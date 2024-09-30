@@ -22,9 +22,8 @@
  * @brief Standalone string functions.
  */
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 
 /**
  * @brief This will return true if passed a continuation byte of a UTF-8 character.
@@ -206,6 +205,5 @@ constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
   return utf8;
 }
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

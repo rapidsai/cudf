@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -38,7 +39,7 @@ template <class TypeParam, bool coalesce>
 void BM_lists_scatter(::benchmark::State& state)
 {
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   cudf::size_type const base_size{(cudf::size_type)state.range(0)};
   cudf::size_type const num_elements_per_row{(cudf::size_type)state.range(1)};
@@ -143,5 +144,5 @@ void BM_lists_scatter(::benchmark::State& state)
     ->Ranges({{1 << 10, 1 << 25}, {64, 2048}}) /* 1K-1B rows, 64-2048 elements */ \
     ->UseManualTime();
 
-SBM_BENCHMARK_DEFINE(double_type_colesce_o, double, true);
-SBM_BENCHMARK_DEFINE(double_type_colesce_x, double, false);
+SBM_BENCHMARK_DEFINE(double_coalesced, double, true);
+SBM_BENCHMARK_DEFINE(double_shuffled, double, false);

@@ -24,7 +24,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -41,7 +40,7 @@ namespace {
 
 std::unique_ptr<column> make_empty_column_from_schema(ArrowSchema const* schema,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
   ArrowSchemaView schema_view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&schema_view, schema, nullptr));
@@ -81,7 +80,7 @@ std::unique_ptr<column> make_empty_column_from_schema(ArrowSchema const* schema,
 
 std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(input != nullptr, "input ArrowArrayStream must not be NULL", std::invalid_argument);
 
@@ -135,7 +134,7 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
 
 std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::from_arrow_stream(input, stream, mr);

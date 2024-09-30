@@ -22,6 +22,7 @@
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -257,10 +258,8 @@ dremel_data get_encoding(column_view h_col,
     },
     stream);
 
-  thrust::host_vector<size_type> column_offsets =
-    cudf::detail::make_host_vector_async(d_column_offsets, stream);
-  thrust::host_vector<size_type> column_ends =
-    cudf::detail::make_host_vector_async(d_column_ends, stream);
+  auto column_offsets = cudf::detail::make_host_vector_async(d_column_offsets, stream);
+  auto column_ends    = cudf::detail::make_host_vector_async(d_column_ends, stream);
   stream.synchronize();
 
   size_t max_vals_size = 0;
@@ -269,7 +268,7 @@ dremel_data get_encoding(column_view h_col,
   }
 
   auto d_nullability = cudf::detail::make_device_uvector_async(
-    nullability, stream, rmm::mr::get_current_device_resource());
+    nullability, stream, cudf::get_current_device_resource_ref());
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);

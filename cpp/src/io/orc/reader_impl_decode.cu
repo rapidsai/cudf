@@ -19,22 +19,22 @@
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
-#include "io/utilities/config_utils.hpp"
 #include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/fill.h>
@@ -492,15 +492,21 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   if (num_stripes == 0) return;
 
   auto const num_columns = chunks.size().second;
-  std::vector<thrust::pair<size_type, uint32_t*>> prefix_sums_to_update;
+  auto const num_struct_cols =
+    std::count_if(chunks[0].begin(), chunks[0].end(), [](auto const& chunk) {
+      return chunk.type_kind == STRUCT;
+    });
+  auto prefix_sums_to_update =
+    cudf::detail::make_empty_host_vector<thrust::pair<size_type, uint32_t*>>(num_struct_cols,
+                                                                             stream);
   for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
     // Null counts sums are only needed for children of struct columns
     if (chunks[0][col_idx].type_kind == STRUCT) {
-      prefix_sums_to_update.emplace_back(col_idx, d_prefix_sums + num_stripes * col_idx);
+      prefix_sums_to_update.push_back({col_idx, d_prefix_sums + num_stripes * col_idx});
     }
   }
   auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
-    prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
+    prefix_sums_to_update, stream, cudf::get_current_device_resource_ref());
 
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
@@ -677,7 +683,7 @@ std::vector<range> find_table_splits(table_view const& input,
   segment_length = std::min(segment_length, input.num_rows());
 
   auto const d_segmented_sizes = cudf::detail::segmented_row_bit_count(
-    input, segment_length, stream, rmm::mr::get_current_device_resource());
+    input, segment_length, stream, cudf::get_current_device_resource_ref());
 
   auto segmented_sizes =
     cudf::detail::hostdevice_vector<cumulative_size>(d_segmented_sizes->size(), stream);
@@ -771,7 +777,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       [](auto const& sum, auto const& cols_level) { return sum + cols_level.size(); });
 
     return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-      num_total_cols * stripe_count, _stream, rmm::mr::get_current_device_resource());
+      num_total_cols * stripe_count, _stream, cudf::get_current_device_resource_ref());
   }();
   std::size_t num_processed_lvl_columns      = 0;
   std::size_t num_processed_prev_lvl_columns = 0;

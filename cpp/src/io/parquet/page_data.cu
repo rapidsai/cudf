@@ -23,6 +23,8 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace cg = cooperative_groups;
+
 namespace {
 
 constexpr int decode_block_size = 128;
@@ -277,6 +279,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
+    auto const tile_warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
@@ -298,9 +301,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
       } else if (s->col.physical_type == BYTE_ARRAY or
                  s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
-        gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
+        gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile_warp);
       }
-      if (t == 32) { s->dict_pos = src_target_pos; }
+      if (tile_warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       int const dtype = s->col.physical_type;

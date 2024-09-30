@@ -18,15 +18,16 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
@@ -76,18 +77,6 @@ struct comparator_adapter {
   {
   }
 
-  // suppress "function was declared but never referenced warning"
-#pragma nv_diagnostic push
-#pragma nv_diag_suppress 177
-  __device__ constexpr auto operator()(lhs_index_type lhs_index,
-                                       lhs_index_type rhs_index) const noexcept
-  {
-    auto const lhs = static_cast<size_type>(lhs_index);
-    auto const rhs = static_cast<size_type>(rhs_index);
-
-    return _self_equal(lhs, rhs);
-  }
-
   __device__ constexpr auto operator()(rhs_index_type lhs_index,
                                        rhs_index_type rhs_index) const noexcept
   {
@@ -102,13 +91,6 @@ struct comparator_adapter {
   {
     return _two_table_equal(lhs_index, rhs_index);
   }
-
-  __device__ constexpr auto operator()(rhs_index_type lhs_index,
-                                       lhs_index_type rhs_index) const noexcept
-  {
-    return _two_table_equal(lhs_index, rhs_index);
-  }
-#pragma nv_diagnostic pop
 
  private:
   SelfEqual const _self_equal;
@@ -137,7 +119,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   if (nullable_columns.size() > 1) {
     auto row_bitmask =
       cudf::detail::bitmask_and(
-        table_view{nullable_columns}, stream, rmm::mr::get_current_device_resource())
+        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref())
         .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
@@ -247,14 +229,15 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     [&](auto const& d_self_equal, auto const& d_two_table_equal, auto const& probing_scheme) {
       auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
-      auto set = cuco::static_set{cuco::extent{compute_hash_table_size(haystack.num_rows())},
-                                  cuco::empty_key{rhs_index_type{-1}},
-                                  d_equal,
-                                  probing_scheme,
-                                  {},
-                                  {},
-                                  cudf::detail::cuco_allocator{stream},
-                                  stream.value()};
+      auto set = cuco::static_set{
+        cuco::extent{compute_hash_table_size(haystack.num_rows())},
+        cuco::empty_key{rhs_index_type{-1}},
+        d_equal,
+        probing_scheme,
+        {},
+        {},
+        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+        stream.value()};
 
       if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
         auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);

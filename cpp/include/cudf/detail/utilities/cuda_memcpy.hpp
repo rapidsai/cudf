@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
 
@@ -50,4 +53,5 @@ void cuda_memcpy_async(
 void cuda_memcpy(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

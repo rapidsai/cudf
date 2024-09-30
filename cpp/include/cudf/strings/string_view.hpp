@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
  * @brief Class definition for cudf::string_view.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
@@ -406,4 +406,4 @@ class string_view {
                                         size_type count) const;
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

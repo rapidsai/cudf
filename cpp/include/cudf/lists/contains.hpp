@@ -17,11 +17,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace lists {
 /**
  * @addtogroup lists_contains
@@ -51,7 +50,7 @@ std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::scalar const& search_key,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a column of `bool` values indicating whether the list rows of the first
@@ -75,7 +74,7 @@ std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a column of `bool` values indicating whether each row in the `lists` column
@@ -97,7 +96,7 @@ std::unique_ptr<column> contains(
 std::unique_ptr<column> contains_nulls(
   cudf::lists_column_view const& lists,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Option to choose whether `index_of()` returns the first or last match
@@ -141,7 +140,7 @@ std::unique_ptr<column> index_of(
   cudf::scalar const& search_key,
   duplicate_find_option find_option = duplicate_find_option::FIND_FIRST,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a column of values indicating the position of a search key
@@ -178,8 +177,8 @@ std::unique_ptr<column> index_of(
   cudf::column_view const& search_keys,
   duplicate_find_option find_option = duplicate_find_option::FIND_FIRST,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

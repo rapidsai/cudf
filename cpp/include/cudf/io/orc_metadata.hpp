@@ -23,12 +23,13 @@
 
 #include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <optional>
 #include <variant>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_types
@@ -387,4 +388,4 @@ orc_metadata read_orc_metadata(source_info const& src_info,
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -16,12 +16,13 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 
@@ -120,4 +121,4 @@ class data_chunk_source {
 
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

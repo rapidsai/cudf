@@ -28,6 +28,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -794,7 +795,7 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
   return row_offsets.subspan(0, new_end - row_offsets.begin());
 }
 
-std::vector<column_type_histogram> detect_column_types(
+cudf::detail::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const& options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
@@ -807,12 +808,12 @@ std::vector<column_type_histogram> detect_column_types(
   int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
   auto d_stats = detail::make_zeroed_device_uvector_async<column_type_histogram>(
-    num_active_columns, stream, rmm::mr::get_current_device_resource());
+    num_active_columns, stream, cudf::get_current_device_resource_ref());
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return detail::make_std_vector_sync(d_stats, stream);
+  return detail::make_host_vector_sync(d_stats, stream);
 }
 
 void decode_row_column_data(cudf::io::parse_options_view const& options,

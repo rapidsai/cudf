@@ -30,11 +30,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -138,10 +138,11 @@ std::unique_ptr<column> compute_column(table_view const& table,
 
 std::unique_ptr<column> compute_column(table_view const& table,
                                        ast::expression const& expr,
+                                       rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, cudf::get_default_stream(), mr);
+  return detail::compute_column(table, expr, stream, mr);
 }
 
 }  // namespace cudf

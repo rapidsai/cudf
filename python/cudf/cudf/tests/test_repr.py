@@ -186,13 +186,11 @@ def test_MI():
         }
     )
     levels = [["a", "b", "c", "d"], ["w", "x", "y", "z"], ["m", "n"]]
-    codes = cudf.DataFrame(
-        {
-            "a": [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
-            "b": [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
-            "c": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        }
-    )
+    codes = [
+        [0, 0, 0, 0, 1, 1, 2, 2, 3, 3],
+        [0, 1, 2, 3, 0, 1, 2, 3, 0, 1],
+        [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    ]
     pd.options.display.max_rows = 999
     pd.options.display.max_columns = 0
     gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
@@ -1480,5 +1478,24 @@ def test_interval_index_repr():
         ]
     )
     gi = cudf.from_pandas(pi)
+
+    assert repr(pi) == repr(gi)
+
+
+def test_large_unique_categories_repr():
+    # Unfortunately, this is a long running test (takes about 1 minute)
+    # and there is no way we can reduce the time
+    pi = pd.CategoricalIndex(range(100_000_000))
+    gi = cudf.CategoricalIndex(range(100_000_000))
+    expected_repr = repr(pi)
+    with utils.cudf_timeout(6):
+        actual_repr = repr(gi)
+    assert expected_repr == actual_repr
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_categorical_index_ordered(ordered):
+    pi = pd.CategoricalIndex(range(10), ordered=ordered)
+    gi = cudf.CategoricalIndex(range(10), ordered=ordered)
 
     assert repr(pi) == repr(gi)

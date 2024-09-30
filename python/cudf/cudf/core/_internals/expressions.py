@@ -4,7 +4,10 @@ from __future__ import annotations
 import ast
 import functools
 
-from cudf._lib.expressions import (
+import pyarrow as pa
+
+import pylibcudf as plc
+from pylibcudf.expressions import (
     ASTOperator,
     ColumnReference,
     Expression,
@@ -117,12 +120,14 @@ class libcudfASTVisitor(ast.NodeVisitor):
         self.stack.append(ColumnReference(col_id))
 
     def visit_Constant(self, node):
-        if not isinstance(node, (ast.Num, ast.Str)):
+        if not isinstance(node.value, (float, int, str, complex)):
             raise ValueError(
                 f"Unsupported literal {repr(node.value)} of type "
                 "{type(node.value).__name__}"
             )
-        self.stack.append(Literal(node.value))
+        self.stack.append(
+            Literal(plc.interop.from_arrow(pa.scalar(node.value)))
+        )
 
     def visit_UnaryOp(self, node):
         self.visit(node.operand)
@@ -132,7 +137,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
             # operand, so there's no way to know whether this should be a float
             # or an int. We should maybe see what Spark does, and this will
             # probably require casting.
-            self.nodes.append(Literal(-1))
+            self.nodes.append(Literal(plc.interop.from_arrow(pa.scalar(-1))))
             op = ASTOperator.MUL
             self.stack.append(Operation(op, self.nodes[-1], self.nodes[-2]))
         elif isinstance(node.op, ast.UAdd):

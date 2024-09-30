@@ -23,9 +23,9 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/resource_ref.hpp>
-
+#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
@@ -38,7 +38,7 @@ namespace {
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
 // for now would also be treated as a string).
-inline bool is_treat_fixed_length_as_string(thrust::optional<LogicalType> const& logical_type)
+inline bool is_treat_fixed_length_as_string(cuda::std::optional<LogicalType> const& logical_type)
 {
   if (!logical_type.has_value()) { return true; }
   return logical_type->type != LogicalType::DECIMAL;
@@ -469,8 +469,10 @@ reader::impl::impl(std::size_t chunk_read_limit,
     _input_pass_read_limit{pass_read_limit}
 {
   // Open and parse the source dataset metadata
-  _metadata =
-    std::make_unique<aggregate_reader_metadata>(_sources, options.is_enabled_use_arrow_schema());
+  _metadata = std::make_unique<aggregate_reader_metadata>(
+    _sources,
+    options.is_enabled_use_arrow_schema(),
+    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -549,7 +551,17 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   out_columns.reserve(_output_buffers.size());
 
   // no work to do (this can happen on the first pass if we have no rows to read)
-  if (!has_more_work()) { return finalize_output(out_metadata, out_columns); }
+  if (!has_more_work()) {
+    // Check if number of rows per source should be included in output metadata.
+    if (include_output_num_rows_per_source()) {
+      // Empty dataframe case: Simply initialize to a list of zeros
+      out_metadata.num_rows_per_source =
+        std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
+    }
+
+    // Finalize output
+    return finalize_output(mode, out_metadata, out_columns);
+  }
 
   auto& pass            = *_pass_itm_data;
   auto& subpass         = *pass.subpass;
@@ -585,11 +597,80 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     }
   }
 
+  // Check if number of rows per source should be included in output metadata.
+  if (include_output_num_rows_per_source()) {
+    // For chunked reading, compute the output number of rows per source
+    if (mode == read_mode::CHUNKED_READ) {
+      out_metadata.num_rows_per_source =
+        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
+    }
+    // Simply move the number of rows per file if reading all at once
+    else {
+      // Move is okay here as we are reading in one go.
+      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
+    }
+  }
+
   // Add empty columns if needed. Filter output columns based on filter.
-  return finalize_output(out_metadata, out_columns);
+  return finalize_output(mode, out_metadata, out_columns);
 }
 
-table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
+std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t const chunk_start_row,
+                                                                       size_t const chunk_num_rows)
+{
+  // Handle base cases.
+  if (_file_itm_data.num_rows_per_source.size() == 0) {
+    return {};
+  } else if (_file_itm_data.num_rows_per_source.size() == 1) {
+    return {chunk_num_rows};
+  }
+
+  std::vector<size_t> num_rows_per_source(_file_itm_data.num_rows_per_source.size(), 0);
+
+  // Subtract global skip rows from the start_row as we took care of that when computing
+  // _file_itm_data.num_rows_per_source
+  auto const start_row = chunk_start_row - _file_itm_data.global_skip_rows;
+  auto const end_row   = start_row + chunk_num_rows;
+  CUDF_EXPECTS(start_row <= end_row and end_row <= _file_itm_data.global_num_rows,
+               "Encountered invalid output chunk row bounds.");
+
+  // Copy reference to a const local variable for better readability
+  auto const& partial_sum_nrows_source = _file_itm_data.exclusive_sum_num_rows_per_source;
+
+  // Binary search start_row and end_row in exclusive_sum_num_rows_per_source vector
+  auto const start_iter =
+    std::upper_bound(partial_sum_nrows_source.cbegin(), partial_sum_nrows_source.cend(), start_row);
+  auto const end_iter =
+    (end_row == _file_itm_data.global_skip_rows + _file_itm_data.global_num_rows)
+      ? partial_sum_nrows_source.cend() - 1
+      : std::upper_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
+
+  // Compute the array offset index for both iterators
+  auto const start_idx = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
+  auto const end_idx   = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
+
+  CUDF_EXPECTS(start_idx <= end_idx,
+               "Encountered invalid source files indexes for output chunk row bounds");
+
+  // If the entire chunk is from the same source file, then the count is simply num_rows
+  if (start_idx == end_idx) {
+    num_rows_per_source[start_idx] = chunk_num_rows;
+  } else {
+    // Compute the number of rows from the first source file
+    num_rows_per_source[start_idx] = partial_sum_nrows_source[start_idx] - start_row;
+    // Compute the number of rows from the last source file
+    num_rows_per_source[end_idx] = end_row - partial_sum_nrows_source[end_idx - 1];
+    // Simply copy the number of rows for each source in range: (start_idx, end_idx)
+    std::copy(_file_itm_data.num_rows_per_source.cbegin() + start_idx + 1,
+              _file_itm_data.num_rows_per_source.cbegin() + end_idx,
+              num_rows_per_source.begin() + start_idx + 1);
+  }
+
+  return num_rows_per_source;
+}
+
+table_with_metadata reader::impl::finalize_output(read_mode mode,
+                                                  table_metadata& out_metadata,
                                                   std::vector<std::unique_ptr<column>>& out_columns)
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
@@ -624,7 +705,7 @@ table_with_metadata reader::impl::finalize_output(table_metadata& out_metadata,
     auto predicate  = cudf::detail::compute_column(*read_table,
                                                   _expr_conv.get_converted_expr().value().get(),
                                                   _stream,
-                                                  rmm::mr::get_current_device_resource());
+                                                  cudf::get_current_device_resource_ref());
     CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
     // Exclude columns present in filter only in output
@@ -689,11 +770,14 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
-  // do not use arrow schema when reading information from parquet metadata.
+  // Do not use arrow schema when reading information from parquet metadata.
   static constexpr auto use_arrow_schema = false;
 
+  // Do not select any columns when only reading the parquet metadata.
+  static constexpr auto has_column_projection = false;
+
   // Open and parse the source dataset metadata
-  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema);
+  auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
 
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),

@@ -22,12 +22,13 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/quantiles.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/advance.h>
@@ -198,7 +199,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
                                                           weight.size(),
                                                           mask_state::UNALLOCATED,
                                                           stream,
-                                                          rmm::mr::get_current_device_resource());
+                                                          cudf::get_current_device_resource_ref());
   auto keys               = cudf::detail::make_counting_transform_iterator(
     0,
     cuda::proclaim_return_type<std::ptrdiff_t>(

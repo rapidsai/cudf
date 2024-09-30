@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/types.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace detail {
 
@@ -84,4 +84,4 @@ class structs_column_device_view : private column_device_view {
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

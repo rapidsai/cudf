@@ -2,5 +2,5 @@
 JSON
 ====
 
-.. automodule:: cudf._lib.pylibcudf.io.json
+.. automodule:: pylibcudf.io.json
    :members:

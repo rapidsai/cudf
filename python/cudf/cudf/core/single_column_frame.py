@@ -11,17 +11,18 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
-    is_bool_dtype,
     is_integer,
-    is_integer_dtype,
     is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     import cupy
     import numpy
     import pyarrow as pa
@@ -92,12 +93,6 @@ class SingleColumnFrame(Frame, NotIterable):
         """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
-    def __bool__(self):
-        raise TypeError(
-            f"The truth value of a {type(self)} is ambiguous. Use "
-            "a.empty, a.bool(), a.item(), a.any() or a.all()."
-        )
-
     @property  # type: ignore
     @_performance_tracking
     def _num_columns(self) -> int:
@@ -120,35 +115,17 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
+        """Constructor for a single Column."""
+        ca = ColumnAccessor({name: column}, verify=False)
+        return cls._from_data(ca)
+
+    @classmethod
+    @_performance_tracking
     def from_arrow(cls, array) -> Self:
-        """Create from PyArrow Array/ChunkedArray.
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        SingleColumnFrame
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        Index(['a', 'b', None], dtype='object')
-        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
-        """
-        return cls(ColumnBase.from_arrow(array))
+        raise NotImplementedError
 
     @_performance_tracking
     def to_arrow(self) -> pa.Array:
@@ -180,6 +157,17 @@ class SingleColumnFrame(Frame, NotIterable):
         ]
         """
         return self._column.to_arrow()
+
+    def _to_frame(
+        self, name: Hashable, index: cudf.Index | None
+    ) -> cudf.DataFrame:
+        """Helper function for Series.to_frame, Index.to_frame"""
+        if name is no_default:
+            col_name = 0 if self.name is None else self.name
+        else:
+            col_name = name
+        ca = ColumnAccessor({col_name: self._column}, verify=False)
+        return cudf.DataFrame._from_data(ca, index=index)
 
     @property  # type: ignore
     @_performance_tracking
@@ -359,9 +347,9 @@ class SingleColumnFrame(Frame, NotIterable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = cudf.core.column.column_empty(0, dtype="int32")
-            if is_integer_dtype(arg.dtype):
+            if arg.dtype.kind in "iu":
                 return self._column.take(arg)
-            if is_bool_dtype(arg.dtype):
+            if arg.dtype.kind == "b":
                 if (bn := len(arg)) != (n := len(self)):
                     raise IndexError(
                         f"Boolean mask has wrong length: {bn} not {n}"
@@ -373,7 +361,6 @@ class SingleColumnFrame(Frame, NotIterable):
     def where(self, cond, other=None, inplace=False):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
-            _make_categorical_like,
         )
 
         if isinstance(other, cudf.DataFrame):
@@ -389,11 +376,16 @@ class SingleColumnFrame(Frame, NotIterable):
         if not cudf.api.types.is_scalar(other):
             other = cudf.core.column.as_column(other)
 
-        self_column = self._column
         input_col, other = _check_and_cast_columns_with_other(
-            source_col=self_column, other=other, inplace=inplace
+            source_col=self._column, other=other, inplace=inplace
         )
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
+        return result._with_type_metadata(self.dtype)
 
-        return _make_categorical_like(result, self_column)
+    @_performance_tracking
+    def transpose(self):
+        """Return the transpose, which is by definition self."""
+        return self
+
+    T = property(transpose, doc=transpose.__doc__)

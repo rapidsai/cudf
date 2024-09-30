@@ -27,19 +27,20 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/merge.hpp>
 #include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -246,7 +247,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   auto rhs_device_view = table_device_view::create(right_table, stream);
 
   auto d_column_order = cudf::detail::make_device_uvector_async(
-    column_order, stream, rmm::mr::get_current_device_resource());
+    column_order, stream, cudf::get_current_device_resource_ref());
 
   if (has_nulls) {
     auto const new_null_precedence = [&]() {
@@ -260,7 +261,7 @@ index_vector generate_merged_indices(table_view const& left_table,
     }();
 
     auto d_null_precedence = cudf::detail::make_device_uvector_async(
-      new_null_precedence, stream, rmm::mr::get_current_device_resource());
+      new_null_precedence, stream, cudf::get_current_device_resource_ref());
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
@@ -306,7 +307,7 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
                                                           column_order,
                                                           null_precedence,
                                                           stream,
-                                                          rmm::mr::get_current_device_resource());
+                                                          cudf::get_current_device_resource_ref());
   auto const left_indices         = left_indices_col->view();
   auto left_indices_mutable       = left_indices_col->mutable_view();
   auto const left_indices_begin   = left_indices.begin<cudf::size_type>();
@@ -646,7 +647,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    tables_to_merge, stream, rmm::mr::get_current_device_resource());
+    tables_to_merge, stream, cudf::get_current_device_resource_ref());
   auto merge_tables = matched.second;
 
   // A queue of (table view, table) pairs
@@ -672,7 +673,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     auto const right_table = top_and_pop(merge_queue);
 
     // Only use mr for the output table
-    auto const& new_tbl_mr = merge_queue.empty() ? mr : rmm::mr::get_current_device_resource();
+    auto const& new_tbl_mr = merge_queue.empty() ? mr : cudf::get_current_device_resource_ref();
     auto merged_table      = merge(left_table.view,
                               right_table.view,
                               key_cols,
@@ -694,11 +695,11 @@ std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merg
                                    std::vector<cudf::size_type> const& key_cols,
                                    std::vector<cudf::order> const& column_order,
                                    std::vector<cudf::null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::merge(
-    tables_to_merge, key_cols, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace cudf

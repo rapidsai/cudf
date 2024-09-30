@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,13 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 struct linked_column_view;
 
@@ -68,4 +70,5 @@ struct linked_column_view : public column_view_base {
  */
 LinkedColVector table_to_linked_columns(table_view const& table);
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

@@ -6,15 +6,16 @@ from cudf.core.buffer import acquire_spill_lock
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.nvtext.byte_pair_encode cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.nvtext.byte_pair_encode cimport (
     bpe_merge_pairs as cpp_bpe_merge_pairs,
     byte_pair_encoding as cpp_byte_pair_encoding,
     load_merge_pairs as cpp_load_merge_pairs,
 )
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+
+from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
 

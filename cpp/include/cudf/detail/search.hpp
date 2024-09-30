@@ -20,12 +20,14 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
+
 /**
  * @copydoc cudf::lower_bound
  *
@@ -92,6 +94,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
  * @param mr Device memory resource used to allocate the returned vector
  * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
+CUDF_EXPORT
 rmm::device_uvector<bool> contains(table_view const& haystack,
                                    table_view const& needles,
                                    null_equality compare_nulls,
@@ -99,4 +102,5 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr);
 
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

@@ -18,10 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/merge.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
-namespace cudf ::strings ::detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 /**
  * @brief Merges two strings columns
  *
@@ -38,4 +41,5 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
-}  // namespace cudf::strings::detail
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

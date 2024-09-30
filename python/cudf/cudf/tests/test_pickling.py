@@ -127,7 +127,7 @@ def test_pickle_categorical_column(slices):
     pickled = pickle.dumps(input_col)
     out = pickle.loads(pickled)
 
-    assert_eq(Series(out), Series(input_col))
+    assert_eq(Series._from_column(out), Series._from_column(input_col))
 
 
 @pytest.mark.parametrize(
@@ -148,4 +148,4 @@ def test_pickle_string_column(slices):
     pickled = pickle.dumps(input_col)
     out = pickle.loads(pickled)
 
-    assert_eq(Series(out), Series(input_col))
+    assert_eq(Series._from_column(out), Series._from_column(input_col))

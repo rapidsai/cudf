@@ -33,12 +33,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/gather.h>
@@ -518,7 +518,7 @@ struct column_gatherer_impl<struct_view> {
  * Positive indices are unchanged by this transformation.
  */
 template <typename map_type>
-struct index_converter : public thrust::unary_function<map_type, map_type> {
+struct index_converter {
   index_converter(size_type n_rows) : n_rows(n_rows) {}
 
   __device__ map_type operator()(map_type in) const { return ((in % n_rows) + n_rows) % n_rows; }
@@ -571,22 +571,22 @@ void gather_bitmask(table_view const& source,
         not target[i]->nullable()) {
       auto const state =
         op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
-      auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
+      auto mask = cudf::create_null_mask(target[i]->size(), state, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
 
   // Make device array of target bitmask pointers
-  std::vector<bitmask_type*> target_masks(target.size());
+  auto target_masks = make_host_vector<bitmask_type*>(target.size(), stream);
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });
   auto d_target_masks =
-    make_device_uvector_async(target_masks, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(target_masks, stream, cudf::get_current_device_resource_ref());
 
   auto const device_source = table_device_view::create(source, stream);
   auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(
-    target.size(), stream, rmm::mr::get_current_device_resource());
+    target.size(), stream, cudf::get_current_device_resource_ref());
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {
@@ -609,7 +609,7 @@ void gather_bitmask(table_view const& source,
        stream);
 
   // Copy the valid counts into each column
-  auto const valid_counts = make_std_vector_sync(d_valid_counts, stream);
+  auto const valid_counts = make_host_vector_sync(d_valid_counts, stream);
   for (size_t i = 0; i < target.size(); ++i) {
     if (target[i]->nullable()) {
       auto const null_count = target_rows - valid_counts[i];

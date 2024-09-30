@@ -19,15 +19,17 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <optional>
 
-namespace cudf::reduction::detail {
+namespace CUDF_EXPORT cudf {
+namespace reduction::detail {
 
 /**
  * @brief Compute the frequency for each distinct row in the input table.
@@ -55,4 +57,5 @@ compute_row_frequencies(table_view const& input,
  */
 [[nodiscard]] std::unique_ptr<column> make_empty_histogram_like(column_view const& values);
 
-}  // namespace cudf::reduction::detail
+}  // namespace reduction::detail
+}  // namespace CUDF_EXPORT cudf

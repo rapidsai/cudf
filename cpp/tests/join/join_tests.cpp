@@ -37,8 +37,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/resource_ref.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <limits>
 
@@ -61,6 +62,7 @@ template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             cudf::table_view const& left_keys,
             cudf::table_view const& right_keys,
             cudf::null_equality compare_nulls,
+            rmm::cuda_stream_view stream,
             rmm::device_async_resource_ref mr),
           cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
 std::unique_ptr<cudf::table> join_and_gather(
@@ -69,12 +71,13 @@ std::unique_ptr<cudf::table> join_and_gather(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto left_selected  = left_input.select(left_on);
   auto right_selected = right_input.select(right_on);
   auto const [left_join_indices, right_join_indices] =
-    join_impl(left_selected, right_selected, compare_nulls, mr);
+    join_impl(left_selected, right_selected, compare_nulls, stream, mr);
 
   auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
   auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
@@ -2028,7 +2031,11 @@ struct JoinTestLists : public cudf::test::BaseFixture {
     auto const probe_tv = cudf::table_view{{probe}};
 
     auto const [left_result_map, right_result_map] =
-      join_func(build_tv, probe_tv, nulls_equal, rmm::mr::get_current_device_resource());
+      join_func(build_tv,
+                probe_tv,
+                nulls_equal,
+                cudf::get_default_stream(),
+                cudf::get_current_device_resource_ref());
 
     auto const left_result_table =
       sort_and_gather(build_tv, column_view_from_device_uvector(*left_result_map), oob_policy);

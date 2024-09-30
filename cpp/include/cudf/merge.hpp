@@ -17,14 +17,13 @@
 #pragma once
 
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_merge
  * @{
@@ -97,6 +96,7 @@ namespace cudf {
  * @param[in] column_order Sort order types of columns indexed by key_cols
  * @param[in] null_precedence Array indicating the order of nulls with respect
  * to non-nulls for the indexing columns (key_cols)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @returns A table containing sorted data from all input tables
@@ -106,7 +106,7 @@ std::unique_ptr<cudf::table> merge(
   std::vector<cudf::size_type> const& key_cols,
   std::vector<cudf::order> const& column_order,
   std::vector<cudf::null_order> const& null_precedence = {},
-  rmm::device_async_resource_ref mr                    = rmm::mr::get_current_device_resource());
-
+  rmm::cuda_stream_view stream                         = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr                    = cudf::get_current_device_resource_ref());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

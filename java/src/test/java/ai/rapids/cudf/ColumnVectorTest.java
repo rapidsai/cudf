@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -3509,9 +3509,9 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testCastDoubleToDecimal() {
     testCastNumericToDecimalsAndBack(DType.FLOAT64, false, 0,
-        () -> ColumnVector.fromBoxedDoubles(1.0, 2.1, -3.23, null, 2.41281, (double) Long.MAX_VALUE),
-        () -> ColumnVector.fromBoxedDoubles(1.0, 2.0, -3.0, null, 2.0, (double) Long.MAX_VALUE),
-        new Long[]{1L, 2L, -3L, null, 2L, Long.MAX_VALUE}
+        () -> ColumnVector.fromBoxedDoubles(1.0, 2.1, -3.23, null, 2.41281, (double) Integer.MAX_VALUE),
+        () -> ColumnVector.fromBoxedDoubles(1.0, 2.0, -3.0, null, 2.0, (double) Integer.MAX_VALUE),
+        new Long[]{1L, 2L, -3L, null, 2L, (long) Integer.MAX_VALUE}
     );
     testCastNumericToDecimalsAndBack(DType.FLOAT64, false, -2,
         () -> ColumnVector.fromBoxedDoubles(1.0, 2.1, -3.23, null, 2.41281, -55.01999),
@@ -6393,46 +6393,6 @@ void testGetJSONObjectWithInvalidQueries() {
       }
     });
     assertTrue(e.getMessage().contains("Duplicate mapping found for replacing child index"));
-  }
-
-  @Test
-  void testCopyWithBooleanColumnAsValidity() {
-    final Boolean T = true;
-    final Boolean F = false;
-    final Integer X = null;
-
-    // Straight-line: Invalidate every other row.
-    try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, T, F, T, F, T, F, T, F, T);
-         ColumnVector expected = ColumnVector.fromBoxedInts(X, 2, X, 4, X, 6, X, 8, X, 10);
-         ColumnVector result = exemplar.copyWithBooleanColumnAsValidity(validity)) {
-      assertColumnsAreEqual(expected, result);
-    }
-
-    // Straight-line: Invalidate all Rows.
-    try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, F, F, F, F, F, F, F, F, F);
-         ColumnVector expected = ColumnVector.fromBoxedInts(X, X, X, X, X, X, X, X, X, X);
-         ColumnVector result = exemplar.copyWithBooleanColumnAsValidity(validity)) {
-      assertColumnsAreEqual(expected, result);
-    }
-
-    // Nulls in the validity column are treated as invalid.
-    try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, T, F, T, F, T, F, null, F, null);
-         ColumnVector expected = ColumnVector.fromBoxedInts(X, 2, X, 4, X, 6, X, X, X, X);
-         ColumnVector result = exemplar.copyWithBooleanColumnAsValidity(validity)) {
-      assertColumnsAreEqual(expected, result);
-    }
-
-    // Negative case: Mismatch in row count.
-    Exception x = assertThrows(CudfException.class, () ->  {
-      try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, T, F, T);
-         ColumnVector result = exemplar.copyWithBooleanColumnAsValidity(validity)) {
-      }
-    });
-    assertTrue(x.getMessage().contains("Exemplar and validity columns must have the same size"));
   }
 
   @Test

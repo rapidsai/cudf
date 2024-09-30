@@ -367,18 +367,18 @@ class TransitionTable {
 
   template <typename StateIdT>
   static KernelParameter InitDeviceTransitionTable(
-    std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& translation_table)
+    std::array<std::array<StateIdT, MAX_NUM_SYMBOLS>, MAX_NUM_STATES> const& transition_table)
   {
     KernelParameter init_data{};
-    // translation_table[state][symbol] -> new state
-    for (std::size_t state = 0; state < translation_table.size(); ++state) {
-      for (std::size_t symbol = 0; symbol < translation_table[state].size(); ++symbol) {
+    // transition_table[state][symbol] -> new state
+    for (std::size_t state = 0; state < transition_table.size(); ++state) {
+      for (std::size_t symbol = 0; symbol < transition_table[state].size(); ++symbol) {
         CUDF_EXPECTS(
-          static_cast<int64_t>(translation_table[state][symbol]) <=
+          static_cast<int64_t>(transition_table[state][symbol]) <=
             std::numeric_limits<ItemT>::max(),
           "Target state index value exceeds value representable by the transition table's type");
         init_data.transitions[symbol * MAX_NUM_STATES + state] =
-          static_cast<ItemT>(translation_table[state][symbol]);
+          static_cast<ItemT>(transition_table[state][symbol]);
       }
     }
 
@@ -494,6 +494,10 @@ class dfa_device_view {
   // This is a value queried by the DFA simulation algorithm
   static constexpr int32_t MAX_NUM_STATES = NUM_STATES;
 
+  using OutSymbolT                            = typename TranslationTableT::OutSymbolT;
+  static constexpr int32_t MIN_TRANSLATED_OUT = TranslationTableT::MIN_TRANSLATED_OUT;
+  static constexpr int32_t MAX_TRANSLATED_OUT = TranslationTableT::MAX_TRANSLATED_OUT;
+
   using SymbolGroupStorageT      = std::conditional_t<is_complex_op<SymbolGroupIdLookupT>::value,
                                                  typename SymbolGroupIdLookupT::TempStorage,
                                                  typename cub::NullType>;
@@ -542,24 +546,33 @@ class dfa_device_view {
  * @tparam OutSymbolT The symbol type being output
  * @tparam OutSymbolOffsetT Type sufficiently large to index into the lookup table of output
  * symbols
- * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
+ * @tparam MAX_NUM_SYMBOLS The maximum number of symbol groups supported by this lookup table
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
+ * @tparam MIN_TRANSLATED_OUT_ The minimum number of symbols being output by a single state
+ * transition
+ * @tparam MAX_TRANSLATED_OUT_ The maximum number of symbols being output by a single state
+ * transition
  * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
- * be used.
  */
-template <typename OutSymbolT,
+template <typename OutSymbolT_,
           typename OutSymbolOffsetT,
           int32_t MAX_NUM_SYMBOLS,
           int32_t MAX_NUM_STATES,
+          int32_t MIN_TRANSLATED_OUT_,
+          int32_t MAX_TRANSLATED_OUT_,
           int32_t MAX_TABLE_SIZE = (MAX_NUM_SYMBOLS * MAX_NUM_STATES)>
 class TransducerLookupTable {
  private:
   struct _TempStorage {
     OutSymbolOffsetT out_offset[MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1];
-    OutSymbolT out_symbols[MAX_TABLE_SIZE];
+    OutSymbolT_ out_symbols[MAX_TABLE_SIZE];
   };
 
  public:
+  using OutSymbolT                            = OutSymbolT_;
+  static constexpr int32_t MIN_TRANSLATED_OUT = MIN_TRANSLATED_OUT_;
+  static constexpr int32_t MAX_TRANSLATED_OUT = MAX_TRANSLATED_OUT_;
+
   using TempStorage = cub::Uninitialized<_TempStorage>;
 
   struct KernelParameter {
@@ -567,6 +580,8 @@ class TransducerLookupTable {
                                                OutSymbolOffsetT,
                                                MAX_NUM_SYMBOLS,
                                                MAX_NUM_STATES,
+                                               MIN_TRANSLATED_OUT,
+                                               MAX_TRANSLATED_OUT,
                                                MAX_TABLE_SIZE>;
 
     OutSymbolOffsetT d_out_offsets[MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1];
@@ -686,14 +701,19 @@ class TransducerLookupTable {
  * sequence of symbols that the finite-state transducer is supposed to output for each transition.
  *
  * @tparam MAX_TABLE_SIZE The maximum number of items in the lookup table of output symbols
- * be used
+ * @tparam MIN_TRANSLATED_OUT The minimum number of symbols being output by a single state
+ * transition
+ * @tparam MAX_TRANSLATED_OUT The maximum number of symbols being output by a single state
+ * transition
  * @tparam OutSymbolT The symbol type being output
- * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
+ * @tparam MAX_NUM_SYMBOLS The maximum number of symbol groups supported by this lookup table
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
  * @param translation_table The translation table
  * @return A translation table of type `TransducerLookupTable`.
  */
 template <std::size_t MAX_TABLE_SIZE,
+          std::size_t MIN_TRANSLATED_OUT,
+          std::size_t MAX_TRANSLATED_OUT,
           typename OutSymbolT,
           std::size_t MAX_NUM_SYMBOLS,
           std::size_t MAX_NUM_STATES>
@@ -705,20 +725,30 @@ auto make_translation_table(std::array<std::array<std::vector<OutSymbolT>, MAX_N
                                                     OutSymbolOffsetT,
                                                     MAX_NUM_SYMBOLS,
                                                     MAX_NUM_STATES,
+                                                    MIN_TRANSLATED_OUT,
+                                                    MAX_TRANSLATED_OUT,
                                                     MAX_TABLE_SIZE>;
   return translation_table_t::InitDeviceTranslationTable(translation_table);
 }
 
-template <typename TranslationOpT>
+template <typename TranslationOpT,
+          typename OutSymbolT_,
+          std::int32_t MIN_TRANSLATED_OUT_,
+          std::int32_t MAX_TRANSLATED_OUT_>
 class TranslationOp {
  private:
   struct _TempStorage {};
 
  public:
+  using OutSymbolT                            = OutSymbolT_;
+  static constexpr int32_t MIN_TRANSLATED_OUT = MIN_TRANSLATED_OUT_;
+  static constexpr int32_t MAX_TRANSLATED_OUT = MAX_TRANSLATED_OUT_;
+
   using TempStorage = cub::Uninitialized<_TempStorage>;
 
   struct KernelParameter {
-    using LookupTableT = TranslationOp<TranslationOpT>;
+    using LookupTableT =
+      TranslationOp<TranslationOpT, OutSymbolT, MIN_TRANSLATED_OUT, MAX_TRANSLATED_OUT>;
     TranslationOpT translation_op;
   };
 
@@ -772,6 +802,10 @@ class TranslationOp {
  *
  * @tparam FunctorT A function object type that must implement two signatures: (1) with `(state_id,
  * match_id, read_symbol)` and (2) with `(state_id, match_id, relative_offset, read_symbol)`
+ * @tparam MIN_TRANSLATED_SYMBOLS The minimum number of translated output symbols for any given
+ * input symbol
+ * @tparam MAX_TRANSLATED_SYMBOLS The maximum number of translated output symbols for any given
+ * input symbol
  * @param map_op A function object that must implement two signatures: (1) with `(state_id,
  * match_id, read_symbol)` and (2) with `(state_id, match_id, relative_offset, read_symbol)`.
  * Invocations of the first signature, (1), must return the number of symbols that are emitted for
@@ -779,10 +813,14 @@ class TranslationOp {
  * that transition, where `i` corresponds to `relative_offse`
  * @return A translation table of type `TranslationO`
  */
-template <typename FunctorT>
+template <typename OutSymbolT,
+          std::size_t MIN_TRANSLATED_OUT,
+          std::size_t MAX_TRANSLATED_OUT,
+          typename FunctorT>
 auto make_translation_functor(FunctorT map_op)
 {
-  return TranslationOp<FunctorT>::InitDeviceTranslationTable(map_op);
+  return TranslationOp<FunctorT, OutSymbolT, MIN_TRANSLATED_OUT, MAX_TRANSLATED_OUT>::
+    InitDeviceTranslationTable(map_op);
 }
 
 /**

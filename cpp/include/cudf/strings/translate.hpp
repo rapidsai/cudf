@@ -19,13 +19,11 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 /**
  * @addtogroup strings_modify
@@ -58,7 +56,7 @@ std::unique_ptr<column> translate(
   strings_column_view const& input,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Removes or keeps the specified character ranges in cudf::strings::filter_characters
@@ -105,8 +103,8 @@ std::unique_ptr<column> filter_characters(
   filter_type keep_characters       = filter_type::KEEP,
   string_scalar const& replacement  = string_scalar(""),
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

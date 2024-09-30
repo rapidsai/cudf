@@ -46,3 +46,12 @@ def test_concat_vertical():
     q = pl.concat([ldf, ldf2], how="vertical")
 
     assert_gpu_result_equal(q)
+
+
+def test_concat_diagonal_empty():
+    df1 = pl.LazyFrame()
+    df2 = pl.LazyFrame({"a": [1, 2]})
+
+    q = pl.concat([df1, df2], how="diagonal_relaxed")
+
+    assert_gpu_result_equal(q, collect_kwargs={"no_optimization": True})

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import itertools
 
+import pylibcudf as plc
 import pytest
 
 import polars as pl
 
+from cudf_polars import translate_ir
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -51,3 +53,31 @@ def test_sort_by_expression(descending, nulls_last, maintain_order):
         )
     )
     assert_gpu_result_equal(query, check_row_order=maintain_order)
+
+
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("nulls_last", [False, True])
+def test_setsorted(descending, nulls_last, with_nulls):
+    values = sorted([1, 2, 3, 4, 5, 6, -2], reverse=descending)
+    if with_nulls:
+        values[-1 if nulls_last else 0] = None
+    df = pl.LazyFrame({"a": values})
+
+    q = df.set_sorted("a", descending=descending)
+
+    assert_gpu_result_equal(q)
+
+    df = translate_ir(q._ldf.visit()).evaluate(cache={})
+
+    (a,) = df.columns
+
+    assert a.is_sorted == plc.types.Sorted.YES
+    null_order = (
+        plc.types.NullOrder.AFTER
+        if (descending ^ nulls_last) and with_nulls
+        else plc.types.NullOrder.BEFORE
+    )
+    assert a.null_order == null_order
+    assert a.order == (
+        plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+    )

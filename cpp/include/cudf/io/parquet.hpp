@@ -21,9 +21,8 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <iostream>
 #include <memory>
@@ -32,15 +31,17 @@
 #include <utility>
 #include <vector>
 
-namespace cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 /**
  * @addtogroup io_readers
  * @{
  * @file
  */
 
-constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr size_t default_row_group_size_bytes =
+  std::numeric_limits<size_t>::max();                          ///< Infinite bytes per row group
+constexpr size_type default_row_group_size_rows = 1'000'000;   ///< 1 million rows per row group
 constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
 constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
 constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
@@ -74,6 +75,8 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Whether to read and use ARROW schema
   bool _use_arrow_schema = true;
+  // Whether to allow reading matching select columns from mismatched Parquet files.
+  bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -135,6 +138,18 @@ class parquet_reader_options {
    * @return `true` if arrow schema is used while reading
    */
   [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
+
+  /**
+   * @brief Returns true/false depending on whether to read matching projected and filter columns
+   * from mismatched Parquet sources.
+   *
+   * @return `true` if mismatched projected and filter columns will be read from mismatched Parquet
+   * sources.
+   */
+  [[nodiscard]] bool is_enabled_allow_mismatched_pq_schemas() const
+  {
+    return _allow_mismatched_pq_schemas;
+  }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -255,6 +270,15 @@ class parquet_reader_options {
    * @param val Boolean value whether to use arrow schema
    */
   void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
+
+  /**
+   * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
+   * Parquet sources.
+   *
+   * @param val Boolean value whether to read matching projected and filter columns from mismatched
+   * Parquet sources.
+   */
+  void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
   /**
    * @brief Sets reader column schema.
@@ -381,6 +405,20 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
+   * Parquet sources.
+   *
+   * @param val Boolean value whether to read matching projected and filter columns from mismatched
+   * Parquet sources.
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)
+  {
+    options._allow_mismatched_pq_schemas = val;
+    return *this;
+  }
+
+  /**
    * @brief Sets reader metadata.
    *
    * @param val Tree of metadata information.
@@ -463,7 +501,7 @@ class parquet_reader_options_builder {
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief The chunked parquet reader class to read Parquet file iteratively in to a series of
@@ -480,8 +518,9 @@ class chunked_parquet_reader {
    * @brief Default constructor, this should never be used.
    *
    * This is added just to satisfy cython.
+   * This is added to not leak detail API
    */
-  chunked_parquet_reader() = default;
+  chunked_parquet_reader();
 
   /**
    * @brief Constructor for chunked reader.
@@ -500,7 +539,7 @@ class chunked_parquet_reader {
     std::size_t chunk_read_limit,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Constructor for chunked reader.
@@ -526,7 +565,7 @@ class chunked_parquet_reader {
     std::size_t pass_read_limit,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Destructor, destroying the internal reader instance.
@@ -597,6 +636,8 @@ class parquet_writer_options_base {
   // Parquet writer can write timestamps as UTC
   // Defaults to true because libcudf timestamps are implicitly UTC
   bool _write_timestamps_as_UTC = true;
+  // Whether to write ARROW schema
+  bool _write_arrow_schema = false;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
@@ -688,6 +729,13 @@ class parquet_writer_options_base {
    * @return `true` if timestamps will be written as UTC
    */
   [[nodiscard]] auto is_enabled_utc_timestamps() const { return _write_timestamps_as_UTC; }
+
+  /**
+   * @brief Returns `true` if arrow schema will be written
+   *
+   * @return `true` if arrow schema will be written
+   */
+  [[nodiscard]] auto is_enabled_write_arrow_schema() const { return _write_arrow_schema; }
 
   /**
    * @brief Returns maximum row group size, in bytes.
@@ -823,6 +871,13 @@ class parquet_writer_options_base {
    * @param val Boolean value to enable/disable writing of timestamps as UTC.
    */
   void enable_utc_timestamps(bool val);
+
+  /**
+   * @brief Sets preference for writing arrow schema. Write arrow schema if set to `true`.
+   *
+   * @param val Boolean value to enable/disable writing of arrow schema.
+   */
+  void enable_write_arrow_schema(bool val);
 
   /**
    * @brief Sets the maximum row group size, in bytes.
@@ -1084,6 +1139,15 @@ class parquet_writer_options_builder_base {
    * @return this for chaining
    */
   BuilderT& utc_timestamps(bool enabled);
+
+  /**
+   * @brief Set to true if arrow schema is to be written
+   *
+   * @param enabled Boolean value to enable/disable writing of arrow schema
+   * @return this for chaining
+   */
+  BuilderT& write_arrow_schema(bool enabled);
+
   /**
    * @brief Set to true if V2 page headers are to be written.
    *
@@ -1355,8 +1419,9 @@ class parquet_chunked_writer {
   /**
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
+   *        This is added to not leak detail API
    */
-  parquet_chunked_writer() = default;
+  parquet_chunked_writer();
 
   /**
    * @brief Constructor with chunked writer options
@@ -1366,6 +1431,11 @@ class parquet_chunked_writer {
    */
   parquet_chunked_writer(chunked_parquet_writer_options const& options,
                          rmm::cuda_stream_view stream = cudf::get_default_stream());
+  /**
+   * @brief Default destructor.
+   *        This is added to not leak detail API
+   */
+  ~parquet_chunked_writer();
 
   /**
    * @brief Writes table to output.
@@ -1398,4 +1468,5 @@ class parquet_chunked_writer {
 
 /** @} */  // end of group
 
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf

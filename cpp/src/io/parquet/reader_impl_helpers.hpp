@@ -117,6 +117,9 @@ struct metadata : public FileMetaData {
   void sanitize_schema();
 };
 
+/**
+ * @brief Class to extract data types from arrow schema tree
+ */
 struct arrow_schema_data_types {
   std::vector<arrow_schema_data_types> children;
   data_type type{type_id::EMPTY};
@@ -125,6 +128,7 @@ struct arrow_schema_data_types {
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
+  std::vector<std::unordered_map<int32_t, int32_t>> schema_idx_maps;
 
   int64_t num_rows;
   size_type num_row_groups;
@@ -142,7 +146,20 @@ class aggregate_reader_metadata {
     const;
 
   /**
-   * @brief Decodes and constructs the arrow schema from the "ARROW:schema" IPC message
+   * @brief Initialize the vector of schema_idx maps.
+   *
+   * Initializes a vector of hash maps that will store the one-to-one mappings between the
+   * schema_idx'es of the selected columns in the zeroth per_file_metadata (source) and each
+   * kth per_file_metadata (destination) for k in range: [1, per_file_metadata.size()-1].
+   *
+   * @param has_cols_from_mismatched_srcs True if we are reading select cols from mismatched
+   * parquet schemas.
+   */
+  [[nodiscard]] std::vector<std::unordered_map<int32_t, int32_t>> init_schema_idx_maps(
+    bool has_cols_from_mismatched_srcs) const;
+
+  /**
+   * @brief Decodes and constructs the arrow schema from the ARROW_SCHEMA_KEY IPC message
    * in key value metadata section of Parquet file footer
    */
   [[nodiscard]] arrow_schema_data_types collect_arrow_schema() const;
@@ -180,10 +197,28 @@ class aggregate_reader_metadata {
 
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
-                            bool use_arrow_schema);
+                            bool use_arrow_schema,
+                            bool has_cols_from_mismatched_srcs);
 
   [[nodiscard]] RowGroup const& get_row_group(size_type row_group_index, size_type src_idx) const;
 
+  /**
+   * @brief Extracts the schema_idx'th column chunk metadata from row_group_index'th row group of
+   * the src_idx'th file.
+   *
+   * Extracts the schema_idx'th column chunk metadata from the specified row group index of the
+   * src_idx'th file. Note that the schema_idx is actually the index in the zeroth file which may
+   * not be the same in all files, in which case, the schema_idx is mapped to the corresponding
+   * index in the src_idx'th file and returned. A range_error error is thrown if schema_idx
+   * doesn't exist or isn't mapped to the src_idx file.
+   *
+   * @param row_group_index The row group index in the file to extract column chunk metadata from.
+   * @param src_idx The per_file_metadata index to extract extract column chunk metadata from.
+   * @param schema_idx The schema_idx of the column chunk to be extracted
+   *
+   * @return The requested column chunk metadata or a range_error error if the schema index isn't
+   * valid.
+   */
   [[nodiscard]] ColumnChunkMetaData const& get_column_metadata(size_type row_group_index,
                                                                size_type src_idx,
                                                                int schema_idx) const;
@@ -199,16 +234,52 @@ class aggregate_reader_metadata {
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
 
-  [[nodiscard]] auto const& get_schema(int schema_idx) const
+  /**
+   * @brief Checks if a schema index from 0th source is mapped to the specified file index
+   *
+   * @param schema_idx The index of the SchemaElement in the zeroth file.
+   * @param pfm_idx The index of the file (per_file_metadata) to check mappings for.
+   *
+   * @return True if schema index is mapped
+   */
+  [[nodiscard]] bool is_schema_index_mapped(int schema_idx, int pfm_idx) const;
+
+  /**
+   * @brief Maps schema index from 0th source file to the specified file index
+   *
+   * @param schema_idx The index of the SchemaElement in the zeroth file.
+   * @param pfm_idx The index of the file (per_file_metadata) to map the schema_idx to.
+   *
+   * @return Mapped schema index
+   */
+  [[nodiscard]] int map_schema_index(int schema_idx, int pfm_idx) const;
+
+  /**
+   * @brief Extracts the schema_idx'th SchemaElement from the pfm_idx'th file
+   *
+   * @param schema_idx The index of the SchemaElement to be extracted.
+   * @param pfm_idx The index of the per_file_metadata to extract SchemaElement from, default = 0 if
+   * not specified.
+   *
+   * @return The requested SchemaElement or an error if invalid schema_idx or pfm_idx.
+   */
+  [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
-    return per_file_metadata[0].schema[schema_idx];
+    CUDF_EXPECTS(
+      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+      "Parquet reader encountered an invalid schema_idx or pfm_idx",
+      std::out_of_range);
+    return per_file_metadata[pfm_idx].schema[schema_idx];
   }
 
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
 
   /**
-   * @brief Gets the concrete nesting depth of output cudf columns
+   * @brief Gets the concrete nesting depth of output cudf columns.
+   *
+   * Gets the nesting depth of the output cudf column for the given schema.
+   * The nesting depth must be equal for the given schema_index across all sources.
    *
    * @param schema_index Schema index of the input column
    *
@@ -279,17 +350,17 @@ class aggregate_reader_metadata {
    * @param output_column_schemas schema indices of output columns
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return A tuple of corrected row_start, row_count and list of row group indexes and its
-   *         starting row
+   * @return A tuple of corrected row_start, row_count, list of row group indexes and its
+   *         starting row, and list of number of rows per source.
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
-    host_span<std::vector<size_type> const> row_group_indices,
-    int64_t row_start,
-    std::optional<size_type> const& row_count,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter,
-    rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
+  select_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+                    int64_t row_start,
+                    std::optional<size_type> const& row_count,
+                    host_span<data_type const> output_dtypes,
+                    host_span<int const> output_column_schemas,
+                    std::optional<std::reference_wrapper<ast::expression const>> filter,
+                    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns
@@ -311,7 +382,7 @@ class aggregate_reader_metadata {
                  std::optional<std::vector<std::string>> const& filter_columns_names,
                  bool include_index,
                  bool strings_to_categorical,
-                 type_id timestamp_type_id) const;
+                 type_id timestamp_type_id);
 };
 
 /**

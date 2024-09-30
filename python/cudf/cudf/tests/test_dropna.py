@@ -284,3 +284,12 @@ def test_dropna_multiindex_2(data, how):
     got = gi.dropna(how)
 
     assert_eq(expect, got)
+
+
+def test_ignore_index():
+    pser = pd.Series([1, 2, np.nan], index=[2, 4, 1])
+    gser = cudf.from_pandas(pser)
+
+    result = pser.dropna(ignore_index=True)
+    expected = gser.dropna(ignore_index=True)
+    assert_eq(result, expected)

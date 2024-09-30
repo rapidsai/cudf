@@ -17,16 +17,16 @@
 #pragma once
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/floating_conversion.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup transformation_unaryops
  * @{
@@ -50,14 +50,19 @@ namespace cudf {
  */
 template <typename Fixed,
           typename Floating,
-          typename cuda::std::enable_if_t<is_fixed_point<Fixed>() &&
-                                          cuda::std::is_floating_point_v<Floating>>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<Floating>&& is_fixed_point<Fixed>())>
 CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::scale_type scale)
 {
-  using Rep          = typename Fixed::rep;
-  auto const shifted = numeric::detail::shift<Rep, Fixed::rad>(floating, scale);
-  numeric::scaled_integer<Rep> scaled{static_cast<Rep>(shifted), scale};
-  return Fixed(scaled);
+  using Rep        = typename Fixed::rep;
+  auto const value = [&]() {
+    if constexpr (Fixed::rad == numeric::Radix::BASE_10) {
+      return numeric::detail::convert_floating_to_integral<Rep>(floating, scale);
+    } else {
+      return static_cast<Rep>(numeric::detail::shift<Rep, Fixed::rad>(floating, scale));
+    }
+  }();
+
+  return Fixed(numeric::scaled_integer<Rep>{value, scale});
 }
 
 /**
@@ -75,14 +80,17 @@ CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::sca
  */
 template <typename Floating,
           typename Fixed,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<Floating> &&
-                                          is_fixed_point<Fixed>()>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<Floating>&& is_fixed_point<Fixed>())>
 CUDF_HOST_DEVICE Floating convert_fixed_to_floating(Fixed fixed)
 {
-  using Rep         = typename Fixed::rep;
-  auto const casted = static_cast<Floating>(fixed.value());
-  auto const scale  = numeric::scale_type{-fixed.scale()};
-  return numeric::detail::shift<Rep, Fixed::rad>(casted, scale);
+  using Rep = typename Fixed::rep;
+  if constexpr (Fixed::rad == numeric::Radix::BASE_10) {
+    return numeric::detail::convert_integral_to_floating<Floating>(fixed.value(), fixed.scale());
+  } else {
+    auto const casted = static_cast<Floating>(fixed.value());
+    auto const scale  = numeric::scale_type{-fixed.scale()};
+    return numeric::detail::shift<Rep, Fixed::rad>(casted, scale);
+  }
 }
 
 /**
@@ -95,7 +103,7 @@ CUDF_HOST_DEVICE Floating convert_fixed_to_floating(Fixed fixed)
  */
 template <typename Floating,
           typename Input,
-          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<Floating>>* = nullptr>
+          CUDF_ENABLE_IF(cuda::std::is_floating_point_v<Floating>)>
 CUDF_HOST_DEVICE Floating convert_to_floating(Input input)
 {
   if constexpr (is_fixed_point<Input>()) {
@@ -149,7 +157,7 @@ std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
   cudf::unary_operator op,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements where for every element in `input` `true`
@@ -165,7 +173,7 @@ std::unique_ptr<cudf::column> unary_operation(
 std::unique_ptr<cudf::column> is_null(
   cudf::column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements where for every element in `input` `true`
@@ -181,7 +189,7 @@ std::unique_ptr<cudf::column> is_null(
 std::unique_ptr<cudf::column> is_valid(
   cudf::column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output.
@@ -200,7 +208,17 @@ std::unique_ptr<column> cast(
   column_view const& input,
   data_type out_type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Check if a cast between two datatypes is supported.
+ *
+ * @param from source type
+ * @param to   target type
+ *
+ * @returns true if the cast is supported.
+ */
+bool is_supported_cast(data_type from, data_type to) noexcept;
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements indicating the presence of `NaN` values
@@ -218,7 +236,7 @@ std::unique_ptr<column> cast(
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements indicating the absence of `NaN` values
@@ -237,7 +255,7 @@ std::unique_ptr<column> is_nan(
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

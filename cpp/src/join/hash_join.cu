@@ -22,13 +22,13 @@
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/count.h>
 #include <thrust/functional.h>
@@ -185,6 +185,8 @@ probe_join_hash_table(
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  cudf::experimental::prefetch::detail::prefetch("hash_join", *left_indices, stream);
+  cudf::experimental::prefetch::detail::prefetch("hash_join", *right_indices, stream);
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
@@ -372,7 +374,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                 cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
-                cudf::detail::cuco_allocator{stream}},
+                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}
@@ -383,7 +385,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   if (_is_empty) { return; }
 
   auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, rmm::mr::get_current_device_resource()).first;
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
   cudf::detail::build_join_hash_table(_build,
                                       _preprocessed_build,
                                       _hash_table,

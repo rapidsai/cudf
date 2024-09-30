@@ -21,13 +21,12 @@
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 namespace detail {
 
@@ -55,4 +54,4 @@ std::unique_ptr<column> label_bins(column_view const& input,
 
 /** @} */  // end of group
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

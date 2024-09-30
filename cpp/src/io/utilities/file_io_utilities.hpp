@@ -19,13 +19,13 @@
 #ifdef CUFILE_FOUND
 #include <cudf_test/file_utilities.hpp>
 
-#include <cudf/utilities/thread_pool.hpp>
-
+#include <BS_thread_pool.hpp>
 #include <cufile.h>
 #endif
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -150,7 +150,7 @@ class cufile_input_impl final : public cufile_input {
  private:
   cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
-  cudf::detail::thread_pool pool;
+  BS::thread_pool pool;
 };
 
 /**
@@ -167,7 +167,7 @@ class cufile_output_impl final : public cufile_output {
  private:
   cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
-  cudf::detail::thread_pool pool;
+  BS::thread_pool pool;
 };
 #else
 
@@ -212,7 +212,7 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
 /**
  * @brief Byte range to be read/written in a single operation.
  */
-struct file_io_slice {
+CUDF_EXPORT struct file_io_slice {
   size_t offset;
   size_t size;
 };
@@ -222,7 +222,7 @@ struct file_io_slice {
  *
  * If `max_slice_size` is below 1024, 1024 will be used instead to prevent potential misuse.
  */
-std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size);
+CUDF_EXPORT std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size);
 
 }  // namespace detail
 }  // namespace io

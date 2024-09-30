@@ -26,6 +26,7 @@
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -33,7 +34,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/functional.h>
@@ -448,7 +448,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
   }
 
   auto block_list = cudf::detail::make_device_uvector_async(
-    meta.block_list, stream, rmm::mr::get_current_device_resource());
+    meta.block_list, stream, cudf::get_current_device_resource_ref());
 
   schema_desc.host_to_device_async(stream);
 
@@ -554,9 +554,11 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
       auto d_global_dict_data = rmm::device_uvector<char>(0, stream);
 
       if (total_dictionary_entries > 0) {
-        auto h_global_dict      = std::vector<string_index_pair>(total_dictionary_entries);
-        auto h_global_dict_data = std::vector<char>(dictionary_data_size);
-        size_t dict_pos         = 0;
+        auto h_global_dict =
+          cudf::detail::make_host_vector<string_index_pair>(total_dictionary_entries, stream);
+        auto h_global_dict_data =
+          cudf::detail::make_host_vector<char>(dictionary_data_size, stream);
+        size_t dict_pos = 0;
 
         for (size_t i = 0; i < column_types.size(); ++i) {
           auto const col_idx          = selected_columns[i].first;
@@ -576,9 +578,9 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
         }
 
         d_global_dict = cudf::detail::make_device_uvector_async(
-          h_global_dict, stream, rmm::mr::get_current_device_resource());
+          h_global_dict, stream, cudf::get_current_device_resource_ref());
         d_global_dict_data = cudf::detail::make_device_uvector_async(
-          h_global_dict_data, stream, rmm::mr::get_current_device_resource());
+          h_global_dict_data, stream, cudf::get_current_device_resource_ref());
 
         stream.synchronize();
       }

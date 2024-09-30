@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (c) 2020-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ cmake .. -G"${CMAKE_GENERATOR}" \
          -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
          -DCUDA_STATIC_RUNTIME=$ENABLE_CUDA_STATIC_RUNTIME \
          -DUSE_NVTX=$ENABLE_NVTX \
+         -DCUDF_LARGE_STRINGS_DISABLED=ON \
          -DCUDF_USE_ARROW_STATIC=ON \
          -DCUDF_ENABLE_ARROW_S3=OFF \
          -DBUILD_TESTS=$BUILD_CPP_TESTS \

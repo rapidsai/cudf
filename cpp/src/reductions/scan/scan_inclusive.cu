@@ -22,15 +22,16 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/scan.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/reduction.hpp>
 #include <cudf/strings/detail/scan.hpp>
 #include <cudf/structs/detail/scan.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/find.h>
 #include <thrust/functional.h>

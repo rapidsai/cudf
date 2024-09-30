@@ -35,12 +35,12 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <algorithm>
 
 namespace cudf::io {
+
 // Returns builder for csv_reader_options
 csv_reader_options_builder csv_reader_options::builder(source_info src)
 {
@@ -215,9 +215,7 @@ table_with_metadata read_json(json_reader_options options,
   return json::detail::read_json(datasources, options, stream, mr);
 }
 
-void write_json(json_writer_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr)
+void write_json(json_writer_options const& options, rmm::cuda_stream_view stream)
 {
   auto sinks = make_datasinks(options.get_sink());
   CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for JSON writing");
@@ -226,8 +224,7 @@ void write_json(json_writer_options const& options,
     sinks[0].get(),
     options.get_table(),
     options,
-    stream,
-    mr);
+    stream);
 }
 
 table_with_metadata read_csv(csv_reader_options options,
@@ -252,9 +249,7 @@ table_with_metadata read_csv(csv_reader_options options,
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(csv_writer_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::device_async_resource_ref mr)
+void write_csv(csv_writer_options const& options, rmm::cuda_stream_view stream)
 {
   using namespace cudf::io::detail;
 
@@ -266,8 +261,7 @@ void write_csv(csv_writer_options const& options,
     options.get_table(),
     options.get_names(),
     options,
-    stream,
-    mr);
+    stream);
 }
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
@@ -478,6 +472,8 @@ chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
 {
 }
 
+chunked_orc_reader::chunked_orc_reader() = default;
+
 // This destructor destroys the internal reader instance.
 // Since the declaration of the internal `reader` object does not exist in the header, this
 // destructor needs to be defined in a separate source file which can access to that object's
@@ -497,6 +493,10 @@ table_with_metadata chunked_orc_reader::read_chunk() const
   CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
   return reader->read_chunk();
 }
+
+orc_chunked_writer::orc_chunked_writer() = default;
+
+orc_chunked_writer::~orc_chunked_writer() = default;
 
 /**
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
@@ -624,6 +624,8 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   return writer->close(options.get_column_chunks_file_paths());
 }
 
+chunked_parquet_reader::chunked_parquet_reader() = default;
+
 /**
  * @copydoc cudf::io::chunked_parquet_reader::chunked_parquet_reader
  */
@@ -678,6 +680,8 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
   return reader->read_chunk();
 }
 
+parquet_chunked_writer::parquet_chunked_writer() = default;
+
 /**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
@@ -691,6 +695,8 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   writer = std::make_unique<detail_parquet::writer>(
     std::move(sinks), options, io_detail::single_write_mode::NO, stream);
 }
+
+parquet_chunked_writer::~parquet_chunked_writer() = default;
 
 /**
  * @copydoc cudf::io::parquet_chunked_writer::write
@@ -762,12 +768,23 @@ void parquet_writer_options_base::set_compression(compression_type compression)
 
 void parquet_writer_options_base::enable_int96_timestamps(bool req)
 {
+  CUDF_EXPECTS(not req or not is_enabled_write_arrow_schema(),
+               "INT96 timestamps and arrow schema cannot be simultaneously "
+               "enabled as INT96 timestamps are deprecated in Arrow.");
   _write_timestamps_as_int96 = req;
 }
 
 void parquet_writer_options_base::enable_utc_timestamps(bool val)
 {
   _write_timestamps_as_UTC = val;
+}
+
+void parquet_writer_options_base::enable_write_arrow_schema(bool val)
+{
+  CUDF_EXPECTS(not val or not is_enabled_int96_timestamps(),
+               "arrow schema and INT96 timestamps cannot be simultaneously "
+               "enabled as INT96 timestamps are deprecated in Arrow.");
+  _write_arrow_schema = val;
 }
 
 void parquet_writer_options_base::set_row_group_size_bytes(size_t size_bytes)
@@ -971,6 +988,13 @@ template <class BuilderT, class OptionsT>
 BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::utc_timestamps(bool enabled)
 {
   _options.enable_utc_timestamps(enabled);
+  return static_cast<BuilderT&>(*this);
+}
+
+template <class BuilderT, class OptionsT>
+BuilderT& parquet_writer_options_builder_base<BuilderT, OptionsT>::write_arrow_schema(bool enabled)
+{
+  _options.enable_write_arrow_schema(enabled);
   return static_cast<BuilderT&>(*this);
 }
 

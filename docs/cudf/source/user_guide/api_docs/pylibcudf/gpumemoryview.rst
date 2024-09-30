@@ -2,5 +2,5 @@
 gpumemoryview
 =============
 
-.. automodule:: cudf._lib.pylibcudf.gpumemoryview
+.. automodule:: pylibcudf.gpumemoryview
    :members:

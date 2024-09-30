@@ -16,16 +16,16 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/subword_tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cstdint>
 #include <cstring>
 
-namespace nvtext {
+namespace CUDF_EXPORT nvtext {
 namespace detail {
 
 /**
@@ -47,4 +47,4 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace nvtext
+}  // namespace CUDF_EXPORT nvtext

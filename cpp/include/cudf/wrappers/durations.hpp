@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <cuda/std/chrono>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup timestamp_classes Timestamp
@@ -65,4 +67,4 @@ static_assert(sizeof(duration_us) == sizeof(typename duration_us::rep));
 static_assert(sizeof(duration_ns) == sizeof(typename duration_ns::rep));
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

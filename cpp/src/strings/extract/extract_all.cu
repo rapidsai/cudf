@@ -27,10 +27,10 @@
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/functional.h>
 #include <thrust/transform_scan.h>
@@ -119,7 +119,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto counts   = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto counts   = count_matches(*d_strings, *d_prog, stream, mr);
   auto d_counts = counts->mutable_view().data<size_type>();
 
   // Compute null output rows

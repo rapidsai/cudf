@@ -26,11 +26,10 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <utility>
 #include <vector>
@@ -51,7 +50,7 @@ namespace {
  * @param func The input functor to invoke
  */
 template <bool HasNested, typename Func>
-rmm::device_uvector<cudf::size_type> dipatch_row_equal(
+rmm::device_uvector<cudf::size_type> dispatch_row_equal(
   null_equality compare_nulls,
   nan_equality compare_nans,
   bool has_nulls,
@@ -97,22 +96,23 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
 
   auto const helper_func = [&](auto const& d_equal) {
     using RowHasher = std::decay_t<decltype(d_equal)>;
-    auto set        = hash_set_type<RowHasher>{num_rows,
-                                               0.5,  // desired load factor
-                                               cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                                               d_equal,
-                                               {row_hash.device_hasher(has_nulls)},
-                                               {},
-                                               {},
-                                               cudf::detail::cuco_allocator{stream},
-                                               stream.value()};
+    auto set        = hash_set_type<RowHasher>{
+      num_rows,
+      0.5,  // desired load factor
+      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      d_equal,
+      {row_hash.device_hasher(has_nulls)},
+      {},
+      {},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
     return detail::reduce_by_row(set, num_rows, keep, stream, mr);
   };
 
   if (cudf::detail::has_nested_columns(input)) {
-    return dipatch_row_equal<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dispatch_row_equal<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
   } else {
-    return dipatch_row_equal<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dispatch_row_equal<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
   }
 }
 
@@ -133,7 +133,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                                    nulls_equal,
                                                    nans_equal,
                                                    stream,
-                                                   rmm::mr::get_current_device_resource());
+                                                   cudf::get_current_device_resource_ref());
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,
@@ -149,11 +149,11 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
                                 nan_equality nans_equal,
+                                rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(
-    input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+  return detail::distinct(input, keys, keep, nulls_equal, nans_equal, stream, mr);
 }
 
 std::unique_ptr<column> distinct_indices(table_view const& input,

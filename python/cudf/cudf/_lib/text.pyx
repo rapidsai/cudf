@@ -8,9 +8,8 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.io.text cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.io.text cimport (
     byte_range_info,
     data_chunk_source,
     make_source,
@@ -19,6 +18,8 @@ from cudf._lib.pylibcudf.libcudf.io.text cimport (
     multibyte_split,
     parse_options,
 )
+
+from cudf._lib.column cimport Column
 
 
 def read_text(object filepaths_or_buffers,
@@ -85,4 +86,4 @@ def read_text(object filepaths_or_buffers,
             delim,
             c_options))
 
-    return {None: Column.from_unique_ptr(move(c_col))}
+    return Column.from_unique_ptr(move(c_col))

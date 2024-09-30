@@ -23,11 +23,11 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/reverse.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -45,7 +45,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
   // The labels are also a map from each list element to its corresponding zero-based list index.
   auto const labels =
-    generate_labels(input, child.size(), stream, rmm::mr::get_current_device_resource());
+    generate_labels(input, child.size(), stream, cudf::get_current_device_resource_ref());
 
   // The offsets of the output lists column.
   auto out_offsets = get_normalized_offsets(input, stream, mr);

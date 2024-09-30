@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -42,5 +42,5 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize)
 
   EXPECT_THROW(cudf::binary_operation(
                  lhs, rhs, cudf::binary_operator::ADD, cudf::data_type(cudf::type_id::INT64)),
-               cudf::logic_error);
+               std::invalid_argument);
 }

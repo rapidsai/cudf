@@ -15,7 +15,12 @@ from dask.utils import M
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
+from dask_cudf.tests.utils import (
+    QUERY_PLANNING_ON,
+    require_dask_expr,
+    skip_dask_expr,
+    xfail_dask_expr,
+)
 
 
 def test_from_dict_backend_dispatch():
@@ -946,12 +951,16 @@ def test_implicit_array_conversion_cupy():
     def func(x):
         return x.values
 
-    # Need to compute the dask collection for now.
-    # See: https://github.com/dask/dask/issues/11017
-    result = ds.map_partitions(func, meta=s.values).compute()
-    expect = func(s)
+    result = ds.map_partitions(func, meta=s.values)
 
-    dask.array.assert_eq(result, expect)
+    if QUERY_PLANNING_ON:
+        # Check Array and round-tripped DataFrame
+        dask.array.assert_eq(result, func(s))
+        dd.assert_eq(result.to_dask_dataframe(), s, check_index=False)
+    else:
+        # Legacy version still carries numpy metadata
+        # See: https://github.com/dask/dask/issues/11017
+        dask.array.assert_eq(result.compute(), func(s))
 
 
 def test_implicit_array_conversion_cupy_sparse():
@@ -963,8 +972,6 @@ def test_implicit_array_conversion_cupy_sparse():
     def func(x):
         return cupyx.scipy.sparse.csr_matrix(x.values)
 
-    # Need to compute the dask collection for now.
-    # See: https://github.com/dask/dask/issues/11017
     result = ds.map_partitions(func, meta=s.values).compute()
     expect = func(s)
 
@@ -993,3 +1000,42 @@ def test_series_isin_error():
         ser.isin([1, 5, "a"])
     with pytest.raises(TypeError):
         ddf.isin([1, 5, "a"]).compute()
+
+
+@require_dask_expr()
+def test_to_backend_simplify():
+    # Check that column projection is not blocked by to_backend
+    with dask.config.set({"dataframe.backend": "pandas"}):
+        df = dd.from_dict({"x": [1, 2, 3], "y": [4, 5, 6]}, npartitions=2)
+        df2 = df.to_backend("cudf")[["y"]].simplify()
+        df3 = df[["y"]].to_backend("cudf").to_backend("cudf").simplify()
+        assert df2._name == df3._name
+
+
+@pytest.mark.parametrize("numeric_only", [True, False])
+@pytest.mark.parametrize("op", ["corr", "cov"])
+def test_cov_corr(op, numeric_only):
+    df = cudf.DataFrame.from_dict(
+        {
+            "x": np.random.randint(0, 5, size=10),
+            "y": np.random.normal(size=10),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    res = getattr(ddf, op)(numeric_only=numeric_only)
+    # Use to_pandas until cudf supports numeric_only
+    # (See: https://github.com/rapidsai/cudf/issues/12626)
+    expect = getattr(df.to_pandas(), op)(numeric_only=numeric_only)
+    dd.assert_eq(res, expect)
+
+
+def test_rename_axis_after_join():
+    df1 = cudf.DataFrame(index=["a", "b", "c"], data=dict(a=[1, 2, 3]))
+    df1.index.name = "test"
+    ddf1 = dd.from_pandas(df1, 2)
+
+    df2 = cudf.DataFrame(index=["a", "b", "d"], data=dict(b=[1, 2, 3]))
+    ddf2 = dd.from_pandas(df2, 2)
+    result = ddf1.join(ddf2, how="outer")
+    expected = df1.join(df2, how="outer")
+    dd.assert_eq(result, expected, check_index=False)

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -907,8 +907,9 @@ public class JCudfSerialization {
     boolean success = false;
     try {
       for (int i = 0; i < columns.length; i++) {
-        onHost[i] = columns[i].copyToHost();
+        onHost[i] = columns[i].copyToHostAsync(Cuda.DEFAULT_STREAM);
       }
+      Cuda.DEFAULT_STREAM.sync();
       ColumnBufferProvider[] ret = providersFrom(onHost, true);
       success = true;
       return ret;

@@ -39,6 +39,9 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
+# disable large strings
+export LIBCUDF_LARGE_STRINGS_ENABLED=0
+
 rapids-logger "Run Java tests"
 pushd java
 mvn test -B -DCUDF_JNI_ENABLE_PROFILING=OFF

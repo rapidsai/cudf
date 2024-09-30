@@ -92,6 +92,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer, List<HostColumnVectorCore> nestedHcv) {
+    // NOTE: This constructor MUST NOT examine the contents of any host buffers, as they may be
+    //       asynchronously written by the device.
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, nestedHcv);
     refCount = 0;
     incRefCountInternal(true);
@@ -100,6 +102,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
   HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer) {
+    // NOTE: This constructor MUST NOT examine the contents of any host buffers, as they may be
+    //       asynchronously written by the device.
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, new ArrayList<>());
     assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
     if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {

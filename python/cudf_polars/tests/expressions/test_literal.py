@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pylibcudf as plc
 import pytest
 
 import polars as pl
@@ -64,11 +65,17 @@ def test_timelike_literal(timestamp, timedelta):
         adjusted=timestamp + timedelta,
         two_delta=timedelta + timedelta,
     )
-    schema = q.collect_schema()
-    time_type = schema["time"]
-    delta_type = schema["delta"]
-    if dtypes.have_compatible_resolution(
-        dtypes.from_polars(time_type).id(), dtypes.from_polars(delta_type).id()
+    schema = {k: dtypes.from_polars(v) for k, v in q.collect_schema().items()}
+    if plc.binaryop.is_supported_operation(
+        schema["adjusted"],
+        schema["time"],
+        schema["delta"],
+        plc.binaryop.BinaryOperator.ADD,
+    ) and plc.binaryop.is_supported_operation(
+        schema["two_delta"],
+        schema["delta"],
+        schema["delta"],
+        plc.binaryop.BinaryOperator.ADD,
     ):
         assert_gpu_result_equal(q)
     else:

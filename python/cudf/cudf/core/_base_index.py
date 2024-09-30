@@ -19,15 +19,7 @@ from cudf._lib.stream_compaction import (
 )
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_bool_dtype,
-    is_integer,
-    is_integer_dtype,
-    is_list_like,
-    is_scalar,
-    is_signed_integer_dtype,
-    is_unsigned_integer_dtype,
-)
+from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.errors import MixedTypeError
@@ -37,6 +29,8 @@ from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+    import cupy
 
     from cudf.core.column_accessor import ColumnAccessor
 
@@ -60,6 +54,12 @@ class BaseIndex(Serializable):
 
     def __len__(self):
         raise NotImplementedError
+
+    def __bool__(self):
+        raise ValueError(
+            f"The truth value of a {type(self).__name__} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
 
     @property
     def size(self):
@@ -98,7 +98,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def argsort(self, *args, **kwargs):
+    def argsort(self, *args, **kwargs) -> cupy.ndarray:
         """Return the integer indices that would sort the index.
 
         Parameters vary by subclass.
@@ -608,20 +608,14 @@ class BaseIndex(Serializable):
             )
 
         if cudf.get_option("mode.pandas_compatible"):
-            if (
-                is_bool_dtype(self.dtype) and not is_bool_dtype(other.dtype)
-            ) or (
-                not is_bool_dtype(self.dtype) and is_bool_dtype(other.dtype)
+            if (self.dtype.kind == "b" and other.dtype.kind != "b") or (
+                self.dtype.kind != "b" and other.dtype.kind == "b"
             ):
                 # Bools + other types will result in mixed type.
                 # This is not yet consistent in pandas and specific to APIs.
                 raise MixedTypeError("Cannot perform union with mixed types")
-            if (
-                is_signed_integer_dtype(self.dtype)
-                and is_unsigned_integer_dtype(other.dtype)
-            ) or (
-                is_unsigned_integer_dtype(self.dtype)
-                and is_signed_integer_dtype(other.dtype)
+            if (self.dtype.kind == "i" and other.dtype.kind == "u") or (
+                self.dtype.kind == "u" and other.dtype.kind == "i"
             ):
                 # signed + unsigned types will result in
                 # mixed type for union in pandas.
@@ -804,64 +798,6 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
-    def to_frame(self, index=True, name=no_default):
-        """Create a DataFrame with a column containing this Index
-
-        Parameters
-        ----------
-        index : boolean, default True
-            Set the index of the returned DataFrame as the original Index
-        name : object, defaults to index.name
-            The passed name should substitute for the index name (if it has
-            one).
-
-        Returns
-        -------
-        DataFrame
-            DataFrame containing the original Index data.
-
-        See Also
-        --------
-        Index.to_series : Convert an Index to a Series.
-        Series.to_frame : Convert Series to DataFrame.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(['Ant', 'Bear', 'Cow'], name='animal')
-        >>> idx.to_frame()
-               animal
-        animal
-        Ant       Ant
-        Bear     Bear
-        Cow       Cow
-
-        By default, the original Index is reused. To enforce a new Index:
-
-        >>> idx.to_frame(index=False)
-            animal
-        0   Ant
-        1  Bear
-        2   Cow
-
-        To override the name of the resulting column, specify `name`:
-
-        >>> idx.to_frame(index=False, name='zoo')
-            zoo
-        0   Ant
-        1  Bear
-        2   Cow
-        """
-
-        if name is no_default:
-            col_name = 0 if self.name is None else self.name
-        else:
-            col_name = name
-
-        return cudf.DataFrame(
-            {col_name: self._values}, index=self if index else None
-        )
-
     def to_arrow(self):
         """Convert to a suitable Arrow object."""
         raise NotImplementedError
@@ -873,6 +809,24 @@ class BaseIndex(Serializable):
     def to_numpy(self):
         """Convert to a numpy array."""
         raise NotImplementedError
+
+    def to_flat_index(self) -> Self:
+        """
+        Identity method.
+
+        This is implemented for compatibility with subclass implementations
+        when chaining.
+
+        Returns
+        -------
+        pd.Index
+            Caller.
+
+        See Also
+        --------
+        MultiIndex.to_flat_index : Subclass implementation.
+        """
+        return self
 
     def any(self):
         """
@@ -951,7 +905,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def isin(self, values):
+    def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
 
         Compute boolean array of whether each index value is found in
@@ -962,6 +916,9 @@ class BaseIndex(Serializable):
         ----------
         values : set, list-like, Index
             Sought values.
+        level : str or int, optional
+            Name or position of the index level to use (if the index is a
+            `MultiIndex`).
 
         Returns
         -------
@@ -985,7 +942,7 @@ class BaseIndex(Serializable):
         # ColumnBase.isin).
         raise NotImplementedError
 
-    def unique(self):
+    def unique(self, level: int | None = None):
         """
         Return unique values in the index.
 
@@ -1526,7 +1483,7 @@ class BaseIndex(Serializable):
         ascending=True,
         na_position="last",
         key=None,
-    ):
+    ) -> Self | tuple[Self, cupy.ndarray]:
         """
         Return a sorted copy of the index, and optionally return the indices
         that sorted the index itself.
@@ -1683,7 +1640,7 @@ class BaseIndex(Serializable):
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
             on = (
-                lhs._data.select_by_index(level).names[0]
+                lhs._data.get_labels_by_index(level)[0]
                 if isinstance(level, int)
                 else level
             )
@@ -1964,7 +1921,7 @@ class BaseIndex(Serializable):
                 name=index.name,
             )
         else:
-            return cudf.Index(
+            return cudf.Index._from_column(
                 column.as_column(index, nan_as_null=nan_as_null),
                 name=index.name,
             )
@@ -1994,14 +1951,14 @@ class BaseIndex(Serializable):
         return self._from_columns_like_self(
             drop_duplicates(
                 list(self._columns),
-                keys=range(len(self._data)),
+                keys=range(len(self._columns)),
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),
             self._column_names,
         )
 
-    def duplicated(self, keep="first"):
+    def duplicated(self, keep="first") -> cupy.ndarray:
         """
         Indicate duplicate index values.
 
@@ -2098,7 +2055,7 @@ class BaseIndex(Serializable):
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
-        if not is_integer_dtype(gather_map.dtype):
+        if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(size_type_dtype)
 
         if not _gather_map_is_valid(
@@ -2152,7 +2109,7 @@ class BaseIndex(Serializable):
         Rows corresponding to `False` is dropped.
         """
         boolean_mask = cudf.core.column.as_column(boolean_mask)
-        if not is_bool_dtype(boolean_mask.dtype):
+        if boolean_mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
         return self._from_columns_like_self(

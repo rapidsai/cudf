@@ -7,16 +7,17 @@ from libcpp.utility cimport move
 
 from enum import IntEnum
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.nvtext.stemmer cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.nvtext.stemmer cimport (
     is_letter as cpp_is_letter,
     letter_type,
     porter_stemmer_measure as cpp_porter_stemmer_measure,
     underlying_type_t_letter_type,
 )
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type
+
+from cudf._lib.column cimport Column
 
 
 class LetterType(IntEnum):

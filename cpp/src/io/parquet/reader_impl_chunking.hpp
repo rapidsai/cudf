@@ -41,6 +41,12 @@ struct file_intermediate_data {
   // is not capped by global_skip_rows and global_num_rows.
   std::vector<std::size_t> input_pass_start_row_count{};
 
+  // number of rows to be read from each data source
+  std::vector<std::size_t> num_rows_per_source{};
+
+  // partial sum of the number of rows per data source
+  std::vector<std::size_t> exclusive_sum_num_rows_per_source{};
+
   size_t _current_input_pass{0};  // current input pass index
   size_t _output_chunk_count{0};  // how many output chunks we have produced
 

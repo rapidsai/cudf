@@ -26,7 +26,11 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -508,6 +512,17 @@ def test_dataframe_drop_columns(pdf, columns, inplace):
         expected = pdf
         actual = gdf
 
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("obj", ["Index", "Series"])
+def test_drop_cudf_obj_columns(obj):
+    pdf = pd.DataFrame({"A": [1], "B": [1]})
+    gdf = cudf.from_pandas(pdf)
+
+    columns = ["B"]
+    expected = pdf.drop(labels=getattr(pd, obj)(columns), axis=1)
+    actual = gdf.drop(columns=getattr(cudf, obj)(columns), axis=1)
     assert_eq(expected, actual)
 
 
@@ -3561,8 +3576,11 @@ def test_dataframe_empty_sort_index():
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_sort_index(
-    index, axis, ascending, inplace, ignore_index, na_position
+    request, index, axis, ascending, inplace, ignore_index, na_position
 ):
+    if not PANDAS_GE_220 and axis in (1, "columns") and ignore_index:
+        pytest.skip(reason="Bug fixed in pandas-2.2")
+
     pdf = pd.DataFrame(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
         index=index,
@@ -3612,6 +3630,10 @@ def test_dataframe_sort_index(
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_dataframe_mulitindex_sort_index(
     request, axis, level, ascending, inplace, ignore_index, na_position
 ):
@@ -4264,34 +4286,36 @@ def test_empty_dataframe_describe():
 def test_as_column_types():
     col = column.as_column(cudf.Series([], dtype="float64"))
     assert_eq(col.dtype, np.dtype("float64"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="float64"))
 
     assert_eq(pds, gds)
 
     col = column.as_column(cudf.Series([], dtype="float64"), dtype="float32")
     assert_eq(col.dtype, np.dtype("float32"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="float32"))
 
     assert_eq(pds, gds)
 
     col = column.as_column(cudf.Series([], dtype="float64"), dtype="str")
     assert_eq(col.dtype, np.dtype("object"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
     col = column.as_column(cudf.Series([], dtype="float64"), dtype="object")
     assert_eq(col.dtype, np.dtype("object"))
-    gds = cudf.Series(col)
+    gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="object"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
-    gds = cudf.Series(column.as_column(np.array([1, 2, 3]), dtype="float32"))
+    gds = cudf.Series._from_column(
+        column.as_column(np.array([1, 2, 3]), dtype="float32")
+    )
 
     assert_eq(pds, gds)
 
@@ -4301,23 +4325,25 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series([], dtype="float64")
-    gds = cudf.Series(column.as_column(pds))
+    gds = cudf.Series._from_column(column.as_column(pds))
     assert_eq(pds, gds)
 
     pds = pd.Series([1, 2, 4], dtype="int64")
-    gds = cudf.Series(column.as_column(cudf.Series([1, 2, 4]), dtype="int64"))
+    gds = cudf.Series._from_column(
+        column.as_column(cudf.Series([1, 2, 4]), dtype="int64")
+    )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
-    gds = cudf.Series(
+    gds = cudf.Series._from_column(
         column.as_column(cudf.Series([1.2, 18.0, 9.0]), dtype="float32")
     )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
-    gds = cudf.Series(
+    gds = cudf.Series._from_column(
         column.as_column(cudf.Series([1.2, 18.0, 9.0]), dtype="str")
     )
 
@@ -5234,7 +5260,7 @@ def test_rowwise_ops(data, op, skipna, numeric_only):
             else (pdf[column].notna().count() == 0)
         )
         or cudf.api.types.is_numeric_dtype(pdf[column].dtype)
-        or cudf.api.types.is_bool_dtype(pdf[column].dtype)
+        or pdf[column].dtype.kind == "b"
         for column in pdf
     ):
         with pytest.raises(TypeError):
@@ -5457,9 +5483,7 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna, numeric_only):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    if not numeric_only and not all(
-        cudf.api.types.is_datetime64_dtype(dt) for dt in gdf.dtypes
-    ):
+    if not numeric_only and not all(dt.kind == "M" for dt in gdf.dtypes):
         with pytest.raises(TypeError):
             got = getattr(gdf, op)(
                 axis=1, skipna=skipna, numeric_only=numeric_only
@@ -6523,7 +6547,9 @@ def test_from_pandas_for_series_nan_as_null(nan_as_null):
     data = [np.nan, 2.0, 3.0]
     psr = pd.Series(data)
 
-    expected = cudf.Series(column.as_column(data, nan_as_null=nan_as_null))
+    expected = cudf.Series._from_column(
+        column.as_column(data, nan_as_null=nan_as_null)
+    )
     got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
 
     assert_eq(expected, got)
@@ -6742,6 +6768,10 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
         np.array("abc"),
         None,
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
 )
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(
@@ -9405,7 +9435,6 @@ def test_rename_for_level_RangeIndex_dataframe():
     assert_eq(expect, got)
 
 
-@pytest_xfail(reason="level=None not implemented yet")
 def test_rename_for_level_is_None_MC():
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     gdf.columns = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1)])
@@ -10835,7 +10864,7 @@ def test_dataframe_contains(name, contains, other_names):
         expectation = contains is cudf.NA and name is cudf.NA
         assert (contains in pdf) == expectation
         assert (contains in gdf) == expectation
-    elif pd.api.types.is_float_dtype(gdf.columns.dtype):
+    elif gdf.columns.dtype.kind == "f":
         # In some cases, the columns are converted to an Index[float] based on
         # the other column names. That casts name values from None to np.nan.
         expectation = contains is np.nan and (name is None or name is np.nan)
@@ -11102,3 +11131,18 @@ def test_from_records_with_index_no_shallow_copy():
     data = np.array([(1.0, 2), (3.0, 4)], dtype=[("x", "<f8"), ("y", "<i8")])
     df = cudf.DataFrame(data.view(np.recarray), index=idx)
     assert df.index is idx
+
+
+def test_bool_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[cudf.DataFrame()]],
+        rfunc_args_and_kwargs=[[pd.DataFrame()]],
+    )
+
+
+def test_from_pandas_preserve_column_dtype():
+    df = pd.DataFrame([[1, 2]], columns=pd.Index([1, 2], dtype="int8"))
+    result = cudf.DataFrame.from_pandas(df)
+    pd.testing.assert_index_equal(result.columns, df.columns, exact=True)

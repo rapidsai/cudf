@@ -30,10 +30,10 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/copy.h>
@@ -321,9 +321,9 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     get_offset_value(input.offsets(), input.offset(), stream);
 
   auto d_targets =
-    create_string_vector_from_column(targets, stream, rmm::mr::get_current_device_resource());
+    create_string_vector_from_column(targets, stream, cudf::get_current_device_resource_ref());
   auto d_replacements =
-    create_string_vector_from_column(repls, stream, rmm::mr::get_current_device_resource());
+    create_string_vector_from_column(repls, stream, cudf::get_current_device_resource_ref());
 
   replace_multi_parallel_fn fn{
     *d_strings,
@@ -361,7 +361,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // create a vector of offsets to each string's set of target positions
   auto const targets_offsets = create_offsets_from_positions(
-    input, targets_positions, stream, rmm::mr::get_current_device_resource());
+    input, targets_positions, stream, cudf::get_current_device_resource_ref());
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 
@@ -451,8 +451,8 @@ struct replace_multi_fn {
     while (spos < d_str.size_bytes()) {
       for (int tgt_idx = 0; tgt_idx < d_targets.size(); ++tgt_idx) {
         auto const d_tgt = d_targets.element<string_view>(tgt_idx);
-        if ((d_tgt.size_bytes() <= (d_str.size_bytes() - spos)) &&    // check fit
-            (d_tgt.compare(in_ptr + spos, d_tgt.size_bytes()) == 0))  // and match
+        if (!d_tgt.empty() && (d_tgt.size_bytes() <= (d_str.size_bytes() - spos)) &&  // check fit
+            (d_tgt.compare(in_ptr + spos, d_tgt.size_bytes()) == 0))                  // and match
         {
           auto const d_repl = (d_repls.size() == 1) ? d_repls.element<string_view>(0)
                                                     : d_repls.element<string_view>(tgt_idx);
@@ -468,9 +468,8 @@ struct replace_multi_fn {
       }
       ++spos;
     }
-    if (out_ptr)  // copy remainder
-    {
-      memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
+    if (out_ptr) {
+      memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);  // copy remainder
     } else {
       d_sizes[idx] = bytes;
     }
@@ -529,17 +528,6 @@ std::unique_ptr<column> replace_multiple(strings_column_view const& strings,
                                          strings_column_view const& repls,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::replace_multiple(strings, targets, repls, stream, mr);
-}
-
-// deprecated in 24.08
-std::unique_ptr<column> replace(strings_column_view const& strings,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::replace_multiple(strings, targets, repls, stream, mr);

@@ -20,10 +20,10 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace {
@@ -77,7 +77,9 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
 std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
                                                std::unique_ptr<column> indices_column,
                                                rmm::device_buffer&& null_mask,
-                                               size_type null_count)
+                                               size_type null_count,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls");
   CUDF_EXPECTS(!indices_column->has_nulls(), "indices column must not have nulls");
@@ -89,7 +91,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
   children.emplace_back(std::move(keys_column));
   return std::make_unique<column>(data_type{type_id::DICTIONARY32},
                                   count,
-                                  rmm::device_buffer{},
+                                  rmm::device_buffer{0, stream, mr},
                                   std::move(null_mask),
                                   null_count,
                                   std::move(children));
@@ -134,8 +136,11 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
   auto indices_column = [&] {
     // If the types match, then just commandeer the column's data buffer.
     if (new_type.id() == indices_type) {
-      return std::make_unique<column>(
-        new_type, indices_size, std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
+      return std::make_unique<column>(new_type,
+                                      indices_size,
+                                      std::move(*(contents.data.release())),
+                                      rmm::device_buffer{0, stream, mr},
+                                      0);
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{

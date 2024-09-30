@@ -4,11 +4,54 @@ import functools
 import dask_expr._shuffle as _shuffle_module
 from dask_expr import new_collection
 from dask_expr._cumulative import CumulativeBlockwise
-from dask_expr._expr import Expr, VarColumns
+from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
 from dask_expr._reductions import Reduction, Var
 
 from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
 from dask.dataframe.dispatch import is_categorical_dtype
+from dask.typing import no_default
+
+import cudf
+
+##
+## Custom expressions
+##
+
+
+class RenameAxisCudf(RenameAxis):
+    # TODO: Remove this after rename_axis is supported in cudf
+    # (See: https://github.com/rapidsai/cudf/issues/16895)
+    @staticmethod
+    def operation(df, index=no_default, **kwargs):
+        if index != no_default:
+            df.index.name = index
+            return df
+        raise NotImplementedError(
+            "Only `index` is supported for the cudf backend"
+        )
+
+
+class ToCudfBackend(Elemwise):
+    # TODO: Inherit from ToBackend when rapids-dask-dependency
+    # is pinned to dask>=2024.8.1
+    _parameters = ["frame", "options"]
+    _projection_passthrough = True
+    _filter_passthrough = True
+    _preserves_partitioning_information = True
+
+    @staticmethod
+    def operation(df, options):
+        from dask_cudf.backends import to_cudf_dispatch
+
+        return to_cudf_dispatch(df, **options)
+
+    def _simplify_down(self):
+        if isinstance(
+            self.frame._meta, (cudf.DataFrame, cudf.Series, cudf.Index)
+        ):
+            # We already have cudf data
+            return self.frame
+
 
 ##
 ## Custom expression patching

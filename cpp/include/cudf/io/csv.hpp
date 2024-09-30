@@ -20,9 +20,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 #include <string>
@@ -31,7 +29,7 @@
 #include <variant>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
@@ -1354,7 +1352,7 @@ class csv_reader_options_builder {
 table_with_metadata read_csv(
   csv_reader_options options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 /**
@@ -1756,12 +1754,10 @@ class csv_writer_options_builder {
  *
  * @param options Settings for controlling writing behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(csv_writer_options const& options,
-               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-               rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

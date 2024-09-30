@@ -14,14 +14,24 @@ import tempfile
 import types
 from io import BytesIO, StringIO
 
+import cupy as cp
+import jupyter_client
+import nbformat
 import numpy as np
 import pyarrow as pa
 import pytest
-from numba import NumbaDeprecationWarning
+from nbconvert.preprocessors import ExecutePreprocessor
+from numba import NumbaDeprecationWarning, vectorize
 from pytz import utc
 
+from cudf.core._compat import PANDAS_GE_220
 from cudf.pandas import LOADED, Profiler
-from cudf.pandas.fast_slow_proxy import _Unusable, is_proxy_object
+from cudf.pandas.fast_slow_proxy import (
+    ProxyFallbackError,
+    _Unusable,
+    is_proxy_object,
+)
+from cudf.testing import assert_eq
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
@@ -41,6 +51,8 @@ from pandas.tseries.holiday import (
     USThanksgivingDay,
     get_calendar,
 )
+
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
@@ -531,12 +543,15 @@ def test_array_ufunc(series):
 @pytest.mark.xfail(strict=False, reason="Fails in CI, passes locally.")
 def test_groupby_apply_func_returns_series(dataframe):
     pdf, df = dataframe
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+
     expect = pdf.groupby("a").apply(
-        lambda group: pd.Series({"x": 1}), include_groups=False
+        lambda group: pd.Series({"x": 1}), **kwargs
     )
-    got = df.groupby("a").apply(
-        lambda group: xpd.Series({"x": 1}), include_groups=False
-    )
+    got = df.groupby("a").apply(lambda group: xpd.Series({"x": 1}), **kwargs)
     tm.assert_equal(expect, got)
 
 
@@ -607,6 +622,10 @@ def test_array_function_series_fallback(series):
     tm.assert_equal(expect, got)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_timedeltaproperties(series):
     psr, sr = series
     psr, sr = psr.astype("timedelta64[ns]"), sr.astype("timedelta64[ns]")
@@ -666,6 +685,10 @@ def test_maintain_container_subclasses(multiindex):
     assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas due to unsupported boxcar window type",
+)
 def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
@@ -1080,6 +1103,13 @@ def test_pickle(obj):
 
     tm.assert_equal(obj, copy)
 
+    with tempfile.TemporaryFile() as f:
+        xpd.to_pickle(obj, f)
+        f.seek(0)
+        copy = xpd.read_pickle(f)
+
+    tm.assert_equal(obj, copy)
+
 
 def test_dataframe_query():
     cudf_pandas_df = xpd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
@@ -1274,6 +1304,10 @@ def test_super_attribute_lookup():
     assert s.max_times_two() == 6
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
+)
 def test_floordiv_array_vs_df():
     xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
     parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
@@ -1545,6 +1579,10 @@ def test_numpy_cupy_flatiter(series):
     assert type(arr.flat._fsproxy_slow) == np.flatiter
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
+)
 def test_arrow_string_arrays():
     cu_s = xpd.Series(["a", "b", "c"])
     pd_s = pd.Series(["a", "b", "c"])
@@ -1566,3 +1604,151 @@ def test_arrow_string_arrays():
     )
 
     tm.assert_equal(cu_arr, pd_arr)
+
+
+@pytest.mark.parametrize("indexer", ["at", "iat"])
+def test_at_iat(indexer):
+    df = xpd.DataFrame(range(3))
+    result = getattr(df, indexer)[0, 0]
+    assert result == 0
+
+    getattr(df, indexer)[0, 0] = 1
+    expected = pd.DataFrame([1, 1, 2])
+    tm.assert_frame_equal(df, expected)
+
+
+def test_at_setitem_empty():
+    df = xpd.DataFrame({"name": []}, dtype="float64")
+    df.at[0, "name"] = 1.0
+    df.at[0, "new"] = 2.0
+    expected = pd.DataFrame({"name": [1.0], "new": [2.0]})
+    tm.assert_frame_equal(df, expected)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        xpd.Index([1, 2, 3], name="foo"),
+        xpd.Index(["a", "b", "c"], name="foo"),
+        xpd.RangeIndex(start=0, stop=3, step=1, name="foo"),
+        xpd.CategoricalIndex(["a", "b", "a"], name="foo"),
+        xpd.DatetimeIndex(
+            ["2024-04-24", "2025-04-24", "2026-04-24"], name="foo"
+        ),
+        xpd.TimedeltaIndex(["1 days", "2 days", "3 days"], name="foo"),
+        xpd.PeriodIndex(
+            ["2024-06", "2023-06", "2022-06"], freq="M", name="foo"
+        ),
+        xpd.IntervalIndex.from_breaks([0, 1, 2, 3], name="foo"),
+        xpd.MultiIndex.from_tuples(
+            [(1, "a"), (2, "b"), (3, "c")], names=["foo1", "bar1"]
+        ),
+    ],
+)
+def test_change_index_name(index):
+    s = xpd.Series([1, 2, object()], index=index)
+    df = xpd.DataFrame({"values": [1, 2, object()]}, index=index)
+
+    if isinstance(index, xpd.MultiIndex):
+        names = ["foo2", "bar2"]
+        s.index.names = names
+        df.index.names = names
+
+        assert s.index.names == names
+        assert df.index.names == names
+    else:
+        name = "bar"
+        s.index.name = name
+        df.index.name = name
+
+        assert s.index.name == name
+        assert df.index.name == name
+
+
+def test_notebook_slow_repr():
+    notebook_filename = (
+        os.path.dirname(os.path.abspath(__file__))
+        + "/data/repr_slow_down_test.ipynb"
+    )
+    with open(notebook_filename, "r", encoding="utf-8") as f:
+        nb = nbformat.read(f, as_version=4)
+
+    ep = ExecutePreprocessor(
+        timeout=30, kernel_name=jupyter_client.KernelManager().kernel_name
+    )
+
+    try:
+        ep.preprocess(nb, {"metadata": {"path": "./"}})
+    except Exception as e:
+        assert False, f"Error executing the notebook: {e}"
+
+    # Collect the outputs
+    html_result = nb.cells[2]["outputs"][0]["data"]["text/html"]
+    for string in {
+        "div",
+        "Column_1",
+        "Column_2",
+        "Column_3",
+        "Column_4",
+        "tbody",
+        "</table>",
+    }:
+        assert (
+            string in html_result
+        ), f"Expected string {string} not found in the output"
+
+
+def test_numpy_ndarray_isinstancecheck(array):
+    arr1, arr2 = array
+    assert isinstance(arr1, np.ndarray)
+    assert isinstance(arr2, np.ndarray)
+
+
+def test_numpy_ndarray_np_ufunc(array):
+    arr1, arr2 = array
+
+    @np.vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_cp_ufunc(array):
+    arr1, arr2 = array
+
+    @cp.vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(cp.asarray(arr1)), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_numba_ufunc(array):
+    arr1, arr2 = array
+
+    @vectorize
+    def add_one_ufunc(arr):
+        return arr + 1
+
+    assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
+
+
+def test_numpy_ndarray_numba_cuda_ufunc(array):
+    arr1, arr2 = array
+
+    @vectorize(["int64(int64)"], target="cuda")
+    def add_one_ufunc(a):
+        return a + 1
+
+    assert_eq(cp.asarray(add_one_ufunc(arr1)), cp.asarray(add_one_ufunc(arr2)))
+
+
+@pytest.mark.xfail(
+    reason="Fallback expected because casting to object is not supported",
+)
+def test_fallback_raises_error(monkeypatch):
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        with pytest.raises(ProxyFallbackError):
+            pd.Series(range(2)).astype(object)
