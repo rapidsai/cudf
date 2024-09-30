@@ -51,8 +51,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::MIN>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
@@ -74,8 +72,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target       = cudf::detail::target_type_t<Source, cudf::aggregation::MIN>;
     using DeviceTarget = cudf::device_storage_type_t<Target>;
     using DeviceSource = cudf::device_storage_type_t<Source>;
@@ -99,8 +95,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::MAX>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_max(&target_casted[target_index],
@@ -121,8 +115,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::MAX>;
 
     using DeviceTarget = cudf::device_storage_type_t<Target>;
@@ -148,8 +140,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::SUM>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index],
@@ -171,8 +161,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::SUM>;
 
     using DeviceTarget = cudf::device_storage_type_t<Target>;
@@ -223,8 +211,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     dispatch_type_and_aggregation(
       source.child(cudf::dictionary_column_view::keys_column_index).type(),
       k,
@@ -248,8 +234,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::SUM_OF_SQUARES>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     auto value            = static_cast<Target>(source.element<Source>(source_index));
@@ -270,8 +254,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::PRODUCT>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_mul(&target_casted[target_index],
@@ -293,8 +275,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index], Target{1});
@@ -333,8 +313,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMAX>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     auto old              = cudf::detail::atomic_cas(
@@ -361,8 +339,6 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    if (source.is_null(source_index)) { return; }
-
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMIN>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     auto old              = cudf::detail::atomic_cas(
@@ -385,9 +361,11 @@ struct shmem_element_aggregator {
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
+    if constexpr (k != cudf::aggregation::COUNT_ALL) {
+      if (source.is_null(source_index)) { return; }
+    }
     update_target_element_shmem<Source, k>{}(
       target, target_index, target_null, source, source_index);
   }
 };
-
 }  // namespace cudf::groupby::detail::hash

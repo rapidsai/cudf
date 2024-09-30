@@ -352,7 +352,7 @@ struct update_target_element_gmem<
     cudf::detail::atomic_add(&target.element<Target>(target_index),
                              static_cast<Target>(source_casted[source_index]));
 
-    // It is assumed the output for COUNT_VALID is initialized to be all valid
+    // It is assumed the output for COUNT_ALL is initialized to be all valid
   }
 };
 

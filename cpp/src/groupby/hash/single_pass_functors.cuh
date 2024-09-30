@@ -25,6 +25,7 @@
 
 namespace cudf::groupby::detail::hash {
 
+// TODO: TO BE REMOVED
 template <typename T, cudf::aggregation::Kind k>
 __device__ constexpr bool is_supported()
 {
