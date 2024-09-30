@@ -16,9 +16,7 @@
 function(find_and_configure_nvcomp)
 
   include(${rapids-cmake-dir}/cpm/nvcomp.cmake)
-  rapids_cpm_nvcomp(
-    USE_PROPRIETARY_BINARY ${CUDF_USE_PROPRIETARY_NVCOMP}
-  )
+  rapids_cpm_nvcomp(USE_PROPRIETARY_BINARY ${CUDF_USE_PROPRIETARY_NVCOMP})
 
   # Per-thread default stream
   if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
