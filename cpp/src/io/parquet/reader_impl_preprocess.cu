@@ -964,7 +964,7 @@ void reader::impl::allocate_level_decode_space()
   }
 }
 
-std::pair<bool, std::vector<std::future<void>>> reader::impl::read_column_chunks()
+std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
 {
   auto const& row_groups_info = _pass_itm_data->row_groups;
 
@@ -989,7 +989,6 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_column_chunks
   // TODO: make this respect the pass-wide skip_rows/num_rows instead of the file-wide
   // skip_rows/num_rows
   // auto remaining_rows            = num_rows;
-  std::vector<std::future<void>> read_chunk_tasks;
   size_type chunk_count = 0;
   for (auto const& rg : row_groups_info) {
     auto const& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
@@ -1018,16 +1017,15 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_column_chunks
   }
 
   // Read compressed chunk data to device memory
-  read_chunk_tasks.push_back(read_column_chunks_async(_sources,
-                                                      raw_page_data,
-                                                      chunks,
-                                                      0,
-                                                      chunks.size(),
-                                                      column_chunk_offsets,
-                                                      chunk_source_map,
-                                                      _stream));
-
-  return {total_decompressed_size > 0, std::move(read_chunk_tasks)};
+  return {total_decompressed_size > 0,
+          read_column_chunks_async(_sources,
+                                   raw_page_data,
+                                   chunks,
+                                   0,
+                                   chunks.size(),
+                                   column_chunk_offsets,
+                                   chunk_source_map,
+                                   _stream)};
 }
 
 void reader::impl::read_compressed_data()
@@ -1042,9 +1040,7 @@ void reader::impl::read_compressed_data()
   auto const [has_compressed_data, read_chunks_tasks] = read_column_chunks();
   pass.has_compressed_data                            = has_compressed_data;
 
-  for (auto& task : read_chunks_tasks) {
-    task.wait();
-  }
+  read_chunks_tasks.wait();
 
   // Process dataset chunk pages into output columns
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)

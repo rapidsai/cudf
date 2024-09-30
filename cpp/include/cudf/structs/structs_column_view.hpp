@@ -42,7 +42,7 @@ class structs_column_view : public column_view {
   // Foundation members:
   structs_column_view(structs_column_view const&) = default;  ///< Copy constructor
   structs_column_view(structs_column_view&&)      = default;  ///< Move constructor
-  ~structs_column_view()                          = default;
+  ~structs_column_view() override                 = default;
   /**
    * @brief Copy assignment operator
    *

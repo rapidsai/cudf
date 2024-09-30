@@ -294,7 +294,8 @@ struct PageInfo {
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
   // indicator. instead the lengths for these are stored in the header.
-  int32_t lvl_bytes[level_type::NUM_LEVEL_TYPES];  // length of the rep/def levels (V2 header)
+  int32_t                                    // NOLINT
+    lvl_bytes[level_type::NUM_LEVEL_TYPES];  // length of the rep/def levels (V2 header)
   // Number of values in this data page or dictionary.
   // Important : the # of input values does not necessarily
   // correspond to the number of rows in the output. It just reflects the number
@@ -345,7 +346,7 @@ struct PageInfo {
   PageNestingDecodeInfo* nesting_decode;
 
   // level decode buffers
-  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
 
   // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
   int64_t temp_string_size;
@@ -431,14 +432,14 @@ struct ColumnChunkDesc {
   size_t num_values{};               // total number of values in this column
   size_t start_row{};                // file-wide, absolute starting row of this chunk
   uint32_t num_rows{};               // number of rows in this chunk
-  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
-  int16_t max_nesting_depth{};                       // max nesting depth of the output
-  int32_t type_length{};                             // type length from schema (for FLBA only)
-  Type physical_type{};                              // parquet physical data type
-  uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
-  int32_t num_data_pages{};                     // number of data pages
-  int32_t num_dict_pages{};                     // number of dictionary pages
+  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};   // max definition/repetition level  // NOLINT
+  int16_t max_nesting_depth{};                        // max nesting depth of the output
+  int32_t type_length{};                              // type length from schema (for FLBA only)
+  Type physical_type{};                               // parquet physical data type
+  uint8_t level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max   // NOLINT
+                                                      // definition/repetition levels
+  int32_t num_data_pages{};                           // number of data pages
+  int32_t num_dict_pages{};                           // number of dictionary pages
   PageInfo const* dict_page{};
   string_index_pair* str_dict_index{};  // index for string dictionary
   bitmask_type** valid_map_base{};      // base pointers of valid bit map for this column
