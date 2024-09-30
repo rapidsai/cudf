@@ -181,6 +181,19 @@ There are a few known limitations that you should be aware of:
    ```
 - `cudf.pandas` (and cuDF in general) is only compatible with pandas 2. Version
   24.02 of cudf was the last to support pandas 1.5.x.
+- `cudf.pandas` can interface with functions that utilize NumPy's C API, but doing so requires
+  a data transfer from device to host to ensure that the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays)(aka the underlying C array) is set correctly. For example, calling `.values`
+  below produces a NumPy proxy array that
+
+  ```python
+  arr = pd.DataFrame("a":range(10)).values() # implicit DtoH transfer
+  ```
+  With the data buffer set, other functions which require the data buffer can be used. For example,
+
+  ```python
+  import torch
+  x = torch.from_numpy(arr)
+  ```
 
 ## Can I force running on the CPU?
 
