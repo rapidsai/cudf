@@ -35,7 +35,7 @@ namespace strings {
 namespace detail {
 namespace {
 // Bitmask of all operators
-#define OPERATOR_MASK 0200
+enum { OPERATOR_MASK = 0200 };
 enum OperatorType : int32_t {
   START        = 0200,  // Start, used for marker on stack
   LBRA_NC      = 0203,  // non-capturing group
@@ -50,7 +50,7 @@ enum OperatorType : int32_t {
   COUNTED_LAZY = 0215,
   NOP          = 0302,  // No operation, internal use only
 };
-#define ITEM_MASK 0300
+enum { ITEM_MASK = 0300 };
 
 static reclass cclass_w(CCLASS_W);   // \w
 static reclass cclass_s(CCLASS_S);   // \s
