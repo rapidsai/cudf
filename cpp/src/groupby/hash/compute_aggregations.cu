@@ -15,6 +15,7 @@
  */
 
 #include "compute_aggregations.hpp"
+#include "create_sparse_results_table.hpp"
 #include "global_memory_aggregator.cuh"
 #include "helpers.cuh"
 #include "shared_memory_aggregator.cuh"
@@ -69,12 +70,12 @@ __device__ void initialize_shared_memory_aggregates(int col_start,
                                                     std::byte** s_aggregates_pointer,
                                                     bool** s_aggregates_valid_pointer,
                                                     cudf::size_type cardinality,
-                                                    cudf::aggregation::Kind const* aggs)
+                                                    cudf::aggregation::Kind const* d_agg_kinds)
 {
   for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
     for (auto idx = threadIdx.x; idx < cardinality; idx += blockDim.x) {
       cudf::detail::dispatch_type_and_aggregation(output_values.column(col_idx).type(),
-                                                  aggs[col_idx],
+                                                  d_agg_kinds[col_idx],
                                                   initialize_shmem{},
                                                   s_aggregates_pointer[col_idx],
                                                   idx,
@@ -92,7 +93,7 @@ __device__ void compute_pre_aggregrates(int col_start,
                                         cudf::size_type* local_mapping_index,
                                         std::byte** s_aggregates_pointer,
                                         bool** s_aggregates_valid_pointer,
-                                        cudf::aggregation::Kind const* aggs)
+                                        cudf::aggregation::Kind const* d_agg_kinds)
 {
   // TODO grid_1d utility
   for (auto cur_idx = blockDim.x * blockIdx.x + threadIdx.x; cur_idx < num_input_rows;
@@ -104,7 +105,7 @@ __device__ void compute_pre_aggregrates(int col_start,
         auto input_col = input_values.column(col_idx);
 
         cudf::detail::dispatch_type_and_aggregation(input_col.type(),
-                                                    aggs[col_idx],
+                                                    d_agg_kinds[col_idx],
                                                     shmem_element_aggregator{},
                                                     s_aggregates_pointer[col_idx],
                                                     map_idx,
@@ -124,7 +125,7 @@ __device__ void compute_final_aggregates(int col_start,
                                          cudf::size_type* global_mapping_index,
                                          std::byte** s_aggregates_pointer,
                                          bool** s_aggregates_valid_pointer,
-                                         cudf::aggregation::Kind const* aggs)
+                                         cudf::aggregation::Kind const* d_agg_kinds)
 {
   for (auto cur_idx = threadIdx.x; cur_idx < cardinality; cur_idx += blockDim.x) {
     auto out_idx = global_mapping_index[blockIdx.x * GROUPBY_SHM_MAX_ELEMENTS + cur_idx];
@@ -132,7 +133,7 @@ __device__ void compute_final_aggregates(int col_start,
       auto output_col = output_values.column(col_idx);
 
       cudf::detail::dispatch_type_and_aggregation(input_values.column(col_idx).type(),
-                                                  aggs[col_idx],
+                                                  d_agg_kinds[col_idx],
                                                   gmem_element_aggregator{},
                                                   output_col,
                                                   out_idx,
@@ -146,17 +147,17 @@ __device__ void compute_final_aggregates(int col_start,
 
 /* Takes the local_mapping_index and global_mapping_index to compute
  * pre (shared) and final (global) aggregates*/
-CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
-                                     bitmask_type const* row_bitmask,
-                                     bool skip_rows_with_nulls,
-                                     cudf::size_type* local_mapping_index,
-                                     cudf::size_type* global_mapping_index,
-                                     cudf::size_type* block_cardinality,
-                                     cudf::table_device_view input_values,
-                                     cudf::mutable_table_device_view output_values,
-                                     cudf::aggregation::Kind const* aggs,
-                                     int total_agg_size,
-                                     int pointer_size)
+CUDF_KERNEL void compute_d_agg_kinds_kernel(cudf::size_type num_rows,
+                                            bitmask_type const* row_bitmask,
+                                            bool skip_rows_with_nulls,
+                                            cudf::size_type* local_mapping_index,
+                                            cudf::size_type* global_mapping_index,
+                                            cudf::size_type* block_cardinality,
+                                            cudf::table_device_view input_values,
+                                            cudf::mutable_table_device_view output_values,
+                                            cudf::aggregation::Kind const* d_agg_kinds,
+                                            int total_agg_size,
+                                            int pointer_size)
 {
   auto const block       = cooperative_groups::this_thread_block();
   auto const cardinality = block_cardinality[block.group_index().x];
@@ -195,7 +196,7 @@ CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
                                         s_aggregates_pointer,
                                         s_aggregates_valid_pointer,
                                         cardinality,
-                                        aggs);
+                                        d_agg_kinds);
     block.sync();
     compute_pre_aggregrates(col_start,
                             col_end,
@@ -206,7 +207,7 @@ CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
                             local_mapping_index,
                             s_aggregates_pointer,
                             s_aggregates_valid_pointer,
-                            aggs);
+                            d_agg_kinds);
     block.sync();
     compute_final_aggregates(col_start,
                              col_end,
@@ -216,7 +217,7 @@ CUDF_KERNEL void compute_aggs_kernel(cudf::size_type num_rows,
                              global_mapping_index,
                              s_aggregates_pointer,
                              s_aggregates_valid_pointer,
-                             aggs);
+                             d_agg_kinds);
     block.sync();
   }
 }
@@ -253,10 +254,12 @@ void compute_aggregations(int grid_size,
                           cudf::size_type* block_cardinality,
                           cudf::table_device_view input_values,
                           cudf::mutable_table_device_view output_values,
-                          cudf::aggregation::Kind const* aggs,
+                          cudf::table_view const& flattened_values,
+                          cudf::aggregation::Kind const* d_agg_kinds,
+                          std::vector<cudf::aggregation::Kind> const& agg_kinds,
                           rmm::cuda_stream_view stream)
 {
-  auto const shmem_size = compute_shared_memory_size(compute_aggs_kernel, grid_size);
+  auto const shmem_size = compute_shared_memory_size(compute_d_agg_kinds_kernel, grid_size);
 
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
@@ -264,7 +267,7 @@ void compute_aggregations(int grid_size,
     round_to_multiple_of_8(sizeof(std::byte*) * output_values.num_columns());
   // The rest of shmem is utilized for the actual arrays in shmem
   auto const shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
-  compute_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
+  compute_d_agg_kinds_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
     skip_rows_with_nulls,
@@ -273,7 +276,7 @@ void compute_aggregations(int grid_size,
     block_cardinality,
     input_values,
     output_values,
-    aggs,
+    d_agg_kinds,
     shmem_agg_size,
     shmem_agg_pointer_size);
 }

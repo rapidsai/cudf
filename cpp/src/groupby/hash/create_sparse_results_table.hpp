@@ -34,7 +34,7 @@ void extract_populated_keys(SetType const& key_set,
 template <typename GlobalSetType>
 cudf::table create_sparse_results_table(cudf::table_view const& flattened_values,
                                         cudf::aggregation::Kind const* d_agg_kinds,
-                                        std::vector<cudf::aggregation::Kind> aggs,
+                                        std::vector<cudf::aggregation::Kind> agg_kinds,
                                         bool direct_aggregations,
                                         GlobalSetType const& global_set,
                                         rmm::device_uvector<cudf::size_type>& populated_keys,

@@ -263,7 +263,9 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                        block_cardinality.data(),
                        *d_values,
                        *d_sparse_table,
+                       flattened_values,
                        d_agg_kinds.data(),
+                       agg_kinds,
                        stream);
 
   if (direct_aggregations.value(stream)) {

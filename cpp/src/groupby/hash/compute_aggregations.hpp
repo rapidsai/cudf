@@ -35,7 +35,9 @@ void compute_aggregations(int grid_size,
                           cudf::size_type* block_cardinality,
                           cudf::table_device_view input_values,
                           cudf::mutable_table_device_view output_values,
-                          cudf::aggregation::Kind const* aggs,
+                          cudf::table_view const& flattened_values,
+                          cudf::aggregation::Kind const* d_agg_kinds,
+                          std::vector<cudf::aggregation::Kind> const& agg_kinds,
                           rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash
