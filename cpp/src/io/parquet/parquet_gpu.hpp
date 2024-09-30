@@ -800,13 +800,13 @@ void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
  * @brief Writes the final offsets to the corresponding list and string buffer end addresses in a
  * batched manner.
  *
- * @param[in] offsets Host span of final offsets
- * @param[in] buff_addrs Host span of corresponding output col buffer end addresses
- * @param[in] stream CUDA stream to use
+ * @param offsets Host span of final offsets
+ * @param buff_addrs Host span of corresponding output col buffer end addresses
+ * @param stream CUDA stream to use
  */
-void WriteFinalOffsetsBatched(host_span<size_type const> offsets,
-                              host_span<size_type* const> const& buff_addrs,
-                              rmm::cuda_stream_view stream);
+void WriteFinalOffsets(host_span<size_type const> offsets,
+                       host_span<size_type* const> buff_addrs,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the string column data stored in the pages

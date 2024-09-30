@@ -469,10 +469,10 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
 }
 
 /**
- * @copydoc cudf::io::parquet::detail::WriteOutputBufferSizesBatched
+ * @copydoc cudf::io::parquet::detail::WriteFinalOffsets
  */
-void WriteFinalOffsetsBatched(host_span<size_type const> offsets,
-                              host_span<size_type* const> const& buff_addrs,
+void WriteFinalOffsets(host_span<size_type const> offsets,
+                              host_span<size_type* const> buff_addrs,
                               rmm::cuda_stream_view stream)
 {
   // Copy offsets to device and create an iterator

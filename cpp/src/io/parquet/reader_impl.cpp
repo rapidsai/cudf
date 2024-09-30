@@ -409,7 +409,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
   // Write the final offsets for list and string columns in a batched manner
-  cudf::io::parquet::detail::WriteFinalOffsetsBatched(final_offsets, out_buffers, _stream);
+  WriteFinalOffsets(final_offsets, out_buffers, _stream);
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {
