@@ -28,11 +28,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -41,7 +41,6 @@
 
 namespace cudf::groupby::detail::hash {
 namespace {
-
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.

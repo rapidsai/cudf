@@ -19,12 +19,9 @@
 #include "sparse_to_dense_results.hpp"
 #include "var_hash_functor.cuh"
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -38,7 +35,6 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
-
 /**
  * @brief Computes groupby using hash table.
  *
