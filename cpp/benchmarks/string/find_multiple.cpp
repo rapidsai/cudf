@@ -59,7 +59,6 @@ static void bench_find_string(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   auto const chars_size = input.chars_size(stream);
-  state.add_element_count(chars_size, "chars_size");
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   if (api == "find") {
     state.add_global_memory_writes<nvbench::int32_t>(input.size());
@@ -81,7 +80,7 @@ static void bench_find_string(nvbench::state& state)
 NVBENCH_BENCH(bench_find_string)
   .set_name("find_multiple")
   .add_string_axis("api", {"find", "contains"})
-  .add_int64_axis("targets", {10, 20})
+  .add_int64_axis("targets", {10, 20, 40})
   .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
   .add_int64_axis("num_rows", {260'000, 1'953'000, 16'777'216})
   .add_int64_axis("hit_rate", {20, 80});  // percentage

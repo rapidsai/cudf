@@ -236,7 +236,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   }();
 
   constexpr cudf::thread_index_type block_size = 256;
-  constexpr size_type targets_threshold        = 16;  // for shared-memory size
+  constexpr size_type targets_threshold        = 32;  // for shared-memory size
 
   auto d_first_bytes = first_bytes.data();
   auto d_indices     = indices.data();
