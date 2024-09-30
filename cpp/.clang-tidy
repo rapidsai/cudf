@@ -17,7 +17,7 @@
 #     https://github.com/llvm/llvm-project/issues/69602
 # clang-analyzer-optin.core.EnumCastOutOfRange
 #     We use enums as flags in multiple cases and this check makes ORing flags invalid
-#     
+#
 # We need to verify that broken checks are still broken
 Checks:
       'modernize-*,
