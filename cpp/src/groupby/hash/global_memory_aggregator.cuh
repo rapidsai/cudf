@@ -53,8 +53,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
-
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::MIN>;
 
     Target* source_casted = reinterpret_cast<Target*>(source);
@@ -78,7 +76,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target              = cudf::detail::target_type_t<Source, cudf::aggregation::MIN>;
     using DeviceType          = cudf::device_storage_type_t<Target>;
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
@@ -102,7 +99,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::MAX>;
     Target* source_casted = reinterpret_cast<Target*>(source);
     cudf::detail::atomic_max(&target.element<Target>(target_index),
@@ -125,7 +121,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::MAX>;
 
     using DeviceType          = cudf::device_storage_type_t<Target>;
@@ -150,7 +145,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::SUM>;
 
     Target* source_casted = reinterpret_cast<Target*>(source);
@@ -174,7 +168,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::SUM>;
 
     using DeviceType          = cudf::device_storage_type_t<Target>;
@@ -244,8 +237,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
-
     dispatch_type_and_aggregation(
       source_column.child(cudf::dictionary_column_view::keys_column_index).type(),
       k,
@@ -272,7 +263,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::SUM_OF_SQUARES>;
 
     Target* source_casted = reinterpret_cast<Target*>(source);
@@ -296,7 +286,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::PRODUCT>;
 
     Target* source_casted = reinterpret_cast<Target*>(source);
@@ -369,7 +358,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target             = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMAX>;
     Target* source_casted    = reinterpret_cast<Target*>(source);
     auto source_argmax_index = source_casted[source_index];
@@ -399,7 +387,6 @@ struct update_target_element_gmem<
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
-    if (source_null[source_index]) { return; }
     using Target             = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMIN>;
     Target* source_casted    = reinterpret_cast<Target*>(source);
     auto source_argmin_index = source_casted[source_index];
@@ -426,6 +413,9 @@ struct gmem_element_aggregator {
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
+    if constexpr (k != cudf::aggregation::COUNT_ALL) {
+      if (source_null[source_index]) { return; }
+    }
     update_target_element_gmem<Source, k>{}(
       target, target_index, source_column, source, source_index, source_null);
   }
