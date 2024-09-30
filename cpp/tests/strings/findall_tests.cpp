@@ -34,10 +34,10 @@ struct StringsFindallTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindallTests, FindallTest)
 {
-  bool valids[] = {true, true, true, true, true, false, true, true};
+  std::array valids{true, true, true, true, true, false, true, true};
   cudf::test::strings_column_wrapper input(
     {"3-A", "4-May 5-Day 6-Hay", "12-Dec-2021-Jan", "Feb-March", "4 ABC", "", "", "25-9000-Hal"},
-    valids);
+    valids.data());
   auto sv = cudf::strings_column_view(input);
 
   auto pattern = std::string("(\\d+)-(\\w+)");
@@ -51,7 +51,7 @@ TEST_F(StringsFindallTests, FindallTest)
                 LCW{},
                 LCW{},
                 LCW{"25-9000"}},
-               valids);
+               valids.data());
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::findall(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
