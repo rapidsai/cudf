@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,8 +127,9 @@ TYPED_TEST(groupby_collect_list_test, CollectListsWithNullExclusion)
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3, 4, 4};
-  bool const validity_mask[] = {true, false, false, true, true, true, false, false};
-  LCW values{{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}}, validity_mask};
+  std::array const validity_mask{true, false, false, true, true, true, false, false};
+  LCW values{{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}},
+             validity_mask.data()};
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};
 
