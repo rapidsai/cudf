@@ -17,6 +17,10 @@
 #     https://github.com/llvm/llvm-project/issues/69602
 # clang-analyzer-optin.core.EnumCastOutOfRange
 #     We use enums as flags in multiple cases and this check makes ORing flags invalid
+# clang-analyzer-optin.cplusplus.UninitializedObject'
+#     There is an error in nanoarrow that none of the clang-tidy filters (i.e.
+#     header-filter and exclude-header-filter are able to properly avoid. This
+#     merits further investigation
 #
 # We need to verify that broken checks are still broken
 Checks:
@@ -27,7 +31,8 @@ Checks:
        -modernize-use-bool-literals,
        clang-analyzer-*,
        -clang-analyzer-cplusplus.NewDeleteLeaks,
-       -clang-analyzer-optin.core.EnumCastOutOfRange'
+       -clang-analyzer-optin.core.EnumCastOutOfRange,
+       -clang-analyzer-optin.cplusplus.UninitializedObject'
 
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
