@@ -243,28 +243,22 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto const d_agg_kinds                         = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
 
-  // prepare to launch kernel to do the actual aggregation
-  auto d_values = table_device_view::create(flattened_values, stream);
+  auto const [uses_shmem_aggs, shmem_size] = can_use_shmem_aggs(grid_size);
 
-  auto [status, sparse_table] =
-    compute_aggregations<SetType>(grid_size,
-                                  num_input_rows,
-                                  static_cast<bitmask_type*>(row_bitmask.data()),
-                                  skip_rows_with_nulls,
-                                  local_mapping_index.data(),
-                                  global_mapping_index.data(),
-                                  block_cardinality.data(),
-                                  *d_values,
-                                  flattened_values,
-                                  d_agg_kinds.data(),
-                                  agg_kinds,
-                                  direct_aggregations.value(stream),
-                                  global_set,
-                                  populated_keys,
-                                  stream);
+  // make table that will hold sparse results
+  cudf::table sparse_table =
+    create_sparse_results_table(flattened_values,
+                                d_agg_kinds.data(),
+                                agg_kinds,
+                                uses_shmem_aggs ? direct_aggregations.value(stream) : true,
+                                global_set,
+                                populated_keys,
+                                stream);
+  // prepare to launch kernel to do the actual aggregation
+  auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
 
-  if (status != cudaSuccess) {
+  if (!uses_shmem_aggs) {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
@@ -276,20 +270,34 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                         static_cast<bitmask_type*>(row_bitmask.data()),
                                         skip_rows_with_nulls});
     extract_populated_keys(global_set, populated_keys, stream);
-  } else if (direct_aggregations.value(stream)) {
-    auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       keys.num_rows(),
-                       compute_direct_aggregates{global_set_ref,
-                                                 *d_values,
-                                                 *d_sparse_table,
-                                                 d_agg_kinds.data(),
-                                                 block_cardinality.data(),
-                                                 stride,
-                                                 static_cast<bitmask_type*>(row_bitmask.data()),
-                                                 skip_rows_with_nulls});
-    extract_populated_keys(global_set, populated_keys, stream);
+  } else {
+    compute_aggregations(grid_size,
+                         num_input_rows,
+                         static_cast<bitmask_type*>(row_bitmask.data()),
+                         skip_rows_with_nulls,
+                         local_mapping_index.data(),
+                         global_mapping_index.data(),
+                         block_cardinality.data(),
+                         *d_values,
+                         *d_sparse_table,
+                         d_agg_kinds.data(),
+                         shmem_size,
+                         stream);
+    if (direct_aggregations.value(stream)) {
+      auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
+      thrust::for_each_n(rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0),
+                         keys.num_rows(),
+                         compute_direct_aggregates{global_set_ref,
+                                                   *d_values,
+                                                   *d_sparse_table,
+                                                   d_agg_kinds.data(),
+                                                   block_cardinality.data(),
+                                                   stride,
+                                                   static_cast<bitmask_type*>(row_bitmask.data()),
+                                                   skip_rows_with_nulls});
+      extract_populated_keys(global_set, populated_keys, stream);
+    }
   }
 
   // Add results back to sparse_results cache
