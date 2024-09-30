@@ -1,4 +1,24 @@
 ---
+# Notes on disabled checks
+# ------------------------
+# modernize-use-equals-default:
+#     auto-fix is broken (doesn't insert =default correctly)
+# modernize-concat-nested-namespaces:
+#     auto-fix is broken (can delete code)
+# modernize-use-trailing-return-type:
+#     Purely stylistic, no benefit to rewriting everything
+# modernize-use-bool-literals:
+#     Our tests use int flags for validity masks extensively and we prefer that
+# clang-analyzer-cplusplus.NewDeleteLeaks:
+#     This check has numerous bugs, see
+#     https://github.com/llvm/llvm-project/issues?q=is%3Aissue+is%3Aopen+newdeleteleaks
+#     We encounter at least
+#     https://github.com/llvm/llvm-project/issues/60896
+#     https://github.com/llvm/llvm-project/issues/69602
+# clang-analyzer-optin.core.EnumCastOutOfRange
+#     We use enums as flags in multiple cases and this check makes ORing flags invalid
+#     
+# We need to verify that broken checks are still broken
 Checks:
       'modernize-*,
        -modernize-use-equals-default,
@@ -6,16 +26,8 @@ Checks:
        -modernize-use-trailing-return-type,
        -modernize-use-bool-literals,
        clang-analyzer-*,
-       # This check has numerous bugs, see
-       # https://github.com/llvm/llvm-project/issues?q=is%3Aissue+is%3Aopen+newdeleteleaks
-       # We encounter at least
-       # https://github.com/llvm/llvm-project/issues/60896
-       # https://github.com/llvm/llvm-project/issues/69602
-       -clang-analyzer-cplusplus.NewDeleteLeaks'
-
-      # -modernize-use-equals-default        # auto-fix is broken (doesn't insert =default correctly)
-      # -modernize-concat-nested-namespaces  # auto-fix is broken (can delete code)
-      # -modernize-use-trailing-return-type  # just a preference
+       -clang-analyzer-cplusplus.NewDeleteLeaks,
+       -clang-analyzer-optin.core.EnumCastOutOfRange'
 
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
