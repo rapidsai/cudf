@@ -9,7 +9,7 @@ color_green='\e[1;32m'
 # Only allow GDS IO. Disallow POSIX fallback.
 # export CUFILE_ALLOW_COMPAT_MODE=false
 
-export KVIKIO_NTHREADS=1
+export KVIKIO_NTHREADS=8
 export KVIKIO_COMPAT_MODE=off
 # export KVIKIO_GDS_THRESHOLD=0
 
@@ -22,11 +22,11 @@ export TMPDIR=/home/coder/cudf/run_benchmark
 export CUFILE_ALLOW_COMPAT_MODE=false
 export CUFILE_LOGGING_LEVEL=TRACE
 
-# gdb -ex start --args ${parquet_reader_bench_bin} -d 0 -b $parquet_benchmark_name \
-# -a compression_type=NONE -a io_type=FILEPATH -a cardinality=0 -a run_length=1 \
-# --run-once
-
-${parquet_reader_bench_bin} -d 0 -b $parquet_benchmark_name \
+gdb -ex start --args ${parquet_reader_bench_bin} -d 0 -b $parquet_benchmark_name \
 -a compression_type=NONE -a io_type=FILEPATH -a cardinality=0 -a run_length=1 \
 --run-once
+
+# ${parquet_reader_bench_bin} -d 0 -b $parquet_benchmark_name \
+# -a compression_type=NONE -a io_type=FILEPATH -a cardinality=0 -a run_length=1 \
+# --run-once
 

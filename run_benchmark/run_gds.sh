@@ -5,9 +5,8 @@
 
 # Drop the cache for the benchmark
 export CUDF_BENCHMARK_DROP_CACHE=true
-
 # Specify GDS behavior
-export LIBCUDF_CUFILE_POLICY
+export LIBCUDF_CUFILE_POLICY="KVIKIO"
 
 # Default axis set in the bench:
 # compression_type: "SNAPPY", "NONE"
