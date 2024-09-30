@@ -5,6 +5,7 @@ set -euo pipefail
 
 package_dir="python/libcudf"
 
+export SKBUILD_CMAKE_ARGS="-DUSE_CUDA_NVCOMP_WHEEL=ON"
 ./ci/build_wheel.sh ${package_dir}
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
