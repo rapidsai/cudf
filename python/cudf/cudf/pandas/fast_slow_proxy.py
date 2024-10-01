@@ -965,7 +965,7 @@ def _fast_slow_function_call(
     except Exception as err:
         if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
             raise ProxyFallbackError(
-                f"The operation failed with cuDF, the reason was {type(err)}: {err}."
+                f"The operation failed with cuDF, the reason was {type(err)}: {err}"
             ) from err
         with nvtx.annotate(
             "EXECUTE_SLOW",
