@@ -22,7 +22,7 @@ project(
   LANGUAGES CXX
 )
 
-option(USE_CUDA_NVCOMP_WHEEL "Use the CUDA nvcomp wheel instead of the system library" OFF)
+option(USE_NVCOMP_WHEEL "Use the nvcomp wheel instead of the system library" OFF)
 
 # Check if cudf is already available. If so, it is the user's responsibility to ensure that the
 # CMake package is also available at build time of the Python cudf package.
@@ -47,7 +47,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 add_subdirectory(../../cpp cudf-cpp)
 
-if(USE_CUDA_NVCOMP_WHEEL)
+if(USE_NVCOMP_WHEEL)
   set(rpaths "$ORIGIN/../../nvidia/nvcomp")
   set_property(
     TARGET cudf
