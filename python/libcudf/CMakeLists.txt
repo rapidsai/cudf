@@ -22,7 +22,7 @@ project(
   LANGUAGES CXX
 )
 
-option(USE_NVCOMP_WHEEL "Use the nvcomp wheel instead of the system library" OFF)
+option(USE_NVCOMP_WHEEL "Use the nvcomp wheel at runtime instead of the system library" OFF)
 
 # Check if cudf is already available. If so, it is the user's responsibility to ensure that the
 # CMake package is also available at build time of the Python cudf package.
