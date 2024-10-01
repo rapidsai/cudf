@@ -24,14 +24,10 @@
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
-namespace impl {
-
 enum class host_memory_kind : uint8_t { PINNED, PAGEABLE };
 
-void cuda_memcpy_async(
+void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream);
-
-}  // namespace impl
 
 /**
  * @brief Asynchronously copies data from host to device memory.
@@ -47,12 +43,11 @@ void cuda_memcpy_async(device_span<T> dst, host_span<T const> src, rmm::cuda_str
 {
   CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
   auto const is_pinned = src.is_device_accessible();
-  impl::cuda_memcpy_async(
-    dst.data(),
-    src.data(),
-    src.size_bytes(),
-    is_pinned ? impl::host_memory_kind::PINNED : impl::host_memory_kind::PAGEABLE,
-    stream);
+  cuda_memcpy_async_impl(dst.data(),
+                         src.data(),
+                         src.size_bytes(),
+                         is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                         stream);
 }
 
 /**
@@ -69,12 +64,11 @@ void cuda_memcpy_async(host_span<T> dst, device_span<T const> src, rmm::cuda_str
 {
   CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
   auto const is_pinned = dst.is_device_accessible();
-  impl::cuda_memcpy_async(
-    dst.data(),
-    src.data(),
-    src.size_bytes(),
-    is_pinned ? impl::host_memory_kind::PINNED : impl::host_memory_kind::PAGEABLE,
-    stream);
+  cuda_memcpy_async_impl(dst.data(),
+                         src.data(),
+                         src.size_bytes(),
+                         is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
+                         stream);
 }
 
 /**
