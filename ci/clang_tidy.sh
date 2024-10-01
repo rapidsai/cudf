@@ -23,7 +23,7 @@ set -u
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 
 # Run the CMake configure step and set the build directory for clang-tidy.
-cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -GNinja
 export CUDF_ROOT="${PWD}/cpp/build"
 
 # Run pre-commit checks
