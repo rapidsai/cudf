@@ -37,4 +37,4 @@ if [ ! -f "${CUDF_BUILD_DIR}/compile_commands.json" ]; then
 fi
 
 
-find cpp/{src,tests} -name *.cpp | grep -v -E ".*(cpu_unbz2.cpp|brotli_dict.cpp).*" | head -1 | xargs -n 1 clang-tidy -p ${CUDF_BUILD_DIR} --extra-arg="-Qunused-arguments" > out 2>&1
+find cpp/{src,tests} -name *.cpp | grep -v -E ".*(cpu_unbz2.cpp|brotli_dict.cpp).*" | xargs -n 1 -P 10 clang-tidy -p ${CUDF_BUILD_DIR} --extra-arg="-Qunused-arguments"
