@@ -278,12 +278,12 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   auto [offsets, total_ngrams] = [&] {
-    auto counts = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    auto const tile_size =
-      ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)
-        ? 1                         // thread per row
-        : cudf::detail::warp_size;  // warp per row
-    auto const grid = cudf::detail::grid_1d(
+    auto counts               = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    auto const avg_char_bytes = (input.chars_size(stream) / (input.size() - input.null_count()));
+    auto const tile_size      = (avg_char_bytes < AVG_CHAR_BYTES_THRESHOLD)
+                                  ? 1                         // thread per row
+                                  : cudf::detail::warp_size;  // warp per row
+    auto const grid           = cudf::detail::grid_1d(
       static_cast<cudf::thread_index_type>(input.size()) * tile_size, block_size);
     count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, ngrams, tile_size, counts.data());
