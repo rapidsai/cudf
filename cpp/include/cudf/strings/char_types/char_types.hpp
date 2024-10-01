@@ -105,8 +105,8 @@ std::unique_ptr<column> all_characters_of_type(
  *        `types_to_remove` will be filtered.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return New strings column with the characters of specified types filtered out and replaced by the
- * specified replacement string
+ * @return New strings column with the characters of specified types filtered out and replaced by
+ * the specified replacement string
  */
 std::unique_ptr<column> filter_characters_of_type(
   strings_column_view const& input,
