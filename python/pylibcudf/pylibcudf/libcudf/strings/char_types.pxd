@@ -22,9 +22,6 @@ cdef extern from "cudf/strings/char_types/char_types.hpp" \
         CASE_TYPES
         ALL_TYPES
 
-cdef extern from "cudf/strings/char_types/char_types.hpp" \
-        namespace "cudf::strings" nogil:
-
     cdef unique_ptr[column] all_characters_of_type(
         column_view source_strings,
         string_character_types types,
