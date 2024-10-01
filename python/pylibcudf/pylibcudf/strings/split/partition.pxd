@@ -5,6 +5,6 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
 
 
-cpdef Table partition(Column input, Scalar delimiter)
+cpdef Table partition(Column input, Scalar delimiter=*)
 
-cpdef Table rpartition(Column input, Scalar delimiter)
+cpdef Table rpartition(Column input, Scalar delimiter=*)
