@@ -8,18 +8,20 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.containers import DataFrame, NamedColumn
+from cudf_polars.containers import Column, DataFrame
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 def test_select_missing_raises():
     df = DataFrame(
         [
-            NamedColumn(
-                plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-                ),
+            (
                 "a",
+                Column(
+                    plc.column_factories.make_numeric_column(
+                        plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    )
+                ),
             )
         ]
     )
@@ -30,17 +32,19 @@ def test_select_missing_raises():
 def test_replace_missing_raises():
     df = DataFrame(
         [
-            NamedColumn(
-                plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-                ),
+            (
                 "a",
+                Column(
+                    plc.column_factories.make_numeric_column(
+                        plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    )
+                ),
             )
         ]
     )
-    replacement = df.columns[0].copy(new_name="b")
+    replacement = df.column_map["a"].copy()
     with pytest.raises(ValueError):
-        df.replace_columns(replacement)
+        df.replace_columns(("b", replacement))
 
 
 def test_from_table_wrong_names():
@@ -58,11 +62,13 @@ def test_from_table_wrong_names():
 def test_sorted_like_raises_mismatching_names():
     df = DataFrame(
         [
-            NamedColumn(
-                plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-                ),
+            (
                 "a",
+                Column(
+                    plc.column_factories.make_numeric_column(
+                        plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    )
+                ),
             )
         ]
     )
@@ -72,26 +78,25 @@ def test_sorted_like_raises_mismatching_names():
 
 
 def test_shallow_copy():
-    column = NamedColumn(
+    column = Column(
         plc.column_factories.make_numeric_column(
             plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-        ),
-        "a",
+        )
     )
     column.set_sorted(
         is_sorted=plc.types.Sorted.YES,
         order=plc.types.Order.ASCENDING,
         null_order=plc.types.NullOrder.AFTER,
     )
-    df = DataFrame([column])
+    df = DataFrame([("a", column)])
     copy = df.copy()
-    copy.columns[0].set_sorted(
+    copy.column_map["a"].set_sorted(
         is_sorted=plc.types.Sorted.NO,
         order=plc.types.Order.ASCENDING,
         null_order=plc.types.NullOrder.AFTER,
     )
-    assert df.columns[0].is_sorted == plc.types.Sorted.YES
-    assert copy.columns[0].is_sorted == plc.types.Sorted.NO
+    assert df.column_map["a"].is_sorted == plc.types.Sorted.YES
+    assert copy.column_map["a"].is_sorted == plc.types.Sorted.NO
 
 
 def test_sorted_flags_preserved_empty():
@@ -100,7 +105,7 @@ def test_sorted_flags_preserved_empty():
 
     gf = DataFrame.from_polars(df)
 
-    (a,) = gf.columns
+    a = gf.column_map["a"]
 
     assert a.is_sorted == plc.types.Sorted.YES
 

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-__all__: list[str] = ["Column", "NamedColumn"]
+__all__: list[str] = ["Column"]
 
 
 class Column:
@@ -217,58 +217,3 @@ class Column:
                 )
             ).as_py()
         return 0
-
-
-class NamedColumn(Column):
-    """A column with a name."""
-
-    name: str
-
-    def __init__(
-        self,
-        column: plc.Column,
-        name: str,
-        *,
-        is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
-        order: plc.types.Order = plc.types.Order.ASCENDING,
-        null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
-    ) -> None:
-        super().__init__(
-            column, is_sorted=is_sorted, order=order, null_order=null_order
-        )
-        self.name = name
-
-    def copy(self, *, new_name: str | None = None) -> Self:
-        """
-        A shallow copy of the column.
-
-        Parameters
-        ----------
-        new_name
-            Optional new name for the copied column.
-
-        Returns
-        -------
-        New column sharing data with self.
-        """
-        return type(self)(
-            self.obj,
-            self.name if new_name is None else new_name,
-            is_sorted=self.is_sorted,
-            order=self.order,
-            null_order=self.null_order,
-        )
-
-    def mask_nans(self) -> Self:
-        """Return a shallow copy of self with nans masked out."""
-        # Annoying, the inheritance is not right (can't call the
-        # super-type mask_nans), but will sort that by refactoring
-        # later.
-        if plc.traits.is_floating_point(self.obj.type()):
-            old_count = self.obj.null_count()
-            mask, new_count = plc.transform.nans_to_nulls(self.obj)
-            result = type(self)(self.obj.with_mask(mask, new_count), self.name)
-            if old_count == new_count:
-                return result.sorted_like(self)
-            return result
-        return self.copy()

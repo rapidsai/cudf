@@ -14,15 +14,13 @@ import pylibcudf as plc
 
 import polars as pl
 
-from cudf_polars.containers.column import NamedColumn
+from cudf_polars.containers import Column
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence, Set
+    from collections.abc import Iterable, Mapping, Sequence, Set
 
     from typing_extensions import Self
-
-    from cudf_polars.containers import Column
 
 
 __all__: list[str] = ["DataFrame"]
@@ -31,17 +29,18 @@ __all__: list[str] = ["DataFrame"]
 class DataFrame:
     """A representation of a dataframe."""
 
-    columns: list[NamedColumn]
+    column_map: dict[str, Column]
     table: plc.Table
 
-    def __init__(self, columns: Sequence[NamedColumn]) -> None:
-        self.columns = list(columns)
-        self._column_map = {c.name: c for c in self.columns}
-        self.table = plc.Table([c.obj for c in columns])
+    def __init__(
+        self, columns: Iterable[tuple[str, Column]] | Mapping[str, Column]
+    ) -> None:
+        self.column_map = dict(columns)
+        self.table = plc.Table([c.obj for c in self.column_map.values()])
 
     def copy(self) -> Self:
         """Return a shallow copy of self."""
-        return type(self)([c.copy() for c in self.columns])
+        return type(self)((name, c.copy()) for name, c in self.column_map.items())
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
@@ -51,7 +50,7 @@ class DataFrame:
         # https://github.com/pola-rs/polars/issues/11632
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
-        name_map = {f"column_{i}": c.name for i, c in enumerate(self.columns)}
+        name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
         table: pa.Table = plc.interop.to_arrow(
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
@@ -59,34 +58,39 @@ class DataFrame:
         df: pl.DataFrame = pl.from_arrow(table)
         return df.rename(name_map).with_columns(
             *(
-                pl.col(c.name).set_sorted(
-                    descending=c.order == plc.types.Order.DESCENDING
+                pl.col(name).set_sorted(
+                    descending=column.order == plc.types.Order.DESCENDING
                 )
-                if c.is_sorted
-                else pl.col(c.name)
-                for c in self.columns
+                if column.is_sorted
+                else pl.col(name)
+                for name, column in self.column_map.items()
             )
         )
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
         """Return the column names as a set."""
-        return frozenset(c.name for c in self.columns)
+        return frozenset(self.column_map)
 
     @cached_property
     def column_names(self) -> list[str]:
         """Return a list of the column names."""
-        return [c.name for c in self.columns]
+        return list(self.column_map)
+
+    @cached_property
+    def columns(self) -> list[Column]:
+        """Return a list of the columns."""
+        return list(self.column_map.values())
 
     @cached_property
     def num_columns(self) -> int:
         """Number of columns."""
-        return len(self.columns)
+        return len(self.column_map)
 
     @cached_property
     def num_rows(self) -> int:
         """Number of rows."""
-        return 0 if len(self.columns) == 0 else self.table.num_rows()
+        return 0 if len(self.column_map) == 0 else self.table.num_rows()
 
     @classmethod
     def from_polars(cls, df: pl.DataFrame) -> Self:
@@ -111,12 +115,8 @@ class DataFrame:
         # No-op if the schema is unchanged.
         d_table = plc.interop.from_arrow(table.cast(schema))
         return cls(
-            [
-                NamedColumn(column, h_col.name).copy_metadata(h_col)
-                for column, h_col in zip(
-                    d_table.columns(), df.iter_columns(), strict=True
-                )
-            ]
+            (h_col.name, Column(column).copy_metadata(h_col))
+            for column, h_col in zip(d_table.columns(), df.iter_columns(), strict=True)
         )
 
     @classmethod
@@ -143,12 +143,7 @@ class DataFrame:
         """
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
-        return cls(
-            [
-                NamedColumn(c, name)
-                for c, name in zip(table.columns(), names, strict=True)
-            ]
-        )
+        return cls(zip(names, map(Column, table.columns()), strict=True))
 
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None
@@ -175,13 +170,15 @@ class DataFrame:
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")
         subset = self.column_names_set if subset is None else subset
-        self.columns = [
-            c.sorted_like(other) if c.name in subset else c
-            for c, other in zip(self.columns, like.columns, strict=True)
-        ]
+        self.column_map = {
+            name: column.sorted_like(other) if name in subset else column
+            for (name, column), other in zip(
+                self.column_map.items(), like.column_map.values(), strict=True
+            )
+        }
         return self
 
-    def with_columns(self, columns: Sequence[NamedColumn]) -> Self:
+    def with_columns(self, columns: Iterable[tuple[str, Column]]) -> Self:
         """
         Return a new dataframe with extra columns.
 
@@ -198,36 +195,40 @@ class DataFrame:
         -----
         If column names overlap, newer names replace older ones.
         """
-        columns = list(
-            {c.name: c for c in itertools.chain(self.columns, columns)}.values()
-        )
-        return type(self)(columns)
+        return type(self)(itertools.chain(self.column_map.items(), columns))
 
     def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""
-        return type(self)([c for c in self.columns if c.name not in names])
+        return type(self)(
+            (name, column)
+            for name, column in self.column_map.items()
+            if name not in names
+        )
 
     def select(self, names: Sequence[str]) -> Self:
         """Select columns by name returning DataFrame."""
         want = set(names)
         if not want.issubset(self.column_names_set):
             raise ValueError("Can't select missing names")
-        return type(self)([self._column_map[name] for name in names])
+        return type(self)((name, self.column_map[name]) for name in names)
 
-    def replace_columns(self, *columns: NamedColumn) -> Self:
+    def replace_columns(self, *columns: tuple[str, Column]) -> Self:
         """Return a new dataframe with columns replaced by name."""
-        new = {c.name: c for c in columns}
+        new = dict(columns)
         if not set(new).issubset(self.column_names_set):
             raise ValueError("Cannot replace with non-existing names")
-        return type(self)([new.get(c.name, c) for c in self.columns])
+        return type(self)(self.column_map | new)
 
     def rename_columns(self, mapping: Mapping[str, str]) -> Self:
         """Rename some columns."""
-        return type(self)([c.copy(new_name=mapping.get(c.name)) for c in self.columns])
+        return type(self)(
+            (mapping.get(name, name), column)
+            for name, column in self.column_map.items()
+        )
 
-    def select_columns(self, names: Set[str]) -> list[NamedColumn]:
+    def select_columns(self, names: Set[str]) -> list[Column]:
         """Select columns by name."""
-        return [c for c in self.columns if c.name in names]
+        return [c for name, c in self.column_map.items() if name in names]
 
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
