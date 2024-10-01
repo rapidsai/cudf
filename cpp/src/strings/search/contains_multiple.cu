@@ -127,8 +127,12 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
   // initialize result: set true if target is empty, false otherwise
   for (auto target_idx = lane_idx; target_idx < num_targets; target_idx += tile_size) {
     auto const d_target = d_targets.element<string_view>(target_idx);
-    auto const begin    = bools + (target_idx * tile_size);
-    thrust::uninitialized_fill(thrust::seq, begin, begin + tile_size, d_target.empty());
+    if constexpr (tile_size == 1) {
+      d_results[target_idx][str_idx] = d_target.empty();
+    } else {
+      auto const begin = bools + (target_idx * tile_size);
+      thrust::uninitialized_fill(thrust::seq, begin, begin + tile_size, d_target.empty());
+    }
   }
   if constexpr (tile_size == cudf::detail::warp_size) { __syncwarp(); }
 
@@ -149,25 +153,31 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
     while (map_idx < last_idx) {
       auto const target_idx = d_indices[map_idx++];
       auto const bool_idx   = (target_idx * tile_size) + lane_idx;
-      if (!bools[bool_idx]) {  // not found before
+      auto const found      = tile_size == 1 ? d_results[target_idx][str_idx] : bools[bool_idx];
+      if (!found) {  // not found before
         auto const d_target = d_targets.element<string_view>(target_idx);
         if ((d_str.size_bytes() - str_byte_idx) >= d_target.size_bytes()) {
           // first char already checked, so just check the [1, end) chars match
           auto const tp = d_target.data();
           if (thrust::equal(thrust::seq, tp + 1, tp + d_target.size_bytes(), sptr + 1)) {
-            bools[bool_idx] = true;
+            if constexpr (tile_size == 1) {
+              d_results[target_idx][str_idx] = true;
+            } else {
+              bools[bool_idx] = true;
+            }
           }
         }
       }
     }
   }
-  if constexpr (tile_size == cudf::detail::warp_size) { __syncwarp(); }
-
-  // reduce the bools for each target to store in the result
-  for (auto target_idx = lane_idx; target_idx < num_targets; target_idx += tile_size) {
-    auto const begin = bools + (target_idx * tile_size);
-    d_results[target_idx][str_idx] =
-      thrust::any_of(thrust::seq, begin, begin + tile_size, thrust::identity<bool>{});
+  if constexpr (tile_size == cudf::detail::warp_size) {
+    __syncwarp();
+    // reduce the bools for each target to store in the result
+    for (auto target_idx = lane_idx; target_idx < num_targets; target_idx += tile_size) {
+      auto const begin = bools + (target_idx * tile_size);
+      d_results[target_idx][str_idx] =
+        thrust::any_of(thrust::seq, begin, begin + tile_size, thrust::identity<bool>{});
+    }
   }
 }
 }  // namespace
@@ -242,30 +252,30 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   auto d_indices     = indices.data();
   auto d_offsets     = offsets.data();
 
+  bool const row_parallel = ((input.null_count() == input.size()) ||
+                             ((input.chars_size(stream) / (input.size() - input.null_count())) <=
+                              AVG_CHAR_BYTES_THRESHOLD));
+
   auto const shared_mem_size =
-    targets.size() < targets_threshold ? (block_size * targets.size()) : 0;
+    !row_parallel && (targets.size() < targets_threshold) ? (block_size * targets.size()) : 0;
   auto const work_mem_size =
-    targets.size() < targets_threshold
+    row_parallel || (targets.size() < targets_threshold)
       ? 0
       : (static_cast<std::size_t>(targets.size()) * input.size() * cudf::detail::warp_size);
   auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
 
-  bool const row_parallel = ((input.null_count() == input.size()) ||
-                             ((input.chars_size(stream) / (input.size() - input.null_count())) <=
-                              AVG_CHAR_BYTES_THRESHOLD));
   if (row_parallel) {
     // Smaller strings perform better with a row per string
     cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()), block_size};
     multi_contains_kernel<1>
-      <<<grid.num_blocks, grid.num_threads_per_block, shared_mem_size, stream.value()>>>(
-        *d_strings,
-        *d_targets,
-        d_first_bytes,
-        d_indices,
-        d_offsets,
-        unique_count,
-        working_memory.data(),
-        d_results);
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(*d_strings,
+                                                                           *d_targets,
+                                                                           d_first_bytes,
+                                                                           d_indices,
+                                                                           d_offsets,
+                                                                           unique_count,
+                                                                           working_memory.data(),
+                                                                           d_results);
   } else {
     // Longer strings perform better with a warp per string
     cudf::detail::grid_1d grid{
