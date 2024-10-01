@@ -37,6 +37,7 @@ void json_read_common(cuio_source_sink_pair& source_sink,
     cudf::io::json_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();
+  auto nvtx_allocator  = cudf::nvtx_allocator();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {

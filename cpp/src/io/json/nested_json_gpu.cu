@@ -1448,7 +1448,9 @@ void get_stack_context(device_span<SymbolT const> json_in,
   rmm::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
 
   // Sequence of stack symbols and their position in the original input (sparse representation)
+  nvtx3::mark("stack_ops alloc");
   rmm::device_uvector<StackSymbolT> stack_ops{json_in.size(), stream};
+  nvtx3::mark("stack_op_indices alloc");
   rmm::device_uvector<SymbolOffsetT> stack_op_indices{json_in.size(), stream};
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
@@ -1465,6 +1467,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
         to_stack_op::get_translation_table(stack_behavior)),
     stream);
 
+  nvtx3::mark("json_to_stack_ops_fst.Transduce");
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
   // of structs/lists
   json_to_stack_ops_fst.Transduce(json_in.begin(),
@@ -1478,6 +1481,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
   // Copy back to actual number of stack operations
   auto const num_stack_ops = d_num_stack_ops.value(stream);
 
+  nvtx3::mark("sparse_stack_op_to_top_of_stack");
   // Stack operations with indices are converted to top of the stack for each character in the input
   if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {
     fst::sparse_stack_op_to_top_of_stack<fst::stack_op_support::WITH_RESET_SUPPORT, StackLevelT>(
@@ -1642,7 +1646,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // see a JSON-line delimiter as the very first item
   SymbolOffsetT const delimiter_offset =
     (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
+  nvtx3::mark("get_token_stream: tokens");
   rmm::device_uvector<PdaTokenT> tokens{max_token_out_count + delimiter_offset, stream, mr};
+  nvtx3::mark("get_token_stream: token_indices");
   rmm::device_uvector<SymbolOffsetT> tokens_indices{
     max_token_out_count + delimiter_offset, stream, mr};
 

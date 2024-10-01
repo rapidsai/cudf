@@ -24,6 +24,8 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
+#include <io/json/nvtx_resource_adaptor.hpp>
+
 #include <benchmark/benchmark.h>
 
 namespace cudf {
@@ -124,6 +126,23 @@ class memory_stats_logger {
   // TODO change to resource_ref once set_current_device_resource supports it
   rmm::mr::device_memory_resource* existing_mr;
   rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
+};
+
+class nvtx_allocator {
+ public:
+  nvtx_allocator()
+    : existing_mr(cudf::get_current_device_resource()),
+      nvtx_mr(rmm::mr::nvtx_resource_adaptor(existing_mr))
+  {
+    cudf::set_current_device_resource(&nvtx_mr);
+  }
+
+  ~nvtx_allocator() { cudf::set_current_device_resource(existing_mr); }
+
+ private:
+  // TODO change to resource_ref once set_current_device_resource supports it
+  rmm::mr::device_memory_resource* existing_mr;
+  rmm::mr::nvtx_resource_adaptor<rmm::mr::device_memory_resource> nvtx_mr;
 };
 
 }  // namespace cudf

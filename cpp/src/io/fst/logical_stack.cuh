@@ -455,6 +455,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                             match_level_scan_bytes,
                                             propagate_writes_scan_bytes});
 
+  nvtx3::mark("stack: temp_storage resize");
   if (temp_storage.size() < total_temp_storage_bytes) {
     temp_storage.resize(total_temp_storage_bytes, stream);
   }
@@ -462,6 +463,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // temp_storage_bytes
   total_temp_storage_bytes = temp_storage.size();
 
+  nvtx3::mark("stack: a new vectors");
   rmm::device_uvector<SymbolPositionT> d_symbol_position_alt{num_symbols_in, stream};
   rmm::device_uvector<StackOpT> d_kv_ops_current{num_symbols_in, stream};
   rmm::device_uvector<StackOpT> d_kv_ops_alt{num_symbols_in, stream};
@@ -483,6 +485,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       d_symbols,
       detail::NewlineToResetStackSegmentOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op});
 
+    nvtx3::mark("stack: key_segments");
     rmm::device_uvector<StackSegmentT> key_segments{num_symbols_in, stream};
     CUDF_CUDA_TRY(cub::DeviceScan::InclusiveSum(
       temp_storage.data(),
