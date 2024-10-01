@@ -15,6 +15,7 @@ from . cimport (
     replace,
     slice,
     strip,
+    translate,
     wrap,
 )
 from .side_type cimport side_type
@@ -35,5 +36,6 @@ __all__ = [
     "slice",
     "strip",
     "side_type",
+    "translate",
     "wrap",
 ]

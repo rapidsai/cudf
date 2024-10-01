@@ -16,6 +16,7 @@ from . import (
     replace,
     slice,
     strip,
+    translate,
     wrap,
 )
 from .side_type import SideType
@@ -36,5 +37,6 @@ __all__ = [
     "slice",
     "strip",
     "SideType",
+    "translate",
     "wrap",
 ]
