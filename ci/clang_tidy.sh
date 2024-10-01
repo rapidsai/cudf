@@ -27,4 +27,4 @@ cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMM
 export CUDF_ROOT="${PWD}/cpp/build"
 
 # Run pre-commit checks
-pre-commit run --all-files --show-diff-on-failure --hook-stage manual
+pre-commit run --all-files --show-diff-on-failure --hook-stage manual clang-tidy
