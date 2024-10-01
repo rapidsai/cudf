@@ -184,7 +184,7 @@ void print_usage()
     "\nUsage: parquet_io_multithreaded <comma delimited list of dirs and/or files> <input "
     "multiplier>\n"
     "                                <io source type> <number of times to read> <thread count>\n"
-    "                                <write and validate output: "
+    "                                <write to temp output files and validate: "
     "yes/no>\n\n");
   fmt::print(
     "Available IO source types: FILEPATH, HOST_BUFFER, {}, DEVICE_BUFFER\n\n",
