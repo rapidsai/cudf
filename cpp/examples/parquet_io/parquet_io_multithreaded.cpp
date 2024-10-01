@@ -192,7 +192,7 @@ void print_usage()
   fmt::print(fg(fmt::color::light_sky_blue),
              "Note: Provide as many arguments as you like in the above order. Default values\n"
              "      for the unprovided arguments will be used. All input parquet files will\n"
-             "      be converted to the specified <io source type> before reading\n\n");
+             "      be converted to the specified IO source type before reading\n\n");
 }
 
 /**
