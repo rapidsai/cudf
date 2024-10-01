@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "avro_common.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -100,15 +101,15 @@ struct column_desc {
  */
 struct file_metadata {
   std::map<std::string, std::string> user_data;
-  std::string codec         = "";
-  uint64_t sync_marker[2]   = {0, 0};
-  size_t metadata_size      = 0;
-  size_t total_data_size    = 0;
-  size_t selected_data_size = 0;
-  size_type num_rows        = 0;
-  size_type skip_rows       = 0;
-  size_type total_num_rows  = 0;
-  uint32_t max_block_size   = 0;
+  std::string codec                   = "";
+  std::array<uint64_t, 2> sync_marker = {0, 0};
+  size_t metadata_size                = 0;
+  size_t total_data_size              = 0;
+  size_t selected_data_size           = 0;
+  size_type num_rows                  = 0;
+  size_type skip_rows                 = 0;
+  size_type total_num_rows            = 0;
+  uint32_t max_block_size             = 0;
   std::vector<schema_entry> schema;
   std::vector<block_desc_s> block_list;
   std::vector<column_desc> columns;
