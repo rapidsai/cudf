@@ -43,6 +43,8 @@ namespace CUDF_EXPORT cudf {
  *
  * @return spdlog::logger& The logger.
  */
-spdlog::logger& logger();
+[[deprecated(
+  "Support for direct access to spdlog loggers in rmm is planned for removal")]] spdlog::logger&
+logger();
 
 }  // namespace CUDF_EXPORT cudf
