@@ -28,7 +28,7 @@ cpdef Column to_timestamps(
     return Column.from_libcudf(move(c_result))
 
 cpdef Column from_timestamps(
-    Column input,
+    Column timestamps,
     const string& format,
     Column input_strings_names
 ):

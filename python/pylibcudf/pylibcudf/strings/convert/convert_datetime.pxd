@@ -16,3 +16,8 @@ cpdef Column from_timestamps(
     const string& format,
     Column input_strings_names
 )
+
+cpdef Column is_timestamp(
+    Column input,
+    const string& format,
+)

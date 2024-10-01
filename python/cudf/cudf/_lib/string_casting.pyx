@@ -15,10 +15,6 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from pylibcudf.libcudf.strings.convert.convert_booleans cimport (
-    from_booleans as cpp_from_booleans,
-    to_booleans as cpp_to_booleans,
-)
 from pylibcudf.libcudf.strings.convert.convert_datetime cimport (
     is_timestamp as cpp_is_timestamp,
 )
@@ -427,77 +423,21 @@ def stoul(Column input_col):
     return string_to_integer(input_col, cudf.dtype("uint64"))
 
 
-def _to_booleans(Column input_col, object string_true="True"):
-    """
-    Converting/Casting input column of type string to boolean column
-
-    Parameters
-    ----------
-    input_col : input column of type string
-    string_true : string that represents True
-
-    Returns
-    -------
-    A Column with string values cast to boolean
-    """
-
-    cdef DeviceScalar str_true = as_device_scalar(string_true)
-    cdef column_view input_column_view = input_col.view()
-    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
-        str_true.get_raw_ptr())
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_to_booleans(
-                input_column_view,
-                string_scalar_true[0]))
-
-    return Column.from_unique_ptr(move(c_result))
-
-
 def to_booleans(Column input_col):
-
-    return _to_booleans(input_col)
-
-
-def _from_booleans(
-        Column input_col,
-        object string_true="True",
-        object string_false="False"):
-    """
-    Converting/Casting input column of type boolean to string column
-
-    Parameters
-    ----------
-    input_col : input column of type boolean
-    string_true : string that represents True
-    string_false : string that represents False
-
-    Returns
-    -------
-    A Column with boolean values cast to string
-    """
-
-    cdef DeviceScalar str_true = as_device_scalar(string_true)
-    cdef DeviceScalar str_false = as_device_scalar(string_false)
-    cdef column_view input_column_view = input_col.view()
-    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
-        str_true.get_raw_ptr())
-    cdef const string_scalar* string_scalar_false = <const string_scalar*>(
-        str_false.get_raw_ptr())
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_booleans(
-                input_column_view,
-                string_scalar_true[0],
-                string_scalar_false[0]))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_booleans.to_booleans(
+        input_col.to_pylibcudf(mode="read"),
+        as_device_scalar("True").device_value.c_value,
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def from_booleans(Column input_col):
-    return _from_booleans(input_col)
+    plc_column = plc.strings.convert.convert_booleans.from_booleans(
+        input_col.to_pylibcudf(mode="read"),
+        as_device_scalar("True").device_value.c_value,
+        as_device_scalar("False").device_value.c_value,
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def int2timestamp(
