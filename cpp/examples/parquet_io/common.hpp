@@ -25,19 +25,20 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/cuda_stream_pool.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <fmt/color.h>
 
-#include <chrono>
 #include <filesystem>
-#include <iostream>
-#include <optional>
 #include <string>
+
+/**
+ * @file commons.hpp
+ * @brief Common utilities for `parquet_io` examples
+ *
+ */
 
 /**
  * @brief Create memory resource for libcudf functions
@@ -65,7 +66,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 {
   using encoding_type = cudf::io::column_encoding;
 
-  static const std::unordered_map<std::string_view, encoding_type> map = {
+  static std::unordered_map<std::string_view, encoding_type> const map = {
     {"DEFAULT", encoding_type::USE_DEFAULT},
     {"DICTIONARY", encoding_type::DICTIONARY},
     {"PLAIN", encoding_type::PLAIN},
@@ -76,11 +77,12 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
   if (map.find(name) != map.end()) { return map.at(name); }
-  throw std::invalid_argument("FATAL: " + std::string(name) +
-                              " is not a valid encoding type.\n\n"
-                              "Available encoding types: DEFAULT, DICTIONARY, PLAIN,\n"
-                              "DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY,\n"
-                              "DELTA_BYTE_ARRAY\n\n");
+  throw std::invalid_argument(fmt::format(fmt::emphasis::bold | fg(fmt::color::red),
+                                          "{} is not a valid encoding type.\n\n"
+                                          "Available encoding types: DEFAULT, DICTIONARY, PLAIN,\n"
+                                          "DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY,\n"
+                                          "DELTA_BYTE_ARRAY\n\n",
+                                          name));
 }
 
 /**
@@ -93,7 +95,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 {
   using compression_type = cudf::io::compression_type;
 
-  static const std::unordered_map<std::string_view, compression_type> map = {
+  static std::unordered_map<std::string_view, compression_type> const map = {
     {"NONE", compression_type::NONE},
     {"AUTO", compression_type::AUTO},
     {"SNAPPY", compression_type::SNAPPY},
@@ -102,10 +104,11 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
   if (map.find(name) != map.end()) { return map.at(name); }
-  throw std::invalid_argument("FATAL: " + std::string(name) +
-                              " is not a valid compression type.\n\n"
-                              "Available compression_type types: NONE, AUTO, SNAPPY,\n"
-                              "LZ4, ZSTD\n\n");
+  throw std::invalid_argument(fmt::format(fmt::emphasis::bold | fg(fmt::color::red),
+                                          "{} is not a valid compression type.\n\n"
+                                          "Available compression types: NONE, AUTO, SNAPPY,\n"
+                                          "LZ4, ZSTD\n\n",
+                                          name));
 }
 
 /**
@@ -154,34 +157,6 @@ inline void check_identical_tables(cudf::table_view const& lhs_table,
 }
 
 /**
- * @brief Get io sink type from the string keyword argument
- *
- * @param name io sink type keyword name
- * @return corresponding io sink type type
- */
-[[nodiscard]] std::optional<cudf::io::io_type> get_io_sink_type(std::string name)
-{
-  using io_type = cudf::io::io_type;
-
-  static const std::unordered_map<std::string_view, io_type> map = {
-    {"FILEPATH", io_type::FILEPATH},
-    {"HOST_BUFFER", io_type::HOST_BUFFER},
-    {"PINNED_BUFFER", io_type::HOST_BUFFER},
-    {"DEVICE_BUFFER", io_type::DEVICE_BUFFER}};
-
-  std::transform(name.begin(), name.end(), name.begin(), ::toupper);
-  if (map.find(name) != map.end()) {
-    return {map.at(name)};
-  } else {
-    fmt::print(
-      "{} is not a valid io sink type. Available: FILEPATH,\n"
-      "HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER. Ignoring\n\n",
-      name);
-    return std::nullopt;
-  }
-}
-
-/**
  * @brief Concatenate a vector of tables and return the resultant table
  *
  * @param tables Vector of tables to concatenate
@@ -202,26 +177,4 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
     });
   // Construct the final table
   return cudf::concatenate(table_views, stream);
-}
-
-/**
- * @brief Thread unsafe function to create a directory for FILEPATH io sink type and return its path
- *
- * @return File path of the created directory
- */
-[[nodiscard]] std::string get_default_output_path()
-{
-  static std::string output_path = std::filesystem::current_path().string();
-  if (output_path == std::filesystem::current_path().string()) {
-    // Check if output path is a valid directory
-    if (std::filesystem::is_directory({output_path})) {
-      // Create a new directory in output path if not empty.
-      if (not std::filesystem::is_empty({output_path})) {
-        output_path +=
-          "/output_" + fmt::format("{:%Y-%m-%d-%H-%M-%S}", std::chrono::system_clock::now());
-        std::filesystem::create_directory({output_path});
-      }
-    }
-  }
-  return output_path;
 }
