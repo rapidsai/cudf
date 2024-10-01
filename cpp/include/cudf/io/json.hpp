@@ -106,7 +106,7 @@ class json_reader_options {
   // Prune columns on read, selected based on the _dtypes option
   bool _prune_columns = false;
   // Experimental features: new column tree construction
-  bool _experimental = false;
+  bool _experimental = true;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -131,7 +131,7 @@ class json_reader_options {
   // Validation checks for spark
   // Should the json validation be strict or not
   // Note: strict validation enforces the JSON specification https://www.json.org/json-en.html
-  bool _strict_validation = false;
+  bool _strict_validation = true;
   // Allow leading zeros for numeric values.
   bool _allow_numeric_leading_zeros = true;
   // Allow non-numeric numbers: NaN, +INF, -INF, +Infinity, Infinity, -Infinity
