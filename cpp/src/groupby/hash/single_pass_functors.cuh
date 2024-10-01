@@ -18,7 +18,7 @@
 
 #include "helpers.cuh"
 
-#include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/traits.cuh>
@@ -217,7 +217,7 @@ struct compute_direct_aggregates {
     if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
         (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i))) {
       auto const result = set.insert_and_find(i);
-      cudf::detail::aggregate_row<true, true>(output_values, *result.first, input_values, i, aggs);
+      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
     }
   }
 };
@@ -293,7 +293,7 @@ struct compute_single_pass_aggs_fn {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
       auto const result = set.insert_and_find(i);
 
-      cudf::detail::aggregate_row<true, true>(output_values, *result.first, input_values, i, aggs);
+      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
     }
   }
 };
