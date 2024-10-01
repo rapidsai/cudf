@@ -20,6 +20,10 @@
 
 #include <spdlog/spdlog.h>
 
+namespace cudf::detail {
+spdlog::logger& logger();
+}
+
 namespace CUDF_EXPORT cudf {
 
 /**
@@ -44,7 +48,7 @@ namespace CUDF_EXPORT cudf {
  * @return spdlog::logger& The logger.
  */
 [[deprecated(
-  "Support for direct access to spdlog loggers in rmm is planned for removal")]] spdlog::logger&
+  "Support for direct access to spdlog loggers in cudf is planned for removal")]] spdlog::logger&
 logger();
 
 }  // namespace CUDF_EXPORT cudf
