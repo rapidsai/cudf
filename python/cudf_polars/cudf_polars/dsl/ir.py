@@ -1205,7 +1205,7 @@ class MapFunction(IR):
             ).columns()
             value_column = plc.concatenate.concatenate(
                 [
-                    df.column_map[pivotee].astype(self.schema[value_name])
+                    df.column_map[pivotee].astype(self.schema[value_name]).obj
                     for pivotee in pivotees
                 ]
             )

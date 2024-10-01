@@ -84,10 +84,9 @@ class Column:
             is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
         )
 
-    # TODO: Return Column once #16272 is fixed.
-    def astype(self, dtype: plc.DataType) -> plc.Column:
+    def astype(self, dtype: plc.DataType) -> Column:
         """
-        Return the backing column as the requested dtype.
+        Cast the column to as the requested dtype.
 
         Parameters
         ----------
@@ -109,8 +108,8 @@ class Column:
         the current one.
         """
         if self.obj.type() != dtype:
-            return plc.unary.cast(self.obj, dtype)
-        return self.obj
+            return Column(plc.unary.cast(self.obj, dtype)).sorted_like(self)
+        return self
 
     def copy_metadata(self, from_: pl.Series, /) -> Self:
         """
