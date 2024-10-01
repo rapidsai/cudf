@@ -275,6 +275,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   // make a copy
@@ -370,6 +371,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -676,6 +678,7 @@ void scatter_offsets(tree_meta_t const& tree,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   auto const num_nodes   = col_ids.size();
   auto const num_columns = d_column_tree.node_categories.size();
   // move columns data to device.
@@ -878,6 +881,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   // make a copy
@@ -974,6 +978,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);
