@@ -145,7 +145,7 @@ TEST_F(MultibyteSplitTest, LargeInput)
 
   for (auto i = 0; i < (2 * 32 * 128 * 1024); i++) {
     host_input += "...:|";
-    host_expected.emplace_back(std::string("...:|"));
+    host_expected.emplace_back("...:|");
   }
 
   auto expected = strings_column_wrapper{host_expected.begin(), host_expected.end()};
