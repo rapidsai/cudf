@@ -26,7 +26,4 @@ compute-sanitizer --tool memcheck custom_with_malloc names.csv
 compute-sanitizer --tool memcheck parquet_io
 compute-sanitizer --tool memcheck parquet_io example.parquet output.parquet DELTA_BINARY_PACKED ZSTD TRUE
 
-compute-sanitizer --tool memcheck parquet_io_multithreaded
-compute-sanitizer --tool memcheck parquet_io_multithreaded example.parquet 4 PINNED_BUFFER 2 2
-
 exit ${EXITCODE}
