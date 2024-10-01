@@ -14,13 +14,25 @@
  * limitations under the License.
  */
 
-#include "common.hpp"
+#include "../utilities/timer.hpp"
+#include "common_utils.hpp"
 #include "io_source.hpp"
 
+#include <cudf/concatenate.hpp>
+#include <cudf/io/parquet.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_view.hpp>
+
 #include <rmm/cuda_stream_pool.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
 #include <fmt/chrono.h>
+#include <fmt/color.h>
+
+#include <filesystem>
+#include <stdexcept>
+#include <string>
 
 /**
  * @file parquet_io_multithreaded.cpp
@@ -175,7 +187,40 @@ struct write_fn {
 };
 
 /**
- * @brief Function to print example usage
+ * @brief Function to setup and launch multithreaded writing parquet files.
+ *
+ * @param output_path Path to output directory
+ * @param tables List of at least table views to be written
+ * @param thread_count Number of threads to use for writing tables.
+ * @param stream_pool CUDA stream pool to use for threads
+ *
+ */
+void write_parquet_multithreaded(std::string const& output_path,
+                                 std::vector<cudf::table_view> const& tables,
+                                 int32_t thread_count,
+                                 rmm::cuda_stream_pool& stream_pool)
+{
+  // Table writing tasks
+  std::vector<write_fn> write_tasks;
+  write_tasks.reserve(thread_count);
+  std::for_each(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(thread_count), [&](auto tid) {
+      write_tasks.emplace_back(write_fn{output_path, tables, tid, stream_pool.get_stream()});
+    });
+
+  // Writer threads
+  std::vector<std::thread> threads;
+  threads.reserve(thread_count);
+  for (auto& c : write_tasks) {
+    threads.emplace_back(std::thread{c});
+  }
+  for (auto& t : threads) {
+    t.join();
+  }
+}
+
+/**
+ * @brief Function to print example usage and argument information.
  */
 void print_usage()
 {
@@ -193,6 +238,94 @@ void print_usage()
              "Note: Provide as many arguments as you like in the above order. Default values\n"
              "      for the unprovided arguments will be used. All input parquet files will\n"
              "      be converted to the specified IO source type before reading\n\n");
+}
+
+/**
+ * @brief Function to process comma delimited input paths string to parquet files and/or dirs
+ *        and asynchronously convert them to specified io sources.
+ *
+ * Process the input path string containing directories (of parquet files) and/or individual
+ * parquet files into a list of input parquet files, multiple the list by `input_multiplier`,
+ * make sure to have at least `thread_count` files to satisfy at least file per parallel thread,
+ * and asynchronously convert the final list of files to a list of `io_source` and return.
+ *
+ * @param paths Comma delimited input paths string
+ * @param input_multiplier Multiplier for the input files list
+ * @param thread_count Number of threads being used in the example
+ * @param io_source_type Specified IO source type to convert input files to
+ * @param stream CUDA stream to use
+ *
+ */
+std::vector<io_source> extract_input_sources_async(std::string const& paths,
+                                                   int32_t input_multiplier,
+                                                   int32_t thread_count,
+                                                   io_source_type io_source_type,
+                                                   rmm::cuda_stream_view stream)
+{
+  // Get the delimited paths to directory and/or files.
+  std::vector<std::string> const delimited_paths = [&]() {
+    std::vector<std::string> paths_list;
+    std::stringstream strstream{paths};
+    std::string path;
+    // Extract the delimited paths.
+    while (std::getline(strstream, path, char{','})) {
+      paths_list.push_back(path);
+    }
+    return paths_list;
+  }();
+
+  // List of parquet files
+  std::vector<std::string> parquet_files;
+  std::for_each(delimited_paths.cbegin(), delimited_paths.cend(), [&](auto const& path_string) {
+    std::filesystem::path path{path_string};
+    // If this is a parquet file, add it.
+    if (std::filesystem::is_regular_file(path)) {
+      parquet_files.push_back(path_string);
+    }
+    // If this is a directory, add all files in the directory.
+    else if (std::filesystem::is_directory(path)) {
+      for (auto const& file : std::filesystem::directory_iterator(path)) {
+        if (std::filesystem::is_regular_file(file.path())) {
+          parquet_files.push_back(file.path().string());
+        }
+      }
+    } else {
+      throw std::runtime_error("Encountered an invalid input path\n");
+    }
+  });
+
+  // Current size of list of parquet files
+  auto const initial_size = parquet_files.size();
+  if (initial_size == 0) { return {}; }
+
+  // Reserve space
+  parquet_files.reserve(std::max<size_t>(thread_count, input_multiplier * parquet_files.size()));
+
+  // Append the input files by input_multiplier times
+  std::for_each(thrust::make_counting_iterator(1),
+                thrust::make_counting_iterator(input_multiplier),
+                [&](auto i) {
+                  parquet_files.insert(parquet_files.end(),
+                                       parquet_files.begin(),
+                                       parquet_files.begin() + initial_size);
+                });
+
+  // Cycle append parquet files from the existing ones if less than the thread_count
+  for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
+    parquet_files.emplace_back(parquet_files[idx % initial_size]);
+  }
+
+  // Vector of io sources
+  std::vector<io_source> input_sources;
+  input_sources.reserve(parquet_files.size());
+  // Transform input files to the specified io sources
+  std::transform(parquet_files.begin(),
+                 parquet_files.end(),
+                 std::back_inserter(input_sources),
+                 [&](auto const& file_name) {
+                   return io_source{file_name, io_source_type, stream};
+                 });
+  return input_sources;
 }
 
 /**
@@ -228,92 +361,6 @@ int32_t main(int argc, char const** argv)
     default: print_usage(); throw std::runtime_error("");
   }
 
-  // Lambda function to process and extract all input files
-  auto const extract_input_sources_async =
-    [thread_count, input_multiplier, io_source_type = io_source_type](
-      std::string const& paths, rmm::cuda_stream_view stream) {
-      std::vector<std::string> const delimited_paths = [&]() {
-        std::vector<std::string> paths_list;
-        std::stringstream strstream{paths};
-        std::string path;
-        // Extract the delimited paths.
-        while (std::getline(strstream, path, char{','})) {
-          paths_list.push_back(path);
-        }
-        return paths_list;
-      }();
-
-      // The final list of parquet files to be read.
-      std::vector<std::string> parquet_files;
-      parquet_files.reserve(
-        std::max<size_t>(thread_count, input_multiplier * delimited_paths.size()));
-      // Append the input files by input_multiplier times
-      std::for_each(
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(input_multiplier),
-        [&](auto i) {
-          std::for_each(
-            delimited_paths.cbegin(), delimited_paths.cend(), [&](auto const& path_string) {
-              std::filesystem::path path{path_string};
-              // If this is a parquet file, add it.
-              if (std::filesystem::is_regular_file(path)) {
-                parquet_files.emplace_back(path_string);
-              }
-              // If this is a directory, add all files at this path
-              else if (std::filesystem::is_directory(path)) {
-                for (auto const& file : std::filesystem::directory_iterator(path)) {
-                  if (std::filesystem::is_regular_file(file.path())) {
-                    parquet_files.emplace_back(file.path().string());
-                  }
-                }
-              } else {
-                throw std::runtime_error("Encountered an invalid input path\n");
-              }
-            });
-        });
-
-      // Cycle append parquet files from the existing ones if less than the thread_count
-      for (size_t idx = 0, initial_size = parquet_files.size();
-           thread_count > static_cast<int>(parquet_files.size());
-           idx++) {
-        parquet_files.emplace_back(parquet_files[idx % initial_size]);
-      }
-
-      std::vector<io_source> input_sources;
-      input_sources.reserve(parquet_files.size());
-      std::transform(parquet_files.begin(),
-                     parquet_files.end(),
-                     std::back_inserter(input_sources),
-                     [&](auto& file_name) { return io_source(file_name, io_source_type, stream); });
-      return input_sources;
-    };
-
-  // Lambda function to setup and launch multithreaded parquet writes
-  auto const write_parquet_multithreaded = [&](std::string const& output_path,
-                                               std::vector<cudf::table_view> const& tables,
-                                               int32_t thread_count,
-                                               rmm::cuda_stream_pool& stream_pool) {
-    // Table writing tasks
-    std::vector<write_fn> write_tasks;
-    write_tasks.reserve(thread_count);
-    std::for_each(
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(thread_count),
-      [&](auto tid) {
-        write_tasks.emplace_back(write_fn{output_path, tables, tid, stream_pool.get_stream()});
-      });
-
-    // Writer threads
-    std::vector<std::thread> threads;
-    threads.reserve(thread_count);
-    for (auto& c : write_tasks) {
-      threads.emplace_back(std::thread{c});
-    }
-    for (auto& t : threads) {
-      t.join();
-    }
-  };
-
   // Initialize mr, default stream and stream pool
   auto const is_pool_used = true;
   auto resource           = create_memory_resource(is_pool_used);
@@ -323,14 +370,14 @@ int32_t main(int argc, char const** argv)
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
   rmm::mr::set_current_device_resource(&stats_mr);
 
-  // Make a list of input sources from the input_paths string.
-  auto const input_sources = extract_input_sources_async(input_paths, default_stream);
+  // List of input sources from the input_paths string.
+  auto const input_sources = extract_input_sources_async(
+    input_paths, input_multiplier, thread_count, io_source_type, default_stream);
   default_stream.synchronize();
 
-  // Exit early if nothing to do.
+  // Check if there is nothing to do
   if (input_sources.empty()) {
-    std::cerr << "No input files to read. Exiting early.\n";
-    return 0;
+    throw std::runtime_error("No input files to read. Exiting early.\n");
   }
 
   // Read the same parquet files specified times with multiple threads and discard the read tables
@@ -362,21 +409,15 @@ int32_t main(int argc, char const** argv)
 
   // Do we need to write parquet files and validate?
   if (write_and_validate) {
-    // Read input files with CONCATENATE_THREADS mode
+    // read_mode::CONCATENATE_THREADS returns a vector of `thread_count` tables
     auto const tables = read_parquet_multithreaded<read_mode::CONCATENATE_THREAD>(
       input_sources, thread_count, stream_pool);
     default_stream.synchronize();
-
-    // Create a directory at the tmpdir path.
-    std::string output_path = std::filesystem::temp_directory_path().string() + "/output_" +
-                              fmt::format("{:%Y-%m-%d-%H-%M-%S}", std::chrono::system_clock::now());
-    std::filesystem::create_directory({output_path});
 
     // Construct a vector of table views for write_parquet_multithreaded
     auto const table_views = [&tables]() {
       std::vector<cudf::table_view> table_views;
       table_views.reserve(tables.size());
-
       std::transform(
         tables.cbegin(), tables.cend(), std::back_inserter(table_views), [](auto const& tbl) {
           return tbl->view();
@@ -386,6 +427,10 @@ int32_t main(int argc, char const** argv)
 
     // Write tables to parquet
     fmt::print("Writing parquet output files..\n");
+    // Create a directory at the tmpdir path.
+    std::string output_path = std::filesystem::temp_directory_path().string() + "/output_" +
+                              fmt::format("{:%Y-%m-%d-%H-%M-%S}", std::chrono::system_clock::now());
+    std::filesystem::create_directory({output_path});
     cudf::examples::timer timer;
     write_parquet_multithreaded(output_path, table_views, thread_count, stream_pool);
     default_stream.synchronize();
@@ -394,21 +439,24 @@ int32_t main(int argc, char const** argv)
     // Verify the output
     fmt::print("Verifying output..\n");
 
-    // CONCATENATE_ALL returns a vector of 1 table
+    // Simply concatenate the previously read tables from input sources
     auto const input_table = cudf::concatenate(table_views, default_stream);
 
-    auto const transcoded_input_sources = extract_input_sources_async(output_path, default_stream);
+    // Sources from written parquet files
+    auto const written_pq_sources = extract_input_sources_async(
+      output_path, input_multiplier, thread_count, io_source_type, default_stream);
     default_stream.synchronize();
 
+    // read_mode::CONCATENATE_ALL returns a concatenated vector of 1 table only
     auto const transcoded_table = std::move(read_parquet_multithreaded<read_mode::CONCATENATE_ALL>(
-                                              transcoded_input_sources, thread_count, stream_pool)
+                                              written_pq_sources, thread_count, stream_pool)
                                               .back());
     default_stream.synchronize();
 
     // Check if the tables are identical
     check_identical_tables(input_table->view(), transcoded_table->view());
 
-    // Remove the created temp directory and parquet data.
+    // Remove the created temp directory and parquet data
     std::filesystem::remove_all(output_path);
   }
 

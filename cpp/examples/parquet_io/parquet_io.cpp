@@ -14,9 +14,15 @@
  * limitations under the License.
  */
 
-#include "common.hpp"
+#include "../utilities/timer.hpp"
+#include "common_utils.hpp"
+#include "io_source.hpp"
 
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/io/parquet.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_view.hpp>
+
+#include <string>
 
 /**
  * @file parquet_io.cpp

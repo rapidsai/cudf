@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2024, NVIDIA CORPORATION.
  *
@@ -14,29 +15,24 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include "../utilities/timer.hpp"
+#include "common_utils.hpp"
 
 #include <cudf/concatenate.hpp>
-#include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <fmt/color.h>
 
-#include <filesystem>
 #include <string>
 
 /**
- * @file commons.hpp
- * @brief Common utilities for `parquet_io` examples
+ * @file commons.cpp
+ * @brief Definitions for common utilities for `parquet_io` examples
  *
  */
 
@@ -62,7 +58,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  * @param name encoding keyword name
  * @return corresponding column encoding type
  */
-[[nodiscard]] cudf::io::column_encoding get_encoding_type(std::string name)
+cudf::io::column_encoding get_encoding_type(std::string name)
 {
   using encoding_type = cudf::io::column_encoding;
 
@@ -91,7 +87,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  * @param name compression keyword name
  * @return corresponding compression type
  */
-[[nodiscard]] cudf::io::compression_type get_compression_type(std::string name)
+cudf::io::compression_type get_compression_type(std::string name)
 {
   using compression_type = cudf::io::compression_type;
 
@@ -117,7 +113,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  * @param input keyword affirmation string such as: Y, T, YES, TRUE, ON
  * @return true or false
  */
-[[nodiscard]] bool get_boolean(std::string input)
+bool get_boolean(std::string input)
 {
   std::transform(input.begin(), input.end(), input.begin(), ::toupper);
 
@@ -136,8 +132,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  * @param lhs_table View to lhs table
  * @param rhs_table View to rhs table
  */
-inline void check_identical_tables(cudf::table_view const& lhs_table,
-                                   cudf::table_view const& rhs_table)
+void check_identical_tables(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
 {
   try {
     // Left anti-join the original and transcoded tables
