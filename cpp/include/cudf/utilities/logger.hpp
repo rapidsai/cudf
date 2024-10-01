@@ -20,7 +20,9 @@
 
 #include <spdlog/spdlog.h>
 
-namespace cudf::detail {
+// Temporarily exporting to allow logger tests. The export may be removed when
+// the logger public API is removed.
+namespace CUDF_EXPORT cudf::detail {
 spdlog::logger& logger();
 }
 
