@@ -183,7 +183,7 @@ class rmm_host_allocator {
    */
   inline bool operator!=(rmm_host_allocator const& x) const { return !operator==(x); }
 
-  bool is_device_accessible() const { return _is_device_accessible; }
+  [[nodiscard]] bool is_device_accessible() const { return _is_device_accessible; }
 
  private:
   rmm::host_async_resource_ref mr;
