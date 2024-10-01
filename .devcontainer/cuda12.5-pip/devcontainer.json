@@ -19,6 +19,8 @@
     "-v",
     "/lib/modules/6.5.0-1019-nvidia-64k:/lib/modules/6.5.0-1019-nvidia-64k",
     "-v",
+    "/usr/local/cuda/gds:/mnt/gds",
+    "-v",
     "${localEnv:HOME}/Downloads:/mnt/profile",
     "--privileged",
     "--cap-add=SYS_ADMIN",
