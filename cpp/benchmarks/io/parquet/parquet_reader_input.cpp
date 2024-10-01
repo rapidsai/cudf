@@ -24,8 +24,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
-// run on most GPUs, but large enough to allow highest throughput
 constexpr cudf::size_type num_cols = 64;
 
 void parquet_read_common(cudf::size_type num_rows_to_read,
