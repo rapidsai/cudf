@@ -13,8 +13,6 @@ dependencies:
 - breathe>=4.35.0
 - c-compiler
 - cachetools
-- clang-tools=16.0.6
-- clang==16.0.6
 - cmake>=3.26.4,!=3.30.0
 - cramjam
 - cubinlinker
