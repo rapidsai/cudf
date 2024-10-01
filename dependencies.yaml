@@ -91,6 +91,7 @@ files:
     includes:
       - build_all
       - build_base
+      - cuda
       - develop
       - py_version
   docs:
