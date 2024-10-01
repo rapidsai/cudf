@@ -13,7 +13,7 @@ def test_all_characters_of_type():
         plc.strings.char_types.StringCharacterTypes.ALPHA,
         plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
     )
-    expected = pa.chunked_array([pc.utf8_is_alpha(pa_array)])
+    expected = pc.utf8_is_alpha(pa_array)
     assert_column_eq(result, expected)
 
 
@@ -25,5 +25,5 @@ def test_filter_characters_of_type():
         plc.interop.from_arrow(pa.scalar(" ")),
         plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
     )
-    expected = pa.chunked_array([pc.replace_substring(pa_array, "A", " ")])
+    expected = pc.replace_substring(pa_array, "A", " ")
     assert_column_eq(result, expected)
