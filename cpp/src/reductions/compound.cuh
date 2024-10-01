@@ -18,6 +18,7 @@
 
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/reduction/detail/reduction.cuh>
+#include <cudf/reduction/detail/reduction_operators.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -59,9 +60,9 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
 
   // All null input produces all null output
   if (valid_count == 0 ||
-      // Don't care about ddof argument of mean. For variance and
-      // standard deviation must have more valid entries than ddof.
-      !std::is_same_v<Op, cudf::reduction::detail::op::mean> && valid_count <= ddof) {
+      // Only care about ddof for standard deviation and variance right now
+      valid_count <= ddof && (std::is_same_v<Op, cudf::reduction::detail::op::standard_deviation> ||
+                              std::is_same_v<Op, cudf::reduction::detail::op::variance>)) {
     auto result = cudf::make_fixed_width_scalar(output_dtype, stream, mr);
     result->set_valid_async(false, stream);
     return result;
