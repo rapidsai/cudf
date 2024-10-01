@@ -1122,7 +1122,7 @@ CUDF_KERNEL void __launch_bounds__(compact_streams_block_size)
     streams[ss.column_id][group].data_ptrs[cid] = dst_ptr;
 
     auto const len = streams[ss.column_id][group].lengths[cid];
-    // len is the size (in bytes) of current stream data.
+    // len is the size (in bytes) of the current stream.
     sizes[out_id] = len;
     dst_ptr += len;
   }
