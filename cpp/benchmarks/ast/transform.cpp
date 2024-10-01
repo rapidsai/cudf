@@ -99,8 +99,8 @@ static void BM_ast_transform(nvbench::state& state)
   }                                                                                        \
   NVBENCH_BENCH(name)                                                                      \
     .set_name(#name)                                                                       \
-    .add_int64_axis("table_size", {100'000, 1'000'000, 10'000'000, 100'000'000})           \
-    .add_int64_axis("tree_levels", {1, 5, 10})
+    .add_int64_axis("tree_levels", {1, 5, 10})                                             \
+    .add_int64_axis("table_size", {100'000, 1'000'000, 10'000'000, 100'000'000})
 
 AST_TRANSFORM_BENCHMARK_DEFINE(
   ast_int32_imbalanced_unique, int32_t, TreeType::IMBALANCED_LEFT, false, false);
