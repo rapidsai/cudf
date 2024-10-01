@@ -307,8 +307,8 @@ class output_builder {
    * @param mr The memory resource used to allocate the output vector.
    * @return The output vector.
    */
-  rmm::device_uvector<T> gather(rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr) const
+  [[nodiscard]] rmm::device_uvector<T> gather(rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr) const
   {
     rmm::device_uvector<T> output{size(), stream, mr};
     auto output_it = output.begin();

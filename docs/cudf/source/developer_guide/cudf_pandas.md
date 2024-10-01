@@ -136,3 +136,21 @@ Arrays are not almost equal to 7 decimals
  ACTUAL: 1.0
  DESIRED: 2.0.
 ```
+
+Setting the environment variable `CUDF_PANDAS_FAIL_ON_FALLBACK` causes `cudf.pandas` to fail when falling back from cuDF to Pandas.
+For example,
+```python
+import cudf.pandas
+cudf.pandas.install()
+import pandas as pd
+import numpy as np
+
+df = pd.DataFrame({
+    'complex_col': [1 + 2j, 3 + 4j, 5 + 6j]
+})
+
+print(df)
+```
+```
+ProxyFallbackError: The operation failed with cuDF, the reason was <class 'NotImplementedError'>: Series with Complex128DType is not supported.
+```
