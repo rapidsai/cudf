@@ -58,14 +58,14 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
   // build chars column
   std::transform(
-    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.begin(), total_bytes.begin(), strings_sizes.begin(), strings_batch.begin(), null_masks.begin())),
-    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.end(), total_bytes.end(), strings_sizes.end(), strings_batch.end(), null_masks.end()))
+    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.begin(), total_bytes.begin(), strings_batch.begin(), null_masks.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(offset_columns.end(), total_bytes.end(), strings_batch.end(), null_masks.end()))
     std::back_inserter(output),
     [] (auto &elem) {
-      auto strings_count = thrust::get<2>(elem)
+      auto strings_count = thrust::get<1>(thrust::get<2>(elem));
       auto bytes = thrust::get<1>(elem)
-      auto null_count = thrust::get<4>(elem)
-      auto begin = thrust::get<3>(elem)
+      auto null_count = thrust::get<3>(elem)
+      auto begin = thrust::get<2>(elem)
       auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(thrust::get<0>(elem)->view());
       auto chars_data = [d_offsets, bytes = bytes, begin, strings_count, null_count, stream, mr] {
       auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
@@ -98,7 +98,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
                           thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
                           strings_count,
                           copy_chars);
-                          
+
         return chars_data;
       }
     }();

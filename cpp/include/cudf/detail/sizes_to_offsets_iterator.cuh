@@ -228,13 +228,13 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
 
 void sizes_to_offsets_batch(std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> strings_batch,
                       std::vector<std::unique_ptr<column>> offsets_columns,
-                      rmm::device_uvector<int64_t> total_bytes,
+                      int64_t *total_bytes,
                       rmm::cuda_stream_view stream)
 {
-  std::for_each (
+  std::for_each_n (
     thrust::make_zip_iterator(thrust::make_tuple(strings_batch.begin(), offsets_columns.begin(), thrust::make_counting_iterator(0))),
     thrust::make_zip_iterator(thrust::make_tuple(strings_batch.end(), offsets_columns.end(), thrust::make_counting_iterator(strings_batch.size()))),
-    [total_bytes = total_bytes.data(), stream] (auto &elem) {
+    [total_bytes = total_bytes, stream] (auto &elem) {
       auto offsets_transformer =
         cuda::proclaim_return_type<size_type>([] (auto item) -> size_type {
           return (item.first != nullptr ? static_cast<size_type>(thrust::get<1>(item)) : size_type{0});

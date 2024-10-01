@@ -46,9 +46,8 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<int64_t>> make_offse
   rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<column>> offsets_columns(strings_batch.size());
+  //std::vector<std::unique_ptr<column>> out_offsets_columns(strings_batch.size());
   rmm::device_uvector<int64_t> total_bytes(strings_batch.size(), stream);
-  
-  auto constexpr size_type_max = static_cast<int64_t>(std::numeric_limits<size_type>::max());
     
   std::transform (
     strings_batch.begin(),
@@ -59,12 +58,12 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<int64_t>> make_offse
     }
   );
 
-  sizes_to_offsets_batch(strings_batch, offsets_columns, total_bytes, stream);
+  sizes_to_offsets_batch(strings_batch, offsets_columns, total_bytes.data(), stream);
 
   auto host_total_bytes = cudf::detail::make_std_vector_async(total_bytes, stream);
 
   auto const threshold = cudf::strings::get_offset64_threshold();
-  std::for_each (
+  thrust::for_each (
     thrust::make_zip_iterator(thrust::make_tuple(host_total_bytes.begin(), offsets_columns.begin(), strings_batch.begin())),
     thrust::make_zip_iterator(thrust::make_tuple(host_total_bytes.end(), offsets_columns.end(), strings_batch.end())),
     [threshold, stream, mr] (auto &elem) {
@@ -73,7 +72,7 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<int64_t>> make_offse
           return (item.first != nullptr ? static_cast<size_type>(thrust::get<1>(item)) : size_type{0});
         });
 
-      auto offsets_transformer_itr = thrust::make_transform_iterator(thrust::get<0>(elem), offsets_transformer);
+      auto offsets_transformer_itr = thrust::make_transform_iterator(thrust::get<2>(elem), offsets_transformer);
       auto strings_count = thrust::get<1>(thrust::get<0>(elem));
 
       if (thrust::get<0>(elem) >= cudf::strings::get_offset64_threshold()) {
@@ -86,17 +85,19 @@ std::pair<std::vector<std::unique_ptr<column>>, std::vector<int64_t>> make_offse
 
         auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
 
-        *(thrust::get<1>(elem)) = make_numeric_column(
+        thrust::get<1>(elem) = make_numeric_column(
           data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
 
-        auto d_offsets64 = (*(thrust::get<1>(elem)))->mutable_view().template data<int64_t>();
+        auto d_offsets64 = (thrust::get<1>(elem))->mutable_view().template data<int64_t>();
 
         cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets64, stream);
+
+        thrust::get<1>(elem) = std::move(thrust::get<1>(elem));
       }
     }
   );
 
-  return std::pair(offsets_columns, total_bytes);
+  return std::pair(offsets_columns, host_total_bytes);
 }
 
 
