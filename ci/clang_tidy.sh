@@ -14,7 +14,11 @@ rapids-dependency-file-generator \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n clang_tidy
+
+# Temporarily allow unbound variables for conda activation.
+set +u
 conda activate clang_tidy
+set -u
 
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 
