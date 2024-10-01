@@ -29,6 +29,25 @@
 #include <cuda/std/type_traits>
 
 namespace cudf::detail {
+/// Checks if an aggregation kind needs to operate on the underlying storage type
+template <aggregation::Kind k>
+__device__ constexpr bool uses_underlying_type()
+{
+  return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM;
+}
+
+/// Gets the underlying target type for the given source type and aggregation kind
+template <typename Source, aggregation::Kind k>
+using underlying_target_t =
+  cuda::std::conditional_t<uses_underlying_type<k>(),
+                           cudf::device_storage_type_t<cudf::detail::target_type_t<Source, k>>,
+                           cudf::detail::target_type_t<Source, k>>;
+
+/// Gets the underlying source type for the given source type and aggregation kind
+template <typename Source, aggregation::Kind k>
+using underlying_source_t =
+  cuda::std::conditional_t<uses_underlying_type<k>(), cudf::device_storage_type_t<Source>, Source>;
+
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct update_target_element {
   __device__ void operator()(mutable_column_device_view target,
@@ -44,35 +63,14 @@ template <typename Source>
 struct update_target_element<
   Source,
   aggregation::MIN,
-  cuda::std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !is_fixed_point<Source>()>> {
+  cuda::std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::MIN>;
-    cudf::detail::atomic_min(&target.element<Target>(target_index),
-                             static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
-  }
-};
-
-template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::MIN,
-  cuda::std::enable_if_t<is_fixed_point<Source>() &&
-                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
-  __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
-  {
-    using Target       = target_type_t<Source, aggregation::MIN>;
-    using DeviceTarget = device_storage_type_t<Target>;
-    using DeviceSource = device_storage_type_t<Source>;
+    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::MIN>;
+    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::MIN>;
 
     cudf::detail::atomic_min(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
@@ -85,35 +83,14 @@ template <typename Source>
 struct update_target_element<
   Source,
   aggregation::MAX,
-  cuda::std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !is_fixed_point<Source>()>> {
+  cuda::std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::MAX>;
-    cudf::detail::atomic_max(&target.element<Target>(target_index),
-                             static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
-  }
-};
-
-template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::MAX,
-  cuda::std::enable_if_t<is_fixed_point<Source>() &&
-                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
-  __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
-  {
-    using Target       = target_type_t<Source, aggregation::MAX>;
-    using DeviceTarget = device_storage_type_t<Target>;
-    using DeviceSource = device_storage_type_t<Source>;
+    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::MAX>;
+    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::MAX>;
 
     cudf::detail::atomic_max(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
@@ -127,34 +104,14 @@ struct update_target_element<
   Source,
   aggregation::SUM,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-                         !cudf::is_fixed_point<Source>() && !cudf::is_timestamp<Source>()>> {
+                         !cudf::is_timestamp<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    using Target = target_type_t<Source, aggregation::SUM>;
-    cudf::detail::atomic_add(&target.element<Target>(target_index),
-                             static_cast<Target>(source.element<Source>(source_index)));
-
-    if (target.is_null(target_index)) { target.set_valid(target_index); }
-  }
-};
-
-template <typename Source>
-struct update_target_element<
-  Source,
-  aggregation::SUM,
-  cuda::std::enable_if_t<is_fixed_point<Source>() &&
-                         cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
-  __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
-  {
-    using Target       = target_type_t<Source, aggregation::SUM>;
-    using DeviceTarget = device_storage_type_t<Target>;
-    using DeviceSource = device_storage_type_t<Source>;
+    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::SUM>;
+    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::SUM>;
 
     cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
