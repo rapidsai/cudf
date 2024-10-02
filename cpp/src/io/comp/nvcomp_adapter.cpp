@@ -134,8 +134,6 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
                 nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE).value());
 #endif
     case compression_type::LZ4: return nvcompBatchedLZ4DecompressAsync(std::forward<Args>(args)...);
-    case compression_type::GZIP:
-      return nvcompBatchedGzipDecompressAsync(std::forward<Args>(args)...);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -147,7 +145,6 @@ std::string compression_type_name(compression_type compression)
     case compression_type::ZSTD: return "Zstandard";
     case compression_type::DEFLATE: return "Deflate";
     case compression_type::LZ4: return "LZ4";
-    case compression_type::GZIP: return "GZIP";
   }
   return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
 }
@@ -547,8 +544,8 @@ std::optional<std::string> is_compression_disabled_impl(compression_type compres
                "environment variable.";
       }
       return std::nullopt;
-    default: return "Unsupported compression type";
   }
+  return "Unsupported compression type";
 }
 
 std::optional<std::string> is_compression_disabled(compression_type compression,

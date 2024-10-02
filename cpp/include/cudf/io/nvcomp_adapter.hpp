@@ -24,7 +24,7 @@
 namespace CUDF_EXPORT cudf {
 namespace io::nvcomp {
 
-enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4, GZIP };
+enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4 };
 
 /**
  * @brief Set of parameters that impact whether nvCOMP features are enabled.
