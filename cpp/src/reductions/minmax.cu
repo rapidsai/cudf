@@ -75,10 +75,10 @@ struct minmax_pair {
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type>
-cudf::detail::device_scalar<OutputType> reduce_device(InputIterator d_in,
-                                                      size_type num_items,
-                                                      Op binary_op,
-                                                      rmm::cuda_stream_view stream)
+auto reduce_device(InputIterator d_in,
+                   size_type num_items,
+                   Op binary_op,
+                   rmm::cuda_stream_view stream)
 {
   OutputType identity{};
   cudf::detail::device_scalar<OutputType> result{identity, stream};

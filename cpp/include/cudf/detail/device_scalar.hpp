@@ -30,9 +30,18 @@ namespace detail {
 template <typename T>
 class device_scalar : public rmm::device_scalar<T> {
  public:
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
   ~device_scalar() = default;
 
-  device_scalar(device_scalar&&) noexcept            = default;
+#ifdef __CUDACC__
+#pragma nv_exec_check_disable
+#endif
+  device_scalar(device_scalar&& other) noexcept
+    : rmm::device_scalar<T>{std::move(other)}, bounce_buffer{std::move(other.bounce_buffer)}
+  {
+  }
   device_scalar& operator=(device_scalar&&) noexcept = default;
 
   device_scalar(device_scalar const&)            = delete;
