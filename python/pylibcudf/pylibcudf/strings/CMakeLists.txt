@@ -20,6 +20,7 @@ set(cython_sources
     contains.pyx
     extract.pyx
     find.pyx
+    find_multiple.pyx
     findall.pyx
     regex_flags.pyx
     regex_program.pyx
