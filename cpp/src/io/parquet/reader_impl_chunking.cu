@@ -865,18 +865,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
     switch (codec.compression_type) {
       case GZIP:
-        if (cudf::io::nvcomp_integration::is_all_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
-                                     d_comp_in_view,
-                                     d_comp_out_view,
-                                     d_comp_res_view,
-                                     codec.max_decompressed_size,
-                                     codec.total_decomp_size,
-                                     stream);
-        } else {
-          gpuinflate(
-            d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
-        }
+        gpuinflate(
+          d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
         break;
       case SNAPPY:
         if (cudf::io::nvcomp_integration::is_stable_enabled()) {
