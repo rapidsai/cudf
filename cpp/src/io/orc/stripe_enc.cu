@@ -21,6 +21,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -1102,7 +1103,7 @@ CUDF_KERNEL void __launch_bounds__(compact_streams_block_size)
                        device_span<uint8_t*> dsts,
                        device_span<size_t> sizes)
 {
-  auto const stripe_id = blockIdx.x * compact_streams_block_size + threadIdx.x;
+  auto const stripe_id = cudf::detail::grid_1d::global_thread_id();
   auto const stream_id = blockIdx.y;
   if (stripe_id >= strm_desc.size().first) { return; }
 
