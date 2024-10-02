@@ -125,23 +125,17 @@ class hostdevice_vector {
 
   void host_to_device_async(rmm::cuda_stream_view stream)
   {
-    cuda_memcpy_async(device_ptr(), host_ptr(), size_bytes(), host_memory_kind::PINNED, stream);
+    cuda_memcpy_async<T>(d_data, h_data, stream);
   }
 
-  void host_to_device_sync(rmm::cuda_stream_view stream)
-  {
-    cuda_memcpy(device_ptr(), host_ptr(), size_bytes(), host_memory_kind::PINNED, stream);
-  }
+  void host_to_device_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(d_data, h_data, stream); }
 
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
-    cuda_memcpy_async(host_ptr(), device_ptr(), size_bytes(), host_memory_kind::PINNED, stream);
+    cuda_memcpy_async<T>(h_data, d_data, stream);
   }
 
-  void device_to_host_sync(rmm::cuda_stream_view stream)
-  {
-    cuda_memcpy(host_ptr(), device_ptr(), size_bytes(), host_memory_kind::PINNED, stream);
-  }
+  void device_to_host_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(h_data, d_data, stream); }
 
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
