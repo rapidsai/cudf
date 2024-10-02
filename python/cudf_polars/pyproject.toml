@@ -51,6 +51,9 @@ version = {file = "cudf_polars/VERSION"}
 
 [tool.pytest.ini_options]
 addopts = "--tb=native"
+filterwarnings = [
+  "error"
+]
 xfail_strict = true
 
 [tool.coverage.report]
