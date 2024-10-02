@@ -49,7 +49,7 @@ static __device__ void scan_block_exclusive_sum(int thread_bit, block_scan_resul
 }
 
 template <int decode_block_size>
-static __device__ void scan_block_exclusive_sum(uint32_t warp_bits,
+__device__ static void scan_block_exclusive_sum(uint32_t warp_bits,
                                                 int warp_lane,
                                                 int warp_index,
                                                 uint32_t lane_mask,
@@ -309,11 +309,10 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
       int const is_valid = ((d >= ni.max_def_level) && in_row_bounds) ? 1 : 0;
 
       // thread and block validity count
-      block_scan_results valid_count_results;
-      scan_block_exclusive_sum<decode_block_size>(is_valid, valid_count_results);
-      uint32_t const warp_validity_mask = valid_count_results.warp_bits;
-      int const thread_valid_count      = valid_count_results.thread_count_within_block;
-      int const block_valid_count       = valid_count_results.block_count;
+      using block_scan = cub::BlockScan<int, decode_block_size>;
+      __shared__ typename block_scan::TempStorage scan_storage;
+      int thread_valid_count, block_valid_count;
+      block_scan(scan_storage).ExclusiveSum(is_valid, thread_valid_count, block_valid_count);
 
       // validity is processed per-warp
       //
@@ -323,18 +322,21 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
       // the correct position to start reading. since we are about to write the validity vector
       // here we need to adjust our computed mask to take into account the write row bounds.
       int warp_null_count = 0;
-      // lane 0 from each warp writes out validity
-      if ((write_start >= 0) && (ni.valid_map != nullptr) && ((t % cudf::detail::warp_size) == 0)) {
-        int const valid_map_offset = ni.valid_map_offset;
-        int const vindex     = value_count + thread_value_count;  // absolute input value index
-        int const bit_offset = (valid_map_offset + vindex + write_start) -
-                               first_row;  // absolute bit offset into the output validity map
-        int const write_end =
-          cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
-        int const bit_count = write_end - write_start;
-        warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
+      if (ni.valid_map != nullptr) {
+        uint32_t const warp_validity_mask = ballot(is_valid);
+        // lane 0 from each warp writes out validity
+        if ((write_start >= 0) && ((t % cudf::detail::warp_size) == 0)) {
+          int const valid_map_offset = ni.valid_map_offset;
+          int const vindex     = value_count + thread_value_count;  // absolute input value index
+          int const bit_offset = (valid_map_offset + vindex + write_start) -
+                                first_row;  // absolute bit offset into the output validity map
+          int const write_end =
+            cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
+          int const bit_count = write_end - write_start;
+          warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
-        store_validity(bit_offset, ni.valid_map, warp_validity_mask >> write_start, bit_count);
+          store_validity(bit_offset, ni.valid_map, warp_validity_mask >> write_start, bit_count);
+        }
       }
 
       // sum null counts. we have to do it this way instead of just incrementing by (value_count -
@@ -418,11 +420,11 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
     }
 
     // thread and block validity count
-    block_scan_results valid_count_results;
-    scan_block_exclusive_sum<decode_block_size>(is_valid, valid_count_results);
-    uint32_t const warp_validity_mask = valid_count_results.warp_bits;
-    int thread_valid_count            = valid_count_results.thread_count_within_block;
-    int block_valid_count             = valid_count_results.block_count;
+    using block_scan = cub::BlockScan<int, decode_block_size>;
+    __shared__ typename block_scan::TempStorage scan_storage;
+    int thread_valid_count, block_valid_count;
+    block_scan(scan_storage).ExclusiveSum(is_valid, thread_valid_count, block_valid_count);
+    uint32_t const warp_validity_mask = ballot(is_valid);
 
     // validity is processed per-warp
     //
