@@ -6,11 +6,10 @@ import struct
 import mmh3
 import numpy as np
 import pyarrow as pa
+import pylibcudf as plc
 import pytest
 import xxhash
 from utils import assert_column_eq, assert_table_eq
-
-import cudf._lib.pylibcudf as plc
 
 SEED = 0
 METHODS = ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
@@ -26,15 +25,9 @@ def pa_input_column(pa_type):
         return pa.array([True, True, False], type=pa_type)
     elif pa.types.is_list(pa_type):
         # TODO: Add heterogenous sizes
-        try:
-            return pa.array([[1], [2], [3]], type=pa_type)
-        except:
-            pytest.skip()
+        return pa.array([[1], [2], [3]], type=pa_type)
     elif pa.types.is_struct(pa_type):
-        try:
-            return pa.array([{"v": 1}, {"v": 2}, {"v": 3}], type=pa_type)
-        except:
-            pytest.skip()
+        return pa.array([{"v": 1}, {"v": 2}, {"v": 3}], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -135,7 +128,6 @@ def test_hash_column_xxhash64(pa_input_column):
     plc_tbl = plc.interop.from_arrow(
         pa.Table.from_arrays([pa_input_column], names=["data"])
     )
-
 
     if isinstance(pa_input_column.type, (pa.ListType, pa.StructType)):
         pytest.xfail()
