@@ -24,8 +24,14 @@ rapids-logger "Download wheels"
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 ./dist
 
+# Download the libcudf built in the previous step
+RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-libcudf-dep
+
 # Download the pylibcudf built in the previous step
 RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
+
+rapids-logger "Install libcudf"
+python -m pip install ./local-libcudf-dep/libcudf*.whl
 
 rapids-logger "Install pylibcudf"
 python -m pip install ./local-pylibcudf-dep/pylibcudf*.whl
