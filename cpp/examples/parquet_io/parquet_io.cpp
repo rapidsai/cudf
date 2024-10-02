@@ -136,7 +136,7 @@ int main(int argc, char const** argv)
   // Read input parquet file
   // We do not want to time the initial read time as it may include
   // time for nvcomp, cufile loading and RMM growth
-  std::cout << "\nReading " << input_filepath << "...";
+  std::cout << "\nReading " << input_filepath << "...\n";
   std::cout << "Note: Not timing the initial parquet read as it may include\n"
                "times for nvcomp, cufile loading and RMM growth.\n\n";
   auto [input, metadata] = read_parquet(input_filepath);
