@@ -86,12 +86,22 @@ class datasource {
   /**
    * @brief Creates a source from a file path.
    *
+   * @note Parameters `offset`, `max_size_estimate` and `min_size_estimate` are hints to the
+   * `datasource` implementation about the expected range of the data that will be read. The
+   * implementation may use these hints to optimize the read operation. These parameters are usually
+   * based on the byte range option. In this case, `min_size_estimate` should be no greater than the
+   * byte range to avoid potential issues when reading adjacent ranges. `max_size_estimate` can
+   * include padding after the byte range, to include additional data that may be needed for
+   * processing.
+   *
+   @throws cudf::logic_error if the minimum size estimate is greater than the maximum size estimate
+   *
    * @param[in] filepath Path to the file to use
-   * @param[in] offset Bytes from the start of the file (the default is zero)
-   * @param[in] max_size_estimate Maximum size of the input within the file (the default is zero,
-   * which means the whole file after `offset`)
-   * @param[in] min_size_estimate Minimum size of the input within the file (the default is zero,
-   * which means the whole file after `offset`)
+   * @param[in] offset Starting byte offset from which data will be read (the default is zero)
+   * @param[in] max_size_estimate Upper estimate of the data range that will be read (the default is
+   * zero, which means the whole file after `offset`)
+   * @param[in] min_size_estimate Lower estimate of the data range that will be read (the default is
+   * zero, which means the whole file after `offset`)
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(std::string const& filepath,
@@ -381,4 +391,4 @@ class datasource {
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

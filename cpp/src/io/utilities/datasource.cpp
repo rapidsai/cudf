@@ -460,6 +460,9 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t max_size_estimate,
                                                size_t min_size_estimate)
 {
+  CUDF_EXPECTS(max_size_estimate == 0 or min_size_estimate <= max_size_estimate,
+               "Invalid min/max size estimates for datasource creation");
+
 #ifdef CUFILE_FOUND
   if (cufile_integration::is_always_enabled()) {
     // avoid mmap as GDS is expected to be used for most reads
