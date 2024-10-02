@@ -85,6 +85,18 @@ class Column:
         new.name = name
         return new
 
+    def unname(self) -> Self:
+        """
+        Return a shallow copy with no name.
+
+        Returns
+        -------
+        Shallow copy of self with name unset.
+        """
+        new = self.copy()
+        new.name = None
+        return new
+
     def sorted_like(self, like: Column, /) -> Self:
         """
         Copy sortedness properties from a column onto self.
