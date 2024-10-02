@@ -9,10 +9,12 @@ strings
     contains
     extract
     find
+    find_multiple
     findall
     regex_flags
     regex_program
     repeat
     replace
     slice
+    split
     strip
