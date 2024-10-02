@@ -12,9 +12,9 @@ cdef extern from "cudf/strings/split/partition.hpp" namespace \
         "cudf::strings" nogil:
 
     cdef unique_ptr[table] partition(
-        column_view source_strings,
+        column_view input,
         string_scalar delimiter) except +
 
     cdef unique_ptr[table] rpartition(
-        column_view source_strings,
+        column_view input,
         string_scalar delimiter) except +
