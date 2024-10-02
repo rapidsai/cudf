@@ -56,7 +56,6 @@ void batched_memcpy_async(SrcIterator src_iter,
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage{temp_storage_bytes, stream.value()};
 
-  // Perform copies
   cub::DeviceMemcpy::Batched(d_temp_storage.data(),
                              temp_storage_bytes,
                              src_iter,
