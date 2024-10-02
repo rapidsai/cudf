@@ -32,7 +32,7 @@
 
 /**
  * @file io_source.hpp
- * @brief Utilities for construction IO sources from the input parquet files.
+ * @brief Utilities for constructing the specified IO sources from the input parquet files.
  *
  */
 
