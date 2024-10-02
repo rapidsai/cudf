@@ -35,11 +35,11 @@ namespace detail {
  * @tparam DstIterator The type of the destination address iterator
  * @tparam SizeIterator The type of the buffer size iterator
  *
- * @param[in] src_iter Iterator to source addresses
- * @param[in] dst_iter Iterator to destination addresses
- * @param[in] size_iter Iterator to the vector sizes (in bytes)
- * @param[in] num_buffs Number of buffers to be copied
- * @param[in] stream CUDA stream to use
+ * @param src_iter Iterator to source addresses
+ * @param dst_iter Iterator to destination addresses
+ * @param size_iter Iterator to the vector sizes (in bytes)
+ * @param num_buffs Number of buffers to be copied
+ * @param stream CUDA stream to use
  */
 template <typename SrcIterator, typename DstIterator, typename SizeIterator>
 void batched_memcpy_async(SrcIterator src_iter,
