@@ -115,6 +115,7 @@ skip = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "--tb=native"
 filterwarnings = [
     "error::FutureWarning",
     "error::DeprecationWarning",
@@ -125,3 +126,4 @@ filterwarnings = [
     "ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead.:DeprecationWarning",
     "ignore:String support for `aggregate_files` is experimental. Behavior may change in the future.:FutureWarning:dask",
 ]
+xfail_strict = true
