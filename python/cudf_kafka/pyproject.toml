@@ -79,9 +79,11 @@ skip = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "--tb=native"
 filterwarnings = [
   "error"
 ]
+xfail_strict = true
 
 [tool.scikit-build]
 build-dir = "build/{wheel_tag}"
