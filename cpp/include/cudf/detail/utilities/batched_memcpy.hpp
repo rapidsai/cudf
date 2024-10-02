@@ -48,12 +48,10 @@ void batched_memcpy_async(SrcIterator src_iter,
                           size_t num_buffs,
                           rmm::cuda_stream_view stream)
 {
-  // Get temp storage needed for cub::DeviceMemcpy::Batched
   size_t temp_storage_bytes = 0;
   cub::DeviceMemcpy::Batched(
     nullptr, temp_storage_bytes, src_iter, dst_iter, size_iter, num_buffs, stream.value());
 
-  // Allocate temporary storage
   rmm::device_buffer d_temp_storage{temp_storage_bytes, stream.value()};
 
   cub::DeviceMemcpy::Batched(d_temp_storage.data(),
