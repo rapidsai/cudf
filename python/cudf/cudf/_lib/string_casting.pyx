@@ -3,9 +3,6 @@
 from cudf._lib.column cimport Column
 
 from cudf._lib.scalar import as_device_scalar
-
-from cudf._lib.scalar cimport DeviceScalar
-
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
@@ -14,10 +11,6 @@ from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from pylibcudf.libcudf.strings.convert.convert_datetime cimport (
-    is_timestamp as cpp_is_timestamp,
-)
 from pylibcudf.libcudf.strings.convert.convert_floats cimport (
     from_floats as cpp_from_floats,
     to_floats as cpp_to_floats,
@@ -460,11 +453,10 @@ def int2timestamp(
     A Column with date-time represented in string format
 
     """
-    cdef string c_timestamp_format = format.encode("UTF-8")
     return Column.from_pylibcudf(
         plc.strings.convert.convert_datetime.from_timestamps(
             input_col.to_pylibcudf(mode="read"),
-            c_timestamp_format,
+            format,
             names.to_pylibcudf(mode="read")
         )
     )
@@ -485,12 +477,11 @@ def timestamp2int(Column input_col, dtype, format):
 
     """
     dtype = dtype_to_pylibcudf_type(dtype)
-    cdef string c_timestamp_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_datetime.to_timestamps(
             input_col.to_pylibcudf(mode="read"),
             dtype,
-            c_timestamp_format
+            format
         )
     )
 
@@ -512,16 +503,11 @@ def istimestamp(Column input_col, str format):
     """
     if input_col.size == 0:
         return cudf.core.column.column_empty(0, dtype=cudf.dtype("bool"))
-    cdef column_view input_column_view = input_col.view()
-    cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_is_timestamp(
-                input_column_view,
-                c_timestamp_format))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_datetime.is_timestamp(
+        input_col.to_pylibcudf(mode="read"),
+        format
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def timedelta2int(Column input_col, dtype, format):
