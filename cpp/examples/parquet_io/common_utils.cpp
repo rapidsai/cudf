@@ -131,7 +131,7 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
   return cudf::concatenate(table_views, stream);
 }
 
-std::string current_time_and_date()
+std::string current_date_and_time()
 {
   auto const time       = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
   auto const local_time = *std::localtime(&time);

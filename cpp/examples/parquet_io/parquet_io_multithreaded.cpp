@@ -423,7 +423,7 @@ int32_t main(int argc, char const** argv)
 
     // Create a directory at the tmpdir path.
     std::string output_path =
-      std::filesystem::temp_directory_path().string() + "/output_" + current_time_and_date();
+      std::filesystem::temp_directory_path().string() + "/output_" + current_date_and_time();
     std::filesystem::create_directory({output_path});
     cudf::examples::timer timer;
     write_parquet_multithreaded(output_path, table_views, thread_count, stream_pool);
