@@ -1,44 +1,137 @@
 #!/usr/bin/env bash
 
-# References
-# https://developer.nvidia.com/blog/boosting-data-ingest-throughput-with-gpudirect-storage-and-rapids-cudf/
-
-# Drop the cache for the benchmark
-export CUDF_BENCHMARK_DROP_CACHE=true
-# Specify GDS behavior
-export LIBCUDF_CUFILE_POLICY="KVIKIO"
-
-# Default axis set in the bench:
-# compression_type: "SNAPPY", "NONE"
-# cardinality: 0, 1000
-# run_length: 1, 32
 parquet_reader_bench_bin=/home/coder/cudf/cpp/build/latest/benchmarks/PARQUET_READER_NVBENCH
 parquet_benchmark_name=parquet_read_io_compression
 
-# Default axis set in the bench:
-# compression_type: "SNAPPY", "NONE"
-# cardinality: 0, 1000
-# run_length: 1, 32
-orc_reader_bench_bin=/home/coder/cudf/cpp/build/latest/benchmarks/ORC_READER_NVBENCH
-orc_benchmark_name=orc_read_io_compression
+# parquet_benchmark_full_program=
+parquet_benchmark_full_program="$parquet_reader_bench_bin -d 0 -b $parquet_benchmark_name
+-a compression_type=SNAPPY -a io_type=FILEPATH -a cardinality=0 -a run_length=1"
+
+color_reset='\e[m'
+color_green='\e[1;32m'
+
+#------------------------------------------------------------
+# kvikIO setting
+#------------------------------------------------------------
+num_threads_arr=(1 8)
+export KVIKIO_NTHREADS
+
+export KVIKIO_COMPAT_MODE
+
+#------------------------------------------------------------
+# cuDF setting
+#------------------------------------------------------------
+export LIBCUDF_CUFILE_POLICY
+
+# Drop the cache for the benchmark
+export CUDF_BENCHMARK_DROP_CACHE=true
+
+# Select an NVMe drive (/tmp is not)
+export TMPDIR=/home/coder/cudf/run_benchmark
+
+#------------------------------------------------------------
+# cuFile setting
+#------------------------------------------------------------
+export CUFILE_ALLOW_COMPAT_MODE
+export CUFILE_FORCE_COMPAT_MODE
+
+export CUFILE_LOGGING_LEVEL=WARN
+
+export CUFILE_LOGFILE_PATH
 
 
+# GDS
+LIBCUDF_CUFILE_POLICY="GDS"
+CUFILE_ALLOW_COMPAT_MODE="false"
+for num_threads in ${num_threads_arr[@]}; do
+    KVIKIO_NTHREADS=$num_threads
+    setup="${LIBCUDF_CUFILE_POLICY}_cufile_compat_${CUFILE_ALLOW_COMPAT_MODE}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
 
-enable_gds=(false true)
-
-for enable_gds_status in ${enable_gds[@]}; do
-    output_suffix=""
-
-    if [ "$enable_gds_status" = true ]; then
-        output_suffix="gds_enabled"
-        LIBCUDF_CUFILE_POLICY=GDS
-    else
-        output_suffix="gds_disabled"
-        LIBCUDF_CUFILE_POLICY=OFF
-    fi
-
-    ${parquet_reader_bench_bin} -d 0 -b $parquet_benchmark_name -a io_type=FILEPATH -a cardinality=0 -a run_length=1 --csv "parquet_reader_bench_$output_suffix.csv" --stopping-criterion entropy
-
-    ${orc_reader_bench_bin} -d 0 -b $orc_benchmark_name -a io=FILEPATH -a cardinality=0 -a run_length=1 --csv "orc_reader_bench_$output_suffix.csv" --stopping-criterion entropy
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
 done
 
+LIBCUDF_CUFILE_POLICY="GDS"
+CUFILE_ALLOW_COMPAT_MODE="true"
+CUFILE_FORCE_COMPAT_MODE="true"
+for num_threads in ${num_threads_arr[@]}; do
+    KVIKIO_NTHREADS=$num_threads
+    setup="${LIBCUDF_CUFILE_POLICY}_cufile_compat_${CUFILE_ALLOW_COMPAT_MODE}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
+
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
+done
+
+# ALWAYS
+LIBCUDF_CUFILE_POLICY="ALWAYS"
+CUFILE_ALLOW_COMPAT_MODE="false"
+for num_threads in ${num_threads_arr[@]}; do
+    KVIKIO_NTHREADS=$num_threads
+    setup="${LIBCUDF_CUFILE_POLICY}_cufile_compat_${CUFILE_ALLOW_COMPAT_MODE}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
+
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
+done
+
+LIBCUDF_CUFILE_POLICY="ALWAYS"
+CUFILE_ALLOW_COMPAT_MODE="true"
+CUFILE_FORCE_COMPAT_MODE="true"
+for num_threads in ${num_threads_arr[@]}; do
+    KVIKIO_NTHREADS=$num_threads
+    setup="${LIBCUDF_CUFILE_POLICY}_cufile_compat_${CUFILE_ALLOW_COMPAT_MODE}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
+
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
+done
+
+# KVIKIO
+LIBCUDF_CUFILE_POLICY="KVIKIO"
+KVIKIO_COMPAT_MODE="off"
+CUFILE_ALLOW_COMPAT_MODE="false"
+for num_threads in ${num_threads_arr[@]}; do
+    KVIKIO_NTHREADS=$num_threads
+    setup="${LIBCUDF_CUFILE_POLICY}_kvik_compat_${KVIKIO_COMPAT_MODE}_cufile_compat_${CUFILE_ALLOW_COMPAT_MODE}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
+
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
+done
+
+LIBCUDF_CUFILE_POLICY="KVIKIO"
+KVIKIO_COMPAT_MODE="off"
+CUFILE_ALLOW_COMPAT_MODE="true"
+CUFILE_FORCE_COMPAT_MODE="true"
+for num_threads in ${num_threads_arr[@]}; do
+    KVIKIO_NTHREADS=$num_threads
+    setup="${LIBCUDF_CUFILE_POLICY}_kvik_compat_${KVIKIO_COMPAT_MODE}_cufile_compat_${CUFILE_ALLOW_COMPAT_MODE}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
+
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
+done
+
+LIBCUDF_CUFILE_POLICY="KVIKIO"
+KVIKIO_COMPAT_MODE="on"
+for num_threads in ${num_threads_arr[@]}; do
+    KVIKIO_NTHREADS=$num_threads
+    setup="${LIBCUDF_CUFILE_POLICY}_kvik_compat_${KVIKIO_COMPAT_MODE}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
+
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
+done
+
+
+# OFF
+LIBCUDF_CUFILE_POLICY="OFF"
+for num_threads in ${num_threads_arr[@]}; do
+    setup="${LIBCUDF_CUFILE_POLICY}_${num_threads}"
+    CUFILE_LOGFILE_PATH="cufile_log_${setup}.txt"
+
+    echo -e "$color_green--> Thread count: $num_threads, setup: $setup$color_reset"
+    $parquet_benchmark_full_program
+done
