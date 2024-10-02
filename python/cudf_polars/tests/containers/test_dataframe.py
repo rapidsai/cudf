@@ -15,13 +15,11 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 def test_select_missing_raises():
     df = DataFrame(
         [
-            (
-                "a",
-                Column(
-                    plc.column_factories.make_numeric_column(
-                        plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-                    )
+            Column(
+                plc.column_factories.make_numeric_column(
+                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
                 ),
+                name="a",
             )
         ]
     )
@@ -32,19 +30,17 @@ def test_select_missing_raises():
 def test_replace_missing_raises():
     df = DataFrame(
         [
-            (
-                "a",
-                Column(
-                    plc.column_factories.make_numeric_column(
-                        plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-                    )
+            Column(
+                plc.column_factories.make_numeric_column(
+                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
                 ),
+                name="a",
             )
         ]
     )
-    replacement = df.column_map["a"].copy()
+    replacement = df.column_map["a"].copy().rename("b")
     with pytest.raises(ValueError):
-        df.replace_columns(("b", replacement))
+        df.replace_columns(replacement)
 
 
 def test_from_table_wrong_names():
@@ -59,16 +55,23 @@ def test_from_table_wrong_names():
         DataFrame.from_table(table, ["a", "b"])
 
 
+def test_unnamed_column_raise():
+    payload = plc.column_factories.make_numeric_column(
+        plc.DataType(plc.TypeId.INT8), 0, plc.MaskState.ALL_VALID
+    )
+
+    with pytest.raises(ValueError):
+        DataFrame([Column(payload, name="a"), Column(payload)])
+
+
 def test_sorted_like_raises_mismatching_names():
     df = DataFrame(
         [
-            (
-                "a",
-                Column(
-                    plc.column_factories.make_numeric_column(
-                        plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-                    )
+            Column(
+                plc.column_factories.make_numeric_column(
+                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
                 ),
+                name="a",
             )
         ]
     )
@@ -81,14 +84,15 @@ def test_shallow_copy():
     column = Column(
         plc.column_factories.make_numeric_column(
             plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-        )
+        ),
+        name="a",
     )
     column.set_sorted(
         is_sorted=plc.types.Sorted.YES,
         order=plc.types.Order.ASCENDING,
         null_order=plc.types.NullOrder.AFTER,
     )
-    df = DataFrame([("a", column)])
+    df = DataFrame([column])
     copy = df.copy()
     copy.column_map["a"].set_sorted(
         is_sorted=plc.types.Sorted.NO,

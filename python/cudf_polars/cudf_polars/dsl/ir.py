@@ -57,24 +57,21 @@ __all__ = [
 ]
 
 
-def broadcast(
-    *named_columns: tuple[str, Column], target_length: int | None = None
-) -> tuple[list[str], list[Column]]:
+def broadcast(*columns: Column, target_length: int | None = None) -> list[Column]:
     """
     Broadcast a sequence of columns to a common length.
 
     Parameters
     ----------
-    named_columns
-        Pairs of column names and Columns to broadcast
+    columns
+        Columns to broadcast.
     target_length
         Optional length to broadcast to. If not provided, uses the
         non-unit length of existing columns.
 
     Returns
     -------
-    Tuple of list of names and list of broadcasted columns all of the
-    same length.
+    List of broadcasted columns all of the same length.
 
     Raises
     ------
@@ -94,13 +91,12 @@ def broadcast(
     ``target_length`` is provided and not all columns are length-1
     (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
     """
-    if len(named_columns) == 0:
-        return [], []
-    names, columns = zip(*named_columns, strict=True)
+    if len(columns) == 0:
+        return []
     lengths: set[int] = {column.obj.size() for column in columns}
     if lengths == {1}:
         if target_length is None:
-            return list(names), list(columns)
+            return list(columns)
         nrows = target_length
     else:
         try:
@@ -111,7 +107,7 @@ def broadcast(
             raise RuntimeError(
                 f"Cannot broadcast columns of length {nrows=} to {target_length=}"
             )
-    return list(names), [
+    return [
         column
         if column.obj.size() != 1
         else Column(
@@ -119,6 +115,7 @@ def broadcast(
             is_sorted=plc.types.Sorted.YES,
             order=plc.types.Order.ASCENDING,
             null_order=plc.types.NullOrder.BEFORE,
+            name=column.name,
         )
         for column in columns
     ]
@@ -391,17 +388,16 @@ class Scan(IR):
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
+                name=name,
             )
-            df = DataFrame([(name, index), *df.column_map.items()])
+            df = DataFrame([index, *df.columns])
         assert all(
             c.obj.type() == self.schema[name] for name, c in df.column_map.items()
         )
         if self.predicate is None:
             return df
         else:
-            _, (mask,) = broadcast(
-                self.predicate.evaluate(df), target_length=df.num_rows
-            )
+            (mask,) = broadcast(self.predicate.evaluate(df), target_length=df.num_rows)
             return df.filter(mask)
 
 
@@ -452,9 +448,7 @@ class DataFrameScan(IR):
             for c, dtype in zip(df.columns, self.schema.values(), strict=True)
         )
         if self.predicate is not None:
-            _, (mask,) = broadcast(
-                self.predicate.evaluate(df), target_length=df.num_rows
-            )
+            (mask,) = broadcast(self.predicate.evaluate(df), target_length=df.num_rows)
             return df.filter(mask)
         else:
             return df
@@ -477,7 +471,7 @@ class Select(IR):
         # Handle any broadcasting
         columns = [e.evaluate(df) for e in self.expr]
         if self.should_broadcast:
-            columns = list(zip(*broadcast(*columns), strict=True))
+            columns = broadcast(*columns)
         return DataFrame(columns)
 
 
@@ -499,9 +493,9 @@ class Reduce(IR):
     ) -> DataFrame:  # pragma: no cover; polars doesn't emit this node yet
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        names, columns = broadcast(*(e.evaluate(df) for e in self.expr))
+        columns = broadcast(*(e.evaluate(df) for e in self.expr))
         assert all(column.obj.size() == 1 for column in columns)
-        return DataFrame(zip(names, columns, strict=True))
+        return DataFrame(columns)
 
 
 @dataclasses.dataclass
@@ -564,7 +558,7 @@ class GroupBy(IR):
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        key_names, keys = broadcast(
+        keys = broadcast(
             *(k.evaluate(df) for k in self.keys), target_length=df.num_rows
         )
         sorted = (
@@ -595,21 +589,19 @@ class GroupBy(IR):
                 replacements.append(rep)
         group_keys, raw_tables = grouper.aggregate(requests)
         raw_columns: list[Column] = []
-        for table in raw_tables:
+        for i, table in enumerate(raw_tables):
             (column,) = table.columns()
-            raw_columns.append(Column(column))
+            raw_columns.append(Column(column, name=f"tmp{i}"))
         mapping = dict(zip(replacements, raw_columns, strict=True))
         result_keys = [
-            (key_name, Column(key))
-            for key_name, key in zip(key_names, group_keys.columns(), strict=True)
+            Column(grouped_key, name=key.name)
+            for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
-        result_subs = DataFrame(
-            (f"tmp{i}", column) for i, column in enumerate(raw_columns)
-        )
+        result_subs = DataFrame(raw_columns)
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
-        names, broadcasted = broadcast(*result_keys, *results)
+        broadcasted = broadcast(*result_keys, *results)
         # Handle order preservation of groups
         if self.maintain_order and not sorted:
             # The order we want
@@ -645,8 +637,13 @@ class GroupBy(IR):
                 right_order,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
-            broadcasted = [Column(reordered) for reordered in ordered_table.columns()]
-        return DataFrame(zip(names, broadcasted, strict=True)).slice(self.options.slice)
+            broadcasted = [
+                Column(reordered, name=old.name)
+                for reordered, old in zip(
+                    ordered_table.columns(), broadcasted, strict=True
+                )
+            ]
+        return DataFrame(broadcasted).slice(self.options.slice)
 
 
 @dataclasses.dataclass
@@ -789,15 +786,17 @@ class Join(IR):
             # result, not the gather maps
             columns = plc.join.cross_join(left.table, right.table).columns()
             left_cols = [
-                (name, Column(new).sorted_like(old))
-                for new, (name, old) in zip(
-                    columns[: left.num_columns], left.column_map.items(), strict=True
+                Column(new, name=old.name).sorted_like(old)
+                for new, old in zip(
+                    columns[: left.num_columns], left.columns, strict=True
                 )
             ]
             right_cols = [
-                (
-                    name if name not in left.column_names_set else f"{name}{suffix}",
-                    Column(new),
+                Column(
+                    new,
+                    name=name
+                    if name not in left.column_names_set
+                    else f"{name}{suffix}",
                 )
                 for new, name in zip(
                     columns[left.num_columns :], right.column_names, strict=True
@@ -805,12 +804,8 @@ class Join(IR):
             ]
             return DataFrame([*left_cols, *right_cols])
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
-        left_on = DataFrame(
-            zip(*broadcast(*(e.evaluate(left) for e in self.left_on)), strict=True)
-        )
-        right_on = DataFrame(
-            zip(*broadcast(*(e.evaluate(right) for e in self.right_on)), strict=True)
-        )
+        left_on = DataFrame(broadcast(*(e.evaluate(left) for e in self.left_on)))
+        right_on = DataFrame(broadcast(*(e.evaluate(right) for e in self.right_on)))
         null_equality = (
             plc.types.NullEquality.EQUAL
             if join_nulls
@@ -844,18 +839,12 @@ class Join(IR):
             if coalesce and how != "inner":
                 left = left.replace_columns(
                     *(
-                        (
-                            name,
-                            Column(
-                                plc.replace.replace_nulls(left_col.obj, right_col.obj)
-                            ),
+                        Column(
+                            plc.replace.replace_nulls(left_col.obj, right_col.obj),
+                            name=left_col.name,
                         )
-                        for (name, left_col), right_col in zip(
-                            (
-                                (name, column)
-                                for name, column in left.column_map.items()
-                                if name in left_on.column_names_set
-                            ),
+                        for left_col, right_col in zip(
+                            left.select_columns(left_on.column_names_set),
                             right.select_columns(right_on.column_names_set),
                             strict=True,
                         )
@@ -872,7 +861,7 @@ class Join(IR):
                     if name in left.column_names_set
                 }
             )
-            result = left.with_columns(right.column_map.items())
+            result = left.with_columns(right.columns)
         return result.slice(zlice)
 
 
@@ -892,9 +881,7 @@ class HStack(IR):
         df = self.df.evaluate(cache=cache)
         columns = [c.evaluate(df) for c in self.columns]
         if self.should_broadcast:
-            columns = list(
-                zip(*broadcast(*columns, target_length=df.num_rows), strict=True)
-            )
+            columns = broadcast(*columns, target_length=df.num_rows)
         else:
             # Polars ensures this is true, but let's make sure nothing
             # went wrong. In this case, the parent node is a
@@ -969,10 +956,10 @@ class Distinct(IR):
             )
         # TODO: Is this sortedness setting correct
         result = DataFrame(
-            (name, Column(new).sorted_like(old))
-            for new, (name, old) in zip(
-                table.columns(), df.column_map.items(), strict=True
-            )
+            [
+                Column(new, name=old.name).sorted_like(old)
+                for new, old in zip(table.columns(), df.columns, strict=True)
+            ]
         )
         if keys_sorted or self.stable:
             result = result.sorted_like(df)
@@ -1019,12 +1006,12 @@ class Sort(IR):
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        key_names, sort_keys = broadcast(*(k.evaluate(df) for k in self.by))
+        sort_keys = broadcast(*(k.evaluate(df) for k in self.by))
         # TODO: More robust identification here.
         keys_in_result = {
-            key_name: i
-            for i, (key_name, k) in enumerate(zip(key_names, sort_keys, strict=True))
-            if key_name in df.column_map and k.obj is df.column_map[key_name].obj
+            k.name: i
+            for i, k in enumerate(sort_keys)
+            if k.name in df.column_map and k.obj is df.column_map[k.name].obj
         }
         table = self.do_sort(
             df.table,
@@ -1032,9 +1019,9 @@ class Sort(IR):
             self.order,
             self.null_order,
         )
-        columns: list[tuple[str, Column]] = []
+        columns: list[Column] = []
         for name, c in zip(df.column_map, table.columns(), strict=True):
-            column = Column(c)
+            column = Column(c, name=name)
             # If a sort key is in the result table, set the sortedness property
             if name in keys_in_result:
                 i = keys_in_result[name]
@@ -1043,7 +1030,7 @@ class Sort(IR):
                     order=self.order[i],
                     null_order=self.null_order[i],
                 )
-            columns.append((name, column))
+            columns.append(column)
         return DataFrame(columns).slice(self.zlice)
 
 
@@ -1076,7 +1063,7 @@ class Filter(IR):
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        _, (mask,) = broadcast(self.mask.evaluate(df), target_length=df.num_rows)
+        (mask,) = broadcast(self.mask.evaluate(df), target_length=df.num_rows)
         return df.filter(mask)
 
 
@@ -1091,11 +1078,10 @@ class Projection(IR):
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
         # This can reorder things.
-        names, columns = broadcast(
-            *(df.select(list(self.schema.keys())).column_map.items()),
-            target_length=df.num_rows,
+        columns = broadcast(
+            *(df.select(list(self.schema.keys())).columns), target_length=df.num_rows
         )
-        return DataFrame(zip(names, columns, strict=True))
+        return DataFrame(columns)
 
 
 @dataclasses.dataclass
@@ -1183,7 +1169,7 @@ class MapFunction(IR):
             npiv = len(pivotees)
             df = self.df.evaluate(cache=cache)
             index_columns = [
-                (name, Column(col))
+                Column(col, name=name)
                 for col, name in zip(
                     plc.reshape.tile(df.select(indices).table, npiv).columns(),
                     indices,
@@ -1212,8 +1198,8 @@ class MapFunction(IR):
             return DataFrame(
                 [
                     *index_columns,
-                    (variable_name, Column(variable_column)),
-                    (value_name, Column(value_column)),
+                    Column(variable_column, name=variable_name),
+                    Column(value_column, name=value_name),
                 ]
             )
         else:
@@ -1294,6 +1280,4 @@ class HConcat(IR):
             )
             for df in dfs
         ]
-        return DataFrame(
-            itertools.chain.from_iterable(df.column_map.items() for df in dfs)
-        )
+        return DataFrame(itertools.chain.from_iterable(df.columns for df in dfs))

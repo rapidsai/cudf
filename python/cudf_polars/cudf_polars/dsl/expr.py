@@ -313,7 +313,7 @@ class NamedExpr:
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
-    ) -> tuple[str, Column]:
+    ) -> Column:
         """
         Evaluate this expression given a dataframe for context.
 
@@ -335,7 +335,9 @@ class NamedExpr:
         :meth:`Expr.evaluate` for details, this function just adds the
         name to a column produced from an expression.
         """
-        return self.name, self.value.evaluate(df, context=context, mapping=mapping)
+        return self.value.evaluate(df, context=context, mapping=mapping).rename(
+            self.name
+        )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""

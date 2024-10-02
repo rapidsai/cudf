@@ -26,6 +26,9 @@ class Column:
     order: plc.types.Order
     null_order: plc.types.NullOrder
     is_scalar: bool
+    # Optional name, only ever set by evaluation of NamedExpr nodes
+    # The internal evaluation should not care about the name.
+    name: str | None
 
     def __init__(
         self,
@@ -34,6 +37,7 @@ class Column:
         is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
         order: plc.types.Order = plc.types.Order.ASCENDING,
         null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
+        name: str | None = None,
     ):
         self.obj = column
         self.is_scalar = self.obj.size() == 1
@@ -42,6 +46,7 @@ class Column:
         self.is_sorted = is_sorted
         self.order = order
         self.null_order = null_order
+        self.name = name
 
     @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:
@@ -62,6 +67,23 @@ class Column:
                 f"Cannot convert a column of length {self.obj.size()} to scalar"
             )
         return plc.copying.get_element(self.obj, 0)
+
+    def rename(self, name: str, /) -> Self:
+        """
+        Return a shallow copy with a new name.
+
+        Parameters
+        ----------
+        name
+            New name
+
+        Returns
+        -------
+        Shallow copy of self with new name set.
+        """
+        new = self.copy()
+        new.name = name
+        return new
 
     def sorted_like(self, like: Column, /) -> Self:
         """
@@ -108,7 +130,9 @@ class Column:
         the current one.
         """
         if self.obj.type() != dtype:
-            return Column(plc.unary.cast(self.obj, dtype)).sorted_like(self)
+            return Column(plc.unary.cast(self.obj, dtype), name=self.name).sorted_like(
+                self
+            )
         return self
 
     def copy_metadata(self, from_: pl.Series, /) -> Self:
@@ -128,6 +152,7 @@ class Column:
         --------
         set_sorted, sorted_like
         """
+        self.name = from_.name
         if len(from_) <= 1:
             return self
         ascending = from_.flags["SORTED_ASC"]
@@ -191,6 +216,7 @@ class Column:
             is_sorted=self.is_sorted,
             order=self.order,
             null_order=self.null_order,
+            name=self.name,
         )
 
     def mask_nans(self) -> Self:
