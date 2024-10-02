@@ -32,9 +32,9 @@ static void bench_minhash(nvbench::state& state)
   auto const seed_count = static_cast<cudf::size_type>(state.get_int64("seed_count"));
   auto const base64     = state.get_int64("hash_type") == 64;
 
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
+  if ((num_rows * seed_count * (base64 ? sizeof(int64_t) : sizeof(int32_t)) * 32L) >=
       static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
+    state.skip("Skip benchmarks requiring more than 2GB working memory");
   }
 
   data_profile const strings_profile = data_profile_builder().distribution(
@@ -63,7 +63,7 @@ static void bench_minhash(nvbench::state& state)
 
 NVBENCH_BENCH(bench_minhash)
   .set_name("minhash")
-  .add_int64_axis("num_rows", {16364, 131072})
+  .add_int64_axis("num_rows", {16364, 65456})
   .add_int64_axis("row_width", {256, 512, 1024})
   .add_int64_axis("hash_width", {5, 10, 20})
   .add_int64_axis("seed_count", {2, 26, 260})
