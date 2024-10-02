@@ -15,6 +15,7 @@ files:
       - depends_on_cupy
       - depends_on_libkvikio
       - depends_on_librmm
+      - depends_on_nvcomp
       - depends_on_rmm
       - develop
       - docs
@@ -152,6 +153,13 @@ files:
       - build_cpp
       - depends_on_libkvikio
       - depends_on_librmm
+  py_run_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: project
+    includes:
+      - depends_on_nvcomp
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -367,9 +375,27 @@ dependencies:
           - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
+          - spdlog>=1.14.1,<1.15
+  depends_on_nvcomp:
+    common:
+      - output_types: conda
+        packages:
           # Align nvcomp version with rapids-cmake
           - nvcomp==4.0.1
-          - spdlog>=1.14.1,<1.15
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - nvidia-nvcomp-cu12==4.0.1
+          - matrix:
+              cuda: "11.*"
+            packages:
+              - nvidia-nvcomp-cu11==4.0.1
+          - matrix:
+            packages:
+              - nvidia-nvcomp==4.0.1
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]

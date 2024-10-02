@@ -18,3 +18,4 @@ strings
     slice
     split
     strip
+    wrap
