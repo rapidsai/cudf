@@ -42,7 +42,7 @@ struct gz_file_header_s {
   uint8_t id2;        // 0x8b
   uint8_t comp_mthd;  // compression method (0-7=reserved, 8=deflate)
   uint8_t flags;      // flags (GZIPHeaderFlag)
-  uint8_t mtime[4];   // If non-zero: modification time (Unix format)
+  uint8_t mtime[4];   // If non-zero: modification time (Unix format)  // NOLINT
   uint8_t xflags;     // Extra compressor-specific flags
   uint8_t os;         // OS id
 };
@@ -103,7 +103,7 @@ struct zip_lfh_s {
 };
 
 struct bz2_file_header_s {
-  uint8_t sig[3];  // "BZh"
+  uint8_t sig[3];  // "BZh" // NOLINT
   uint8_t blksz;   // block size 1..9 in 100kB units (post-RLE)
 };
 

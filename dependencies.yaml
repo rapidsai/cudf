@@ -25,6 +25,7 @@ files:
       - rapids_build_setuptools
       - run_common
       - run_cudf
+      - run_cudf_polars
       - run_pylibcudf
       - run_dask_cudf
       - run_custreamz
@@ -604,7 +605,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba numba>=0.57
+          - &numba-cuda-dep numba-cuda>=0.0.13
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -719,7 +720,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba==0.57.*
+              - *numba-cuda-dep
               - pandas==2.0.*
           - matrix:
             packages:
@@ -807,7 +808,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - dask-cuda==24.12.*,>=0.0.0a0
-          - *numba
+          - *numba-cuda-dep
     specific:
       - output_types: [conda, requirements]
         matrices:

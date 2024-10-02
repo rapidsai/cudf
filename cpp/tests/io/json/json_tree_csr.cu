@@ -168,6 +168,7 @@ void run_test(std::string const& input, bool enable_lines = true)
                                                      gpu_tree,
                                                      is_array_of_arrays,
                                                      options.is_enabled_lines(),
+                                                     false,
                                                      stream,
                                                      rmm::mr::get_current_device_resource());
   auto& gpu_col_id      = std::get<0>(tup);

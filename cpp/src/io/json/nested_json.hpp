@@ -316,6 +316,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
  * index, level, begin index, and end index in the input JSON string
  * @param is_array_of_arrays Whether the tree is an array of arrays
  * @param is_enabled_lines Whether the input is a line-delimited JSON
+ * @param is_enabled_experimental Whether to enable experimental features such as utf-8 field name
+ * support
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate
  * @return A tuple of the output column indices and the row offsets within each column for each node
@@ -326,6 +328,7 @@ records_orient_tree_traversal(device_span<SymbolT const> d_input,
                               tree_meta_t const& d_tree,
                               bool is_array_of_arrays,
                               bool is_enabled_lines,
+                              bool is_enabled_experimental,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
 
@@ -352,7 +355,7 @@ get_array_children_indices(TreeDepthT row_array_children_level,
 /**
  * @brief Reduces node tree representation to column tree representation.
  *
- * @param node_tree Node tree representation of JSON string
+ * @param tree Node tree representation of JSON string
  * @param original_col_ids Column ids of nodes
  * @param sorted_col_ids Sorted column ids of nodes
  * @param ordered_node_ids Node ids of nodes sorted by column ids
@@ -365,7 +368,7 @@ get_array_children_indices(TreeDepthT row_array_children_level,
  */
 CUDF_EXPORT
 std::tuple<tree_meta_t, rmm::device_uvector<NodeIndexT>, rmm::device_uvector<size_type>>
-reduce_to_column_tree(tree_meta_t& node_tree,
+reduce_to_column_tree(tree_meta_t const& tree,
                       device_span<NodeIndexT const> original_col_ids,
                       device_span<NodeIndexT const> sorted_col_ids,
                       device_span<NodeIndexT const> ordered_node_ids,
@@ -393,14 +396,30 @@ reduce_to_column_tree(tree_meta_t& node_tree,
  * of child_offets and validity members of `d_json_column`
  */
 void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t& tree,
-                             device_span<NodeIndexT> col_ids,
-                             device_span<size_type> row_offsets,
+                             tree_meta_t const& tree,
+                             device_span<NodeIndexT const> col_ids,
+                             device_span<size_type const> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
+
+namespace experimental {
+/**
+ * @copydoc cudf::io::json::detail::make_device_json_column
+ */
+void make_device_json_column(device_span<SymbolT const> input,
+                             tree_meta_t const& tree,
+                             device_span<NodeIndexT const> col_ids,
+                             device_span<size_type const> row_offsets,
+                             device_json_column& root,
+                             bool is_array_of_arrays,
+                             cudf::io::json_reader_options const& options,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr);
+}  // namespace experimental
+
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
  *

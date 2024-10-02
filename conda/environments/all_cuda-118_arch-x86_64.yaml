@@ -55,7 +55,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba>=0.57
+- numba-cuda>=0.0.13
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcc_linux-64=11.8
@@ -66,6 +66,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.3dev0
 - pandoc
+- polars>=1.8,<1.9
 - pre-commit
 - ptxcompiler
 - pyarrow>=14.0.0,<18.0.0a0
@@ -76,8 +77,8 @@ dependencies:
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=2.5.0,<2.6.0a0
-- python>=3.10,<3.13
 - python-xxhash
+- python>=3.10,<3.13
 - pytorch>=2.1.0
 - rapids-build-backend>=0.3.0,<0.4.0.dev0
 - rapids-dask-dependency==24.12.*,>=0.0.0a0

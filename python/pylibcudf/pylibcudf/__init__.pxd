@@ -18,6 +18,7 @@ from . cimport (
     lists,
     merge,
     null_mask,
+    partitioning,
     quantiles,
     reduce,
     replace,
@@ -30,6 +31,7 @@ from . cimport (
     strings,
     traits,
     transform,
+    transpose,
     types,
     unary,
 )
@@ -62,6 +64,7 @@ __all__ = [
     "lists",
     "merge",
     "null_mask",
+    "partitioning",
     "quantiles",
     "reduce",
     "replace",
@@ -74,6 +77,7 @@ __all__ = [
     "sorting",
     "traits",
     "transform",
+    "transpose",
     "types",
     "unary",
 ]
