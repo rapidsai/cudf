@@ -1,7 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
