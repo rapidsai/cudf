@@ -287,6 +287,8 @@ std::vector<io_source> extract_input_sources_async(std::string const& paths,
       for (auto const& file : std::filesystem::directory_iterator(path)) {
         if (std::filesystem::is_regular_file(file.path())) {
           parquet_files.push_back(file.path().string());
+        } else {
+          fmt::print("Skipping sub-directory: {}\n", file.path().string());
         }
       }
     } else {
