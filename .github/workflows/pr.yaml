@@ -9,7 +9,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # TODO: put this in a shared org-wide secret?
+  TEMPO_HOST: https://136.49.91.190:4318
+
 jobs:
+  telemetry-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      traceparent: ${{ steps.telemetry-setup.outputs.trace_id }}
+    steps:
+      - name: Telemetry setup
+        id: telemetry-setup
+        uses: rapidsai/shared-actions/telemetry-setup@main
   pr-builder:
     needs:
       - changed-files
@@ -95,11 +107,15 @@ jobs:
     with:
       enable_check_generated_files: false
   conda-cpp-build:
-    needs: checks
+    needs:
+        - checks
+        - telemetry-setup
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@add-telemetry
     with:
       build_type: pull-request
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
+      default_endpoint: ${{ github.env.TEMPO_HOST }}
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
