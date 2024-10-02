@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 import cudf.api.types
 from cudf import _lib as libcudf
@@ -2966,7 +2968,7 @@ class StringMethods(ColumnMethods):
             raise TypeError(msg)
 
         try:
-            side = libstrings.SideType[side.upper()]
+            side = plc.strings.side_type.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {'left', 'right', 'both'}"
