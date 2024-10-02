@@ -9,6 +9,7 @@ strings
     contains
     extract
     find
+    find_multiple
     findall
     padding
     regex_flags
@@ -17,4 +18,5 @@ strings
     replace
     side_type
     slice
+    split
     strip

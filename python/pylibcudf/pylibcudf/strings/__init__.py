@@ -9,6 +9,7 @@ from . import (
     convert,
     extract,
     find,
+    find_multiple,
     findall,
     padding,
     regex_flags,
@@ -17,7 +18,9 @@ from . import (
     replace,
     side_type,
     slice,
+    split,
     strip,
+    translate,
 )
 from .side_type import SideType
 
@@ -36,5 +39,7 @@ __all__ = [
     "replace",
     "slice",
     "strip",
+    "split",
     "SideType",
+    "translate",
 ]

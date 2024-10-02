@@ -2548,9 +2548,9 @@ class StringMethods(ColumnMethods):
                 result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, _ = libstrings.split_re(self._column, pat, n)
+                    data = libstrings.split_re(self._column, pat, n)
                 else:
-                    data, _ = libstrings.split(
+                    data = libstrings.split(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
@@ -2721,9 +2721,9 @@ class StringMethods(ColumnMethods):
                 result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, _ = libstrings.rsplit_re(self._column, pat, n)
+                    data = libstrings.rsplit_re(self._column, pat, n)
                 else:
-                    data, _ = libstrings.rsplit(
+                    data = libstrings.rsplit(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
@@ -2822,7 +2822,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.partition(self._column, cudf.Scalar(sep, "str"))[0],
+            libstrings.partition(self._column, cudf.Scalar(sep, "str")),
             expand=expand,
         )
 
@@ -2887,7 +2887,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))[0],
+            libstrings.rpartition(self._column, cudf.Scalar(sep, "str")),
             expand=expand,
         )
 
