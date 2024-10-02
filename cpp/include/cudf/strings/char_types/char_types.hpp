@@ -30,7 +30,7 @@ namespace strings {
  */
 
 /**
- * @brief Returns a boolean column identifying strings entries in which all
+ * @brief Returns a boolean column identifying string entries where all
  * characters are of the type specified.
  *
  * The output row entry will be set to false if the corresponding string element
@@ -105,7 +105,8 @@ std::unique_ptr<column> all_characters_of_type(
  *        `types_to_remove` will be filtered.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return New column of boolean results for each string
+ * @return New strings column with the characters of specified types filtered out and replaced by
+ * the specified replacement string
  */
 std::unique_ptr<column> filter_characters_of_type(
   strings_column_view const& input,
