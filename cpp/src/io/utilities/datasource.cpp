@@ -165,13 +165,17 @@ class memory_mapped_source : public file_source {
  public:
   explicit memory_mapped_source(char const* filepath,
                                 size_t offset,
-                                size_t map_size,
-                                size_t register_size)
+                                size_t max_size_estimate,
+                                size_t min_size_estimate)
     : file_source(filepath)
   {
     if (_file.size() != 0) {
-      map(_file.desc(), offset, map_size);
-      register_mmap_buffer(offset, register_size);
+      // Memory mapping is not exclusive, so we can include the whole region we expect to read
+      map(_file.desc(), offset, max_size_estimate);
+      // Buffer registration is exclusive (can't overlap with other registered buffers) so we
+      // register the lower estimate; this avoids issues when reading adjacent ranges from the same
+      // file from multiple threads
+      register_mmap_buffer(offset, min_size_estimate);
     }
   }
 
