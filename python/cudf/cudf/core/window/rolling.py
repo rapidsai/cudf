@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import numba
 import pandas as pd
@@ -16,25 +17,29 @@ from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
+if TYPE_CHECKING:
+    from cudf.core.column.column import ColumnBase
+
 
 class _RollingBase:
     """
-    Contains methods common to all kinds of rolling
+    Contains routines to apply a window aggregation to a column.
     """
 
-    def _apply_agg_dataframe(self, df, agg_name):
-        result_df = cudf.DataFrame({})
-        for i, col_name in enumerate(df.columns):
-            result_col = self._apply_agg_series(df[col_name], agg_name)
-            result_df.insert(i, col_name, result_col)
-        result_df.index = df.index
-        return result_df
+    obj: cudf.DataFrame | cudf.Series
 
-    def _apply_agg(self, agg_name):
-        if isinstance(self.obj, cudf.Series):
-            return self._apply_agg_series(self.obj, agg_name)
-        else:
-            return self._apply_agg_dataframe(self.obj, agg_name)
+    def _apply_agg_column(
+        self, source_column: ColumnBase, agg_name: str
+    ) -> ColumnBase:
+        raise NotImplementedError
+
+    def _apply_agg(self, agg_name: str) -> cudf.DataFrame | cudf.Series:
+        applied = (
+            self._apply_agg_column(col, agg_name) for col in self.obj._columns
+        )
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(applied)
+        )
 
 
 class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
@@ -288,14 +293,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             center=self.center,
             op=agg_name,
             agg_params=self.agg_params,
-        )
-
-    def _apply_agg(self, agg_name):
-        applied = (
-            self._apply_agg_column(col, agg_name) for col in self.obj._columns
-        )
-        return self.obj._from_data_like_self(
-            self.obj._data._from_columns_like_self(applied)
         )
 
     def _reduce(
