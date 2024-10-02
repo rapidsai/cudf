@@ -27,9 +27,6 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
-#include <fmt/chrono.h>
-#include <fmt/color.h>
-
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -224,20 +221,17 @@ void write_parquet_multithreaded(std::string const& output_path,
  */
 void print_usage()
 {
-  fmt::print(
-    fg(fmt::color::yellow),
-    "\nUsage: parquet_io_multithreaded <comma delimited list of dirs and/or files> <input "
-    "multiplier>\n"
-    "                                <io source type> <number of times to read> <thread count>\n"
-    "                                <write to temp output files and validate: "
-    "yes/no>\n\n");
-  fmt::print(
-    "Available IO source types: FILEPATH, HOST_BUFFER, {}, DEVICE_BUFFER\n\n",
-    fmt::format(fmt::emphasis::bold | fg(fmt::color::green_yellow), "PINNED_BUFFER (Default)"));
-  fmt::print(fg(fmt::color::light_sky_blue),
-             "Note: Provide as many arguments as you like in the above order. Default values\n"
-             "      for the unprovided arguments will be used. All input parquet files will\n"
-             "      be converted to the specified IO source type before reading\n\n");
+  std::cout
+    << "\nUsage: parquet_io_multithreaded <comma delimited list of dirs and/or files> <input "
+       "multiplier>\n"
+       "                                <io source type> <number of times to read> <thread count>\n"
+       "                                <write to temp output files and validate: "
+       "yes/no>\n\n"
+       "Available IO source types: FILEPATH, HOST_BUFFER, PINNED_BUFFER (Default), "
+       "DEVICE_BUFFER\n\n"
+       "Note: Provide as many arguments as you like in the above order. Default values\n"
+       "      for the unprovided arguments will be used. All input parquet files will\n"
+       "      be converted to the specified IO source type before reading\n\n";
 }
 
 /**
@@ -288,7 +282,7 @@ std::vector<io_source> extract_input_sources_async(std::string const& paths,
         if (std::filesystem::is_regular_file(file.path())) {
           parquet_files.push_back(file.path().string());
         } else {
-          fmt::print("Skipping sub-directory: {}\n", file.path().string());
+          std::cout << "Skipping sub-directory: " << file.path().string() << "\n";
         }
       }
     } else {
@@ -385,17 +379,14 @@ int32_t main(int argc, char const** argv)
   // Read the same parquet files specified times with multiple threads and discard the read tables
   {
     // Print status
-    fmt::print(
-      "\nReading {} input sources {} time(s) using {} threads and discarding output "
-      "tables..\n",
-      input_sources.size(),
-      num_reads,
-      thread_count);
+    std::cout << "\nReading " << input_sources.size() << " input sources " << num_reads
+              << " time(s) using " << thread_count
+              << " threads and discarding output "
+                 "tables..\n";
 
     if (io_source_type == io_source_type::FILEPATH) {
-      fmt::print(fg(fmt::color::yellow),
-                 "Note that the first read may include times for nvcomp, cufile loading and RMM "
-                 "growth.\n\n");
+      std::cout << "Note that the first read may include times for nvcomp, cufile loading and RMM "
+                   "growth.\n\n";
     }
 
     cudf::examples::timer timer;
@@ -428,10 +419,11 @@ int32_t main(int argc, char const** argv)
     }();
 
     // Write tables to parquet
-    fmt::print("Writing parquet output files..\n");
+    std::cout << "Writing parquet output files..\n";
+
     // Create a directory at the tmpdir path.
-    std::string output_path = std::filesystem::temp_directory_path().string() + "/output_" +
-                              fmt::format("{:%Y-%m-%d-%H-%M-%S}", std::chrono::system_clock::now());
+    std::string output_path =
+      std::filesystem::temp_directory_path().string() + "/output_" + current_time_and_date();
     std::filesystem::create_directory({output_path});
     cudf::examples::timer timer;
     write_parquet_multithreaded(output_path, table_views, thread_count, stream_pool);
@@ -439,7 +431,7 @@ int32_t main(int argc, char const** argv)
     timer.print_elapsed_millis();
 
     // Verify the output
-    fmt::print("Verifying output..\n");
+    std::cout << "Verifying output..\n";
 
     // Simply concatenate the previously read tables from input sources
     auto const input_table = cudf::concatenate(table_views, default_stream);
@@ -463,9 +455,7 @@ int32_t main(int argc, char const** argv)
   }
 
   // Print peak memory
-  fmt::print(fmt::emphasis::bold | fg(fmt::color::medium_purple),
-             "Peak memory: {} MB\n\n",
-             (stats_mr.get_bytes_counter().peak / 1048576.0));
+  std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n\n";
 
   return 0;
 }

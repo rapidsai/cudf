@@ -136,16 +136,16 @@ int main(int argc, char const** argv)
   // Read input parquet file
   // We do not want to time the initial read time as it may include
   // time for nvcomp, cufile loading and RMM growth
-  fmt::print("\nReading {}...", input_filepath);
-  fmt::print(
-    "Note: Not timing the initial parquet read as it may include\n"
-    "times for nvcomp, cufile loading and RMM growth.\n\n");
+  std::cout << "\nReading " << input_filepath << "...";
+  std::cout << "Note: Not timing the initial parquet read as it may include\n"
+               "times for nvcomp, cufile loading and RMM growth.\n\n";
   auto [input, metadata] = read_parquet(input_filepath);
 
   // Status string to indicate if page stats are set to be written or not
   auto page_stat_string = (page_stats.has_value()) ? "page stats" : "no page stats";
   // Write parquet file with the specified encoding and compression
-  fmt::print("Writing {} with encoding, compression and {}..\n", output_filepath, page_stat_string);
+  std::cout << "Writing " << output_filepath << " with encoding, compression and "
+            << page_stat_string << "..\n";
 
   // `timer` is automatically started here
   cudf::examples::timer timer;
@@ -153,7 +153,7 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Read the parquet file written with encoding and compression
-  fmt::print("Reading {}...\n", output_filepath);
+  std::cout << "Reading " << output_filepath << "...\n";
 
   // Reset the timer
   timer.reset();

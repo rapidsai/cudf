@@ -79,3 +79,9 @@ void check_identical_tables(cudf::table_view const& lhs_table, cudf::table_view 
  */
 std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
                                                 rmm::cuda_stream_view stream);
+
+/**
+ * @brief Returns a string containing current date and time
+ *
+ */
+std::string current_time_and_date();

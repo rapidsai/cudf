@@ -25,8 +25,8 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
-#include <fmt/color.h>
-
+#include <chrono>
+#include <iomanip>
 #include <string>
 
 /**
@@ -35,12 +35,6 @@
  *
  */
 
-/**
- * @brief Create memory resource for libcudf functions
- *
- * @param pool Whether to use a pool memory resource.
- * @return Memory resource instance
- */
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
 {
   auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
@@ -51,12 +45,6 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
   return cuda_mr;
 }
 
-/**
- * @brief Get encoding type from the keyword
- *
- * @param name encoding keyword name
- * @return corresponding column encoding type
- */
 cudf::io::column_encoding get_encoding_type(std::string name)
 {
   using encoding_type = cudf::io::column_encoding;
@@ -72,20 +60,13 @@ cudf::io::column_encoding get_encoding_type(std::string name)
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
   if (map.find(name) != map.end()) { return map.at(name); }
-  throw std::invalid_argument(fmt::format(fmt::emphasis::bold | fg(fmt::color::red),
-                                          "{} is not a valid encoding type.\n\n"
-                                          "Available encoding types: DEFAULT, DICTIONARY, PLAIN,\n"
-                                          "DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY,\n"
-                                          "DELTA_BYTE_ARRAY\n\n",
-                                          name));
+  throw std::invalid_argument(name +
+                              " is not a valid encoding type.\n\n"
+                              "Available encoding types: DEFAULT, DICTIONARY, PLAIN,\n"
+                              "DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY,\n"
+                              "DELTA_BYTE_ARRAY\n\n");
 }
 
-/**
- * @brief Get compression type from the keyword
- *
- * @param name compression keyword name
- * @return corresponding compression type
- */
 cudf::io::compression_type get_compression_type(std::string name)
 {
   using compression_type = cudf::io::compression_type;
@@ -99,19 +80,12 @@ cudf::io::compression_type get_compression_type(std::string name)
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
   if (map.find(name) != map.end()) { return map.at(name); }
-  throw std::invalid_argument(fmt::format(fmt::emphasis::bold | fg(fmt::color::red),
-                                          "{} is not a valid compression type.\n\n"
-                                          "Available compression types: NONE, AUTO, SNAPPY,\n"
-                                          "LZ4, ZSTD\n\n",
-                                          name));
+  throw std::invalid_argument(name +
+                              " is not a valid compression type.\n\n"
+                              "Available compression types: NONE, AUTO, SNAPPY,\n"
+                              "LZ4, ZSTD\n\n");
 }
 
-/**
- * @brief Get boolean from they keyword
- *
- * @param input keyword affirmation string such as: Y, T, YES, TRUE, ON
- * @return true or false
- */
 bool get_boolean(std::string input)
 {
   std::transform(input.begin(), input.end(), input.begin(), ::toupper);
@@ -125,12 +99,6 @@ bool get_boolean(std::string input)
   }
 }
 
-/**
- * @brief Check if two tables are identical, throw an error otherwise
- *
- * @param lhs_table View to lhs table
- * @param rhs_table View to rhs table
- */
 void check_identical_tables(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
 {
   try {
@@ -141,23 +109,13 @@ void check_identical_tables(cudf::table_view const& lhs_table, cudf::table_view 
 
     // No exception thrown, check indices
     auto const valid = indices->size() == 0;
-    fmt::print(
-      fmt::emphasis::bold | fg(fmt::color::green_yellow), "Tables identical: {}\n\n", valid);
+    std::cout << "Tables identical: " << valid << "\n\n";
   } catch (std::exception& e) {
     std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error(
-      fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "Tables identical: false\n\n"));
+    throw std::runtime_error("Tables identical: false\n\n");
   }
 }
 
-/**
- * @brief Concatenate a vector of tables and return the resultant table
- *
- * @param tables Vector of tables to concatenate
- * @param stream CUDA stream to use
- *
- * @return Unique pointer to the resultant concatenated table.
- */
 std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
                                                 rmm::cuda_stream_view stream)
 {
@@ -171,4 +129,14 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
     });
   // Construct the final table
   return cudf::concatenate(table_views, stream);
+}
+
+std::string current_time_and_date()
+{
+  auto const time       = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  auto const local_time = *std::localtime(&time);
+  // Stringstream to format the date and time
+  std::stringstream ss;
+  ss << std::put_time(&local_time, "%Y-%m-%d-%H-%M-%S");
+  return ss.str();
 }

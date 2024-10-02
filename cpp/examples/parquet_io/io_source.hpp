@@ -24,9 +24,6 @@
 
 #include <thrust/host_vector.h>
 
-#include <fmt/chrono.h>
-#include <fmt/color.h>
-
 #include <filesystem>
 #include <string>
 
@@ -97,11 +94,9 @@ struct pinned_allocator : public std::allocator<T> {
   if (map.find(name) != map.end()) {
     return map.at(name);
   } else {
-    throw std::invalid_argument(
-      fmt::format(fmt::emphasis::bold | fg(fmt::color::red),
-                  "{} is not a valid io source type. Available: FILEPATH,\n"
-                  "HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER.\n\n",
-                  name));
+    throw std::invalid_argument(name +
+                                " is not a valid io source type. Available: FILEPATH,\n"
+                                "HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER.\n\n");
   }
 }
 
@@ -151,8 +146,7 @@ class io_source {
         break;
       }
       default: {
-        throw std::runtime_error(fmt::format(fmt::emphasis::bold | fg(fmt::color::red),
-                                             "Encountered unexpected source type\n\n"));
+        throw std::runtime_error("Encountered unexpected source type\n\n");
       }
     }
   }
