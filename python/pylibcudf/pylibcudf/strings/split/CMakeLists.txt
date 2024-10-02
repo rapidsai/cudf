@@ -12,12 +12,11 @@
 # the License.
 # =============================================================================
 
-set(cython_sources char_types.pyx regex_flags.pyx side_type.pyx translate.pyx)
+set(cython_sources partition.pyx split.pyx)
 
 set(linked_libraries cudf::cudf)
-
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" ASSOCIATED_TARGETS cudf MODULE_PREFIX cpp_strings
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_strings_ ASSOCIATED_TARGETS cudf
 )
