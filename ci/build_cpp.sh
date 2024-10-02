@@ -18,7 +18,7 @@ rapids-logger "Begin cpp build"
 sccache --zero-stats
 
 # With boa installed conda build forward to boa
-RAPIDS_PACKAGE_VERSION=$(rapids-generate-version) rapids-conda-retry mambabuild \
+RAPIDS_PACKAGE_VERSION=$(rapids-generate-version) rapids-conda-retry build \
     conda/recipes/libcudf
 
 sccache --show-adv-stats
