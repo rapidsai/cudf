@@ -20,6 +20,7 @@ set(cython_sources
     contains.pyx
     extract.pyx
     find.pyx
+    find_multiple.pyx
     findall.pyx
     regex_flags.pyx
     regex_program.pyx
@@ -28,6 +29,7 @@ set(cython_sources
     side_type.pyx
     slice.pyx
     strip.pyx
+    translate.pyx
 )
 
 set(linked_libraries cudf::cudf)
@@ -38,3 +40,4 @@ rapids_cython_create_modules(
 )
 
 add_subdirectory(convert)
+add_subdirectory(split)

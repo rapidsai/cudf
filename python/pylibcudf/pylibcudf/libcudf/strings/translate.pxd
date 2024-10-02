@@ -13,15 +13,15 @@ from pylibcudf.libcudf.types cimport char_utf8
 cdef extern from "cudf/strings/translate.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] translate(
-        column_view source_strings,
+        column_view input,
         vector[pair[char_utf8, char_utf8]] chars_table) except +
 
-    ctypedef enum filter_type:
-        KEEP 'cudf::strings::filter_type::KEEP',
-        REMOVE 'cudf::strings::filter_type::REMOVE'
+    cpdef enum class filter_type(bool):
+        KEEP
+        REMOVE
 
     cdef unique_ptr[column] filter_characters(
-        column_view source_strings,
-        vector[pair[char_utf8, char_utf8]] chars_table,
-        filter_type keep,
+        column_view input,
+        vector[pair[char_utf8, char_utf8]] characters_to_filter,
+        filter_type keep_characters,
         string_scalar replacement) except +
