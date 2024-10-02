@@ -30,6 +30,7 @@ set(cython_sources
     slice.pyx
     strip.pyx
     translate.pyx
+    wrap.pyx
 )
 
 set(linked_libraries cudf::cudf)

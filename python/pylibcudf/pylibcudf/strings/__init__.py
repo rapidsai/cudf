@@ -19,6 +19,7 @@ from . import (
     split,
     strip,
     translate,
+    wrap,
 )
 from .side_type import SideType
 
@@ -40,4 +41,5 @@ __all__ = [
     "split",
     "SideType",
     "translate",
+    "wrap",
 ]
