@@ -419,7 +419,7 @@ def stoul(Column input_col):
 def to_booleans(Column input_col):
     plc_column = plc.strings.convert.convert_booleans.to_booleans(
         input_col.to_pylibcudf(mode="read"),
-        as_device_scalar("True").device_value.c_value,
+        as_device_scalar("True").c_value,
     )
     return Column.from_pylibcudf(plc_column)
 
@@ -427,8 +427,8 @@ def to_booleans(Column input_col):
 def from_booleans(Column input_col):
     plc_column = plc.strings.convert.convert_booleans.from_booleans(
         input_col.to_pylibcudf(mode="read"),
-        as_device_scalar("True").device_value.c_value,
-        as_device_scalar("False").device_value.c_value,
+        as_device_scalar("True").c_value,
+        as_device_scalar("False").c_value,
     )
     return Column.from_pylibcudf(plc_column)
 
