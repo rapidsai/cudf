@@ -415,8 +415,8 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
   int row_count = 512;
 
   auto data_begin = cudf::detail::make_counting_transform_iterator(0, [](auto idx) {
-    char const s[] = {static_cast<char>('a' + (idx % 26)), 0};
-    return std::string(s);
+    char const s = static_cast<char>('a' + (idx % 26));
+    return std::string{1, s};
   });
   auto validity   = cudf::detail::make_counting_transform_iterator(
     0, [](auto idx) -> bool { return (idx % 23) != 22; });

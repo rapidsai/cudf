@@ -96,5 +96,5 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
   }
 
   // go back to normal batch_size
-  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+  unsetenv("LIBCUDF_JSON_BATCH_SIZE");
 }
