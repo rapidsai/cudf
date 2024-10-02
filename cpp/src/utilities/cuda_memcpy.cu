@@ -30,7 +30,7 @@ namespace cudf::detail {
 namespace {
 
 // Simple kernel to copy between device buffers
-CUDF_KERNEL void copy_kernel(char const* src, char* dst, size_t n)
+CUDF_KERNEL void copy_kernel(char const* __restrict__ src, char* __restrict__ dst, size_t n)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
   if (idx < n) { dst[idx] = src[idx]; }
@@ -61,7 +61,7 @@ void copy_pageable(void* dst, void const* src, std::size_t size, rmm::cuda_strea
 
 };  // namespace
 
-void cuda_memcpy_async(
+void cuda_memcpy_async_impl(
   void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
 {
   if (kind == host_memory_kind::PINNED) {
@@ -71,13 +71,6 @@ void cuda_memcpy_async(
   } else {
     CUDF_FAIL("Unsupported host memory kind");
   }
-}
-
-void cuda_memcpy(
-  void* dst, void const* src, size_t size, host_memory_kind kind, rmm::cuda_stream_view stream)
-{
-  cuda_memcpy_async(dst, src, size, kind, stream);
-  stream.synchronize();
 }
 
 }  // namespace cudf::detail
