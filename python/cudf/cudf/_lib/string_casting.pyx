@@ -599,12 +599,11 @@ def timedelta2int(Column input_col, dtype, format):
 
     """
     dtype = dtype_to_pylibcudf_type(dtype)
-    cdef string c_timestamp_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_durations.to_durations(
             input_col.to_pylibcudf(mode="read"),
             dtype,
-            c_timestamp_format
+            format
         )
     )
 
@@ -623,12 +622,10 @@ def int2timedelta(Column input_col, str format):
     A Column with Timedelta represented in string format
 
     """
-
-    cdef string c_duration_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_durations.from_durations(
             input_col.to_pylibcudf(mode="read"),
-            c_duration_format
+            format
         )
     )
 
