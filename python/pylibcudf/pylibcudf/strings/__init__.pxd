@@ -15,6 +15,7 @@ from . cimport (
     regex_program,
     replace,
     slice,
+    split,
     strip,
     translate,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "replace",
     "slice",
     "strip",
+    "split",
     "side_type",
     "translate",
 ]

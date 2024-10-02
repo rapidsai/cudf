@@ -16,4 +16,5 @@ strings
     repeat
     replace
     slice
+    split
     strip

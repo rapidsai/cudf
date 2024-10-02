@@ -16,6 +16,7 @@ from . import (
     repeat,
     replace,
     slice,
+    split,
     strip,
     translate,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "replace",
     "slice",
     "strip",
+    "split",
     "SideType",
     "translate",
 ]
