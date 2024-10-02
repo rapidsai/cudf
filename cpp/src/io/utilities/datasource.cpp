@@ -193,7 +193,7 @@ class memory_mapped_source : public file_source {
       return file_source::host_read(offset, read_size);
     }
 
-    // If the requested range is only partially within the mapped region, copy to a new
+    // If the requested range is only partially within the registered region, copy to a new
     // host buffer to make the data safe to copy to the device
     if (_reg_addr != nullptr and
         (offset < _reg_offset or offset + read_size > (_reg_offset + _reg_size))) {
