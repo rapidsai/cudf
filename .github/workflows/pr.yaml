@@ -26,6 +26,7 @@ jobs:
     needs:
       - changed-files
       - checks
+      - telemetry-setup
       - conda-cpp-build
       - conda-cpp-checks
       - conda-cpp-tests
