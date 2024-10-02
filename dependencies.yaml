@@ -368,7 +368,7 @@ dependencies:
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==4.0.1
+          - nvcomp==3.0.6
           - spdlog>=1.14.1,<1.15
   rapids_build_skbuild:
     common:
