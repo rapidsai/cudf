@@ -9,5 +9,5 @@ cdef extern from "cudf/strings/find_multiple.hpp" namespace "cudf::strings" \
         nogil:
 
     cdef unique_ptr[column] find_multiple(
-        column_view source_strings,
+        column_view input,
         column_view targets) except +
