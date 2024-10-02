@@ -9,5 +9,5 @@ from pylibcudf.libcudf.types cimport size_type
 cdef extern from "cudf/strings/wrap.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] wrap(
-        column_view source_strings,
+        column_view input,
         size_type width) except +
