@@ -53,8 +53,8 @@ constexpr cudf::thread_index_type tile_size  = block_size;  // cudf::detail::war
 /**
  * @brief Compute the minhash of each string for each seed
  *
- * This is a warp-per-string algorithm where parallel threads within a warp
- * work on substrings of a single string row.
+ * This is a block-per-string algorithm where parallel threads within a block
+ * work on a single string row.
  *
  * @tparam HashFunction hash function to use on each substring
  *
@@ -77,20 +77,18 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
   auto const idx     = cudf::detail::grid_1d::global_thread_id();
   auto const str_idx = idx / tile_size;
   if (str_idx >= d_strings.size()) { return; }
-
   if (d_strings.is_null(str_idx)) { return; }
 
   auto const d_str    = d_strings.element<cudf::string_view>(str_idx);
   auto const init     = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
   auto const lane_idx = idx % tile_size;
 
-  auto warp_hashes = working_memory + (str_idx * tile_size * seeds.size());
+  auto tile_hashes = working_memory + (str_idx * tile_size * seeds.size());
 
   for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size(); seed_idx += tile_size) {
-    auto begin = warp_hashes + (seed_idx * tile_size);
+    auto begin = tile_hashes + (seed_idx * tile_size);
     thrust::uninitialized_fill(thrust::seq, begin, begin + tile_size, init);
   }
-  //__syncwarp();
   __syncthreads();
 
   auto const d_output = d_hashes + (str_idx * seeds.size());
@@ -115,16 +113,15 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
       } else {
         hv = thrust::get<0>(hasher(hash_str));
       }
-      warp_hashes[(seed_idx * tile_size) + lane_idx] =
-        cuda::std::min(hv, warp_hashes[(seed_idx * tile_size) + lane_idx]);
+      tile_hashes[(seed_idx * tile_size) + lane_idx] =
+        cuda::std::min(hv, tile_hashes[(seed_idx * tile_size) + lane_idx]);
     }
   }
-  //__syncwarp();
   __syncthreads();
 
   // compute final result
   for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size(); seed_idx += tile_size) {
-    auto begin = warp_hashes + (seed_idx * tile_size);
+    auto begin = tile_hashes + (seed_idx * tile_size);
     auto hv    = thrust::reduce(thrust::seq, begin, begin + tile_size, init, thrust::minimum{});
     d_output[seed_idx] = hv;
   }
