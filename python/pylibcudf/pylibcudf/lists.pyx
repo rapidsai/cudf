@@ -52,6 +52,8 @@ cpdef Table explode_outer(Table input, size_type explode_column_idx):
 
     All other columns will be duplicated for each element in the list.
 
+    For details, see :cpp:func:`explode_outer`.
+
     Parameters
     ----------
     input : Table
@@ -75,6 +77,8 @@ cpdef Table explode_outer(Table input, size_type explode_column_idx):
 cpdef Column concatenate_rows(Table input):
     """Concatenate multiple lists columns into a single lists column row-wise.
 
+    For details, see :cpp:func:`concatenate_list_elements`.
+
     Parameters
     ----------
     input : Table
@@ -95,6 +99,8 @@ cpdef Column concatenate_rows(Table input):
 
 cpdef Column concatenate_list_elements(Column input, bool dropna):
     """Concatenate multiple lists on the same row into a single list.
+
+    For details, see :cpp:func:`concatenate_list_elements`.
 
     Parameters
     ----------
@@ -167,6 +173,8 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
 cpdef Column contains_nulls(Column input):
     """Create a column of bool values indicating whether
     each row in the lists column contains a null value.
+
+    For details, see :cpp:func:`contains_nulls`.
 
     Parameters
     ----------
@@ -290,6 +298,8 @@ cpdef Column segmented_gather(Column input, Column gather_map_list):
 cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
     """Create a column of extracted list elements.
 
+    For details, see :cpp:func:`extract_list_element`.
+
     Parameters
     ----------
     input : Column
@@ -316,6 +326,8 @@ cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
 cpdef Column count_elements(Column input):
     """Count the number of rows in each
     list element in the given lists column.
+    For details, see :cpp:func:`count_elements`.
+
     For details, see :cpp:func:`count_elements`.
 
     Parameters

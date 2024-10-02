@@ -378,7 +378,7 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
     auto expressions = std::list<cudf::ast::operation>();
 
     auto op = arithmetic_operator;
-    expressions.push_back(cudf::ast::operation(op, col_ref, col_ref));
+    expressions.emplace_back(op, col_ref, col_ref);
 
     for (int64_t i = 0; i < depth_level - 1; i++) {
       if (i == depth_level - 2) {
@@ -387,9 +387,9 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
         op = arithmetic_operator;
       }
       if (nested_left_tree) {
-        expressions.push_back(cudf::ast::operation(op, expressions.back(), col_ref));
+        expressions.emplace_back(op, expressions.back(), col_ref);
       } else {
-        expressions.push_back(cudf::ast::operation(op, col_ref, expressions.back()));
+        expressions.emplace_back(op, col_ref, expressions.back());
       }
     }
     return expressions;

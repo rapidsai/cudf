@@ -13,10 +13,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     "sort_keys",
     [
         (pl.col("a"),),
-        pytest.param(
-            (pl.col("d").abs(),),
-            marks=pytest.mark.xfail(reason="abs not yet implemented"),
-        ),
+        (pl.col("d").abs(),),
         (pl.col("a"), pl.col("d")),
         (pl.col("b"),),
     ],

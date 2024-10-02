@@ -32,7 +32,7 @@
 class TransformTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Data>
-void test_udf(char const udf[], Data data_init, cudf::size_type size, bool is_ptx)
+void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx)
 {
   auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
