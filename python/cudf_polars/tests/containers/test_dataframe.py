@@ -40,7 +40,7 @@ def test_replace_missing_raises():
     )
     replacement = df.column_map["a"].copy().rename("b")
     with pytest.raises(ValueError):
-        df.replace_columns(replacement)
+        df.with_columns([replacement], replace_only=True)
 
 
 def test_from_table_wrong_names():

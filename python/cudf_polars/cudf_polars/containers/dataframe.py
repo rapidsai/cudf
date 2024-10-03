@@ -176,7 +176,7 @@ class DataFrame:
             for c, other in zip(self.columns, like.columns, strict=True)
         )
 
-    def with_columns(self, columns: Iterable[Column]) -> Self:
+    def with_columns(self, columns: Iterable[Column], *, replace_only=False) -> Self:
         """
         Return a new dataframe with extra columns.
 
@@ -184,6 +184,8 @@ class DataFrame:
         ----------
         columns
             Columns to add
+        replace_only
+            If true, then only replacements are allowed (matching by name).
 
         Returns
         -------
@@ -191,9 +193,12 @@ class DataFrame:
 
         Notes
         -----
-        If column names overlap, newer names replace older ones.
+        If column names overlap, newer names replace older ones, and
+        appear in the same order as the original frame.
         """
         new = {c.name: c for c in columns}
+        if replace_only and not self.column_names_set.issuperset(new.keys()):
+            raise ValueError("Cannot replace with non-existing names")
         return type(self)((self.column_map | new).values())
 
     def discard_columns(self, names: Set[str]) -> Self:
@@ -206,13 +211,6 @@ class DataFrame:
             return type(self)(self.column_map[name] for name in names)
         except KeyError as e:
             raise ValueError("Can't select missing names") from e
-
-    def replace_columns(self, *columns: Column) -> Self:
-        """Return a new dataframe with columns replaced by name."""
-        new = {c.name: c for c in columns}
-        if not set(new).issubset(self.column_names_set):
-            raise ValueError("Cannot replace with non-existing names")
-        return type(self)((self.column_map | new).values())
 
     def rename_columns(self, mapping: Mapping[str, str]) -> Self:
         """Rename some columns."""

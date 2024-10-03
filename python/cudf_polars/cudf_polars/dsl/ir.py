@@ -837,8 +837,8 @@ class Join(IR):
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
             if coalesce and how != "inner":
-                left = left.replace_columns(
-                    *(
+                left = left.with_columns(
+                    (
                         Column(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
                             name=left_col.name,
@@ -848,7 +848,8 @@ class Join(IR):
                             right.select_columns(right_on.column_names_set),
                             strict=True,
                         )
-                    )
+                    ),
+                    replace_only=True,
                 )
                 right = right.discard_columns(right_on.column_names_set)
             if how == "right":

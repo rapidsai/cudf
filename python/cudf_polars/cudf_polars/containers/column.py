@@ -64,7 +64,7 @@ class Column:
             )
         return plc.copying.get_element(self.obj, 0)
 
-    def rename(self, name: str, /) -> Self:
+    def rename(self, name: str | None, /) -> Self:
         """
         Return a shallow copy with a new name.
 
@@ -79,18 +79,6 @@ class Column:
         """
         new = self.copy()
         new.name = name
-        return new
-
-    def unname(self) -> Self:
-        """
-        Return a shallow copy with no name.
-
-        Returns
-        -------
-        Shallow copy of self with name unset.
-        """
-        new = self.copy()
-        new.name = None
         return new
 
     def sorted_like(self, like: Column, /) -> Self:

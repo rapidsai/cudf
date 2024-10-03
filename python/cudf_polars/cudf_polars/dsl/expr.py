@@ -425,7 +425,7 @@ class Col(Expr):
         """Evaluate this expression given a dataframe for context."""
         # Deliberately remove the name here so that we guarantee
         # evaluation of the IR produces names.
-        return df.column_map[self.name].unname()
+        return df.column_map[self.name].rename(None)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
