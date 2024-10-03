@@ -11,10 +11,13 @@ strings
     find
     find_multiple
     findall
+    padding
     regex_flags
     regex_program
     repeat
     replace
+    side_type
     slice
     split
     strip
+    wrap
