@@ -36,4 +36,9 @@ public class RmmAllocationMode {
    * Use CUDA async suballocation strategy
    */
   public static final int CUDA_ASYNC = 0x00000008;
+  /**
+   * Use CUDA async suballocation strategy with fabric handles that are
+   * peer accessible with read-write access
+   */
+  public static final int CUDA_ASYNC_FABRIC = 0x00000010;
 }
