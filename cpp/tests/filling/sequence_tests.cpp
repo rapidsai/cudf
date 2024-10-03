@@ -41,8 +41,7 @@ TYPED_TEST(SequenceTypedTestFixture, Incrementing)
 
   cudf::size_type num_els = 10;
 
-  T expected[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  cudf::test::fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
+  cudf::test::fixed_width_column_wrapper<T> expected_w({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
   auto result = cudf::sequence(num_els, init, step);
 
@@ -58,8 +57,8 @@ TYPED_TEST(SequenceTypedTestFixture, Decrementing)
 
   cudf::size_type num_els = 10;
 
-  T expected[] = {0, -5, -10, -15, -20, -25, -30, -35, -40, -45};
-  cudf::test::fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
+  cudf::test::fixed_width_column_wrapper<T> expected_w(
+    {0, -5, -10, -15, -20, -25, -30, -35, -40, -45});
 
   auto result = cudf::sequence(num_els, init, step);
 
@@ -75,8 +74,7 @@ TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
 
   cudf::size_type num_els = 0;
 
-  T expected[] = {};
-  cudf::test::fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
+  cudf::test::fixed_width_column_wrapper<T> expected_w({});
 
   auto result = cudf::sequence(num_els, init, step);
 
@@ -121,8 +119,7 @@ TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
 
   cudf::size_type num_els = 10;
 
-  T expected[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  cudf::test::fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
+  cudf::test::fixed_width_column_wrapper<T> expected_w({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
   auto result = cudf::sequence(num_els, init);
 

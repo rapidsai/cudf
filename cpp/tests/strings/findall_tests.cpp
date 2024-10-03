@@ -19,6 +19,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/strings/findall.hpp>
@@ -33,10 +34,10 @@ struct StringsFindallTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFindallTests, FindallTest)
 {
-  bool valids[] = {true, true, true, true, true, false, true, true};
+  std::array valids{true, true, true, true, true, false, true, true};
   cudf::test::strings_column_wrapper input(
     {"3-A", "4-May 5-Day 6-Hay", "12-Dec-2021-Jan", "Feb-March", "4 ABC", "", "", "25-9000-Hal"},
-    valids);
+    valids.data());
   auto sv = cudf::strings_column_view(input);
 
   auto pattern = std::string("(\\d+)-(\\w+)");
@@ -50,7 +51,7 @@ TEST_F(StringsFindallTests, FindallTest)
                 LCW{},
                 LCW{},
                 LCW{"25-9000"}},
-               valids);
+               valids.data());
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::findall(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
@@ -147,4 +148,54 @@ TEST_F(StringsFindallTests, LargeRegex)
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{large_regex.c_str()}, LCW{}, LCW{}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, FindTest)
+{
+  auto const valids = cudf::test::iterators::null_at(5);
+  cudf::test::strings_column_wrapper input(
+    {"3A", "May4", "Jan2021", "March", "A9BC", "", "", "abcdef ghijklm 12345"}, valids);
+  auto sv = cudf::strings_column_view(input);
+
+  auto pattern = std::string("\\d+");
+
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::find_re(sv, *prog);
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 3, 3, -1, 1, 0, -1, 15}, valids);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, NoMatches)
+{
+  cudf::test::strings_column_wrapper input({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
+  auto sv = cudf::strings_column_view(input);
+
+  auto pattern = std::string("(^zzz$)");
+  using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{}, LCW{}, LCW{}, LCW{}, LCW{}});
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, EmptyTest)
+{
+  std::string pattern = R"(\w+)";
+
+  auto prog = cudf::strings::regex_program::create(pattern);
+
+  cudf::test::strings_column_wrapper input;
+  auto sv = cudf::strings_column_view(input);
+  {
+    auto results = cudf::strings::findall(sv, *prog);
+    using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
+    LCW expected;
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
+  {
+    auto results  = cudf::strings::find_re(sv, *prog);
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>{};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+  }
 }
