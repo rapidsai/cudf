@@ -161,7 +161,7 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Check for validity
-  check_identical_tables(input->view(), transcoded_input->view());
+  check_tables_equal(input->view(), transcoded_input->view());
 
   return 0;
 }

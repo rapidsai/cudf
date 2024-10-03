@@ -19,12 +19,14 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <memory>
 #include <string>
 
 /**
- * @file commons.hpp
+ * @file common_utils.hpp
  * @brief Common utilities for `parquet_io` examples
  *
  */
@@ -67,7 +69,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
  * @param lhs_table View to lhs table
  * @param rhs_table View to rhs table
  */
-void check_identical_tables(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
+void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table);
 
 /**
  * @brief Concatenate a vector of tables and return the resultant table

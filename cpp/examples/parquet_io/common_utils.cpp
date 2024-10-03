@@ -30,7 +30,7 @@
 #include <string>
 
 /**
- * @file commons.cpp
+ * @file common_utils.cpp
  * @brief Definitions for common utilities for `parquet_io` examples
  *
  */

@@ -448,7 +448,7 @@ int32_t main(int argc, char const** argv)
     default_stream.synchronize();
 
     // Check if the tables are identical
-    check_identical_tables(input_table->view(), transcoded_table->view());
+    check_tables_equal(input_table->view(), transcoded_table->view());
 
     // Remove the created temp directory and parquet data
     std::filesystem::remove_all(output_path);
