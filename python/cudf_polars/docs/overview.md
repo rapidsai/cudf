@@ -211,8 +211,8 @@ around their pylibcudf counterparts. We have three (in
 The interfaces offered by these are somewhat in flux, but broadly
 speaking, a `DataFrame` is just a mapping from string `name`s to
 `Column`s, and thus also holds a pylibcudf `Table`. Names are only
-every attached to `Column`s and hence inserted into `DataFrames` via
-`NamedExpr`s: these which are the top-level expression nodes that live
+attached to `Column`s and hence inserted into `DataFrames` via
+`NamedExpr`s, which are the top-level expression nodes that live
 inside an `IR` node. This means that the expression evaluator never
 has to concern itself with column names: columns are only ever
 decorated with names when constructing a `DataFrame`.
