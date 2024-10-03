@@ -12,11 +12,11 @@ from pylibcudf.libcudf.types cimport size_type
 cdef extern from "cudf/strings/padding.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] pad(
-        column_view source_strings,
+        column_view input,
         size_type width,
         side_type side,
         string fill_char) except +
 
     cdef unique_ptr[column] zfill(
-        column_view source_strings,
+        column_view input,
         size_type width) except +
