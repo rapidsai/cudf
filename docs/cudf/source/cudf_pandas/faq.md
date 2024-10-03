@@ -181,14 +181,16 @@ There are a few known limitations that you should be aware of:
    ```
 - `cudf.pandas` (and cuDF in general) is only compatible with pandas 2. Version
   24.02 of cudf was the last to support pandas 1.5.x.
-- `cudf.pandas` can interface with functions that utilize NumPy's C API, but doing so requires
-  a data transfer from device to host to ensure that the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays)(aka the underlying C array) is set correctly. For example, calling `.values`
-  below produces a NumPy proxy array that
+- In order for `cudf.pandas` to produce a proxy array that ducktypes as a `np.ndarray`, we actually have to wrap a valid `np.ndarray` and cannot keep the data on device with a `cupy` array. This approach incurs the overhead of an initial device-to-host (DtoH) transfer when creating a proxy array. For example,
 
   ```python
-  arr = pd.DataFrame("a":range(10)).values() # implicit DtoH transfer
+  import pandas as pd
+  import numpy as np
+
+  arr = pd.DataFrame("a":range(10)).values # implicit DtoH transfer
+  isinstance(arr, np.ndarrray) # returns True
   ```
-  With the data buffer set, other functions which require the data buffer can be used. For example,
+  The reason why we do the data transfer from device to host is to ensure that the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays) is set correctly. With the data buffer set, we can utilize other functions which require a valid data buffer.
 
   ```python
   import torch
