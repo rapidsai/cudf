@@ -26,13 +26,6 @@ from pylibcudf.libcudf.strings.convert.convert_floats cimport (
     from_floats as cpp_from_floats,
     to_floats as cpp_to_floats,
 )
-from pylibcudf.libcudf.strings.convert.convert_integers cimport (
-    from_integers as cpp_from_integers,
-    hex_to_integers as cpp_hex_to_integers,
-    integers_to_hex as cpp_integers_to_hex,
-    is_hex as cpp_is_hex,
-    to_integers as cpp_to_integers,
-)
 from pylibcudf.libcudf.strings.convert.convert_ipv4 cimport (
     integers_to_ipv4 as cpp_integers_to_ipv4,
     ipv4_to_integers as cpp_ipv4_to_integers,
@@ -143,32 +136,18 @@ def stof(Column input_col):
 
 
 def integer_to_string(Column input_col):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_integers(
-                input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_integers.from_integers(
+        input_col.to_pylibcudf(mode="read"),
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def string_to_integer(Column input_col, object out_type):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
-        )
+    plc_column = plc.strings.convert.convert_integers.to_integers(
+        input_col.to_pylibcudf(mode="read"),
+        dtype_to_pylibcudf_type(out_type)
     )
-    cdef data_type c_out_type = data_type(tid)
-    with nogil:
-        c_result = move(
-            cpp_to_integers(
-                input_column_view,
-                c_out_type))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(plc_column)
 
 
 def i8tos(Column input_col):
@@ -696,7 +675,7 @@ def is_ipv4(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def htoi(Column input_col, **kwargs):
+def htoi(Column input_col):
     """
     Converting input column of type string having hex values
     to integer of out_type
@@ -709,22 +688,11 @@ def htoi(Column input_col, **kwargs):
     -------
     A Column of integers parsed from hexadecimal string values.
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[cudf.dtype("int64")]
-        )
+    plc_column = plc.strings.convert.convert_integers.hex_to_integers(
+        input_col.to_pylibcudf(mode="read"),
+        dtype_to_pylibcudf_type(cudf.dtype("int64"))
     )
-    cdef data_type c_out_type = data_type(tid)
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_hex_to_integers(input_column_view,
-                                c_out_type))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(plc_column)
 
 
 def is_hex(Column source_strings):
@@ -732,15 +700,10 @@ def is_hex(Column source_strings):
     Returns a Column of boolean values with True for `source_strings`
     that have hex characters.
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_is_hex(
-            source_view
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_integers.is_hex(
+        source_strings.to_pylibcudf(mode="read"),
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def itoh(Column input_col):
@@ -756,11 +719,7 @@ def itoh(Column input_col):
     -------
     A Column of strings with hexadecimal characters.
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_integers_to_hex(input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_integers.integers_to_hex(
+        input_col.to_pylibcudf(mode="read"),
+    )
+    return Column.from_pylibcudf(plc_column)

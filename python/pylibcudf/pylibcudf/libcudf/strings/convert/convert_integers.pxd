@@ -9,23 +9,28 @@ from pylibcudf.libcudf.types cimport data_type
 cdef extern from "cudf/strings/convert/convert_integers.hpp" namespace \
         "cudf::strings" nogil:
     cdef unique_ptr[column] to_integers(
-        column_view input_col,
+        column_view input,
         data_type output_type) except +
 
     cdef unique_ptr[column] from_integers(
-        column_view input_col) except +
+        column_view integers) except +
 
     cdef unique_ptr[column] is_integer(
-        column_view source_strings
+        column_view input
+    ) except +
+
+    cdef unique_ptr[column] is_integer(
+        column_view input,
+        data_type int_type
     ) except +
 
     cdef unique_ptr[column] hex_to_integers(
-        column_view input_col,
+        column_view input,
         data_type output_type) except +
 
     cdef unique_ptr[column] is_hex(
-        column_view source_strings
+        column_view input
     ) except +
 
     cdef unique_ptr[column] integers_to_hex(
-        column_view input_col) except +
+        column_view input) except +
