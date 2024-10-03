@@ -248,7 +248,7 @@ void print_usage()
  * @param thread_count Number of threads being used in the example
  * @param io_source_type Specified IO source type to convert input files to
  * @param stream CUDA stream to use
- *
+ * @return Vector of input sources for the given paths
  */
 std::vector<io_source> extract_input_sources_async(std::string const& paths,
                                                    int32_t input_multiplier,
