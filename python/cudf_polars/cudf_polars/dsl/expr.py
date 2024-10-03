@@ -914,7 +914,7 @@ class StringFunction(Expr):
             col = self.children[0].evaluate(df, context=context, mapping=mapping)
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
-                col.obj, format.encode()
+                col.obj, format
             )
 
             if strict:
