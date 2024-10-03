@@ -22,10 +22,6 @@ from pylibcudf.libcudf.strings.convert.convert_booleans cimport (
 from pylibcudf.libcudf.strings.convert.convert_datetime cimport (
     is_timestamp as cpp_is_timestamp,
 )
-from pylibcudf.libcudf.strings.convert.convert_floats cimport (
-    from_floats as cpp_from_floats,
-    to_floats as cpp_to_floats,
-)
 from pylibcudf.libcudf.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
     hex_to_integers as cpp_hex_to_integers,
@@ -50,32 +46,18 @@ from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 
 def floating_to_string(Column input_col):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_floats(
-                input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_floats.from_floats(
+        input_col.to_pylibcudf(mode="read"),
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def string_to_floating(Column input_col, object out_type):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
-        )
+    plc_column = plc.strings.convert.convert_floats.to_floats(
+        input_col.to_pylibcudf(mode="read"),
+        dtype_to_pylibcudf_type(out_type)
     )
-    cdef data_type c_out_type = data_type(tid)
-    with nogil:
-        c_result = move(
-            cpp_to_floats(
-                input_column_view,
-                c_out_type))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(plc_column)
 
 
 def dtos(Column input_col):
