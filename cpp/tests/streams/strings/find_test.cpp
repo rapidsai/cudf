@@ -46,4 +46,5 @@ TEST_F(StringsFindTest, Find)
   auto const pattern = std::string("[a-z]");
   auto const prog    = cudf::strings::regex_program::create(pattern);
   cudf::strings::findall(view, *prog, cudf::test::get_default_stream());
+  cudf::strings::find_re(view, *prog, cudf::test::get_default_stream());
 }
