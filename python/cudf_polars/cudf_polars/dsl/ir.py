@@ -1007,7 +1007,9 @@ class Sort(IR):
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         df = self.df.evaluate(cache=cache)
-        sort_keys = broadcast(*(k.evaluate(df) for k in self.by))
+        sort_keys = broadcast(
+            *(k.evaluate(df) for k in self.by), target_length=df.num_rows
+        )
         # TODO: More robust identification here.
         keys_in_result = {
             k.name: i
@@ -1080,7 +1082,7 @@ class Projection(IR):
         df = self.df.evaluate(cache=cache)
         # This can reorder things.
         columns = broadcast(
-            *(df.select(list(self.schema.keys())).columns), target_length=df.num_rows
+            *(df.column_map[name] for name in self.schema), target_length=df.num_rows
         )
         return DataFrame(columns)
 
