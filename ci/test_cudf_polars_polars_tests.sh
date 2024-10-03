@@ -36,8 +36,6 @@ python -m pip install \
     "$(echo ./local-pylibcudf-dep/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 
 
-python -m pip install $(echo ./dist/cudf_polars*.whl)
-
 TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
 rapids-logger "Clone polars to ${TAG}"
 git clone https://github.com/pola-rs/polars.git --branch ${TAG} --depth 1
