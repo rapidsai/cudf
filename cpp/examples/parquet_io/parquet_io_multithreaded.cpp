@@ -248,6 +248,7 @@ void print_usage()
  * @param thread_count Number of threads being used in the example
  * @param io_source_type Specified IO source type to convert input files to
  * @param stream CUDA stream to use
+ *
  * @return Vector of input sources for the given paths
  */
 std::vector<io_source> extract_input_sources_async(std::string const& paths,
@@ -286,6 +287,7 @@ std::vector<io_source> extract_input_sources_async(std::string const& paths,
         }
       }
     } else {
+      print_usage();
       throw std::runtime_error("Encountered an invalid input path\n");
     }
   });
@@ -353,7 +355,6 @@ int32_t main(int argc, char const** argv)
       } else
         input_paths = std::string{argv[1]};
       [[fallthrough]];
-    case 1: break;
     default: print_usage(); throw std::runtime_error("");
   }
 
@@ -373,6 +374,7 @@ int32_t main(int argc, char const** argv)
 
   // Check if there is nothing to do
   if (input_sources.empty()) {
+    print_usage();
     throw std::runtime_error("No input files to read. Exiting early.\n");
   }
 

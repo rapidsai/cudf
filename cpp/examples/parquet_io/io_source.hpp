@@ -17,14 +17,13 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/host_vector.h>
 
-#include <filesystem>
 #include <string>
 
 /**
@@ -39,15 +38,19 @@
 enum class io_source_type { FILEPATH, HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER };
 
 /**
+ * @brief Get io source type from the string keyword argument
+ *
+ * @param name io source type keyword name
+ * @return io source type
+ */
+[[nodiscard]] io_source_type get_io_source_type(std::string name);
+
+/**
  * @brief Create and return a reference to a static pinned memory pool
  *
  * @return Reference to a static pinned memory pool
  */
-rmm::host_async_resource_ref pinned_memory_resource()
-{
-  static auto mr = rmm::mr::pinned_host_memory_resource{};
-  return mr;
-}
+rmm::host_async_resource_ref pinned_memory_resource();
 
 /**
  * @brief Custom allocator for pinned_buffer via RMM.
@@ -77,79 +80,12 @@ struct pinned_allocator : public std::allocator<T> {
 };
 
 /**
- * @brief Get io source type from the string keyword argument
- *
- * @param name io source type keyword name
- * @return io source type
- */
-[[nodiscard]] io_source_type get_io_source_type(std::string name)
-{
-  static std::unordered_map<std::string_view, io_source_type> const map = {
-    {"FILEPATH", io_source_type::FILEPATH},
-    {"HOST_BUFFER", io_source_type::HOST_BUFFER},
-    {"PINNED_BUFFER", io_source_type::PINNED_BUFFER},
-    {"DEVICE_BUFFER", io_source_type::DEVICE_BUFFER}};
-
-  std::transform(name.begin(), name.end(), name.begin(), ::toupper);
-  if (map.find(name) != map.end()) {
-    return map.at(name);
-  } else {
-    throw std::invalid_argument(name +
-                                " is not a valid io source type. Available: FILEPATH,\n"
-                                "HOST_BUFFER, PINNED_BUFFER, DEVICE_BUFFER.\n\n");
-  }
-}
-
-/**
  * @brief Class to create a cudf::io::source_info of given type from the input parquet file
  *
  */
 class io_source {
  public:
-  io_source(std::string_view file_path, io_source_type io_type, rmm::cuda_stream_view stream)
-    : type{io_type},
-      file_name{file_path},
-      file_size{std::filesystem::file_size(file_name)},
-      pinned_buffer({pinned_memory_resource(), stream}),
-      d_buffer{0, stream}
-  {
-    // For filepath make a quick source_info and return early
-    if (type == io_source_type::FILEPATH) {
-      source_info = cudf::io::source_info(file_name);
-      return;
-    }
-
-    std::ifstream file{file_name, std::ifstream::binary};
-
-    // Copy file contents to the specified io source buffer
-    switch (type) {
-      case io_source_type::HOST_BUFFER: {
-        h_buffer.resize(file_size);
-        file.read(h_buffer.data(), file_size);
-        source_info = cudf::io::source_info(h_buffer.data(), file_size);
-        break;
-      }
-      case io_source_type::PINNED_BUFFER: {
-        pinned_buffer.resize(file_size);
-        file.read(pinned_buffer.data(), file_size);
-        source_info = cudf::io::source_info(pinned_buffer.data(), file_size);
-        break;
-      }
-      case io_source_type::DEVICE_BUFFER: {
-        h_buffer.resize(file_size);
-        file.read(h_buffer.data(), file_size);
-        d_buffer.resize(file_size, stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(
-          d_buffer.data(), h_buffer.data(), file_size, cudaMemcpyDefault, stream.value()));
-
-        source_info = cudf::io::source_info(d_buffer);
-        break;
-      }
-      default: {
-        throw std::runtime_error("Encountered unexpected source type\n\n");
-      }
-    }
-  }
+  io_source(std::string_view file_path, io_source_type io_type, rmm::cuda_stream_view stream);
 
   // Get the internal source info
   [[nodiscard]] cudf::io::source_info get_source_info() const { return source_info; }

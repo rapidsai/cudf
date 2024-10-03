@@ -99,7 +99,7 @@ bool get_boolean(std::string input)
   }
 }
 
-void check_identical_tables(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
+void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
 {
   try {
     // Left anti-join the original and transcoded tables
