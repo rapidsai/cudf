@@ -468,9 +468,6 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
   }
 }
 
-/**
- * @copydoc cudf::io::parquet::detail::WriteFinalOffsets
- */
 void WriteFinalOffsets(host_span<size_type const> offsets,
                        host_span<size_type* const> buff_addrs,
                        rmm::cuda_stream_view stream)
