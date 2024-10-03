@@ -35,8 +35,7 @@ mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 rapids-print-env
 
-rapids-mamba-retry install \
+rapids-mamba-retry install --update-deps \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  --update-deps \
   cudf libcudf
