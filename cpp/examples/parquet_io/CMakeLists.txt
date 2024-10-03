@@ -21,9 +21,7 @@ target_link_libraries(parquet_io_utils PRIVATE cudf::cudf)
 
 # Build and install parquet_io
 add_executable(parquet_io parquet_io.cpp)
-target_link_libraries(
-  parquet_io PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:parquet_io_utils>
-)
+target_link_libraries(parquet_io PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:parquet_io_utils>)
 target_compile_features(parquet_io PRIVATE cxx_std_17)
 install(TARGETS parquet_io DESTINATION bin/examples/libcudf)
 
