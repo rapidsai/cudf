@@ -150,7 +150,7 @@ class DataFrame:
         self, like: DataFrame, /, *, subset: Set[str] | None = None
     ) -> Self:
         """
-        Copy sortedness from a dataframe onto self.
+        Return a shallow copy with sortedness copied from like.
 
         Parameters
         ----------
@@ -161,11 +161,7 @@ class DataFrame:
 
         Returns
         -------
-        Self with metadata set.
-
-        Note
-        ----
-        This modifies the sortedness of columns in-place.
+        Shallow copy of self with metadata set.
 
         Raises
         ------
@@ -175,14 +171,10 @@ class DataFrame:
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")
         subset = self.column_names_set if subset is None else subset
-        # TODO: ugly, this relies on sorted_like modifying a Column in
-        # place such that the column_map property also advertises the
-        # sortedness.
-        self.columns = [
+        return type(self)(
             c.sorted_like(other) if c.name in subset else c
             for c, other in zip(self.columns, like.columns, strict=True)
-        ]
-        return self
+        )
 
     def with_columns(self, columns: Iterable[Column]) -> Self:
         """

@@ -41,12 +41,8 @@ class Column:
     ):
         self.obj = column
         self.is_scalar = self.obj.size() == 1
-        if self.obj.size() <= 1:
-            is_sorted = plc.types.Sorted.YES
-        self.is_sorted = is_sorted
-        self.order = order
-        self.null_order = null_order
         self.name = name
+        self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
 
     @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:
@@ -99,7 +95,7 @@ class Column:
 
     def sorted_like(self, like: Column, /) -> Self:
         """
-        Copy sortedness properties from a column onto self.
+        Return a shallow copy with sortedness from like.
 
         Parameters
         ----------
@@ -108,14 +104,18 @@ class Column:
 
         Returns
         -------
-        Self with metadata set.
+        Shallow copy of self with metadata set.
 
         See Also
         --------
         set_sorted, copy_metadata
         """
-        return self.set_sorted(
-            is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
+        return type(self)(
+            self.obj,
+            name=self.name,
+            is_sorted=like.is_sorted,
+            order=like.order,
+            null_order=like.null_order,
         )
 
     def astype(self, dtype: plc.DataType) -> Column:
