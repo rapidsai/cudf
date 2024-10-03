@@ -17,6 +17,9 @@ rapids-dependency-file-generator \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
     | tee "${ENV_YAML_DIR}/env.yaml"
 
+rapids-logger "env file"
+cat "${ENV_YAML_DIR}/env.yaml"
+
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 
 # Temporarily allow unbound variables for conda activation.
@@ -40,4 +43,4 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   cudf libcudf
 
-rapids-mamba-retry update --all
+# rapids-mamba-retry update --all
