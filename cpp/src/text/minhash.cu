@@ -48,7 +48,8 @@ namespace detail {
 namespace {
 
 constexpr cudf::thread_index_type block_size = 256;
-constexpr cudf::thread_index_type tile_size  = block_size;  // cudf::detail::warp_size;
+// for tuning independently from block_size
+constexpr cudf::thread_index_type tile_size = block_size;
 
 /**
  * @brief Compute the minhash of each string for each seed
@@ -85,6 +86,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
 
   auto tile_hashes = working_memory + (str_idx * tile_size * seeds.size());
 
+  // initialize working memory
   for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size(); seed_idx += tile_size) {
     auto begin = tile_hashes + (seed_idx * tile_size);
     thrust::uninitialized_fill(thrust::seq, begin, begin + tile_size, init);
