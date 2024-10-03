@@ -120,6 +120,8 @@ filterwarnings = [
     # Should be fixed in the next streamz release
     # https://github.com/python-streamz/streamz/commit/2812f1f961dfcb3f17e948d8b12a12472975558e
     "ignore:pkg_resources is deprecated as an API:DeprecationWarning:streamz",
-    "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning"
+    "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
+    # Ignore numba PEP 456 warning specific to arm machines
+    "ignore:FNV hashing is not implemented in Numba.*:UserWarning"
 ]
 xfail_strict = true
