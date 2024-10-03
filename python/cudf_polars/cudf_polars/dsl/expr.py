@@ -937,7 +937,7 @@ class StringFunction(Expr):
                 )
                 return Column(
                     plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype, format.encode()
+                        res.columns()[0], self.dtype, format
                     )
                 )
         elif self.name == pl_expr.StringFunction.Replace:
