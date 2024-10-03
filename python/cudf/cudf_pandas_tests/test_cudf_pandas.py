@@ -21,7 +21,12 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from nbconvert.preprocessors import ExecutePreprocessor
-from numba import NumbaDeprecationWarning, vectorize
+from numba import (
+    NumbaDeprecationWarning,
+    __version__ as numba_version,
+    vectorize,
+)
+from packaging import version
 from pytz import utc
 
 from cudf.core._compat import PANDAS_GE_220
@@ -622,10 +627,6 @@ def test_array_function_series_fallback(series):
     tm.assert_equal(expect, got)
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_timedeltaproperties(series):
     psr, sr = series
     psr, sr = psr.astype("timedelta64[ns]"), sr.astype("timedelta64[ns]")
@@ -685,10 +686,6 @@ def test_maintain_container_subclasses(multiindex):
     assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas due to unsupported boxcar window type",
-)
 def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
@@ -697,8 +694,9 @@ def test_rolling_win_type():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.skip(
-    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009"
+@pytest.mark.skipif(
+    version.parse(numba_version) < version.parse("0.59"),
+    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009",
 )
 def test_rolling_apply_numba_engine():
     def weighted_mean(x):
