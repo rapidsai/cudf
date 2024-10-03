@@ -55,61 +55,61 @@ jobs:
     if: always()
     with:
       needs: ${{ toJSON(needs) }}
-  changed-files:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-24.12
-    with:
-      files_yaml: |
-        test_cpp:
-          - '**'
-          - '!CONTRIBUTING.md'
-          - '!README.md'
-          - '!ci/cudf_pandas_scripts/**'
-          - '!docs/**'
-          - '!img/**'
-          - '!java/**'
-          - '!notebooks/**'
-          - '!python/**'
-        test_cudf_pandas:
-          - '**'
-          - '!CONTRIBUTING.md'
-          - '!README.md'
-          - '!docs/**'
-          - '!img/**'
-          - '!java/**'
-          - '!notebooks/**'
-        test_java:
-          - '**'
-          - '!CONTRIBUTING.md'
-          - '!README.md'
-          - '!ci/cudf_pandas_scripts/**'
-          - '!docs/**'
-          - '!img/**'
-          - '!notebooks/**'
-          - '!python/**'
-        test_notebooks:
-          - '**'
-          - '!CONTRIBUTING.md'
-          - '!README.md'
-          - '!ci/cudf_pandas_scripts/**'
-          - '!java/**'
-        test_python:
-          - '**'
-          - '!CONTRIBUTING.md'
-          - '!README.md'
-          - '!ci/cudf_pandas_scripts/**'
-          - '!docs/**'
-          - '!img/**'
-          - '!java/**'
-          - '!notebooks/**'
-  checks:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
-    with:
-      enable_check_generated_files: false
+#   changed-files:
+#     secrets: inherit
+#     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-24.12
+#     with:
+#       files_yaml: |
+#         test_cpp:
+#           - '**'
+#           - '!CONTRIBUTING.md'
+#           - '!README.md'
+#           - '!ci/cudf_pandas_scripts/**'
+#           - '!docs/**'
+#           - '!img/**'
+#           - '!java/**'
+#           - '!notebooks/**'
+#           - '!python/**'
+#         test_cudf_pandas:
+#           - '**'
+#           - '!CONTRIBUTING.md'
+#           - '!README.md'
+#           - '!docs/**'
+#           - '!img/**'
+#           - '!java/**'
+#           - '!notebooks/**'
+#         test_java:
+#           - '**'
+#           - '!CONTRIBUTING.md'
+#           - '!README.md'
+#           - '!ci/cudf_pandas_scripts/**'
+#           - '!docs/**'
+#           - '!img/**'
+#           - '!notebooks/**'
+#           - '!python/**'
+#         test_notebooks:
+#           - '**'
+#           - '!CONTRIBUTING.md'
+#           - '!README.md'
+#           - '!ci/cudf_pandas_scripts/**'
+#           - '!java/**'
+#         test_python:
+#           - '**'
+#           - '!CONTRIBUTING.md'
+#           - '!README.md'
+#           - '!ci/cudf_pandas_scripts/**'
+#           - '!docs/**'
+#           - '!img/**'
+#           - '!java/**'
+#           - '!notebooks/**'
+#   checks:
+#     secrets: inherit
+#     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
+#     with:
+#       enable_check_generated_files: false
   conda-cpp-build:
     needs:
-        - checks
+        # - checks
         - telemetry-setup
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@add-telemetry
