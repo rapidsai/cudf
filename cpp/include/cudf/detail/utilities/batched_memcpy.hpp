@@ -31,13 +31,13 @@ namespace detail {
  * @brief A helper function that copies a vector of vectors from source to destination addresses in
  * a batched manner.
  *
- * @tparam SrcIterator The type of the source address iterator
- * @tparam DstIterator The type of the destination address iterator
- * @tparam SizeIterator The type of the buffer size iterator
+ * @tparam SrcIterator **[inferred]** The type of device-accessible source addresses iterator
+ * @tparam DstIterator **[inferred]** The type of device-accessible destination address iterator
+ * @tparam SizeIterator **[inferred]** The type of device-accessible buffer size iterator
  *
- * @param src_iter Iterator to source addresses
- * @param dst_iter Iterator to destination addresses
- * @param size_iter Iterator to the vector sizes (in bytes)
+ * @param src_iter Device-accessible iterator to source addresses
+ * @param dst_iter Device-accessible iterator to destination addresses
+ * @param size_iter Device-accessible iterator to the buffer sizes (in bytes)
  * @param num_buffs Number of buffers to be copied
  * @param stream CUDA stream to use
  */
