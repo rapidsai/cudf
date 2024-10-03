@@ -9,13 +9,19 @@ from . import (
     convert,
     extract,
     find,
+    find_multiple,
     findall,
+    padding,
     regex_flags,
     regex_program,
     repeat,
     replace,
+    side_type,
     slice,
+    split,
     strip,
+    translate,
+    wrap,
 )
 from .side_type import SideType
 
@@ -34,5 +40,8 @@ __all__ = [
     "replace",
     "slice",
     "strip",
+    "split",
     "SideType",
+    "translate",
+    "wrap",
 ]

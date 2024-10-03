@@ -858,8 +858,7 @@ TEST_P(JsonReaderRecordTest, JsonLinesObjects)
 
 TEST_P(JsonReaderRecordTest, JsonLinesObjectsStrings)
 {
-  auto const test_opt    = GetParam();
-  auto test_json_objects = [test_opt](std::string const& data) {
+  auto test_json_objects = [](std::string const& data) {
     cudf::io::json_reader_options in_options =
       cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
         .lines(true);
@@ -2573,6 +2572,30 @@ TEST_F(JsonReaderTest, ViableDelimiter)
   CUDF_EXPECT_NO_THROW(cudf::io::read_json(json_parser_options));
 
   EXPECT_THROW(json_parser_options.set_delimiter('\t'), std::invalid_argument);
+}
+
+TEST_F(JsonReaderTest, ViableDelimiterNewlineWS)
+{
+  // Test input
+  std::string input = R"({"a":
+  100})";
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{input.c_str(), input.size()})
+      .lines(true)
+      .delimiter('\0');
+
+  auto result = cudf::io::read_json(json_parser_options);
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 1);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+
+  auto col1_iterator = thrust::constant_iterator<int64_t>(100);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper(col1_iterator, col1_iterator + 1));
 }
 
 // Test case for dtype prune:
