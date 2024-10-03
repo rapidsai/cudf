@@ -126,6 +126,43 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                            mr);
 }
 
+namespace {
+struct find_re_fn {
+  column_device_view d_strings;
+
+  __device__ size_type operator()(size_type const idx,
+                                  reprog_device const prog,
+                                  int32_t const thread_idx) const
+  {
+    if (d_strings.is_null(idx)) { return 0; }
+    auto const d_str = d_strings.element<string_view>(idx);
+
+    auto const result = prog.find(thread_idx, d_str, d_str.begin());
+    return result.has_value() ? result.value().first : -1;
+  }
+};
+}  // namespace
+
+std::unique_ptr<column> find_re(strings_column_view const& input,
+                                regex_program const& prog,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+{
+  auto results = make_numeric_column(data_type{type_to_id<size_type>()},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+  if (input.is_empty()) { return results; }
+
+  auto d_results       = results->mutable_view().data<size_type>();
+  auto d_prog          = regex_device_builder::create_prog_device(prog, stream);
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+  launch_transform_kernel(find_re_fn{*d_strings}, *d_prog, d_results, input.size(), stream);
+
+  return results;
+}
 }  // namespace detail
 
 // external API
@@ -137,6 +174,15 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::findall(input, prog, stream, mr);
+}
+
+std::unique_ptr<column> find_re(strings_column_view const& input,
+                                regex_program const& prog,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::find_re(input, prog, stream, mr);
 }
 
 }  // namespace strings
