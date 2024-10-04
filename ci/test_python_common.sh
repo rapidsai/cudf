@@ -41,6 +41,6 @@ rapids-print-env
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  cudf libcudf
+  cudf libcudf pandas==2.2.3
 
 # rapids-mamba-retry update --all
