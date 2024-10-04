@@ -62,7 +62,7 @@ def test_to_datetime(
     got = plc.strings.convert.convert_datetime.to_timestamps(
         plc_timestamp_col,
         plc.interop.from_arrow(timestamp_type),
-        format.encode(),
+        format,
     )
     assert_column_eq(expect, got)
 
