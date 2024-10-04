@@ -39,7 +39,6 @@ namespace reduction::detail {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate memory of the returned objects
  * @return A pair of array contains the (stable-order) indices of the distinct rows in the input
- *
  * table, and their corresponding distinct counts
  */
 [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>>
