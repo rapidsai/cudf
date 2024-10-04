@@ -21,7 +21,7 @@ cpdef Column ipv4_to_integers(Column input):
     Returns
     -------
     Column
-        New int32 column converted from strings.
+        New uint32 column converted from strings.
     """
     cdef unique_ptr[column] c_result
 
