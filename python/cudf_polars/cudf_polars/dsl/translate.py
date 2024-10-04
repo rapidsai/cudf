@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
@@ -182,6 +183,27 @@ def _(
     with set_node(visitor, node.input_right):
         inp_right = translate_ir(visitor, n=None)
         right_on = [translate_named_expr(visitor, n=e) for e in node.right_on]
+    if node.options[0] == "inequality":
+        # No exposure of mixed/conditional joins in pylibcudf yet, so in
+        # the first instance, implement by doing a cross join followed by
+        # a filter.
+        _, *options, op1, op2 = node.options
+        cross = ir.Join(schema, inp_left, inp_right, [], [], ("cross", *options))
+        dtype = plc.DataType(plc.TypeId.BOOL8)
+        if op2 is None:
+            ops = [op1]
+        else:
+            ops = [op1, op2]
+        mask = functools.reduce(
+            functools.partial(
+                expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
+            ),
+            (
+                expr.BinOp(dtype, expr.BinOp._MAPPING[op], left.value, right.value)
+                for op, left, right in zip(ops, left_on, right_on, strict=True)
+            ),
+        )
+        return ir.Filter(schema, cross, expr.NamedExpr("mask", mask))
     return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
 
 
