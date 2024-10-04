@@ -70,7 +70,7 @@ cpdef Column from_durations(
 
     format : str
         The string specifying output format.
-        Default format is ""%D days %H:%M:%S".
+        Default format is "%D days %H:%M:%S".
 
     Returns
     -------
