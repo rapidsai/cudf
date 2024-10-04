@@ -698,6 +698,11 @@ def test_rolling_win_type():
     version.parse(numba_version) < version.parse("0.59"),
     reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009",
 )
+@pytest.mark.xfail(
+    version.parse(numba_version) >= version.parse("0.59")
+    and PANDAS_VERSION < version.parse("2.1"),
+    reason="numba.generated_jit removed in 0.59, requires pandas >= 2.1",
+)
 def test_rolling_apply_numba_engine():
     def weighted_mean(x):
         arr = np.ones((1, x.shape[1]))
