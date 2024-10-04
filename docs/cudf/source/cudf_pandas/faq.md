@@ -181,16 +181,21 @@ There are a few known limitations that you should be aware of:
    ```
 - `cudf.pandas` (and cuDF in general) is only compatible with pandas 2. Version
   24.02 of cudf was the last to support pandas 1.5.x.
-- In order for `cudf.pandas` to produce a proxy array that ducktypes as a `np.ndarray`, we actually have to wrap a valid `np.ndarray` and cannot keep the data on device with a `cupy` array. This approach incurs the overhead of an initial device-to-host (DtoH) transfer when creating a proxy array. For example,
+- In order for `cudf.pandas` to produce a proxy array that ducktypes as a NumPy
+  array, we create a proxy type that actually subclasses `numpy.ndarray`. We can
+  verify this with an isinstance check.
 
   ```python
+  %load_ext cudf.pandas
   import pandas as pd
   import numpy as np
 
-  arr = pd.DataFrame("a":range(10)).values # implicit DtoH transfer
-  isinstance(arr, np.ndarrray) # returns True
+  arr = pd.Series([1, 1, 2]).unique() # returns a proxy array
+  isinstance(arr, np.ndarray) # returns True, where arr is a proxy array
   ```
-  The reason why we do the data transfer from device to host is to ensure that the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays) is set correctly. With the data buffer set, we can utilize other functions which require a valid data buffer.
+  Because the proxy type ducktypes as a NumPy array, NumPy functions may attempt to access internal members, such as the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays), via the NumPy C API. However, our proxy mechanism is designed to proxy function calls at the Python level, which is incompatible with these types of accesses. To handle these situations, we perform an eager device-to-host (DtoH) copy, which sets the data buffer correctly but incurs the cost of extra time when creating the proxy array. In the previous example, creating `arr` performed this kind of implicit DtoH transfer.
+
+  With this approach, we also get compatibility with third party libraries like `torch`.
 
   ```python
   import torch
