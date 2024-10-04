@@ -140,10 +140,12 @@ compute_row_frequencies(table_view const& input,
 
   size_t const num_rows = input.num_rows();
 
-  // Initialize intial counts to zero
-  rmm::device_uvector<histogram_count_type> counts(num_rows, stream, mr);
-  thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), histogram_count_type{0});
+  // Construct a vector to store reduced counts and init to zero
+  rmm::device_uvector<histogram_count_type> reduction_results(num_rows, stream, mr);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                             reduction_results.begin(),
+                             reduction_results.end(),
+                             histogram_count_type{0});
 
   // Construct a hash set
   auto row_set = cuco::static_set{
@@ -166,15 +168,14 @@ compute_row_frequencies(table_view const& input,
     rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(num_rows),
-    [row_set_ref,
+    [set_ref = row_set_ref,
      increments =
        partial_counts.has_value() ? partial_counts.value().begin<histogram_count_type>() : nullptr,
-     counts = counts.begin()] __device__(auto const idx) mutable {
-      auto const [inserted_idx_ptr, _] = row_set_ref.insert_and_find(idx);
+     counts = reduction_results.begin()] __device__(auto const idx) mutable {
+      auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
       cuda::atomic_ref<histogram_count_type, cuda::thread_scope_device> count_ref{
         counts[*inserted_idx_ptr]};
-      auto increment = histogram_count_type{1};
-      if (increments) { increment = increments[idx]; }
+      auto const increment = increments ? increments[idx] : histogram_count_type{1};
       count_ref.fetch_add(increment, cuda::std::memory_order_relaxed);
     });
 
@@ -189,14 +190,14 @@ compute_row_frequencies(table_view const& input,
 
   // Copy row indices and counts to the output if counts are non-zero
   auto const input_it = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_counting_iterator<size_type>(0), counts.begin()));
+    thrust::make_tuple(thrust::make_counting_iterator<size_type>(0), reduction_results.begin()));
   auto const output_it = thrust::make_zip_iterator(thrust::make_tuple(
     distinct_indices->begin(), distinct_counts->mutable_view().begin<histogram_count_type>()));
 
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
   thrust::copy_if(
-    rmm::exec_policy_nosync(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
+    rmm::exec_policy(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }
