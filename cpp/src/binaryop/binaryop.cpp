@@ -64,15 +64,15 @@ std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  if (col.is_empty()) return {rmm::device_buffer{0, stream, mr}, 0};
+  if (col.is_empty()) return std::pair(rmm::device_buffer{0, stream, mr}, 0);
 
   if (not s.is_valid(stream)) {
-    return {cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-            col.size()};
+    return std::pair(cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
+                     col.size());
   } else if (s.is_valid(stream) and col.nullable()) {
-    return {cudf::detail::copy_bitmask(col, stream, mr), col.null_count()};
+    return std::pair(cudf::detail::copy_bitmask(col, stream, mr), col.null_count());
   } else {
-    return {rmm::device_buffer{0, stream, mr}, 0};
+    return std::pair(rmm::device_buffer{0, stream, mr}, 0);
   }
 }
 

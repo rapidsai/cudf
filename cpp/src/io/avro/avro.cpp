@@ -54,7 +54,7 @@ std::string container::get_encoded()
   }();
   auto const s = reinterpret_cast<char const*>(m_cur);
   m_cur += len;
-  return {s, len};
+  return std::string(s, len);
 }
 
 /**

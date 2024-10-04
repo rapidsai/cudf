@@ -41,7 +41,7 @@ cudf::table create_fixed_table(cudf::size_type num_cols,
       create_fixed_columns<T>(start + (idx * num_cols), col_size, valids);
     cols.push_back(wrap.release());
   }
-  return {std::move(cols)};
+  return cudf::table(std::move(cols));
 }
 
 template <typename T>

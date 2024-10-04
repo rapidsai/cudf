@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,20 +36,20 @@ linked_column_view::operator column_view() const
 {
   auto child_it = thrust::make_transform_iterator(
     children.begin(), [](auto const& c) { return static_cast<column_view>(*c); });
-  return {this->type(),
-          this->size(),
-          this->head(),
-          this->null_mask(),
-          this->null_count(),
-          this->offset(),
-          std::vector<column_view>(child_it, child_it + children.size())};
+  return column_view(this->type(),
+                     this->size(),
+                     this->head(),
+                     this->null_mask(),
+                     this->null_count(),
+                     this->offset(),
+                     std::vector<column_view>(child_it, child_it + children.size()));
 }
 
 LinkedColVector table_to_linked_columns(table_view const& table)
 {
   auto linked_it = thrust::make_transform_iterator(
     table.begin(), [](auto const& c) { return std::make_shared<linked_column_view>(c); });
-  return {linked_it, linked_it + table.num_columns()};
+  return LinkedColVector(linked_it, linked_it + table.num_columns());
 }
 
 }  // namespace cudf::detail

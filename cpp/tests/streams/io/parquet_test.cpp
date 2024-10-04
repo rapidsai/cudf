@@ -84,7 +84,7 @@ cudf::table construct_table()
                                         col8.release(),
                                         col9.release(),
                                         col10.release());
-  return {std::move(colsptr)};
+  return cudf::table(std::move(colsptr));
 }
 
 TEST_F(ParquetTest, ParquetWriter)

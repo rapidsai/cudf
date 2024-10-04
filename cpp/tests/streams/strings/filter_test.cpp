@@ -32,7 +32,7 @@ static std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(char const* from, 
   cudf::char_utf8 out = 0;
   cudf::strings::detail::to_char_utf8(from, in);
   if (to) cudf::strings::detail::to_char_utf8(to, out);
-  return {in, out};
+  return std::pair(in, out);
 }
 
 TEST_F(StringsFilterTest, Translate)
