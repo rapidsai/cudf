@@ -21,3 +21,20 @@ def test_findall():
         type=pa_result.type,
     )
     assert_column_eq(result, expected)
+
+
+def test_find_re():
+    arr = pa.array(["bunny", "rabbit", "hare", "dog"])
+    pattern = "[eb]"
+    result = plc.strings.findall.find_re(
+        plc.interop.from_arrow(arr),
+        plc.strings.regex_program.RegexProgram.create(
+            pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
+        ),
+    )
+    pa_result = plc.interop.to_arrow(result)
+    expected = pa.array(
+        [0, 2, 3, -1],
+        type=pa_result.type,
+    )
+    assert_column_eq(result, expected)

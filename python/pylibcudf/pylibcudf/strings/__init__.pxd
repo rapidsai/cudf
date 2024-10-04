@@ -11,13 +11,16 @@ from . cimport (
     find,
     find_multiple,
     findall,
+    padding,
     regex_flags,
     regex_program,
     replace,
+    side_type,
     slice,
     split,
     strip,
     translate,
+    wrap,
 )
 from .side_type cimport side_type
 
@@ -39,4 +42,5 @@ __all__ = [
     "split",
     "side_type",
     "translate",
+    "wrap",
 ]
