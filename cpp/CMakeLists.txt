@@ -910,13 +910,9 @@ if(CUDF_BUILD_TESTUTIL)
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
 
+  install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
   install(
-    FILES tests/io/metadata_utilities.cpp
-    DESTINATION src/cudftestutil/io
-  )
-  install(
-    FILES
-          tests/utilities/column_utilities.cu
+    FILES tests/utilities/column_utilities.cu
           tests/utilities/debug_utilities.cu
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
