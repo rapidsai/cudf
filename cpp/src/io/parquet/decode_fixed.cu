@@ -284,13 +284,11 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
     // definition level
-    int d;
+    int d = 1;
     if (t >= batch_size) {
       d = -1;
     } else if (def) {
       d = static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
-    } else {
-      d = 1;
     }
 
     int const thread_value_count = t;

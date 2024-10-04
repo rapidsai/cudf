@@ -17,13 +17,14 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf pylibcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
-HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
+VALIDARGS="clean libcudf pylibcudf cudf cudf_polars cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
+HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
    pylibcudf                     - build the pylibcudf Python package
    cudf                          - build the cudf Python package
+   cudf_polars                   - build the cudf_polars Python package
    cudfjar                       - build cudf JAR with static libcudf using devtoolset toolchain
    dask_cudf                     - build the dask_cudf Python package
    benchmarks                    - build benchmarks
@@ -353,6 +354,12 @@ if buildAll || hasArg cudf; then
         python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
+# Build and install the cudf_polars Python package
+if buildAll || hasArg cudf_polars; then
+
+    cd ${REPODIR}/python/cudf_polars
+    python ${PYTHON_ARGS_FOR_INSTALL} .
+fi
 
 # Build and install the dask_cudf Python package
 if buildAll || hasArg dask_cudf; then

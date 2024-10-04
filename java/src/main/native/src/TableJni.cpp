@@ -1627,6 +1627,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
                                                          jboolean allow_leading_zeros,
                                                          jboolean allow_nonnumeric_numbers,
                                                          jboolean allow_unquoted_control,
+                                                         jboolean experimental,
                                                          jbyte line_delimiter,
                                                          jlong ds_handle)
 {
@@ -1649,6 +1650,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(JNIEnv* env,
         .mixed_types_as_string(mixed_types_as_string)
         .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
+        .experimental(experimental)
         .keep_quotes(keep_quotes)
         .prune_columns(false);
     if (strict_validation) {
@@ -1680,6 +1682,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
                                            jboolean allow_leading_zeros,
                                            jboolean allow_nonnumeric_numbers,
                                            jboolean allow_unquoted_control,
+                                           jboolean experimental,
                                            jbyte line_delimiter)
 {
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
@@ -1705,6 +1708,7 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
         .strict_validation(strict_validation)
         .mixed_types_as_string(mixed_types_as_string)
         .prune_columns(false)
+        .experimental(experimental)
         .delimiter(static_cast<char>(line_delimiter))
         .keep_quotes(keep_quotes);
     if (strict_validation) {
@@ -1821,6 +1825,7 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
                                                  jboolean allow_nonnumeric_numbers,
                                                  jboolean allow_unquoted_control,
                                                  jboolean prune_columns,
+                                                 jboolean experimental,
                                                  jbyte line_delimiter,
                                                  jlong ds_handle)
 {
@@ -1859,7 +1864,8 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
         .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes)
-        .prune_columns(prune_columns);
+        .prune_columns(prune_columns)
+        .experimental(experimental);
     if (strict_validation) {
       opts.numeric_leading_zeros(allow_leading_zeros)
         .nonnumeric_numbers(allow_nonnumeric_numbers)
@@ -1920,6 +1926,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
                                                            jboolean allow_nonnumeric_numbers,
                                                            jboolean allow_unquoted_control,
                                                            jboolean prune_columns,
+                                                           jboolean experimental,
                                                            jbyte line_delimiter)
 {
   bool read_buffer = true;
@@ -1972,7 +1979,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
         .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes)
-        .prune_columns(prune_columns);
+        .prune_columns(prune_columns)
+        .experimental(experimental);
     if (strict_validation) {
       opts.numeric_leading_zeros(allow_leading_zeros)
         .nonnumeric_numbers(allow_nonnumeric_numbers)
