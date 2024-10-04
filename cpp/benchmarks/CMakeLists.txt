@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil nvtx3::nvtx3-cpp
+         cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -49,7 +49,7 @@ target_compile_options(
 
 target_link_libraries(
   ndsh_data_generator
-  PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp
+  PUBLIC cudf GTest::gmock GTest::gtest cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -65,12 +65,14 @@ target_include_directories(
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
   cudf_benchmark_common OBJECT
-  common/random_seed_impl.cpp synchronization/synchronization.cpp io/cuio_common.cpp
-  common/table_utilities.cpp common/benchmark_utilities.cpp common/nvbench_utilities.cpp
+  synchronization/synchronization.cpp io/cuio_common.cpp common/table_utilities.cpp
+  common/benchmark_utilities.cpp common/nvbench_utilities.cpp
 )
 target_link_libraries(
-  cudf_benchmark_common PRIVATE cudftestutil cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>
+  cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env> GTest::gmock
+                                GTest::gtest
 )
+
 add_custom_command(
   OUTPUT CUDF_BENCHMARKS
   COMMAND echo Running benchmarks
@@ -97,7 +99,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
-                                $<TARGET_NAME_IF_EXISTS:conda_env>
+                                cudf::cudftestutil_impl $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -125,8 +127,9 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen
-                                nvbench::nvbench $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_BENCH_NAME}
+    PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen nvbench::nvbench
+            $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudftestutil_impl
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}

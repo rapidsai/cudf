@@ -891,6 +891,35 @@ if(CUDF_BUILD_TESTUTIL)
   rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
+  add_library(cudftestutil_impl INTERFACE)
+  add_library(cudf::cudftestutil_impl ALIAS cudftestutil_impl)
+  target_sources(
+    cudftestutil_impl
+    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/io/metadata_utilities.cpp>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/column_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
+  )
+  target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
+
+  install(
+    FILES tests/io/metadata_utilities.cpp
+          tests/utilities/column_utilities.cu
+          tests/utilities/debug_utilities.cu
+          tests/utilities/random_seed.cpp
+          tests/utilities/table_utilities.cu
+          tests/utilities/tdigest_utilities.cu
+    DESTINATION src/cudftestutil
+  )
+
 endif()
 
 # * build cudf_identify_stream_usage --------------------------------------------------------------

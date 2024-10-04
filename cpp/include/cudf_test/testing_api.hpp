@@ -16,20 +16,5 @@
 
 #pragma once
 
-/**
- * @file testing_api.hpp
- * @brief exposes the testing APIs, GTEST can be disabled by defining CUDF_TEST_EXCLUDE_GTEST=1, and
- * then including a testing API that conforms to GTEST's API before including any cudf_test headers.
- * The testing API must define CUDF_TEST_TESTING_API_IMPL to signal cudf_test that it conforms to
- * the GTest API.
- *
- */
-
-#if !(defined(CUDF_TEST_EXCLUDE_GTEST) && CUDF_TEST_EXCLUDE_GTEST)
-#include <cudf_test/testing_api_gtest.hpp>
-#endif
-
-#if !defined(CUDF_TEST_TESTING_API_IMPL)
-#error \
-  "No CUDF Testing API implementation found, Include a testing API that conforms to the GoogleTest API before including libcudftestutil headers"
-#endif
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
