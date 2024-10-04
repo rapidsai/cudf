@@ -19,9 +19,9 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/detail/batched_memset.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -1656,9 +1656,9 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
-  cudf::io::detail::batched_memset(memset_bufs, static_cast<std::byte>(0), _stream);
+  cudf::detail::batched_memset(memset_bufs, static_cast<std::byte>(0), _stream);
   // Need to set null mask bufs to all high bits
-  cudf::io::detail::batched_memset(
+  cudf::detail::batched_memset(
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
