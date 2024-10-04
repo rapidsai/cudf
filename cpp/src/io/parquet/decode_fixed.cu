@@ -327,7 +327,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
           int const valid_map_offset = ni.valid_map_offset;
           int const vindex     = value_count + thread_value_count;  // absolute input value index
           int const bit_offset = (valid_map_offset + vindex + write_start) -
-                                first_row;  // absolute bit offset into the output validity map
+                                 first_row;  // absolute bit offset into the output validity map
           int const write_end =
             cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
           int const bit_count = write_end - write_start;
