@@ -328,7 +328,7 @@ class NamedExpr:
 
         Returns
         -------
-        tuple of name and evaluated Column
+        Evaluated Column with name attached.
 
         See Also
         --------
