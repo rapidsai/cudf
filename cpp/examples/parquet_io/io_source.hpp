@@ -94,10 +94,6 @@ class io_source {
   // alias for pinned vector
   template <typename T>
   using pinned_vector = thrust::host_vector<T, pinned_allocator<T>>;
-
-  io_source_type const type;
-  std::string const file_name;
-  size_t const file_size;
   cudf::io::source_info source_info;
   std::vector<char> h_buffer;
   pinned_vector<char> pinned_buffer;

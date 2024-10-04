@@ -91,12 +91,7 @@ bool get_boolean(std::string input)
   std::transform(input.begin(), input.end(), input.begin(), ::toupper);
 
   // Check if the input string matches to any of the following
-  if (not input.compare("ON") or not input.compare("TRUE") or not input.compare("YES") or
-      not input.compare("Y") or not input.compare("T")) {
-    return true;
-  } else {
-    return false;
-  }
+  return input == "ON" or input == "TRUE" or input == "YES" or input == "Y" or input == "T";
 }
 
 void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)

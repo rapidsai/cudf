@@ -55,7 +55,7 @@ using table_t = std::unique_ptr<cudf::table>;
  * @brief Behavior when handling the read tables by multiple threads
  */
 enum class read_mode {
-  NOWORK,              ///< Only read and discard tables
+  NO_CONCATENATE,      ///< Only read and discard tables
   CONCATENATE_THREAD,  ///< Read and concatenate tables from each thread
   CONCATENATE_ALL,     ///< Read and concatenate everything to a single table
 };
@@ -82,15 +82,15 @@ struct read_fn {
       auto builder =
         cudf::io::parquet_reader_options::builder(input_sources[curr_file_idx].get_source_info());
       auto const options = builder.build();
-      if constexpr (READ_FN != read_mode::NOWORK) {
+      if constexpr (READ_FN != read_mode::NO_CONCATENATE) {
         tables_this_thread.push_back(cudf::io::read_parquet(options, stream).tbl);
       } else {
         cudf::io::read_parquet(options, stream);
       }
     }
 
-    // Concatenate the tables read by this thread if not NOWORK read_mode.
-    if constexpr (READ_FN != read_mode::NOWORK) {
+    // Concatenate the tables read by this thread if not NO_CONCATENATE read_mode.
+    if constexpr (READ_FN != read_mode::NO_CONCATENATE) {
       auto table = concatenate_tables(std::move(tables_this_thread), stream);
       stream.synchronize_no_throw();
       tables[thread_id] = std::move(table);
@@ -107,7 +107,7 @@ struct read_fn {
  * @tparam read_mode Specifies if to concatenate and return the actual
  *                    tables or discard them and return an empty vector
  *
- * @param files List of files to read
+ * @param input_sources List of input sources to read
  * @param thread_count Number of threads
  * @param stream_pool CUDA stream pool to use for threads
  *
@@ -136,7 +136,7 @@ std::vector<table_t> read_parquet_multithreaded(std::vector<io_source> const& in
   std::vector<std::thread> threads;
   threads.reserve(thread_count);
   for (auto& c : read_tasks) {
-    threads.emplace_back(std::thread{c});
+    threads.emplace_back(c);
   }
   for (auto& t : threads) {
     t.join();
@@ -210,7 +210,7 @@ void write_parquet_multithreaded(std::string const& output_path,
   std::vector<std::thread> threads;
   threads.reserve(thread_count);
   for (auto& c : write_tasks) {
-    threads.emplace_back(std::thread{c});
+    threads.emplace_back(c);
   }
   for (auto& t : threads) {
     t.join();
@@ -237,12 +237,12 @@ void print_usage()
 
 /**
  * @brief Function to process comma delimited input paths string to parquet files and/or dirs
- *        and asynchronously convert them to specified io sources.
+ *        and convert them to specified io sources.
  *
  * Process the input path string containing directories (of parquet files) and/or individual
  * parquet files into a list of input parquet files, multiple the list by `input_multiplier`,
  * make sure to have at least `thread_count` files to satisfy at least file per parallel thread,
- * and asynchronously convert the final list of files to a list of `io_source` and return.
+ * and convert the final list of files to a list of `io_source` and return.
  *
  * @param paths Comma delimited input paths string
  * @param input_multiplier Multiplier for the input files list
@@ -252,11 +252,11 @@ void print_usage()
  *
  * @return Vector of input sources for the given paths
  */
-std::vector<io_source> extract_input_sources_async(std::string const& paths,
-                                                   int32_t input_multiplier,
-                                                   int32_t thread_count,
-                                                   io_source_type io_source_type,
-                                                   rmm::cuda_stream_view stream)
+std::vector<io_source> extract_input_sources(std::string const& paths,
+                                             int32_t input_multiplier,
+                                             int32_t thread_count,
+                                             io_source_type io_source_type,
+                                             rmm::cuda_stream_view stream)
 {
   // Get the delimited paths to directory and/or files.
   std::vector<std::string> const delimited_paths = [&]() {
@@ -310,6 +310,9 @@ std::vector<io_source> extract_input_sources_async(std::string const& paths,
                 });
 
   // Cycle append parquet files from the existing ones if less than the thread_count
+  std::cout << "Warning: Number of input sources < thread count. Cycling from\n"
+               "and appending to current input sources such that the number of\n"
+               "input source == thread count\n";
   for (size_t idx = 0; thread_count > static_cast<int>(parquet_files.size()); idx++) {
     parquet_files.emplace_back(parquet_files[idx % initial_size]);
   }
@@ -324,6 +327,7 @@ std::vector<io_source> extract_input_sources_async(std::string const& paths,
                  [&](auto const& file_name) {
                    return io_source{file_name, io_source_type, stream};
                  });
+  stream.synchronize();
   return input_sources;
 }
 
@@ -369,9 +373,8 @@ int32_t main(int argc, char const** argv)
   rmm::mr::set_current_device_resource(&stats_mr);
 
   // List of input sources from the input_paths string.
-  auto const input_sources = extract_input_sources_async(
+  auto const input_sources = extract_input_sources(
     input_paths, input_multiplier, thread_count, io_source_type, default_stream);
-  default_stream.synchronize();
 
   // Check if there is nothing to do
   if (input_sources.empty()) {
@@ -396,7 +399,7 @@ int32_t main(int argc, char const** argv)
     std::for_each(thrust::make_counting_iterator(0),
                   thrust::make_counting_iterator(num_reads),
                   [&](auto i) {  // Read parquet files and discard the tables
-                    std::ignore = read_parquet_multithreaded<read_mode::NOWORK>(
+                    std::ignore = read_parquet_multithreaded<read_mode::NO_CONCATENATE>(
                       input_sources, thread_count, stream_pool);
                   });
     default_stream.synchronize();
@@ -440,9 +443,8 @@ int32_t main(int argc, char const** argv)
     auto const input_table = cudf::concatenate(table_views, default_stream);
 
     // Sources from written parquet files
-    auto const written_pq_sources = extract_input_sources_async(
+    auto const written_pq_sources = extract_input_sources(
       output_path, input_multiplier, thread_count, io_source_type, default_stream);
-    default_stream.synchronize();
 
     // read_mode::CONCATENATE_ALL returns a concatenated vector of 1 table only
     auto const transcoded_table = std::move(read_parquet_multithreaded<read_mode::CONCATENATE_ALL>(

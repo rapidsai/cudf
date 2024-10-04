@@ -52,15 +52,12 @@ io_source_type get_io_source_type(std::string name)
   }
 }
 
-io_source::io_source(std::string_view file_path,
-                     io_source_type io_type,
-                     rmm::cuda_stream_view stream)
-  : type{io_type},
-    file_name{file_path},
-    file_size{std::filesystem::file_size(file_name)},
-    pinned_buffer({pinned_memory_resource(), stream}),
-    d_buffer{0, stream}
+io_source::io_source(std::string_view file_path, io_source_type type, rmm::cuda_stream_view stream)
+  : pinned_buffer({pinned_memory_resource(), stream}), d_buffer{0, stream}
 {
+  std::string const file_name{file_path};
+  auto const file_size = std::filesystem::file_size(file_name);
+
   // For filepath make a quick source_info and return early
   if (type == io_source_type::FILEPATH) {
     source_info = cudf::io::source_info(file_name);
