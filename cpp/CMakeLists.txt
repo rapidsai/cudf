@@ -912,12 +912,16 @@ if(CUDF_BUILD_TESTUTIL)
 
   install(
     FILES tests/io/metadata_utilities.cpp
+    DESTINATION src/cudftestutil/io
+  )
+  install(
+    FILES
           tests/utilities/column_utilities.cu
           tests/utilities/debug_utilities.cu
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
           tests/utilities/tdigest_utilities.cu
-    DESTINATION src/cudftestutil
+    DESTINATION src/cudftestutil/utilities
   )
 
 endif()
