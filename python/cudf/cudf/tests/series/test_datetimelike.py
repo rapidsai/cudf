@@ -266,3 +266,25 @@ def test_pandas_compatible_non_zoneinfo_raises(klass):
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(NotImplementedError):
             cudf.from_pandas(pandas_obj)
+
+
+def test_astype_naive_to_aware_raises():
+    ser = cudf.Series([datetime.datetime(2020, 1, 1)])
+    with pytest.raises(TypeError):
+        ser.astype("datetime64[ns, UTC]")
+    with pytest.raises(TypeError):
+        ser.to_pandas().astype("datetime64[ns, UTC]")
+
+
+@pytest.mark.parametrize("unit", ["ns", "us"])
+def test_astype_aware_to_aware(unit):
+    ser = cudf.Series(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    )
+    result = ser.astype(f"datetime64[{unit}, US/Pacific]")
+    expected = ser.to_pandas().astype(f"datetime64[{unit}, US/Pacific]")
+    zoneinfo_type = pd.DatetimeTZDtype(
+        expected.dtype.unit, zoneinfo.ZoneInfo(str(expected.dtype.tz))
+    )
+    expected = ser.astype(zoneinfo_type)
+    assert_eq(result, expected)
