@@ -80,8 +80,9 @@ TEST_F(JsonWriterTest, EmptyLeaf)
                                 0,
                                 rmm::device_buffer{},
                                 cudf::test::get_default_stream());
-  cudf::table_view tbl_view{{col1, *col2}};
-  cudf::io::table_metadata mt{{{"col1"}, {"col2"}}};
+  auto col3 = cudf::test::lists_column_wrapper<int>::make_one_empty_row_column();
+  cudf::table_view tbl_view{{col1, *col2, col3}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"col3"}}};
 
   std::vector<char> out_buffer;
   auto destination = cudf::io::sink_info(&out_buffer);
@@ -94,14 +95,14 @@ TEST_F(JsonWriterTest, EmptyLeaf)
 
   // Empty columns in table
   cudf::io::write_json(out_options, cudf::test::get_default_stream());
-  std::string const expected = R"([{"col1":"","col2":[]}])";
+  std::string const expected = R"([{"col1":"","col2":[],"col3":[]}])";
   EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
 
   // Empty columns in table - JSON Lines
   out_buffer.clear();
   out_options.enable_lines(true);
   cudf::io::write_json(out_options, cudf::test::get_default_stream());
-  std::string const expected_lines = R"({"col1":"","col2":[]})"
+  std::string const expected_lines = R"({"col1":"","col2":[],"col3":[]})"
                                      "\n";
   EXPECT_EQ(expected_lines, std::string(out_buffer.data(), out_buffer.size()));
 }
