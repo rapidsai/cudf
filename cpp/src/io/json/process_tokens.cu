@@ -90,24 +90,23 @@ void validate_token_stream(device_span<char const> d_input,
 
   rmm::device_uvector<bool> d_invalid(tokens.size(), stream);
   thrust::fill(rmm::exec_policy_nosync(stream), d_invalid.begin(), d_invalid.end(), false);
-  using token_t  = cudf::io::json::token_t;
-  auto na_values = options.get_na_values();
-  na_values.emplace_back("null");  // added these too to single trie
-  na_values.emplace_back("true");
-  na_values.emplace_back("false");
-  cudf::detail::optional_trie trie_na =
-    cudf::detail::create_serialized_trie(options.get_na_values(), stream);
-  auto trie_na_view = cudf::detail::make_trie_view(trie_na);
-  std::vector<std::string> literals{
-    "NaN", "Infinity", "-Infinity", "+INF", "+Infinity", "-INF", "-Infinity"};
+  using token_t = cudf::io::json::token_t;
+  auto literals = options.get_na_values();
+  literals.emplace_back("null");  // added these too to single trie
+  literals.emplace_back("true");
+  literals.emplace_back("false");
   cudf::detail::optional_trie trie_literals =
     cudf::detail::create_serialized_trie(literals, stream);
   auto trie_literals_view = cudf::detail::make_trie_view(trie_literals);
+  std::vector<std::string> nonnumeric{"NaN", "Infinity", "+INF", "+Infinity", "-INF", "-Infinity"};
+  cudf::detail::optional_trie trie_nonnumeric =
+    cudf::detail::create_serialized_trie(nonnumeric, stream);
+  auto trie_nonnumeric_view = cudf::detail::make_trie_view(trie_nonnumeric);
 
   auto validate_values = cuda::proclaim_return_type<bool>(
     [data                        = d_input.data(),
-     trie_na                     = trie_na_view,
      trie_literals               = trie_literals_view,
+     trie_nonnumeric             = trie_nonnumeric_view,
      allow_numeric_leading_zeros = options.is_allowed_numeric_leading_zeros(),
      allow_nonnumeric =
        options.is_allowed_nonnumeric_numbers()] __device__(SymbolOffsetT start,
@@ -115,11 +114,11 @@ void validate_token_stream(device_span<char const> d_input,
       // This validates an unquoted value. A value must match https://www.json.org/json-en.html
       // but the leading and training whitespace should already have been removed, and is not
       // a string
-      auto c               = data[start];
-      auto is_null_literal = serialized_trie_contains(trie_na, {data + start, end - start});
-      if (is_null_literal) { return true; }
+      auto c          = data[start];
+      auto is_literal = serialized_trie_contains(trie_literals, {data + start, end - start});
+      if (is_literal) { return true; }
       if (allow_nonnumeric) {
-        auto is_literal = serialized_trie_contains(trie_literals, {data + start, end - start});
+        auto is_literal = serialized_trie_contains(trie_nonnumeric, {data + start, end - start});
         if (is_literal) { return true; }
       }
       if ('-' == c || c <= '9' && 'c' >= '0') {
