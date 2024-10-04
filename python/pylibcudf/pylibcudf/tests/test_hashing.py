@@ -15,25 +15,45 @@ SEED = 0
 METHODS = ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
 
 
+def scalar_to_binary(x):
+    if isinstance(x, str):
+        return x.encode()
+    elif isinstance(x, float):
+        return struct.pack("<d", x)
+    elif isinstance(x, bool):
+        return x.to_bytes(1, byteorder="little", signed=True)
+    elif isinstance(x, int):
+        return x.to_bytes(8, byteorder="little", signed=True)
+    else:
+        raise NotImplementedError
+
+
+def libcudf_mmh3_x86_32(binary):
+    seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+    hashval = mmh3.hash(binary, seed)
+    return seed ^ (hashval + 0x9E3779B9 + (seed << 6) + (seed >> 2))
+
+
+@pytest.fixture(params=[pa.int64(), pa.float64(), pa.string(), pa.bool_()])
+def scalar_type(request):
+    return request.param
+
+
 @pytest.fixture
-def pa_input_column(pa_type):
-    if pa.types.is_integer(pa_type) or pa.types.is_floating(pa_type):
-        return pa.array([1, 2, 3], type=pa_type)
-    elif pa.types.is_string(pa_type):
-        return pa.array(["a", "b", "c"], type=pa_type)
-    elif pa.types.is_boolean(pa_type):
-        return pa.array([True, True, False], type=pa_type)
-    elif pa.types.is_list(pa_type):
-        # TODO: Add heterogenous sizes
-        return pa.array([[1], [2], [3]], type=pa_type)
-    elif pa.types.is_struct(pa_type):
-        return pa.array([{"v": 1}, {"v": 2}, {"v": 3}], type=pa_type)
-    raise ValueError("Unsupported type")
+def pa_scalar_input_column(scalar_type):
+    if pa.types.is_integer(scalar_type) or pa.types.is_floating(scalar_type):
+        return pa.array([1, 2, 3], type=scalar_type)
+    elif pa.types.is_string(scalar_type):
+        return pa.array(["a", "b", "c"], type=scalar_type)
+    elif pa.types.is_boolean(scalar_type):
+        return pa.array([True, True, False], type=scalar_type)
 
 
-@pytest.fixture()
-def input_column(pa_input_column):
-    return plc.interop.from_arrow(pa_input_column)
+@pytest.fixture
+def plc_scalar_input_tbl(pa_scalar_input_column):
+    return plc.interop.from_arrow(
+        pa.Table.from_arrays([pa_scalar_input_column], names=["data"])
+    )
 
 
 @pytest.fixture(scope="module")
@@ -47,98 +67,65 @@ def list_struct_table():
     return data
 
 
-def libcudf_mmh3_x86_32(binary):
-    seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
-    hashval = mmh3.hash(binary, seed)
-    return seed ^ (hashval + 0x9E3779B9 + (seed << 6) + (seed >> 2))
-
-
 def python_hash_value(x, method):
-    if isinstance(x, str):
-        binary = str(x).encode()
-    elif isinstance(x, float):
-        binary = struct.pack("<d", x)
-    elif isinstance(x, bool):
-        binary = x.to_bytes(1, byteorder="little", signed=True)
-    elif isinstance(x, int):
-        binary = x.to_bytes(8, byteorder="little", signed=True)
-    elif isinstance(x, list):
-        binary = np.array(x).tobytes()
-    else:
-        raise NotImplementedError
     if method == "murmurhash3_x86_32":
-        return libcudf_mmh3_x86_32(binary)
+        return libcudf_mmh3_x86_32(x)
     elif method == "murmurhash3_x64_128":
         hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
-        hasher.update(binary)
+        hasher.update(x)
         # libcudf returns a tuple of two 64-bit integers
         return hasher.utupledigest()
     elif method == "xxhash_64":
         return xxhash.xxh64(
-            binary, seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+            x, seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
         ).intdigest()
     else:
-        return getattr(hashlib, method)(binary).hexdigest()
+        return getattr(hashlib, method)(x).hexdigest()
 
 
 @pytest.mark.parametrize(
     "method", ["sha1", "sha224", "sha256", "sha384", "sha512"]
 )
-def test_hash_column_sha(pa_input_column, method):
-    plc_tbl = plc.interop.from_arrow(
-        pa.Table.from_arrays([pa_input_column], names=["data"])
-    )
+def test_hash_column_sha(pa_scalar_input_column, plc_scalar_input_tbl, method):
     plc_hasher = getattr(plc.hashing, method)
 
-    if isinstance(pa_input_column.type, (pa.ListType, pa.StructType)):
-        with pytest.raises(TypeError):
-            plc_hasher(plc_tbl)
-        return
+    def py_hasher(val):
+        return getattr(hashlib, method)(scalar_to_binary(val)).hexdigest()
 
     expect = pa.array(
-        [
-            python_hash_value(val, method)
-            for val in pa_input_column.to_pylist()
-        ],
+        [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
         type=pa.string(),
     )
-    got = plc_hasher(plc_tbl)
+    got = plc_hasher(plc_scalar_input_tbl)
     assert_column_eq(got, expect)
 
 
-def test_hash_column_md5(pa_input_column):
-    plc_tbl = plc.interop.from_arrow(
-        pa.Table.from_arrays([pa_input_column], names=["data"])
-    )
-
-    if isinstance(pa_input_column.type, pa.StructType):
-        with pytest.raises(TypeError):
-            plc.hashing.md5(plc_tbl)
-        return
+def test_hash_column_md5(pa_scalar_input_column, plc_scalar_input_tbl):
+    def py_hasher(val):
+        return hashlib.md5(scalar_to_binary(val)).hexdigest()
 
     expect = pa.array(
-        [python_hash_value(val, "md5") for val in pa_input_column.to_pylist()],
+        [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
         type=pa.string(),
     )
-    got = plc.hashing.md5(plc_tbl)
+    got = plc.hashing.md5(plc_scalar_input_tbl)
     assert_column_eq(got, expect)
 
 
-def test_hash_column_xxhash64(pa_input_column):
-    plc_tbl = plc.interop.from_arrow(
-        pa.Table.from_arrays([pa_input_column], names=["data"])
-    )
+# TODO: sha and md5 struct/list errors
 
-    if isinstance(pa_input_column.type, (pa.ListType, pa.StructType)):
-        pytest.xfail()
+
+def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
+    def py_hasher(val):
+        return xxhash.xxh64(
+            scalar_to_binary(val), seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+        ).intdigest()
+
     expect = pa.array(
-        [
-            python_hash_value(val, "xxhash_64")
-            for val in pa_input_column.to_pylist()
-        ],
+        [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
         type=pa.uint64(),
     )
-    got = plc.hashing.xxhash_64(plc_tbl, 0)
+    got = plc.hashing.xxhash_64(plc_scalar_input_tbl, 0)
 
     assert_column_eq(got, expect)
 
@@ -156,29 +143,28 @@ def test_sha_list_struct_err(list_struct_table, dtype, method):
         plc_hasher(plc_tbl)
 
 
-def test_murmurhash3_x86_32(pa_input_column):
-    plc_tbl = plc.interop.from_arrow(
-        pa.Table.from_arrays([pa_input_column], names=["data"])
-    )
-    got = plc.hashing.murmurhash3_x86_32(plc_tbl, 0)
+def test_murmurhash3_x86_32(pa_scalar_input_column, plc_scalar_input_tbl):
+    def py_hasher(val):
+        return libcudf_mmh3_x86_32(scalar_to_binary(val))
+
+    got = plc.hashing.murmurhash3_x86_32(plc_scalar_input_tbl, 0)
     expect = pa.array(
-        [
-            python_hash_value(val, "murmurhash3_x86_32")
-            for val in pa_input_column.to_pylist()
-        ],
+        [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
         type=pa.uint32(),
     )
+    got = plc.hashing.murmurhash3_x86_32(plc_scalar_input_tbl, 0)
     assert_column_eq(got, expect)
 
 
-def test_murmurhash3_x64_128(pa_input_column):
-    plc_tbl = plc.interop.from_arrow(
-        pa.Table.from_arrays([pa_input_column], names=["data"])
-    )
-    got = plc.hashing.murmurhash3_x64_128(plc_tbl, 0)
+def test_murmurhash3_x64_128(pa_scalar_input_column, plc_scalar_input_tbl):
+    def py_hasher(val):
+        hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
+        hasher.update(val)
+        return hasher.utupledigest()
+
     tuples = [
-        python_hash_value(val, "murmurhash3_x64_128")
-        for val in pa_input_column.to_pylist()
+        py_hasher(scalar_to_binary(val))
+        for val in pa_scalar_input_column.to_pylist()
     ]
     expect = pa.Table.from_arrays(
         [
@@ -187,5 +173,6 @@ def test_murmurhash3_x64_128(pa_input_column):
         ],
         names=["0", "1"],
     )
+    got = plc.hashing.murmurhash3_x64_128(plc_scalar_input_tbl, 0)
 
     assert_table_eq(expect, got)
