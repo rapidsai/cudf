@@ -38,9 +38,17 @@ mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 rapids-print-env
 
-rapids-mamba-retry install \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${PYTHON_CHANNEL}" \
-  cudf libcudf pandas==2.2.3
+if [[ $RAPIDS_DEPENDENCIES == "latest" ]]; then
+    # Extract the version value assigned to PANDAS_CURRENT_SUPPORTED_VERSION
+    pandas_version=$(grep -oP 'PANDAS_CURRENT_SUPPORTED_VERSION\s*=\s*version\.parse\("\K[^"]+' "python/cudf/cudf/core/_compat.py")
+    rapids-mamba-retry install \
+      --channel "${CPP_CHANNEL}" \
+      --channel "${PYTHON_CHANNEL}" \
+      cudf libcudf pandas==$pandas_version
+else
+    rapids-mamba-retry install \
+      --channel "${CPP_CHANNEL}" \
+      --channel "${PYTHON_CHANNEL}" \
+      cudf libcudf
+fi
 
-# rapids-mamba-retry update --all
