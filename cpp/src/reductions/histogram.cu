@@ -19,24 +19,43 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <cuco/static_map.cuh>
+#include <rmm/exec_policy.hpp>
+
+#include <cuco/operator.hpp>
+#include <cuco/static_set.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/sort.h>
 #include <thrust/tuple.h>
+#include <thrust/uninitialized_fill.h>
 
 #include <optional>
 
 namespace cudf::reduction::detail {
 
 namespace {
+
+// A CUDA Cooperative Group of 1 thread for the hash set for histogram
+auto constexpr DEFAULT_HISTOGRAM_CG_SIZE = 1;
+
+// Always use 64-bit signed integer for storing count.
+using histogram_count_type = int64_t;
+
+/**
+ * @brief Specialized functor to check for not-zero of the second component of the input.
+ */
+struct is_not_zero {
+  template <typename Pair>
+  __device__ bool operator()(Pair const input) const
+  {
+    return thrust::get<1>(input) != 0;
+  }
+};
 
 /**
  * @brief Building a histogram by gathering distinct rows from the input table and their
@@ -87,16 +106,6 @@ std::unique_ptr<column> make_empty_histogram_like(column_view const& values)
                                   std::move(struct_children));
 }
 
-// TODO: replace with cuco reduction functors
-struct plus_op {
-  __device__ void operator()(
-    cuda::atomic_ref<histogram_count_type, cuda::thread_scope_device> payload_ref,
-    histogram_count_type val)
-  {
-    payload_ref.fetch_add(val, cuda::memory_order_relaxed);
-  }
-};
-
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>>
 compute_row_frequencies(table_view const& input,
                         std::optional<column_view> const& partial_counts,
@@ -119,15 +128,6 @@ compute_row_frequencies(table_view const& input,
   auto const key_hasher = row_hasher.device_hasher(has_nulls);
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  auto const pair_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0},
-    cuda::proclaim_return_type<cuco::pair<size_type, histogram_count_type>>(
-      [d_partial_output = partial_counts ? partial_counts.value().begin<histogram_count_type>()
-                                         : nullptr] __device__(size_type const idx) {
-        auto const increment = d_partial_output ? d_partial_output[idx] : histogram_count_type{1};
-        return cuco::pair{idx, increment};
-      }));
-
   // Always compare NaNs as equal.
   using nan_equal_comparator =
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
@@ -138,32 +138,65 @@ compute_row_frequencies(table_view const& input,
     cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                      cudf::nullate::DYNAMIC>;
 
-  auto map = cuco::static_map{
-    input.num_rows(),
+  size_t const num_rows = input.num_rows();
+
+  // Initialize intial counts to zero
+  rmm::device_uvector<histogram_count_type> counts(num_rows, stream, mr);
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), histogram_count_type{0});
+
+  // Construct a hash set
+  auto row_set = cuco::static_set{
+    cuco::extent{num_rows},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
     cuco::empty_key<size_type>{-1},
-    cuco::empty_value<histogram_count_type>{0},
     key_equal,
-    cuco::linear_probing<1, row_hash>{key_hasher},
+    cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
     {},
     {},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
-  // TODO: use `insert_or_apply` init overload for better performance
-  map.insert_or_apply(pair_iter, pair_iter + input.num_rows(), plus_op{}, stream.value());
+  // Device-accessible reference to the hash set with insert_and_find operatro
+  auto row_set_ref = row_set.ref(cuco::op::insert_and_find);
 
-  size_type const map_size = map.size(stream.value());
-  // Gather the indices of distinct rows.
-  auto distinct_indices = std::make_unique<rmm::device_uvector<size_type>>(map_size, stream, mr);
+  // Compute frequencies (aka distinct counts) for the input rows.
+  // Note that we consider null and NaNs as always equal.
+  thrust::for_each(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(num_rows),
+    [row_set_ref,
+     increments =
+       partial_counts.has_value() ? partial_counts.value().begin<histogram_count_type>() : nullptr,
+     counts = counts.begin()] __device__(auto const idx) mutable {
+      auto const [inserted_idx_ptr, _] = row_set_ref.insert_and_find(idx);
+      cuda::atomic_ref<histogram_count_type, cuda::thread_scope_device> count_ref{
+        counts[*inserted_idx_ptr]};
+      auto increment = histogram_count_type{1};
+      if (increments) { increment = increments[idx]; }
+      count_ref.fetch_add(increment, cuda::std::memory_order_relaxed);
+    });
 
-  // Store the number of occurrences of each distinct row.
+  // Set-size is the number of distinct (inserted) rows
+  auto const set_size = row_set.size(stream);
+
+  // Vector of distinct indices
+  auto distinct_indices = std::make_unique<rmm::device_uvector<size_type>>(set_size, stream, mr);
+  // Column of distinct counts
   auto distinct_counts = make_numeric_column(
-    data_type{type_to_id<histogram_count_type>()}, map_size, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<histogram_count_type>()}, set_size, mask_state::UNALLOCATED, stream, mr);
 
-  map.retrieve_all(distinct_indices->begin(),
-                   distinct_counts->mutable_view().begin<histogram_count_type>(),
-                   stream.value());
+  // Copy row indices and counts to the output if counts are non-zero
+  auto const input_it = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::make_counting_iterator<size_type>(0), counts.begin()));
+  auto const output_it = thrust::make_zip_iterator(thrust::make_tuple(
+    distinct_indices->begin(), distinct_counts->mutable_view().begin<histogram_count_type>()));
+
+  // Reduction results above are either group sizes of equal rows, or `0`.
+  // The final output is non-zero group sizes only.
+  thrust::copy_if(
+    rmm::exec_policy_nosync(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }
