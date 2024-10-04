@@ -181,7 +181,6 @@ std::unique_ptr<cudf::column> extract_second(
  * @returns cudf::column of the extracted int16_t milliseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-
 std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
