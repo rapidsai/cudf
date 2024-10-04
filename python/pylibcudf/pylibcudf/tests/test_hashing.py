@@ -112,9 +112,6 @@ def test_hash_column_md5(pa_scalar_input_column, plc_scalar_input_tbl):
     assert_column_eq(got, expect)
 
 
-# TODO: sha and md5 struct/list errors
-
-
 def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
     def py_hasher(val):
         return xxhash.xxh64(
@@ -141,6 +138,14 @@ def test_sha_list_struct_err(list_struct_table, dtype, method):
 
     with pytest.raises(TypeError):
         plc_hasher(plc_tbl)
+
+
+def test_md5_struct_err(list_struct_table):
+    err_types = list_struct_table.select(["struct"])
+    plc_tbl = plc.interop.from_arrow(err_types)
+
+    with pytest.raises(TypeError):
+        plc.hashing.md5(plc_tbl)
 
 
 def test_murmurhash3_x86_32(pa_scalar_input_column, plc_scalar_input_tbl):
