@@ -141,6 +141,7 @@ repos:
     hooks:
       - id: ruff
         files: python/.*$
+        args: [ --fix ]
       - id: ruff-format
         files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
