@@ -20,7 +20,7 @@ def duration_type(request):
     return request.param
 
 
-@pytest.fixture
+@pytest.fixture(scope=module)
 def pa_duration_col():
     return pa.array(["05:20:25"])
 
