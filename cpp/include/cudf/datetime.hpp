@@ -42,7 +42,6 @@ namespace datetime {
  * @brief Types of datetime components that may be extracted.
  */
 enum class datetime_component : uint8_t {
-  INVALID = 0,
   YEAR,
   MONTH,
   DAY,

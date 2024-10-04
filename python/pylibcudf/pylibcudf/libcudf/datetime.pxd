@@ -9,7 +9,6 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 
 cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     cpdef enum class datetime_component(uint8_t):
-        INVALID
         YEAR
         MONTH
         DAY
