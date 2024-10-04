@@ -150,6 +150,7 @@ struct update_target_from_dictionary_gmem {
  *
  * `update_target_element( target, target_index, source.keys(), source.indices()[source_index] )`
  */
+/*
 template <aggregation::Kind k>
 struct update_target_element_gmem<
   dictionary32,
@@ -175,6 +176,7 @@ struct update_target_element_gmem<
       source_null);
   }
 };
+*/
 
 // The shared memory will already have it squared
 template <typename Source>

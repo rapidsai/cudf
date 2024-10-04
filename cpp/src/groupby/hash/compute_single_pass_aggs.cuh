@@ -210,7 +210,57 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
       ? cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
       : rmm::device_buffer{};
 
+  auto const has_dictionary_input = std::any_of(keys.begin(), keys.end(), [](cudf::column_view col) {
+      return cudf::is_dictionary(col.type());});
+
+  // 'populated_keys' contains inserted row_indices (keys) of global hash set
+  rmm::device_uvector<cudf::size_type> populated_keys(keys.num_rows(), stream);
+
+  // flatten the aggs to a table that can be operated on by aggregate_row
+  auto const [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests);
+  auto const d_agg_kinds                         = cudf::detail::make_device_uvector_async(
+    agg_kinds, stream, rmm::mr::get_current_device_resource());
+
   auto global_set_ref  = global_set.ref(cuco::op::insert_and_find);
+
+  if (has_dictionary_input) {
+  // make table that will hold sparse results
+  cudf::table sparse_table =
+    create_sparse_results_table(flattened_values,
+                                d_agg_kinds.data(),
+                                agg_kinds,
+                                has_dictionary_input,
+                                global_set,
+                                populated_keys,
+                                stream);
+
+  // prepare to launch kernel to do the actual aggregation
+  auto d_values       = table_device_view::create(flattened_values, stream);
+  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
+
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      keys.num_rows(),
+      hash::compute_single_pass_aggs_fn{global_set_ref,
+                                        *d_values,
+                                        *d_sparse_table,
+                                        d_agg_kinds.data(),
+                                        static_cast<bitmask_type*>(row_bitmask.data()),
+                                        skip_rows_with_nulls});
+    extract_populated_keys(global_set, populated_keys, stream);
+
+  // Add results back to sparse_results cache
+  auto sparse_result_cols = sparse_table.release();
+  for (size_t i = 0; i < aggs.size(); i++) {
+    // Note that the cache will make a copy of this temporary aggregation
+    sparse_results->add_result(
+      flattened_values.column(i), *aggs[i], std::move(sparse_result_cols[i]));
+  }
+
+  return populated_keys;
+  }
+
   auto const grid_size = max_occupancy_grid_size(
     compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>,
     num_input_rows);
@@ -235,22 +285,12 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                    direct_aggregations.data());
   stream.synchronize();
 
-  // 'populated_keys' contains inserted row_indices (keys) of global hash set
-  rmm::device_uvector<cudf::size_type> populated_keys(keys.num_rows(), stream);
-
-  // flatten the aggs to a table that can be operated on by aggregate_row
-  auto const [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests);
-  auto const d_agg_kinds                         = cudf::detail::make_device_uvector_async(
-    agg_kinds, stream, rmm::mr::get_current_device_resource());
-
-  auto const [uses_shmem_aggs, shmem_size] = can_use_shmem_aggs(grid_size);
-
   // make table that will hold sparse results
   cudf::table sparse_table =
     create_sparse_results_table(flattened_values,
                                 d_agg_kinds.data(),
                                 agg_kinds,
-                                uses_shmem_aggs ? direct_aggregations.value(stream) : true,
+                              direct_aggregations.value(stream),
                                 global_set,
                                 populated_keys,
                                 stream);
@@ -258,19 +298,9 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
 
-  if (!uses_shmem_aggs) {
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      keys.num_rows(),
-      hash::compute_single_pass_aggs_fn{global_set_ref,
-                                        *d_values,
-                                        *d_sparse_table,
-                                        d_agg_kinds.data(),
-                                        static_cast<bitmask_type*>(row_bitmask.data()),
-                                        skip_rows_with_nulls});
-    extract_populated_keys(global_set, populated_keys, stream);
-  } else {
+  auto const [valid, shmem_size] = can_use_shmem_aggs(grid_size);
+  CUDF_EXPECTS(valid, "this must be usable");
+
     compute_aggregations(grid_size,
                          num_input_rows,
                          static_cast<bitmask_type*>(row_bitmask.data()),
@@ -298,7 +328,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                    skip_rows_with_nulls});
       extract_populated_keys(global_set, populated_keys, stream);
     }
-  }
 
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();

@@ -130,6 +130,7 @@ struct update_target_from_dictionary_shmem {
   }
 };
 
+/*
 template <aggregation::Kind k>
 struct update_target_element_shmem<
   dictionary32,
@@ -153,6 +154,7 @@ struct update_target_element_shmem<
       static_cast<cudf::size_type>(source.element<dictionary32>(source_index)));
   }
 };
+*/
 
 template <typename Source>
 struct update_target_element_shmem<
