@@ -17,6 +17,7 @@ project(
 include(../fetch_dependencies.cmake)
 
 add_library(parquet_io_utils OBJECT common_utils.cpp io_source.cpp)
+target_compile_features(parquet_io_utils PRIVATE cxx_std_17)
 target_link_libraries(parquet_io_utils PRIVATE cudf::cudf)
 
 # Build and install parquet_io

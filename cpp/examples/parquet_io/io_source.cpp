@@ -25,6 +25,7 @@
 #include <thrust/host_vector.h>
 
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 rmm::host_async_resource_ref pinned_memory_resource()

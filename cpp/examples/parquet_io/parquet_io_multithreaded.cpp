@@ -30,6 +30,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 /**
  * @file parquet_io_multithreaded.cpp
@@ -349,11 +350,11 @@ int32_t main(int argc, char const** argv)
       input_multiplier = std::max(input_multiplier, std::stoi(std::string{argv[2]}));
       [[fallthrough]];
     case 2:
-      if (auto arg = std::string{argv[1]}; arg == "-h" or arg == "--help") {
-        print_usage();
-        return 0;
-      } else
-        input_paths = std::string{argv[1]};
+      // Check if instead of input_paths, the first argument is `-h` or `--help`
+      if (auto arg = std::string{argv[1]}; arg != "-h" and arg != "--help") {
+        input_paths = std::move(arg);
+        break;
+      }
       [[fallthrough]];
     default: print_usage(); throw std::runtime_error("");
   }
