@@ -15,6 +15,7 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -227,6 +228,19 @@ class memory_mapped_source : public file_source {
   }
 
  private:
+  [[nodiscard]] bool should_register_mmap_buffer()
+  {
+    if (_map_addr == nullptr) { return false; }
+
+    auto const policy = getenv_or("LIBCUDF_MMAP_REGISTER_ENABLED", std::string{"AUTO"});
+
+    if (policy == "ALWAYS") { return true; }
+    if (policy == "AUTO") { return pageableMemoryAccessUsesHostPageTables(); }
+    if (policy == "OFF") { return false; }
+
+    CUDF_FAIL("Invalid LIBCUDF_MMAP_REGISTER_POLICY value: " + policy);
+  }
+
   /**
    * @brief Page-locks (registers) the memory range of the mapped file.
    *
@@ -234,7 +248,7 @@ class memory_mapped_source : public file_source {
    */
   void register_mmap_buffer(size_t offset, size_t size)
   {
-    if (_map_addr == nullptr or not pageableMemoryAccessUsesHostPageTables()) { return; }
+    if (not should_register_mmap_buffer()) { return; }
 
     // Registered region must be within the mapped region
     _reg_offset = std::max(offset, _map_offset);
@@ -267,8 +281,20 @@ class memory_mapped_source : public file_source {
     }
   }
 
+  [[nodiscard]] bool should_memory_map()
+  {
+    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"ON"});
+
+    if (policy == "ON") { return true; }
+    if (policy == "OFF") { return false; }
+
+    CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
+  }
+
   void map(int fd, size_t offset, size_t size)
   {
+    if (not should_memory_map()) { return; }
+
     CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file", std::overflow_error);
 
     // Offset for `mmap()` must be page aligned
