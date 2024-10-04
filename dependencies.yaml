@@ -748,6 +748,10 @@ dependencies:
             packages:
               - *numba-cuda-dep
               - pandas==2.0.*
+          - matrix: {dependencies: "latest"}
+            packages:
+              - numba-cuda==0.0.15
+              - pandas==2.2.3
           - matrix:
             packages:
       - output_types: conda
