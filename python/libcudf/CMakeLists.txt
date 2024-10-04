@@ -22,6 +22,8 @@ project(
   LANGUAGES CXX
 )
 
+option(USE_NVCOMP_RUNTIME_WHEEL "Use the nvcomp wheel at runtime instead of the system library" OFF)
+
 # Check if cudf is already available. If so, it is the user's responsibility to ensure that the
 # CMake package is also available at build time of the Python cudf package.
 find_package(cudf "${RAPIDS_VERSION}")
@@ -39,14 +41,20 @@ set(BUILD_TESTS OFF)
 set(BUILD_BENCHMARKS OFF)
 set(CUDF_BUILD_TESTUTIL OFF)
 set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+if(USE_NVCOMP_RUNTIME_WHEEL)
+  set(CUDF_EXPORT_NVCOMP OFF)
+endif()
 set(CUDA_STATIC_RUNTIME ON)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 add_subdirectory(../../cpp cudf-cpp)
 
-# Ensure other libraries needed by libcudf.so get installed alongside it.
-include(cmake/Modules/WheelHelpers.cmake)
-install_aliased_imported_targets(
-  TARGETS cudf nvcomp::nvcomp DESTINATION ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
-)
+if(USE_NVCOMP_RUNTIME_WHEEL)
+  set(rpaths "$ORIGIN/../../nvidia/nvcomp")
+  set_property(
+    TARGET cudf
+    PROPERTY INSTALL_RPATH ${rpaths}
+    APPEND
+  )
+endif()
