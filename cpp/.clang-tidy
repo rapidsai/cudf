@@ -7,6 +7,10 @@
 #     auto-fix is broken (can delete code)
 # modernize-use-trailing-return-type:
 #     Purely stylistic, no benefit to rewriting everything
+# modernize-return-braced-init-list:
+#     Stylistically we prefer to see the return type at the return site.
+#     See https://github.com/rapidsai/cudf/pull/16956#pullrequestreview-2341891672
+#     for more information.
 # modernize-use-bool-literals:
 #     Our tests use int flags for validity masks extensively and we prefer that
 # clang-analyzer-cplusplus.NewDeleteLeaks:
