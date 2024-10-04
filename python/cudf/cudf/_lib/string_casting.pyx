@@ -3,9 +3,6 @@
 from cudf._lib.column cimport Column
 
 from cudf._lib.scalar import as_device_scalar
-
-from cudf._lib.scalar cimport DeviceScalar
-
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
@@ -14,14 +11,6 @@ from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from pylibcudf.libcudf.strings.convert.convert_booleans cimport (
-    from_booleans as cpp_from_booleans,
-    to_booleans as cpp_to_booleans,
-)
-from pylibcudf.libcudf.strings.convert.convert_datetime cimport (
-    is_timestamp as cpp_is_timestamp,
-)
 from pylibcudf.libcudf.strings.convert.convert_floats cimport (
     from_floats as cpp_from_floats,
     to_floats as cpp_to_floats,
@@ -427,77 +416,21 @@ def stoul(Column input_col):
     return string_to_integer(input_col, cudf.dtype("uint64"))
 
 
-def _to_booleans(Column input_col, object string_true="True"):
-    """
-    Converting/Casting input column of type string to boolean column
-
-    Parameters
-    ----------
-    input_col : input column of type string
-    string_true : string that represents True
-
-    Returns
-    -------
-    A Column with string values cast to boolean
-    """
-
-    cdef DeviceScalar str_true = as_device_scalar(string_true)
-    cdef column_view input_column_view = input_col.view()
-    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
-        str_true.get_raw_ptr())
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_to_booleans(
-                input_column_view,
-                string_scalar_true[0]))
-
-    return Column.from_unique_ptr(move(c_result))
-
-
 def to_booleans(Column input_col):
-
-    return _to_booleans(input_col)
-
-
-def _from_booleans(
-        Column input_col,
-        object string_true="True",
-        object string_false="False"):
-    """
-    Converting/Casting input column of type boolean to string column
-
-    Parameters
-    ----------
-    input_col : input column of type boolean
-    string_true : string that represents True
-    string_false : string that represents False
-
-    Returns
-    -------
-    A Column with boolean values cast to string
-    """
-
-    cdef DeviceScalar str_true = as_device_scalar(string_true)
-    cdef DeviceScalar str_false = as_device_scalar(string_false)
-    cdef column_view input_column_view = input_col.view()
-    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
-        str_true.get_raw_ptr())
-    cdef const string_scalar* string_scalar_false = <const string_scalar*>(
-        str_false.get_raw_ptr())
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_booleans(
-                input_column_view,
-                string_scalar_true[0],
-                string_scalar_false[0]))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_booleans.to_booleans(
+        input_col.to_pylibcudf(mode="read"),
+        as_device_scalar("True").c_value,
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def from_booleans(Column input_col):
-    return _from_booleans(input_col)
+    plc_column = plc.strings.convert.convert_booleans.from_booleans(
+        input_col.to_pylibcudf(mode="read"),
+        as_device_scalar("True").c_value,
+        as_device_scalar("False").c_value,
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def int2timestamp(
@@ -520,11 +453,10 @@ def int2timestamp(
     A Column with date-time represented in string format
 
     """
-    cdef string c_timestamp_format = format.encode("UTF-8")
     return Column.from_pylibcudf(
         plc.strings.convert.convert_datetime.from_timestamps(
             input_col.to_pylibcudf(mode="read"),
-            c_timestamp_format,
+            format,
             names.to_pylibcudf(mode="read")
         )
     )
@@ -545,12 +477,11 @@ def timestamp2int(Column input_col, dtype, format):
 
     """
     dtype = dtype_to_pylibcudf_type(dtype)
-    cdef string c_timestamp_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_datetime.to_timestamps(
             input_col.to_pylibcudf(mode="read"),
             dtype,
-            c_timestamp_format
+            format
         )
     )
 
@@ -572,16 +503,11 @@ def istimestamp(Column input_col, str format):
     """
     if input_col.size == 0:
         return cudf.core.column.column_empty(0, dtype=cudf.dtype("bool"))
-    cdef column_view input_column_view = input_col.view()
-    cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_is_timestamp(
-                input_column_view,
-                c_timestamp_format))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_datetime.is_timestamp(
+        input_col.to_pylibcudf(mode="read"),
+        format
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def timedelta2int(Column input_col, dtype, format):
