@@ -49,3 +49,4 @@ This page provides API documentation for pylibcudf.
 
     io/index.rst
     strings/index.rst
+    nvtext/index.rst
