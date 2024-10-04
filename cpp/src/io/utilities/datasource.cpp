@@ -281,20 +281,8 @@ class memory_mapped_source : public file_source {
     }
   }
 
-  [[nodiscard]] bool should_memory_map()
-  {
-    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"ON"});
-
-    if (policy == "ON") { return true; }
-    if (policy == "OFF") { return false; }
-
-    CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
-  }
-
   void map(int fd, size_t offset, size_t size)
   {
-    if (not should_memory_map()) { return; }
-
     CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file", std::overflow_error);
 
     // Offset for `mmap()` must be page aligned
@@ -493,15 +481,22 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
   CUDF_EXPECTS(max_size_estimate == 0 or min_size_estimate <= max_size_estimate,
                "Invalid min/max size estimates for datasource creation");
 
-#ifdef CUFILE_FOUND
-  if (cufile_integration::is_always_enabled()) {
-    // avoid mmap as GDS is expected to be used for most reads
+  auto const use_memory_mapping = [] {
+    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"ON"});
+
+    if (policy == "ON") { return true; }
+    if (policy == "OFF") { return false; }
+
+    CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
+  }();
+
+  if (use_memory_mapping) {
+    return std::make_unique<memory_mapped_source>(
+      filepath.c_str(), offset, max_size_estimate, min_size_estimate);
+  } else {
+    // `file_source` reads the file directly without memory mapping
     return std::make_unique<file_source>(filepath.c_str());
   }
-#endif
-  // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(
-    filepath.c_str(), offset, max_size_estimate, min_size_estimate);
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
