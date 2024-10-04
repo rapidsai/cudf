@@ -8,11 +8,16 @@ from pylibcudf.types cimport DataType
 cpdef Column to_timestamps(
     Column input,
     DataType timestamp_type,
-    const string& format
+    str format
 )
 
 cpdef Column from_timestamps(
-    Column input,
-    const string& format,
+    Column timestamps,
+    str format,
     Column input_strings_names
+)
+
+cpdef Column is_timestamp(
+    Column input,
+    str format,
 )
