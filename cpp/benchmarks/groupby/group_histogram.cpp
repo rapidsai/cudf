@@ -36,7 +36,7 @@ void groupby_histogram_helper(nvbench::state& state,
     return create_random_column(cudf::type_to_id<int32_t>(), row_count{num_rows}, profile);
   }();
 
-  auto const vals = [&] {
+  auto const values = [&] {
     auto builder = data_profile_builder().cardinality(0).distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, num_rows);
     if (null_probability > 0) {
@@ -47,19 +47,18 @@ void groupby_histogram_helper(nvbench::state& state,
     return create_random_column(
       cudf::type_to_id<Type>(), row_count{num_rows}, data_profile{builder});
   }();
-
-  auto keys_view = keys->view();
-  auto gb_obj    = cudf::groupby::groupby(cudf::table_view({keys_view}));
-
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
-  requests[0].values = vals->view();
-  requests[0].aggregations.push_back(cudf::make_histogram_aggregation<cudf::groupby_aggregation>());
+  std::vector<cudf::groupby::aggregation_request> requests(1);
+  requests.back().values = values->view();
+  requests.back().aggregations.push_back(
+    cudf::make_histogram_aggregation<cudf::groupby_aggregation>());
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    auto gb_obj       = cudf::groupby::groupby(cudf::table_view({keys->view()}));
+    auto const result = gb_obj.aggregate(requests);
+  });
+
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_rows) / elapsed_time / 1'000'000., "Mrows/s");
   state.add_buffer_size(
@@ -77,6 +76,7 @@ void bench_groupby_histogram(nvbench::state& state, nvbench::type_list<Type>)
     state.skip("cardinality > num_rows");
     return;
   }
+
   groupby_histogram_helper<Type>(state, num_rows, cardinality, null_probability);
 }
 
