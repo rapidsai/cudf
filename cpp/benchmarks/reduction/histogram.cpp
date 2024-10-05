@@ -63,5 +63,6 @@ using data_type = nvbench::type_list<int32_t, int64_t>;
 NVBENCH_BENCH_TYPES(nvbench_reduction_histogram, NVBENCH_TYPE_AXES(data_type))
   .set_name("histogram")
   .add_float64_axis("null_probability", {0.1})
-  .add_int64_axis("cardinality", {1})
+  .add_int64_axis("cardinality",
+                  {0, 100, 1'000, 10'000, 100'000, 1'000'000, 10'000'000, 50'000'000})
   .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000});
