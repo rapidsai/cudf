@@ -503,11 +503,9 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   CUDF_FUNC_RANGE();
 
   auto gpu_tree = [&]() {
-        std::cout<<"get_token_stream"<<std::endl;
     // Parse the JSON and get the token stream
     const auto [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
-  std::cout<<"get_token_stream done"<<std::endl;
     // gpu tree generation
     // Note that to normalize whitespaces in nested columns coerced to be string, we need the column
     // to either be of mixed type or we need to request the column to be returned as string by

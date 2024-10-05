@@ -275,7 +275,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   // make a copy
@@ -371,7 +370,6 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);
   auto column_categories =
@@ -636,11 +634,8 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
           is_mixed_type_column[this_col_id] == 1)
         column_categories[this_col_id] = NC_STR;
     }
-    cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
-                                    column_categories.data(),
-                                    column_categories.size() * sizeof(column_categories[0]),
-                                    cudf::detail::host_memory_kind::PAGEABLE,
-                                    stream);
+    cudf::detail::cuda_memcpy_async<NodeT>(
+      d_column_tree.node_categories, column_categories, stream);
   }
 
   // ignore all children of columns forced as string
@@ -655,11 +650,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
         forced_as_string_column[this_col_id])
       column_categories[this_col_id] = NC_STR;
   }
-  cudf::detail::cuda_memcpy_async(d_column_tree.node_categories.begin(),
-                                  column_categories.data(),
-                                  column_categories.size() * sizeof(column_categories[0]),
-                                  cudf::detail::host_memory_kind::PAGEABLE,
-                                  stream);
+  cudf::detail::cuda_memcpy_async<NodeT>(d_column_tree.node_categories, column_categories, stream);
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
@@ -678,7 +669,6 @@ void scatter_offsets(tree_meta_t const& tree,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
   auto const num_nodes   = col_ids.size();
   auto const num_columns = d_column_tree.node_categories.size();
   // move columns data to device.
@@ -881,7 +871,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   // make a copy
@@ -978,7 +967,6 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   auto unique_col_ids = cudf::detail::make_host_vector_async(d_unique_col_ids, stream);

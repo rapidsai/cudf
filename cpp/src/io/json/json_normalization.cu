@@ -338,7 +338,6 @@ std::
                        rmm::cuda_stream_view stream,
                        rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
   /*
    * Algorithm:
     1. Create a single buffer by concatenating the rows of the string column. Create segment offsets
