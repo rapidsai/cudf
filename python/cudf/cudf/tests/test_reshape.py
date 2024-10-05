@@ -48,11 +48,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     id_vars = []
     for i in range(num_id_vars):
         colname = "id" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         elif nulls == "all":
             data[:] = np.nan
@@ -62,11 +60,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     value_vars = []
     for i in range(num_value_vars):
         colname = "val" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         elif nulls == "all":
             data[:] = np.nan
@@ -132,11 +128,9 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     pdf = pd.DataFrame()
     for i in range(num_cols):
         colname = str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -301,12 +295,10 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(0, 26, num_rows)).astype(dtype)
+        data = pd.Series(rng.integers(0, 26, num_rows)).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -337,14 +329,10 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(num_cols, 26, num_rows)).astype(
-            dtype
-        )
+        data = pd.Series(rng.integers(num_cols, 26, num_rows)).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 

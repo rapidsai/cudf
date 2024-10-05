@@ -132,9 +132,9 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         cupy.asarray(np.array([True] * 5)),
         cupy.asarray(np.array([False] * 5)),
-        np.random.randint(0, 2, 5).astype("bool").tolist(),
-        np.random.randint(0, 2, 5).astype("bool"),
-        cupy.asarray(np.random.randint(0, 2, 5).astype("bool")),
+        rng.integers(0, 2, 5).astype("bool").tolist(),
+        rng.integers(0, 2, 5).astype("bool"),
+        cupy.asarray(rng.integers(0, 2, 5).astype("bool")),
     ],
 )
 def test_string_bool_mask(ps_gs, item):

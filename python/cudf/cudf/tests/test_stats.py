@@ -85,7 +85,7 @@ def test_series_std(ddof):
 
 def test_series_unique():
     for size in [10**x for x in range(5)]:
-        arr = np.random.randint(low=-1, high=10, size=size)
+        arr = rng.integers(low=-1, high=10, size=size)
         mask = arr != -1
         sr = cudf.Series(arr)
         sr[~mask] = None
@@ -129,7 +129,7 @@ def test_series_nunique(nan_as_null, dropna):
 
 
 def test_series_scale():
-    arr = pd.Series(np.random.randint(low=-10, high=10, size=100))
+    arr = pd.Series(rng.integers(low=-10, high=10, size=100))
     sr = cudf.Series(arr)
 
     vmin = arr.min()
@@ -229,8 +229,8 @@ def test_misc_quantiles(data, q):
 @pytest.mark.parametrize(
     "data",
     [
-        {"data": np.random.normal(-100, 100, 1000)},
-        {"data": np.random.randint(-50, 50, 1000)},
+        {"data": rng.normal(-100, 100, 1000)},
+        {"data": rng.integers(-50, 50, 1000)},
         {"data": (np.zeros(100))},
         {"data": np.repeat(np.nan, 100)},
         {"data": np.array([1.123, 2.343, np.nan, 0.0])},
@@ -280,8 +280,8 @@ def test_kurt_skew_error(op):
 @pytest.mark.parametrize(
     "data",
     [
-        cudf.Series(np.random.normal(-100, 100, 1000)),
-        cudf.Series(np.random.randint(-50, 50, 1000)),
+        cudf.Series(rng.normal(-100, 100, 1000)),
+        cudf.Series(rng.integers(-50, 50, 1000)),
         cudf.Series(np.zeros(100)),
         cudf.Series(np.repeat(np.nan, 100)),
         cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
@@ -344,8 +344,8 @@ def test_series_median(dtype, num_na):
 @pytest.mark.parametrize(
     "data",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        rng.normal(-100, 100, 1000),
+        rng.integers(-50, 50, 1000),
         np.zeros(100),
         np.array([1.123, 2.343, np.nan, 0.0]),
         np.array([-2, 3.75, 6, None, None, None, -8.5, None, 4.2]),
@@ -379,8 +379,8 @@ def test_series_pct_change(data, periods, fill_method):
 @pytest.mark.parametrize(
     "data1",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        rng.normal(-100, 100, 1000),
+        rng.integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
@@ -393,8 +393,8 @@ def test_series_pct_change(data, periods, fill_method):
 @pytest.mark.parametrize(
     "data2",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        rng.normal(-100, 100, 1000),
+        rng.integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
@@ -423,8 +423,8 @@ def test_cov1d(data1, data2):
 @pytest.mark.parametrize(
     "data1",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        rng.normal(-100, 100, 1000),
+        rng.integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
@@ -437,8 +437,8 @@ def test_cov1d(data1, data2):
 @pytest.mark.parametrize(
     "data2",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        rng.normal(-100, 100, 1000),
+        rng.integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),

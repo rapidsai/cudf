@@ -255,7 +255,7 @@ def test_categorical_unique(num_elements):
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(
+            rng.choice(
                 list(string.ascii_letters + string.digits), num_elements
             ),
             dtype="category",
@@ -282,9 +282,7 @@ def test_categorical_unique_count(nelem):
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(
-                list(string.ascii_letters + string.digits), nelem
-            ),
+            rng.choice(list(string.ascii_letters + string.digits), nelem),
             dtype="category",
         )
     )

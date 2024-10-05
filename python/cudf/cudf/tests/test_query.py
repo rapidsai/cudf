@@ -123,7 +123,7 @@ def test_query_local_dict():
 def test_query_splitted_combine():
     np.random.seed(0)
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10), "y": np.random.normal(size=10)}
+        {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
     gdf = DataFrame.from_pandas(df)
 

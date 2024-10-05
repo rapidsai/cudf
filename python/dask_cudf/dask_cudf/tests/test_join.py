@@ -257,6 +257,7 @@ def test_merge_should_fail():
         left.merge(right, how="left", on=["c"])
 
     # Same column names
+
     df2["b"] = np.random.randint(0, 12, 12)
     right = dask_cudf.from_cudf(df2, 1).groupby("a").b.min().to_frame()
 

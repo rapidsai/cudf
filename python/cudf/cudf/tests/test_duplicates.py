@@ -585,7 +585,8 @@ def test_drop_duplicates_multi_index():
     ]
 
     idx = pd.MultiIndex.from_tuples(list(zip(*arrays)), names=["a", "b"])
-    pdf = pd.DataFrame(np.random.randint(0, 2, (8, 4)), index=idx)
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.integers(0, 2, (8, 4)), index=idx)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     expected = pdf.drop_duplicates()

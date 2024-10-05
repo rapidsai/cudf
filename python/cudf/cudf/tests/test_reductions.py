@@ -79,7 +79,7 @@ def test_product(dtype, nelem):
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
-            data[np.random.randint(low=0, high=nelem, size=1)] = (
+            data[rng.integers(low=0, high=nelem, size=1)] = (
                 np.random.uniform() * 2
             )
     else:
@@ -256,7 +256,7 @@ def test_sum_boolean():
 
 
 def test_date_minmax():
-    np_data = np.random.normal(size=10**3)
+    np_data = rng.normal(size=10**3)
     gdf_data = Series(np_data)
 
     np_casted = np_data.astype("datetime64[ms]")

@@ -204,7 +204,7 @@ def test_serialize_multi_index():
         {
             "a": [4, 17, 4, 9, 5],
             "b": [1, 4, 4, 3, 2],
-            "x": np.random.normal(size=5),
+            "x": rng.normal(size=5),
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -230,8 +230,8 @@ def test_serialize_masked_series():
 
 def test_serialize_groupby_df():
     df = cudf.DataFrame()
-    df["key_1"] = np.random.randint(0, 20, 100)
-    df["key_2"] = np.random.randint(0, 20, 100)
+    df["key_1"] = rng.integers(0, 20, 100)
+    df["key_2"] = rng.integers(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
     gb = df.groupby(["key_1", "key_2"], sort=True)
     outgb = gb.deserialize(*gb.serialize())
@@ -243,7 +243,7 @@ def test_serialize_groupby_df():
 def test_serialize_groupby_external():
     df = cudf.DataFrame()
     df["val"] = np.arange(100, dtype=np.float32)
-    gb = df.groupby(cudf.Series(np.random.randint(0, 20, 100)))
+    gb = df.groupby(cudf.Series(rng.integers(0, 20, 100)))
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
@@ -262,7 +262,7 @@ def test_serialize_groupby_level():
 
 
 def test_serialize_groupby_sr():
-    sr = cudf.Series(np.random.randint(0, 20, 100))
+    sr = cudf.Series(rng.integers(0, 20, 100))
     gb = sr.groupby(sr // 2)
     outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
@@ -273,7 +273,7 @@ def test_serialize_groupby_sr():
 def test_serialize_datetime():
     # Make frame with datetime column
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
+        {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
     ts = np.arange(0, len(df), dtype=np.dtype("datetime64[ms]"))
     df["timestamp"] = ts
@@ -287,7 +287,7 @@ def test_serialize_datetime():
 def test_serialize_string():
     # Make frame with string column
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=5), "y": np.random.normal(size=5)}
+        {"x": rng.integers(0, 5, size=5), "y": rng.normal(size=5)}
     )
     str_data = ["a", "bc", "def", "ghij", "klmno"]
     df["timestamp"] = str_data

@@ -432,11 +432,12 @@ def test_datetime_to_arrow(dtype):
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_unique(data, nulls):
+    rng = np.random.default_rng(seed=0)
     psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = rng.integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
@@ -461,10 +462,11 @@ def test_datetime_unique(data, nulls):
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_nunique(data, nulls):
     psr = data.copy()
+    rng = np.random.default_rng(seed=0)
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = rng.integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)

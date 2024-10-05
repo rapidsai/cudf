@@ -22,7 +22,7 @@ _JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
 
 
 def make_params():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     hows = _JOIN_TYPES
 
@@ -39,8 +39,8 @@ def make_params():
         yield (aa, bb, how)
 
     # Test large random integer inputs
-    aa = np.random.randint(0, 50, 100)
-    bb = np.random.randint(0, 50, 100)
+    aa = rng.integers(0, 50, 100)
+    bb = rng.integers(0, 50, 100)
     for how in hows:
         yield (aa, bb, how)
 
@@ -164,7 +164,7 @@ def _check_series(expect, got):
 def test_dataframe_join_suffix():
     np.random.seed(0)
 
-    df = cudf.DataFrame(np.random.randint(0, 5, (5, 3)), columns=list("abc"))
+    df = cudf.DataFrame(rng.integers(0, 5, (5, 3)), columns=list("abc"))
 
     left = df.set_index("a")
     right = df.set_index("c")
@@ -286,14 +286,14 @@ def test_dataframe_merge_on(on):
     # Make cuDF
     df_left = cudf.DataFrame()
     nelem = 500
-    df_left["key1"] = np.random.randint(0, 40, nelem)
-    df_left["key2"] = np.random.randint(0, 50, nelem)
+    df_left["key1"] = rng.integers(0, 40, nelem)
+    df_left["key2"] = rng.integers(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
     df_right = cudf.DataFrame()
     nelem = 500
-    df_right["key1"] = np.random.randint(0, 30, nelem)
-    df_right["key2"] = np.random.randint(0, 50, nelem)
+    df_right["key1"] = rng.integers(0, 30, nelem)
+    df_right["key2"] = rng.integers(0, 50, nelem)
     df_right["right_val"] = np.arange(nelem)
 
     # Make pandas DF
@@ -352,14 +352,14 @@ def test_dataframe_merge_on_unknown_column():
     # Make cuDF
     df_left = cudf.DataFrame()
     nelem = 500
-    df_left["key1"] = np.random.randint(0, 40, nelem)
-    df_left["key2"] = np.random.randint(0, 50, nelem)
+    df_left["key1"] = rng.integers(0, 40, nelem)
+    df_left["key2"] = rng.integers(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
     df_right = cudf.DataFrame()
     nelem = 500
-    df_right["key1"] = np.random.randint(0, 30, nelem)
-    df_right["key2"] = np.random.randint(0, 50, nelem)
+    df_right["key1"] = rng.integers(0, 30, nelem)
+    df_right["key2"] = rng.integers(0, 50, nelem)
     df_right["right_val"] = np.arange(nelem)
 
     with pytest.raises(KeyError) as raises:
@@ -373,14 +373,14 @@ def test_dataframe_merge_no_common_column():
     # Make cuDF
     df_left = cudf.DataFrame()
     nelem = 500
-    df_left["key1"] = np.random.randint(0, 40, nelem)
-    df_left["key2"] = np.random.randint(0, 50, nelem)
+    df_left["key1"] = rng.integers(0, 40, nelem)
+    df_left["key2"] = rng.integers(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
     df_right = cudf.DataFrame()
     nelem = 500
-    df_right["key3"] = np.random.randint(0, 30, nelem)
-    df_right["key4"] = np.random.randint(0, 50, nelem)
+    df_right["key3"] = rng.integers(0, 30, nelem)
+    df_right["key4"] = rng.integers(0, 50, nelem)
     df_right["right_val"] = np.arange(nelem)
 
     with pytest.raises(ValueError) as raises:
@@ -465,9 +465,9 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
     pdf_left = pd.DataFrame()
     pdf_right = pd.DataFrame()
     for left_column in pairs[0]:
-        pdf_left[left_column] = np.random.randint(0, max, rows)
+        pdf_left[left_column] = rng.integers(0, max, rows)
     for right_column in pairs[1]:
-        pdf_right[right_column] = np.random.randint(0, max, rows)
+        pdf_right[right_column] = rng.integers(0, max, rows)
     gdf_left = cudf.from_pandas(pdf_left)
     gdf_right = cudf.from_pandas(pdf_right)
     if not set(pdf_left.columns).intersection(pdf_right.columns):
@@ -510,9 +510,9 @@ def test_safe_merging_with_left_empty():
     pdf_left = pd.DataFrame()
     pdf_right = pd.DataFrame()
     for left_column in pairs[0]:
-        pdf_left[left_column] = np.random.randint(0, 10, 0)
+        pdf_left[left_column] = rng.integers(0, 10, 0)
     for right_column in pairs[1]:
-        pdf_right[right_column] = np.random.randint(0, 10, 5)
+        pdf_right[right_column] = rng.integers(0, 10, 5)
     gdf_left = cudf.from_pandas(pdf_left)
     gdf_right = cudf.from_pandas(pdf_right)
 

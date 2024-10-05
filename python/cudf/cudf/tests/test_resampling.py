@@ -51,7 +51,7 @@ def test_series_upsample_simple():
 @pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_ffill(rule):
     rng = pd.date_range("1/1/2012", periods=10, freq="5s")
-    ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
+    ts = pd.Series(rng.integers(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
         ts.resample(rule).ffill(), gts.resample(rule).ffill()
@@ -61,7 +61,7 @@ def test_series_resample_ffill(rule):
 @pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_bfill(rule):
     rng = pd.date_range("1/1/2012", periods=10, freq="5s")
-    ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
+    ts = pd.Series(rng.integers(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
         ts.resample(rule).bfill(), gts.resample(rule).bfill()
@@ -71,7 +71,7 @@ def test_series_resample_bfill(rule):
 @pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_asfreq(rule):
     rng = pd.date_range("1/1/2012", periods=100, freq="5s")
-    ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
+    ts = pd.Series(rng.integers(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
         ts.resample(rule).asfreq(), gts.resample(rule).asfreq()

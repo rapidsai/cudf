@@ -72,7 +72,7 @@ def simple_pdf(request):
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
         {
-            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            f"col_{typ}": rng.integers(0, nrows, nrows).astype(typ)
             for typ in types
         },
         # Need to ensure that this index is not a RangeIndex to get the
@@ -114,7 +114,7 @@ def build_pdf(num_columns, day_resolution_timestamps):
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
         {
-            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            f"col_{typ}": rng.integers(0, nrows, nrows).astype(typ)
             for typ in types
         },
         # Need to ensure that this index is not a RangeIndex to get the
@@ -142,7 +142,7 @@ def build_pdf(num_columns, day_resolution_timestamps):
         },
     ]:
         data = [
-            np.random.randint(0, (0x7FFFFFFFFFFFFFFF / t["nsDivisor"]))
+            rng.integers(0, (0x7FFFFFFFFFFFFFFF / t["nsDivisor"]))
             for i in range(nrows)
         ]
         if day_resolution_timestamps:
@@ -152,11 +152,11 @@ def build_pdf(num_columns, day_resolution_timestamps):
         )
 
     # Create non-numeric categorical data otherwise parquet may typecast it
-    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
+    data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
     test_pdf["col_category"] = pd.Series(data, dtype="category")
 
     # Create non-numeric str data
-    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
+    data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
     test_pdf["col_str"] = pd.Series(data, dtype="str")
 
     return test_pdf
@@ -1917,8 +1917,8 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
     pdf = pd.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="int64"),
-            "b": np.random.choice(list("abcd"), size=size),
-            "c": np.random.choice(np.arange(4), size=size),
+            "b": rng.choice(list("abcd"), size=size),
+            "c": rng.choice(np.arange(4), size=size),
         }
     )
     pdf.to_parquet(pdf_dir, index=False, partition_cols=cols)
@@ -1961,8 +1961,8 @@ def test_parquet_partitioned_notimplemented(tmpdir_factory, kwargs):
     pdf = pd.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="int64"),
-            "b": np.random.choice(list("abcd"), size=size),
-            "c": np.random.choice(np.arange(4), size=size),
+            "b": rng.choice(list("abcd"), size=size),
+            "c": rng.choice(np.arange(4), size=size),
         }
     )
     pdf.to_parquet(pdf_dir, index=False, partition_cols=["b"])
@@ -2139,7 +2139,7 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols, store_schema):
     gdf = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size),
-            "b": np.random.choice(np.arange(4), size=size),
+            "b": rng.choice(np.arange(4), size=size),
         }
     )
     gdf.to_parquet(dir1, partition_cols=cols, store_schema=store_schema)
@@ -3217,8 +3217,8 @@ def test_parquet_writer_zstd():
     expected = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="float64"),
-            "b": np.random.choice(list("abcd"), size=size),
-            "c": np.random.choice(np.arange(4), size=size),
+            "b": rng.choice(list("abcd"), size=size),
+            "c": rng.choice(np.arange(4), size=size),
         }
     )
 

@@ -523,8 +523,8 @@ def test_multiindex_from_product(arrays):
 
 def test_multiindex_index_and_columns():
     gdf = cudf.DataFrame()
-    gdf["x"] = np.random.randint(0, 5, 5)
-    gdf["y"] = np.random.randint(0, 5, 5)
+    gdf["x"] = rng.integers(0, 5, 5)
+    gdf["y"] = rng.integers(0, 5, 5)
     pdf = gdf.to_pandas()
     mi = cudf.MultiIndex(
         levels=[[0, 1, 2], [3, 4]],
@@ -546,7 +546,7 @@ def test_multiindex_multiple_groupby():
         {
             "a": [4, 17, 4, 9, 5],
             "b": [1, 4, 4, 3, 2],
-            "x": np.random.normal(size=5),
+            "x": rng.normal(size=5),
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -568,9 +568,9 @@ def test_multiindex_multiple_groupby():
 def test_multi_column(func):
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=1000),
-            "y": np.random.randint(0, 10, size=1000),
-            "z": np.random.normal(size=1000),
+            "x": rng.integers(0, 5, size=1000),
+            "y": rng.integers(0, 10, size=1000),
+            "z": rng.normal(size=1000),
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)

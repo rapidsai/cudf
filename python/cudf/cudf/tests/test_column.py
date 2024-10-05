@@ -37,6 +37,7 @@ def pandas_input(request):
     def random_ints(dtype, size):
         dtype_min = np.iinfo(dtype).min
         dtype_max = np.iinfo(dtype).max
+        rng = np.random.default_rng(seed=0)
         return rng.integers(dtype_min, dtype_max, size=size, dtype=dtype)
 
     try:

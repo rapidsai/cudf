@@ -222,7 +222,7 @@ def test_dataframe_multi_column(
 
     for i in range(5):
         colname = string.ascii_lowercase[i]
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
@@ -250,11 +250,11 @@ def test_dataframe_multi_column_nulls(
 
     for i in range(3):
         colname = string.ascii_lowercase[i]
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
             idx = np.array([], dtype="int64")
             if num_rows > 0:
-                idx = np.random.choice(
+                idx = rng.choice(
                     num_rows, size=int(num_rows / 4), replace=False
                 )
             data[idx] = np.nan
@@ -310,9 +310,9 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     strlist = ["dog", "cat", "fish", "bird", "pig", "fox", "cow", "goat"]
     np.random.seed(0)
     df = DataFrame()
-    df["a"] = np.random.choice(strlist[:map_size], nelem)
+    df["a"] = rng.choice(strlist[:map_size], nelem)
     df["b"] = np.random.uniform(low=0, high=map_size, size=nelem)
-    df["c"] = np.random.randint(map_size, size=nelem)
+    df["c"] = rng.integers(map_size, size=nelem)
     df["d"] = df["a"].astype("category")
 
     def _check_scatter_by_map(dfs, col):

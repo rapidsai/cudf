@@ -271,10 +271,9 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     "dtype", ["int8", "int32", "int64", "float32", "float64", "datetime64[ms]"]
 )
 def test_series_compare(cmpop, obj_class, dtype):
-    arr1 = np.random.randint(0, 100, 100).astype(dtype)
-    arr2 = np.random.randint(0, 100, 100).astype(dtype)
-    sr1 = Series(arr1)
-    sr2 = Series(arr2)
+    rng = np.random.default_rng(seed=0)
+    sr1 = Series(rng.integers(0, 100, 100).astype(dtype))
+    sr2 = Series(rng.integers(0, 100, 100).astype(dtype))
 
     if obj_class == "Index":
         sr1 = Index(sr1)
@@ -438,9 +437,10 @@ def test_str_series_compare_num_reflected(
 def test_series_compare_scalar(
     nelem, cmpop, obj_class, dtype, use_cudf_scalar
 ):
-    arr1 = np.random.randint(0, 100, 100).astype(dtype)
+    rng = np.random.default_rng(seed=0)
+    arr1 = rng.integers(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
-    rhs = random.choice(arr1).item()
+    rhs = rng.choice(arr1).item()
 
     if use_cudf_scalar:
         rhs = cudf.Scalar(rhs)
@@ -774,7 +774,7 @@ def test_df_different_index_shape(df2, binop):
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
 def test_boolean_scalar_binop(op):
-    psr = pd.Series(np.random.choice([True, False], 10))
+    psr = pd.Series(rng.choice([True, False], 10))
     gsr = cudf.from_pandas(psr)
     assert_eq(op(psr, True), op(gsr, True))
     assert_eq(op(psr, False), op(gsr, False))
@@ -926,13 +926,13 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
         pdf = pd.DataFrame()
         from string import ascii_lowercase
 
-        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+        cols = rng.choice(num_cols + 5, num_cols, replace=False)
 
         for i in range(num_cols):
             colname = ascii_lowercase[cols[i]]
             data = utils.gen_rand("float64", num_rows) * 10000
             if nulls == "some":
-                idx = np.random.choice(
+                idx = rng.choice(
                     num_rows, size=int(num_rows / 2), replace=False
                 )
                 data[idx] = np.nan
@@ -962,13 +962,13 @@ def test_logical_operator_func_dataframe(func, nulls, other):
         pdf = pd.DataFrame()
         from string import ascii_lowercase
 
-        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+        cols = rng.choice(num_cols + 5, num_cols, replace=False)
 
         for i in range(num_cols):
             colname = ascii_lowercase[cols[i]]
             data = utils.gen_rand("float64", num_rows) * 10000
             if nulls == "some":
-                idx = np.random.choice(
+                idx = rng.choice(
                     num_rows, size=int(num_rows / 2), replace=False
                 )
                 data[idx] = np.nan

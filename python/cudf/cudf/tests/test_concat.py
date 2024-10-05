@@ -203,10 +203,9 @@ def test_concat_misordered_columns():
 
 @pytest.mark.parametrize("axis", [1, "columns"])
 def test_concat_columns(axis):
-    pdf1 = pd.DataFrame(np.random.randint(10, size=(5, 3)), columns=[1, 2, 3])
-    pdf2 = pd.DataFrame(
-        np.random.randint(10, size=(5, 4)), columns=[4, 5, 6, 7]
-    )
+    rng = np.random.default_rng(seed=0)
+    pdf1 = pd.DataFrame(rng.integers(10, size=(5, 3)), columns=[1, 2, 3])
+    pdf2 = pd.DataFrame(rng.integers(10, size=(5, 4)), columns=[4, 5, 6, 7])
     gdf1 = cudf.from_pandas(pdf1)
     gdf2 = cudf.from_pandas(pdf2)
 
@@ -1398,11 +1397,12 @@ def test_concat_single_object(ignore_index, typ):
     ],
 )
 def test_concat_decimal_dataframe(ltype, rtype):
+    rng = np.random.default_rng(seed=0)
     gdf1 = cudf.DataFrame(
-        {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
+        {"id": rng.integers(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
     )
     gdf2 = cudf.DataFrame(
-        {"id": np.random.randint(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
+        {"id": rng.integers(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
     )
 
     gdf1["val"] = gdf1["val"].astype(ltype)

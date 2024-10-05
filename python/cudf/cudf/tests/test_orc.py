@@ -999,12 +999,12 @@ def generate_list_struct_buff(size=100_000):
                 [
                     [
                         [
-                            rd.choice([None, np.random.randint(1, 3)])
-                            for _ in range(np.random.randint(1, 3))
+                            rd.choice([None, rng.integers(1, 3)])
+                            for _ in range(rng.integers(1, 3))
                         ]
-                        for _ in range(np.random.randint(0, 3))
+                        for _ in range(rng.integers(0, 3))
                     ]
-                    for _ in range(np.random.randint(0, 3))
+                    for _ in range(rng.integers(0, 3))
                 ],
             ]
         )
@@ -1012,8 +1012,8 @@ def generate_list_struct_buff(size=100_000):
     ]
     lvl1_list = [
         [
-            rd.choice([None, np.random.randint(0, 3)])
-            for _ in range(np.random.randint(1, 4))
+            rd.choice([None, rng.integers(0, 3)])
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1021,7 +1021,7 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": np.random.randint(0, 3), "b": np.random.randint(0, 3)},
+                {"a": rng.integers(0, 3), "b": rng.integers(0, 3)},
             ]
         )
         for _ in range(size)
@@ -1030,11 +1030,11 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": rd.choice([None, np.random.randint(0, 3)])},
+                {"a": rd.choice([None, rng.integers(0, 3)])},
                 {
                     "lvl1_struct": {
-                        "c": rd.choice([None, np.random.randint(0, 3)]),
-                        "d": np.random.randint(0, 3),
+                        "c": rd.choice([None, rng.integers(0, 3)]),
+                        "d": rng.integers(0, 3),
                     },
                 },
             ]
@@ -1044,7 +1044,7 @@ def generate_list_struct_buff(size=100_000):
     list_nests_struct = [
         [
             {"a": rd.choice(lvl1_struct), "b": rd.choice(lvl1_struct)}
-            for _ in range(np.random.randint(1, 4))
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1146,7 +1146,7 @@ def gen_map_buff(size):
                     None,
                     {
                         rd.choice(al): rd.choice(
-                            [None, np.random.randint(1, 1500)]
+                            [None, rng.integers(1, 1500)]
                         ),
                     },
                 ]
@@ -1167,7 +1167,7 @@ def gen_map_buff(size):
                                     None,
                                     [
                                         rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         )
                                         for _ in range(5)
                                     ],
@@ -1194,10 +1194,10 @@ def gen_map_buff(size):
                                     None,
                                     {
                                         "a": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                         "b": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                     },
                                 ]

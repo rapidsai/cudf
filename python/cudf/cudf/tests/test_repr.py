@@ -26,8 +26,8 @@ repr_categories = [
 @pytest.mark.parametrize("nrows", [0, 5, 10])
 def test_null_series(nrows, dtype):
     size = 5
-    sr = cudf.Series(np.random.randint(1, 9, size)).astype(dtype)
-    sr[np.random.choice([False, True], size=size)] = None
+    sr = cudf.Series(rng.integers(1, 9, size)).astype(dtype)
+    sr[rng.choice([False, True], size=size)] = None
     if dtype != "category" and cudf.dtype(dtype).kind in {"u", "i"}:
         ps = pd.Series(
             sr._column.data_array_view(mode="read").copy_to_host(),
@@ -63,8 +63,8 @@ def test_null_dataframe(ncols):
     size = 20
     gdf = cudf.DataFrame()
     for idx, dtype in enumerate(dtype_categories):
-        sr = cudf.Series(np.random.randint(0, 128, size)).astype(dtype)
-        sr[np.random.choice([False, True], size=size)] = None
+        sr = cudf.Series(rng.integers(0, 128, size)).astype(dtype)
+        sr[rng.choice([False, True], size=size)] = None
         gdf[dtype] = sr
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = int(ncols)
@@ -77,7 +77,7 @@ def test_null_dataframe(ncols):
 @pytest.mark.parametrize("nrows", [None, 0, 1, 2, 9, 10, 11, 19, 20, 21])
 def test_full_series(nrows, dtype):
     size = 20
-    ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
+    ps = pd.Series(rng.integers(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = nrows
     assert repr(ps) == repr(sr)
@@ -90,7 +90,7 @@ def test_full_series(nrows, dtype):
 @pytest.mark.parametrize("dtype", repr_categories)
 def test_full_dataframe_20(dtype, size, nrows, ncols):
     pdf = pd.DataFrame(
-        {idx: np.random.randint(0, 100, size) for idx in range(size)}
+        {idx: rng.integers(0, 100, size) for idx in range(size)}
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
@@ -180,9 +180,9 @@ def test_mixed_series(mixed_pdf, mixed_gdf):
 def test_MI():
     gdf = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 4, 10),
-            "b": np.random.randint(0, 4, 10),
-            "c": np.random.randint(0, 4, 10),
+            "a": rng.integers(0, 4, 10),
+            "b": rng.integers(0, 4, 10),
+            "c": rng.integers(0, 4, 10),
         }
     )
     levels = [["a", "b", "c", "d"], ["w", "x", "y", "z"], ["m", "n"]]
@@ -225,7 +225,7 @@ def test_groupby_MI(nrows, ncols):
 def test_generic_index(length, dtype):
     psr = pd.Series(
         range(length),
-        index=np.random.randint(0, high=100, size=length).astype(dtype),
+        index=rng.integers(0, high=100, size=length).astype(dtype),
         dtype="float64" if length == 0 else None,
     )
     gsr = cudf.Series.from_pandas(psr)
