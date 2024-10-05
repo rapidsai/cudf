@@ -1463,10 +1463,9 @@ void get_stack_context(device_span<SymbolT const> json_in,
         to_stack_op::get_translation_table(stack_behavior)),
     stream);
 
-  nvtx3::mark("json_to_stack_ops_fst.Transduce");
-  // TODO: allocate exact memory for stack_op_indices
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
   // of structs/lists
+  // Run FST to estimate the sizes of translated buffers
   json_to_stack_ops_fst.Transduce(json_in.begin(),
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   thrust::make_discard_iterator(),
@@ -1475,25 +1474,23 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   to_stack_op::start_state,
                                   stream);
 
-  // Sequence of stack symbols and their position in the original input (sparse representation)
   auto stack_ops_bufsize = d_num_stack_ops.value(stream);
-  nvtx3::mark("stack_ops alloc");
+  // Sequence of stack symbols and their position in the original input (sparse representation)
   rmm::device_uvector<StackSymbolT> stack_ops{stack_ops_bufsize, stream};
-  nvtx3::mark("stack_op_indices alloc");
   rmm::device_uvector<SymbolOffsetT> stack_op_indices{stack_ops_bufsize, stream};
 
+  // Run bracket-brace FST to retrieve starting positions of structs and lists
   json_to_stack_ops_fst.Transduce(json_in.begin(),
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
                                   stack_op_indices.data(),
-                                  d_num_stack_ops.data(),
+                                  thrust::make_discard_iterator(),
                                   to_stack_op::start_state,
                                   stream);
 
   // Copy back to actual number of stack operations
   auto const num_stack_ops = d_num_stack_ops.value(stream);
 
-  nvtx3::mark("sparse_stack_op_to_top_of_stack");
   // Stack operations with indices are converted to top of the stack for each character in the input
   if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {
     fst::sparse_stack_op_to_top_of_stack<fst::stack_op_support::WITH_RESET_SUPPORT, StackLevelT>(
@@ -1660,6 +1657,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   SymbolOffsetT const delimiter_offset =
     (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
 
+  // Run FST to estimate the size of output buffers
   json_to_tokens_fst.Transduce(zip_in,
                                static_cast<SymbolOffsetT>(json_in.size()),
                                thrust::make_discard_iterator(),
@@ -1669,23 +1667,10 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                stream);
 
   auto const num_total_tokens = num_written_tokens.value(stream) + delimiter_offset;
-  nvtx3::mark("get_token_stream: tokens");
   rmm::device_uvector<PdaTokenT> tokens{num_total_tokens, stream, mr};
-  nvtx3::mark("get_token_stream: token_indices");
   rmm::device_uvector<SymbolOffsetT> tokens_indices{num_total_tokens, stream, mr};
 
-  // TODO: same indexing as token_t enum of length NUM_TOKENS
-  // for multiple tokens in the same index, use formula: t1 + NUM_TOKENS * t2 + NUM_TOKENS^2 * t3
-  // (tokens are 1-indexed)
-  /*
-  rmm::device_uvector<uint8_t> bool_token_indices(max_token_out_count + delimiter_offset, stream,
-  mr); auto outit = thrust::make_transform_output_iterator(thrust::make_discard_iterator(),
-      [bool_token_indices=bool_token_indices.begin()](int i) ->
-  thrust::discard_iterator<thrust::use_default>::value_type { bool_token_indices[i] += 1; return {};
-  });
-  */
-
-  nvtx3::mark("json_to_tokens_fst.Transduce");
+  // Run FST to translate the input JSON string into tokens and indices at which they occur
   json_to_tokens_fst.Transduce(zip_in,
                                static_cast<SymbolOffsetT>(json_in.size()),
                                tokens.data() + delimiter_offset,
@@ -1694,16 +1679,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                tokenizer_pda::start_state,
                                stream);
 
-  /*
-  tokens.resize(num_total_tokens, stream);
-  tokens_indices.resize(num_total_tokens, stream);
-  */
-
   if (delimiter_offset == 1) {
     tokens.set_element(0, token_t::LineEnd, stream);
-    nvtx3::mark("validate_token_stream");
     validate_token_stream(json_in, tokens, tokens_indices, options, stream);
-    nvtx3::mark("process_token_stream");
     auto [filtered_tokens, filtered_tokens_indices] =
       process_token_stream(tokens, tokens_indices, stream);
     tokens         = std::move(filtered_tokens);
