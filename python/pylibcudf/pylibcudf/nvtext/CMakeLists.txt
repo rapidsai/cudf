@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources edit_distance.pyx)
+set(cython_sources edit_distance.pyx generate_ngrams.pyx)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
