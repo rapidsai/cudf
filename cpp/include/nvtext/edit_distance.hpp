@@ -57,7 +57,7 @@ namespace CUDF_EXPORT nvtext {
  * @param targets Strings to compute edit distance against `input`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New strings columns of with replaced strings
+ * @return New lists column of edit distance values
  */
 std::unique_ptr<cudf::column> edit_distance(
   cudf::strings_column_view const& input,
