@@ -228,7 +228,8 @@ class parquet_field_string : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-struct parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
+class parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
+ public:
   parquet_field_string_list(int f, std::vector<std::string>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
@@ -396,8 +397,9 @@ class parquet_field_binary : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-struct parquet_field_binary_list
+class parquet_field_binary_list
   : public parquet_field_list<std::vector<uint8_t>, FieldType::BINARY> {
+ public:
   parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
