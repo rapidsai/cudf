@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/tokenize_json.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -88,17 +89,19 @@ void validate_token_stream(device_span<char const> d_input,
   CUDF_FUNC_RANGE();
   if (!options.is_strict_validation()) { return; }
 
-  rmm::device_uvector<bool> d_invalid(tokens.size(), stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), d_invalid.begin(), d_invalid.end(), false);
+  rmm::device_uvector<bool> d_invalid = cudf::detail::make_zeroed_device_uvector_async<bool>(
+    tokens.size(), stream, cudf::get_current_device_resource_ref());
+
   using token_t = cudf::io::json::token_t;
   auto literals = options.get_na_values();
   literals.emplace_back("null");  // added these too to single trie
   literals.emplace_back("true");
   literals.emplace_back("false");
+  std::vector<std::string> nonnumeric{"NaN", "Infinity", "+INF", "+Infinity", "-INF", "-Infinity"};
+
   cudf::detail::optional_trie trie_literals =
     cudf::detail::create_serialized_trie(literals, stream);
   auto trie_literals_view = cudf::detail::make_trie_view(trie_literals);
-  std::vector<std::string> nonnumeric{"NaN", "Infinity", "+INF", "+Infinity", "-INF", "-Infinity"};
   cudf::detail::optional_trie trie_nonnumeric =
     cudf::detail::create_serialized_trie(nonnumeric, stream);
   auto trie_nonnumeric_view = cudf::detail::make_trie_view(trie_nonnumeric);
@@ -288,9 +291,9 @@ void validate_token_stream(device_span<char const> d_input,
   auto conditional_invalidout_it =
     cudf::detail::make_tabulate_output_iterator(cuda::proclaim_return_type<void>(
       [d_invalid = d_invalid.begin()] __device__(size_type i, bool x) -> void {
-        if (x) d_invalid[i] = true;
+        if (x) { d_invalid[i] = true; }
       }));
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     count_it,
                     count_it + num_tokens,
                     conditional_invalidout_it,
@@ -302,7 +305,7 @@ void validate_token_stream(device_span<char const> d_input,
   auto binary_op             = cuda::proclaim_return_type<scan_type>(
     [] __device__(scan_type prev, scan_type curr) -> scan_type {
       auto op_result = (prev.first == token_t::ErrorBegin ? prev.first : curr.first);
-      return scan_type((curr.second ? curr.first : op_result), prev.second | curr.second);
+      return {(curr.second ? curr.first : op_result), prev.second | curr.second};
     });
   auto transform_op = cuda::proclaim_return_type<scan_type>(
     [d_invalid = d_invalid.begin(), tokens = tokens.begin()] __device__(auto i) -> scan_type {
@@ -310,7 +313,7 @@ void validate_token_stream(device_span<char const> d_input,
       return {static_cast<token_t>(tokens[i]), tokens[i] == token_t::LineEnd};
     });
 
-  thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                    count_it,
                                    count_it + num_tokens,
                                    conditional_output_it,
