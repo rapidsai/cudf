@@ -52,33 +52,27 @@ cpdef Column binary_operation(
 
     if LeftBinaryOperand is Column and RightBinaryOperand is Column:
         with nogil:
-            result = move(
-                cpp_binaryop.binary_operation(
-                    lhs.view(),
-                    rhs.view(),
-                    op,
-                    output_type.c_obj
-                )
+            result = cpp_binaryop.binary_operation(
+                lhs.view(),
+                rhs.view(),
+                op,
+                output_type.c_obj
             )
     elif LeftBinaryOperand is Column and RightBinaryOperand is Scalar:
         with nogil:
-            result = move(
-                cpp_binaryop.binary_operation(
-                    lhs.view(),
-                    dereference(rhs.c_obj),
-                    op,
-                    output_type.c_obj
-                )
+            result = cpp_binaryop.binary_operation(
+                lhs.view(),
+                dereference(rhs.c_obj),
+                op,
+                output_type.c_obj
             )
     elif LeftBinaryOperand is Scalar and RightBinaryOperand is Column:
         with nogil:
-            result = move(
-                cpp_binaryop.binary_operation(
-                    dereference(lhs.c_obj),
-                    rhs.view(),
-                    op,
-                    output_type.c_obj
-                )
+            result = cpp_binaryop.binary_operation(
+                dereference(lhs.c_obj),
+                rhs.view(),
+                op,
+                output_type.c_obj
             )
     else:
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
