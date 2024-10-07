@@ -105,57 +105,6 @@ struct update_target_element_shmem<
   }
 };
 
-struct update_target_from_dictionary_shmem {
-  template <typename Source,
-            aggregation::Kind k,
-            cuda::std::enable_if_t<!is_dictionary<Source>()>* = nullptr>
-  __device__ void operator()(std::byte* target,
-                             cudf::size_type target_index,
-                             bool* target_null,
-                             cudf::column_device_view source,
-                             cudf::size_type source_index) const noexcept
-  {
-    update_target_element_shmem<Source, k>{}(
-      target, target_index, target_null, source, source_index);
-  }
-  template <typename Source,
-            aggregation::Kind k,
-            cuda::std::enable_if_t<is_dictionary<Source>()>* = nullptr>
-  __device__ void operator()(std::byte* target,
-                             cudf::size_type target_index,
-                             bool* target_null,
-                             cudf::column_device_view source,
-                             cudf::size_type source_index) const noexcept
-  {
-  }
-};
-
-/*
-template <aggregation::Kind k>
-struct update_target_element_shmem<
-  dictionary32,
-  k,
-  cuda::std::enable_if_t<not(k == aggregation::ARGMIN or k == aggregation::ARGMAX or
-                             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL)>> {
-  __device__ void operator()(std::byte* target,
-                             cudf::size_type target_index,
-                             bool* target_null,
-                             cudf::column_device_view source,
-                             cudf::size_type source_index) const noexcept
-  {
-    dispatch_type_and_aggregation(
-      source.child(cudf::dictionary_column_view::keys_column_index).type(),
-      k,
-      update_target_from_dictionary_shmem{},
-      target,
-      target_index,
-      target_null,
-      source.child(cudf::dictionary_column_view::keys_column_index),
-      static_cast<cudf::size_type>(source.element<dictionary32>(source_index)));
-  }
-};
-*/
-
 template <typename Source>
 struct update_target_element_shmem<
   Source,
