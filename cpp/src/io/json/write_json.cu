@@ -170,6 +170,9 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
   {
+    if (column_v.is_empty()) {  // empty begets empty
+      return make_empty_column(type_id::STRING);
+    }
     auto [offsets_column, chars] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
