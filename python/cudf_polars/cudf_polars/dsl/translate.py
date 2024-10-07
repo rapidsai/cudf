@@ -183,12 +183,26 @@ def _(
     with set_node(visitor, node.input_right):
         inp_right = translate_ir(visitor, n=None)
         right_on = [translate_named_expr(visitor, n=e) for e in node.right_on]
-    if node.options[0] == "inequality":
+    if (how := node.options[0]) in {
+        "inner",
+        "left",
+        "right",
+        "full",
+        "cross",
+        "leftsemi",
+        "leftanti",
+    }:
+        return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
+    else:
+        how, op1, op2 = how
+        if how != "inequality":
+            raise NotImplementedError(f"Unsupported join type {how}")
         # No exposure of mixed/conditional joins in pylibcudf yet, so in
         # the first instance, implement by doing a cross join followed by
         # a filter.
-        _, *options, op1, op2 = node.options
-        cross = ir.Join(schema, inp_left, inp_right, [], [], ("cross", *options))
+        cross = ir.Join(
+            schema, inp_left, inp_right, [], [], ("cross", *node.options[1:])
+        )
         dtype = plc.DataType(plc.TypeId.BOOL8)
         if op2 is None:
             ops = [op1]
@@ -204,7 +218,6 @@ def _(
             ),
         )
         return ir.Filter(schema, cross, expr.NamedExpr("mask", mask))
-    return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
 
 
 @_translate_ir.register
