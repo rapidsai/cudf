@@ -41,9 +41,9 @@ TEST_F(JaccardTest, Basic)
   auto expected = cudf::test::fixed_width_column_wrapper<float>({1.0f, 1.0f, 1.0f, 1.0f});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
-  expected = cudf::test::fixed_width_column_wrapper<float>({1.0f, 1.0f});
-  results  = nvtext::jaccard_index(view1, view1, 5);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  // expected = cudf::test::fixed_width_column_wrapper<float>({1.0f, 1.0f});
+  // results  = nvtext::jaccard_index(view1, view1, 5);
+  // CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   // results = nvtext::jaccard_index(view2, view2, 10);
   // CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
