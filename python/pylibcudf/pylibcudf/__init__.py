@@ -28,6 +28,7 @@ from . import (
     lists,
     merge,
     null_mask,
+    nvtext,
     partitioning,
     quantiles,
     reduce,
@@ -92,4 +93,5 @@ __all__ = [
     "transpose",
     "types",
     "unary",
+    "nvtext",
 ]
