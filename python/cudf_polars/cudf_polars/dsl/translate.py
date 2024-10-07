@@ -20,6 +20,7 @@ import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.rewrite import rename
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes
 
@@ -208,6 +209,19 @@ def _(
             ops = [op1]
         else:
             ops = [op1, op2]
+        suffix = cross.suffix
+
+        # Column references in the right table refer to the post-join
+        # names, so with suffixes.
+        def renamer(name):
+            return name if name not in inp_left.schema else f"{name}{suffix}"
+
+        right_on = [
+            expr.NamedExpr(renamer(old.name), new)
+            for new, old in zip(
+                rename((e.value for e in right_on), renamer), right_on, strict=True
+            )
+        ]
         mask = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
