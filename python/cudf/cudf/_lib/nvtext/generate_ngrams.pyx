@@ -31,7 +31,7 @@ def generate_character_ngrams(Column strings, int ngrams):
 
 @acquire_spill_lock()
 def hash_character_ngrams(Column strings, int ngrams):
-    result = nvtext.generate_ngrams.generate_chash_character_ngramsharacter_ngrams(
+    result = nvtext.generate_ngrams.hash_character_ngrams(
         strings.to_pylibcudf(mode="read"),
         <size_type> ngrams
     )
