@@ -8,10 +8,10 @@ from pylibcudf.types cimport DataType
 cpdef Column to_durations(
     Column input,
     DataType duration_type,
-    const string& format
+    str format
 )
 
 cpdef Column from_durations(
-    Column input,
-    const string& format
+    Column durations,
+    str format=*
 )

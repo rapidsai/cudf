@@ -681,7 +681,7 @@ def melt(
     nval = len(value_vars)
     dtype = min_unsigned_type(nval)
 
-    if not var_name:
+    if var_name is None:
         var_name = "variable"
 
     if not value_vars:
@@ -961,14 +961,14 @@ def _merge_sorted(
     )
 
 
-def _pivot(df, index, columns):
+def _pivot(col_accessor: ColumnAccessor, index, columns) -> cudf.DataFrame:
     """
     Reorganize the values of the DataFrame according to the given
     index and columns.
 
     Parameters
     ----------
-    df : DataFrame
+    col_accessor : DataFrame
     index : cudf.Index
         Index labels of the result
     columns : cudf.Index
@@ -985,7 +985,7 @@ def _pivot(df, index, columns):
             return x if isinstance(x, tuple) else (x,)
 
         nrows = len(index_labels)
-        for col_label, col in df._column_labels_and_values:
+        for col_label, col in col_accessor.items():
             names = [
                 as_tuple(col_label) + as_tuple(name) for name in column_labels
             ]
@@ -1067,22 +1067,21 @@ def pivot(data, columns=None, index=no_default, values=no_default):
         2  <NA>  <NA>  three
 
     """
-    df = data
     values_is_list = True
     if values is no_default:
-        values = df._columns_view(
-            col for col in df._column_names if col not in (index, columns)
-        )
+        cols_to_select = [
+            col for col in data._column_names if col not in (index, columns)
+        ]
+    elif not isinstance(values, (list, tuple)):
+        cols_to_select = [values]
+        values_is_list = False
     else:
-        if not isinstance(values, (list, tuple)):
-            values = [values]
-            values_is_list = False
-        values = df._columns_view(values)
+        cols_to_select = values
     if index is no_default:
-        index = df.index
+        index = data.index
     else:
-        index = cudf.Index(df.loc[:, index])
-    columns = cudf.Index(df.loc[:, columns])
+        index = cudf.Index(data.loc[:, index])
+    columns = cudf.Index(data.loc[:, columns])
 
     # Create a DataFrame composed of columns from both
     # columns and index
@@ -1096,7 +1095,7 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     if len(columns_index) != len(columns_index.drop_duplicates()):
         raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
-    result = _pivot(values, index, columns)
+    result = _pivot(data._data.select_by_label(cols_to_select), index, columns)
 
     # MultiIndex to Index
     if not values_is_list:

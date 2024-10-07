@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@
 #include <cudf/utilities/logger.hpp>
 
 // Log messages that require computation should only be used at level TRACE and DEBUG
-#define CUDF_LOG_TRACE(...)    SPDLOG_LOGGER_TRACE(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_DEBUG(...)    SPDLOG_LOGGER_DEBUG(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_INFO(...)     SPDLOG_LOGGER_INFO(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_WARN(...)     SPDLOG_LOGGER_WARN(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_ERROR(...)    SPDLOG_LOGGER_ERROR(&cudf::logger(), __VA_ARGS__)
-#define CUDF_LOG_CRITICAL(...) SPDLOG_LOGGER_CRITICAL(&cudf::logger(), __VA_ARGS__)
+#define CUDF_LOG_TRACE(...)    SPDLOG_LOGGER_TRACE(&cudf::detail::logger(), __VA_ARGS__)
+#define CUDF_LOG_DEBUG(...)    SPDLOG_LOGGER_DEBUG(&cudf::detail::logger(), __VA_ARGS__)
+#define CUDF_LOG_INFO(...)     SPDLOG_LOGGER_INFO(&cudf::detail::logger(), __VA_ARGS__)
+#define CUDF_LOG_WARN(...)     SPDLOG_LOGGER_WARN(&cudf::detail::logger(), __VA_ARGS__)
+#define CUDF_LOG_ERROR(...)    SPDLOG_LOGGER_ERROR(&cudf::detail::logger(), __VA_ARGS__)
+#define CUDF_LOG_CRITICAL(...) SPDLOG_LOGGER_CRITICAL(&cudf::detail::logger(), __VA_ARGS__)
