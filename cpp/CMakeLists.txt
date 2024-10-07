@@ -315,10 +315,10 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
-  src/groupby/hash/compute_aggregations.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/compute_single_pass_aggs_null.cu
+  src/groupby/hash/compute_single_pass_shmem_aggs.cu
   src/groupby/hash/create_sparse_results_table.cu
   src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
