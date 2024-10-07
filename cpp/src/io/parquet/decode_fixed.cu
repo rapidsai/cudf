@@ -71,19 +71,9 @@ __device__ static void scan_block_exclusive_sum(uint32_t warp_bits,
   // Compute block-wide results
   results.block_count               = 0;
   results.thread_count_within_block = results.thread_count_within_warp;
-  if constexpr ((num_warps == 4) || (num_warps == 8)) {
-    results.block_count = warp_counts[0] + warp_counts[1] + warp_counts[2] + warp_counts[3];
-    if constexpr (num_warps == 8) {
-      results.block_count += warp_counts[4] + warp_counts[5] + warp_counts[6] + warp_counts[7];
-    }
-    for (int warp_idx = 0; warp_idx < warp_index; ++warp_idx) {
-      results.thread_count_within_block += warp_counts[warp_idx];
-    }
-  } else {
-    for (int warp_idx = 0; warp_idx < num_warps; ++warp_idx) {
-      results.block_count += warp_counts[warp_idx];
-      if (warp_idx < warp_index) { results.thread_count_within_block += warp_counts[warp_idx]; }
-    }
+  for (int warp_idx = 0; warp_idx < num_warps; ++warp_idx) {
+    results.block_count += warp_counts[warp_idx];
+    if (warp_idx < warp_index) { results.thread_count_within_block += warp_counts[warp_idx]; }
   }
 }
 
