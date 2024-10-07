@@ -193,7 +193,13 @@ There are a few known limitations that you should be aware of:
   arr = pd.Series([1, 1, 2]).unique() # returns a proxy array
   isinstance(arr, np.ndarray) # returns True, where arr is a proxy array
   ```
-  Because the proxy type ducktypes as a NumPy array, NumPy functions may attempt to access internal members, such as the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays), via the NumPy C API. However, our proxy mechanism is designed to proxy function calls at the Python level, which is incompatible with these types of accesses. To handle these situations, we perform an eager device-to-host (DtoH) copy, which sets the data buffer correctly but incurs the cost of extra time when creating the proxy array. In the previous example, creating `arr` performed this kind of implicit DtoH transfer.
+  Because the proxy type ducktypes as a NumPy array, NumPy functions may attempt to
+  access internal members, such as the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays), via the NumPy C API.
+  However, our proxy mechanism is designed to proxy function calls at the Python
+  level, which is incompatible with these types of accesses. To handle these
+  situations, we perform an eager device-to-host (DtoH) copy, which sets the data
+  buffer correctly but incurs the cost of extra time when creating the proxy array.
+  In the previous example, creating `arr` performed this kind of implicit DtoH transfer.
 
   With this approach, we also get compatibility with third party libraries like `torch`.
 
