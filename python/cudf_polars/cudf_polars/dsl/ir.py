@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-from functools import cache
+from functools import cache, cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -684,6 +684,17 @@ class Join(IR):
         ):
             raise NotImplementedError("Join with literal as join key.")
 
+    @cached_property
+    def suffix(self) -> str:
+        """
+        The suffix to append to the names of columns in the right frame.
+
+        The suffix is only applied if the name overlaps with a name in
+        the left frame.
+        """
+        suffix = self.options[3]
+        return "_right" if suffix is None else suffix
+
     @staticmethod
     @cache
     def _joiners(
@@ -781,7 +792,7 @@ class Join(IR):
         left = self.left.evaluate(cache=cache)
         right = self.right.evaluate(cache=cache)
         how, join_nulls, zlice, suffix, coalesce = self.options
-        suffix = "_right" if suffix is None else suffix
+        suffix = self.suffix
         if how == "cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
