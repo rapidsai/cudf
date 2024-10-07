@@ -39,6 +39,7 @@ def right():
         {
             "a": [1, 4, 3, 7, None, None],
             "c": [2, 3, 4, 5, 6, 7],
+            "d": [6, None, 7, 8, -1, 2],
         }
     )
 
@@ -86,3 +87,24 @@ def test_join_literal_key_unsupported(left, right, left_on, right_on):
     q = left.join(right, left_on=left_on, right_on=right_on, how="inner")
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "conditions",
+    [
+        [pl.col("a") < pl.col("a_right")],
+        [pl.col("a_right") <= pl.col("a") * 2],
+        [pl.col("b") * 2 > pl.col("a_right"), pl.col("a") == pl.col("c_right")],
+        [pl.col("b") * 2 <= pl.col("a_right"), pl.col("a") < pl.col("c_right")],
+        pytest.param(
+            [pl.col("b") <= pl.col("a_right") * 7, pl.col("a") < pl.col("d") * 2],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pola-rs/polars/issues/19119"
+            ),
+        ),
+    ],
+)
+def test_join_where(left, right, conditions):
+    q = left.join_where(right, *conditions)
+
+    assert_gpu_result_equal(q, check_row_order=False)
