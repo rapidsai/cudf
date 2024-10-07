@@ -266,7 +266,7 @@ void find_utility(strings_column_view const& input,
 
   if(avg_char_bytes >= BLOCK_AVG_CHAR_BYTES_THRESHOLD) {
     // use block-per-string if we have really large strings
-    constexpr int block_size = 256;
+    constexpr int block_size = 512;
     cudf::detail::grid_1d grid{block_size * input.size(), block_size};
     finder_block_parallel_fn<TargetIterator, block_size, forward>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
