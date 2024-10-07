@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
+import contextlib
 import copy
 import datetime
 import operator
@@ -29,7 +30,7 @@ from numba import (
 from packaging import version
 from pytz import utc
 
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
     ProxyFallbackError,
@@ -56,8 +57,6 @@ from pandas.tseries.holiday import (
     USThanksgivingDay,
     get_calendar,
 )
-
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
@@ -712,7 +711,12 @@ def test_rolling_apply_numba_engine():
     pdf = pd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
     df = xpd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
 
-    with pytest.warns(NumbaDeprecationWarning):
+    ctx = (
+        contextlib.nullcontext()
+        if PANDAS_GE_210
+        else pytest.warns(NumbaDeprecationWarning)
+    )
+    with ctx:
         expect = pdf.rolling(2, method="table", min_periods=0).apply(
             weighted_mean, raw=True, engine="numba"
         )
@@ -1308,7 +1312,7 @@ def test_super_attribute_lookup():
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION < version.parse("2.1"),
     reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
 )
 def test_floordiv_array_vs_df():
@@ -1583,7 +1587,7 @@ def test_numpy_cupy_flatiter(series):
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION < version.parse("2.1"),
     reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
 )
 def test_arrow_string_arrays():
