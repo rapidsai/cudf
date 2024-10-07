@@ -210,9 +210,9 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
       ? cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
       : rmm::device_buffer{};
 
-  auto const has_dictionary_input =
-    std::any_of(keys.begin(), keys.end(), [](cudf::column_view col) {
-      return cudf::is_dictionary(col.type());
+  auto const has_dictionary_request = std::any_of(
+    requests.begin(), requests.end(), [](cudf::groupby::aggregation_request const& request) {
+      return cudf::is_dictionary(request.values.type());
     });
 
   // 'populated_keys' contains inserted row_indices (keys) of global hash set
@@ -225,12 +225,12 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  if (has_dictionary_input) {
+  if (has_dictionary_request) {
     // make table that will hold sparse results
     cudf::table sparse_table = create_sparse_results_table(flattened_values,
                                                            d_agg_kinds.data(),
                                                            agg_kinds,
-                                                           has_dictionary_input,
+                                                           has_dictionary_request,
                                                            global_set,
                                                            populated_keys,
                                                            stream);
