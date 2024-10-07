@@ -49,9 +49,9 @@ cdef table_view table_view_from_table(tbl, ignore_index=False) except*:
         If True, don't include the index in the columns.
     """
     return table_view_from_columns(
-        tbl._index._data.columns + tbl._data.columns
+        tbl._index._columns + tbl._columns
         if not ignore_index and tbl._index is not None
-        else tbl._data.columns
+        else tbl._columns
     )
 
 
@@ -62,7 +62,7 @@ cpdef generate_pandas_metadata(table, index):
     index_descriptors = []
     columns_to_convert = list(table._columns)
     # Columns
-    for name, col in table._data.items():
+    for name, col in table._column_labels_and_values:
         if cudf.get_option("mode.pandas_compatible"):
             # in pandas-compat mode, non-string column names are stringified.
             col_names.append(str(name))
@@ -316,15 +316,17 @@ cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
         index_names
     )
 
-cdef data_from_pylibcudf_io(tbl_with_meta):
+cdef data_from_pylibcudf_io(tbl_with_meta, column_names=None, index_names=None):
     """
     Unpacks the TableWithMetadata from libcudf I/O
     into a dict of columns and an Index (cuDF format)
     """
+    if column_names is None:
+        column_names = tbl_with_meta.column_names(include_children=False)
     return _data_from_columns(
         columns=[Column.from_pylibcudf(plc) for plc in tbl_with_meta.columns],
-        column_names=tbl_with_meta.column_names(include_children=False),
-        index_names=None
+        column_names=column_names,
+        index_names=index_names
     )
 
 cdef columns_from_table_view(

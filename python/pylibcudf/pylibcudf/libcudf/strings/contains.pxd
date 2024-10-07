@@ -24,4 +24,9 @@ cdef extern from "cudf/strings/contains.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] like(
         column_view source_strings,
         string_scalar pattern,
-        string_scalar escape) except +
+        string_scalar escape_character) except +
+
+    cdef unique_ptr[column] like(
+        column_view source_strings,
+        column_view patterns,
+        string_scalar escape_character) except +

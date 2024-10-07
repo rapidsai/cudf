@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "special_chars.h"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -80,6 +82,32 @@ TEST_F(StringsFindallTests, DotAll)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
+TEST_F(StringsFindallTests, SpecialNewLines)
+{
+  auto input = cudf::test::strings_column_wrapper({"zzé" PARAGRAPH_SEPARATOR "qqq\nzzé",
+                                                   "qqq\nzzé" PARAGRAPH_SEPARATOR "lll",
+                                                   "zzé",
+                                                   "",
+                                                   "zzé\r",
+                                                   "zzé" LINE_SEPARATOR "zzé" NEXT_LINE});
+  auto view  = cudf::strings_column_view(input);
+
+  auto prog =
+    cudf::strings::regex_program::create("(^zzé$)", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results = cudf::strings::findall(view, *prog);
+  using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{}, LCW{}, LCW{"zzé"}, LCW{}, LCW{"zzé"}, LCW{}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  auto both_flags = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create("^(zzé)$", both_flags);
+  results      = cudf::strings::findall(view, *prog_ml);
+  LCW expected_ml(
+    {LCW{"zzé", "zzé"}, LCW{"zzé"}, LCW{"zzé"}, LCW{}, LCW{"zzé"}, LCW{"zzé", "zzé"}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_ml);
+}
+
 TEST_F(StringsFindallTests, MediumRegex)
 {
   // This results in 15 regex instructions and falls in the 'medium' range.
@@ -118,5 +146,33 @@ TEST_F(StringsFindallTests, LargeRegex)
 
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{large_regex.c_str()}, LCW{}, LCW{}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, NoMatches)
+{
+  cudf::test::strings_column_wrapper input({"abc\nfff\nabc", "fff\nabc\nlll", "abc", "", "abc\n"});
+  auto sv = cudf::strings_column_view(input);
+
+  auto pattern = std::string("(^zzz$)");
+  using LCW    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{}, LCW{}, LCW{}, LCW{}, LCW{}});
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::findall(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(StringsFindallTests, EmptyTest)
+{
+  std::string pattern = R"(\w+)";
+
+  auto prog = cudf::strings::regex_program::create(pattern);
+
+  cudf::test::strings_column_wrapper input;
+  auto sv      = cudf::strings_column_view(input);
+  auto results = cudf::strings::findall(sv, *prog);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected;
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
