@@ -60,7 +60,7 @@ void groupby_histogram_helper(nvbench::state& state,
   });
 
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(num_rows) / elapsed_time / 1'000'000., "Mrows/s");
+  state.add_element_count(static_cast<double>(num_rows) / elapsed_time, "rows/s");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
