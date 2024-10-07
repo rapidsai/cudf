@@ -24,6 +24,54 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
+// Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously. 
+// Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for lists. 
+struct block_scan_results {
+  uint32_t warp_bits;
+  int thread_count_within_warp;
+  int warp_count;
+
+  int thread_count_within_block;
+  int block_count;
+};
+
+template <int decode_block_size>
+__device__ inline static void scan_block_exclusive_sum(int thread_bit, block_scan_results& results)
+{
+  int const t = threadIdx.x;
+  int const warp_index     = t / cudf::detail::warp_size;
+  int const warp_lane      = t % cudf::detail::warp_size;
+  uint32_t const lane_mask = (uint32_t(1) << warp_lane) - 1;
+
+  uint32_t warp_bits = ballot(thread_bit);
+  scan_block_exclusive_sum<decode_block_size>(warp_bits, warp_lane, warp_index, lane_mask, results);
+}
+
+template <int decode_block_size>
+__device__ inline static void scan_block_exclusive_sum(uint32_t warp_bits, int warp_lane, int warp_index, uint32_t lane_mask, block_scan_results& results)
+{
+  //Compute # warps
+  constexpr int num_warps = decode_block_size / cudf::detail::warp_size;
+  
+  //Compute the warp-wide results
+  results.warp_bits                = warp_bits;
+  results.warp_count               = __popc(results.warp_bits);
+  results.thread_count_within_warp = __popc(results.warp_bits & lane_mask);
+
+  //Share the warp counts amongst the block threads
+  __shared__ int warp_counts[num_warps];
+  if (warp_lane == 0) { warp_counts[warp_index] = results.warp_count; }
+  __syncthreads();
+
+  //Compute block-wide results
+  results.block_count               = 0;
+  results.thread_count_within_block = results.thread_count_within_warp;
+  for (int warp_idx = 0; warp_idx < num_warps; ++warp_idx) {
+    results.block_count += warp_counts[warp_idx];
+    if (warp_idx < warp_index) { results.thread_count_within_block += warp_counts[warp_idx]; }
+  }
+}
+
 template <int block_size, bool has_lists_t, typename state_buf>
 __device__ inline void gpuDecodeFixedWidthValues(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
@@ -265,7 +313,7 @@ struct decode_fixed_width_split_values_func {
 };
 
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesNestedNonLists(
+static __device__ int gpuUpdateValidityAndRowIndicesNested(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
@@ -552,48 +600,6 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
   return valid_count;
 }
 
-struct scan_results
-{
-  uint32_t warp_bits;
-  int thread_count_within_warp;
-  int warp_count;
-
-  int thread_count_within_block;
-  int block_count;
-};
-
-template <int decode_block_size>
-static __device__ void scan_block(uint32_t warp_bits, int warp_lane, int warp_index, uint32_t lane_mask, scan_results& results)
-{
-  constexpr int num_warps = decode_block_size / cudf::detail::warp_size;
-
-  results.warp_bits = warp_bits;
-  results.warp_count = __popc(results.warp_bits);
-  results.thread_count_within_warp = __popc(results.warp_bits & lane_mask);
-
-  __shared__ uint32_t warp_counts[num_warps];
-  if(warp_lane == 0) {
-    warp_counts[warp_index] = results.warp_count;
-  }
-  __syncthreads();
-
-  results.block_count = 0;
-  results.thread_count_within_block = results.thread_count_within_warp;
-  for(int warp_idx = 0; warp_idx < num_warps; ++warp_idx) {
-    results.block_count += warp_counts[warp_idx];
-    if(warp_idx < warp_index) {
-      results.thread_count_within_block += warp_counts[warp_idx];
-    }
-  }
-}
-
-template <int decode_block_size>
-static __device__ void scan_block(int thread_bit, int warp_lane, int warp_index, uint32_t lane_mask, scan_results& results)
-{
-  uint32_t warp_bits = ballot(thread_bit);
-  scan_block<decode_block_size>(warp_bits, warp_lane, warp_index, lane_mask, results);
-}
-
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
 static __device__ int gpuUpdateValidityAndRowIndicesLists(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, 
@@ -630,13 +636,9 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
 
   __syncthreads();
   
-  using block_scan = cub::BlockScan<int, decode_block_size>;
-  __shared__ typename block_scan::TempStorage scan_storage;
-
-  int const warp_lane = t % cudf::detail::warp_size;
-  bool const is_first_lane = warp_lane == 0;
-  int const warp_index = t / cudf::detail::warp_size;
-  uint32_t const lane_mask = (uint32_t(1) << warp_lane) - 1;
+  int const warp_index     = t / cudf::detail::warp_size;
+  int const warp_lane      = t % cudf::detail::warp_size;
+  bool const is_first_lane = (warp_lane == 0);
 
   while (value_count < target_value_count) {
 
@@ -647,10 +649,10 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
 
     // get definition level, use repitition level to get start/end depth
     // different for each thread, as each thread has a different r/d
-    int rep_level = -1, def_level = -1, start_depth = -1, end_depth = -1;
+    int def_level = -1, start_depth = -1, end_depth = -1;
     if (within_batch) {
       int const index = rolling_index<state_buf::nz_buf_size>(value_count + t);
-      rep_level = static_cast<int>(rep[index]);
+      int rep_level = static_cast<int>(rep[index]);
       if constexpr (nullable) {
         def_level = static_cast<int>(def[index]);
         end_depth = s->nesting_info[def_level].end_depth;
@@ -686,16 +688,19 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
     //Determine value count & row index
     // track (page-relative) row index for the thread so we can compare against input bounds
     // keep track of overall # of rows we've read.
-    //THIS IS THE UNDO POINT
     int const is_new_row = start_depth == 0 ? 1 : 0;
     int num_prior_new_rows, total_num_new_rows;
-    block_scan(scan_storage).ExclusiveSum(is_new_row, num_prior_new_rows, total_num_new_rows);
-    __syncthreads();
+    {
+      block_scan_results new_row_scan_results;
+      scan_block_exclusive_sum<decode_block_size>(is_new_row, new_row_scan_results);
+      num_prior_new_rows = new_row_scan_results.thread_count_within_block;
+      total_num_new_rows = new_row_scan_results.block_count;
+    }
 
 if constexpr (enable_print_large_list) {
   if(within_batch && (bool(is_new_row) != (t % 4 == 0))) {
-    printf("CUB GARBAGE: blockIdx.x %d, value_count %d, target_value_count %d, t %d, is_new_row %d, start_depth %d, rep_level %d\n", 
-      blockIdx.x, value_count, target_value_count, t, is_new_row, start_depth, rep_level);
+    printf("CUB GARBAGE: blockIdx.x %d, value_count %d, target_value_count %d, t %d, is_new_row %d, start_depth %d\n", 
+      blockIdx.x, value_count, target_value_count, t, is_new_row, start_depth);
   }
   if(within_batch && (num_prior_new_rows != ((t + 3) / 4))) {
     printf("CUB GARBAGE: blockIdx.x %d, value_count %d, target_value_count %d, t %d, num_prior_new_rows %d\n", 
@@ -731,13 +736,16 @@ if constexpr (enable_print_large_list) {
     // queries is_valid from all threads, stores prior total and total total
 
     //WARP VALUE COUNT:
-    scan_results value_count_scan_results;
-    scan_block<decode_block_size>(in_nesting_bounds, warp_lane, warp_index, lane_mask, value_count_scan_results);
+    int thread_value_count_within_warp, warp_value_count, thread_value_count, block_value_count;
+    {
+      block_scan_results value_count_scan_results;
+      scan_block_exclusive_sum<decode_block_size>(in_nesting_bounds, value_count_scan_results);
 
-    int thread_value_count_within_warp = value_count_scan_results.thread_count_within_warp;
-    int warp_value_count = value_count_scan_results.warp_count;
-    int thread_value_count = value_count_scan_results.thread_count_within_block;
-    int block_value_count = value_count_scan_results.block_count;
+      thread_value_count_within_warp = value_count_scan_results.thread_count_within_warp;
+      warp_value_count = value_count_scan_results.warp_count;
+      thread_value_count = value_count_scan_results.thread_count_within_block;
+      block_value_count = value_count_scan_results.block_count;
+    }
 
 if constexpr (enable_print_large_list) {
   if(within_batch && in_row_bounds && (in_nesting_bounds != (t % 4 == 0))) {
@@ -798,14 +806,15 @@ if constexpr (enable_print_large_list) {
         // position for thread t's bit is thread_value_count. for cuda 11 we could use
         // __reduce_or_sync(), but until then we have to do a warp reduce.
         uint32_t const warp_valid_mask = WarpReduceOr32((uint32_t)is_valid << thread_value_count_within_warp);
-        auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
+        int thread_valid_count, block_valid_count;
+        {
+          auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
 
-        scan_results valid_count_scan_results;
-        scan_block<decode_block_size>(warp_valid_mask, warp_lane, warp_index, thread_mask, valid_count_scan_results);
-
-        int warp_valid_count = valid_count_scan_results.warp_count;
-        int thread_valid_count = valid_count_scan_results.thread_count_within_block;
-        int block_valid_count = valid_count_scan_results.block_count;
+          block_scan_results valid_count_scan_results;
+          scan_block_exclusive_sum<decode_block_size>(warp_valid_mask, warp_lane, warp_index, thread_mask, valid_count_scan_results);
+          thread_valid_count = valid_count_scan_results.thread_count_within_block;
+          block_valid_count = valid_count_scan_results.block_count;
+        }
 
 if constexpr (enable_print_large_list) {
   if(within_batch && in_row_bounds && (((d_idx == 0) && (is_valid != (t % 4 == 0))) || ((d_idx == 1) && !is_valid))) {
@@ -846,13 +855,15 @@ if constexpr (enable_print_large_list) {
           (d_idx + 1 >= start_depth && d_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0;
 
 //NEXT WARP VALUE COUNT:
-        scan_results next_value_count_scan_results;
-        scan_block<decode_block_size>(next_in_nesting_bounds, warp_lane, warp_index, lane_mask, next_value_count_scan_results);
+        {
+          block_scan_results next_value_count_scan_results;
+          scan_block_exclusive_sum<decode_block_size>(next_in_nesting_bounds, next_value_count_scan_results);
 
-        next_thread_value_count_within_warp = next_value_count_scan_results.thread_count_within_warp;
-        next_warp_value_count = next_value_count_scan_results.warp_count;
-        next_thread_value_count = next_value_count_scan_results.thread_count_within_block;
-        next_block_value_count = next_value_count_scan_results.block_count;
+          next_thread_value_count_within_warp = next_value_count_scan_results.thread_count_within_warp;
+          next_warp_value_count = next_value_count_scan_results.warp_count;
+          next_thread_value_count = next_value_count_scan_results.thread_count_within_block;
+          next_block_value_count = next_value_count_scan_results.block_count;
+        }
 
 if constexpr (enable_print_large_list) {
   if(within_batch && in_row_bounds && (next_in_nesting_bounds != 1)) {
@@ -894,12 +905,12 @@ if constexpr (enable_print_large_list) {
     printf("WHOA BAD OFFSET\n");
     printf("WHOA BAD OFFSET: WROTE %d to %d! t %d, blockIdx.x %d, idx %d, d_idx %d, start_depth %d, end_depth %d, max_depth %d, "
       "in_row_bounds %d, in_nesting_bounds %d, next_in_nesting_bounds %d, row_index %d, row_index_lower_bound %d, last_row %d, "
-      "input_row_count %d, num_prior_new_rows %d, is_new_row %d, total_num_new_rows %d, rep_level %d, def_level %d, ni.value_count %d, "
+      "input_row_count %d, num_prior_new_rows %d, is_new_row %d, total_num_new_rows %d, def_level %d, ni.value_count %d, "
       "thread_value_count %d, next_ni.value_count %d, next_thread_value_count %d, next_ni.page_start_value %d, value_count %d, "
       "target_value_count %d, block_value_count %d, next_block_value_count %d\n", 
       ofs, overall_index, t, blockIdx.x, idx, d_idx, start_depth, end_depth, max_depth, in_row_bounds, in_nesting_bounds, 
       next_in_nesting_bounds, row_index, row_index_lower_bound, last_row, input_row_count, num_prior_new_rows, is_new_row, 
-      total_num_new_rows, rep_level, def_level, ni.value_count, thread_value_count, next_ni.value_count, 
+      total_num_new_rows, def_level, ni.value_count, thread_value_count, next_ni.value_count, 
       next_thread_value_count, next_ni.page_start_value, value_count, target_value_count, block_value_count, next_block_value_count);
   }
 }
@@ -927,7 +938,6 @@ if constexpr (enable_print_large_list) {
 //TODO: Consider OR'ING for next_thread_value_count and popc() for next_thread_value_count
 //so that we don't have to take a ballot here. Is uint128 so may deconstruct to this anyway ...
 
-        int warp_null_count = 0;
         if(is_first_lane && (ni.valid_map != nullptr) && (warp_value_count > 0)) {
           // last bit in the warp to store //in old is warp_valid_mask_bit_count
 //so it's a count of everything in nesting bounds, though bits can be zero if NULL at this level            
@@ -936,14 +946,11 @@ if constexpr (enable_print_large_list) {
           //is cumulative sum of warp_value_count at the given nesting depth
           // DON'T subtract by first_row: since it's lists it's not 1-row-per-value
           int const bit_offset = ni.valid_map_offset + thread_value_count;
-
           store_validity(bit_offset, ni.valid_map, warp_valid_mask, warp_value_count);
-          warp_null_count = warp_value_count - warp_valid_count;
 
           if constexpr (enable_print) {
               printf("STORE VALIDITY: t %d, depth %d, thread_value_count %d, valid_map_offset %d, bit_offset %d, warp_value_count %d, warp_valid_mask %u\n", 
                 t, d_idx, thread_value_count, ni.valid_map_offset, bit_offset, warp_value_count, warp_valid_mask);
-              printf("NUM NULLS: t %d, depth %d, warp_null_count %d\n", t, d_idx, warp_null_count);
             }
         }
 
@@ -1148,8 +1155,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
 
   DecodeValuesFunc<decode_block_size_t, has_lists_t, state_buf_t> decode_values;
 
-  bool const nullable             = is_nullable(s);
-  bool const should_process_nulls = nullable && maybe_has_nulls(s);
+  bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // shared buffer. all shared memory is suballocated out of here
   static constexpr auto align_test = false;
@@ -1244,8 +1250,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   }
 
   if constexpr (enable_print) {
-    if(t == 0) { printf("page_idx %d, nullable %d, should_process_nulls %d, has_lists_t %d, has_dict_t %d, num_rows %lu, page.num_input_values %d\n", 
-      page_idx, int(nullable), int(should_process_nulls), int(has_lists_t), int(has_dict_t), num_rows, s->page.num_input_values); }
+    if(t == 0) { printf("page_idx %d, should_process_nulls %d, has_lists_t %d, has_dict_t %d, num_rows %lu, page.num_input_values %d\n", 
+      page_idx, int(should_process_nulls), int(has_lists_t), int(has_dict_t), num_rows, s->page.num_input_values); }
   }
 
   auto print_nestings = [&](bool is_post){
@@ -1295,7 +1301,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
             s->page.num_input_values, s->input_value_count, value_count, s->input_value_count, processed_count, valid_count, next_valid_count); }
         }
       } else if constexpr (has_nesting_t) {
-        next_valid_count = gpuUpdateValidityAndRowIndicesNestedNonLists<decode_block_size_t, true, level_t>(
+        next_valid_count = gpuUpdateValidityAndRowIndicesNested<decode_block_size_t, true, level_t>(
           processed_count, s, sb, def, t);
         if constexpr (enable_print) {
           if(t == 0) { printf("NESTED NEXT: next_valid_count %d\n", next_valid_count); }
@@ -1321,7 +1327,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
 
         if constexpr (has_nesting_t) {
           next_valid_count =
-            gpuUpdateValidityAndRowIndicesNestedNonLists<decode_block_size_t, false, level_t>(
+            gpuUpdateValidityAndRowIndicesNested<decode_block_size_t, false, level_t>(
               processed_count, s, sb, nullptr, t);
         } else {
           next_valid_count = gpuUpdateValidityAndRowIndicesFlat<decode_block_size_t, false, level_t>(
