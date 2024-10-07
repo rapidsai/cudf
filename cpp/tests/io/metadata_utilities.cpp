@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
-#include <cudf_test/testing_api.hpp>
 
 namespace cudf::test {
 

@@ -16,7 +16,8 @@
 
 #pragma once
 
-#include <cudf_test/testing_api.hpp>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 /**
  * @brief test macro to be expects `expr` to return cudaSuccess

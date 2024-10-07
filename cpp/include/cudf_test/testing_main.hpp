@@ -16,9 +16,9 @@
 
 #pragma once
 
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
-#include <cudf_test/testing_api.hpp>
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>

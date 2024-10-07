@@ -15,9 +15,8 @@
  */
 
 #include <cudf_test/column_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
-
-#include <gtest/gtest.h>
 
 namespace cudf::test::detail {
 void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs)
