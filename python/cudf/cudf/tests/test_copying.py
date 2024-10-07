@@ -17,7 +17,7 @@ pytestmark = pytest.mark.spilling
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 def test_repeat(dtype):
     rng = np.random.default_rng(seed=0)
-    arr = np.random.rand(10) * 10
+    arr = rng.random(10) * 10
     repeats = rng.integers(10, size=10)
     psr = pd.Series(arr).astype(dtype)
     gsr = cudf.from_pandas(psr)
@@ -48,7 +48,8 @@ def test_repeat_dataframe():
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_repeat_scalar(dtype):
-    arr = np.random.rand(10) * 10
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(10) * 10
     repeats = 10
     psr = pd.Series(arr).astype(dtype)
     gsr = cudf.from_pandas(psr)

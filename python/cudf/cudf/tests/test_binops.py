@@ -2,7 +2,6 @@
 
 import decimal
 import operator
-import random
 import warnings
 from itertools import combinations_with_replacement, product
 
@@ -204,7 +203,8 @@ def test_series_binop(binop, obj_class):
 @pytest.mark.parametrize("binop", _binops)
 def test_series_binop_concurrent(binop):
     def func(index):
-        arr = np.random.random(100) * 10
+        rng = np.random.default_rng(seed=0)
+        arr = rng.random(100) * 10
         sr = Series(arr)
 
         result = binop(sr.astype("int32"), sr)
@@ -223,8 +223,9 @@ def test_series_binop_concurrent(binop):
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem,binop", list(product([1, 2, 100], _binops)))
 def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
-    arr = np.random.random(nelem)
-    rhs = random.choice(arr).item()
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(nelem)
+    rhs = rng.choice(arr).item()
 
     sr = Series(arr)
     if obj_class == "Index":
@@ -247,10 +248,11 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
     "lhs_dtype,rhs_dtype", list(product(_int_types, _int_types))
 )
 def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
-    arr1 = (np.random.random(100) * 100).astype(lhs_dtype)
+    rng = np.random.default_rng(seed=0)
+    arr1 = (rng.random(100) * 100).astype(lhs_dtype)
     sr1 = Series(arr1)
 
-    arr2 = (np.random.random(100) * 100).astype(rhs_dtype)
+    arr2 = (rng.random(100) * 100).astype(rhs_dtype)
     sr2 = Series(arr2)
 
     if obj_class == "Index":
@@ -272,8 +274,10 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
 )
 def test_series_compare(cmpop, obj_class, dtype):
     rng = np.random.default_rng(seed=0)
-    sr1 = Series(rng.integers(0, 100, 100).astype(dtype))
-    sr2 = Series(rng.integers(0, 100, 100).astype(dtype))
+    arr1 = rng.integers(0, 100, 100).astype(dtype)
+    arr2 = rng.integers(0, 100, 100).astype(dtype)
+    sr1 = Series(arr1)
+    sr2 = Series(arr2)
 
     if obj_class == "Index":
         sr1 = Index(sr1)
@@ -465,9 +469,9 @@ _nulls = ["none", "some"]
 @pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
 @pytest.mark.parametrize("lhs_nulls,rhs_nulls", list(product(_nulls, _nulls)))
 def test_validity_add(nelem, lhs_nulls, rhs_nulls):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     # LHS
-    lhs_data = np.random.random(nelem)
+    lhs_data = rng.random(nelem)
     if lhs_nulls == "some":
         lhs_mask = utils.random_bitmask(nelem)
         lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)[:nelem]
@@ -478,7 +482,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     else:
         lhs = Series(lhs_data)
     # RHS
-    rhs_data = np.random.random(nelem)
+    rhs_data = rng.random(nelem)
     if rhs_nulls == "some":
         rhs_mask = utils.random_bitmask(nelem)
         rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)[:nelem]
@@ -525,8 +529,9 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
 )
 def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 10
-    lhs = (np.random.random(nelem) * nelem).astype(lhs_dtype)
-    rhs = (np.random.random(nelem) * nelem).astype(rhs_dtype)
+    rng = np.random.default_rng(seed=0)
+    lhs = (rng.random(nelem) * nelem).astype(lhs_dtype)
+    rhs = (rng.random(nelem) * nelem).astype(rhs_dtype)
 
     sr1 = Series(lhs)
     sr2 = Series(rhs)
@@ -550,8 +555,9 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
 )
 def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 5
-    lhs = (np.random.random(nelem) * nelem).astype(lhs_dtype)
-    rhs = (np.random.random(nelem) * nelem).astype(rhs_dtype)
+    rng = np.random.default_rng(seed=0)
+    lhs = (rng.random(nelem) * nelem).astype(lhs_dtype)
+    rhs = (rng.random(nelem) * nelem).astype(rhs_dtype)
 
     sr1 = Series(lhs)
     sr2 = Series(rhs)
@@ -574,7 +580,6 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
 )
 def test_series_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
-    np.random.seed(12)
     random_series = utils.gen_rand(dtype, 100, low=10)
 
     # gpu series
@@ -631,7 +636,6 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     cpu_func, gpu_func = funcs
 
     # create random series
-    np.random.seed(12)
     random_series = utils.gen_rand(dtype, 100, low=10)
 
     # gpu series
@@ -774,6 +778,7 @@ def test_df_different_index_shape(df2, binop):
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
 def test_boolean_scalar_binop(op):
+    rng = np.random.default_rng(seed=0)
     psr = pd.Series(rng.choice([True, False], 10))
     gsr = cudf.from_pandas(psr)
     assert_eq(op(psr, True), op(gsr, True))
@@ -923,6 +928,7 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     num_cols = 3
 
     def gen_df():
+        rng = np.random.default_rng(seed=0)
         pdf = pd.DataFrame()
         from string import ascii_lowercase
 
@@ -954,7 +960,7 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("other", ["df", "scalar"])
 def test_logical_operator_func_dataframe(func, nulls, other):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     num_rows = 100
     num_cols = 3
 

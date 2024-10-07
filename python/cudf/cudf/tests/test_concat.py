@@ -30,6 +30,7 @@ def _hide_concat_empty_dtype_warning():
 
 
 def make_frames(index=None, nulls="none"):
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
             "x": range(10),
@@ -51,7 +52,7 @@ def make_frames(index=None, nulls="none"):
         df2.y = np.full_like(df2.y, np.nan)
     if nulls == "some":
         mask = np.arange(10)
-        np.random.shuffle(mask)
+        rng.shuffle(mask)
         mask = mask[:5]
         df.loc[mask, "y"] = np.nan
         df2.loc[mask, "y"] = np.nan

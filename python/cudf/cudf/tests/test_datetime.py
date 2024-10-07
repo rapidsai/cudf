@@ -216,17 +216,21 @@ def test_setitem_datetime():
 
 
 def test_sort_datetime():
-    df = pd.DataFrame()
-    df["date"] = np.array(
-        [
-            np.datetime64("2016-11-20"),
-            np.datetime64("2020-11-20"),
-            np.datetime64("2019-11-20"),
-            np.datetime64("1918-11-20"),
-            np.datetime64("2118-11-20"),
-        ]
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(
+        {
+            "data": np.array(
+                [
+                    np.datetime64("2016-11-20"),
+                    np.datetime64("2020-11-20"),
+                    np.datetime64("2019-11-20"),
+                    np.datetime64("1918-11-20"),
+                    np.datetime64("2118-11-20"),
+                ]
+            ),
+            "vals": rng.random(5),
+        }
     )
-    df["vals"] = np.random.sample(len(df["date"]))
 
     gdf = cudf.from_pandas(df)
 

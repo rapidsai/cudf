@@ -125,9 +125,11 @@ def test_rank_error_arguments(pdf):
     )
 
 
+rng = np.random.default_rng(seed=0)
+
 sort_group_args = [
     np.full((3,), np.nan),
-    100 * np.random.random(10),
+    100 * rng.random(10),
     np.full((3,), np.inf),
     np.full((3,), -np.inf),
 ]
@@ -145,12 +147,9 @@ sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
     ),
 )
 def test_series_rank_combinations(elem, dtype):
-    np.random.seed(0)
     aa = np.fromiter(chain.from_iterable(elem), np.float64).astype(dtype)
-    gdf = DataFrame()
-    df = pd.DataFrame()
-    gdf["a"] = aa
-    df["a"] = aa
+    gdf = DataFrame({"a": aa})
+    df = pd.DataFrame({"a": aa})
     ranked_gs = gdf["a"].rank(method="first")
     ranked_ps = df["a"].rank(method="first")
     # Check

@@ -170,11 +170,15 @@ def test_serialize_dataframe():
 
 
 def test_serialize_dataframe_with_index():
-    df = cudf.DataFrame()
-    df["a"] = np.arange(100)
-    df["b"] = np.random.random(100)
-    df["c"] = pd.Categorical(
-        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(
+        {
+            "a": np.arange(100),
+            "b": rng.random(100),
+            "c": pd.Categorical(
+                ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+            ),
+        }
     )
     df = df.sort_values("b")
     outdf = cudf.DataFrame.deserialize(*df.serialize())
@@ -200,6 +204,7 @@ def test_serialize_generic_index():
 
 
 def test_serialize_multi_index():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
             "a": [4, 17, 4, 9, 5],
@@ -218,7 +223,8 @@ def test_serialize_multi_index():
 
 def test_serialize_masked_series():
     nelem = 50
-    data = np.random.random(nelem)
+    rng = np.random.default_rng(seed=0)
+    data = rng.random(nelem)
     mask = utils.random_bitmask(nelem)
     bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
     null_count = utils.count_zero(bitmask)
@@ -229,10 +235,14 @@ def test_serialize_masked_series():
 
 
 def test_serialize_groupby_df():
-    df = cudf.DataFrame()
-    df["key_1"] = rng.integers(0, 20, 100)
-    df["key_2"] = rng.integers(0, 20, 100)
-    df["val"] = np.arange(100, dtype=np.float32)
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(
+        {
+            "key_1": rng.integers(0, 20, 100),
+            "key_2": rng.integers(0, 20, 100),
+            "val": np.arange(100, dtype=np.float32),
+        }
+    )
     gb = df.groupby(["key_1", "key_2"], sort=True)
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
@@ -241,8 +251,8 @@ def test_serialize_groupby_df():
 
 
 def test_serialize_groupby_external():
-    df = cudf.DataFrame()
-    df["val"] = np.arange(100, dtype=np.float32)
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame({"val": np.arange(100, dtype=np.float32)})
     gb = df.groupby(cudf.Series(rng.integers(0, 20, 100)))
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
@@ -262,6 +272,7 @@ def test_serialize_groupby_level():
 
 
 def test_serialize_groupby_sr():
+    rng = np.random.default_rng(seed=0)
     sr = cudf.Series(rng.integers(0, 20, 100))
     gb = sr.groupby(sr // 2)
     outgb = gb.deserialize(*gb.serialize())
@@ -271,6 +282,7 @@ def test_serialize_groupby_sr():
 
 
 def test_serialize_datetime():
+    rng = np.random.default_rng(seed=0)
     # Make frame with datetime column
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
@@ -285,6 +297,7 @@ def test_serialize_datetime():
 
 
 def test_serialize_string():
+    rng = np.random.default_rng(seed=0)
     # Make frame with string column
     df = pd.DataFrame(
         {"x": rng.integers(0, 5, size=5), "y": rng.normal(size=5)}

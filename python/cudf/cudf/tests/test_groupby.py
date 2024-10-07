@@ -86,9 +86,9 @@ def make_frame(
     for lvl in extra_levels:
         df[lvl] = rng.integers(0, 2, nelem)
 
-    df["val"] = np.random.random(nelem)
+    df["val"] = rng.random(nelem)
     for val in extra_vals:
-        df[val] = np.random.random(nelem)
+        df[val] = rng.random(nelem)
 
     if with_datetime:
         df["datetime"] = rng.integers(
@@ -266,9 +266,10 @@ def test_groupby_getitem_getattr(as_index):
 
 
 def test_groupby_cats():
-    df = DataFrame()
-    df["cats"] = pd.Categorical(list("aabaacaab"))
-    df["vals"] = np.random.random(len(df))
+    rng = np.random.default_rng(seed=0)
+    df = DataFrame(
+        {"cats": pd.Categorical(list("aabaacaab")), "vals": rng.random(9)}
+    )
 
     cats = df["cats"].values_host
     vals = df["vals"].to_numpy()
@@ -291,8 +292,8 @@ def test_groupby_iterate_groups():
         {
             "key1": rng.integers(0, 3, nelem),
             "key2": rng.integers(0, 2, nelem),
-            "val1": np.random.random(nelem),
-            "val2": np.random.random(nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
         }
     )
 
@@ -316,8 +317,8 @@ def test_groupby_apply():
         {
             "key1": rng.integers(0, 3, nelem),
             "key2": rng.integers(0, 2, nelem),
-            "val1": np.random.random(nelem),
-            "val2": np.random.random(nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
         }
     )
 
@@ -363,8 +364,8 @@ def test_groupby_apply_args(func, args):
         {
             "key1": rng.integers(0, 3, nelem),
             "key2": rng.integers(0, 2, nelem),
-            "val1": np.random.random(nelem),
-            "val2": np.random.random(nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
         }
     )
 
@@ -378,7 +379,6 @@ def test_groupby_apply_args(func, args):
 
 
 def test_groupby_apply_grouped():
-    np.random.seed(0)
     df = DataFrame()
     nelem = 20
     df["key1"] = range(nelem)
@@ -1019,6 +1019,7 @@ def test_groupby_2keys_agg(nelem, func):
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
+    rng = np.random.default_rng(seed=0)
     # The number of digits after the decimal to use.
     decimal_digits = 2
     # The number of digits before the decimal to use.
@@ -1035,8 +1036,8 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # https://github.com/pandas-dev/pandas/issues/40685). However, if that is
     # ever enabled, then this issue will crop up again so we may as well have
     # it fixed now.
-    x = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
-    y = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+    x = np.unique((rng.random(nelem) * scale).round(decimal_digits))
+    y = np.unique((rng.random(nelem) * scale).round(decimal_digits))
 
     if x.size < y.size:
         total_elements = x.size
@@ -1322,7 +1323,7 @@ def test_empty_groupby(func):
 
 
 def test_groupby_unsupported_columns():
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=0)
     pd_cat = pd.Categorical(
         pd.Series(rng.choice(["a", "b", 1], 3), dtype="category")
     )

@@ -32,6 +32,7 @@ def make_numeric_dataframe(nrows, dtype):
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
+    rng = np.random.default_rng(seed=0)
     types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
     nrows = request.param
 

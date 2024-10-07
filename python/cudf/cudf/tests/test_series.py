@@ -27,6 +27,8 @@ from cudf.testing._utils import (
     gen_rand,
 )
 
+rng = np.random.default_rng(seed=0)
+
 
 def _series_na_data():
     return [
@@ -546,7 +548,7 @@ def test_series_datetime_value_counts(data, nulls, normalize, dropna):
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
 def test_categorical_value_counts(dropna, normalize, num_elements):
     # create categorical series
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=0)
     pd_cat = pd.Categorical(
         pd.Series(
             rng.choice(list(ascii_letters + digits), num_elements),
@@ -1943,6 +1945,7 @@ def test_diff_many_dtypes(data):
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
 @pytest.mark.parametrize("series_bins", [True, False])
 def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
+    rng = np.random.default_rng(seed=0)
     data = rng.integers(0, 100, num_rows).astype(dtype)
     bins = np.unique(np.sort(rng.integers(2, 95, num_bins).astype(dtype)))
     s = cudf.Series(data)
@@ -1957,6 +1960,7 @@ def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
 
 
 def test_series_digitize_invalid_bins():
+    rng = np.random.default_rng(seed=0)
     s = cudf.Series(rng.integers(0, 30, 80), dtype="int32")
     bins = cudf.Series([2, None, None, 50, 90], dtype="int32")
 
@@ -2038,6 +2042,7 @@ def test_default_float_bitwidth_construction(default_float_bitwidth, data):
 
 def test_series_ordered_dedup():
     # part of https://github.com/rapidsai/cudf/issues/11486
+    rng = np.random.default_rng(seed=0)
     sr = cudf.Series(rng.integers(0, 100, 1000))
     # pandas unique() preserves order
     expect = pd.Series(sr.to_pandas().unique())

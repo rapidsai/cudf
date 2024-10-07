@@ -45,8 +45,8 @@ def make_params():
         yield (aa, bb, how)
 
     # Test floating point inputs
-    aa = np.random.random(50)
-    bb = np.random.random(50)
+    aa = rng.random(50)
+    bb = rng.random(50)
     for how in hows:
         yield (aa, bb, how)
 
@@ -162,7 +162,7 @@ def _check_series(expect, got):
     reason="bug in older version of pandas",
 )
 def test_dataframe_join_suffix():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = cudf.DataFrame(rng.integers(0, 5, (5, 3)), columns=list("abc"))
 
@@ -281,7 +281,7 @@ def test_dataframe_join_mismatch_cats(how):
 
 @pytest.mark.parametrize("on", ["key1", ["key1", "key2"], None])
 def test_dataframe_merge_on(on):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # Make cuDF
     df_left = cudf.DataFrame()
@@ -347,7 +347,7 @@ def test_dataframe_merge_on(on):
 
 
 def test_dataframe_merge_on_unknown_column():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # Make cuDF
     df_left = cudf.DataFrame()
@@ -368,7 +368,7 @@ def test_dataframe_merge_on_unknown_column():
 
 
 def test_dataframe_merge_no_common_column():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # Make cuDF
     df_left = cudf.DataFrame()
@@ -460,7 +460,7 @@ def test_dataframe_merge_order():
 @pytest.mark.parametrize("rows", [1, 5, 100])
 @pytest.mark.parametrize("how", ["left", "inner", "outer"])
 def test_dataframe_pairs_of_triples(pairs, max, rows, how):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     pdf_left = pd.DataFrame()
     pdf_right = pd.DataFrame()
@@ -504,7 +504,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 
 def test_safe_merging_with_left_empty():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     pairs = ("bcd", "b")
     pdf_left = pd.DataFrame()

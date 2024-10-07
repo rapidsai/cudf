@@ -79,8 +79,9 @@ def test_series_resample_asfreq(rule):
 
 
 def test_dataframe_resample_aggregation_simple():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
-        np.random.randn(1000, 3),
+        rng.standard_normal(size=(1000, 3)),
         index=pd.date_range("1/1/2012", freq="s", periods=1000),
         columns=["A", "B", "C"],
     )
@@ -91,8 +92,9 @@ def test_dataframe_resample_aggregation_simple():
 
 
 def test_dataframe_resample_multiagg():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
-        np.random.randn(1000, 3),
+        rng.standard_normal(size=(1000, 3)),
         index=pd.date_range("1/1/2012", freq="s", periods=1000),
         columns=["A", "B", "C"],
     )
@@ -104,10 +106,11 @@ def test_dataframe_resample_multiagg():
 
 
 def test_dataframe_resample_on():
+    rng = np.random.default_rng(seed=0)
     # test resampling on a specified column
     pdf = pd.DataFrame(
         {
-            "x": np.random.randn(1000),
+            "x": rng.standard_normal(size=(1000)),
             "y": pd.date_range("1/1/2012", freq="s", periods=1000),
         }
     )
@@ -119,15 +122,16 @@ def test_dataframe_resample_on():
 
 
 def test_dataframe_resample_level():
+    rng = np.random.default_rng(seed=0)
     # test resampling on a specific level of a MultIndex
     pdf = pd.DataFrame(
         {
-            "x": np.random.randn(1000),
+            "x": rng.standard_normal(size=1000),
             "y": pd.date_range("1/1/2012", freq="s", periods=1000),
         }
     )
     pdi = pd.MultiIndex.from_frame(pdf)
-    pdf = pd.DataFrame({"a": np.random.randn(1000)}, index=pdi)
+    pdf = pd.DataFrame({"a": rng.standard_normal(size=1000)}, index=pdi)
     gdf = cudf.from_pandas(pdf)
     assert_resample_results_equal(
         pdf.resample("3min", level="y").mean(),
@@ -153,11 +157,12 @@ def test_dataframe_resample_level():
     reason="Fails in older versions of pandas",
 )
 def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
+    rng = np.random.default_rng(seed=0)
     # test that we cast to the appropriate frequency
     # when resampling:
     pdf = pd.DataFrame(
         {
-            "x": np.random.randn(100),
+            "x": rng.standard_normal(size=100),
             "y": pd.date_range("1/1/2012", freq=in_freq, periods=100),
         }
     )

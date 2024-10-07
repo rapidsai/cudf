@@ -155,7 +155,9 @@ def test_column_slicing(pandas_input, offset, size):
     [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
 )
 def test_decimal_column_slicing(offset, size, precision, scale, decimal_type):
-    col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
+    col = cudf.core.column.as_column(
+        pd.Series(np.random.default_rng(seed=0).random(1000))
+    )
     col = col.astype(decimal_type(precision, scale))
     column_slicing_test(col, offset, size, True)
 

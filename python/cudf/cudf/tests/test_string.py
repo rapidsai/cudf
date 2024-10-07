@@ -36,6 +36,7 @@ data_id_list = ["no_nulls", "some_nulls", "all_nulls"]
 idx_list = [None, [10, 11, 12, 13, 14]]
 
 idx_id_list = ["None_index", "Set_index"]
+rng = np.random.default_rng(seed=0)
 
 
 def raise_builder(flags, exceptions):
@@ -1078,7 +1079,7 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
-    pdf = pd.DataFrame(np.random.rand(5, 5))
+    pdf = pd.DataFrame(rng.random(size=(5, 5)))
     gdf = cudf.DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
     pdf.index = stringIndex

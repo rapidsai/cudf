@@ -32,7 +32,8 @@ def pdf_gdf():
 
 @pytest.fixture
 def pdf_gdf_multi():
-    pdf = pd.DataFrame(np.random.rand(7, 5))
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
     pdfIndex = pd.MultiIndex(
         [
             ["a", "b", "c"],
@@ -220,7 +221,7 @@ def test_dataframe_column_name_indexing():
             "key1": rng.integers(0, 5, nelem),
             "key2": rng.integers(0, 3, nelem),
             1: np.arange(1, 1 + nelem),
-            2: np.random.random(nelem),
+            2: rng.random(nelem),
         }
     )
     df = cudf.from_pandas(pdf)
@@ -248,9 +249,9 @@ def test_dataframe_slicing():
     df = cudf.DataFrame()
     size = 123
     df["a"] = ha = rng.integers(low=0, high=100, size=size).astype(np.int32)
-    df["b"] = hb = np.random.random(size).astype(np.float32)
+    df["b"] = hb = rng.random(size).astype(np.float32)
     df["c"] = hc = rng.integers(low=0, high=100, size=size).astype(np.int64)
-    df["d"] = hd = np.random.random(size).astype(np.float64)
+    df["d"] = hd = rng.random(size).astype(np.float64)
 
     # Row slice first 10
     first_10 = df[:10]
@@ -293,9 +294,9 @@ def test_dataframe_loc(scalar, step):
     pdf = pd.DataFrame(
         {
             "a": rng.integers(low=0, high=100, size=size),
-            "b": np.random.random(size).astype(np.float32),
-            "c": np.random.random(size).astype(np.float64),
-            "d": np.random.random(size).astype(np.float64),
+            "b": rng.random(size).astype(np.float32),
+            "c": rng.random(size).astype(np.float64),
+            "d": rng.random(size).astype(np.float64),
         }
     )
     pdf.index.name = "index"
@@ -399,7 +400,7 @@ def test_dataframe_loc_outbound():
     df = cudf.DataFrame()
     size = 10
     df["a"] = ha = rng.integers(low=0, high=100, size=size).astype(np.int32)
-    df["b"] = hb = np.random.random(size).astype(np.float32)
+    df["b"] = hb = rng.random(size).astype(np.float32)
 
     pdf = pd.DataFrame()
     pdf["a"] = ha
@@ -592,8 +593,8 @@ def test_dataframe_series_loc_multiindex(obj):
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_series_iloc(nelem):
     # create random cudf.Series
-    np.random.seed(12)
-    ps = pd.Series(np.random.sample(nelem))
+    rng = np.random.default_rng(seed=0)
+    ps = pd.Series(rng.sample(nelem))
 
     # gpu cudf.Series
     gs = cudf.Series(ps)
@@ -631,7 +632,7 @@ def test_dataframe_iloc(nelem):
     gdf = cudf.DataFrame()
 
     gdf["a"] = ha = rng.integers(low=0, high=100, size=nelem).astype(np.int32)
-    gdf["b"] = hb = np.random.random(nelem).astype(np.float32)
+    gdf["b"] = hb = rng.random(nelem).astype(np.float32)
 
     pdf = pd.DataFrame()
     pdf["a"] = ha
@@ -684,7 +685,7 @@ def test_dataframe_iloc_tuple():
     gdf = cudf.DataFrame()
     nelem = 123
     gdf["a"] = ha = rng.integers(low=0, high=100, size=nelem).astype(np.int32)
-    gdf["b"] = hb = np.random.random(nelem).astype(np.float32)
+    gdf["b"] = hb = rng.random(nelem).astype(np.float32)
 
     pdf = pd.DataFrame()
     pdf["a"] = ha
@@ -699,7 +700,7 @@ def test_dataframe_iloc_index_error():
     gdf = cudf.DataFrame()
     nelem = 123
     gdf["a"] = ha = rng.integers(low=0, high=100, size=nelem).astype(np.int32)
-    gdf["b"] = hb = np.random.random(nelem).astype(np.float32)
+    gdf["b"] = hb = rng.random(nelem).astype(np.float32)
 
     pdf = pd.DataFrame()
     pdf["a"] = ha
@@ -718,7 +719,7 @@ def test_dataframe_take(ntake):
     df = cudf.DataFrame(
         {
             "ii": rng.integers(0, 20, nelem),
-            "ff": np.random.random(nelem),
+            "ff": rng.random(nelem),
         }
     )
 
@@ -744,7 +745,7 @@ def test_dataframe_take_with_multiindex(ntake):
 
     nelem = 9
     df["ii"] = rng.integers(0, 20, nelem)
-    df["ff"] = np.random.random(nelem)
+    df["ff"] = rng.random(nelem)
 
     take_indices = rng.integers(0, len(df), ntake)
 
@@ -1812,6 +1813,7 @@ def test_boolean_mask_columns_iloc_series():
 
 @pytest.mark.parametrize("index_type", ["single", "slice"])
 def test_loc_timestamp_issue_8585(index_type):
+    rng = np.random.default_rng(seed=0)
     # https://github.com/rapidsai/cudf/issues/8585
     start = pd.Timestamp(
         datetime.strptime("2021-03-12 00:00", "%Y-%m-%d %H:%M")
@@ -1853,6 +1855,7 @@ def test_loc_timestamp_issue_8585(index_type):
     ],
 )
 def test_loc_multiindex_timestamp_issue_8585(index_type):
+    rng = np.random.default_rng(seed=0)
     # https://github.com/rapidsai/cudf/issues/8585
     start = pd.Timestamp(
         datetime.strptime("2021-03-12 00:00", "%Y-%m-%d %H:%M")

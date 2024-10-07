@@ -5118,11 +5118,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         useful for big DataFrames and fine-tune memory optimization:
 
         >>> import numpy as np
-        >>> random_strings_array = np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        >>> random_strings_array = rng.choice(['a', 'b', 'c'], 10 ** 6)
         >>> df = cudf.DataFrame({
-        ...     'column_1': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_2': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_3': np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        ...     'column_1': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_2': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_3': rng.choice(['a', 'b', 'c'], 10 ** 6)
         ... })
         >>> df.info(memory_usage='deep')
         <class 'cudf.core.dataframe.DataFrame'>

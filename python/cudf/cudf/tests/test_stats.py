@@ -19,13 +19,15 @@ methods = ["min", "max", "sum", "mean", "var", "std"]
 
 interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
 
+rng = np.random.default_rng(seed=0)
+
 
 @pytest.mark.parametrize("method", methods)
 @pytest.mark.parametrize("dtype", params_dtypes)
 @pytest.mark.parametrize("skipna", [True, False])
 def test_series_reductions(method, dtype, skipna):
-    np.random.seed(0)
-    arr = np.random.random(100)
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(100)
     if np.issubdtype(dtype, np.integer):
         arr *= 100
         mask = arr > 10
@@ -56,8 +58,8 @@ def test_series_reductions(method, dtype, skipna):
 def test_series_reductions_concurrency(method):
     e = ThreadPoolExecutor(10)
 
-    np.random.seed(0)
-    srs = [cudf.Series(np.random.random(10000)) for _ in range(1)]
+    rng = np.random.default_rng(seed=0)
+    srs = [cudf.Series(rng.random(10000)) for _ in range(1)]
 
     def call_test(sr):
         fn = getattr(sr, method)
@@ -74,8 +76,8 @@ def test_series_reductions_concurrency(method):
 
 @pytest.mark.parametrize("ddof", range(3))
 def test_series_std(ddof):
-    np.random.seed(0)
-    arr = np.random.random(100) - 0.5
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(100) - 0.5
     sr = cudf.Series(arr)
     pd = sr.to_pandas()
     got = sr.std(ddof=ddof)
@@ -311,8 +313,8 @@ def test_skew_series(data, null_flag, numeric_only):
 @pytest.mark.parametrize("dtype", params_dtypes)
 @pytest.mark.parametrize("num_na", [0, 1, 50, 99, 100])
 def test_series_median(dtype, num_na):
-    np.random.seed(0)
-    arr = np.random.random(100)
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(100)
     if np.issubdtype(dtype, np.integer):
         arr *= 100
     mask = np.arange(100) >= num_na

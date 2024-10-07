@@ -681,7 +681,6 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
@@ -845,7 +844,6 @@ def test_orc_reader_gmt_timestamps(datadir):
 
 
 def test_orc_bool_encode_fail():
-    np.random.seed(0)
     buffer = BytesIO()
 
     # Generate a boolean column longer than a single row group
@@ -927,7 +925,6 @@ def test_empty_string_columns(data):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 def test_orc_writer_decimal(tmpdir, scale, decimal_type):
-    np.random.seed(0)
     fname = tmpdir / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
@@ -988,7 +985,7 @@ def test_orc_string_stream_offset_issue():
 
 def generate_list_struct_buff(size=100_000):
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=0)
 
     buff = BytesIO()
 
@@ -1135,7 +1132,7 @@ def gen_map_buff(size):
     from pyarrow import orc
 
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=0)
 
     buff = BytesIO()
 

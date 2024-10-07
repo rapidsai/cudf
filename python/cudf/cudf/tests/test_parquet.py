@@ -53,6 +53,7 @@ def datadir(datadir):
 
 @pytest.fixture(params=[1, 5, 10, 100000])
 def simple_pdf(request):
+    rng = np.random.default_rng(seed=0)
     types = [
         "bool",
         "int8",
@@ -92,6 +93,7 @@ def simple_gdf(simple_pdf):
 
 
 def build_pdf(num_columns, day_resolution_timestamps):
+    rng = np.random.default_rng(seed=0)
     types = [
         "bool",
         "int8",
@@ -1909,6 +1911,7 @@ def test_parquet_writer_dictionary_setting(use_dict, max_dict_size):
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_partitioned(tmpdir_factory, cols, filename):
+    rng = np.random.default_rng(seed=0)
     # Checks that write_to_dataset is wrapping to_parquet
     # as expected
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
@@ -1954,6 +1957,7 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
 
 @pytest.mark.parametrize("kwargs", [{"nrows": 1}, {"skip_rows": 1}])
 def test_parquet_partitioned_notimplemented(tmpdir_factory, kwargs):
+    rng = np.random.default_rng(seed=0)
     # Checks that write_to_dataset is wrapping to_parquet
     # as expected
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
@@ -2127,6 +2131,7 @@ def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
 @pytest.mark.parametrize("cols", [None, ["b"]])
 @pytest.mark.parametrize("store_schema", [True, False])
 def test_parquet_write_to_dataset(tmpdir_factory, cols, store_schema):
+    rng = np.random.default_rng(seed=0)
     dir1 = tmpdir_factory.mktemp("dir1")
     dir2 = tmpdir_factory.mktemp("dir2")
     if cols is None:
@@ -3214,6 +3219,7 @@ def test_parquet_nested_struct_list():
 
 def test_parquet_writer_zstd():
     size = 12345
+    rng = np.random.default_rng(seed=0)
     expected = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="float64"),

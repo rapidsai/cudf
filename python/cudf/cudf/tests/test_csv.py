@@ -1770,7 +1770,7 @@ def test_csv_writer_multiindex(tmpdir):
             "a": rng.integers(0, 5, 20),
             "b": rng.integers(0, 5, 20),
             "c": range(20),
-            "d": np.random.random(20),
+            "d": rng.random(20),
         }
     )
     gdg = gdf.groupby(["a", "b"]).mean()

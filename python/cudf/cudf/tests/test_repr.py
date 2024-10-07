@@ -25,6 +25,7 @@ repr_categories = [
 @pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [0, 5, 10])
 def test_null_series(nrows, dtype):
+    rng = np.random.default_rng(seed=0)
     size = 5
     sr = cudf.Series(rng.integers(1, 9, size)).astype(dtype)
     sr[rng.choice([False, True], size=size)] = None
@@ -60,6 +61,7 @@ dtype_categories = [
 
 @pytest.mark.parametrize("ncols", [1, 2, 3, 4, 5, 10])
 def test_null_dataframe(ncols):
+    rng = np.random.default_rng(seed=0)
     size = 20
     gdf = cudf.DataFrame()
     for idx, dtype in enumerate(dtype_categories):
@@ -77,6 +79,7 @@ def test_null_dataframe(ncols):
 @pytest.mark.parametrize("nrows", [None, 0, 1, 2, 9, 10, 11, 19, 20, 21])
 def test_full_series(nrows, dtype):
     size = 20
+    rng = np.random.default_rng(seed=0)
     ps = pd.Series(rng.integers(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = nrows
@@ -89,6 +92,7 @@ def test_full_series(nrows, dtype):
 @pytest.mark.parametrize("size", [20, 21])
 @pytest.mark.parametrize("dtype", repr_categories)
 def test_full_dataframe_20(dtype, size, nrows, ncols):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {idx: rng.integers(0, 100, size) for idx in range(size)}
     ).astype(dtype)
@@ -178,6 +182,7 @@ def test_mixed_series(mixed_pdf, mixed_gdf):
 
 
 def test_MI():
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
             "a": rng.integers(0, 4, 10),
@@ -223,6 +228,7 @@ def test_groupby_MI(nrows, ncols):
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
 @pytest.mark.parametrize("length", [0, 1, 10, 100, 1000])
 def test_generic_index(length, dtype):
+    rng = np.random.default_rng(seed=0)
     psr = pd.Series(
         range(length),
         index=rng.integers(0, high=100, size=length).astype(dtype),
