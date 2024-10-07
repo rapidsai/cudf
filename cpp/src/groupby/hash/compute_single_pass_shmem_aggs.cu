@@ -64,7 +64,7 @@ __device__ void calculate_columns_to_aggregate(int& col_start,
   }
 }
 
-__device__ void initialize_shared_memory_aggs(int col_start,
+__device__ void initialize_shmem_aggregations(int col_start,
                                               int col_end,
                                               cudf::mutable_table_device_view output_values,
                                               std::byte** s_aggregates_pointer,
@@ -190,7 +190,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                    cardinality,
                                    total_agg_size);
     block.sync();
-    initialize_shared_memory_aggs(col_start,
+    initialize_shmem_aggregations(col_start,
                                   col_end,
                                   output_values,
                                   s_aggregates_pointer,
