@@ -6,11 +6,20 @@ import pandas as pd
 from dask_expr import new_collection
 from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
+from dask_expr._groupby import (
+    DecomposableGroupbyAggregation,
+    GroupbyAggregation,
+)
 from dask_expr._reductions import Reduction, Var
 from dask_expr.io.io import FusedParquetIO
 from dask_expr.io.parquet import ReadParquetPyarrowFS
 
-from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
+from dask.dataframe.core import (
+    _concat,
+    is_dataframe_like,
+    make_meta,
+    meta_nonempty,
+)
 from dask.dataframe.dispatch import is_categorical_dtype
 from dask.typing import no_default
 
@@ -19,6 +28,154 @@ import cudf
 ##
 ## Custom expressions
 ##
+
+
+def _groupby_meta(gb):
+    from dask.dataframe.dispatch import make_meta, meta_nonempty
+
+    meta = meta_nonempty(gb.frame._meta)
+    meta = meta.groupby(
+        gb._by_meta,
+        # **_as_dict("observed", gb.observed),
+        # **_as_dict("dropna", gb.dropna),
+    )
+    if gb._slice is not None:
+        meta = meta[gb._slice]
+    meta = meta.aggregate(gb.arg)
+    return make_meta(meta)
+
+
+class CudfGroupbyAggregation(GroupbyAggregation):
+    @functools.cached_property
+    def _meta(self):
+        return _groupby_meta(self)
+
+    def _lower(self):
+        return DecomposableCudfGroupbyAggregation(
+            self.frame,
+            self.arg,
+            self.observed,
+            self.dropna,
+            self.split_every,
+            self.split_out,
+            self.sort,
+            self.shuffle_method,
+            self._slice,
+            *self.by,
+        )
+
+
+class DecomposableCudfGroupbyAggregation(DecomposableGroupbyAggregation):
+    sep = "___"
+
+    @functools.cached_property
+    def _meta(self):
+        return _groupby_meta(self)
+
+    @property
+    def shuffle_by_index(self):
+        return False  # We always group by column(s)
+
+    @functools.cached_property
+    def spec_info(self):
+        if isinstance(self.arg, (dict, list)):
+            aggs = self.arg.copy()
+        else:
+            aggs = self.arg
+
+        if self._slice and not isinstance(aggs, dict):
+            aggs = {self._slice: aggs}
+
+        gb_cols = self._by_columns
+        if isinstance(gb_cols, str):
+            gb_cols = [gb_cols]
+        columns = [c for c in self.frame.columns if c not in gb_cols]
+        if not isinstance(aggs, dict):
+            aggs = {col: aggs for col in columns}
+
+        # Assert if our output will have a MultiIndex; this will be the case if
+        # any value in the `aggs` dict is not a string (i.e. multiple/named
+        # aggregations per column)
+        str_cols_out = True
+        aggs_renames = {}
+        for col in aggs:
+            if isinstance(aggs[col], str) or callable(aggs[col]):
+                aggs[col] = [aggs[col]]
+            elif isinstance(aggs[col], dict):
+                str_cols_out = False
+                col_aggs = []
+                for k, v in aggs[col].items():
+                    aggs_renames[col, v] = k
+                    col_aggs.append(v)
+                aggs[col] = col_aggs
+            else:
+                str_cols_out = False
+            if col in gb_cols:
+                columns.append(col)
+
+        return {
+            "aggs": aggs,
+            "columns": columns,
+            "str_cols_out": str_cols_out,
+            "aggs_renames": aggs_renames,
+        }
+
+    @classmethod
+    def chunk(cls, df, *by, **kwargs):
+        from dask_cudf.groupby import _groupby_partition_agg
+
+        return _groupby_partition_agg(df, **kwargs)
+
+    @classmethod
+    def combine(cls, inputs, **kwargs):
+        from dask_cudf.groupby import _tree_node_agg
+
+        return _tree_node_agg(_concat(inputs), **kwargs)
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        from dask_cudf.groupby import _finalize_gb_agg
+
+        return _finalize_gb_agg(_concat(inputs), **kwargs)
+
+    @property
+    def chunk_kwargs(self) -> dict:
+        dropna = True if self.dropna is None else self.dropna
+        return {
+            "gb_cols": self._by_columns,
+            "aggs": self.spec_info["aggs"],
+            "columns": self.spec_info["columns"],
+            "dropna": dropna,
+            "sort": self.sort,
+            "sep": self.sep,
+        }
+
+    @property
+    def combine_kwargs(self) -> dict:
+        dropna = True if self.dropna is None else self.dropna
+        return {
+            "gb_cols": self._by_columns,
+            "dropna": dropna,
+            "sort": self.sort,
+            "sep": self.sep,
+        }
+
+    @property
+    def aggregate_kwargs(self) -> dict:
+        dropna = True if self.dropna is None else self.dropna
+        final_columns = self._slice or self._meta.columns
+        return {
+            "gb_cols": self._by_columns,
+            "aggs": self.spec_info["aggs"],
+            "columns": self.spec_info["columns"],
+            "final_columns": final_columns,
+            "as_index": True,
+            "dropna": dropna,
+            "sort": self.sort,
+            "sep": self.sep,
+            "str_cols_out": self.spec_info["str_cols_out"],
+            "aggs_renames": self.spec_info["aggs_renames"],
+        }
 
 
 class CudfFusedParquetIO(FusedParquetIO):
