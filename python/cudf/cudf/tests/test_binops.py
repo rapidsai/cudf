@@ -960,11 +960,11 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("other", ["df", "scalar"])
 def test_logical_operator_func_dataframe(func, nulls, other):
-    rng = np.random.default_rng(seed=0)
     num_rows = 100
     num_cols = 3
 
     def gen_df():
+        rng = np.random.default_rng(seed=0)
         pdf = pd.DataFrame()
         from string import ascii_lowercase
 
@@ -983,8 +983,12 @@ def test_logical_operator_func_dataframe(func, nulls, other):
 
     pdf1 = gen_df()
     pdf2 = gen_df() if other == "df" else 59.0
-    gdf1 = cudf.DataFrame.from_pandas(pdf1)
-    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
+    gdf1 = cudf.DataFrame.from_pandas(pdf1, nan_as_null=False)
+    gdf2 = (
+        cudf.DataFrame.from_pandas(pdf2, nan_as_null=False)
+        if other == "df"
+        else 59.0
+    )
 
     got = getattr(gdf1, func)(gdf2)
     expect = getattr(pdf1, func)(pdf2)[list(got._data)]

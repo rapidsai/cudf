@@ -594,7 +594,7 @@ def test_dataframe_series_loc_multiindex(obj):
 def test_series_iloc(nelem):
     # create random cudf.Series
     rng = np.random.default_rng(seed=0)
-    ps = pd.Series(rng.sample(nelem))
+    ps = pd.Series(rng.random(nelem))
 
     # gpu cudf.Series
     gs = cudf.Series(ps)

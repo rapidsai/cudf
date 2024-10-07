@@ -217,7 +217,7 @@ def gen_rand(dtype, size, **kwargs):
         if kwargs.get("positive_only", False):
             return res
         else:
-            return res * 2 - 1
+            return 2 * res - 2
     elif dtype == np.int8 or dtype == np.int16:
         low = kwargs.get("low", -32)
         high = kwargs.get("high", 32)

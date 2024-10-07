@@ -10537,10 +10537,10 @@ def test_dataframe_init_length_error(data, index):
 def test_dataframe_binop_with_mixed_date_types():
     rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
-        rng.random(2, 2),
+        rng.random(size=(2, 2)),
         columns=pd.Index(["2000-01-03", "2000-01-04"], dtype="datetime64[ns]"),
     )
-    ser = pd.Series(rng.random(3), index=[0, 1, 2])
+    ser = pd.Series(rng.random(size=3), index=[0, 1, 2])
     gdf = cudf.from_pandas(df)
     gser = cudf.from_pandas(ser)
     expected = df - ser

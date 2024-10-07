@@ -219,7 +219,7 @@ def test_sort_datetime():
     rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
-            "data": np.array(
+            "date": np.array(
                 [
                     np.datetime64("2016-11-20"),
                     np.datetime64("2020-11-20"),
