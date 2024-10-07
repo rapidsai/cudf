@@ -1021,7 +1021,7 @@ install(
 set(_components_export_string)
 if(TARGET cudftestutil)
   install(
-    TARGETS cudftest_default_stream cudftestutil
+    TARGETS cudftest_default_stream cudftestutil cudftestutil_impl
     DESTINATION ${lib_dir}
     EXPORT cudf-testing-exports
   )
@@ -1061,14 +1061,15 @@ targets:
 This module offers an optional testing component which defines the
 following IMPORTED GLOBAL  targets:
 
- cudf::cudftestutil     - The main cudf testing library
+ cudf::cudftestutil          - The main cudf testing library
+ cudf::cudftestutil_impl     - Symbol definitions for cudf::cudftestutil
     ]=]
 )
 
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil
+  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
 )
@@ -1089,7 +1090,7 @@ endif()
 rapids_export(
   BUILD cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil
+  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK build_code_string
