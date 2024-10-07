@@ -17,10 +17,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -154,12 +154,12 @@ compute_row_frequencies(table_view const& input,
     cuco::empty_key<size_type>{-1},
     key_equal,
     cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
-    {},
-    {},
+    {},  // thread scope
+    {},  // storage
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
-  // Device-accessible reference to the hash set with insert_and_find operatro
+  // Device-accessible reference to the hash set with `insert_and_find` operator
   auto row_set_ref = row_set.ref(cuco::op::insert_and_find);
 
   // Compute frequencies (aka distinct counts) for the input rows.
@@ -190,14 +190,14 @@ compute_row_frequencies(table_view const& input,
 
   // Copy row indices and counts to the output if counts are non-zero
   auto const input_it = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_counting_iterator<size_type>(0), reduction_results.begin()));
+    thrust::make_tuple(thrust::make_counting_iterator(0), reduction_results.begin()));
   auto const output_it = thrust::make_zip_iterator(thrust::make_tuple(
     distinct_indices->begin(), distinct_counts->mutable_view().begin<histogram_count_type>()));
 
   // Reduction results above are either group sizes of equal rows, or `0`.
   // The final output is non-zero group sizes only.
   thrust::copy_if(
-    rmm::exec_policy(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
+    rmm::exec_policy_nosync(stream), input_it, input_it + num_rows, output_it, is_not_zero{});
 
   return {std::move(distinct_indices), std::move(distinct_counts)};
 }
