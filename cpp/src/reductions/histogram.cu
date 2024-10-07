@@ -132,7 +132,8 @@ compute_row_frequencies(table_view const& input,
   using nan_equal_comparator =
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
   auto const value_comp = nan_equal_comparator{};
-  auto const key_equal  = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
+  // Hard set the tparam `has_nested_columns` = false for now as we don't yet support nested columns
+  auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
 
   using row_hash =
     cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
