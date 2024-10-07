@@ -6,7 +6,6 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column
