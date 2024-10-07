@@ -138,12 +138,7 @@ void generate_depth_remappings(
   // depth.
   //
 
-  static constexpr bool enable_print = false;
-
   // compute "X" from above
-  if constexpr (enable_print) {
-    printf("REMAPPING: max def %d, max rep %d\n", schema.max_definition_level, schema.max_repetition_level);
-  }
   for (int s_idx = schema.max_repetition_level; s_idx >= 0; s_idx--) {
     auto find_shallowest = [&](int r) {
       int shallowest = -1;
@@ -161,9 +156,6 @@ void generate_depth_remappings(
         }
         if (!cur_schema.is_stub()) { cur_depth--; }
         schema_idx = cur_schema.parent_idx;
-      }
-      if constexpr (enable_print) {
-        printf("REMAPPING: s_idx / r %d, shallowest %d\n", r, shallowest);
       }
       return shallowest;
     };
@@ -202,10 +194,6 @@ void generate_depth_remappings(
         if (!cur_schema.is_stub()) { depth--; }
         prev_schema = cur_schema;
         schema_idx  = cur_schema.parent_idx;
-      }
-
-      if constexpr (enable_print) {
-        printf("REMAPPING: s_idx %d, r1 %d, end_depth %d\n", s_idx, r1, depth);
       }
       return depth;
     };

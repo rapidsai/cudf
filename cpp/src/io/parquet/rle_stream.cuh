@@ -252,8 +252,6 @@ struct rle_stream {
       run.level_run  = level_run;
       run.remaining  = run.size;
       cur += run_bytes;
-//printf("STORE RUN: decode_index %d, fill_index %d, output_pos %d, run.size %d\n", 
-  //decode_index, fill_index, output_pos, run.size);
       output_pos += run.size;
       fill_index++;
     }
@@ -355,8 +353,6 @@ struct rle_stream {
             // this is the last batch we will process this iteration if:
             // - either this run still has remaining values
             // - or it is consumed fully and its last index corresponds to output_count
-//printf("STATUS: run_index %d, batch_len %d, remaining %d, at_end %d, last_run_pos %d, cur_values %d\n", 
-  //run_index, batch_len, remaining, at_end, last_run_pos, cur_values);
             if (remaining > 0 || at_end) { values_processed_shared = output_count; }
             if (remaining == 0 && (at_end || is_last_decode_warp(warp_id))) {
               decode_index_shared = run_index + 1;
@@ -401,7 +397,6 @@ struct rle_stream {
       }
 
       if((output_pos + run_size) > target_count) {
-//printf("SKIPPING: target_count %d, run_size %d, output_pos %d\n", target_count, run_size, output_pos);
         return output_pos; //bail! we've reached the starting one
       }
 
@@ -409,7 +404,6 @@ struct rle_stream {
       cur += run_bytes;
     }
 
-//printf("SKIPPING: target_count %d, output_pos %d\n", target_count, output_pos);
     return output_pos; //we skipped everything
   }
 
