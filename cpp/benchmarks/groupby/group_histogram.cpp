@@ -47,6 +47,8 @@ void groupby_histogram_helper(nvbench::state& state,
     return create_random_column(
       cudf::type_to_id<Type>(), row_count{num_rows}, data_profile{builder});
   }();
+
+  // Vector of 1 request
   std::vector<cudf::groupby::aggregation_request> requests(1);
   requests.back().values = values->view();
   requests.back().aggregations.push_back(
