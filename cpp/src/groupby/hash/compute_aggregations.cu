@@ -226,19 +226,15 @@ constexpr size_t get_previous_multiple_of_8(size_t number) { return number / 8 *
 
 }  // namespace
 
-std::pair<bool, size_t> can_use_shmem_aggs(int grid_size) noexcept
+size_t available_shared_memory_size(int grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
 
   size_t dynamic_shmem_size = 0;
-
-  auto const status = cudaOccupancyAvailableDynamicSMemPerBlock(
-    &dynamic_shmem_size, compute_aggs_kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE);
-  auto const success = status == cudaSuccess;
-  if (!success) { cudaGetLastError(); }
-
-  return {success, get_previous_multiple_of_8(0.5 * dynamic_shmem_size)};
+  CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
+    &dynamic_shmem_size, compute_aggs_kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
+  return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
 }
 
 void compute_aggregations(int grid_size,
@@ -251,9 +247,9 @@ void compute_aggregations(int grid_size,
                           cudf::table_device_view input_values,
                           cudf::mutable_table_device_view output_values,
                           cudf::aggregation::Kind const* d_agg_kinds,
-                          size_t shmem_size,
                           rmm::cuda_stream_view stream)
 {
+  auto const shmem_size = available_shared_memory_size(grid_size);
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
   auto const shmem_agg_pointer_size =

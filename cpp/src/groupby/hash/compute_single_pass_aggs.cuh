@@ -298,9 +298,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
 
-  auto const [valid, shmem_size] = can_use_shmem_aggs(grid_size);
-  CUDF_EXPECTS(valid, "this must be usable");
-
   compute_aggregations(grid_size,
                        num_input_rows,
                        static_cast<bitmask_type*>(row_bitmask.data()),
@@ -311,7 +308,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                        *d_values,
                        *d_sparse_table,
                        d_agg_kinds.data(),
-                       shmem_size,
                        stream);
   if (direct_aggregations.value(stream)) {
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;

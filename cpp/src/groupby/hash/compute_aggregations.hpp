@@ -21,13 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cuda_runtime_api.h>
-
-#include <cstddef>
-
 namespace cudf::groupby::detail::hash {
-
-std::pair<bool, size_t> can_use_shmem_aggs(int grid_size) noexcept;
 
 void compute_aggregations(int grid_size,
                           cudf::size_type num_input_rows,
@@ -39,7 +33,6 @@ void compute_aggregations(int grid_size,
                           cudf::table_device_view input_values,
                           cudf::mutable_table_device_view output_values,
                           cudf::aggregation::Kind const* d_agg_kinds,
-                          size_t shmem_size,
                           rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash
