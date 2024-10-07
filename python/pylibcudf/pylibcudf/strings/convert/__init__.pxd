@@ -4,4 +4,5 @@ from . cimport (
     convert_datetime,
     convert_durations,
     convert_fixed_point,
+    convert_ipv4,
 )
