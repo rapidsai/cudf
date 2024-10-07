@@ -5,4 +5,5 @@ from . cimport (
     convert_durations,
     convert_fixed_point,
     convert_integers,
+    convert_ipv4,
 )

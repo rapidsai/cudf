@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources convert_booleans.pyx convert_datetime.pyx convert_durations.pyx
-                   convert_fixed_point.pyx convert_integers.pyx
+                   convert_fixed_point.pyx convert_integers.pyx convert_ipv4.pyx
 )
 
 set(linked_libraries cudf::cudf)

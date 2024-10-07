@@ -6,7 +6,6 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column
@@ -14,11 +13,6 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.strings.convert.convert_floats cimport (
     from_floats as cpp_from_floats,
     to_floats as cpp_to_floats,
-)
-from pylibcudf.libcudf.strings.convert.convert_ipv4 cimport (
-    integers_to_ipv4 as cpp_integers_to_ipv4,
-    ipv4_to_integers as cpp_ipv4_to_integers,
-    is_ipv4 as cpp_is_ipv4,
 )
 from pylibcudf.libcudf.types cimport data_type, type_id
 
@@ -504,12 +498,11 @@ def timedelta2int(Column input_col, dtype, format):
 
     """
     dtype = dtype_to_pylibcudf_type(dtype)
-    cdef string c_timestamp_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_durations.to_durations(
             input_col.to_pylibcudf(mode="read"),
             dtype,
-            c_timestamp_format
+            format
         )
     )
 
@@ -528,12 +521,10 @@ def int2timedelta(Column input_col, str format):
     A Column with Timedelta represented in string format
 
     """
-
-    cdef string c_duration_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_durations.from_durations(
             input_col.to_pylibcudf(mode="read"),
-            c_duration_format
+            format
         )
     )
 
@@ -551,14 +542,10 @@ def int2ip(Column input_col):
     A Column with integer represented in string ipv4 format
 
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_integers_to_ipv4(input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
+        input_col.to_pylibcudf(mode="read")
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def ip2int(Column input_col):
@@ -574,14 +561,10 @@ def ip2int(Column input_col):
     A Column with ipv4 represented as integer
 
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_ipv4_to_integers(input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_ipv4.ipv4_to_integers(
+        input_col.to_pylibcudf(mode="read")
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def is_ipv4(Column source_strings):
@@ -590,15 +573,10 @@ def is_ipv4(Column source_strings):
     that have strings in IPv4 format. This format is nnn.nnn.nnn.nnn
     where nnn is integer digits in [0,255].
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_is_ipv4(
-            source_view
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_ipv4.is_ipv4(
+        source_strings.to_pylibcudf(mode="read")
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def htoi(Column input_col):
