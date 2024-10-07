@@ -1098,20 +1098,18 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
 {
   static constexpr bool enable_print = false;
 
-  //Dictionary
+  // it could be that (e.g.) we skip 5000 but starting at row 4000 we have a run of length 2000:
+  // in that case skip_decode() only skips 4000, and we have to process the remaining 1000 up front
+  // modulo 2 * block_size of course, since that's as many as we process at once
   int num_skipped = parquet_stream.skip_decode(t, num_to_skip);
   if constexpr (enable_print) {
     if (t == 0) { printf("SKIPPED: num_skipped %d, for %d\n", num_skipped, num_to_skip); }
   }
-  //it could be that (e.g.) we skip 5000 but starting at row 4000 we have a run of length 2000:
-  //in that case skip_decode() only skips 4000, and we have to process the remaining 1000 up front
-  //modulo 2 * block_size of course, since that's as many as we process at once
   while (num_skipped < num_to_skip) {
-    auto const to_skip = min(2*decode_block_size_t, num_to_skip - num_skipped);
-    parquet_stream.decode_next(t, to_skip);
-    num_skipped += to_skip;
+    auto const to_decode = min(2 * decode_block_size_t, num_to_skip - num_skipped);
+    num_skipped += parquet_stream.decode_next(t, to_decode);
     if constexpr (enable_print) {
-      if (t == 0) { printf("EXTRA SKIPPED: to_skip %d, at %d, for %d\n", to_skip, num_skipped, num_to_skip); }
+      if (t == 0) { printf("EXTRA SKIPPED: to_decode %d, at %d, for %d\n", to_decode, num_skipped, num_to_skip); }
     }
     __syncthreads();
   }
@@ -1240,7 +1238,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
         s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values, s->dict_pos); }
     }
   }
-  
+
   if constexpr (enable_print) {
     if((t == 0) && (page_idx == 0)){
       printf("SIZES: shared_rep_size %d, shared_dict_size %d, shared_def_size %d\n", shared_rep_size, shared_dict_size, shared_def_size);
