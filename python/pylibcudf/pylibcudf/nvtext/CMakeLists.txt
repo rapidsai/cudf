@@ -12,13 +12,11 @@
 # the License.
 # =============================================================================
 
-set(cython_sources convert_booleans.pyx convert_datetime.pyx convert_durations.pyx
-                   convert_fixed_point.pyx convert_ipv4.pyx
-)
+set(cython_sources edit_distance.pyx)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_strings_ ASSOCIATED_TARGETS cudf
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_nvtext_ ASSOCIATED_TARGETS cudf
 )

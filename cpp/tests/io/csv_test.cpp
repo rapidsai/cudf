@@ -2516,4 +2516,39 @@ TEST_F(CsvReaderTest, UTF8BOM)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result_view, expected);
 }
 
+void expect_buffers_equal(cudf::io::datasource::buffer* lhs, cudf::io::datasource::buffer* rhs)
+{
+  ASSERT_EQ(lhs->size(), rhs->size());
+  EXPECT_EQ(0, std::memcmp(lhs->data(), rhs->data(), lhs->size()));
+}
+
+TEST_F(CsvReaderTest, OutOfMapBoundsReads)
+{
+  // write a lot of data into a file
+  auto filepath        = temp_env->get_temp_dir() + "OutOfMapBoundsReads.csv";
+  auto const num_rows  = 1 << 20;
+  auto const row       = std::string{"0,1,2,3,4,5,6,7,8,9\n"};
+  auto const file_size = num_rows * row.size();
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    for (size_t i = 0; i < num_rows; ++i) {
+      outfile << row;
+    }
+  }
+
+  // Only memory map the middle of the file
+  auto source         = cudf::io::datasource::create(filepath, file_size / 2, file_size / 4);
+  auto full_source    = cudf::io::datasource::create(filepath);
+  auto const all_data = source->host_read(0, file_size);
+  auto ref_data       = full_source->host_read(0, file_size);
+  expect_buffers_equal(ref_data.get(), all_data.get());
+
+  auto const start_data = source->host_read(file_size / 2, file_size / 2);
+  expect_buffers_equal(full_source->host_read(file_size / 2, file_size / 2).get(),
+                       start_data.get());
+
+  auto const end_data = source->host_read(0, file_size / 2 + 512);
+  expect_buffers_equal(full_source->host_read(0, file_size / 2 + 512).get(), end_data.get());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
