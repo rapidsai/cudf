@@ -22,12 +22,6 @@ set -u
 
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 
-# Run the CMake configure step and set the build directory for clang-tidy. We
-# also have to build the jitify generated files or they won't exist for
-# clang-tidy to discover.
-export CUDF_ROOT="${PWD}/cpp/build"
-cmake -S cpp -B "${CUDF_ROOT}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -GNinja
-cmake --build "${CUDF_ROOT}" --target jitify_preprocess_run
-
-# Run pre-commit checks
-pre-commit run --all-files --show-diff-on-failure --hook-stage manual clang-tidy
+# Run the build via CMake, which will run clang-tidy when CUDF_CLANG_TIDY is enabled.
+cmake -S cpp -B "${CUDF_ROOT}" -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinja
+cmake --build "${CUDF_ROOT}"
