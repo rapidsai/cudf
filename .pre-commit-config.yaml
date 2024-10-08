@@ -125,18 +125,6 @@ repos:
         language: system
         pass_filenames: false
         verbose: true
-      - id: clang-tidy
-        name: clang-tidy
-        entry: ./cpp/scripts/run-clang-tidy.sh
-        language: python
-        types_or: [c, c++]
-        # Note that pre-commit autoupdate does not update the versions
-        # of dependencies, so we'll have to update this manually.
-        additional_dependencies:
-          - clang-tidy==19.1.0
-        pass_filenames: false
-        stages: [manual]
-        verbose: true
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.6
     hooks:
