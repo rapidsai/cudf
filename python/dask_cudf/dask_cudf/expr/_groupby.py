@@ -99,12 +99,15 @@ class GroupBy(DXGroupBy):
         _deprecate_collect()
         return self._single_agg(ListAgg, **kwargs)
 
-    def aggregate(self, arg, **kwargs):
-        expr = _maybe_get_custom_expr(self, arg, **kwargs)
-        if expr is None:
-            return super().aggregate(_translate_arg(arg), **kwargs)
-        else:
+    def aggregate(self, arg, fused=True, **kwargs):
+        if (
+            fused
+            and (expr := _maybe_get_custom_expr(self, arg, **kwargs))
+            is not None
+        ):
             return new_collection(expr)
+        else:
+            return super().aggregate(_translate_arg(arg), **kwargs)
 
 
 class SeriesGroupBy(DXSeriesGroupBy):
