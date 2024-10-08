@@ -440,7 +440,7 @@ class parquet_field_optional : public parquet_field {
   cuda::std::optional<T>& val;
 
  public:
-  parquet_field_optional(int f, cuda::std::optional<T>& v) : parquet_field(f), val(v) {}
+  parquet_field_optional(int f, std::optional<T>& v) : parquet_field(f), val(v) {}
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
