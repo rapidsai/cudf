@@ -308,10 +308,10 @@ class parquet_field_struct : public parquet_field {
 template <typename E, typename T>
 class parquet_field_union_struct : public parquet_field {
   E& enum_val;
-  cuda::std::optional<T>& val;  // union structs are always wrapped in std::optional
+  std::optional<T>& val;  // union structs are always wrapped in std::optional
 
  public:
-  parquet_field_union_struct(int f, E& ev, cuda::std::optional<T>& v)
+  parquet_field_union_struct(int f, E& ev, std::optional<T>& v)
     : parquet_field(f), enum_val(ev), val(v)
   {
   }
@@ -437,7 +437,7 @@ class parquet_field_struct_blob : public parquet_field {
  */
 template <typename T, typename FieldFunctor>
 class parquet_field_optional : public parquet_field {
-  cuda::std::optional<T>& val;
+  std::optional<T>& val;
 
  public:
   parquet_field_optional(int f, std::optional<T>& v) : parquet_field(f), val(v) {}

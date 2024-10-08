@@ -395,7 +395,7 @@ struct ColumnChunkDesc {
                            uint8_t def_level_bits_,
                            uint8_t rep_level_bits_,
                            Compression codec_,
-                           cuda::std::optional<LogicalType> logical_type_,
+                           std::optional<LogicalType> logical_type_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
@@ -446,7 +446,7 @@ struct ColumnChunkDesc {
   void** column_data_base{};            // base pointers of column data
   void** column_string_base{};          // base pointers of column string data
   Compression codec{};                  // compressed codec enum
-  cuda::std::optional<LogicalType> logical_type{};  // logical type
+  std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index

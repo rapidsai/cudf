@@ -234,8 +234,8 @@ struct stats_caster {
             max.set_index(stats_idx, max_value, colchunk.meta_data.type);
           } else {
             // Marking it null, if column present in row group
-            min.set_index(stats_idx, cuda::std::nullopt, {});
-            max.set_index(stats_idx, cuda::std::nullopt, {});
+            min.set_index(stats_idx, std::nullopt, {});
+            max.set_index(stats_idx, std::nullopt, {});
           }
           stats_idx++;
         }
