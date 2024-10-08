@@ -3,5 +3,4 @@
 set -x
 
 sudo apt update
-sudo apt install -y gdb
-
+sudo apt install -y gdb fio
