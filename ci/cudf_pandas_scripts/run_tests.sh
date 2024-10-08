@@ -76,13 +76,26 @@ python -m pip install ipykernel
 python -m ipykernel install --user --name python3
 
 # The third-party integration tests are ignored because they are run nightly in seperate CI job
+# The profiler test are also ignored because they fail when run in parallel
 python -m pytest -p cudf.pandas \
     --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
+    --ignore=./python/cudf/cudf_pandas_tests/test_profiler.py \
+    --numprocesses=8 \
+    --dist=worksteal \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
     --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
     --cov-report=term \
     ./python/cudf/cudf_pandas_tests/
+
+
+# Run the profiler test serially
+python -m pytest -p cudf.pandas \
+    --cov-config=./python/cudf/.coveragerc \
+    --cov=cudf \
+    --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-pandas-coverage.xml" \
+    --cov-report=term \
+    ./python/cudf/cudf_pandas_tests/test_profiler.py
 
 output=$(python ci/cudf_pandas_scripts/fetch_pandas_versions.py $pandas_version_constraint)
 

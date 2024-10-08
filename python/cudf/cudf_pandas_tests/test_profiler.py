@@ -106,7 +106,7 @@ def test_profiler_commandline():
         env=env,
     )
     assert sp_completed.returncode == 0
-    output = sp_completed.stdout
+    output = sp_completed.stdout.decode("utf-8")
 
     for string in [
         "Total time",
