@@ -234,7 +234,7 @@ class memory_mapped_source : public file_source {
 
     auto const policy = getenv_or("LIBCUDF_MMAP_REGISTER_ENABLED", std::string{"AUTO"});
 
-    if (policy == "ALWAYS") { return true; }
+    if (policy == "ON") { return true; }
     if (policy == "AUTO") { return pageableMemoryAccessUsesHostPageTables(); }
     if (policy == "OFF") { return false; }
 
