@@ -237,6 +237,8 @@ size_t available_shared_memory_size(int grid_size)
   return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
 }
 
+size_t shmem_agg_pointer_size(int num_cols) { return sizeof(void*) * num_cols; }
+
 void compute_single_pass_shmem_aggs(int grid_size,
                                     cudf::size_type num_input_rows,
                                     bitmask_type const* row_bitmask,
@@ -252,10 +254,11 @@ void compute_single_pass_shmem_aggs(int grid_size,
   auto const shmem_size = available_shared_memory_size(grid_size);
   // For each aggregation, need two pointers to arrays in shmem
   // One where the aggregation is performed, one indicating the validity of the aggregation
-  auto const shmem_agg_pointer_size =
-    round_to_multiple_of_8(sizeof(std::byte*) * output_values.num_columns());
+  auto const shmem_pointer_size = shmem_agg_pointer_size(output_values.num_columns());
   // The rest of shmem is utilized for the actual arrays in shmem
-  auto const shmem_agg_size = shmem_size - shmem_agg_pointer_size * 2;
+  CUDF_EXPECTS(shmem_size > shmem_pointer_size * 2,
+               "No enough space for shared memory aggregations");
+  auto const shmem_agg_size = shmem_size - shmem_pointer_size * 2;
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
@@ -267,6 +270,6 @@ void compute_single_pass_shmem_aggs(int grid_size,
     output_values,
     d_agg_kinds,
     shmem_agg_size,
-    shmem_agg_pointer_size);
+    shmem_pointer_size);
 }
 }  // namespace cudf::groupby::detail::hash

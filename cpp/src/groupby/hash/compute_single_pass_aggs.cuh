@@ -225,12 +225,21 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  if (has_dictionary_request) {
+  auto const grid_size = max_occupancy_grid_size(
+    compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>,
+    num_input_rows);
+  auto const has_sufficient_shmem = available_shared_memory_size(grid_size) >
+                                    (shmem_agg_pointer_size(flattened_values.num_columns()) * 2);
+  auto const uses_global_aggs = has_dictionary_request or !has_sufficient_shmem;
+
+  // Use naive global memory aggregations when there are dictionary columns to aggregagte or when
+  // there is no sufficient dynamic shared memory for shared memory aggregations
+  if (uses_global_aggs) {
     // make table that will hold sparse results
     cudf::table sparse_table = create_sparse_results_table(flattened_values,
                                                            d_agg_kinds.data(),
                                                            agg_kinds,
-                                                           has_dictionary_request,
+                                                           uses_global_aggs,
                                                            global_set,
                                                            populated_keys,
                                                            stream);
@@ -262,9 +271,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
     return populated_keys;
   }
 
-  auto const grid_size = max_occupancy_grid_size(
-    compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>,
-    num_input_rows);
   // 'local_mapping_index' maps from the global row index of the input table to the row index of
   // the local pre-aggregate table
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
