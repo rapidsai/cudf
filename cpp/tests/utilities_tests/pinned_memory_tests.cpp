@@ -22,6 +22,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
@@ -123,5 +124,24 @@ TEST_F(PinnedMemoryTest, MakeHostVector)
   {
     auto const vec = cudf::detail::make_host_vector<int32_t>(2, cudf::get_default_stream());
     EXPECT_FALSE(vec.get_allocator().is_device_accessible());
+  }
+}
+
+TEST_F(PinnedMemoryTest, HostSpan)
+{
+  auto test_ctors = [](auto&& vec) {
+    auto const is_vec_device_accessible = vec.get_allocator().is_device_accessible();
+    // Test conversion from a vector
+    auto const span = cudf::host_span<int16_t>{vec};
+    EXPECT_EQ(span.is_device_accessible(), is_vec_device_accessible);
+    // Test conversion from host_span with different type
+    auto const span_converted = cudf::host_span<int16_t const>{span};
+    EXPECT_EQ(span_converted.is_device_accessible(), is_vec_device_accessible);
+  };
+
+  cudf::set_allocate_host_as_pinned_threshold(7);
+  for (int i = 1; i < 10; i++) {
+    // some iterations will use pinned memory, some will not
+    test_ctors(cudf::detail::make_host_vector<int16_t>(i, cudf::get_default_stream()));
   }
 }
