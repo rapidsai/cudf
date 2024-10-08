@@ -123,8 +123,6 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
   auto const block = cooperative_groups::this_thread_block();
   shared_set.initialize(block);
 
-  auto shared_insert_ref = std::move(shared_set).with(cuco::insert_and_find);
-
   __shared__ cudf::size_type cardinality;
   if (block.thread_rank() == 0) { cardinality = 0; }
   block.sync();
@@ -136,7 +134,7 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
        cur_idx += stride) {
     find_local_mapping(cur_idx,
                        num_input_rows,
-                       shared_insert_ref,
+                       shared_set,
                        row_bitmask,
                        skip_rows_with_nulls,
                        &cardinality,
@@ -200,7 +198,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                            probing_scheme_t,
                                            cuco::cuda_allocator<cudf::size_type>,
                                            cuco::storage<GROUPBY_WINDOW_SIZE>>;
-  using shared_set_ref_type    = typename shared_set_type::ref_type<>;
+  using shared_set_ref_type    = typename shared_set_type::ref_type<cuco::op::insert_and_find_tag>;
   auto constexpr window_extent = cuco::make_window_extent<shared_set_ref_type>(extent_type{});
 
   auto const num_input_rows = keys.num_rows();
