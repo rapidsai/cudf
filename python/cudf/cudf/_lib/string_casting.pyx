@@ -594,7 +594,7 @@ def htoi(Column input_col):
     """
     plc_column = plc.strings.convert.convert_integers.hex_to_integers(
         input_col.to_pylibcudf(mode="read"),
-        dtype_to_pylibcudf_type(cudf.dtype("int64"))
+        plc.DataType(plc.TypeId.INT64)
     )
     return Column.from_pylibcudf(plc_column)
 
