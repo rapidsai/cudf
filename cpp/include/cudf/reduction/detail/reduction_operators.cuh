@@ -62,7 +62,7 @@ struct var_std {
     auto const sm   = this->running_square_deviations;
     auto const sn   = rhs.running_square_deviations;
     auto const tmn  = tm + tn;
-    auto const diff = (static_cast<ResultType>(n) / m) * tm - tn;
+    auto const diff = ((static_cast<ResultType>(n) / m) * tm) - tn;
     // Computing m/n(m+n) as m/n/(m+n) to avoid integer overflow
     auto const smn = sm + sn + ((static_cast<ResultType>(m) / n) / (m + n)) * diff * diff;
     return {tmn, smn, m + n};
