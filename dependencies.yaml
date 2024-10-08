@@ -421,9 +421,18 @@ dependencies:
           - cython>=3.0.3
   pyarrow_run:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda]
         packages:
           - pyarrow>=14.0.0,<18.0.0a0
+      - output_types: [requirements, pyproject]
+        packages:
+          # pyarrow 17.0.0 wheels have a subtle issue around threading that
+          # can cause segmentation faults around imports on arm. It appears to
+          # be highly dependent on the exact build configuration, so we'll just
+          # avoid 17.0.0 for now unless we observe similar issues in future
+          # releases as well.
+          - pyarrow>=14.0.0,<18.0.0a0; platform_machine='x86_64'
+          - pyarrow>=14.0.0,<18.0.0a0,!=17.0.0; platform_machine='aarch64'
   cuda_version:
     specific:
       - output_types: conda
