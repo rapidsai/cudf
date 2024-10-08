@@ -2,8 +2,6 @@
 
 from cudf.core.buffer import acquire_spill_lock
 
-from pylibcudf.libcudf.types cimport size_type
-
 from cudf._lib.column cimport Column
 
 from pylibcudf import nvtext
@@ -14,6 +12,6 @@ def jaccard_index(Column input1, Column input2, int width):
     result = nvtext.jaccard.jaccard_index(
         input1.to_pylibcudf(mode="read"),
         input2.to_pylibcudf(mode="read"),
-        <size_type> width,
+        width,
     )
     return Column.from_pylibcudf(result)
