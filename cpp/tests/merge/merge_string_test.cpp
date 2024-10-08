@@ -97,7 +97,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
                                             "hi",
                                             "hj"});
 
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
@@ -296,7 +296,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
                                             true,
                                             false,
                                             false});
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
