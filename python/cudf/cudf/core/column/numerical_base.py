@@ -180,9 +180,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         ddof=1,
     ):
-        return self._reduce(
+        result = self._reduce(
             "var", skipna=skipna, min_count=min_count, ddof=ddof
         )
+        if result is NA:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        return result
 
     def std(
         self,
@@ -190,9 +193,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         ddof=1,
     ):
-        return self._reduce(
+        result = self._reduce(
             "std", skipna=skipna, min_count=min_count, ddof=ddof
         )
+        if result is NA:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        return result
 
     def median(self, skipna: bool | None = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
