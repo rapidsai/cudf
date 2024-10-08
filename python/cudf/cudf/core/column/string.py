@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 import cudf.api.types
 from cudf import _lib as libcudf
@@ -2966,7 +2968,7 @@ class StringMethods(ColumnMethods):
             raise TypeError(msg)
 
         try:
-            side = libstrings.SideType[side.upper()]
+            side = plc.strings.side_type.SideType[side.upper()]
         except KeyError:
             raise ValueError(
                 "side has to be either one of {'left', 'right', 'both'}"
@@ -3622,6 +3624,46 @@ class StringMethods(ColumnMethods):
             )
 
         data = libstrings.findall(self._column, pat, flags)
+        return self._return_or_inplace(data)
+
+    def find_re(self, pat: str, flags: int = 0) -> SeriesOrIndex:
+        """
+        Find first occurrence of pattern or regular expression in the
+        Series/Index.
+
+        Parameters
+        ----------
+        pat : str
+            Pattern or regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
+
+        Returns
+        -------
+        Series
+            A Series of position values where the pattern first matches
+            each string.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['Lion', 'Monkey', 'Rabbit', 'Cat'])
+        >>> s.str.find_re('[ti]')
+        0    1
+        1   -1
+        2    4
+        3    2
+        dtype: int32
+        """
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise NotImplementedError(
+                "Unsupported value for `flags` parameter"
+            )
+
+        data = libstrings.find_re(self._column, pat, flags)
         return self._return_or_inplace(data)
 
     def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
