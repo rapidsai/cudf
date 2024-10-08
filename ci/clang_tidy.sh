@@ -23,6 +23,5 @@ set -u
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 
 # Run the build via CMake, which will run clang-tidy when CUDF_CLANG_TIDY is enabled.
-export CUDF_ROOT="${PWD}/cpp/build"
-cmake -S cpp -B "${CUDF_ROOT}" -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinja
-cmake --build "${CUDF_ROOT}"
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinja
+cmake --build cpp/build
