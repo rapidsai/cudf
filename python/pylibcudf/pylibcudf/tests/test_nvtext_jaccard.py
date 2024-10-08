@@ -14,7 +14,7 @@ def input_data():
 
 
 @pytest.mark.parametrize("width", [2, 3])
-def test_generate_ngrams(input_data, width):
+def test_jaccard_index(input_data, width):
     def get_tokens(s, width):
         return [s[i : i + width] for i in range(len(s) - width + 1)]
 
