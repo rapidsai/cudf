@@ -258,7 +258,7 @@ class ProtobufReader {
 
  private:
   template <int index>
-  friend class FunctionSwitchImpl;
+  friend struct FunctionSwitchImpl;
 
   void skip_bytes(size_t bytecnt)
   {

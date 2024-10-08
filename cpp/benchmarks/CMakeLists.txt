@@ -330,11 +330,11 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
-ConfigureBench(AST_BENCH ast/transform.cpp)
+ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
+ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
@@ -391,11 +391,6 @@ ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
-
-# ##################################################################################################
-# * multi buffer memset benchmark
-# ----------------------------------------------------------------------
-ConfigureNVBench(BATCHED_MEMSET_BENCH io/utilities/batched_memset_bench.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

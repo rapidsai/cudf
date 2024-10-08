@@ -28,7 +28,7 @@
 #include <thrust/transform.h>
 
 namespace CUDF_EXPORT cudf {
-namespace io::detail {
+namespace detail {
 
 /**
  * @brief A helper function that takes in a vector of device spans and memsets them to the
@@ -78,5 +78,5 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
     d_temp_storage.data(), temp_storage_bytes, iter_in, iter_out, sizes, num_bufs, stream);
 }
 
-}  // namespace io::detail
+}  // namespace detail
 }  // namespace CUDF_EXPORT cudf

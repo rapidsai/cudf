@@ -10,6 +10,6 @@ from pylibcudf.libcudf.strings.side_type cimport side_type
 cdef extern from "cudf/strings/strip.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] strip(
-        column_view source_strings,
-        side_type stype,
+        column_view input,
+        side_type side,
         string_scalar to_strip) except +
