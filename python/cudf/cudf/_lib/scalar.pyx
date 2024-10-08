@@ -32,13 +32,13 @@ from pylibcudf.libcudf.scalar.scalar cimport (
     struct_scalar,
     timestamp_scalar,
 )
-from pylibcudf.libcudf.wrappers.durations cimport (
+from pylibcudf.wrappers.durations cimport (
     duration_ms,
     duration_ns,
     duration_s,
     duration_us,
 )
-from pylibcudf.libcudf.wrappers.timestamps cimport (
+from pylibcudf.wrappers.timestamps cimport (
     timestamp_ms,
     timestamp_ns,
     timestamp_s,
