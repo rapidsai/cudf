@@ -76,6 +76,9 @@ function(ConfigureTest CMAKE_TEST_NAME)
         "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
     )
   endif()
+  if(CUDF_CLANG_TIDY)
+    enable_clang_tidy(${CMAKE_TEST_NAME})
+  endif()
 endfunction()
 
 # ##################################################################################################
