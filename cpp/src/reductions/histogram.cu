@@ -106,6 +106,70 @@ std::unique_ptr<column> make_empty_histogram_like(column_view const& values)
                                   std::move(struct_children));
 }
 
+/**
+ * @brief Helper functor to compute row frequencies using cuco::static_set with the specified
+ *        row equality comarator
+ *
+ * @tparam KeyEqual Type of the row equality comparator
+ *
+ * @param[in]  num_rows Number of rows in the input table
+ * @param[in]  partial_counts An optional column containing count for each row
+ * @param[out] reduction_results Devic vector to store the row counts (the histogram)
+ * @param[in]  stream CUDA stream to use
+ */
+struct hash_set_insert_fn {
+  size_t num_rows;
+  std::optional<column_view> const& partial_counts;
+  rmm::device_uvector<histogram_count_type>& reduction_results;
+  rmm::cuda_stream_view stream;
+
+  using row_hash =
+    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                     cudf::nullate::DYNAMIC>;
+  using device_row_hasher =
+    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                     nullate::DYNAMIC>;
+
+  template <typename KeyEqual>
+  size_t operator()(device_row_hasher const& key_hasher, KeyEqual const& key_equal)
+  {
+    // Construct a hash set
+    auto row_set = cuco::static_set{
+      cuco::extent{num_rows},
+      cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+      cuco::empty_key<size_type>{-1},
+      key_equal,
+      cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
+      {},  // thread scope
+      {},  // storage
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
+    // Device-accessible reference to the hash set with `insert_and_find` operator
+    auto row_set_ref = row_set.ref(cuco::op::insert_and_find);
+
+    // Compute frequencies (aka distinct counts) for the input rows.
+    // Note that we consider null and NaNs as always equal.
+    thrust::for_each(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(num_rows),
+                     [set_ref    = row_set_ref,
+                      increments = partial_counts.has_value()
+                                     ? partial_counts.value().begin<histogram_count_type>()
+                                     : nullptr,
+                      counts     = reduction_results.begin()] __device__(auto const idx) mutable {
+                       auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
+                       cuda::atomic_ref<histogram_count_type, cuda::thread_scope_device> count_ref{
+                         counts[*inserted_idx_ptr]};
+                       auto const increment =
+                         increments ? increments[idx] : histogram_count_type{1};
+                       count_ref.fetch_add(increment, cuda::std::memory_order_relaxed);
+                     });
+
+    // Set-size is the number of distinct (inserted) rows
+    return row_set.size(stream);
+  }
+};
+
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>, std::unique_ptr<column>>
 compute_row_frequencies(table_view const& input,
                         std::optional<column_view> const& partial_counts,
@@ -132,56 +196,30 @@ compute_row_frequencies(table_view const& input,
   using nan_equal_comparator =
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
   auto const value_comp = nan_equal_comparator{};
-  // Hard set the tparam `has_nested_columns` = false for now as we don't yet support nested columns
-  auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
 
-  using row_hash =
-    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                     cudf::nullate::DYNAMIC>;
-
+  // Number of rows in the input table
   size_t const num_rows = input.num_rows();
 
-  // Construct a vector to store reduced counts and init to zero
+  // Create a vector to store the reduced row counts and init to zero
   rmm::device_uvector<histogram_count_type> reduction_results(num_rows, stream, mr);
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                              reduction_results.begin(),
                              reduction_results.end(),
                              histogram_count_type{0});
 
-  // Construct a hash set
-  auto row_set = cuco::static_set{
-    cuco::extent{num_rows},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-    cuco::empty_key<size_type>{-1},
-    key_equal,
-    cuco::linear_probing<DEFAULT_HISTOGRAM_CG_SIZE, row_hash>{key_hasher},
-    {},  // thread scope
-    {},  // storage
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  // Hash set size after insertions
+  size_t set_size = 0;
 
-  // Device-accessible reference to the hash set with `insert_and_find` operator
-  auto row_set_ref = row_set.ref(cuco::op::insert_and_find);
-
-  // Compute frequencies (aka distinct counts) for the input rows.
-  // Note that we consider null and NaNs as always equal.
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_rows),
-    [set_ref = row_set_ref,
-     increments =
-       partial_counts.has_value() ? partial_counts.value().begin<histogram_count_type>() : nullptr,
-     counts = reduction_results.begin()] __device__(auto const idx) mutable {
-      auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
-      cuda::atomic_ref<histogram_count_type, cuda::thread_scope_device> count_ref{
-        counts[*inserted_idx_ptr]};
-      auto const increment = increments ? increments[idx] : histogram_count_type{1};
-      count_ref.fetch_add(increment, cuda::std::memory_order_relaxed);
-    });
-
-  // Set-size is the number of distinct (inserted) rows
-  auto const set_size = row_set.size(stream);
+  // Dispatch the appropriate hash set insert functor
+  if (has_nested_columns) {
+    auto const key_equal = row_comp.equal_to<true>(has_nulls, null_equality::EQUAL, value_comp);
+    set_size = hash_set_insert_fn{num_rows, partial_counts, reduction_results, stream}(key_hasher,
+                                                                                       key_equal);
+  } else {
+    auto const key_equal = row_comp.equal_to<false>(has_nulls, null_equality::EQUAL, value_comp);
+    set_size = hash_set_insert_fn{num_rows, partial_counts, reduction_results, stream}(key_hasher,
+                                                                                       key_equal);
+  }
 
   // Vector of distinct indices
   auto distinct_indices = std::make_unique<rmm::device_uvector<size_type>>(set_size, stream, mr);
