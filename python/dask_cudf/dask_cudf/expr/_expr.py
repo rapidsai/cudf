@@ -30,95 +30,86 @@ import cudf
 ##
 
 
-def _groupby_meta(gb):
-    from dask.dataframe.dispatch import make_meta, meta_nonempty
+def _get_spec_info(gb):
+    if isinstance(gb.arg, (dict, list)):
+        aggs = gb.arg.copy()
+    else:
+        aggs = gb.arg
 
-    meta = meta_nonempty(gb.frame._meta)
-    meta = meta.groupby(
-        gb._by_meta,
-        # **_as_dict("observed", gb.observed),
-        # **_as_dict("dropna", gb.dropna),
-    )
-    if gb._slice is not None:
-        meta = meta[gb._slice]
-    meta = meta.aggregate(gb.arg)
-    return make_meta(meta)
+    if gb._slice and not isinstance(aggs, dict):
+        aggs = {gb._slice: aggs}
+
+    gb_cols = gb._by_columns
+    if isinstance(gb_cols, str):
+        gb_cols = [gb_cols]
+    columns = [c for c in gb.frame.columns if c not in gb_cols]
+    if not isinstance(aggs, dict):
+        aggs = {col: aggs for col in columns}
+
+    # Assert if our output will have a MultiIndex; this will be the case if
+    # any value in the `aggs` dict is not a string (i.e. multiple/named
+    # aggregations per column)
+    str_cols_out = True
+    aggs_renames = {}
+    for col in aggs:
+        if isinstance(aggs[col], str) or callable(aggs[col]):
+            aggs[col] = [aggs[col]]
+        elif isinstance(aggs[col], dict):
+            str_cols_out = False
+            col_aggs = []
+            for k, v in aggs[col].items():
+                aggs_renames[col, v] = k
+                col_aggs.append(v)
+            aggs[col] = col_aggs
+        else:
+            str_cols_out = False
+        if col in gb_cols:
+            columns.append(col)
+
+    return {
+        "aggs": aggs,
+        "columns": columns,
+        "str_cols_out": str_cols_out,
+        "aggs_renames": aggs_renames,
+    }
 
 
-class CudfGroupbyAggregation(GroupbyAggregation):
-    @functools.cached_property
-    def _meta(self):
-        return _groupby_meta(self)
+def _get_meta(gb):
+    spec_info = gb.spec_info
+    gb_cols = gb._by_columns
+    aggs = spec_info["aggs"].copy()
+    aggs_renames = spec_info["aggs_renames"]
+    if spec_info["str_cols_out"]:
+        # Metadata should use `str` for dict values if that is
+        # what the user originally specified (column names will
+        # be str, rather than tuples).
+        for col in aggs:
+            aggs[col] = aggs[col][0]
+    _meta = gb.frame._meta.groupby(gb_cols).agg(aggs)
+    if aggs_renames:
+        col_array = []
+        agg_array = []
+        for col, agg in _meta.columns:
+            col_array.append(col)
+            agg_array.append(aggs_renames.get((col, agg), agg))
+        _meta.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
+    return _meta
 
-    def _lower(self):
-        return DecomposableCudfGroupbyAggregation(
-            self.frame,
-            self.arg,
-            self.observed,
-            self.dropna,
-            self.split_every,
-            self.split_out,
-            self.sort,
-            self.shuffle_method,
-            self._slice,
-            *self.by,
-        )
 
-
-class DecomposableCudfGroupbyAggregation(DecomposableGroupbyAggregation):
+class DecomposableCudfGroupbyAgg(DecomposableGroupbyAggregation):
     sep = "___"
 
     @functools.cached_property
+    def spec_info(self):
+        return _get_spec_info(self)
+
+    @functools.cached_property
     def _meta(self):
-        return _groupby_meta(self)
+        return _get_meta(self)
 
     @property
     def shuffle_by_index(self):
         return False  # We always group by column(s)
-
-    @functools.cached_property
-    def spec_info(self):
-        if isinstance(self.arg, (dict, list)):
-            aggs = self.arg.copy()
-        else:
-            aggs = self.arg
-
-        if self._slice and not isinstance(aggs, dict):
-            aggs = {self._slice: aggs}
-
-        gb_cols = self._by_columns
-        if isinstance(gb_cols, str):
-            gb_cols = [gb_cols]
-        columns = [c for c in self.frame.columns if c not in gb_cols]
-        if not isinstance(aggs, dict):
-            aggs = {col: aggs for col in columns}
-
-        # Assert if our output will have a MultiIndex; this will be the case if
-        # any value in the `aggs` dict is not a string (i.e. multiple/named
-        # aggregations per column)
-        str_cols_out = True
-        aggs_renames = {}
-        for col in aggs:
-            if isinstance(aggs[col], str) or callable(aggs[col]):
-                aggs[col] = [aggs[col]]
-            elif isinstance(aggs[col], dict):
-                str_cols_out = False
-                col_aggs = []
-                for k, v in aggs[col].items():
-                    aggs_renames[col, v] = k
-                    col_aggs.append(v)
-                aggs[col] = col_aggs
-            else:
-                str_cols_out = False
-            if col in gb_cols:
-                columns.append(col)
-
-        return {
-            "aggs": aggs,
-            "columns": columns,
-            "str_cols_out": str_cols_out,
-            "aggs_renames": aggs_renames,
-        }
 
     @classmethod
     def chunk(cls, df, *by, **kwargs):
@@ -176,6 +167,71 @@ class DecomposableCudfGroupbyAggregation(DecomposableGroupbyAggregation):
             "str_cols_out": self.spec_info["str_cols_out"],
             "aggs_renames": self.spec_info["aggs_renames"],
         }
+
+
+class CudfGroupbyAgg(GroupbyAggregation):
+    @functools.cached_property
+    def spec_info(self):
+        return _get_spec_info(self)
+
+    @functools.cached_property
+    def _meta(self):
+        return _get_meta(self)
+
+    def _lower(self):
+        return DecomposableCudfGroupbyAgg(
+            self.frame,
+            self.arg,
+            self.observed,
+            self.dropna,
+            self.split_every,
+            self.split_out,
+            self.sort,
+            self.shuffle_method,
+            self._slice,
+            *self.by,
+        )
+
+
+def _maybe_get_custom_expr(
+    gb,
+    aggs,
+    split_every=None,
+    split_out=None,
+    shuffle_method=None,
+    **kwargs,
+):
+    from dask_cudf.groupby import (
+        OPTIMIZED_AGGS,
+        _aggs_optimized,
+        _redirect_aggs,
+    )
+
+    if kwargs:
+        # Unsupported key-word arguments
+        return None
+
+    if not hasattr(gb.obj._meta, "to_pandas"):
+        # Not cuDF-backed data
+        return None
+
+    _aggs = _redirect_aggs(aggs)
+    if not _aggs_optimized(_aggs, OPTIMIZED_AGGS):
+        # One or more aggregations are unsupported
+        return None
+
+    return CudfGroupbyAgg(
+        gb.obj.expr,
+        _aggs,
+        gb.observed,
+        gb.dropna,
+        split_every,
+        split_out,
+        gb.sort,
+        shuffle_method,
+        gb._slice,
+        *gb.by,
+    )
 
 
 class CudfFusedParquetIO(FusedParquetIO):
