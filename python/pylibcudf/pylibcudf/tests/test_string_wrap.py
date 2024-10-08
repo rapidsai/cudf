@@ -7,6 +7,7 @@ from utils import assert_column_eq
 
 
 def test_wrap():
+    width = 12
     pa_array = pa.array(
         [
             "the quick brown fox jumped over the lazy brown dog",
@@ -14,10 +15,10 @@ def test_wrap():
             None,
         ]
     )
-    result = plc.strings.wrap.wrap(plc.interop.from_arrow(pa_array), 12)
+    result = plc.strings.wrap.wrap(plc.interop.from_arrow(pa_array), width)
     expected = pa.array(
         [
-            textwrap.fill(val, 12) if isinstance(val, str) else val
+            textwrap.fill(val, width) if isinstance(val, str) else val
             for val in pa_array.to_pylist()
         ]
     )
