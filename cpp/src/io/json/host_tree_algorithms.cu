@@ -134,12 +134,13 @@ std::vector<std::string> copy_strings_to_host_sync(
     // build std::string vector from chars and offsets
     std::vector<std::string> host_data;
     host_data.reserve(col.size());
-    std::transform(
-      std::begin(h_offsets),
-      std::end(h_offsets) - 1,
-      std::begin(h_offsets) + 1,
-      std::back_inserter(host_data),
-      [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
+    std::transform(std::begin(h_offsets),
+                   std::end(h_offsets) - 1,
+                   std::begin(h_offsets) + 1,
+                   std::back_inserter(host_data),
+                   [&h_chars](auto start, auto end) {
+                     return std::string(h_chars.data() + start, end - start);
+                   });
     return host_data;
   };
   return to_host(d_column_names->view());
@@ -466,7 +467,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
   std::fill_n(is_pruned.begin(), num_columns, options.is_enabled_prune_columns());
 
   // prune all children of a column, but not self.
-  auto ignore_all_children = [&](auto parent_col_id) {
+  auto ignore_all_children = [&adj, &is_pruned](auto parent_col_id) {
     std::deque<NodeIndexT> offspring;
     if (adj.count(parent_col_id)) {
       for (auto const& child : adj[parent_col_id]) {
