@@ -375,9 +375,9 @@ struct rle_stream {
   __device__ inline int skip_runs(int target_count)
   {
     //we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip amount
-    //so thread 0 spins like crazy on fill_run_batch(), skipping writing unnecessary run info
+    //so threads spin like crazy on fill_run_batch(), skipping writing unnecessary run info
     //then when it hits the one that matters, we don't process it at all and bail as if we never started
-    //basically we're setting up the global vars necessary to start fill_run_batch for the first time
+    //basically we're setting up the rle_stream vars necessary to start fill_run_batch for the first time
     while (cur < end) {
       // bytes for the varint header
       uint8_t const* _cur = cur;
@@ -397,9 +397,10 @@ struct rle_stream {
       }
 
       if((output_pos + run_size) > target_count) {
-        return output_pos; //bail! we've reached the starting one
+        return output_pos; //bail! we've reached the starting run
       }
 
+      //skip this run
       output_pos += run_size;
       cur += run_bytes;
     }
@@ -412,27 +413,10 @@ struct rle_stream {
   {
     int const output_count = min(count, total_values - cur_values);
 
-    // special case. if level_bits == 0, just return all zeros. this should tremendously speed up
+    // if level_bits == 0, there's nothing to do
     // a very common case: columns with no nulls, especially if they are non-nested
-    if (level_bits == 0) {
-      cur_values = output_count;
-      return output_count;
-    }
-
-    __shared__ int values_processed_shared;
-
-    __syncthreads();
-
-    // warp 0 reads ahead and fills `runs` array to be decoded by remaining warps.
-    if (t == 0) {
-      values_processed_shared = skip_runs(output_count);
-    }
-    __syncthreads();
-
-    cur_values = values_processed_shared;
-
-    // valid for every thread
-    return values_processed_shared;
+    cur_values = (level_bits == 0) ? output_count : skip_runs(output_count);
+    return cur_values;
   }
 
   __device__ inline int decode_next(int t) { return decode_next(t, max_output_values); }

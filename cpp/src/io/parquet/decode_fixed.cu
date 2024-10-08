@@ -80,32 +80,27 @@ __device__ inline void gpuDecodeFixedWidthValues(
   constexpr int num_warps      = block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
-  int const dtype                          = s->col.physical_type;
-
+  // nesting level that is storing actual leaf values
   int const leaf_level_index = s->col.max_nesting_depth - 1;
+  auto const data_out = s->nesting_info[leaf_level_index].data_out;
+
+  int const dtype = s->col.physical_type;
   uint32_t dtype_len = s->dtype_len;
-  auto const data_out = nesting_info_base[leaf_level_index].data_out;
+
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
   int pos = start;
   while (pos < end) {
     int const batch_size = min(max_batch_size, end - pos);
-
     int const target_pos = pos + batch_size;
     int src_pos    = pos + t;
 
-    // the position in the output column/buffer
-//Index from rolling buffer of values (which doesn't include nulls) to final array (which includes gaps for nulls)
-    auto offset = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)];
-    int dst_pos = offset;
+    //Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
+    int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)];
     if constexpr (!has_lists_t) {
       dst_pos -= s->first_row;
     }
-
-    int dict_idx = rolling_index<state_buf::dict_buf_size>(src_pos + skipped_leaf_values);
-    int dict_pos = sb->dict_idx[dict_idx];
 
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
     // before first_row) in the flat hierarchy case.
@@ -113,7 +108,7 @@ __device__ inline void gpuDecodeFixedWidthValues(
       // nesting level that is storing actual leaf values
 
       // src_pos represents the logical row position we want to read from. But in the case of
-      // nested hierarchies (lists), there is no 1:1 mapping of rows to values.  So our true read position
+      // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
       // has to take into account the # of values we have to skip in the page to get to the
       // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
       if constexpr (has_lists_t) {
@@ -176,10 +171,14 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   constexpr int num_warps      = block_size / warp_size;
   constexpr int max_batch_size = num_warps * warp_size;
 
-  PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
+  // nesting level that is storing actual leaf values
+  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  auto const data_out = s->nesting_info[leaf_level_index].data_out;
+
   int const dtype                          = s->col.physical_type;
   auto const data_len                      = thrust::distance(s->data_start, s->data_end);
   auto const num_values                    = data_len / s->dtype_len_in;
+
   uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
@@ -199,11 +198,9 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
     // before first_row) in the flat hierarchy case.
     if (src_pos < target_pos && dst_pos >= 0) {
-      // nesting level that is storing actual leaf values
-      int const leaf_level_index = s->col.max_nesting_depth - 1;
 
       // src_pos represents the logical row position we want to read from. But in the case of
-      // nested hierarchies (lists), there is no 1:1 mapping of rows to values.  So our true read position
+      // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
       // has to take into account the # of values we have to skip in the page to get to the
       // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
       if constexpr (has_lists_t) {
@@ -212,8 +209,7 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
 
       uint32_t dtype_len = s->dtype_len;
       uint8_t const* src = s->data_start + src_pos;
-      uint8_t* dst =
-        nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+      uint8_t* dst = data_out + static_cast<size_t>(dst_pos) * dtype_len;
       auto const is_decimal =
         s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
 
@@ -862,7 +858,7 @@ template <typename level_t,
           bool has_lists_t,
           template <int block_size, bool decode_has_lists_t, typename state_buf>
           typename DecodeValuesFunc>
-CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
+CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   gpuDecodePageDataGeneric(PageInfo* pages,
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
@@ -907,18 +903,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // shared buffer. all shared memory is suballocated out of here
-  static constexpr auto align_test = false;
-  static constexpr size_t buffer_alignment = align_test ? 128 : 16;
   constexpr int shared_rep_size = has_lists_t ? cudf::util::round_up_unsafe(rle_run_buffer_size *
-    sizeof(rle_run<level_t>), buffer_alignment) : 0;
+    sizeof(rle_run<level_t>), size_t{16}) : 0;
   constexpr int shared_dict_size =
     has_dict_t
-      ? cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<uint32_t>), buffer_alignment)
+      ? cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<uint32_t>), size_t{16})
       : 0;
   constexpr int shared_def_size =
-    cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<level_t>), buffer_alignment);
+    cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<level_t>), size_t{16});
   constexpr int shared_buf_size = shared_rep_size + shared_dict_size + shared_def_size;
-  __shared__ __align__(buffer_alignment) uint8_t shared_buf[shared_buf_size];
+  __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
   int shared_offset = 0;
