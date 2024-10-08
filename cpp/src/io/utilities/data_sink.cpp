@@ -51,7 +51,7 @@ class file_sink : public data_sink {
   }
 
   // Marked as NOLINT because we are calling a virtual method in the destructor
-  ~file_sink() override { flush(); }  // NOLINT
+  ~file_sink() override { flush(); }
 
   void host_write(void const* data, size_t size) override
   {
