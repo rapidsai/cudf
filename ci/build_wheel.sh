@@ -13,3 +13,5 @@ rapids-generate-version > ./VERSION
 cd "${package_dir}"
 
 python -m pip wheel . -w dist -v --no-deps --disable-pip-version-check
+
+sccache -s
