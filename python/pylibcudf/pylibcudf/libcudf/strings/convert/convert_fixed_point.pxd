@@ -9,13 +9,13 @@ from pylibcudf.libcudf.types cimport data_type
 cdef extern from "cudf/strings/convert/convert_fixed_point.hpp" namespace \
         "cudf::strings" nogil:
     cdef unique_ptr[column] to_fixed_point(
-        column_view input_col,
+        column_view input,
         data_type output_type) except +
 
     cdef unique_ptr[column] from_fixed_point(
-        column_view input_col) except +
+        column_view input) except +
 
     cdef unique_ptr[column] is_fixed_point(
-        column_view source_strings,
-        data_type output_type
+        column_view input,
+        data_type decimal_type
     ) except +

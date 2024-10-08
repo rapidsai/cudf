@@ -602,7 +602,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - &numpy numpy>=1.23,<3.0a0
-          - pandas>=2.0,<2.2.3dev0
+          - pandas>=2.0,<2.2.4dev0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -748,6 +748,10 @@ dependencies:
             packages:
               - *numba-cuda-dep
               - pandas==2.0.*
+          - matrix: {dependencies: "latest"}
+            packages:
+              - numba-cuda==0.0.15
+              - pandas==2.2.3
           - matrix:
             packages:
       - output_types: conda
