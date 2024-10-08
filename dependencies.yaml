@@ -6,6 +6,9 @@ files:
       cuda: ["11.8", "12.5"]
       arch: [x86_64]
     includes:
+      # Note that clang-tidy is not included here because cudf's preferred
+      # version conflicts with the rest of RAPIDS and that would break any
+      # unified environment.
       - build_base
       - build_all
       - build_cpp
@@ -91,6 +94,7 @@ files:
     includes:
       - build_all
       - build_base
+      - clang_tidy
       - cuda
       - develop
       - py_version
@@ -564,6 +568,12 @@ dependencies:
       - output_types: conda
         packages:
           - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
+  clang_tidy:
+    common:
+      - output_types: conda
+        packages:
+          - clang==19.1.0
+          - clang-tools==19.1.0
   docs:
     common:
       - output_types: [conda]
