@@ -37,7 +37,7 @@ class Agg(Expr):
     def __init__(
         self, dtype: plc.DataType, name: str, options: Any, *children: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.name = name
         self.options = options
         self.children = children

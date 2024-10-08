@@ -30,7 +30,7 @@ class Sort(Expr):
     def __init__(
         self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (column,)
 
@@ -70,7 +70,7 @@ class SortBy(Expr):
         column: Expr,
         *by: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (column, *by)
 

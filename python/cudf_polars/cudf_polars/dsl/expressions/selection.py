@@ -28,7 +28,7 @@ class Gather(Expr):
     children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(
@@ -70,7 +70,7 @@ class Filter(Expr):
     children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(

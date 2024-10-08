@@ -35,7 +35,7 @@ class BinOp(Expr):
         left: Expr,
         right: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         if plc.traits.is_boolean(self.dtype):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the

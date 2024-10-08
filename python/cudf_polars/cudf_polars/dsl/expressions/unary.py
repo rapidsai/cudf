@@ -31,7 +31,7 @@ class Cast(Expr):
     children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (value,)
         if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
@@ -61,6 +61,9 @@ class Len(Expr):
     """Class representing the length of an expression."""
 
     children: tuple[()]
+
+    def __init__(self, dtype: plc.DataType) -> None:
+        self.dtype = dtype
 
     def do_evaluate(
         self,
@@ -142,7 +145,7 @@ class UnaryFunction(Expr):
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.name = name
         self.options = options
         self.children = children
