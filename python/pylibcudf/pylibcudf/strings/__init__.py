@@ -38,6 +38,7 @@ __all__ = [
     "regex_flags",
     "regex_program",
     "replace",
+    "replace_re",
     "slice",
     "strip",
     "split",
