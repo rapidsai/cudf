@@ -618,12 +618,14 @@ struct PdaSymbolToSymbolGroupId {
     constexpr auto pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
     // We map the delimiter character to LINE_BREAK symbol group id, and the newline character
-    // to OTHER. Note that delimiter cannot be any of opening(closing) brace, bracket, quote,
+    // to WHITE_SPACE. Note that delimiter cannot be any of opening(closing) brace, bracket, quote,
     // escape, comma, colon or whitespace characters.
+    auto constexpr newline    = '\n';
+    auto constexpr whitespace = ' ';
     auto const symbol_position =
       symbol == delimiter
-        ? static_cast<int32_t>('\n')
-        : (symbol == '\n' ? static_cast<int32_t>(delimiter) : static_cast<int32_t>(symbol));
+        ? static_cast<int32_t>(newline)
+        : (symbol == newline ? static_cast<int32_t>(whitespace) : static_cast<int32_t>(symbol));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +

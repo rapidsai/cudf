@@ -26,7 +26,7 @@ from typing_extensions import assert_never
 import polars as pl
 
 import cudf_polars.dsl.expr as expr
-from cudf_polars.containers import DataFrame, NamedColumn
+from cudf_polars.containers import Column, DataFrame
 from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
@@ -57,9 +57,7 @@ __all__ = [
 ]
 
 
-def broadcast(
-    *columns: NamedColumn, target_length: int | None = None
-) -> list[NamedColumn]:
+def broadcast(*columns: Column, target_length: int | None = None) -> list[Column]:
     """
     Broadcast a sequence of columns to a common length.
 
@@ -112,12 +110,12 @@ def broadcast(
     return [
         column
         if column.obj.size() != 1
-        else NamedColumn(
+        else Column(
             plc.Column.from_scalar(column.obj_scalar, nrows),
-            column.name,
             is_sorted=plc.types.Sorted.YES,
             order=plc.types.Order.ASCENDING,
             null_order=plc.types.NullOrder.BEFORE,
+            name=column.name,
         )
         for column in columns
     ]
@@ -385,15 +383,17 @@ class Scan(IR):
             init = plc.interop.from_arrow(
                 pa.scalar(offset, type=plc.interop.to_arrow(dtype))
             )
-            index = NamedColumn(
+            index = Column(
                 plc.filling.sequence(df.num_rows, init, step),
-                name,
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
+                name=name,
             )
             df = DataFrame([index, *df.columns])
-        assert all(c.obj.type() == self.schema[c.name] for c in df.columns)
+        assert all(
+            c.obj.type() == self.schema[name] for name, c in df.column_map.items()
+        )
         if self.predicate is None:
             return df
         else:
@@ -588,44 +588,58 @@ class GroupBy(IR):
                 requests.append(plc.groupby.GroupByRequest(col, [req]))
                 replacements.append(rep)
         group_keys, raw_tables = grouper.aggregate(requests)
-        # TODO: names
-        raw_columns: list[NamedColumn] = []
+        raw_columns: list[Column] = []
         for i, table in enumerate(raw_tables):
             (column,) = table.columns()
-            raw_columns.append(NamedColumn(column, f"tmp{i}"))
+            raw_columns.append(Column(column, name=f"tmp{i}"))
         mapping = dict(zip(replacements, raw_columns, strict=True))
         result_keys = [
-            NamedColumn(gk, k.name)
-            for gk, k in zip(group_keys.columns(), keys, strict=True)
+            Column(grouped_key, name=key.name)
+            for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
         result_subs = DataFrame(raw_columns)
         results = [
             req.evaluate(result_subs, mapping=mapping) for req in self.agg_requests
         ]
         broadcasted = broadcast(*result_keys, *results)
-        result_keys = broadcasted[: len(result_keys)]
-        results = broadcasted[len(result_keys) :]
         # Handle order preservation of groups
-        # like cudf classic does
-        # https://github.com/rapidsai/cudf/blob/5780c4d8fb5afac2e04988a2ff5531f94c22d3a3/python/cudf/cudf/core/groupby/groupby.py#L723-L743
         if self.maintain_order and not sorted:
-            left = plc.stream_compaction.stable_distinct(
+            # The order we want
+            want = plc.stream_compaction.stable_distinct(
                 plc.Table([k.obj for k in keys]),
                 list(range(group_keys.num_columns())),
                 plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
-            right = plc.Table([key.obj for key in result_keys])
-            _, indices = plc.join.left_join(left, right, plc.types.NullEquality.EQUAL)
+            # The order we have
+            have = plc.Table([key.obj for key in broadcasted[: len(keys)]])
+
+            # We know an inner join is OK because by construction
+            # want and have are permutations of each other.
+            left_order, right_order = plc.join.inner_join(
+                want, have, plc.types.NullEquality.EQUAL
+            )
+            # Now left_order is an arbitrary permutation of the ordering we
+            # want, and right_order is a matching permutation of the ordering
+            # we have. To get to the original ordering, we need
+            # left_order == iota(nrows), with right_order permuted
+            # appropriately. This can be obtained by sorting
+            # right_order by left_order.
+            (right_order,) = plc.sorting.sort_by_key(
+                plc.Table([right_order]),
+                plc.Table([left_order]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.AFTER],
+            ).columns()
             ordered_table = plc.copying.gather(
                 plc.Table([col.obj for col in broadcasted]),
-                indices,
+                right_order,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
             broadcasted = [
-                NamedColumn(reordered, b.name)
-                for reordered, b in zip(
+                Column(reordered, name=old.name)
+                for reordered, old in zip(
                     ordered_table.columns(), broadcasted, strict=True
                 )
             ]
@@ -772,20 +786,20 @@ class Join(IR):
             # result, not the gather maps
             columns = plc.join.cross_join(left.table, right.table).columns()
             left_cols = [
-                NamedColumn(new, old.name).sorted_like(old)
+                Column(new, name=old.name).sorted_like(old)
                 for new, old in zip(
                     columns[: left.num_columns], left.columns, strict=True
                 )
             ]
             right_cols = [
-                NamedColumn(
+                Column(
                     new,
-                    old.name
-                    if old.name not in left.column_names_set
-                    else f"{old.name}{suffix}",
+                    name=name
+                    if name not in left.column_names_set
+                    else f"{name}{suffix}",
                 )
-                for new, old in zip(
-                    columns[left.num_columns :], right.columns, strict=True
+                for new, name in zip(
+                    columns[left.num_columns :], right.column_names, strict=True
                 )
             ]
             return DataFrame([*left_cols, *right_cols])
@@ -823,18 +837,19 @@ class Join(IR):
                 plc.copying.gather(right.table, rg, right_policy), right.column_names
             )
             if coalesce and how != "inner":
-                left = left.replace_columns(
-                    *(
-                        NamedColumn(
+                left = left.with_columns(
+                    (
+                        Column(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
-                            left_col.name,
+                            name=left_col.name,
                         )
                         for left_col, right_col in zip(
                             left.select_columns(left_on.column_names_set),
                             right.select_columns(right_on.column_names_set),
                             strict=True,
                         )
-                    )
+                    ),
+                    replace_only=True,
                 )
                 right = right.discard_columns(right_on.column_names_set)
             if how == "right":
@@ -916,9 +931,10 @@ class Distinct(IR):
         df = self.df.evaluate(cache=cache)
         if self.subset is None:
             indices = list(range(df.num_columns))
+            keys_sorted = all(c.is_sorted for c in df.column_map.values())
         else:
             indices = [i for i, k in enumerate(df.column_names) if k in self.subset]
-        keys_sorted = all(df.columns[i].is_sorted for i in indices)
+            keys_sorted = all(df.column_map[name].is_sorted for name in self.subset)
         if keys_sorted:
             table = plc.stream_compaction.unique(
                 df.table,
@@ -939,10 +955,11 @@ class Distinct(IR):
                 plc.types.NullEquality.EQUAL,
                 plc.types.NanEquality.ALL_EQUAL,
             )
+        # TODO: Is this sortedness setting correct
         result = DataFrame(
             [
-                NamedColumn(c, old.name).sorted_like(old)
-                for c, old in zip(table.columns(), df.columns, strict=True)
+                Column(new, name=old.name).sorted_like(old)
+                for new, old in zip(table.columns(), df.columns, strict=True)
             ]
         )
         if keys_sorted or self.stable:
@@ -993,30 +1010,30 @@ class Sort(IR):
         sort_keys = broadcast(
             *(k.evaluate(df) for k in self.by), target_length=df.num_rows
         )
-        names = {c.name: i for i, c in enumerate(df.columns)}
         # TODO: More robust identification here.
-        keys_in_result = [
-            i
-            for k in sort_keys
-            if (i := names.get(k.name)) is not None and k.obj is df.columns[i].obj
-        ]
+        keys_in_result = {
+            k.name: i
+            for i, k in enumerate(sort_keys)
+            if k.name in df.column_map and k.obj is df.column_map[k.name].obj
+        }
         table = self.do_sort(
             df.table,
             plc.Table([k.obj for k in sort_keys]),
             self.order,
             self.null_order,
         )
-        columns = [
-            NamedColumn(c, old.name)
-            for c, old in zip(table.columns(), df.columns, strict=True)
-        ]
-        # If a sort key is in the result table, set the sortedness property
-        for k, i in enumerate(keys_in_result):
-            columns[i] = columns[i].set_sorted(
-                is_sorted=plc.types.Sorted.YES,
-                order=self.order[k],
-                null_order=self.null_order[k],
-            )
+        columns: list[Column] = []
+        for name, c in zip(df.column_map, table.columns(), strict=True):
+            column = Column(c, name=name)
+            # If a sort key is in the result table, set the sortedness property
+            if name in keys_in_result:
+                i = keys_in_result[name]
+                column = column.set_sorted(
+                    is_sorted=plc.types.Sorted.YES,
+                    order=self.order[i],
+                    null_order=self.null_order[i],
+                )
+            columns.append(column)
         return DataFrame(columns).slice(self.zlice)
 
 
@@ -1065,7 +1082,7 @@ class Projection(IR):
         df = self.df.evaluate(cache=cache)
         # This can reorder things.
         columns = broadcast(
-            *df.select(list(self.schema.keys())).columns, target_length=df.num_rows
+            *(df.column_map[name] for name in self.schema), target_length=df.num_rows
         )
         return DataFrame(columns)
 
@@ -1110,7 +1127,7 @@ class MapFunction(IR):
             old, new, _ = self.options
             # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
-                set(new) & (set(self.df.schema.keys() - set(old)))
+                set(new) & (set(self.df.schema.keys()) - set(old))
             ):
                 raise NotImplementedError("Duplicate new names in rename.")
         elif self.name == "unpivot":
@@ -1155,7 +1172,7 @@ class MapFunction(IR):
             npiv = len(pivotees)
             df = self.df.evaluate(cache=cache)
             index_columns = [
-                NamedColumn(col, name)
+                Column(col, name=name)
                 for col, name in zip(
                     plc.reshape.tile(df.select(indices).table, npiv).columns(),
                     indices,
@@ -1176,13 +1193,16 @@ class MapFunction(IR):
                 df.num_rows,
             ).columns()
             value_column = plc.concatenate.concatenate(
-                [c.astype(self.schema[value_name]) for c in df.select(pivotees).columns]
+                [
+                    df.column_map[pivotee].astype(self.schema[value_name]).obj
+                    for pivotee in pivotees
+                ]
             )
             return DataFrame(
                 [
                     *index_columns,
-                    NamedColumn(variable_column, variable_name),
-                    NamedColumn(value_column, value_name),
+                    Column(variable_column, name=variable_name),
+                    Column(value_column, name=value_name),
                 ]
             )
         else:
@@ -1263,6 +1283,4 @@ class HConcat(IR):
             )
             for df in dfs
         ]
-        return DataFrame(
-            list(itertools.chain.from_iterable(df.columns for df in dfs)),
-        )
+        return DataFrame(itertools.chain.from_iterable(df.columns for df in dfs))

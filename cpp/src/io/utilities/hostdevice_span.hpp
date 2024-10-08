@@ -43,8 +43,8 @@ class hostdevice_span {
   template <typename C,
             // Only supported containers of types convertible to T
             std::enable_if_t<std::is_convertible_v<
-              std::remove_pointer_t<decltype(std::declval<C&>().host_ptr())> (*)[],
-              T (*)[]>>* = nullptr>
+              std::remove_pointer_t<decltype(std::declval<C&>().host_ptr())> (*)[],  // NOLINT
+              T (*)[]>>* = nullptr>                                                  // NOLINT
   constexpr hostdevice_span(C& in) : hostdevice_span(in.host_ptr(), in.device_ptr(), in.size())
   {
   }
@@ -54,8 +54,8 @@ class hostdevice_span {
   template <typename C,
             // Only supported containers of types convertible to T
             std::enable_if_t<std::is_convertible_v<
-              std::remove_pointer_t<decltype(std::declval<C&>().host_ptr())> (*)[],
-              T (*)[]>>* = nullptr>
+              std::remove_pointer_t<decltype(std::declval<C&>().host_ptr())> (*)[],  // NOLINT
+              T (*)[]>>* = nullptr>                                                  // NOLINT
   constexpr hostdevice_span(C const& in)
     : hostdevice_span(in.host_ptr(), in.device_ptr(), in.size())
   {

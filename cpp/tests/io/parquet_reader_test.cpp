@@ -29,6 +29,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
+#include <array>
+
 TEST_F(ParquetReaderTest, UserBounds)
 {
   // trying to read more rows than there are should result in
@@ -569,7 +571,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
        This test is a temporary test until python gains the ability to write decimal, so we're
        embedding
        a parquet file directly into the code here to prevent issues with finding the file */
-    unsigned char const decimals_parquet[] = {
+    constexpr unsigned int decimals_parquet_len = 2366;
+    std::array<unsigned char, decimals_parquet_len> const decimals_parquet{
       0x50, 0x41, 0x52, 0x31, 0x15, 0x00, 0x15, 0xb0, 0x03, 0x15, 0xb8, 0x03, 0x2c, 0x15, 0x6a,
       0x15, 0x00, 0x15, 0x06, 0x15, 0x08, 0x1c, 0x36, 0x02, 0x28, 0x04, 0x7f, 0x96, 0x98, 0x00,
       0x18, 0x04, 0x81, 0x69, 0x67, 0xff, 0x00, 0x00, 0x00, 0xd8, 0x01, 0xf0, 0xd7, 0x04, 0x00,
@@ -728,10 +731,10 @@ TEST_F(ParquetReaderTest, DecimalRead)
       0x30, 0x36, 0x30, 0x36, 0x39, 0x65, 0x35, 0x30, 0x63, 0x39, 0x62, 0x37, 0x39, 0x37, 0x30,
       0x62, 0x65, 0x62, 0x64, 0x31, 0x29, 0x19, 0x3c, 0x1c, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x1c,
       0x00, 0x00, 0x00, 0xd3, 0x02, 0x00, 0x00, 0x50, 0x41, 0x52, 0x31};
-    unsigned int decimals_parquet_len = 2366;
 
-    cudf::io::parquet_reader_options read_opts = cudf::io::parquet_reader_options::builder(
-      cudf::io::source_info{reinterpret_cast<char const*>(decimals_parquet), decimals_parquet_len});
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{
+        reinterpret_cast<char const*>(decimals_parquet.data()), decimals_parquet_len});
     auto result = cudf::io::read_parquet(read_opts);
 
     auto validity =
@@ -739,7 +742,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
 
     EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
-    int32_t col0_data[] = {
+    std::array<int32_t, 53> col0_data{
       -2354584, -190275,  8393572,  6446515,  -5687920, -1843550, -6897687, -6780385, 3428529,
       5842056,  -4312278, -4450603, -7516141, 2974667,  -4288640, 1065090,  -9410428, 7891355,
       1076244,  -1975984, 6999466,  2666959,  9262967,  7931374,  -1370640, 451074,   8799111,
@@ -753,29 +756,28 @@ TEST_F(ParquetReaderTest, DecimalRead)
       std::begin(col0_data), std::end(col0_data), validity, numeric::scale_type{-4});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
 
-    int64_t col1_data[] = {29274040266581,  -17210335917753, -58420730139037,
-                           68073792696254,  2236456014294,   13704555677045,
-                           -70797090469548, -52248605513407, -68976081919961,
-                           -34277313883112, 97774730521689,  21184241014572,
-                           -670882460254,   -40862944054399, -24079852370612,
-                           -88670167797498, -84007574359403, -71843004533519,
-                           -55538016554201, 3491435293032,   -29085437167297,
-                           36901882672273,  -98622066122568, -13974902998457,
-                           86712597643378,  -16835133643735, -94759096142232,
-                           30708340810940,  79086853262082,  78923696440892,
-                           -76316597208589, 37247268714759,  80303592631774,
-                           57790350050889,  19387319851064,  -33186875066145,
-                           69701203023404,  -7157433049060,  -7073790423437,
-                           92769171617714,  -75127120182184, -951893180618,
-                           64927618310150,  -53875897154023, -16168039035569,
-                           -24273449166429, -30359781249192, 35639397345991,
-                           45844829680593,  71401416837149,  0,
-                           -99999999999999, 99999999999999};
+    std::array<int64_t, 53> col1_data{29274040266581,  -17210335917753, -58420730139037,
+                                      68073792696254,  2236456014294,   13704555677045,
+                                      -70797090469548, -52248605513407, -68976081919961,
+                                      -34277313883112, 97774730521689,  21184241014572,
+                                      -670882460254,   -40862944054399, -24079852370612,
+                                      -88670167797498, -84007574359403, -71843004533519,
+                                      -55538016554201, 3491435293032,   -29085437167297,
+                                      36901882672273,  -98622066122568, -13974902998457,
+                                      86712597643378,  -16835133643735, -94759096142232,
+                                      30708340810940,  79086853262082,  78923696440892,
+                                      -76316597208589, 37247268714759,  80303592631774,
+                                      57790350050889,  19387319851064,  -33186875066145,
+                                      69701203023404,  -7157433049060,  -7073790423437,
+                                      92769171617714,  -75127120182184, -951893180618,
+                                      64927618310150,  -53875897154023, -16168039035569,
+                                      -24273449166429, -30359781249192, 35639397345991,
+                                      45844829680593,  71401416837149,  0,
+                                      -99999999999999, 99999999999999};
 
-    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
-              sizeof(col1_data) / sizeof(col1_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()), col1_data.size());
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
-      std::begin(col1_data), std::end(col1_data), validity, numeric::scale_type{-5});
+      col1_data.begin(), col1_data.end(), validity, numeric::scale_type{-5});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), col1);
 
     cudf::io::parquet_reader_options read_strict_opts = read_opts;
@@ -786,7 +788,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
     // dec7p3: Decimal(precision=7, scale=3) backed by FIXED_LENGTH_BYTE_ARRAY(length = 4)
     // dec12p11: Decimal(precision=12, scale=11) backed by FIXED_LENGTH_BYTE_ARRAY(length = 6)
     // dec20p1: Decimal(precision=20, scale=1) backed by FIXED_LENGTH_BYTE_ARRAY(length = 9)
-    unsigned char const fixed_len_bytes_decimal_parquet[] = {
+    std::array<unsigned char, 1226> const fixed_len_bytes_decimal_parquet{
       0x50, 0x41, 0x52, 0x31, 0x15, 0x00, 0x15, 0xA8, 0x01, 0x15, 0xAE, 0x01, 0x2C, 0x15, 0x28,
       0x15, 0x00, 0x15, 0x06, 0x15, 0x08, 0x1C, 0x36, 0x02, 0x28, 0x04, 0x00, 0x97, 0x45, 0x72,
       0x18, 0x04, 0x00, 0x01, 0x81, 0x3B, 0x00, 0x00, 0x00, 0x54, 0xF0, 0x53, 0x04, 0x00, 0x00,
@@ -875,75 +877,72 @@ TEST_F(ParquetReaderTest, DecimalRead)
 
     cudf::io::parquet_reader_options read_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{
-        reinterpret_cast<char const*>(fixed_len_bytes_decimal_parquet), parquet_len});
+        reinterpret_cast<char const*>(fixed_len_bytes_decimal_parquet.data()), parquet_len});
     auto result = cudf::io::read_parquet(read_opts);
     EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
-    auto validity_c0    = cudf::test::iterators::nulls_at({19});
-    int32_t col0_data[] = {6361295, 698632,  7821423, 7073444, 9631892, 3021012, 5195059,
-                           9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
-                           2282579, 7521455, 4430706, 1937859, 4532040, 0};
+    auto validity_c0 = cudf::test::iterators::nulls_at({19});
+    std::array col0_data{6361295, 698632,  7821423, 7073444, 9631892, 3021012, 5195059,
+                         9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
+                         2282579, 7521455, 4430706, 1937859, 4532040, 0};
 
-    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
-              sizeof(col0_data) / sizeof(col0_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()), col0_data.size());
     cudf::test::fixed_point_column_wrapper<int32_t> col0(
-      std::begin(col0_data), std::end(col0_data), validity_c0, numeric::scale_type{-3});
+      col0_data.begin(), col0_data.end(), validity_c0, numeric::scale_type{-3});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
 
-    auto validity_c1    = cudf::test::iterators::nulls_at({18});
-    int64_t col1_data[] = {361378026250,
-                           30646804862,
-                           429930238629,
-                           418758703536,
-                           895494171113,
-                           435283865083,
-                           809096053722,
-                           -999999999999,
-                           426465099333,
-                           526684574144,
-                           826310892810,
-                           584686967589,
-                           113822282951,
-                           409236212092,
-                           420631167535,
-                           918438386086,
-                           -999999999999,
-                           489053889147,
-                           0,
-                           363993164092};
+    auto validity_c1 = cudf::test::iterators::nulls_at({18});
+    std::array<int64_t, 20> col1_data{361378026250,
+                                      30646804862,
+                                      429930238629,
+                                      418758703536,
+                                      895494171113,
+                                      435283865083,
+                                      809096053722,
+                                      -999999999999,
+                                      426465099333,
+                                      526684574144,
+                                      826310892810,
+                                      584686967589,
+                                      113822282951,
+                                      409236212092,
+                                      420631167535,
+                                      918438386086,
+                                      -999999999999,
+                                      489053889147,
+                                      0,
+                                      363993164092};
 
-    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()),
-              sizeof(col1_data) / sizeof(col1_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(1).size()), col1_data.size());
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
-      std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});
+      col1_data.begin(), col1_data.end(), validity_c1, numeric::scale_type{-11});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), col1);
 
-    auto validity_c2       = cudf::test::iterators::nulls_at({6, 14});
-    __int128_t col2_data[] = {9078697037144433659,
-                              9050770539577117612,
-                              2358363961733893636,
-                              1566059559232276662,
-                              6658306200002735268,
-                              4967909073046397334,
-                              0,
-                              7235588493887532473,
-                              5023160741463849572,
-                              2765173712965988273,
-                              3880866513515749646,
-                              5019704400576359500,
-                              5544435986818825655,
-                              7265381725809874549,
-                              0,
-                              1576192427381240677,
-                              2828305195087094598,
-                              260308667809395171,
-                              2460080200895288476,
-                              2718441925197820439};
+    auto validity_c2 = cudf::test::iterators::nulls_at({6, 14});
+    std::array<__int128_t, 20> col2_data{9078697037144433659,
+                                         9050770539577117612,
+                                         2358363961733893636,
+                                         1566059559232276662,
+                                         6658306200002735268,
+                                         4967909073046397334,
+                                         0,
+                                         7235588493887532473,
+                                         5023160741463849572,
+                                         2765173712965988273,
+                                         3880866513515749646,
+                                         5019704400576359500,
+                                         5544435986818825655,
+                                         7265381725809874549,
+                                         0,
+                                         1576192427381240677,
+                                         2828305195087094598,
+                                         260308667809395171,
+                                         2460080200895288476,
+                                         2718441925197820439};
 
-    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(2).size()),
-              sizeof(col2_data) / sizeof(col2_data[0]));
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(2).size()), col2_data.size());
     cudf::test::fixed_point_column_wrapper<__int128_t> col2(
-      std::begin(col2_data), std::end(col2_data), validity_c2, numeric::scale_type{-1});
+      col2_data.begin(), col2_data.end(), validity_c2, numeric::scale_type{-1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), col2);
   }
 }
@@ -1190,15 +1189,12 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
   cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);
 
   // ~256k values with num_nesting_levels = 16
-  int total_values_produced = num_values;
-  auto prev_col             = values.release();
+  auto prev_col = values.release();
   for (int idx = 0; idx < num_nesting_levels; idx++) {
-    auto const depth    = num_nesting_levels - idx;
     auto const num_rows = (1 << (num_nesting_levels - idx));
 
     auto offsets_iter = cudf::detail::make_counting_transform_iterator(
-      0, [depth, rows_per_level](cudf::size_type i) { return i * rows_per_level; });
-    total_values_produced += (num_rows + 1);
+      0, [](cudf::size_type i) { return i * rows_per_level; });
 
     cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offsets_iter,
                                                                     offsets_iter + num_rows + 1);
@@ -1221,7 +1217,7 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
 
 TEST_F(ParquetReaderTest, SingleLevelLists)
 {
-  unsigned char list_bytes[] = {
+  std::array<unsigned char, 214> list_bytes{
     0x50, 0x41, 0x52, 0x31, 0x15, 0x00, 0x15, 0x28, 0x15, 0x28, 0x15, 0xa7, 0xce, 0x91, 0x8c, 0x06,
     0x1c, 0x15, 0x04, 0x15, 0x00, 0x15, 0x06, 0x15, 0x06, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03,
     0x02, 0x02, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x15,
@@ -1239,7 +1235,7 @@ TEST_F(ParquetReaderTest, SingleLevelLists)
 
   // read single level list reproducing parquet file
   cudf::io::parquet_reader_options read_opts = cudf::io::parquet_reader_options::builder(
-    cudf::io::source_info{reinterpret_cast<char const*>(list_bytes), sizeof(list_bytes)});
+    cudf::io::source_info{reinterpret_cast<char const*>(list_bytes.data()), list_bytes.size()});
   auto table = cudf::io::read_parquet(read_opts);
 
   auto const c0 = table.tbl->get_column(0);
@@ -1252,7 +1248,7 @@ TEST_F(ParquetReaderTest, SingleLevelLists)
 
 TEST_F(ParquetReaderTest, ChunkedSingleLevelLists)
 {
-  unsigned char list_bytes[] = {
+  std::array<unsigned char, 214> list_bytes{
     0x50, 0x41, 0x52, 0x31, 0x15, 0x00, 0x15, 0x28, 0x15, 0x28, 0x15, 0xa7, 0xce, 0x91, 0x8c, 0x06,
     0x1c, 0x15, 0x04, 0x15, 0x00, 0x15, 0x06, 0x15, 0x06, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03,
     0x02, 0x02, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x15,
@@ -1271,7 +1267,7 @@ TEST_F(ParquetReaderTest, ChunkedSingleLevelLists)
   auto reader = cudf::io::chunked_parquet_reader(
     1L << 31,
     cudf::io::parquet_reader_options::builder(
-      cudf::io::source_info{reinterpret_cast<char const*>(list_bytes), sizeof(list_bytes)}));
+      cudf::io::source_info{reinterpret_cast<char const*>(list_bytes.data()), list_bytes.size()}));
   int iterations = 0;
   while (reader.has_next() && iterations < 10) {
     auto chunk = reader.read_chunk();
@@ -1932,7 +1928,7 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
 
 TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
 {
-  constexpr unsigned char repeated_bytes[] = {
+  constexpr std::array<unsigned char, 662> repeated_bytes{
     0x50, 0x41, 0x52, 0x31, 0x15, 0x04, 0x15, 0x30, 0x15, 0x30, 0x4c, 0x15, 0x0c, 0x15, 0x00, 0x12,
     0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00,
     0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x15, 0x00, 0x15, 0x0a, 0x15, 0x0a,
@@ -1976,9 +1972,9 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
     0x61, 0x38, 0x33, 0x39, 0x31, 0x36, 0x63, 0x36, 0x39, 0x62, 0x35, 0x65, 0x29, 0x00, 0x32, 0x01,
     0x00, 0x00, 0x50, 0x41, 0x52, 0x31};
 
-  auto read_opts = cudf::io::parquet_reader_options::builder(
-    cudf::io::source_info{reinterpret_cast<char const*>(repeated_bytes), sizeof(repeated_bytes)});
-  auto result = cudf::io::read_parquet(read_opts);
+  auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{
+    reinterpret_cast<char const*>(repeated_bytes.data()), repeated_bytes.size()});
+  auto result    = cudf::io::read_parquet(read_opts);
 
   EXPECT_EQ(result.tbl->view().column(0).size(), 6);
   EXPECT_EQ(result.tbl->view().num_columns(), 2);
