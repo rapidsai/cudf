@@ -441,11 +441,11 @@ struct ColumnChunkDesc {
   int32_t num_data_pages{};                           // number of data pages
   int32_t num_dict_pages{};                           // number of dictionary pages
   PageInfo const* dict_page{};
-  string_index_pair* str_dict_index{};  // index for string dictionary
-  bitmask_type** valid_map_base{};      // base pointers of valid bit map for this column
-  void** column_data_base{};            // base pointers of column data
-  void** column_string_base{};          // base pointers of column string data
-  Compression codec{};                  // compressed codec enum
+  string_index_pair* str_dict_index{};        // index for string dictionary
+  bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
+  void** column_data_base{};                  // base pointers of column data
+  void** column_string_base{};                // base pointers of column string data
+  Compression codec{};                        // compressed codec enum
   std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 

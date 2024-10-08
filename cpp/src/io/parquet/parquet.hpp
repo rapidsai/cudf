@@ -327,7 +327,7 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;  // Indicates if min and max values are ordered
+    BoundaryOrder::UNORDERED;                       // Indicates if min and max values are ordered
   std::optional<std::vector<int64_t>> null_counts;  // Optional count of null values per page
   // Repetition/definition level histograms for the column chunk
   std::optional<std::vector<int64_t>> repetition_level_histogram;
