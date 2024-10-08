@@ -770,7 +770,7 @@ TYPED_TEST(MultiStepReductionTest, Mean)
 }
 
 template <typename T>
-double calc_var(cudf::host_span<T const> v, int ddof, cudf::host_span<bool const> mask = {})
+double calc_var(std::vector<T> const& v, int ddof, std::vector<bool> const& mask = {})
 {
   auto const values = [&]() {
     if (mask.empty()) { return v; }
