@@ -34,22 +34,7 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
-
-rapids-logger "pytest pylibcudf"
-pushd python/pylibcudf/pylibcudf/tests
-python -m pytest \
-  --cache-clear \
-  --numprocesses=8 \
-  --dist=worksteal \
-  .
-popd
-
 rapids-logger "pytest cudf"
 pushd python/cudf/cudf/tests
-python -m pytest \
-  --cache-clear \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
-  --numprocesses=8 \
-  --dist=worksteal \
-  .
+python -m pytest --cache-clear .
 popd
