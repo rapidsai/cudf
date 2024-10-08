@@ -85,6 +85,6 @@ static void bench_find_string(nvbench::state& state)
 NVBENCH_BENCH(bench_find_string)
   .set_name("find_string")
   .add_string_axis("api", {"find", "find_multi", "contains", "starts_with", "ends_with"})
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384})
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768})
   .add_int64_axis("num_rows", {50'000, 260'000, 1'953'000, 16'777'216})
   .add_int64_axis("hit_rate", {20, 80});  // percentage
