@@ -541,7 +541,7 @@ class RollingTest : public cudf::test::BaseFixture {
 
     agg_op op;
     for (cudf::size_type i = 0; i < num_rows; i++) {
-      OutputType val = agg_op::template identity<OutputType>();
+      auto val = agg_op::template identity<OutputType>();
 
       // load sizes
       min_periods = std::max(min_periods, 1);  // at least one observation is required

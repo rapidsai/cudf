@@ -63,9 +63,9 @@ auto dtype()
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same_v<T, cudf::string_view>,
-                            cudf::test::strings_column_wrapper,
-                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+  std::conditional_t<std::is_same_v<T, cudf::string_view>,
+                     cudf::test::strings_column_wrapper,
+                     cudf::test::fixed_width_column_wrapper<T, SourceElementT>>;
 using column     = cudf::column;
 using table      = cudf::table;
 using table_view = cudf::table_view;
@@ -954,7 +954,7 @@ TEST_F(CsvReaderTest, Strings)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"},
+    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"},
     view.column(1));
 }
 
@@ -1014,7 +1014,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"\"abcdef ghi\"", "\"jkl \"\"mno\"\" pqr\"", "stu \"vwx\" yz"},
+    std::vector<std::string>{"\"abcdef ghi\"", R"("jkl ""mno"" pqr")", "stu \"vwx\" yz"},
     view.column(1));
 }
 
@@ -1830,7 +1830,7 @@ TEST_F(CsvReaderTest, StringsWithWriter)
 
   auto int_column = column_wrapper<int32_t>{10, 20, 30};
   auto string_column =
-    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"};
+    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"};
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
   // TODO add quoting style flag?
@@ -2514,6 +2514,41 @@ TEST_F(CsvReaderTest, UTF8BOM)
   auto expected = cudf::table_view({col1, col2, col3});
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result_view, expected);
+}
+
+void expect_buffers_equal(cudf::io::datasource::buffer* lhs, cudf::io::datasource::buffer* rhs)
+{
+  ASSERT_EQ(lhs->size(), rhs->size());
+  EXPECT_EQ(0, std::memcmp(lhs->data(), rhs->data(), lhs->size()));
+}
+
+TEST_F(CsvReaderTest, OutOfMapBoundsReads)
+{
+  // write a lot of data into a file
+  auto filepath        = temp_env->get_temp_dir() + "OutOfMapBoundsReads.csv";
+  auto const num_rows  = 1 << 20;
+  auto const row       = std::string{"0,1,2,3,4,5,6,7,8,9\n"};
+  auto const file_size = num_rows * row.size();
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    for (size_t i = 0; i < num_rows; ++i) {
+      outfile << row;
+    }
+  }
+
+  // Only memory map the middle of the file
+  auto source         = cudf::io::datasource::create(filepath, file_size / 2, file_size / 4);
+  auto full_source    = cudf::io::datasource::create(filepath);
+  auto const all_data = source->host_read(0, file_size);
+  auto ref_data       = full_source->host_read(0, file_size);
+  expect_buffers_equal(ref_data.get(), all_data.get());
+
+  auto const start_data = source->host_read(file_size / 2, file_size / 2);
+  expect_buffers_equal(full_source->host_read(file_size / 2, file_size / 2).get(),
+                       start_data.get());
+
+  auto const end_data = source->host_read(0, file_size / 2 + 512);
+  expect_buffers_equal(full_source->host_read(0, file_size / 2 + 512).get(), end_data.get());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
