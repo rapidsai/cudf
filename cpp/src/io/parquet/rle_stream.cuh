@@ -374,10 +374,11 @@ struct rle_stream {
 
   __device__ inline int skip_runs(int target_count)
   {
-    //we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip amount
-    //so threads spin like crazy on fill_run_batch(), skipping writing unnecessary run info
-    //then when it hits the one that matters, we don't process it at all and bail as if we never started
-    //basically we're setting up the rle_stream vars necessary to start fill_run_batch for the first time
+    // we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip
+    // amount so threads spin like crazy on fill_run_batch(), skipping writing unnecessary run info
+    // then when it hits the one that matters, we don't process it at all and bail as if we never
+    // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
+    // the first time
     while (cur < end) {
       // bytes for the varint header
       uint8_t const* _cur = cur;
@@ -396,18 +397,17 @@ struct rle_stream {
         run_bytes += ((level_bits) + 7) >> 3;
       }
 
-      if((output_pos + run_size) > target_count) {
-        return output_pos; //bail! we've reached the starting run
+      if ((output_pos + run_size) > target_count) {
+        return output_pos;  // bail! we've reached the starting run
       }
 
-      //skip this run
+      // skip this run
       output_pos += run_size;
       cur += run_bytes;
     }
 
-    return output_pos; //we skipped everything
+    return output_pos;  // we skipped everything
   }
-
 
   __device__ inline int skip_decode(int t, int count)
   {
