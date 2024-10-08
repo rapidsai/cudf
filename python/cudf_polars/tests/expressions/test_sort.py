@@ -69,7 +69,7 @@ def test_setsorted(descending, nulls_last, with_nulls):
 
     df = translate_ir(q._ldf.visit()).evaluate(cache={})
 
-    (a,) = df.columns
+    a = df.column_map["a"]
 
     assert a.is_sorted == plc.types.Sorted.YES
     null_order = (
