@@ -20,7 +20,7 @@ from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.typing import NodeTraverser
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import dtypes, sorting
 
 __all__ = ["translate_ir", "translate_named_expr"]
 
@@ -148,7 +148,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
-    return ir.Select(schema, inp, exprs, node.should_broadcast)
+    return ir.Select(schema, exprs, node.should_broadcast, inp)
 
 
 @_translate_ir.register
@@ -161,11 +161,11 @@ def _(
         keys = [translate_named_expr(visitor, n=e) for e in node.keys]
     return ir.GroupBy(
         schema,
-        inp,
-        aggs,
         keys,
+        aggs,
         node.maintain_order,
         node.options,
+        inp,
     )
 
 
@@ -182,7 +182,7 @@ def _(
     with set_node(visitor, node.input_right):
         inp_right = translate_ir(visitor, n=None)
         right_on = [translate_named_expr(visitor, n=e) for e in node.right_on]
-    return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
+    return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
 
 
 @_translate_ir.register
@@ -192,7 +192,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.exprs]
-    return ir.HStack(schema, inp, exprs, node.should_broadcast)
+    return ir.HStack(schema, exprs, node.should_broadcast, inp)
 
 
 @_translate_ir.register
@@ -202,17 +202,23 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
-    return ir.Reduce(schema, inp, exprs)
+    return ir.Reduce(schema, exprs, inp)
 
 
 @_translate_ir.register
 def _(
     node: pl_ir.Distinct, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    (keep, subset, maintain_order, zlice) = node.options
+    keep = ir.Distinct._KEEP_MAP[keep]
+    subset = frozenset(subset) if subset is not None else None
     return ir.Distinct(
         schema,
+        keep,
+        subset,
+        zlice,
+        maintain_order,
         translate_ir(visitor, n=node.input),
-        node.options,
     )
 
 
@@ -223,14 +229,18 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         by = [translate_named_expr(visitor, n=e) for e in node.by_column]
-    return ir.Sort(schema, inp, by, node.sort_options, node.slice)
+    stable, nulls_last, descending = node.sort_options
+    order, null_order = sorting.sort_order(
+        descending, nulls_last=nulls_last, num_keys=len(by)
+    )
+    return ir.Sort(schema, by, order, null_order, stable, node.slice, inp)
 
 
 @_translate_ir.register
 def _(
     node: pl_ir.Slice, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.Slice(schema, translate_ir(visitor, n=node.input), node.offset, node.len)
+    return ir.Slice(schema, node.offset, node.len, translate_ir(visitor, n=node.input))
 
 
 @_translate_ir.register
@@ -240,7 +250,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         mask = translate_named_expr(visitor, n=node.predicate)
-    return ir.Filter(schema, inp, mask)
+    return ir.Filter(schema, mask, inp)
 
 
 @_translate_ir.register
@@ -259,10 +269,10 @@ def _(
     name, *options = node.function
     return ir.MapFunction(
         schema,
-        # TODO: merge_sorted breaks this pattern
-        translate_ir(visitor, n=node.input),
         name,
         options,
+        # TODO: merge_sorted breaks this pattern
+        translate_ir(visitor, n=node.input),
     )
 
 
@@ -271,7 +281,7 @@ def _(
     node: pl_ir.Union, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
     return ir.Union(
-        schema, [translate_ir(visitor, n=n) for n in node.inputs], node.options
+        schema, node.options, *(translate_ir(visitor, n=n) for n in node.inputs)
     )
 
 
@@ -279,7 +289,7 @@ def _(
 def _(
     node: pl_ir.HConcat, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
+    return ir.HConcat(schema, *(translate_ir(visitor, n=n) for n in node.inputs))
 
 
 def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:

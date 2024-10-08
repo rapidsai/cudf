@@ -18,10 +18,10 @@ from cudf_polars.testing.asserts import (
 
 
 def test_polars_verbose_warns(monkeypatch):
-    def raise_unimplemented(self):
+    def raise_unimplemented(self, schema):
         raise NotImplementedError("We don't support this")
 
-    monkeypatch.setattr(IR, "__post_init__", raise_unimplemented)
+    monkeypatch.setattr(IR, "__init__", raise_unimplemented)
     q = pl.LazyFrame({})
     # Ensure that things raise
     assert_ir_translation_raises(q, NotImplementedError)
