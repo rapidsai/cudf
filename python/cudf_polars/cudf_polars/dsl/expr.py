@@ -911,7 +911,7 @@ class StringFunction(Expr):
             col = self.children[0].evaluate(df, context=context, mapping=mapping)
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
-                col.obj, format.encode()
+                col.obj, format
             )
 
             if strict:
@@ -934,7 +934,7 @@ class StringFunction(Expr):
                 )
                 return Column(
                     plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype, format.encode()
+                        res.columns()[0], self.dtype, format
                     )
                 )
         elif self.name == pl_expr.StringFunction.Replace:
@@ -958,16 +958,16 @@ class StringFunction(Expr):
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")
     _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
-        pl_expr.TemporalFunction.Year: "year",
-        pl_expr.TemporalFunction.Month: "month",
-        pl_expr.TemporalFunction.Day: "day",
-        pl_expr.TemporalFunction.WeekDay: "weekday",
-        pl_expr.TemporalFunction.Hour: "hour",
-        pl_expr.TemporalFunction.Minute: "minute",
-        pl_expr.TemporalFunction.Second: "second",
-        pl_expr.TemporalFunction.Millisecond: "millisecond",
-        pl_expr.TemporalFunction.Microsecond: "microsecond",
-        pl_expr.TemporalFunction.Nanosecond: "nanosecond",
+        pl_expr.TemporalFunction.Year: plc.datetime.DatetimeComponent.YEAR,
+        pl_expr.TemporalFunction.Month: plc.datetime.DatetimeComponent.MONTH,
+        pl_expr.TemporalFunction.Day: plc.datetime.DatetimeComponent.DAY,
+        pl_expr.TemporalFunction.WeekDay: plc.datetime.DatetimeComponent.WEEKDAY,
+        pl_expr.TemporalFunction.Hour: plc.datetime.DatetimeComponent.HOUR,
+        pl_expr.TemporalFunction.Minute: plc.datetime.DatetimeComponent.MINUTE,
+        pl_expr.TemporalFunction.Second: plc.datetime.DatetimeComponent.SECOND,
+        pl_expr.TemporalFunction.Millisecond: plc.datetime.DatetimeComponent.MILLISECOND,
+        pl_expr.TemporalFunction.Microsecond: plc.datetime.DatetimeComponent.MICROSECOND,
+        pl_expr.TemporalFunction.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
@@ -1000,8 +1000,12 @@ class TemporalFunction(Expr):
         ]
         (column,) = columns
         if self.name == pl_expr.TemporalFunction.Microsecond:
-            millis = plc.datetime.extract_datetime_component(column.obj, "millisecond")
-            micros = plc.datetime.extract_datetime_component(column.obj, "microsecond")
+            millis = plc.datetime.extract_datetime_component(
+                column.obj, plc.datetime.DatetimeComponent.MILLISECOND
+            )
+            micros = plc.datetime.extract_datetime_component(
+                column.obj, plc.datetime.DatetimeComponent.MICROSECOND
+            )
             millis_as_micros = plc.binaryop.binary_operation(
                 millis,
                 plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
@@ -1016,9 +1020,15 @@ class TemporalFunction(Expr):
             )
             return Column(total_micros)
         elif self.name == pl_expr.TemporalFunction.Nanosecond:
-            millis = plc.datetime.extract_datetime_component(column.obj, "millisecond")
-            micros = plc.datetime.extract_datetime_component(column.obj, "microsecond")
-            nanos = plc.datetime.extract_datetime_component(column.obj, "nanosecond")
+            millis = plc.datetime.extract_datetime_component(
+                column.obj, plc.datetime.DatetimeComponent.MILLISECOND
+            )
+            micros = plc.datetime.extract_datetime_component(
+                column.obj, plc.datetime.DatetimeComponent.MICROSECOND
+            )
+            nanos = plc.datetime.extract_datetime_component(
+                column.obj, plc.datetime.DatetimeComponent.NANOSECOND
+            )
             millis_as_nanos = plc.binaryop.binary_operation(
                 millis,
                 plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),

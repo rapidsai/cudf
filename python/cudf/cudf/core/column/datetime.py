@@ -480,6 +480,11 @@ class DatetimeColumn(column.ColumnBase):
     def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
         if dtype == self.dtype:
             return self
+        elif isinstance(dtype, pd.DatetimeTZDtype):
+            raise TypeError(
+                "Cannot use .astype to convert from timezone-naive dtype to timezone-aware dtype. "
+                "Use tz_localize instead."
+            )
         return libcudf.unary.cast(self, dtype=dtype)
 
     def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
@@ -939,6 +944,16 @@ class DatetimeTZColumn(DatetimeColumn):
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self._local_time.as_string_column()
+
+    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+        if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
+            if dtype.unit != self.time_unit:
+                # TODO: Doesn't check that new unit is valid.
+                casted = self._with_type_metadata(dtype)
+            else:
+                casted = self
+            return casted.tz_convert(str(dtype.tz))
+        return super().as_datetime_column(dtype)
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(

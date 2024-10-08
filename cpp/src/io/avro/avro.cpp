@@ -16,6 +16,7 @@
 
 #include "avro.hpp"
 
+#include <array>
 #include <cstring>
 #include <unordered_map>
 
@@ -302,7 +303,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, std::string const& 
   // Empty schema
   if (json_str == "[]") return true;
 
-  char depthbuf[MAX_SCHEMA_DEPTH];
+  std::array<char, MAX_SCHEMA_DEPTH> depthbuf;
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
   std::string str;
