@@ -50,7 +50,8 @@ class file_sink : public data_sink {
     }
   }
 
-  ~file_sink() override { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~file_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {
@@ -114,7 +115,8 @@ class host_buffer_sink : public data_sink {
  public:
   explicit host_buffer_sink(std::vector<char>* buffer) : buffer_(buffer) {}
 
-  ~host_buffer_sink() override { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~host_buffer_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {

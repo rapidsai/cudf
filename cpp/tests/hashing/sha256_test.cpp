@@ -23,8 +23,6 @@
 #include <cudf/hashing.hpp>
 #include <cudf/utilities/error.hpp>
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
-
 class SHA256HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(SHA256HashTest, EmptyTable)

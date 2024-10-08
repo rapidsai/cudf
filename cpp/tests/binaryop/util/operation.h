@@ -100,7 +100,7 @@ struct Mul {
             std::enable_if_t<(cudf::is_duration_t<LhsT>::value && std::is_integral_v<RhsT>) ||
                                (cudf::is_duration_t<RhsT>::value && std::is_integral_v<LhsT>),
                              void>* = nullptr>
-  OutT DurationProduct(LhsT x, RhsT y) const
+  [[nodiscard]] OutT DurationProduct(LhsT x, RhsT y) const
   {
     return x * y;
   }
@@ -128,7 +128,7 @@ struct Div {
     typename LhsT,
     typename RhsT,
     std::enable_if_t<(std::is_integral_v<RhsT> || cudf::is_duration<RhsT>()), void>* = nullptr>
-  OutT DurationDivide(LhsT x, RhsT y) const
+  [[nodiscard]] OutT DurationDivide(LhsT x, RhsT y) const
   {
     return x / y;
   }

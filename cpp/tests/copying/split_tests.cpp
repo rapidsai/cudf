@@ -35,6 +35,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <array>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -135,7 +136,7 @@ std::vector<cudf::table> create_expected_tables_for_splits(
 }
 
 std::vector<cudf::table> create_expected_string_tables_for_splits(
-  std::vector<std::string> const strings[2],
+  std::vector<std::vector<std::string>> const strings,
   std::vector<cudf::size_type> const& splits,
   bool nullable)
 {
@@ -144,8 +145,8 @@ std::vector<cudf::table> create_expected_string_tables_for_splits(
 }
 
 std::vector<cudf::table> create_expected_string_tables_for_splits(
-  std::vector<std::string> const strings[2],
-  std::vector<bool> const validity[2],
+  std::vector<std::vector<std::string>> const strings,
+  std::vector<std::vector<bool>> const validity,
   std::vector<cudf::size_type> const& splits)
 {
   std::vector<cudf::size_type> indices = splits_to_indices(splits, strings[0].size());
@@ -627,11 +628,12 @@ void split_string_with_invalids(SplitFunc Split,
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<std::string> strings[2] = {
-    {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
-    {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}};
-  cudf::test::strings_column_wrapper sw[2] = {{strings[0].begin(), strings[0].end(), valids},
-                                              {strings[1].begin(), strings[1].end(), valids}};
+  std::vector<std::vector<std::string>> strings{
+    {{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
+     {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}}};
+  std::array<cudf::test::strings_column_wrapper, 2> sw{
+    {{strings[0].begin(), strings[0].end(), valids},
+     {strings[1].begin(), strings[1].end(), valids}}};
 
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
@@ -658,11 +660,12 @@ void split_empty_output_strings_column_value(SplitFunc Split,
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<std::string> strings[2] = {
-    {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
-    {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}};
-  cudf::test::strings_column_wrapper sw[2] = {{strings[0].begin(), strings[0].end(), valids},
-                                              {strings[1].begin(), strings[1].end(), valids}};
+  std::vector<std::vector<std::string>> strings{
+    {{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
+     {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}}};
+  std::array<cudf::test::strings_column_wrapper, 2> sw{
+    {{strings[0].begin(), strings[0].end(), valids},
+     {strings[1].begin(), strings[1].end(), valids}}};
 
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
@@ -684,9 +687,9 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<std::string> strings[2] = {
-    {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
-    {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}};
+  std::vector<std::vector<std::string>> strings{
+    {{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
+     {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}}};
 
   std::vector<cudf::size_type> splits{2, 5, 9};
 
@@ -699,16 +702,17 @@ void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
     EXPECT_NO_THROW(Split(empty_table, splits));
   }
 
-  cudf::test::strings_column_wrapper sw[2] = {{strings[0].begin(), strings[0].end(), no_valids},
-                                              {strings[1].begin(), strings[1].end(), valids}};
+  std::array<cudf::test::strings_column_wrapper, 2> sw{
+    {{strings[0].begin(), strings[0].end(), no_valids},
+     {strings[1].begin(), strings[1].end(), valids}}};
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());
   scols.push_back(sw[1].release());
   cudf::table src_table(std::move(scols));
   auto result = Split(src_table, splits);
 
-  std::vector<bool> validity_masks[2] = {std::vector<bool>(strings[0].size()),
-                                         std::vector<bool>(strings[0].size())};
+  std::vector<std::vector<bool>> validity_masks{std::vector<bool>(strings[0].size()),
+                                                std::vector<bool>(strings[0].size())};
   std::generate(
     validity_masks[1].begin(), validity_masks[1].end(), [i = 0]() mutable { return i++ % 2 == 0; });
 
@@ -1913,9 +1917,9 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
   cudf::size_type start = 0;
   auto valids = cudf::detail::make_counting_transform_iterator(start, [](auto i) { return true; });
 
-  std::vector<std::string> strings[2] = {
-    {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
-    {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}};
+  std::vector<std::vector<std::string>> strings{
+    {{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
+     {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}}};
 
   std::vector<std::unique_ptr<cudf::column>> cols;
 
@@ -2377,7 +2381,7 @@ TEST_F(ContiguousSplitTableCornerCases, OutBufferToSmall)
 {
   // internally, contiguous split chunks GPU work in 1MB contiguous copies
   // so the output buffer must be 1MB or larger.
-  EXPECT_THROW(cudf::chunked_pack::create({}, 1 * 1024), cudf::logic_error);
+  EXPECT_THROW(auto _ = cudf::chunked_pack::create({}, 1 * 1024), cudf::logic_error);
 }
 
 TEST_F(ContiguousSplitTableCornerCases, ChunkSpanTooSmall)

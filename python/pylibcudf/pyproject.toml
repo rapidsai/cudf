@@ -95,6 +95,16 @@ skip = [
     "__init__.py",
 ]
 
+[tool.pytest.ini_options]
+addopts = "--tb=native --strict-config --strict-markers"
+empty_parameter_set_mark = "fail_at_collect"
+filterwarnings = [
+  "error",
+  "ignore:::.*xdist.*",
+  "ignore:::.*pytest.*"
+]
+xfail_strict = true
+
 [tool.rapids-build-backend]
 build-backend = "scikit_build_core.build"
 dependencies-file = "../../dependencies.yaml"
