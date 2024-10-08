@@ -45,11 +45,10 @@ def test_hash_character_ngrams(input_col, ngram):
         ngram,
     )
     pa_result = plc.interop.to_arrow(result)
-    if ngram == 2:
-        assert len(pa_result[0]) == 1
-        assert len(pa_result[1]) == 2
-        assert len(pa_result[2]) == 2
-    else:
-        assert len(pa_result[0]) == 0
-        assert len(pa_result[1]) == 1
-        assert len(pa_result[2]) == 1
+    assert all(
+        len(got) == max(0, len(s.as_py()) - ngram + 1)
+        for got, s in zip(pa_result, input_col)
+    )
+    assert pa_result.type == pa.list_(
+        pa.field("element", pa.uint32(), nullable=False)
+    )
