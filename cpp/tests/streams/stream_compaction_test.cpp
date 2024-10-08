@@ -29,8 +29,6 @@
 
 #include <cmath>
 
-auto constexpr null{0};  // null at current level
-auto constexpr XXX{0};   // null pushed down from parent level
 auto constexpr NaN          = std::numeric_limits<double>::quiet_NaN();
 auto constexpr KEEP_ANY     = cudf::duplicate_keep_option::KEEP_ANY;
 auto constexpr KEEP_FIRST   = cudf::duplicate_keep_option::KEEP_FIRST;
