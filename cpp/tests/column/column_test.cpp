@@ -340,7 +340,7 @@ TYPED_TEST(TypedColumnTest, MoveConstructorNoMask)
 
   cudf::column moved_to{std::move(original)};
 
-  EXPECT_EQ(0, original.size());
+  EXPECT_EQ(0, original.size());  // NOLINT
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, original.type());
 
   verify_column_views(moved_to);
@@ -359,7 +359,7 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
   cudf::column moved_to{std::move(original)};
   verify_column_views(moved_to);
 
-  EXPECT_EQ(0, original.size());
+  EXPECT_EQ(0, original.size());  // NOLINT
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, original.type());
 
   // Verify move

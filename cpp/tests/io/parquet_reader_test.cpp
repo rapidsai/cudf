@@ -1189,15 +1189,12 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
   cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);
 
   // ~256k values with num_nesting_levels = 16
-  int total_values_produced = num_values;
-  auto prev_col             = values.release();
+  auto prev_col = values.release();
   for (int idx = 0; idx < num_nesting_levels; idx++) {
-    auto const depth    = num_nesting_levels - idx;
     auto const num_rows = (1 << (num_nesting_levels - idx));
 
     auto offsets_iter = cudf::detail::make_counting_transform_iterator(
-      0, [depth, rows_per_level](cudf::size_type i) { return i * rows_per_level; });
-    total_values_produced += (num_rows + 1);
+      0, [](cudf::size_type i) { return i * rows_per_level; });
 
     cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offsets_iter,
                                                                     offsets_iter + num_rows + 1);
