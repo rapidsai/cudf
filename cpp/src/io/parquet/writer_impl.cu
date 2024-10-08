@@ -186,7 +186,7 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  cuda::std::optional<std::vector<ColumnOrder>> column_orders = cuda::std::nullopt;
+  std::optional<std::vector<ColumnOrder>> column_orders = std::nullopt;
 };
 
 namespace {

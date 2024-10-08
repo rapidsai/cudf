@@ -258,17 +258,17 @@ struct SchemaElement {
  */
 struct Statistics {
   // deprecated max value in signed comparison order
-  cuda::std::optional<std::vector<uint8_t>> max;
+  std::optional<std::vector<uint8_t>> max;
   // deprecated min value in signed comparison order
-  cuda::std::optional<std::vector<uint8_t>> min;
+  std::optional<std::vector<uint8_t>> min;
   // count of null values in the column
   cuda::std::optional<int64_t> null_count;
   // count of distinct values occurring
   cuda::std::optional<int64_t> distinct_count;
   // max value for column determined by ColumnOrder
-  cuda::std::optional<std::vector<uint8_t>> max_value;
+  std::optional<std::vector<uint8_t>> max_value;
   // min value for column determined by ColumnOrder
-  cuda::std::optional<std::vector<uint8_t>> min_value;
+  std::optional<std::vector<uint8_t>> min_value;
   // If true, max_value is the actual maximum value for a column
   cuda::std::optional<bool> is_max_value_exact;
   // If true, min_value is the actual minimum value for a column
@@ -290,14 +290,14 @@ struct SizeStatistics {
    *
    * This value should not be written if max_repetition_level is 0.
    */
-  cuda::std::optional<std::vector<int64_t>> repetition_level_histogram;
+  std::optional<std::vector<int64_t>> repetition_level_histogram;
 
   /**
    * Same as repetition_level_histogram except for definition levels.
    *
    * This value should not be written if max_definition_level is 0 or 1.
    */
-  cuda::std::optional<std::vector<int64_t>> definition_level_histogram;
+  std::optional<std::vector<int64_t>> definition_level_histogram;
 };
 
 /**
@@ -318,7 +318,7 @@ struct OffsetIndex {
   std::vector<PageLocation> page_locations;
   // per-page size info. see description of the same field in SizeStatistics. only present for
   // columns with a BYTE_ARRAY physical type.
-  cuda::std::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes;
+  std::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes;
 };
 
 /**
@@ -330,10 +330,10 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
     BoundaryOrder::UNORDERED;  // Indicates if min and max values are ordered
-  cuda::std::optional<std::vector<int64_t>> null_counts;  // Optional count of null values per page
+  std::optional<std::vector<int64_t>> null_counts;  // Optional count of null values per page
   // Repetition/definition level histograms for the column chunk
-  cuda::std::optional<std::vector<int64_t>> repetition_level_histogram;
-  cuda::std::optional<std::vector<int64_t>> definition_level_histogram;
+  std::optional<std::vector<int64_t>> repetition_level_histogram;
+  std::optional<std::vector<int64_t>> definition_level_histogram;
 };
 
 /**
@@ -383,7 +383,7 @@ struct ColumnChunkMetaData {
   Statistics statistics;
   // Set of all encodings used for pages in this column chunk. This information can be used to
   // determine if all data pages are dictionary encoded for example.
-  cuda::std::optional<std::vector<PageEncodingStats>> encoding_stats;
+  std::optional<std::vector<PageEncodingStats>> encoding_stats;
   // Optional statistics to help estimate total memory when converted to in-memory representations.
   // The histograms contained in these statistics can also be useful in some cases for more
   // fine-grained nullability/list length filter pushdown.
@@ -429,7 +429,7 @@ struct RowGroup {
   int64_t num_rows = 0;
   // If set, specifies a sort ordering of the rows in this RowGroup.
   // The sorting columns can be a subset of all the columns.
-  cuda::std::optional<std::vector<SortingColumn>> sorting_columns;
+  std::optional<std::vector<SortingColumn>> sorting_columns;
   // Byte offset from beginning of file to first page (data or dictionary) in this row group
   cuda::std::optional<int64_t> file_offset;
   // Total byte size of all compressed (and potentially encrypted) column data in this row group
@@ -460,7 +460,7 @@ struct FileMetaData {
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
   std::string created_by = "";
-  cuda::std::optional<std::vector<ColumnOrder>> column_orders;
+  std::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**
