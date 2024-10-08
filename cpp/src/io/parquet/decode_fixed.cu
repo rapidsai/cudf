@@ -562,7 +562,6 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, 
   level_t const* const rep, int t)
 {
-  //What is the output of this? Validity bits and offsets to list starts
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
@@ -579,25 +578,30 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
   int const row_index_lower_bound = s->row_index_lower_bound;
   int const max_depth = s->col.max_nesting_depth - 1;
   int max_depth_valid_count = s->nesting_info[max_depth].valid_count;
-
-  __syncthreads();
   
   int const warp_index     = t / cudf::detail::warp_size;
   int const warp_lane      = t % cudf::detail::warp_size;
   bool const is_first_lane = (warp_lane == 0);
 
+  __syncthreads();
+
   while (value_count < target_value_count) {
     bool const within_batch = value_count + t < target_value_count;
 
-    // get definition level, use repitition level to get start/end depth
+    // get definition level, use repetition level to get start/end depth
     // different for each thread, as each thread has a different r/d
     int def_level = -1, start_depth = -1, end_depth = -1;
     if (within_batch) {
       int const index = rolling_index<state_buf::nz_buf_size>(value_count + t);
       int rep_level = static_cast<int>(rep[index]);
       if constexpr (nullable) {
-        def_level = static_cast<int>(def[index]);
-        end_depth = s->nesting_info[def_level].end_depth;
+        if(def != nullptr) {
+          def_level = static_cast<int>(def[index]);
+          end_depth = s->nesting_info[def_level].end_depth;
+        } else {
+          def_level = 1;
+          end_depth = max_depth;
+        }
       } else {
         end_depth = max_depth;
       }
@@ -622,15 +626,10 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
     input_row_count += total_num_new_rows;
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
-    // thread and block value count
-
+    // VALUE COUNT:
     // if we are within the range of nesting levels we should be adding value indices for
     // is from/in current rep level to/in the rep level AT the depth with the def value
     int in_nesting_bounds = ((0 >= start_depth && 0 <= end_depth) && in_row_bounds) ? 1 : 0;
-
-    // queries is_valid from all threads, stores prior total and total total
-
-    //WARP VALUE COUNT:
     int thread_value_count_within_warp, warp_value_count, thread_value_count, block_value_count;
     {
       block_scan_results value_count_scan_results;
@@ -642,9 +641,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
       block_value_count = value_count_scan_results.block_count;
     }
 
-    // column is either nullable or is a list (or both): iterate by depth
+    // iterate by depth
     for (int d_idx = 0; d_idx <= max_depth; d_idx++) {
-
       auto& ni = s->nesting_info[d_idx];
 
       // everything up to the max_def_level is a non-null value
@@ -655,45 +653,32 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
         is_valid = in_nesting_bounds;
       }
 
-      // thread and block validity count
-      // queries is_valid of all threads, stores prior total and total total
+      // VALID COUNT:
+      // Not all values visited by this block will represent a value at this nesting level. 
+      // the validity bit for thread t might actually represent output value t-6. 
+      // the correct position for thread t's bit is thread_value_count. 
+      uint32_t const warp_valid_mask = WarpReduceOr32((uint32_t)is_valid << thread_value_count_within_warp);
+      int thread_valid_count, block_valid_count;
+      {
+        auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
 
-      // for nested lists, it's more complicated.  This block will visit 128 incoming values,
-      // however not all of them will necessarily represent a value at this nesting level. so
-      // the validity bit for thread t might actually represent output value t-6. the correct
-      // position for thread t's bit is thread_value_count. 
-
-
-//WARP VALID COUNT:
-        // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
-        // however not all of them will necessarily represent a value at this nesting level. so
-        // the validity bit for thread t might actually represent output value t-6. the correct
-        // position for thread t's bit is thread_value_count. for cuda 11 we could use
-        // __reduce_or_sync(), but until then we have to do a warp reduce.
-        uint32_t const warp_valid_mask = WarpReduceOr32((uint32_t)is_valid << thread_value_count_within_warp);
-        int thread_valid_count, block_valid_count;
-        {
-          auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
-
-          block_scan_results valid_count_scan_results;
-          scan_block_exclusive_sum<decode_block_size>(warp_valid_mask, warp_lane, warp_index, thread_mask, valid_count_scan_results);
-          thread_valid_count = valid_count_scan_results.thread_count_within_block;
-          block_valid_count = valid_count_scan_results.block_count;
-        }
+        block_scan_results valid_count_scan_results;
+        scan_block_exclusive_sum<decode_block_size>(warp_valid_mask, warp_lane, warp_index, thread_mask, valid_count_scan_results);
+        thread_valid_count = valid_count_scan_results.thread_count_within_block;
+        block_valid_count = valid_count_scan_results.block_count;
+      }
 
       // compute warp and thread value counts for the -next- nesting level. we need to
-      // do this for nested schemas so that we can emit an offset for the -current- nesting
-      // level. more concretely : the offset for the current nesting level == current length of the
-      // next nesting level
+      // do this for lists so that we can emit an offset for the -current- nesting level.
+      // the offset for the current nesting level == current length of the next nesting level
       int next_thread_value_count_within_warp = 0, next_warp_value_count = 0;
       int next_thread_value_count = 0, next_block_value_count = 0;
       int next_in_nesting_bounds = 0;
       if (d_idx < max_depth) {
-        //mask is different between depths
-        next_in_nesting_bounds = 
-          (d_idx + 1 >= start_depth && d_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0;
 
-//NEXT WARP VALUE COUNT:
+        //NEXT DEPTH VALUE COUNT:
+        next_in_nesting_bounds = 
+          ((d_idx + 1 >= start_depth) && (d_idx + 1 <= end_depth) && in_row_bounds) ? 1 : 0;
         {
           block_scan_results next_value_count_scan_results;
           scan_block_exclusive_sum<decode_block_size>(next_in_nesting_bounds, next_value_count_scan_results);
@@ -704,6 +689,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
           next_block_value_count = next_value_count_scan_results.block_count;
         }
 
+        // STORE OFFSET TO THE LIST LOCATION
         // if we're -not- at a leaf column and we're within nesting/row bounds
         // and we have a valid data_out pointer, it implies this is a list column, so
         // emit an offset.
@@ -712,45 +698,37 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
           int const idx             = ni.value_count + thread_value_count;
           cudf::size_type const ofs = next_ni.value_count + next_thread_value_count + next_ni.page_start_value;
 
-          //STORE THE OFFSET FOR THE NEW LIST LOCATION
           (reinterpret_cast<cudf::size_type*>(ni.data_out))[idx] = ofs;
         }
       }
 
-      // validity is processed per-warp (on lane 0's), because writes are atomic
+      // validity is processed per-warp (on lane 0's), because writes are 32-bit atomic ops
       //
-      // nested schemas always read and write to the same bounds 
+      // lists always read and write to the same bounds 
       // (that is, read and write positions are already pre-bounded by first_row/num_rows). 
       // since we are about to write the validity vector
       // here we need to adjust our computed mask to take into account the write row bounds.
       if constexpr (nullable) {
-//TODO: Consider OR'ING for next_thread_value_count and popc() for next_thread_value_count
-//so that we don't have to take a ballot here. Is uint128 so may deconstruct to this anyway ...
-
         if(is_first_lane && (ni.valid_map != nullptr) && (warp_value_count > 0)) {
-          // last bit in the warp to store //in old is warp_valid_mask_bit_count
-//so it's a count of everything in nesting bounds, though bits can be zero if NULL at this level            
-
           // absolute bit offset into the output validity map
-          //is cumulative sum of warp_value_count at the given nesting depth
+          // is cumulative sum of warp_value_count at the given nesting depth
           // DON'T subtract by first_row: since it's lists it's not 1-row-per-value
           int const bit_offset = ni.valid_map_offset + thread_value_count;
+
           store_validity(bit_offset, ni.valid_map, warp_valid_mask, warp_value_count);
         }
 
         if (t == 0) { 
-          size_type const block_null_count = block_value_count - block_valid_count;
-          ni.null_count += block_null_count;
+          ni.null_count += block_value_count - block_valid_count;
         }
       }
 
       // if this is valid and we're at the leaf, output dst_pos
-      // Read these before the sync, so that when thread 0 modifies them we've already read their values
+      // Read value_count before the sync, so that when thread 0 modifies it we've already read its value
       int current_value_count = ni.value_count;
-      __syncthreads();  // handle modification of ni.value_count from below
+      __syncthreads();  // guard against modification of ni.value_count below
       if (d_idx == max_depth) {
         if (is_valid) {
-          // for non-list types, the value count is always the same across
           int const dst_pos = current_value_count + thread_value_count;
           int const src_pos = max_depth_valid_count + thread_valid_count;
           int const output_index = rolling_index<state_buf::nz_buf_size>(src_pos);
@@ -766,7 +744,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(
         ni.value_count += block_value_count;
         ni.valid_map_offset += block_value_count;
       }
-      __syncthreads();  // handle modification of ni.value_count from below
+      __syncthreads();  // sync modification of ni.value_count
 
       // propagate value counts for the next depth level
       block_value_count  = next_block_value_count;
@@ -959,10 +937,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   //   and valid_count is that running count.
   int processed_count = 0;
   int valid_count     = 0;
-  // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to gpuDecodeValues
 
-  //For lists (which can have skipped values, skip ahead in the decoding so that we don't repeat work
+  // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
   if constexpr (has_lists_t){
     if(s->page.skipped_leaf_values > 0) {
       if (should_process_nulls) {
@@ -975,6 +951,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     }
   }
 
+  // the core loop. decode batches of level stream data using rle_stream objects
+  // and pass the results to gpuDecodeValues
   int last_row = s->first_row + s->num_rows;
   while ((s->error == 0) && (processed_count < s->page.num_input_values) &&
          (s->input_row_count <= last_row)) {
@@ -1049,6 +1027,7 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
 
   dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
   if (level_type_size == 1) {
     if (is_list) {
       gpuDecodePageDataGeneric<uint8_t,
