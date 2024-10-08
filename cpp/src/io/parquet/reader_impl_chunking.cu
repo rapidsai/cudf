@@ -386,11 +386,11 @@ int64_t find_next_split(int64_t cur_pos,
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
-      return std::make_tuple(clock_rate, std::nullopt);
+      return {clock_rate, std::nullopt};
     }
   }
 
-  return std::make_tuple(clock_rate, std::move(logical_type));
+  return {clock_rate, std::move(logical_type)};
 }
 
 /**
