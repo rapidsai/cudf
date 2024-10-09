@@ -35,4 +35,5 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 rapids-logger "pytest cudf"
+export ARROW_DEFAULT_MEMORY_POOL="mimalloc"
 python -c "import cupy; import cudf"
