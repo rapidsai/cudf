@@ -19,15 +19,15 @@
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/std/cstddef>
 #include <cuda/std/type_traits>
 
 namespace cudf::groupby::detail::hash {
 template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_shmem {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -42,7 +42,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::MIN,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -63,7 +63,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::MAX,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -86,7 +86,7 @@ struct update_target_element_shmem<
   cudf::aggregation::SUM,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
                          !cudf::is_timestamp<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -108,7 +108,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::SUM_OF_SQUARES,
   cuda::std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -128,7 +128,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::PRODUCT,
   cuda::std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -149,7 +149,7 @@ struct update_target_element_shmem<
   cudf::aggregation::COUNT_VALID,
   cuda::std::enable_if_t<
     cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_VALID>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -167,7 +167,7 @@ struct update_target_element_shmem<
   cudf::aggregation::COUNT_ALL,
   cuda::std::enable_if_t<
     cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_ALL>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -187,7 +187,7 @@ struct update_target_element_shmem<
   cudf::aggregation::ARGMAX,
   cuda::std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMAX>() and
                          cudf::is_relationally_comparable<Source, Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -213,7 +213,7 @@ struct update_target_element_shmem<
   cudf::aggregation::ARGMIN,
   cuda::std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMIN>() and
                          cudf::is_relationally_comparable<Source, Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,
@@ -233,9 +233,21 @@ struct update_target_element_shmem<
   }
 };
 
+/**
+ * @brief A functor that updates a single element in the target column stored in shared memory by
+ * applying an aggregation operation to a corresponding element from a source column in global
+ * memory.
+ *
+ * This functor can NOT be used for dictionary columns.
+ *
+ * This is a redundant copy replicating the behavior of `elementwise_aggregator` from
+ * `cudf/detail/aggregation/device_aggregators.cuh`. The key difference is that this functor accepts
+ * a pointer to raw bytes as the source, as `column_device_view` cannot yet be constructed from
+ * shared memory.
+ */
 struct shmem_element_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              bool* target_null,
                              cudf::column_device_view source,

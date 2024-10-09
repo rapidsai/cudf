@@ -19,9 +19,9 @@
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/std/cstddef>
 #include <cuda/std/type_traits>
 
 namespace cudf::groupby::detail::hash {
@@ -30,7 +30,7 @@ struct update_target_element_gmem {
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const
   {
@@ -46,7 +46,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -67,7 +67,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -89,7 +89,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -111,7 +111,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -134,7 +134,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -159,7 +159,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -173,7 +173,6 @@ struct update_target_element_gmem<
   }
 };
 
-// TODO: VALID and ALL have same code
 template <typename Source>
 struct update_target_element_gmem<
   Source,
@@ -183,7 +182,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -206,7 +205,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -226,6 +225,7 @@ struct update_target_element_gmem<
     if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
+
 template <typename Source>
 struct update_target_element_gmem<
   Source,
@@ -235,7 +235,7 @@ struct update_target_element_gmem<
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
@@ -256,12 +256,24 @@ struct update_target_element_gmem<
   }
 };
 
+/**
+ * @brief A functor that updates a single element in the target column stored in global memory by
+ * applying an aggregation operation to a corresponding element from a source column in shared
+ * memory.
+ *
+ * This functor can NOT be used for dictionary columns.
+ *
+ * This is a redundant copy replicating the behavior of `elementwise_aggregator` from
+ * `cudf/detail/aggregation/device_aggregators.cuh`. The key difference is that this functor accepts
+ * a pointer to raw bytes as the source, as `column_device_view` cannot yet be constructed from
+ * shared memory.
+ */
 struct gmem_element_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
   __device__ void operator()(cudf::mutable_column_device_view target,
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
-                             std::byte* source,
+                             cuda::std::byte* source,
                              cudf::size_type source_index,
                              bool* source_null) const noexcept
   {
