@@ -18,6 +18,7 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -184,6 +185,73 @@ CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
 
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
 
+    if (threadIdx.x == 0) { atomicAdd(valid_counts + mask_idx, block_valid_count); }
+  }
+}
+
+// TODO
+/**
+ * @brief Populates a set of bitmasks by applying a binary predicate to two
+*         input ranges.
+
+ * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
+ * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
+ * to true, the bit is set to `1`. If false, set to `0`.
+ *
+ * Example Arguments:
+ * begin1:        zero-based counting iterator,
+ * begin2:        zero-based counting iterator,
+ * p:             [](size_type col, size_type row){ return col == row; }
+ * masks:         [[b00...], [b00...], [b00...]]
+ * mask_count:    3
+ * mask_num_bits: 2
+ * valid_counts:  [0, 0, 0]
+ *
+ * Example Results:
+ * masks:         [[b10...], [b01...], [b00...]]
+ * valid_counts:  [1, 1, 0]
+ *
+ * @note If any mask in `masks` is `nullptr`, that mask will be ignored.
+ *
+ * @param begin1        LHS arguments to binary predicate. ex: column/mask idx
+ * @param begin2        RHS arguments to binary predicate. ex: row/bit idx
+ * @param p             Predicate: `bit = p(begin1 + mask_idx, begin2 + bit_idx)`
+ * @param masks         Masks for which bits will be obtained and assigned.
+ * @param mask_count    The number of `masks`.
+ * @param mask_num_bits The number of bits to assign for each mask. If this
+ *                      number is smaller than the total number of bits, the
+ *                      remaining bits may not be initialized.
+ * @param valid_counts  Used to obtain the total number of valid bits for each
+ *                      mask.
+ */
+template <int32_t block_size, typename ElementType, typename BinaryPredicate>
+CUDF_KERNEL void valid_if_batch_kernel(device_span<device_span<ElementType const> const> input,
+                                       BinaryPredicate p,
+                                       bitmask_type* const* masks,
+                                       size_type* valid_counts)
+{
+  for (std::size_t mask_idx = 0; mask_idx < input.size(); ++mask_idx) {
+    auto const mask_input    = input[mask_idx];
+    auto const mask_num_bits = mask_input.size();
+    auto const out_mask      = masks[mask_idx];
+
+    std::size_t block_offset{blockIdx.x * blockDim.x};
+    size_type warp_valid_count{0};
+    while (block_offset < mask_num_bits) {
+      auto const thread_idx    = block_offset + threadIdx.x;
+      auto const thread_active = thread_idx < mask_num_bits;
+      auto const bit_is_valid  = thread_active && p(mask_input[thread_idx]);
+      auto const warp_validity = __ballot_sync(0xffff'ffffu, bit_is_valid);
+
+      if (thread_active && threadIdx.x % warp_size == 0) {
+        out_mask[word_index(thread_idx)] = warp_validity;
+      }
+
+      warp_valid_count += __popc(warp_validity);
+      block_offset += blockDim.x * gridDim.x;
+    }
+
+    auto const block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
     if (threadIdx.x == 0) { atomicAdd(valid_counts + mask_idx, block_valid_count); }
   }
 }

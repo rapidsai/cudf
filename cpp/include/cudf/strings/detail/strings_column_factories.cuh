@@ -60,6 +60,61 @@ using string_index_pair = thrust::pair<char const*, size_type>;
 constexpr size_type FACTORY_BYTES_PER_ROW_THRESHOLD = 64;
 
 /**
+ * @brief Gather characters to create a strings column using the given string_index_pair iterator
+ *
+ * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
+ *
+ * @param offsets The offsets for the output strings column
+ * @param chars_size The size (in bytes) of the chars data
+ * @param avg_bytes_per_row The average bytes per row
+ * @param begin Iterator to the first string_index_pair
+ * @param strings_count The number of strings
+ * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return An array of chars gathered from the input string_index_pair iterator
+ */
+template <typename IndexPairIterator>
+rmm::device_uvector<char> make_chars_column(column_view const& offsets,
+                                            int64_t chars_size,
+                                            int64_t avg_bytes_per_row,
+                                            IndexPairIterator begin,
+                                            size_type strings_count,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
+
+  // use a character-parallel kernel for long string lengths
+  if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
+    auto const str_begin = thrust::make_transform_iterator(
+      begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
+        return string_view{ip.first, ip.second};
+      }));
+
+    return gather_chars(str_begin,
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        d_offsets,
+                        chars_size,
+                        stream,
+                        mr);
+  }
+  // this approach is 2-3x faster for a large number of smaller string lengths
+  auto chars_data = rmm::device_uvector<char>(chars_size, stream, mr);
+  auto d_chars    = chars_data.data();
+  auto copy_chars = [d_chars] __device__(auto item) {
+    string_index_pair const str = thrust::get<0>(item);
+    int64_t const offset        = thrust::get<1>(item);
+    if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
+  };
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
+                     strings_count,
+                     copy_chars);
+  return chars_data;
+}
+
+/**
  * @brief Create a strings-type column from iterators of pointer/size pairs
  *
  * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
@@ -88,8 +143,6 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
   auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto const d_offsets =
-    cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // create null mask
   auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
@@ -99,38 +152,9 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
   // build chars column
-  auto chars_data = [d_offsets, bytes = bytes, begin, strings_count, null_count, stream, mr] {
-    auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
-    // use a character-parallel kernel for long string lengths
-    if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
-      auto const str_begin = thrust::make_transform_iterator(
-        begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
-          return string_view{ip.first, ip.second};
-        }));
-
-      return gather_chars(str_begin,
-                          thrust::make_counting_iterator<size_type>(0),
-                          thrust::make_counting_iterator<size_type>(strings_count),
-                          d_offsets,
-                          bytes,
-                          stream,
-                          mr);
-    } else {
-      // this approach is 2-3x faster for a large number of smaller string lengths
-      auto chars_data = rmm::device_uvector<char>(bytes, stream, mr);
-      auto d_chars    = chars_data.data();
-      auto copy_chars = [d_chars] __device__(auto item) {
-        string_index_pair const str = thrust::get<0>(item);
-        int64_t const offset        = thrust::get<1>(item);
-        if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
-      };
-      thrust::for_each_n(rmm::exec_policy(stream),
-                         thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
-                         strings_count,
-                         copy_chars);
-      return chars_data;
-    }
-  }();
+  auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
+  auto chars_data              = make_chars_column(
+    offsets_column->view(), bytes, avg_bytes_per_row, begin, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
