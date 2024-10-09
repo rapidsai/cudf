@@ -20,7 +20,6 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cuco/static_set_ref.cuh>
@@ -84,7 +83,6 @@ struct var_hash_functor {
     Target result = (x - mean) * (x - mean) / (group_size - ddof);
     cuda::atomic_ref<Target, cuda::thread_scope_device> ref{target.element<Target>(target_index)};
     ref.fetch_add(result, cuda::std::memory_order_relaxed);
-    // STD sqrt is applied in finalize()
 
     if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
