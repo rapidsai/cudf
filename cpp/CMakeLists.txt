@@ -160,7 +160,10 @@ if(CUDF_CLANG_TIDY)
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
   string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" LLVM_VERSION "${CLANG_TIDY_OUTPUT}")
-  # Discard the patch version and allow it to float
+  # Discard the patch version and allow it to float. Empirically, results between patch versions are
+  # mostly stable, and looking at available packages on some package managers sometimes patch
+  # versions are skipped so we don't want to constrain to a patch version that the user can't
+  # install.
   string(REPLACE "." ";" LLVM_VERSION_LIST ${LLVM_VERSION})
   list(SUBLIST LLVM_VERSION_LIST 0 2 LLVM_VERSION_LIST)
   list(JOIN LLVM_VERSION_LIST "." LLVM_VERSION)
@@ -183,7 +186,8 @@ function(enable_clang_tidy target)
   )
 
   if(CUDF_CLANG_TIDY)
-    # clang will complain about unused link libraries on the compile line.
+    # clang will complain about unused link libraries on the compile line unless we specify
+    # -Qunused-arguments.
     set_target_properties(
       ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
     )
