@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libc.stdint cimport uint8_t, uintptr_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.contiguous_split cimport (
@@ -11,7 +12,12 @@ from pylibcudf.libcudf.contiguous_split cimport (
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 
+from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
+
+from types import SimpleNamespace
+
+import numpy as np
 
 
 cdef class PackedColumns:
@@ -35,6 +41,47 @@ cdef class PackedColumns:
         cdef PackedColumns out = PackedColumns.__new__(PackedColumns)
         out.c_obj = move(data)
         return out
+
+    @property
+    def metadata(self):
+        """memoryview of the metadata (host memory)"""
+        cdef size_t size = dereference(dereference(self.c_obj).metadata).size()
+        cdef uint8_t* data = dereference(dereference(self.c_obj).metadata).data()
+        if size == 0:
+            return memoryview(np.ndarray(shape=(0,), dtype="uint8"))
+        return memoryview(
+            np.asarray(
+                SimpleNamespace(
+                    owner = self,
+                    __array_interface__ = {
+                        'data': (<uintptr_t>data, False),
+                        'shape': (size,),
+                        'typestr': '|u1',
+                        'strides': None,
+                        'version': 3,
+                    }
+                )
+            )
+        )
+
+    @property
+    def gpu_data(self):
+        """gpumemoryview of the data (device memory)"""
+        cdef size_t size = dereference(dereference(self.c_obj).gpu_data).size()
+        cdef void* data = dereference(dereference(self.c_obj).gpu_data).data()
+        return gpumemoryview(
+            SimpleNamespace(
+                owner = self,
+                __cuda_array_interface__ = {
+                    'data': (<uintptr_t>data, False),
+                    'shape': (size,),
+                    'typestr': '|u1',
+                    'strides': None,
+                    'version': 3,
+                }
+            )
+        )
+
 
 cpdef PackedColumns pack(Table input):
     """Deep-copy a table into a serialized contiguous memory format.
