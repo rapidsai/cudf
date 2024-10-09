@@ -6,8 +6,10 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.strings cimport replace_re as cpp_replace_re
+from pylibcudf.libcudf.strings.regex_program cimport regex_program
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_flags cimport regex_flags
@@ -57,29 +59,37 @@ cpdef Column replace_re(
         New strings column
     """
     cdef unique_ptr[column] c_result
-    cdef vector[string] c_patterns
+    cdef vector[string] c_lst_patterns
+    cdef regex_program c_regex_pattern
+    cdef column_view c_replacement_col
+    cdef string_scalar* c_replacement_scalar
 
     if patterns is RegexProgram and replacement is Scalar:
+        c_replacement_scalar = <string_scalar*>((<Scalar>replacement).get())
+        c_regex_pattern = (<RegexProgram>patterns).c_obj.get()[0]
+
         with nogil:
             c_result = move(
                 cpp_replace_re.replace_re(
                     input.view(),
-                    patterns.c_obj.get()[0],
-                    dereference(<string_scalar*>(replacement.get())),
-                    max_replace_count
+                    c_regex_pattern,
+                    dereference(c_replacement_scalar),
+                    max_replace_count,
                 )
             )
 
         return Column.from_libcudf(move(c_result))
     elif patterns is list and replacement is Column:
-        c_patterns = patterns
+        c_replacement_col = replacement.view()
+        for pattern in patterns:
+            c_lst_patterns.push_back(pattern.encode())
 
         with nogil:
             c_result = move(
                 cpp_replace_re.replace_re(
                     input.view(),
-                    c_patterns,
-                    replacement.view(),
+                    c_lst_patterns,
+                    c_replacement_col,
                     flags,
                 )
             )
