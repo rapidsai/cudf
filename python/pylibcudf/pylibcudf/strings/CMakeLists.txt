@@ -22,7 +22,6 @@ set(cython_sources
     find.pyx
     find_multiple.pyx
     findall.pyx
-    json.pyx
     padding.pyx
     regex_flags.pyx
     regex_program.pyx

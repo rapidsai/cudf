@@ -29,10 +29,10 @@ def test_get_json_object(
     strip_quotes_from_single_strings,
     missing_fields_as_nulls,
 ):
-    result = plc.strings.json.get_json_object(
+    result = plc.json.get_json_object(
         plc_col,
         json_path,
-        plc.strings.json.GetJsonObjectOptions(
+        plc.json.GetJsonObjectOptions(
             allow_single_quotes=allow_single_quotes,
             strip_quotes_from_single_strings=strip_quotes_from_single_strings,
             missing_fields_as_nulls=missing_fields_as_nulls,

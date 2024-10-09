@@ -1,7 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import pylibcudf as plc
-from pylibcudf.strings.json cimport GetJsonObjectOptions
+from pylibcudf.json cimport GetJsonObjectOptions
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -18,7 +18,7 @@ def get_json_object(
     Apply a JSONPath string to all rows in an input column
     of json strings.
     """
-    plc_column = plc.strings.json.get_json_object(
+    plc_column = plc.json.get_json_object(
         col.to_pylibcudf(mode="read"),
         py_json_path.device_value.c_value,
         options

@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from pylibcudf.column cimport Column
-from pylibcudf.libcudf.strings.json cimport get_json_object_options
+from pylibcudf.libcudf.json cimport get_json_object_options
 from pylibcudf.scalar cimport Scalar
 
 

@@ -12,7 +12,6 @@ strings
     find_multiple
     findall
     padding
-    json
     regex_flags
     regex_program
     repeat

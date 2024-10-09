@@ -5,9 +5,9 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
+from pylibcudf.libcudf cimport json as cpp_json
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from pylibcudf.libcudf.strings cimport json as cpp_json
 from pylibcudf.scalar cimport Scalar
 
 
@@ -115,7 +115,7 @@ cpdef Column get_json_object(
     """
     Apply a JSONPath string to all rows in an input strings column.
 
-    For details, see :cpp:func:`cpp::strings::get_json_object`
+    For details, see :cpp:func:`cudf::get_json_object`
 
     Parameters
     ----------
