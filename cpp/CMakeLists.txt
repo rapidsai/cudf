@@ -153,6 +153,24 @@ if(CUDF_CLANG_TIDY)
     NAMES "clang-tidy"
     DOC "Path to clang-tidy executable" REQUIRED
   )
+
+  execute_process(
+    COMMAND ${CLANG_TIDY_EXE} --version
+    OUTPUT_VARIABLE CLANG_TIDY_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" LLVM_VERSION "${CLANG_TIDY_OUTPUT}")
+  # Discard the patch version and allow it to float
+  string(REPLACE "." ";" LLVM_VERSION_LIST ${LLVM_VERSION})
+  list(SUBLIST LLVM_VERSION_LIST 0 2 LLVM_VERSION_LIST)
+  list(JOIN LLVM_VERSION_LIST "." LLVM_VERSION)
+  set(expected_clang_tidy_version 19.1)
+  if(NOT expected_clang_tidy_version VERSION_EQUAL LLVM_VERSION)
+    message(
+      FATAL_ERROR
+        "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
+    )
+  endif()
 endif()
 
 # Turn on the clang-tidy property for a target excluding the files specified in SKIPPED_FILES.
