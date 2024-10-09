@@ -14,7 +14,8 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   "dask-cudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
   "cudf_kafka=${RAPIDS_VERSION_MAJOR_MINOR}" \
-  "custreamz=${RAPIDS_VERSION_MAJOR_MINOR}"
+  "custreamz=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "cudf-polars=${RAPIDS_VERSION_MAJOR_MINOR}"
 
 rapids-logger "Check GPU usage"
 nvidia-smi
@@ -37,7 +38,7 @@ rapids-logger "pytest dask_cudf (legacy)"
 DASK_DATAFRAME__QUERY_PLANNING=False ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-legacy.xml" \
   --numprocesses=8 \
-  --dist=loadscope \
+  --dist=worksteal \
   .
 
 rapids-logger "pytest cudf_kafka"
@@ -52,6 +53,16 @@ rapids-logger "pytest custreamz"
   --cov-config=../.coveragerc \
   --cov=custreamz \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
+  --cov-report=term
+
+rapids-logger "pytest cudf-polars"
+./ci/run_cudf_polars_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
+  --numprocesses=8 \
+  --dist=worksteal \
+  --cov-config=../.coveragerc \
+  --cov=cudf_polars \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-polars-coverage.xml" \
   --cov-report=term
 
 rapids-logger "Test script exiting with value: $EXITCODE"
