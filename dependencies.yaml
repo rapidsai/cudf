@@ -573,8 +573,6 @@ dependencies:
           - identify>=2.5.20
       - output_types: conda
         packages:
-          - clang==16.0.6
-          - clang-tools=16.0.6
           - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
   clang_format:
     common:
