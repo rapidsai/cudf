@@ -152,7 +152,7 @@ struct stats_caster {
         }
 
         void set_index(size_type index,
-                       cuda::std::optional<std::vector<uint8_t>> const& binary_value,
+                       std::optional<std::vector<uint8_t>> const& binary_value,
                        Type const type)
         {
           if (binary_value.has_value()) {
@@ -234,8 +234,8 @@ struct stats_caster {
             max.set_index(stats_idx, max_value, colchunk.meta_data.type);
           } else {
             // Marking it null, if column present in row group
-            min.set_index(stats_idx, cuda::std::nullopt, {});
-            max.set_index(stats_idx, cuda::std::nullopt, {});
+            min.set_index(stats_idx, std::nullopt, {});
+            max.set_index(stats_idx, std::nullopt, {});
           }
           stats_idx++;
         }

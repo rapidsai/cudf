@@ -744,7 +744,7 @@ int32_t compare(T& v1, T& v2)
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
                        cudf::io::parquet::detail::Type ptype,
-                       cuda::std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
+                       std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
 {
   auto ctype_val = ctype.value_or(cudf::io::parquet::detail::UNKNOWN);
   switch (ptype) {
