@@ -186,7 +186,7 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  cuda::std::optional<std::vector<ColumnOrder>> column_orders = cuda::std::nullopt;
+  std::optional<std::vector<ColumnOrder>> column_orders = std::nullopt;
 };
 
 namespace {
@@ -472,7 +472,7 @@ struct leaf_schema_fn {
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
     col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type = cuda::std::nullopt;
+    col_schema.converted_type = std::nullopt;
     col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
     if (timestamp_is_int96) {
       col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
@@ -750,7 +750,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
           col_schema.type = Type::BYTE_ARRAY;
         }
 
-        col_schema.converted_type  = cuda::std::nullopt;
+        col_schema.converted_type  = std::nullopt;
         col_schema.stats_dtype     = statistics_dtype::dtype_byte_array;
         col_schema.repetition_type = col_nullable ? OPTIONAL : REQUIRED;
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
@@ -2795,7 +2795,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   // See https://github.com/rapidsai/cudf/pull/14264#issuecomment-1778311615
   for (auto& se : md.schema) {
     if (se.logical_type.has_value() && se.logical_type.value().type == LogicalType::UNKNOWN) {
-      se.logical_type = cuda::std::nullopt;
+      se.logical_type = std::nullopt;
     }
   }
 
