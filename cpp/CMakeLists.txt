@@ -159,14 +159,12 @@ if(CUDF_CLANG_TIDY)
     OUTPUT_VARIABLE CLANG_TIDY_OUTPUT
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" LLVM_VERSION "${CLANG_TIDY_OUTPUT}")
+  string(REGEX MATCH "LLVM version ([0-9]+\\.[0-9]+)\\.[0-9]+" LLVM_VERSION_MATCH "${CLANG_TIDY_OUTPUT}")
   # Discard the patch version and allow it to float. Empirically, results between patch versions are
   # mostly stable, and looking at available packages on some package managers sometimes patch
   # versions are skipped so we don't want to constrain to a patch version that the user can't
   # install.
-  string(REPLACE "." ";" LLVM_VERSION_LIST ${LLVM_VERSION})
-  list(SUBLIST LLVM_VERSION_LIST 0 2 LLVM_VERSION_LIST)
-  list(JOIN LLVM_VERSION_LIST "." LLVM_VERSION)
+  set(LLVM_VERSION "${CMAKE_MATCH_1}")
   set(expected_clang_tidy_version 19.1)
   if(NOT expected_clang_tidy_version VERSION_EQUAL LLVM_VERSION)
     message(
