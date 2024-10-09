@@ -15,6 +15,7 @@ strings
     regex_flags
     regex_program
     repeat
+    replace_re
     replace
     side_type
     slice

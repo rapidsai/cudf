@@ -16,6 +16,7 @@ from . import (
     regex_program,
     repeat,
     replace,
+    replace_re,
     side_type,
     slice,
     split,

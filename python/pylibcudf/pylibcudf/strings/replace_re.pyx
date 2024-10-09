@@ -60,19 +60,19 @@ cpdef Column replace_re(
     """
     cdef unique_ptr[column] c_result
     cdef vector[string] c_lst_patterns
-    cdef regex_program c_regex_pattern
+    cdef regex_program* c_regex_pattern
     cdef column_view c_replacement_col
     cdef string_scalar* c_replacement_scalar
 
     if patterns is RegexProgram and replacement is Scalar:
         c_replacement_scalar = <string_scalar*>((<Scalar>replacement).get())
-        c_regex_pattern = (<RegexProgram>patterns).c_obj.get()[0]
+        c_regex_pattern = (<RegexProgram>patterns).c_obj.get()
 
         with nogil:
             c_result = move(
                 cpp_replace_re.replace_re(
                     input.view(),
-                    c_regex_pattern,
+                    dereference(c_regex_pattern),
                     dereference(c_replacement_scalar),
                     max_replace_count,
                 )
@@ -80,7 +80,7 @@ cpdef Column replace_re(
 
         return Column.from_libcudf(move(c_result))
     elif patterns is list and replacement is Column:
-        c_replacement_col = replacement.view()
+        c_replacement_col = (<Column>replacement).view()
         for pattern in patterns:
             c_lst_patterns.push_back(pattern.encode())
 
