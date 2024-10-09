@@ -2525,23 +2525,7 @@ def test_dti_asi8():
 
 @pytest.mark.parametrize(
     "method, kwargs",
-    [
-        ["mean", {}],
-        pytest.param(
-            "std",
-            {},
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/16444"
-            ),
-        ),
-        pytest.param(
-            "std",
-            {"ddof": 0},
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/16444"
-            ),
-        ),
-    ],
+    [["mean", {}], ["std", {}], ["std", {"ddof": 0}]],
 )
 def test_dti_reduction(method, kwargs):
     pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")
