@@ -25,6 +25,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -77,9 +78,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
                                 device_span<cumulative_page_info const> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
-  std::vector<PageInfo> pages              = cudf::detail::make_std_vector_sync(d_pages, stream);
-  std::vector<ColumnChunkDesc> chunks      = cudf::detail::make_std_vector_sync(d_chunks, stream);
-  std::vector<cumulative_page_info> c_info = cudf::detail::make_std_vector_sync(d_c_info, stream);
+  auto const pages  = cudf::detail::make_host_vector_sync(d_pages, stream);
+  auto const chunks = cudf::detail::make_host_vector_sync(d_chunks, stream);
+  auto const c_info = cudf::detail::make_host_vector_sync(d_c_info, stream);
 
   printf("------------\nCumulative sizes by page\n");
 
@@ -370,11 +371,11 @@ int64_t find_next_split(int64_t cur_pos,
  *
  * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, thrust::optional<LogicalType>> conversion_info(
+[[nodiscard]] std::tuple<int32_t, cuda::std::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  thrust::optional<LogicalType> logical_type)
+  cuda::std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
     is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
@@ -385,7 +386,7 @@ int64_t find_next_split(int64_t cur_pos,
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
-      return std::make_tuple(clock_rate, thrust::nullopt);
+      return std::make_tuple(clock_rate, cuda::std::nullopt);
     }
   }
 
@@ -441,7 +442,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
 {
   // sort by row count
   rmm::device_uvector<cumulative_page_info> c_info_sorted =
-    make_device_uvector_async(c_info, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(c_info, stream, cudf::get_current_device_resource_ref());
   thrust::sort(
     rmm::exec_policy_nosync(stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_less{});
 
@@ -647,7 +648,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_std_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
@@ -694,8 +695,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  std::vector<cumulative_page_info> h_aggregated_info =
-    cudf::detail::make_std_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   std::vector<row_range> splits;
@@ -847,9 +847,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     });
   }
   auto d_comp_in = cudf::detail::make_device_uvector_async(
-    comp_in, stream, rmm::mr::get_current_device_resource());
+    comp_in, stream, cudf::get_current_device_resource_ref());
   auto d_comp_out = cudf::detail::make_device_uvector_async(
-    comp_out, stream, rmm::mr::get_current_device_resource());
+    comp_out, stream, cudf::get_current_device_resource_ref());
 
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
@@ -865,8 +865,18 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
     switch (codec.compression_type) {
       case GZIP:
-        gpuinflate(
-          d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
+        if (cudf::io::nvcomp_integration::is_all_enabled()) {
+          nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
+                                     d_comp_in_view,
+                                     d_comp_out_view,
+                                     d_comp_res_view,
+                                     codec.max_decompressed_size,
+                                     codec.total_decomp_size,
+                                     stream);
+        } else {
+          gpuinflate(
+            d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
+        }
         break;
       case SNAPPY:
         if (cudf::io::nvcomp_integration::is_stable_enabled()) {
@@ -923,9 +933,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
-      copy_in, stream, rmm::mr::get_current_device_resource());
+      copy_in, stream, cudf::get_current_device_resource_ref());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
-      copy_out, stream, rmm::mr::get_current_device_resource());
+      copy_out, stream, cudf::get_current_device_resource_ref());
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
     stream.synchronize();
@@ -1144,7 +1154,7 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, rmm::mr::get_current_device_resource());
+    temp_cost, stream, cudf::get_current_device_resource_ref());
   auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
@@ -1304,9 +1314,8 @@ void reader::impl::setup_next_pass(read_mode mode)
     printf("\tskip_rows: %'lu\n", pass.skip_rows);
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
-    auto const num_columns = _input_columns.size();
-    std::vector<size_type> h_page_offsets =
-      cudf::detail::make_std_vector_sync(pass.page_offsets, _stream);
+    auto const num_columns    = _input_columns.size();
+    auto const h_page_offsets = cudf::detail::make_host_vector_sync(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
@@ -1348,7 +1357,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
     [&]() -> std::tuple<rmm::device_uvector<page_span>, size_t, size_t> {
     if (!pass.has_compressed_data || _input_pass_read_limit == 0) {
       rmm::device_uvector<page_span> page_indices(
-        num_columns, _stream, rmm::mr::get_current_device_resource());
+        num_columns, _stream, cudf::get_current_device_resource_ref());
       auto iter = thrust::make_counting_iterator(0);
       thrust::transform(rmm::exec_policy_nosync(_stream),
                         iter,
@@ -1426,7 +1435,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
     subpass.pages = subpass.page_buf;
   }
 
-  std::vector<page_span> h_spans = cudf::detail::make_std_vector_async(page_indices, _stream);
+  auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
   subpass.pages.device_to_host_async(_stream);
 
   _stream.synchronize();
@@ -1464,7 +1473,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
-  std::vector<page_span> h_page_indices = cudf::detail::make_std_vector_sync(page_indices, _stream);
+  auto const h_page_indices = cudf::detail::make_host_vector_sync(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
@@ -1502,10 +1511,13 @@ void reader::impl::create_global_chunk_info()
     std::transform(
       _input_columns.begin(), _input_columns.end(), column_mapping.begin(), [&](auto const& col) {
         // translate schema_idx into something we can use for the page indexes
-        if (auto it = std::find_if(
-              columns.begin(),
-              columns.end(),
-              [&col](auto const& col_chunk) { return col_chunk.schema_idx == col.schema_idx; });
+        if (auto it = std::find_if(columns.begin(),
+                                   columns.end(),
+                                   [&](auto const& col_chunk) {
+                                     return col_chunk.schema_idx ==
+                                            _metadata->map_schema_index(col.schema_idx,
+                                                                        rg.source_index);
+                                   });
             it != columns.end()) {
           return std::distance(columns.begin(), it);
         }
@@ -1526,7 +1538,8 @@ void reader::impl::create_global_chunk_info()
       auto col = _input_columns[i];
       // look up metadata
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
-      auto& schema   = _metadata->get_schema(col.schema_idx);
+      auto& schema   = _metadata->get_schema(
+        _metadata->map_schema_index(col.schema_idx, rg.source_index), rg.source_index);
 
       auto [clock_rate, logical_type] =
         conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),
@@ -1565,9 +1578,9 @@ void reader::impl::create_global_chunk_info()
                                        col.schema_idx,
                                        chunk_info,
                                        list_bytes_per_row_est,
-                                       schema.type == BYTE_ARRAY and _strings_to_categorical));
+                                       schema.type == BYTE_ARRAY and _strings_to_categorical,
+                                       rg.source_index));
     }
-
     // Adjust for skip_rows when updating the remaining rows after the first group
     remaining_rows -=
       (skip_rows) ? std::min<int>(rg.start_row + row_group.num_rows - skip_rows, remaining_rows)

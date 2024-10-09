@@ -294,7 +294,8 @@ struct PageInfo {
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
   // indicator. instead the lengths for these are stored in the header.
-  int32_t lvl_bytes[level_type::NUM_LEVEL_TYPES];  // length of the rep/def levels (V2 header)
+  int32_t                                    // NOLINT
+    lvl_bytes[level_type::NUM_LEVEL_TYPES];  // length of the rep/def levels (V2 header)
   // Number of values in this data page or dictionary.
   // Important : the # of input values does not necessarily
   // correspond to the number of rows in the output. It just reflects the number
@@ -345,7 +346,7 @@ struct PageInfo {
   PageNestingDecodeInfo* nesting_decode;
 
   // level decode buffers
-  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
 
   // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
   int64_t temp_string_size;
@@ -394,13 +395,14 @@ struct ColumnChunkDesc {
                            uint8_t def_level_bits_,
                            uint8_t rep_level_bits_,
                            Compression codec_,
-                           thrust::optional<LogicalType> logical_type_,
+                           cuda::std::optional<LogicalType> logical_type_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
                            column_chunk_info const* chunk_info_,
                            float list_bytes_per_row_est_,
-                           bool strings_to_categorical_)
+                           bool strings_to_categorical_,
+                           int32_t src_file_idx_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -419,7 +421,8 @@ struct ColumnChunkDesc {
       src_col_schema(src_col_schema_),
       h_chunk_info(chunk_info_),
       list_bytes_per_row_est(list_bytes_per_row_est_),
-      is_strings_to_cat(strings_to_categorical_)
+      is_strings_to_cat(strings_to_categorical_),
+      src_file_idx(src_file_idx_)
 
   {
   }
@@ -429,21 +432,21 @@ struct ColumnChunkDesc {
   size_t num_values{};               // total number of values in this column
   size_t start_row{};                // file-wide, absolute starting row of this chunk
   uint32_t num_rows{};               // number of rows in this chunk
-  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
-  int16_t max_nesting_depth{};                       // max nesting depth of the output
-  int32_t type_length{};                             // type length from schema (for FLBA only)
-  Type physical_type{};                              // parquet physical data type
-  uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
-  int32_t num_data_pages{};                     // number of data pages
-  int32_t num_dict_pages{};                     // number of dictionary pages
+  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};   // max definition/repetition level  // NOLINT
+  int16_t max_nesting_depth{};                        // max nesting depth of the output
+  int32_t type_length{};                              // type length from schema (for FLBA only)
+  Type physical_type{};                               // parquet physical data type
+  uint8_t level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max   // NOLINT
+                                                      // definition/repetition levels
+  int32_t num_data_pages{};                           // number of data pages
+  int32_t num_dict_pages{};                           // number of dictionary pages
   PageInfo const* dict_page{};
-  string_index_pair* str_dict_index{};           // index for string dictionary
-  bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
-  void** column_data_base{};                     // base pointers of column data
-  void** column_string_base{};                   // base pointers of column string data
-  Compression codec{};                           // compressed codec enum
-  thrust::optional<LogicalType> logical_type{};  // logical type
+  string_index_pair* str_dict_index{};  // index for string dictionary
+  bitmask_type** valid_map_base{};      // base pointers of valid bit map for this column
+  void** column_data_base{};            // base pointers of column data
+  void** column_string_base{};          // base pointers of column string data
+  Compression codec{};                  // compressed codec enum
+  cuda::std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
@@ -456,6 +459,7 @@ struct ColumnChunkDesc {
 
   bool is_strings_to_cat{};    // convert strings to hashes
   bool is_large_string_col{};  // `true` if string data uses 64-bit offsets
+  int32_t src_file_idx{};      // source file index
 };
 
 /**
@@ -514,7 +518,6 @@ constexpr unsigned int kDictHashBits = 16;
 constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 
 struct EncPage;
-struct slot_type;
 
 // convert Encoding to a mask value
 constexpr uint32_t encoding_to_mask(Encoding encoding)
@@ -560,7 +563,8 @@ struct EncColumnChunk {
   uint8_t is_compressed;    //!< Nonzero if the chunk uses compression
   uint32_t dictionary_size;    //!< Size of dictionary page including header
   uint32_t ck_stat_size;       //!< Size of chunk-level statistics (included in 1st page header)
-  slot_type* dict_map_slots;   //!< Hash map storage for calculating dict encoding for this chunk
+  uint32_t dict_map_offset;    //!< Offset of the hash map storage for calculating dict encoding for
+                               //!< this chunk
   size_type dict_map_size;     //!< Size of dict_map_slots
   size_type num_dict_entries;  //!< Total number of entries in dictionary
   size_type
@@ -794,6 +798,18 @@ void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                          rmm::cuda_stream_view stream);
 
 /**
+ * @brief Writes the final offsets to the corresponding list and string buffer end addresses in a
+ * batched manner.
+ *
+ * @param offsets Host span of final offsets
+ * @param buff_addrs Host span of corresponding output col buffer end addresses
+ * @param stream CUDA stream to use
+ */
+void WriteFinalOffsets(host_span<size_type const> offsets,
+                       host_span<size_type* const> buff_addrs,
+                       rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading the string column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
@@ -999,46 +1015,6 @@ void CalculatePageFragments(device_span<PageFragment> frag,
  */
 void InitFragmentStatistics(device_span<statistics_group> groups,
                             device_span<PageFragment const> fragments,
-                            rmm::cuda_stream_view stream);
-
-/**
- * @brief Initialize per-chunk hash maps used for dictionary with sentinel values
- *
- * @param chunks Flat span of chunks to initialize hash maps for
- * @param stream CUDA stream to use
- */
-void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
-
-/**
- * @brief Insert chunk values into their respective hash maps
- *
- * @param frags Column fragments
- * @param stream CUDA stream to use
- */
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<PageFragment const> frags,
-                              rmm::cuda_stream_view stream);
-
-/**
- * @brief Compact dictionary hash map entries into chunk.dict_data
- *
- * @param chunks Flat span of chunks to compact hash maps for
- * @param stream CUDA stream to use
- */
-void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
-
-/**
- * @brief Get the Dictionary Indices for each row
- *
- * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
- * stored in input column [row]. Stores these indices into chunk.dict_index.
- *
- * Since dict_data itself contains indices into the original cudf column, this means that
- * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
- *
- * @param frags Column fragments
- * @param stream CUDA stream to use
- */
-void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
 /**

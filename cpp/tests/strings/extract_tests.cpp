@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
+#include "special_chars.h"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -200,6 +203,43 @@ TEST_F(StringsExtractTests, DotAll)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
 }
 
+TEST_F(StringsExtractTests, SpecialNewLines)
+{
+  auto input = cudf::test::strings_column_wrapper({"zzé" NEXT_LINE "qqq" LINE_SEPARATOR "zzé",
+                                                   "qqq" LINE_SEPARATOR "zzé\rlll",
+                                                   "zzé",
+                                                   "",
+                                                   "zzé" NEXT_LINE,
+                                                   "abc" PARAGRAPH_SEPARATOR "zzé\n"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto prog =
+    cudf::strings::regex_program::create("(^zzé$)", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results = cudf::strings::extract(view, *prog);
+  auto expected =
+    cudf::test::strings_column_wrapper({"", "", "zzé", "", "zzé", ""}, {0, 0, 1, 0, 1, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+
+  auto both_flags = static_cast<cudf::strings::regex_flags>(
+    cudf::strings::regex_flags::EXT_NEWLINE | cudf::strings::regex_flags::MULTILINE);
+  auto prog_ml = cudf::strings::regex_program::create("^(zzé)$", both_flags);
+  results      = cudf::strings::extract(view, *prog_ml);
+  expected =
+    cudf::test::strings_column_wrapper({"zzé", "zzé", "zzé", "", "zzé", "zzé"}, {1, 1, 1, 0, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+
+  prog = cudf::strings::regex_program::create("q(q.*l)l");
+  expected = cudf::test::strings_column_wrapper({"", "qq" LINE_SEPARATOR "zzé\rll", "", "", "", ""},
+                                                {0, 1, 0, 0, 0, 0});
+  results = cudf::strings::extract(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+  // expect no matches here since the newline(s) interrupts the pattern
+  prog = cudf::strings::regex_program::create("q(q.*l)l", cudf::strings::regex_flags::EXT_NEWLINE);
+  expected = cudf::test::strings_column_wrapper({"", "", "", "", "", ""}, {0, 0, 0, 0, 0, 0});
+  results  = cudf::strings::extract(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+}
+
 TEST_F(StringsExtractTests, EmptyExtractTest)
 {
   std::vector<char const*> h_strings{nullptr, "AAA", "AAA_A", "AAA_AAA_", "A__", ""};
@@ -235,8 +275,8 @@ TEST_F(StringsExtractTests, ExtractAllTest)
 
   auto pattern = std::string("(\\d+) (\\w+)");
 
-  bool valids[] = {true, true, true, false, false, false, true};
-  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  std::array valids{true, true, true, false, false, false, true};
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"123", "banana", "7", "eleven"},
                 LCW{"41", "apple"},
                 LCW{"6", "péar", "0", "pair"},
@@ -244,7 +284,7 @@ TEST_F(StringsExtractTests, ExtractAllTest)
                 LCW{},
                 LCW{},
                 LCW{"4", "paré"}},
-               valids);
+               valids.data());
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::extract_all_record(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);

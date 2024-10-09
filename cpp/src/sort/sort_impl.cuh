@@ -20,8 +20,7 @@
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf {
 namespace detail {

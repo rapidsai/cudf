@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import itertools
 
+import pylibcudf as plc
 import pytest
 
 import polars as pl
-
-import cudf._lib.pylibcudf as plc
 
 from cudf_polars import translate_ir
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -70,7 +69,7 @@ def test_setsorted(descending, nulls_last, with_nulls):
 
     df = translate_ir(q._ldf.visit()).evaluate(cache={})
 
-    (a,) = df.columns
+    a = df.column_map["a"]
 
     assert a.is_sorted == plc.types.Sorted.YES
     null_order = (

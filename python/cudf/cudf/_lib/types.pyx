@@ -7,19 +7,19 @@ import pandas as pd
 
 from libcpp.memory cimport make_shared, shared_ptr
 
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
+cimport pylibcudf.libcudf.types as libcudf_types
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
+
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_order,
     underlying_type_t_sorted,
 )
 
+import pylibcudf
+
 import cudf
-from cudf._lib import pylibcudf
 
 
 class TypeId(IntEnum):

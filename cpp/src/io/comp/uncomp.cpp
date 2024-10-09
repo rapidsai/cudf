@@ -21,6 +21,7 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <cuda_runtime.h>
@@ -41,7 +42,7 @@ struct gz_file_header_s {
   uint8_t id2;        // 0x8b
   uint8_t comp_mthd;  // compression method (0-7=reserved, 8=deflate)
   uint8_t flags;      // flags (GZIPHeaderFlag)
-  uint8_t mtime[4];   // If non-zero: modification time (Unix format)
+  uint8_t mtime[4];   // If non-zero: modification time (Unix format)  // NOLINT
   uint8_t xflags;     // Extra compressor-specific flags
   uint8_t os;         // OS id
 };
@@ -102,7 +103,7 @@ struct zip_lfh_s {
 };
 
 struct bz2_file_header_s {
-  uint8_t sig[3];  // "BZh"
+  uint8_t sig[3];  // "BZh" // NOLINT
   uint8_t blksz;   // block size 1..9 in 100kB units (post-RLE)
 };
 
@@ -510,7 +511,7 @@ size_t decompress_zstd(host_span<uint8_t const> src,
 {
   // Init device span of spans (source)
   auto const d_src =
-    cudf::detail::make_device_uvector_async(src, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
   auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
   hd_srcs[0]   = d_src;
   hd_srcs.host_to_device_async(stream);

@@ -5,17 +5,17 @@
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../;
 
 # Common setup steps shared by Python test jobs
-source ./ci/test_python_common.sh
+source ./ci/test_python_common.sh test_python_cudf
 
 rapids-logger "Check GPU usage"
 nvidia-smi
-
+rapids-print-env
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
 rapids-logger "pytest pylibcudf"
-pushd python/cudf/cudf/pylibcudf_tests
+pushd python/pylibcudf/pylibcudf/tests
 python -m pytest \
   --cache-clear \
   --dist=worksteal \

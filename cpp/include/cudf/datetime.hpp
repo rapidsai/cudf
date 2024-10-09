@@ -17,10 +17,11 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 
@@ -38,10 +39,27 @@ namespace datetime {
  */
 
 /**
+ * @brief Types of datetime components that may be extracted.
+ */
+enum class datetime_component : uint8_t {
+  YEAR,
+  MONTH,
+  DAY,
+  WEEKDAY,
+  HOUR,
+  MINUTE,
+  SECOND,
+  MILLISECOND,
+  MICROSECOND,
+  NANOSECOND
+};
+
+/**
  * @brief  Extracts year from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t years
@@ -49,13 +67,15 @@ namespace datetime {
  */
 std::unique_ptr<cudf::column> extract_year(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts month from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t months
@@ -63,13 +83,15 @@ std::unique_ptr<cudf::column> extract_year(
  */
 std::unique_ptr<cudf::column> extract_month(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts day from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t days
@@ -77,13 +99,15 @@ std::unique_ptr<cudf::column> extract_month(
  */
 std::unique_ptr<cudf::column> extract_day(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts a weekday from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t days
@@ -91,13 +115,15 @@ std::unique_ptr<cudf::column> extract_day(
  */
 std::unique_ptr<cudf::column> extract_weekday(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts hour from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t hours
@@ -105,13 +131,15 @@ std::unique_ptr<cudf::column> extract_weekday(
  */
 std::unique_ptr<cudf::column> extract_hour(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts minute from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t minutes
@@ -119,13 +147,15 @@ std::unique_ptr<cudf::column> extract_hour(
  */
 std::unique_ptr<cudf::column> extract_minute(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts second from any datetime type and returns an int16_t
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t seconds
@@ -133,7 +163,8 @@ std::unique_ptr<cudf::column> extract_minute(
  */
 std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts millisecond fraction from any datetime type and returns an int16_t
@@ -143,6 +174,7 @@ std::unique_ptr<cudf::column> extract_second(
  * For example, the millisecond fraction of 1.234567890 seconds is 234.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t milliseconds
@@ -150,7 +182,8 @@ std::unique_ptr<cudf::column> extract_second(
  */
 std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts microsecond fraction from any datetime type and returns an int16_t
@@ -160,6 +193,7 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  * For example, the microsecond fraction of 1.234567890 seconds is 567.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t microseconds
@@ -167,7 +201,8 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  */
 std::unique_ptr<cudf::column> extract_microsecond_fraction(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Extracts nanosecond fraction from any datetime type and returns an int16_t
@@ -177,6 +212,7 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  * For example, the nanosecond fraction of 1.234567890 seconds is 890.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t nanoseconds
@@ -184,7 +220,26 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  */
 std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Extracts the specified datetime component from any datetime type and
+ * returns an int16_t cudf::column.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param component The datetime component to extract
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t datetime component
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_datetime_component(
+  cudf::column_view const& column,
+  datetime_component component,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 /**
@@ -198,6 +253,7 @@ std::unique_ptr<cudf::column> extract_nanosecond_fraction(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column containing last day of the month as TIMESTAMP_DAYS
@@ -205,13 +261,15 @@ std::unique_ptr<cudf::column> extract_nanosecond_fraction(
  */
 std::unique_ptr<cudf::column> last_day_of_month(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Computes the day number since the start of the year from the datetime and
  * returns an int16_t cudf::column. The value is between [1, {365-366}]
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of datatype INT16 containing the day number since the start of the year
@@ -219,7 +277,8 @@ std::unique_ptr<cudf::column> last_day_of_month(
  */
 std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Adds or subtracts a number of months from the datetime type and returns a
@@ -247,6 +306,7 @@ std::unique_ptr<cudf::column> day_of_year(
  *
  * @param timestamps cudf::column_view of timestamp type
  * @param months cudf::column_view of integer type containing the number of months to add
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of timestamp type containing the computed timestamps
@@ -254,7 +314,8 @@ std::unique_ptr<cudf::column> day_of_year(
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::column_view const& months,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Adds or subtracts a number of months from the datetime type and returns a
@@ -282,6 +343,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  *
  * @param timestamps cudf::column_view of timestamp type
  * @param months cudf::scalar of integer type containing the number of months to add
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @return cudf::column of timestamp type containing the computed timestamps
@@ -289,7 +351,8 @@ std::unique_ptr<cudf::column> add_calendrical_months(
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::scalar const& months,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Check if the year of the given date is a leap year
@@ -299,6 +362,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  * `output[i] is null` if `column[i]` is null
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of datatype BOOL8 truth value of the corresponding date
@@ -306,7 +370,8 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  */
 std::unique_ptr<cudf::column> is_leap_year(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Extract the number of days in the month
@@ -317,12 +382,14 @@ std::unique_ptr<cudf::column> is_leap_year(
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  *
  * @param column cudf::column_view of the input datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  * @return cudf::column of datatype INT16 of days in month of the corresponding date
  */
 std::unique_ptr<cudf::column> days_in_month(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief  Returns the quarter of the date
@@ -333,12 +400,14 @@ std::unique_ptr<cudf::column> days_in_month(
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  *
  * @param column The input column containing datetime values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  * @return A column of INT16 type indicating which quarter the date is in
  */
 std::unique_ptr<cudf::column> extract_quarter(
   cudf::column_view const& column,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Fixed frequencies supported by datetime rounding functions ceil, floor, round.
@@ -359,6 +428,7 @@ enum class rounding_frequency : int32_t {
  *
  * @param column cudf::column_view of the input datetime values
  * @param freq rounding_frequency indicating the frequency to round up to
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
@@ -367,13 +437,15 @@ enum class rounding_frequency : int32_t {
 std::unique_ptr<cudf::column> ceil_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Round datetimes down to the nearest multiple of the given frequency.
  *
  * @param column cudf::column_view of the input datetime values
  * @param freq rounding_frequency indicating the frequency to round down to
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
@@ -382,13 +454,15 @@ std::unique_ptr<cudf::column> ceil_datetimes(
 std::unique_ptr<cudf::column> floor_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Round datetimes to the nearest multiple of the given frequency.
  *
  * @param column cudf::column_view of the input datetime values
  * @param freq rounding_frequency indicating the frequency to round to
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
@@ -397,7 +471,8 @@ std::unique_ptr<cudf::column> floor_datetimes(
 std::unique_ptr<cudf::column> round_datetimes(
   cudf::column_view const& column,
   rounding_frequency freq,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

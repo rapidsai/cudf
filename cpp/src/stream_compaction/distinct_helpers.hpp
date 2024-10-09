@@ -18,10 +18,10 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
@@ -57,7 +57,7 @@ using hash_set_type =
                                         cudf::experimental::row::hash::device_row_hasher<
                                           cudf::hashing::detail::default_hash,
                                           cudf::nullate::DYNAMIC>>,
-                   cudf::detail::cuco_allocator,
+                   cudf::detail::cuco_allocator<char>,
                    cuco::storage<1>>;
 
 /**

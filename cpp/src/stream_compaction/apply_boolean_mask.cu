@@ -24,10 +24,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 
@@ -91,9 +91,10 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
  */
 std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           column_view const& boolean_mask,
+                                          rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(input, boolean_mask, cudf::get_default_stream(), mr);
+  return detail::apply_boolean_mask(input, boolean_mask, stream, mr);
 }
 }  // namespace cudf

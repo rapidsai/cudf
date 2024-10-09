@@ -81,7 +81,7 @@ def read_json(
 
         If str, this value will be used as the ``engine`` argument
         when :func:`cudf.read_json` is used to create each partition.
-        If a :obj:`~typing.Callable`, this value will be used as the
+        If a :obj:`~collections.abc.Callable`, this value will be used as the
         underlying function used to create each partition from JSON
         data. The default value is "auto", so that
         ``engine=partial(cudf.read_json, engine="auto")`` will be

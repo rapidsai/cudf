@@ -19,9 +19,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
@@ -47,7 +46,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                                          nulls_equal,
                                                          nans_equal,
                                                          stream,
-                                                         rmm::mr::get_current_device_resource());
+                                                         cudf::get_current_device_resource_ref());
 
   // The only difference between this implementation and the unstable version
   // is that the stable implementation must retain the input order. The

@@ -8,10 +8,19 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import assert_eq
-from cudf.testing._utils import ALL_TYPES, DATETIME_TYPES, NUMERIC_TYPES
+from cudf.testing._utils import (
+    ALL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    expect_warning_if,
+)
 
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
@@ -106,6 +115,15 @@ def test_melt_str_scalar_id_var():
         id_vars="index",
         var_name="column",
         value_name="value",
+    )
+    assert_eq(result, expected)
+
+
+def test_melt_falsy_var_name():
+    df = cudf.DataFrame({"A": ["a", "b", "c"], "B": [1, 3, 5], "C": [2, 4, 6]})
+    result = cudf.melt(df, id_vars=["A"], value_vars=["B"], var_name="")
+    expected = pd.melt(
+        df.to_pandas(), id_vars=["A"], value_vars=["B"], var_name=""
     )
     assert_eq(result, expected)
 
@@ -220,7 +238,7 @@ def test_df_stack_multiindex_column_axis(columns, index, level, dropna):
 
     with pytest.warns(FutureWarning):
         got = gdf.stack(level=level, dropna=dropna, future_stack=False)
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(PANDAS_GE_220, FutureWarning):
         expect = pdf.stack(level=level, dropna=dropna, future_stack=False)
 
     assert_eq(expect, got, check_dtype=False)
@@ -265,7 +283,7 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
 
     df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
 
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(PANDAS_GE_220, FutureWarning):
         expect = df.stack(level=level, future_stack=False)
     gdf = cudf.from_pandas(df)
     with pytest.warns(FutureWarning):

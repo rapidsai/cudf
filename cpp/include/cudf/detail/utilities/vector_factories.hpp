@@ -27,13 +27,13 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <vector>
 
@@ -101,12 +101,7 @@ rmm::device_uvector<T> make_device_uvector_async(host_span<T const> source_data,
                                                  rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(source_data.size(), stream, mr);
-  auto const is_pinned = source_data.is_device_accessible();
-  cuda_memcpy_async(ret.data(),
-                    source_data.data(),
-                    source_data.size() * sizeof(T),
-                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
-                    stream);
+  cuda_memcpy_async<T>(ret, source_data, stream);
   return ret;
 }
 
@@ -405,13 +400,8 @@ host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view str
 template <typename T>
 host_vector<T> make_host_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 {
-  auto result          = make_host_vector<T>(v.size(), stream);
-  auto const is_pinned = result.get_allocator().is_device_accessible();
-  cuda_memcpy_async(result.data(),
-                    v.data(),
-                    v.size() * sizeof(T),
-                    is_pinned ? host_memory_kind::PINNED : host_memory_kind::PAGEABLE,
-                    stream);
+  auto result = make_host_vector<T>(v.size(), stream);
+  cuda_memcpy_async<T>(result, v, stream);
   return result;
 }
 

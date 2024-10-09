@@ -7,13 +7,15 @@ from cudf.core.buffer import acquire_spill_lock
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-cimport cudf._lib.pylibcudf.libcudf.datetime as libcudf_datetime
+cimport pylibcudf.libcudf.datetime as libcudf_datetime
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.filling cimport calendrical_month_sequence
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.datetime import DatetimeComponent
+
 from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.filling cimport calendrical_month_sequence
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
@@ -40,38 +42,34 @@ def extract_datetime_component(Column col, object field):
 
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
+    cdef libcudf_datetime.datetime_component component
 
-    with nogil:
-        if field == "year":
-            c_result = move(libcudf_datetime.extract_year(col_view))
-        elif field == "month":
-            c_result = move(libcudf_datetime.extract_month(col_view))
-        elif field == "day":
-            c_result = move(libcudf_datetime.extract_day(col_view))
-        elif field == "weekday":
-            c_result = move(libcudf_datetime.extract_weekday(col_view))
-        elif field == "hour":
-            c_result = move(libcudf_datetime.extract_hour(col_view))
-        elif field == "minute":
-            c_result = move(libcudf_datetime.extract_minute(col_view))
-        elif field == "second":
-            c_result = move(libcudf_datetime.extract_second(col_view))
-        elif field == "millisecond":
-            c_result = move(
-                libcudf_datetime.extract_millisecond_fraction(col_view)
-            )
-        elif field == "microsecond":
-            c_result = move(
-                libcudf_datetime.extract_microsecond_fraction(col_view)
-            )
-        elif field == "nanosecond":
-            c_result = move(
-                libcudf_datetime.extract_nanosecond_fraction(col_view)
-            )
-        elif field == "day_of_year":
+    component_names = {
+        "year": DatetimeComponent.YEAR,
+        "month": DatetimeComponent.MONTH,
+        "day": DatetimeComponent.DAY,
+        "weekday": DatetimeComponent.WEEKDAY,
+        "hour": DatetimeComponent.HOUR,
+        "minute": DatetimeComponent.MINUTE,
+        "second": DatetimeComponent.SECOND,
+        "millisecond": DatetimeComponent.MILLISECOND,
+        "microsecond": DatetimeComponent.MICROSECOND,
+        "nanosecond": DatetimeComponent.NANOSECOND,
+    }
+    if field == "day_of_year":
+        with nogil:
             c_result = move(libcudf_datetime.day_of_year(col_view))
-        else:
-            raise ValueError(f"Invalid datetime field: '{field}'")
+    elif field in component_names:
+        component = component_names[field]
+        with nogil:
+            c_result = move(
+                libcudf_datetime.extract_datetime_component(
+                    col_view,
+                    component
+                )
+            )
+    else:
+        raise ValueError(f"Invalid field: '{field}'")
 
     result = Column.from_unique_ptr(move(c_result))
 

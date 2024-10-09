@@ -7,14 +7,17 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+
 rapids-logger "Generate Python testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
-
+FILE_KEY=$1
 rapids-dependency-file-generator \
   --output conda \
-  --file-key test_python \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
+  --file-key ${FILE_KEY} \
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
+    | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 
@@ -37,4 +40,5 @@ rapids-print-env
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  cudf libcudf
+  "cudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "libcudf=${RAPIDS_VERSION_MAJOR_MINOR}"

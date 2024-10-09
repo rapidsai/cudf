@@ -36,19 +36,10 @@ static double constexpr CUCO_DESIRED_LOAD_FACTOR = 0.5;
  * later expects a standard C++ `Allocator` interface. This allocator helper provides a simple way
  * to handle cuco memory allocation/deallocation with the given `stream` and the rmm default memory
  * resource.
+ *
+ * @tparam T The allocator's value type.
  */
-class cuco_allocator
-  : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<char>> {
-  /// Default stream-ordered allocator type
-  using default_allocator = rmm::mr::polymorphic_allocator<char>;
-  /// The base allocator adaptor type
-  using base_type = rmm::mr::stream_allocator_adaptor<default_allocator>;
-
- public:
-  /**
-   * @brief Constructs the allocator adaptor with the given `stream`
-   */
-  cuco_allocator(rmm::cuda_stream_view stream) : base_type{default_allocator{}, stream} {}
-};
+template <typename T>
+using cuco_allocator = rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<T>>;
 
 }  // namespace cudf::detail

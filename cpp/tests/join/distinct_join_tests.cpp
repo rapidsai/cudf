@@ -29,6 +29,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <limits>
 #include <vector>
@@ -44,7 +45,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> get_left_indices(cudf::siz
   auto sequence = std::vector<cudf::size_type>(size);
   std::iota(sequence.begin(), sequence.end(), 0);
   auto indices = cudf::detail::make_device_uvector_sync(
-    sequence, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    sequence, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   return std::make_unique<rmm::device_uvector<cudf::size_type>>(std::move(indices));
 }
 
@@ -313,7 +314,7 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
 
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
   auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
+  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -361,7 +362,7 @@ TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
 
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
   auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
+  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -397,7 +398,7 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
 
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
   auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
+  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -422,7 +423,7 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
 
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
   auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
+  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {true, true, true, true, true}};
   strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
@@ -467,7 +468,7 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
 
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
   auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
+  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   auto col0_gold_names_col = strcol_wrapper{
     "Samuel Vimes", "Detritus", "Carrot Ironfoundersson", "Samuel Vimes", "Angua von Überwald"};

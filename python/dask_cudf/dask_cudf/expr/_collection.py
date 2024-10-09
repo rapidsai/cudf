@@ -15,6 +15,7 @@ from dask_expr._util import _raise_if_object_series
 
 from dask import config
 from dask.dataframe.core import is_dataframe_like
+from dask.typing import no_default
 
 import cudf
 
@@ -49,8 +50,24 @@ class CudfFrameBase(FrameBase):
 
         return self.to_backend("pandas", **kwargs)
 
+    def _prepare_cov_corr(self, min_periods, numeric_only):
+        # Upstream version of this method sets min_periods
+        # to 2 by default (which is not supported by cudf)
+        # TODO: Remove when cudf supports both min_periods
+        # and numeric_only
+        # See: https://github.com/rapidsai/cudf/issues/12626
+        # See: https://github.com/rapidsai/cudf/issues/9009
+        self._meta.cov(min_periods=min_periods)
+
+        frame = self
+        if numeric_only:
+            numerics = self._meta._get_numeric_data()
+            if len(numerics.columns) != len(self.columns):
+                frame = frame[list(numerics.columns)]
+        return frame, min_periods
+
     # var can be removed if cudf#15179 is addressed.
-    # See: https://github.com/rapidsai/cudf/issues/15179
+    # See: https://github.com/rapidsai/cudf/issues/14935
     def var(
         self,
         axis=0,
@@ -71,6 +88,17 @@ class CudfFrameBase(FrameBase):
         return new_collection(
             frame.expr.var(
                 axis, skipna, ddof, numeric_only, split_every=split_every
+            )
+        )
+
+    def rename_axis(
+        self, mapper=no_default, index=no_default, columns=no_default, axis=0
+    ):
+        from dask_cudf.expr._expr import RenameAxisCudf
+
+        return new_collection(
+            RenameAxisCudf(
+                self, mapper=mapper, index=index, columns=columns, axis=axis
             )
         )
 
@@ -186,27 +214,58 @@ get_collection_type.register(cudf.BaseIndex, lambda _: Index)
 ##
 
 
-try:
-    from dask_expr._backends import create_array_collection
+def _create_array_collection_with_meta(expr):
+    # NOTE: This is the GPU compatible version of
+    # `new_dd_object` for DataFrame -> Array conversion.
+    # This can be removed if dask#11017 is resolved
+    # (See: https://github.com/dask/dask/issues/11017)
+    import numpy as np
 
-    @get_collection_type.register_lazy("cupy")
-    def _register_cupy():
-        import cupy
+    import dask.array as da
+    from dask.blockwise import Blockwise
+    from dask.highlevelgraph import HighLevelGraph
 
-        @get_collection_type.register(cupy.ndarray)
-        def get_collection_type_cupy_array(_):
-            return create_array_collection
+    result = expr.optimize()
+    dsk = result.__dask_graph__()
+    name = result._name
+    meta = result._meta
+    divisions = result.divisions
+    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
+        (d,) for d in meta.shape[1:]
+    )
+    if len(chunks) > 1:
+        if isinstance(dsk, HighLevelGraph):
+            layer = dsk.layers[name]
+        else:
+            # dask-expr provides a dict only
+            layer = dsk
+        if isinstance(layer, Blockwise):
+            layer.new_axes["j"] = chunks[1][0]
+            layer.output_indices = layer.output_indices + ("j",)
+        else:
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                layer[(name, i) + suffix] = layer.pop((name, i))
 
-    @get_collection_type.register_lazy("cupyx")
-    def _register_cupyx():
-        # Needed for cuml
-        from cupyx.scipy.sparse import spmatrix
+    return da.Array(dsk, name=name, chunks=chunks, meta=meta)
 
-        @get_collection_type.register(spmatrix)
-        def get_collection_type_csr_matrix(_):
-            return create_array_collection
 
-except ImportError:
-    # Older version of dask-expr.
-    # Implicit conversion to array wont work.
-    pass
+@get_collection_type.register_lazy("cupy")
+def _register_cupy():
+    import cupy
+
+    get_collection_type.register(
+        cupy.ndarray,
+        lambda _: _create_array_collection_with_meta,
+    )
+
+
+@get_collection_type.register_lazy("cupyx")
+def _register_cupyx():
+    # Needed for cuml
+    from cupyx.scipy.sparse import spmatrix
+
+    get_collection_type.register(
+        spmatrix,
+        lambda _: _create_array_collection_with_meta,
+    )

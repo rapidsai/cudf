@@ -34,6 +34,13 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean normalizeWhitespace;
   private final boolean mixedTypesAsStrings;
   private final boolean keepStringQuotes;
+  private final boolean strictValidation;
+  private final boolean allowLeadingZeros;
+  private final boolean allowNonNumericNumbers;
+  private final boolean allowUnquotedControlChars;
+  private final boolean cudfPruneSchema;
+  private final boolean experimental;
+  private final byte lineDelimiter;
 
   private JSONOptions(Builder builder) {
     super(builder);
@@ -44,6 +51,21 @@ public final class JSONOptions extends ColumnFilterOptions {
     normalizeWhitespace = builder.normalizeWhitespace;
     mixedTypesAsStrings = builder.mixedTypesAsStrings;
     keepStringQuotes = builder.keepQuotes;
+    strictValidation = builder.strictValidation;
+    allowLeadingZeros = builder.allowLeadingZeros;
+    allowNonNumericNumbers = builder.allowNonNumericNumbers;
+    allowUnquotedControlChars = builder.allowUnquotedControlChars;
+    cudfPruneSchema = builder.cudfPruneSchema;
+    experimental = builder.experimental;
+    lineDelimiter = builder.lineDelimiter;
+  }
+
+  public boolean shouldCudfPruneSchema() {
+    return cudfPruneSchema;
+  }
+
+  public byte getLineDelimiter() {
+    return lineDelimiter;
   }
 
   public boolean isDayFirst() {
@@ -75,6 +97,26 @@ public final class JSONOptions extends ColumnFilterOptions {
     return keepStringQuotes;
   }
 
+  public boolean strictValidation() {
+    return strictValidation;
+  }
+
+  public boolean leadingZerosAllowed() {
+    return allowLeadingZeros;
+  }
+
+  public boolean nonNumericNumbersAllowed() {
+    return allowNonNumericNumbers;
+  }
+
+  public boolean unquotedControlChars() {
+    return allowUnquotedControlChars;
+  }
+
+  public boolean experimental() {
+    return experimental;
+  }
+
   @Override
   String[] getIncludeColumnNames() {
     throw new UnsupportedOperationException("JSON reader didn't support column prune");
@@ -85,6 +127,10 @@ public final class JSONOptions extends ColumnFilterOptions {
   }
 
   public static final class Builder  extends ColumnFilterOptions.Builder<JSONOptions.Builder> {
+    private boolean strictValidation = false;
+    private boolean allowUnquotedControlChars = true;
+    private boolean allowNonNumericNumbers = false;
+    private boolean allowLeadingZeros = false;
     private boolean dayFirst = false;
     private boolean lines = true;
 
@@ -95,10 +141,70 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean mixedTypesAsStrings = false;
     private boolean keepQuotes = false;
 
+    private boolean cudfPruneSchema = false;
+    private boolean experimental = false;
+    private byte lineDelimiter = '\n';
+
+    public Builder withCudfPruneSchema(boolean prune) {
+      cudfPruneSchema = prune;
+      return this;
+    }
+
+    public Builder withLineDelimiter(char delimiter) {
+      if (delimiter > Byte.MAX_VALUE) {
+        throw new IllegalArgumentException("Only basic ASCII values are supported as line delimiters " + delimiter);
+      }
+      lineDelimiter = (byte)delimiter;
+      return this;
+    }
+
+    /**
+     * Should json validation be strict or not
+     */
+    public Builder withStrictValidation(boolean isAllowed) {
+      strictValidation = isAllowed;
+      return this;
+    }
+
+    /**
+     * Should experimental features be enabled or not
+     */
+    public Builder withExperimental(boolean isAllowed) {
+      experimental = isAllowed;
+      return this;
+    }
+
+    /**
+     * Should leading zeros on numbers be allowed or not. Strict validation
+     * must be enabled for this to have any effect.
+     */
+    public Builder withLeadingZeros(boolean isAllowed) {
+      allowLeadingZeros = isAllowed;
+      return this;
+    }
+
+    /**
+     * Should non-numeric numbers be allowed or not. Strict validation
+     * must be enabled for this to have any effect.
+     */
+    public Builder withNonNumericNumbers(boolean isAllowed) {
+      allowNonNumericNumbers = isAllowed;
+      return this;
+    }
+
+    /**
+     * Should unquoted control chars be allowed in strings. Strict validation
+     * must be enabled for this to have any effect.
+     */
+    public Builder withUnquotedControlChars(boolean isAllowed) {
+      allowUnquotedControlChars = isAllowed;
+      return this;
+    }
+
     /**
      * Whether to parse dates as DD/MM versus MM/DD
      * @param dayFirst true: DD/MM, false, MM/DD
-     * @return
+     * @return builder for chaining
      */
     public Builder withDayFirst(boolean dayFirst) {
       this.dayFirst = dayFirst;

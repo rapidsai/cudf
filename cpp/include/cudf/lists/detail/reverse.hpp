@@ -17,8 +17,7 @@
 
 #include <cudf/lists/reverse.hpp>
 #include <cudf/utilities/export.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace lists::detail {

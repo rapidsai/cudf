@@ -40,8 +40,8 @@ TEST_F(StringsConvertTest, IPv4ToIntegers)
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::ipv4_to_integers(strings_view);
 
-  std::vector<int64_t> h_expected{0, 0, 0, 698875905, 2130706433, 700776449, 3232235521};
-  cudf::test::fixed_width_column_wrapper<int64_t> expected(
+  std::vector<uint32_t> h_expected{0, 0, 0, 698875905, 2130706433, 700776449, 3232235521};
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected(
     h_expected.cbegin(),
     h_expected.cend(),
     thrust::make_transform_iterator(h_strings.begin(),
@@ -59,8 +59,8 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
     thrust::make_transform_iterator(h_strings.begin(),
                                     [](auto const str) { return str != nullptr; }));
 
-  std::vector<int64_t> h_column{3232235521, 167772161, 0, 0, 700055553, 700776449};
-  cudf::test::fixed_width_column_wrapper<int64_t> column(
+  std::vector<uint32_t> h_column{3232235521, 167772161, 0, 0, 700055553, 700776449};
+  cudf::test::fixed_width_column_wrapper<uint32_t> column(
     h_column.cbegin(),
     h_column.cend(),
     thrust::make_transform_iterator(h_strings.begin(),

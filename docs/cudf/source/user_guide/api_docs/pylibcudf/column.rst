@@ -2,5 +2,5 @@
 Column
 ======
 
-.. automodule:: cudf._lib.pylibcudf.column
+.. automodule:: pylibcudf.column
    :members:

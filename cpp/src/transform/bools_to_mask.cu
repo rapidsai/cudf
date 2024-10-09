@@ -23,11 +23,11 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -59,10 +59,10 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
-  column_view const& input, rmm::device_async_resource_ref mr)
+  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::bools_to_mask(input, cudf::get_default_stream(), mr);
+  return detail::bools_to_mask(input, stream, mr);
 }
 
 }  // namespace cudf

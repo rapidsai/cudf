@@ -18,8 +18,7 @@
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <algorithm>
 #include <filesystem>
@@ -39,7 +38,7 @@ std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 struct timezone_file_header {
   uint32_t magic;          ///< "TZif"
   uint8_t version;         ///< 0:version1, '2':version2, '3':version3
-  uint8_t reserved15[15];  ///< unused, reserved for future use
+  uint8_t reserved15[15];  ///< unused, reserved for future use // NOLINT
   uint32_t isutccnt;       ///< number of UTC/local indicators contained in the body
   uint32_t isstdcnt;       ///< number of standard/wall indicators contained in the body
   uint32_t leapcnt;        ///< number of leap second records contained in the body
@@ -381,11 +380,11 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
 
 std::unique_ptr<table> make_timezone_transition_table(std::optional<std::string_view> tzif_dir,
                                                       std::string_view timezone_name,
+                                                      rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::make_timezone_transition_table(
-    tzif_dir, timezone_name, cudf::get_default_stream(), mr);
+  return detail::make_timezone_transition_table(tzif_dir, timezone_name, stream, mr);
 }
 
 namespace detail {

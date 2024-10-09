@@ -5,7 +5,8 @@ from libcpp cimport bool
 from cudf._lib.column cimport Column
 from cudf._lib.utils cimport data_from_pylibcudf_table
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf.core.buffer import acquire_spill_lock
 
 
@@ -22,9 +23,9 @@ def concat_columns(object columns):
 def concat_tables(object tables, bool ignore_index=False):
     plc_tables = []
     for table in tables:
-        cols = table._data.columns
+        cols = table._columns
         if not ignore_index:
-            cols = table._index._data.columns + cols
+            cols = table._index._columns + cols
         plc_tables.append(pylibcudf.Table([c.to_pylibcudf(mode="read") for c in cols]))
 
     return data_from_pylibcudf_table(
