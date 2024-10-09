@@ -74,11 +74,10 @@ class Expr(Node):
     """An abstract expression object."""
 
     __slots__ = ("dtype",)
+    _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     dtype: plc.DataType
     """Data type of the expression."""
     children: tuple[Expr, ...] = ()
-    """Children of the expression."""
-    _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
 
     # Constructor must take arguments in order (*_non_child, *children)
     def __init__(self, dtype: plc.DataType) -> None:
@@ -878,18 +877,6 @@ class StringFunction(Expr):
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")
-    _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
-        pl_expr.TemporalFunction.Year: plc.datetime.DatetimeComponent.YEAR,
-        pl_expr.TemporalFunction.Month: plc.datetime.DatetimeComponent.MONTH,
-        pl_expr.TemporalFunction.Day: plc.datetime.DatetimeComponent.DAY,
-        pl_expr.TemporalFunction.WeekDay: plc.datetime.DatetimeComponent.WEEKDAY,
-        pl_expr.TemporalFunction.Hour: plc.datetime.DatetimeComponent.HOUR,
-        pl_expr.TemporalFunction.Minute: plc.datetime.DatetimeComponent.MINUTE,
-        pl_expr.TemporalFunction.Second: plc.datetime.DatetimeComponent.SECOND,
-        pl_expr.TemporalFunction.Millisecond: plc.datetime.DatetimeComponent.MILLISECOND,
-        pl_expr.TemporalFunction.Microsecond: plc.datetime.DatetimeComponent.MICROSECOND,
-        pl_expr.TemporalFunction.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
-    }
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
@@ -906,6 +893,19 @@ class TemporalFunction(Expr):
         self.children = children
         if self.name not in self._COMPONENT_MAP:
             raise NotImplementedError(f"Temporal function {self.name}")
+
+    _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
+        pl_expr.TemporalFunction.Year: plc.datetime.DatetimeComponent.YEAR,
+        pl_expr.TemporalFunction.Month: plc.datetime.DatetimeComponent.MONTH,
+        pl_expr.TemporalFunction.Day: plc.datetime.DatetimeComponent.DAY,
+        pl_expr.TemporalFunction.WeekDay: plc.datetime.DatetimeComponent.WEEKDAY,
+        pl_expr.TemporalFunction.Hour: plc.datetime.DatetimeComponent.HOUR,
+        pl_expr.TemporalFunction.Minute: plc.datetime.DatetimeComponent.MINUTE,
+        pl_expr.TemporalFunction.Second: plc.datetime.DatetimeComponent.SECOND,
+        pl_expr.TemporalFunction.Millisecond: plc.datetime.DatetimeComponent.MILLISECOND,
+        pl_expr.TemporalFunction.Microsecond: plc.datetime.DatetimeComponent.MICROSECOND,
+        pl_expr.TemporalFunction.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
+    }
 
     def do_evaluate(
         self,
@@ -989,6 +989,23 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
+    def __init__(
+        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
+    ) -> None:
+        super().__init__(dtype)
+        self.name = name
+        self.options = options
+        self.children = children
+
+        if self.name not in UnaryFunction._supported_fns:
+            raise NotImplementedError(f"Unary function {name=}")
+        if self.name in UnaryFunction._supported_cum_aggs:
+            (reverse,) = self.options
+            if reverse:
+                raise NotImplementedError(
+                    "reverse=True is not supported for cumulative aggregations"
+                )
+
     # Note: log, and pow are handled via translation to binops
     _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
         "sin": plc.unary.UnaryOperator.SIN,
@@ -1033,23 +1050,6 @@ class UnaryFunction(Expr):
     _supported_fns = frozenset().union(
         _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
     )
-
-    def __init__(
-        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
-    ) -> None:
-        super().__init__(dtype)
-        self.name = name
-        self.options = options
-        self.children = children
-
-        if self.name not in UnaryFunction._supported_fns:
-            raise NotImplementedError(f"Unary function {name=}")
-        if self.name in UnaryFunction._supported_cum_aggs:
-            (reverse,) = self.options
-            if reverse:
-                raise NotImplementedError(
-                    "reverse=True is not supported for cumulative aggregations"
-                )
 
     def do_evaluate(
         self,
