@@ -184,8 +184,10 @@ def execute_with_cudf(
             translator = Translator(nt, debug_mode=debug_mode)
             ir = translator.translate_ir()
             if debug_mode and len(translator.errors):
-                print(set(translator.errors))
-                raise NotImplementedError("Query contained unsupported operations")
+                unique_errors = set(translator.errors)
+                raise NotImplementedError(
+                    "Query contained unsupported operations", unique_errors
+                )
             nt.set_udf(
                 partial(
                     _callback,
