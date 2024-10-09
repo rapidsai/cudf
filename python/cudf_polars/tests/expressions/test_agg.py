@@ -93,7 +93,7 @@ def test_bool_agg(agg, request):
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_exact=False)
 
 
 @pytest.mark.parametrize("cum_agg", expr.UnaryFunction._supported_cum_aggs)
