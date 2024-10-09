@@ -31,6 +31,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuco/static_set.cuh>
+
+#include <functional>
 #include <utility>
 #include <vector>
 
@@ -95,18 +98,41 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const helper_func = [&](auto const& d_equal) {
-    using RowHasher = std::decay_t<decltype(d_equal)>;
-    auto set        = hash_set_type<RowHasher>{
+    using RowHasher = cuda::std::decay_t<decltype(d_equal)>;
+
+    // If we don't care about order, just gather indices of distinct keys taken from set.
+    if (keep == duplicate_keep_option::KEEP_ANY) {
+      auto set = hash_set_type<RowHasher>{
+        num_rows,
+        0.5,  // desired load factor
+        cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+        d_equal,
+        {row_hash.device_hasher(has_nulls)},
+        {},
+        {},
+        cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+        stream.value()};
+
+      auto const iter = thrust::counting_iterator<cudf::size_type>{0};
+      set.insert_async(iter, iter + num_rows, stream.value());
+      auto output_indices   = rmm::device_uvector<size_type>(num_rows, stream, mr);
+      auto const output_end = set.retrieve_all(output_indices.begin(), stream.value());
+      output_indices.resize(thrust::distance(output_indices.begin(), output_end), stream);
+      return output_indices;
+    }
+
+    auto map = hash_map_type<RowHasher>{
       num_rows,
       0.5,  // desired load factor
       cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      cuco::empty_value{reduction_init_value(keep)},
       d_equal,
       {row_hash.device_hasher(has_nulls)},
       {},
       {},
       cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
       stream.value()};
-    return detail::reduce_by_row(set, num_rows, keep, stream, mr);
+    return reduce_by_row(map, num_rows, keep, stream, mr);
   };
 
   if (cudf::detail::has_nested_columns(input)) {

@@ -23,11 +23,13 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf::detail {
 
@@ -47,9 +49,49 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
+struct plus_op {
+  template <cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
+  {
+    ref.fetch_add(static_cast<size_type>(1), cuda::memory_order_relaxed);
+  }
+};
+
+struct min_op {
+  template <cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
+  {
+    ref.fetch_min(val, cuda::memory_order_relaxed);
+  }
+};
+
+struct max_op {
+  template <cuda::thread_scope Scope>
+  __device__ void operator()(cuda::atomic_ref<size_type, Scope> ref, size_type const val)
+  {
+    ref.fetch_max(val, cuda::memory_order_relaxed);
+  }
+};
+
+// The static_set type used to process `keep_any` option
 template <typename RowHasher>
 using hash_set_type =
   cuco::static_set<size_type,
+                   cuco::extent<int64_t>,
+                   cuda::thread_scope_device,
+                   RowHasher,
+                   cuco::linear_probing<1,
+                                        cudf::experimental::row::hash::device_row_hasher<
+                                          cudf::hashing::detail::default_hash,
+                                          cudf::nullate::DYNAMIC>>,
+                   cudf::detail::cuco_allocator<char>,
+                   cuco::storage<1>>;
+
+// The static_map type used to process `keep_first`, `keep_last` and `keep_none` option
+template <typename RowHasher>
+using hash_map_type =
+  cuco::static_map<size_type,
+                   size_type,
                    cuco::extent<int64_t>,
                    cuda::thread_scope_device,
                    RowHasher,
@@ -65,7 +107,7 @@ using hash_set_type =
  * of the occurrences of the distinct elements based on `keep` parameter.
  *
  * This is essentially a reduce-by-key operation with keys are non-contiguous rows and are compared
- * equal. A hash set is used to find groups of equal rows.
+ * equal. A hash map is used to find groups of equal rows.
  *
  * Depending on the `keep` parameter, the reduction operation for each row group is:
  * - If `keep == KEEP_ANY` : order does not matter.
@@ -79,8 +121,7 @@ using hash_set_type =
  * the `reduction_init_value()` function. Then, the reduction result for each row group is written
  * into the output array at the index of an unspecified row in the group.
  *
- * @param set The auxiliary set to perform reduction
- * @param set_size The number of elements in set
+ * @param map The auxiliary map to perform reduction
  * @param num_rows The number of all input rows
  * @param keep The parameter to determine what type of reduction to perform
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -88,7 +129,7 @@ using hash_set_type =
  * @return A device_uvector containing the output indices
  */
 template <typename RowHasher>
-rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+rmm::device_uvector<size_type> reduce_by_row(hash_map_type<RowHasher>& map,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
