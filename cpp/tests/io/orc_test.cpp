@@ -38,13 +38,14 @@
 
 #include <src/io/comp/nvcomp_adapter.hpp>
 
+#include <array>
 #include <type_traits>
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same_v<T, cudf::string_view>,
-                            cudf::test::strings_column_wrapper,
-                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+  std::conditional_t<std::is_same_v<T, cudf::string_view>,
+                     cudf::test::strings_column_wrapper,
+                     cudf::test::fixed_width_column_wrapper<T, SourceElementT>>;
 
 using str_col     = column_wrapper<cudf::string_view>;
 using bool_col    = column_wrapper<bool>;
@@ -767,14 +768,14 @@ TEST_F(OrcChunkedWriterTest, Metadata)
 
 TEST_F(OrcChunkedWriterTest, Strings)
 {
-  bool mask1[] = {true, true, false, true, true, true, true};
+  std::array mask1{true, true, false, true, true, true, true};
   std::vector<char const*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
-  str_col strings1(h_strings1.begin(), h_strings1.end(), mask1);
+  str_col strings1(h_strings1.begin(), h_strings1.end(), mask1.data());
   table_view tbl1({strings1});
 
-  bool mask2[] = {false, true, true, true, true, true, true};
+  std::array mask2{false, true, true, true, true, true, true};
   std::vector<char const*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
-  str_col strings2(h_strings2.begin(), h_strings2.end(), mask2);
+  str_col strings2(h_strings2.begin(), h_strings2.end(), mask2.data());
   table_view tbl2({strings2});
 
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
@@ -877,26 +878,26 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
 
   using T = TypeParam;
 
-  int num_els = 31;
+  constexpr int num_els{31};
 
-  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true};
+  std::array<bool, num_els> mask{false, true, true, true, true, true, true, true, true, true, true,
+                                 true,  true, true, true, true, true, true, true, true, true, true,
+                                 true,  true, true, true, true, true, true, true, true};
 
-  T c1a[num_els];
-  std::fill(c1a, c1a + num_els, static_cast<T>(5));
-  T c1b[num_els];
-  std::fill(c1b, c1b + num_els, static_cast<T>(6));
-  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
-  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  std::array<T, num_els> c1a;
+  std::fill(c1a.begin(), c1a.end(), static_cast<T>(5));
+  std::array<T, num_els> c1b;
+  std::fill(c1b.begin(), c1b.end(), static_cast<T>(5));
+  column_wrapper<T> c1a_w(c1a.begin(), c1a.end(), mask.begin());
+  column_wrapper<T> c1b_w(c1b.begin(), c1b.end(), mask.begin());
   table_view tbl1({c1a_w, c1b_w});
 
-  T c2a[num_els];
-  std::fill(c2a, c2a + num_els, static_cast<T>(8));
-  T c2b[num_els];
-  std::fill(c2b, c2b + num_els, static_cast<T>(9));
-  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
-  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  std::array<T, num_els> c2a;
+  std::fill(c2a.begin(), c2a.end(), static_cast<T>(8));
+  std::array<T, num_els> c2b;
+  std::fill(c2b.begin(), c2b.end(), static_cast<T>(9));
+  column_wrapper<T> c2a_w(c2a.begin(), c2a.end(), mask.begin());
+  column_wrapper<T> c2b_w(c2b.begin(), c2b.end(), mask.begin());
   table_view tbl2({c2a_w, c2b_w});
 
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
@@ -920,26 +921,26 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
 
   using T = TypeParam;
 
-  int num_els = 33;
+  constexpr int num_els = 33;
 
-  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true, true, true,
-                 true,  true, true, true, true, true, true, true, true, true, true};
+  std::array<bool, num_els> mask{false, true, true, true, true, true, true, true, true, true, true,
+                                 true,  true, true, true, true, true, true, true, true, true, true,
+                                 true,  true, true, true, true, true, true, true, true, true, true};
 
-  T c1a[num_els];
-  std::fill(c1a, c1a + num_els, static_cast<T>(5));
-  T c1b[num_els];
-  std::fill(c1b, c1b + num_els, static_cast<T>(6));
-  column_wrapper<T> c1a_w(c1a, c1a + num_els, mask);
-  column_wrapper<T> c1b_w(c1b, c1b + num_els, mask);
+  std::array<T, num_els> c1a;
+  std::fill(c1a.begin(), c1a.end(), static_cast<T>(5));
+  std::array<T, num_els> c1b;
+  std::fill(c1b.begin(), c1b.end(), static_cast<T>(5));
+  column_wrapper<T> c1a_w(c1a.begin(), c1a.end(), mask.begin());
+  column_wrapper<T> c1b_w(c1b.begin(), c1b.end(), mask.begin());
   table_view tbl1({c1a_w, c1b_w});
 
-  T c2a[num_els];
-  std::fill(c2a, c2a + num_els, static_cast<T>(8));
-  T c2b[num_els];
-  std::fill(c2b, c2b + num_els, static_cast<T>(9));
-  column_wrapper<T> c2a_w(c2a, c2a + num_els, mask);
-  column_wrapper<T> c2b_w(c2b, c2b + num_els, mask);
+  std::array<T, num_els> c2a;
+  std::fill(c2a.begin(), c2a.end(), static_cast<T>(8));
+  std::array<T, num_els> c2b;
+  std::fill(c2b.begin(), c2b.end(), static_cast<T>(9));
+  column_wrapper<T> c2a_w(c2a.begin(), c2a.end(), mask.begin());
+  column_wrapper<T> c2b_w(c2b.begin(), c2b.end(), mask.begin());
   table_view tbl2({c2a_w, c2b_w});
 
   auto expected = cudf::concatenate(std::vector<table_view>({tbl1, tbl2}));
@@ -1140,7 +1141,7 @@ TEST_F(OrcReaderTest, zstdCompressionRegression)
   }
 
   // Test with zstd compressed orc file with high compression ratio.
-  constexpr uint8_t input_buffer[] = {
+  constexpr std::array<uint8_t, 170> input_buffer{
     0x4f, 0x52, 0x43, 0x5a, 0x00, 0x00, 0x28, 0xb5, 0x2f, 0xfd, 0xa4, 0x34, 0xc7, 0x03, 0x00, 0x74,
     0x00, 0x00, 0x18, 0x41, 0xff, 0xaa, 0x02, 0x00, 0xbb, 0xff, 0x45, 0xc8, 0x01, 0x25, 0x30, 0x04,
     0x65, 0x00, 0x00, 0x10, 0xaa, 0x1f, 0x02, 0x00, 0x01, 0x29, 0x0b, 0xc7, 0x39, 0xb8, 0x02, 0xcb,
@@ -1154,7 +1155,7 @@ TEST_F(OrcReaderTest, zstdCompressionRegression)
     0x30, 0x09, 0x82, 0xf4, 0x03, 0x03, 0x4f, 0x52, 0x43, 0x17};
 
   auto source =
-    cudf::io::source_info(reinterpret_cast<char const*>(input_buffer), sizeof(input_buffer));
+    cudf::io::source_info(reinterpret_cast<char const*>(input_buffer.data()), input_buffer.size());
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(source).use_index(false);
 
@@ -1357,21 +1358,22 @@ TEST_P(OrcWriterTestStripes, StripeSize)
   cols.push_back(col.release());
   auto const expected = std::make_unique<table>(std::move(cols));
 
-  auto validate = [&](std::vector<char> const& orc_buffer) {
-    auto const expected_stripe_num =
-      std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
-    auto const stats = cudf::io::read_parsed_orc_statistics(
-      cudf::io::source_info(orc_buffer.data(), orc_buffer.size()));
-    EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
+  auto validate =
+    [&, &size_bytes = size_bytes, &size_rows = size_rows](std::vector<char> const& orc_buffer) {
+      auto const expected_stripe_num =
+        std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
+      auto const stats = cudf::io::read_parsed_orc_statistics(
+        cudf::io::source_info(orc_buffer.data(), orc_buffer.size()));
+      EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
 
-    cudf::io::orc_reader_options in_opts =
-      cudf::io::orc_reader_options::builder(
-        cudf::io::source_info(orc_buffer.data(), orc_buffer.size()))
-        .use_index(false);
-    auto result = cudf::io::read_orc(in_opts);
+      cudf::io::orc_reader_options in_opts =
+        cudf::io::orc_reader_options::builder(
+          cudf::io::source_info(orc_buffer.data(), orc_buffer.size()))
+          .use_index(false);
+      auto result = cudf::io::read_orc(in_opts);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-  };
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+    };
 
   {
     std::vector<char> out_buffer_chunked;

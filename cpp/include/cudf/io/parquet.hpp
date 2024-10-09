@@ -1200,7 +1200,7 @@ class parquet_writer_options : public parquet_writer_options_base {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit parquet_writer_options(sink_info const& sink, table_view const& table);
+  explicit parquet_writer_options(sink_info const& sink, table_view table);
 
  public:
   /**

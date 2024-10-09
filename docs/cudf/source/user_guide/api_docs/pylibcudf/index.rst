@@ -25,6 +25,7 @@ This page provides API documentation for pylibcudf.
     lists
     merge
     null_mask
+    partitioning
     quantiles
     reduce
     replace
@@ -38,6 +39,7 @@ This page provides API documentation for pylibcudf.
     table
     traits
     transform
+    transpose
     types
     unary
 
@@ -47,3 +49,4 @@ This page provides API documentation for pylibcudf.
 
     io/index.rst
     strings/index.rst
+    nvtext/index.rst

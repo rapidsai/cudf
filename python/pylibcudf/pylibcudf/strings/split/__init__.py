@@ -1,4 +1,2 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
-[pytest]
-addopts = --tb=native
+from . import partition, split

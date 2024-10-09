@@ -1,17 +1,47 @@
 ---
+# Notes on disabled checks
+# ------------------------
+# modernize-use-equals-default:
+#     auto-fix is broken (doesn't insert =default correctly)
+# modernize-concat-nested-namespaces:
+#     auto-fix is broken (can delete code)
+# modernize-use-trailing-return-type:
+#     Purely stylistic, no benefit to rewriting everything
+# modernize-return-braced-init-list:
+#     Stylistically we prefer to see the return type at the return site.
+#     See https://github.com/rapidsai/cudf/pull/16956#pullrequestreview-2341891672
+#     for more information.
+# modernize-use-bool-literals:
+#     Our tests use int flags for validity masks extensively and we prefer that
+# clang-analyzer-cplusplus.NewDeleteLeaks:
+#     This check has numerous bugs, see
+#     https://github.com/llvm/llvm-project/issues?q=is%3Aissue+is%3Aopen+newdeleteleaks
+#     We encounter at least
+#     https://github.com/llvm/llvm-project/issues/60896
+#     https://github.com/llvm/llvm-project/issues/69602
+# clang-analyzer-optin.core.EnumCastOutOfRange
+#     We use enums as flags in multiple cases and this check makes ORing flags invalid
+# clang-analyzer-optin.cplusplus.UninitializedObject'
+#     There is an error in nanoarrow that none of the clang-tidy filters (i.e.
+#     header-filter and exclude-header-filter are able to properly avoid. This
+#     merits further investigation
+#
+# We need to verify that broken checks are still broken
 Checks:
       'modernize-*,
        -modernize-use-equals-default,
        -modernize-concat-nested-namespaces,
-       -modernize-use-trailing-return-type'
-
-      # -modernize-use-equals-default        # auto-fix is broken (doesn't insert =default correctly)
-      # -modernize-concat-nested-namespaces  # auto-fix is broken (can delete code)
-      # -modernize-use-trailing-return-type  # just a preference
+       -modernize-use-trailing-return-type,
+       -modernize-return-braced-init-list,
+       -modernize-use-bool-literals,
+       clang-analyzer-*,
+       -clang-analyzer-cplusplus.NewDeleteLeaks,
+       -clang-analyzer-optin.core.EnumCastOutOfRange,
+       -clang-analyzer-optin.cplusplus.UninitializedObject'
 
 WarningsAsErrors: ''
-HeaderFilterRegex: ''
-AnalyzeTemporaryDtors: false
+HeaderFilterRegex: '.*cudf/cpp/(src|include|tests).*'
+ExcludeHeaderFilterRegex: '.*(Message_generated.h|Schema_generated.h|brotli_dict.hpp|unbz2.hpp|cxxopts.hpp).*'
 FormatStyle:     none
 CheckOptions:
  - key:             modernize-loop-convert.MaxCopySize

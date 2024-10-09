@@ -13,8 +13,25 @@
 # =============================================================================
 
 set(cython_sources
-    capitalize.pyx case.pyx char_types.pyx contains.pyx extract.pyx find.pyx findall.pyx
-    regex_flags.pyx regex_program.pyx repeat.pyx replace.pyx side_type.pyx slice.pyx strip.pyx
+    attributes.pyx
+    capitalize.pyx
+    case.pyx
+    char_types.pyx
+    contains.pyx
+    extract.pyx
+    find.pyx
+    find_multiple.pyx
+    findall.pyx
+    padding.pyx
+    regex_flags.pyx
+    regex_program.pyx
+    repeat.pyx
+    replace.pyx
+    side_type.pyx
+    slice.pyx
+    strip.pyx
+    translate.pyx
+    wrap.pyx
 )
 
 set(linked_libraries cudf::cudf)
@@ -25,3 +42,4 @@ rapids_cython_create_modules(
 )
 
 add_subdirectory(convert)
+add_subdirectory(split)

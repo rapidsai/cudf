@@ -83,7 +83,7 @@ class rolling_exec {
     return *this;
   }
 
-  std::unique_ptr<cudf::column> test_grouped_nth_element(
+  [[nodiscard]] std::unique_ptr<cudf::column> test_grouped_nth_element(
     cudf::size_type n, std::optional<cudf::null_policy> null_handling = std::nullopt) const
   {
     return cudf::grouped_rolling_window(
@@ -96,7 +96,7 @@ class rolling_exec {
         n, null_handling.value_or(_null_handling)));
   }
 
-  std::unique_ptr<cudf::column> test_nth_element(
+  [[nodiscard]] std::unique_ptr<cudf::column> test_nth_element(
     cudf::size_type n, std::optional<cudf::null_policy> null_handling = std::nullopt) const
   {
     return cudf::rolling_window(_input,

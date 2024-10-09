@@ -119,6 +119,15 @@ def test_melt_str_scalar_id_var():
     assert_eq(result, expected)
 
 
+def test_melt_falsy_var_name():
+    df = cudf.DataFrame({"A": ["a", "b", "c"], "B": [1, 3, 5], "C": [2, 4, 6]})
+    result = cudf.melt(df, id_vars=["A"], value_vars=["B"], var_name="")
+    expected = pd.melt(
+        df.to_pandas(), id_vars=["A"], value_vars=["B"], var_name=""
+    )
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(
