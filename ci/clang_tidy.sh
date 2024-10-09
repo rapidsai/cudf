@@ -26,4 +26,4 @@ source rapids-configure-sccache
 
 # Run the build via CMake, which will run clang-tidy when CUDF_CLANG_TIDY is enabled.
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinja
-cmake --build cpp/build --parallel `nproc`
+cmake --build cpp/build
