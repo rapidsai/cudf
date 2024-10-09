@@ -25,13 +25,10 @@
 
 #include <cuco/static_set_ref.cuh>
 #include <cuda/atomic>
+#include <cuda/std/type_traits>
 
-#include <cmath>
-
-namespace cudf {
-namespace detail {
-
-template <typename SetType, bool target_has_nulls = true, bool source_has_nulls = true>
+namespace cudf::groupby::detail::hash {
+template <typename SetType>
 struct var_hash_functor {
   SetType set;
   bitmask_type const* __restrict__ row_bitmask;
@@ -64,23 +61,21 @@ struct var_hash_functor {
   }
 
   template <typename Source>
-  __device__ std::enable_if_t<!is_supported<Source>()> operator()(column_device_view const& source,
-                                                                  size_type source_index,
-                                                                  size_type target_index) noexcept
+  __device__ cuda::std::enable_if_t<!is_supported<Source>()> operator()(
+    column_device_view const& source, size_type source_index, size_type target_index) noexcept
   {
     CUDF_UNREACHABLE("Invalid source type for std, var aggregation combination.");
   }
 
   template <typename Source>
-  __device__ std::enable_if_t<is_supported<Source>()> operator()(column_device_view const& source,
-                                                                 size_type source_index,
-                                                                 size_type target_index) noexcept
+  __device__ cuda::std::enable_if_t<is_supported<Source>()> operator()(
+    column_device_view const& source, size_type source_index, size_type target_index) noexcept
   {
     using Target    = target_type_t<Source, aggregation::VARIANCE>;
     using SumType   = target_type_t<Source, aggregation::SUM>;
     using CountType = target_type_t<Source, aggregation::COUNT_VALID>;
 
-    if (source_has_nulls and source.is_null(source_index)) return;
+    if (source.is_null(source_index)) return;
     CountType group_size = count.element<CountType>(target_index);
     if (group_size == 0 or group_size - ddof <= 0) return;
 
@@ -91,8 +86,9 @@ struct var_hash_functor {
     ref.fetch_add(result, cuda::std::memory_order_relaxed);
     // STD sqrt is applied in finalize()
 
-    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
+    if (target.is_null(target_index)) { target.set_valid(target_index); }
   }
+
   __device__ inline void operator()(size_type source_index)
   {
     if (row_bitmask == nullptr or cudf::bit_is_set(row_bitmask, source_index)) {
@@ -110,6 +106,4 @@ struct var_hash_functor {
     }
   }
 };
-
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::groupby::detail::hash
