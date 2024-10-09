@@ -71,9 +71,9 @@ struct var_hash_functor {
   __device__ cuda::std::enable_if_t<is_supported<Source>()> operator()(
     column_device_view const& source, size_type source_index, size_type target_index) noexcept
   {
-    using Target    = target_type_t<Source, aggregation::VARIANCE>;
-    using SumType   = target_type_t<Source, aggregation::SUM>;
-    using CountType = target_type_t<Source, aggregation::COUNT_VALID>;
+    using Target    = cudf::detail::target_type_t<Source, aggregation::VARIANCE>;
+    using SumType   = cudf::detail::target_type_t<Source, aggregation::SUM>;
+    using CountType = cudf::detail::target_type_t<Source, aggregation::COUNT_VALID>;
 
     if (source.is_null(source_index)) return;
     CountType group_size = count.element<CountType>(target_index);
