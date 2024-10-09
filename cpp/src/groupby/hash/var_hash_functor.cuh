@@ -44,13 +44,13 @@ struct var_hash_functor {
                    column_device_view sum,
                    column_device_view count,
                    size_type ddof)
-    : set(set),
-      row_bitmask(row_bitmask),
-      target(target),
-      source(source),
-      sum(sum),
-      count(count),
-      ddof(ddof)
+    : set{set},
+      row_bitmask{row_bitmask},
+      target{target},
+      source{source},
+      sum{sum},
+      count{count},
+      ddof{ddof}
   {
   }
 
