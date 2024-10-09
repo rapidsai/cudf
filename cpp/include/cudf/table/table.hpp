@@ -148,7 +148,7 @@ class table {
     std::vector<column_view> columns(std::distance(begin, end));
     std::transform(
       begin, end, columns.begin(), [this](auto index) { return _columns.at(index)->view(); });
-    return table_view(columns);
+    return table_view{columns};
   }
 
   /**

@@ -63,9 +63,9 @@ auto dtype()
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same_v<T, cudf::string_view>,
-                            cudf::test::strings_column_wrapper,
-                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+  std::conditional_t<std::is_same_v<T, cudf::string_view>,
+                     cudf::test::strings_column_wrapper,
+                     cudf::test::fixed_width_column_wrapper<T, SourceElementT>>;
 using column     = cudf::column;
 using table      = cudf::table;
 using table_view = cudf::table_view;
@@ -954,7 +954,7 @@ TEST_F(CsvReaderTest, Strings)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"},
+    std::vector<std::string>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"},
     view.column(1));
 }
 
@@ -1014,7 +1014,7 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored)
   ASSERT_EQ(type_id::STRING, view.column(1).type().id());
 
   expect_column_data_equal(
-    std::vector<std::string>{"\"abcdef ghi\"", "\"jkl \"\"mno\"\" pqr\"", "stu \"vwx\" yz"},
+    std::vector<std::string>{"\"abcdef ghi\"", R"("jkl ""mno"" pqr")", "stu \"vwx\" yz"},
     view.column(1));
 }
 
@@ -1830,7 +1830,7 @@ TEST_F(CsvReaderTest, StringsWithWriter)
 
   auto int_column = column_wrapper<int32_t>{10, 20, 30};
   auto string_column =
-    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"};
+    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", R"(stu ""vwx"" yz)"};
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
   // TODO add quoting style flag?
