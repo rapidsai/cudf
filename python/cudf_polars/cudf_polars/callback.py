@@ -18,7 +18,7 @@ from polars.exceptions import ComputeError, PerformanceWarning
 import rmm
 from rmm._cuda import gpu
 
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -174,16 +174,22 @@ def execute_with_cudf(
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    if unsupported := (config.config.keys() - {"raise_on_fail"}):
+    debug_mode = config.config.get("debug_mode", False)
+    if unsupported := (config.config.keys() - {"raise_on_fail", "debug_mode"}):
         raise ValueError(
             f"Engine configuration contains unsupported settings {unsupported}"
         )
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+            translator = Translator(nt, debug_mode=debug_mode)
+            ir = translator.translate_ir()
+            if debug_mode and len(translator.errors):
+                print(set(translator.errors))
+                raise NotImplementedError("Query contained unsupported operations")
             nt.set_udf(
                 partial(
                     _callback,
-                    translate_ir(nt),
+                    ir,
                     device=device,
                     memory_resource=memory_resource,
                 )

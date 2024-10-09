@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "IR",
+    "ErrorNode",
     "PythonScan",
     "Scan",
     "Cache",
@@ -172,6 +173,15 @@ class IR(Node["IR"]):
         )  # pragma: no cover
 
 
+@dataclasses.dataclass
+class ErrorNode(IR):
+    """Represents an error translating the IR."""
+
+    error: str
+    """The error."""
+
+
+@dataclasses.dataclass
 class PythonScan(IR):
     """Representation of input from a python function."""
 
