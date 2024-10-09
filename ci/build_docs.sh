@@ -3,8 +3,7 @@
 
 set -euo pipefail
 
-export RAPIDS_VERSION="$(rapids-version)"
-export RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 export RAPIDS_VERSION_NUMBER="$RAPIDS_VERSION_MAJOR_MINOR"
 
 rapids-logger "Create test conda environment"
@@ -29,7 +28,10 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  libcudf pylibcudf cudf dask-cudf
+  "libcudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "pylibcudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "cudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "dask-cudf=${RAPIDS_VERSION_MAJOR_MINOR}"
 
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
