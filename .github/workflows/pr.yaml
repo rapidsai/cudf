@@ -96,7 +96,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
     with:
       enable_check_generated_files: false
-  clang_tidy:
+  clang-tidy:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
     with:

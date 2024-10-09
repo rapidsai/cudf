@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
 
 set -euo pipefail
 

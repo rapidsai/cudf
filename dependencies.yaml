@@ -96,6 +96,7 @@ files:
       - build_base
       - clang_tidy
       - cuda
+      - cuda_version
       - develop
       - py_version
   docs:
