@@ -154,11 +154,21 @@ TEST_F(StringsFindTest, FindSuperLongStrings)
     "Hendrerit sed amet quis praesent parturient sollicitudin. Nisi neque praesent ultrices scelerisque lacus class et malesuada. Proin nam facilisi habitasse lectus lobortis erat dui. Lacinia dapibus molestie consectetur nostra a aliquet odio. Et ad in mauris penatibus tempus venenatis porta. Dui id non morbi auctor augue hendrerit vehicula. Arcu condimentum ultrices fermentum, posuere ipsum morbi hendrerit auctor tortor.",
     "Curabitur eget posuere sapien. Nullam suscipit elit urna, in volutpat ex pharetra a. Vivamus convallis scelerisque felis, ut commodo enim scelerisque nec. In et leo commodo, ullamcorper orci eu, scelerisque quam. Integer imperdiet fringilla magna a convallis. Phasellus pharetra lorem elit, tristique fermentum sem interdum at. Ut nec laoreet neque. Nullam vulputate metus nec tristique vestibulum. Morbi ullamcorper varius mi, et tincidunt elit vulputate nec. Etiam interdum accumsan nibh nec scelerisque. Fusce sagittis interdum placerat. Ut neque diam, venenatis aliquet tempor a, egestas blandit ex. Etiam condimentum dolor scelerisque finibus tempor. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Nunc vel risus ullamcorper, interdum erat eget, luctus ante. Aenean nec mauris facilisis, sodales tortor sit amet, pulvinar neque."
   });
-  auto view    = cudf::strings_column_view(input);
-  auto results = cudf::strings::find(view, cudf::string_scalar("ipsum"));
-  auto expected =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 25, 838, 878, 672});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  auto strings_view = cudf::strings_column_view(input);
+  {
+    // Check the find result
+    auto results = cudf::strings::find(strings_view, cudf::string_scalar("ipsum"));
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 25, 838, 878, 672});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  }
+
+  {
+    // Check the contains result
+    auto results = cudf::strings::contains(strings_view, cudf::string_scalar("adipiscing"));
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
 }
 
 TEST_F(StringsFindTest, Contains)

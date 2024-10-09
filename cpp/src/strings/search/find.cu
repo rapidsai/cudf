@@ -53,7 +53,21 @@ namespace {
  *
  * Note that this value is shared by find, rfind, and contains functions.
  */
-constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
+constexpr size_type WARP_AVG_CHAR_BYTES_THRESHOLD = 64;
+
+/**
+ * @brief Threshold to decide on using block parallel functions.
+ *
+ * If the average byte length of a string in a column exceeds this value then
+ * a block-parallel function is used.
+ *
+ */
+constexpr size_type BLOCK_AVG_CHAR_BYTES_THRESHOLD = 512;
+
+/** 
+* @brief Default number of threads to use per block
+*/
+constexpr size_type DEFAULT_THREADS_PER_BLOCK = 256;
 
 /**
  * @brief Find function handles a string per thread
@@ -176,6 +190,71 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
   }
 }
 
+/**
+ * @brief String per block function for find/rfind
+ */
+template <typename TargetIterator, bool forward = true>
+CUDF_KERNEL void finder_block_parallel_fn(column_device_view const d_strings,
+                                         TargetIterator const d_targets,
+                                         size_type const start,
+                                         size_type const stop,
+                                         size_type* d_results)
+{
+  // Determine the string that this thread is going to be working on
+  auto const kernel_size = blockDim.x;
+  auto const str_idx  = blockIdx.x;
+  auto const worker_idx = threadIdx.x;
+  if (str_idx >= d_strings.size()) { return; }
+
+  // See if this is a null string
+  if (d_strings.is_null(str_idx)) { return; }
+
+  // initialize the output for the atomicMin/Max
+  if (worker_idx == 0) { d_results[str_idx] = forward ? std::numeric_limits<size_type>::max() : -1; }
+
+  // Get the current string
+  auto const d_str    = d_strings.element<string_view>(str_idx);
+  auto const d_target = d_targets[str_idx];
+
+  auto const [begin, left_over] = bytes_to_character_position(d_str, start);
+  auto const start_char_pos     = start - left_over;  // keep track of character position
+
+  auto const end = [d_str, start, stop, begin = begin] {
+    if (stop < 0) { return d_str.size_bytes(); }
+    if (stop <= start) { return begin; }
+    // we count from `begin` instead of recounting from the beginning of the string
+    return begin + std::get<0>(bytes_to_character_position(
+                     string_view(d_str.data() + begin, d_str.size_bytes() - begin), stop - start));
+  }();
+
+  // each thread compares the target with the thread's individual starting byte
+  size_type position = forward ? std::numeric_limits<size_type>::max() : -1;
+  for (auto itr = begin + worker_idx; itr + d_target.size_bytes() <= end;
+       itr += kernel_size) {
+    if (d_target.compare(d_str.data() + itr, d_target.size_bytes()) == 0) {
+      position = itr;
+      if (forward) break;
+    }
+  }
+
+  // find stores the minimum position while rfind stores the maximum position
+  // note that this was slightly faster than using cub::WarpReduce
+  cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_results + str_idx)};
+  forward ? ref.fetch_min(position, cuda::std::memory_order_relaxed)
+          : ref.fetch_max(position, cuda::std::memory_order_relaxed);
+  __syncthreads();
+
+  if (worker_idx == 0) {
+    // the final result needs to be fixed up convert max() to -1
+    // and a byte position to a character position
+    auto const result = d_results[str_idx];
+    d_results[str_idx] =
+      ((result < std::numeric_limits<size_type>::max()) && (result >= begin))
+        ? start_char_pos + characters_in_string(d_str.data() + begin, result - begin)
+        : -1;
+  }
+}
+
 template <typename TargetIterator, bool forward = true>
 void find_utility(strings_column_view const& input,
                   TargetIterator const& target_itr,
@@ -186,9 +265,18 @@ void find_utility(strings_column_view const& input,
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto d_results = output.mutable_view().data<size_type>();
-  if ((input.chars_size(stream) / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
+  auto avg_char_bytes = (input.chars_size(stream) / (input.size() - input.null_count()));
+
+  if(avg_char_bytes >= BLOCK_AVG_CHAR_BYTES_THRESHOLD) {
+    // use block-per-string if we have really large strings
+    constexpr int block_size = DEFAULT_THREADS_PER_BLOCK;
+    cudf::detail::grid_1d grid{block_size * input.size(), block_size};
+    finder_block_parallel_fn<TargetIterator, forward>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        *d_strings, target_itr, start, stop, d_results);
+  } else if (avg_char_bytes >= WARP_AVG_CHAR_BYTES_THRESHOLD) {
     // warp-per-string runs faster for longer strings (but not shorter ones)
-    constexpr int block_size = 256;
+    constexpr int block_size = DEFAULT_THREADS_PER_BLOCK;
     cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
     finder_warp_parallel_fn<TargetIterator, forward>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
@@ -340,7 +428,7 @@ namespace {
  * @brief Check if `d_target` appears in a row in `d_strings`.
  *
  * This executes as a warp per string/row and performs well for longer strings.
- * @see AVG_CHAR_BYTES_THRESHOLD
+ * @see WARP_AVG_CHAR_BYTES_THRESHOLD
  *
  * @param d_strings Column of input strings
  * @param d_target String to search for in each row of `d_strings`
@@ -405,9 +493,87 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
   } else {
     // launch warp per string
     auto const d_strings     = column_device_view::create(input.parent(), stream);
-    constexpr int block_size = 256;
+    constexpr int block_size = DEFAULT_THREADS_PER_BLOCK;
     cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
     contains_warp_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      *d_strings, d_target, results_view.data<bool>());
+  }
+  results->set_null_count(input.null_count());
+  return results;
+}
+
+/**
+ * @brief Check if `d_target` appears in a row in `d_strings`.
+ *
+ * This executes as a warp per string/row and performs well for longer strings.
+ * @see BLOCK_AVG_CHAR_BYTES_THRESHOLD
+ *
+ * @param d_strings Column of input strings
+ * @param d_target String to search for in each row of `d_strings`
+ * @param d_results Indicates which rows contain `d_target`
+ */
+CUDF_KERNEL void contains_block_parallel_fn(column_device_view const d_strings,
+                                           string_view const d_target,
+                                           bool* d_results)
+{
+  // Determine if we should process this string
+  auto const kernel_size = blockDim.x;
+  auto const str_idx  = blockIdx.x;
+  auto const worker_idx = threadIdx.x;
+  if (str_idx >= d_strings.size() || d_strings.is_null(str_idx)) { return; }
+
+  // Create the shared memory
+  using BlockReduce = cub::BlockReduce<bool, DEFAULT_THREADS_PER_BLOCK>;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+
+  // each thread in the block processes 4 starting bytes of the current string
+  auto const d_str = d_strings.element<string_view>(str_idx);
+  auto constexpr bytes_per_warp = 4;
+  auto found = false;
+  for (auto i = worker_idx * bytes_per_warp;
+       !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
+       i += kernel_size * bytes_per_warp) {
+
+    // check the target matches this part of the d_str data
+    for (auto j = 0; j < bytes_per_warp && !found; j++) {
+      if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
+          d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
+        found = true;
+      }
+    }
+  }
+
+  auto const result = BlockReduce(temp_storage).Reduce(found, cub::Max());
+  if (worker_idx == 0) { d_results[str_idx] = result; }
+}
+
+std::unique_ptr<column> contains_block_parallel(strings_column_view const& input,
+                                               string_scalar const& target,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
+  auto d_target = string_view(target.data(), target.size());
+
+  // create output column
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+
+  // fill the output with `false` unless the `d_target` is empty
+  auto results_view = results->mutable_view();
+  if (d_target.empty()) {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
+  } else {
+    // launch block per string
+    auto const d_strings     = column_device_view::create(input.parent(), stream);
+    constexpr int block_size = DEFAULT_THREADS_PER_BLOCK;
+    cudf::detail::grid_1d grid{input.size() * block_size, block_size};
+    contains_block_parallel_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *d_strings, d_target, results_view.data<bool>());
   }
   results->set_null_count(input.null_count());
@@ -541,9 +707,13 @@ std::unique_ptr<column> contains(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  // use warp parallel when the average string width is greater than the threshold
-  if ((input.null_count() < input.size()) &&
-      ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+  bool have_not_null = (input.null_count() < input.size());
+  size_type average_str_bytes = input.chars_size(stream) / input.size();
+  if (have_not_null && average_str_bytes >= BLOCK_AVG_CHAR_BYTES_THRESHOLD) {
+    // use block parallel when the average string width is greater than the threshold
+    return contains_block_parallel(input, target, stream, mr);
+  } else if(have_not_null && average_str_bytes >= WARP_AVG_CHAR_BYTES_THRESHOLD) {
+    // use warp parallel when the average string width is greater than the threshold
     return contains_warp_parallel(input, target, stream, mr);
   }
 
