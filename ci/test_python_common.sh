@@ -7,6 +7,8 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+
 rapids-logger "Generate Python testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
@@ -38,4 +40,5 @@ rapids-print-env
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  cudf libcudf
+  "cudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "libcudf=${RAPIDS_VERSION_MAJOR_MINOR}"

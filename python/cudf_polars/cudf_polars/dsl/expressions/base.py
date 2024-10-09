@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 import pylibcudf as plc
 
-from cudf_polars.containers import NamedColumn
+from cudf_polars.containers import Column
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -276,7 +276,7 @@ class NamedExpr:
         *,
         context: ExecutionContext = ExecutionContext.FRAME,
         mapping: Mapping[Expr, Column] | None = None,
-    ) -> NamedColumn:
+    ) -> Column:
         """
         Evaluate this expression given a dataframe for context.
 
@@ -291,20 +291,15 @@ class NamedExpr:
 
         Returns
         -------
-        NamedColumn attaching a name to an evaluated Column
+        Evaluated Column with name attached.
 
         See Also
         --------
         :meth:`Expr.evaluate` for details, this function just adds the
         name to a column produced from an expression.
         """
-        obj = self.value.evaluate(df, context=context, mapping=mapping)
-        return NamedColumn(
-            obj.obj,
-            self.name,
-            is_sorted=obj.is_sorted,
-            order=obj.order,
-            null_order=obj.null_order,
+        return self.value.evaluate(df, context=context, mapping=mapping).rename(
+            self.name
         )
 
     def collect_agg(self, *, depth: int) -> AggInfo:
@@ -330,7 +325,9 @@ class Col(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        return df._column_map[self.name]
+        # Deliberately remove the name here so that we guarantee
+        # evaluation of the IR produces names.
+        return df.column_map[self.name].rename(None)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
