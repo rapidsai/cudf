@@ -127,12 +127,9 @@ class IR(Node):
 
     __slots__ = ("schema",)
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
-    children: tuple[IR, ...] = ()
     schema: Schema
     """Mapping from column names to their data types."""
-
-    def __init__(self, schema: Schema) -> None:
-        self.schema = schema
+    children: tuple[IR, ...] = ()
 
     def get_hash(self) -> int:
         """Hash of node, treating schema dictionary."""
@@ -179,7 +176,7 @@ class PythonScan(IR):
     """Filter to apply to the constructed dataframe before returning it."""
 
     def __init__(self, schema: Schema, options: Any, predicate: expr.NamedExpr | None):
-        super().__init__(schema)
+        self.schema = schema
         self.options = options
         self.predicate = predicate
         raise NotImplementedError("PythonScan not implemented")
@@ -230,23 +227,6 @@ class Scan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
-    def get_hash(self) -> int:
-        """Hash of the node."""
-        return hash(
-            (
-                type(self),
-                self.typ,
-                json.dumps(self.reader_options),
-                json.dumps(self.cloud_options),
-                tuple(self.paths),
-                tuple(self.with_columns) if self.with_columns is not None else None,
-                self.skip_rows,
-                self.n_rows,
-                self.row_index,
-                self.predicate,
-            )
-        )
-
     def __init__(
         self,
         schema: Schema,
@@ -260,7 +240,7 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         predicate: expr.NamedExpr | None,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
@@ -328,6 +308,23 @@ class Scan(IR):
             raise NotImplementedError(
                 "Reading only parquet metadata to produce row index."
             )
+
+    def get_hash(self) -> int:
+        """Hash of the node."""
+        return hash(
+            (
+                type(self),
+                self.typ,
+                json.dumps(self.reader_options),
+                json.dumps(self.cloud_options),
+                tuple(self.paths),
+                tuple(self.with_columns) if self.with_columns is not None else None,
+                self.skip_rows,
+                self.n_rows,
+                self.row_index,
+                self.predicate,
+            )
+        )
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -482,14 +479,13 @@ class Cache(IR):
     __slots__ = ("key", "children")
     _non_child = ("schema", "key")
     children: tuple[IR]
-
     key: int
     """The cache key."""
     value: IR
     """The unevaluated node to cache."""
 
     def __init__(self, schema: Schema, key: int, value: IR):
-        super().__init__(schema)
+        self.schema = schema
         self.key = key
         self.children = (value,)
 
@@ -511,7 +507,6 @@ class DataFrameScan(IR):
 
     __slots__ = ("df", "projection", "predicate")
     _non_child = ("schema", "df", "projection", "predicate")
-
     df: Any
     """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
@@ -526,7 +521,7 @@ class DataFrameScan(IR):
         projection: Sequence[str] | None,
         predicate: expr.NamedExpr | None,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
@@ -562,7 +557,6 @@ class Select(IR):
     __slots__ = ("exprs", "children", "should_broadcast")
     _non_child = ("schema", "exprs", "should_broadcast")
     children: tuple[IR]
-
     df: IR
     """Input dataframe."""
     exprs: tuple[expr.NamedExpr, ...]
@@ -577,7 +571,7 @@ class Select(IR):
         should_broadcast: bool,  # noqa: FBT001
         df: IR,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.exprs = tuple(exprs)
         self.should_broadcast = should_broadcast
         self.children = (df,)
@@ -611,7 +605,7 @@ class Reduce(IR):
     def __init__(
         self, schema: Schema, exprs: Sequence[expr.NamedExpr], df: IR
     ):  # pragma: no cover; polars doesn't emit this node yet
-        super().__init__(schema)
+        self.schema = schema
         self.exprs = tuple(exprs)
         self.children = (df,)
 
@@ -649,7 +643,7 @@ class GroupBy(IR):
         options: Any,
         df: IR,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
@@ -819,7 +813,7 @@ class Join(IR):
         left: IR,
         right: IR,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
@@ -1026,7 +1020,7 @@ class HStack(IR):
         should_broadcast: bool,  # noqa: FBT001
         df: IR,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.columns = tuple(columns)
         self.should_broadcast = should_broadcast
         self.children = (df,)
@@ -1066,7 +1060,7 @@ class Distinct(IR):
         stable: bool,  # noqa: FBT001
         df: IR,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.keep = keep
         self.subset = subset
         self.zlice = zlice
@@ -1139,7 +1133,7 @@ class Sort(IR):
         zlice: tuple[int, int] | None,
         df: IR,
     ):
-        super().__init__(schema)
+        self.schema = schema
         self.by = tuple(by)
         self.order = tuple(order)
         self.null_order = tuple(null_order)
@@ -1189,16 +1183,14 @@ class Slice(IR):
 
     __slots__ = ("offset", "length", "children")
     _non_child = ("schema", "offset", "length")
-
-    df: IR
-    """Input."""
+    children: tuple[IR]
     offset: int
     """Start of the slice."""
     length: int
     """Length of the slice."""
 
     def __init__(self, schema: Schema, offset: int, length: int, df: IR):
-        super().__init__(schema)
+        self.schema = schema
         self.offset = offset
         self.length = length
         self.children = (df,)
@@ -1218,7 +1210,7 @@ class Filter(IR):
     children: tuple[IR]
 
     def __init__(self, schema: Schema, mask: expr.NamedExpr, df: IR):
-        super().__init__(schema)
+        self.schema = schema
         self.mask = mask
         self.children = (df,)
 
@@ -1238,7 +1230,7 @@ class Projection(IR):
     children: tuple[IR]
 
     def __init__(self, schema: Schema, df: IR):
-        super().__init__(schema)
+        self.schema = schema
         self.children = (df,)
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
@@ -1274,7 +1266,7 @@ class MapFunction(IR):
     )
 
     def __init__(self, schema: Schema, name: str, options: Any, df: IR):
-        super().__init__(schema)
+        self.schema = schema
         self.name = name
         self.options = options
         self.children = (df,)
@@ -1380,7 +1372,7 @@ class Union(IR):
     _non_child = ("schema", "zlice")
 
     def __init__(self, schema: Schema, zlice: tuple[int, int] | None, *children: IR):
-        super().__init__(schema)
+        self.schema = schema
         self.zlice = zlice
         self.children = children
         schema = self.children[0].schema
@@ -1403,7 +1395,7 @@ class HConcat(IR):
     _non_child = ("schema",)
 
     def __init__(self, schema: Schema, *children: IR):
-        super().__init__(schema)
+        self.schema = schema
         self.children = children
 
     @staticmethod

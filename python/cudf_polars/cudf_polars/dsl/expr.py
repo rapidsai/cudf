@@ -79,10 +79,6 @@ class Expr(Node):
     """Data type of the expression."""
     children: tuple[Expr, ...] = ()
 
-    # Constructor must take arguments in order (*_non_child, *children)
-    def __init__(self, dtype: plc.DataType) -> None:
-        self.dtype = dtype
-
     def do_evaluate(
         self,
         df: DataFrame,
@@ -271,7 +267,7 @@ class Literal(Expr):
     children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
 
@@ -298,7 +294,7 @@ class LiteralColumn(Expr):
     children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
@@ -355,6 +351,9 @@ class Col(Expr):
 class Len(Expr):
     children: tuple[()]
 
+    def __init__(self, dtype: plc.DataType) -> None:
+        self.dtype = dtype
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -392,7 +391,7 @@ class BooleanFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children
@@ -631,7 +630,7 @@ class StringFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children
@@ -887,7 +886,7 @@ class TemporalFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children
@@ -992,7 +991,7 @@ class UnaryFunction(Expr):
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.name = name
         self.options = options
         self.children = children
@@ -1231,7 +1230,7 @@ class Sort(Expr):
     def __init__(
         self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (column,)
 
@@ -1271,7 +1270,7 @@ class SortBy(Expr):
         column: Expr,
         *by: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (column, *by)
 
@@ -1304,7 +1303,7 @@ class Gather(Expr):
     children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(
@@ -1346,7 +1345,7 @@ class Filter(Expr):
     children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(
@@ -1373,7 +1372,7 @@ class RollingWindow(Expr):
     children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg,)
         raise NotImplementedError("Rolling window not implemented")
@@ -1385,7 +1384,7 @@ class GroupedRollingWindow(Expr):
     children: tuple[Expr, ...]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg, *by)
         raise NotImplementedError("Grouped rolling window not implemented")
@@ -1397,7 +1396,7 @@ class Cast(Expr):
     children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (value,)
         if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
@@ -1431,7 +1430,7 @@ class Agg(Expr):
     def __init__(
         self, dtype: plc.DataType, name: str, options: Any, *children: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.name = name
         self.options = options
         self.children = children
@@ -1631,7 +1630,7 @@ class Ternary(Expr):
     def __init__(
         self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (when, then, otherwise)
 
     def do_evaluate(
@@ -1663,7 +1662,7 @@ class BinOp(Expr):
         left: Expr,
         right: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         if plc.traits.is_boolean(self.dtype):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
