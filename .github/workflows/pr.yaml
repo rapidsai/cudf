@@ -15,7 +15,7 @@ jobs:
       - changed-files
       - checks
       # TODO: Before merging this PR, this check needs to be moved to nightly.yaml
-      - clang_tidy
+      - clang-tidy
       - conda-cpp-build
       - conda-cpp-checks
       - conda-cpp-tests
