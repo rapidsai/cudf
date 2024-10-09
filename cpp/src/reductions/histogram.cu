@@ -167,8 +167,8 @@ compute_row_frequencies(table_view const& input,
   // Note that we consider null and NaNs as always equal.
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_rows),
+    thrust::make_counting_iterator<size_t>(0),
+    thrust::make_counting_iterator<size_t>(num_rows),
     [set_ref = row_set_ref,
      increments =
        partial_counts.has_value() ? partial_counts.value().begin<histogram_count_type>() : nullptr,
