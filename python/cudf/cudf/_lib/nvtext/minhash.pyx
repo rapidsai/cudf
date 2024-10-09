@@ -8,9 +8,9 @@ from pylibcudf import nvtext
 
 
 @acquire_spill_lock()
-def minhash(Column strings, Column seeds, int width):
+def minhash(Column input, Column seeds, int width=4):
     result = nvtext.minhash.minhash(
-        strings.to_pylibcudf(mode="read"),
+        input.to_pylibcudf(mode="read"),
         seeds.to_pylibcudf(mode="read"),
         width,
     )
@@ -18,9 +18,9 @@ def minhash(Column strings, Column seeds, int width):
 
 
 @acquire_spill_lock()
-def minhash64(Column strings, Column seeds, int width):
+def minhash64(Column input, Column seeds, int width=4):
     result = nvtext.minhash.minhash64(
-        strings.to_pylibcudf(mode="read"),
+        input.to_pylibcudf(mode="read"),
         seeds.to_pylibcudf(mode="read"),
         width,
     )
@@ -29,19 +29,17 @@ def minhash64(Column strings, Column seeds, int width):
 
 @acquire_spill_lock()
 def word_minhash(Column input, Column seeds):
-    result = nvtext.minhash.minhash(
+    result = nvtext.minhash.word_minhash(
         input.to_pylibcudf(mode="read"),
         seeds.to_pylibcudf(mode="read"),
-        4,
     )
     return Column.from_pylibcudf(result)
 
 
 @acquire_spill_lock()
 def word_minhash64(Column input, Column seeds):
-    result = nvtext.minhash.minhash64(
+    result = nvtext.minhash.word_minhash64(
         input.to_pylibcudf(mode="read"),
         seeds.to_pylibcudf(mode="read"),
-        4,
     )
     return Column.from_pylibcudf(result)

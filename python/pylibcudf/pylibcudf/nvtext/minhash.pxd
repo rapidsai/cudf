@@ -12,3 +12,7 @@ ctypedef fused ColumnOrScalar:
 cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=*)
 
 cpdef Column minhash64(Column input, ColumnOrScalar seeds, size_type width=*)
+
+cpdef Column word_minhash(Column input, Column seeds)
+
+cpdef Column word_minhash64(Column input, Column seeds)

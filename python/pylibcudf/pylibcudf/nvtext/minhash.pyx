@@ -8,6 +8,8 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.nvtext.minhash cimport (
     minhash as cpp_minhash,
     minhash64 as cpp_minhash64,
+    word_minhash as cpp_word_minhash,
+    word_minhash64 as cpp_word_minhash64,
 )
 from pylibcudf.libcudf.scalar.scalar cimport numeric_scalar
 from pylibcudf.libcudf.types cimport size_type
@@ -21,7 +23,7 @@ cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
     Returns the minhash values for each string per seed.
     This function uses MurmurHash3_x86_32 for the hash algorithm.
 
-    For details, see :cpp:func:`cudf::nvtext::minhash`.
+    For details, see :cpp:func:`minhash`.
 
     Parameters
     ----------
@@ -39,29 +41,19 @@ cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
         List column of minhash values for each string per seed
     """
     cdef unique_ptr[column] c_result
-    cdef numeric_scalar[uint32_t]* cpp_seed
 
-    if ColumnOrScalar is Column:
-        with nogil:
-            c_result = move(
-                cpp_minhash(
-                    input.view(),
-                    seeds.view(),
-                    width
-                )
+    if not isinstance(seeds, (Column, Scalar)):
+        raise TypeError("Must pass a Column or Scalar")
+
+    with nogil:
+        c_result = move(
+            cpp_minhash(
+                input.view(),
+                seeds.view() if ColumnOrScalar is Column else
+                dereference(<numeric_scalar[uint32_t]*>seeds.c_obj.get()),
+                width
             )
-    elif ColumnOrScalar is Scalar:
-        cpp_seed = <numeric_scalar[uint32_t]*>seeds.c_obj.get()
-        with nogil:
-            c_result = move(
-                cpp_minhash(
-                    input.view(),
-                    dereference(cpp_seed),
-                    width
-                )
-            )
-    else:
-        raise ValueError("seeds must be a Column or Scalar")
+        )
 
     return Column.from_libcudf(move(c_result))
 
@@ -70,7 +62,7 @@ cpdef Column minhash64(Column input, ColumnOrScalar seeds, size_type width=4):
     Returns the minhash values for each string per seed.
     This function uses MurmurHash3_x64_128 for the hash algorithm.
 
-    For details, see :cpp:func:`cudf::nvtext::minhash64`.
+    For details, see :cpp:func:`minhash64`.
 
     Parameters
     ----------
@@ -88,28 +80,81 @@ cpdef Column minhash64(Column input, ColumnOrScalar seeds, size_type width=4):
         List column of minhash values for each string per seed
     """
     cdef unique_ptr[column] c_result
-    cdef numeric_scalar[uint64_t]* cpp_seed
 
-    if ColumnOrScalar is Column:
-        with nogil:
-            c_result = move(
-                cpp_minhash64(
-                    input.view(),
-                    seeds.view(),
-                    width
-                )
+    if not isinstance(seeds, (Column, Scalar)):
+        raise TypeError("Must pass a Column or Scalar")
+
+    with nogil:
+        c_result = move(
+            cpp_minhash64(
+                input.view(),
+                seeds.view() if ColumnOrScalar is Column else
+                dereference(<numeric_scalar[uint64_t]*>seeds.c_obj.get()),
+                width
             )
-    elif ColumnOrScalar is Scalar:
-        cpp_seed = <numeric_scalar[uint64_t]*>seeds.c_obj.get()
-        with nogil:
-            c_result = move(
-                cpp_minhash64(
-                    input.view(),
-                    dereference(cpp_seed),
-                    width
-                )
+        )
+
+    return Column.from_libcudf(move(c_result))
+
+cpdef Column word_minhash(Column input, Column seeds):
+    """
+    Returns the minhash values for each row of strings per seed.
+    This function uses MurmurHash3_x86_32 for the hash algorithm.
+
+    For details, see :cpp:func:`word_minhash`.
+
+    Parameters
+    ----------
+    input : Column
+        Lists column of strings to compute minhash
+    seeds : Column or Scalar
+        Seed values used for the hash algorithm.
+
+    Returns
+    -------
+    Column
+        List column of minhash values for each string per seed
+    """
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_word_minhash(
+                input.view(),
+                seeds.view()
             )
-    else:
-        raise ValueError("seeds must be a Column or Scalar")
+        )
+
+    return Column.from_libcudf(move(c_result))
+
+cpdef Column word_minhash64(Column input, Column seeds):
+    """
+    Returns the minhash values for each row of strings per seed.
+    This function uses MurmurHash3_x64_128 for the hash algorithm though
+    only the first 64-bits of the hash are used in computing the output.
+
+    For details, see :cpp:func:`word_minhash64`.
+
+    Parameters
+    ----------
+    input : Column
+        Lists column of strings to compute minhash
+    seeds : Column or Scalar
+        Seed values used for the hash algorithm.
+
+    Returns
+    -------
+    Column
+        List column of minhash values for each string per seed
+    """
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_word_minhash64(
+                input.view(),
+                seeds.view()
+            )
+        )
 
     return Column.from_libcudf(move(c_result))
