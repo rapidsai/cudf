@@ -19,6 +19,7 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "cudf/detail/utilities/cuda_memcpy.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
@@ -1407,7 +1408,8 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     num_entries_seen += stripes_per_col;
   }
 
-  std::vector<statistics_merge_group> file_stats_merge(num_file_blobs);
+  auto file_stats_merge =
+    cudf::detail::make_host_vector<statistics_merge_group>(num_file_blobs, stream);
   for (auto i = 0u; i < num_file_blobs; ++i) {
     auto col_stats         = &file_stats_merge[i];
     col_stats->col_dtype   = per_chunk_stats.col_types[i];
@@ -1417,11 +1419,10 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   }
 
   auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_file_stats_merge,
-                                file_stats_merge.data(),
-                                num_file_blobs * sizeof(statistics_merge_group),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<statistics_merge_group>(
+    device_span<statistics_merge_group>{stats_merge.device_ptr(num_stripe_blobs), num_file_blobs},
+    file_stats_merge,
+    stream);
 
   auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
   detail::merge_group_statistics<detail::io_file_format::ORC>(
@@ -1572,7 +1573,7 @@ void write_index_stream(int32_t stripe_id,
  * @param[in] strm_desc Stream's descriptor
  * @param[in] enc_stream Chunk's streams
  * @param[in] compressed_data Compressed stream data
- * @param[in,out] stream_out Temporary host output buffer
+ * @param[in,out] bounce_buffer Pinned memory bounce buffer for D2H data transfer
  * @param[in,out] stripe Stream's parent stripe
  * @param[in,out] streams List of all streams
  * @param[in] compression_kind The compression kind
@@ -1583,7 +1584,7 @@ void write_index_stream(int32_t stripe_id,
 std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
                                     gpu::encoder_chunk_streams const& enc_stream,
                                     uint8_t const* compressed_data,
-                                    uint8_t* stream_out,
+                                    host_span<uint8_t> bounce_buffer,
                                     StripeInformation* stripe,
                                     orc_streams* streams,
                                     CompressionKind compression_kind,
@@ -1603,11 +1604,10 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
     if (out_sink->is_device_write_preferred(length)) {
       return out_sink->device_write_async(stream_in, length, stream);
     } else {
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDefault, stream.value()));
-      stream.synchronize();
+      cudf::detail::cuda_memcpy(
+        bounce_buffer.subspan(0, length), device_span<uint8_t const>{stream_in, length}, stream);
 
-      out_sink->host_write(stream_out, length);
+      out_sink->host_write(bounce_buffer.data(), length);
       return std::async(std::launch::deferred, [] {});
     }
   }();
@@ -2606,7 +2606,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
         strm_desc,
         enc_data.streams[strm_desc.column_id][segmentation.stripes[stripe_id].first],
         compressed_data.data(),
-        bounce_buffer.data(),
+        bounce_buffer,
         &stripe,
         &streams,
         _compression_kind,

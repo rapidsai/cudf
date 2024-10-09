@@ -507,10 +507,10 @@ void reader_impl::load_next_stripe_data(read_mode mode)
       lvl_stripe_data[read_info.level][read_info.stripe_idx - stripe_start].data());
 
     if (source_ptr->is_device_read_preferred(read_info.length)) {
-      device_read_tasks.push_back(
-        std::pair(source_ptr->device_read_async(
-                    read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
-                  read_info.length));
+      device_read_tasks.emplace_back(
+        source_ptr->device_read_async(
+          read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
+        read_info.length);
 
     } else {
       auto buffer = source_ptr->host_read(read_info.offset, read_info.length);
