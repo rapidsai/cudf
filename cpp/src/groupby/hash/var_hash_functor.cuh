@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include <cudf/aggregation.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuco/static_set_ref.cuh>
 #include <cuda/atomic>
 
 #include <cmath>
