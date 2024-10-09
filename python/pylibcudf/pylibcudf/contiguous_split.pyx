@@ -14,6 +14,7 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
+from .utils cimport int_to_void_ptr
 
 from types import SimpleNamespace
 
@@ -123,5 +124,41 @@ cpdef Table unpack(PackedColumns input):
         Copy of the packed columns.
     """
     cdef table_view v = cpp_unpack(dereference(input.c_obj))
-    cdef unique_ptr[table] t = make_unique[table](v)
+    cdef unique_ptr[table] t = make_unique[table](v)  # Copy
+    return Table.from_libcudf(move(t))
+
+
+cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data):
+    """Deserialize the result of `pack`.
+
+    Copies the result of a serialized table into a table.
+    Contrary to the libcudf C++ function, the returned table is a copy
+    of the serialized data.
+
+    For details, see :cpp:func:`cudf::unpack`.
+
+    Parameters
+    ----------
+    metadata : memoryview
+        The packed metadata to unpack.
+    gpu_data : gpumemoryview
+        The packed gpu_data to unpack.
+
+    Returns
+    -------
+    Table
+        Copy of the packed columns.
+    """
+    if metadata.nbytes == 0:
+        if gpu_data.__cuda_array_interface__["data"][0] != 0:
+            raise ValueError("expect an empty gpu_data when unpackking an empty table")
+        return Table.from_libcudf(make_unique[table](table_view()))
+
+    # Extract the raw data pointers
+    cdef const uint8_t[::1] _metadata = metadata
+    cdef const uint8_t* metadata_ptr = &_metadata[0]
+    cdef const uint8_t* gpu_data_ptr = <uint8_t*>int_to_void_ptr(gpu_data.ptr)
+
+    cdef table_view v = cpp_unpack(metadata_ptr, gpu_data_ptr)
+    cdef unique_ptr[table] t = make_unique[table](v)  # Copy
     return Table.from_libcudf(move(t))

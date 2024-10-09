@@ -3,6 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.contiguous_split cimport packed_columns
 
+from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
 
 
@@ -15,3 +16,5 @@ cdef class PackedColumns:
 cpdef PackedColumns pack(Table input)
 
 cpdef Table unpack(PackedColumns input)
+
+cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
