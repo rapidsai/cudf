@@ -36,7 +36,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Hashable
 
     from typing_extensions import Self
 
@@ -233,8 +233,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # to unexpected behavior in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
-            self._data = self._data.__class__(
-                dict(zip(value, self._data.values())),
+            self._data = type(self._data)(
+                dict(zip(value, self._columns)),
                 level_names=self._data.level_names,
                 verify=False,
             )
@@ -247,7 +247,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def astype(self, dtype, copy: bool = True):
+    def astype(self, dtype, copy: bool = True) -> Self:
         if not is_object_dtype(dtype):
             raise TypeError(
                 "Setting a MultiIndex dtype to anything other than object is "
@@ -256,7 +256,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return self
 
     @_performance_tracking
-    def rename(self, names, inplace=False):
+    def rename(self, names, inplace: bool = False) -> Self | None:
         """
         Alter MultiIndex level names
 
@@ -303,7 +303,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return self.set_names(names, level=None, inplace=inplace)
 
     @_performance_tracking
-    def set_names(self, names, level=None, inplace=False):
+    def set_names(
+        self, names, level=None, inplace: bool = False
+    ) -> Self | None:
         names_is_list_like = is_list_like(names)
         level_is_list_like = is_list_like(level)
 
@@ -345,7 +347,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         cls,
         data: MutableMapping,
         name: Any = None,
-    ) -> MultiIndex:
+    ) -> Self:
         """
         Use when you have a ColumnAccessor-like mapping but no codes and levels.
         """
@@ -394,7 +396,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         names=None,
         deep=False,
         name=None,
-    ):
+    ) -> Self:
         """Returns copy of MultiIndex object.
 
         Returns a copy of `MultiIndex`. The `levels` and `codes` value can be
@@ -457,7 +459,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def __repr__(self):
+    def __repr__(self) -> str:
         max_seq_items = pd.get_option("display.max_seq_items") or len(self)
 
         if len(self) > max_seq_items:
@@ -503,7 +505,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @property  # type: ignore
     @_external_only_api("Use ._codes instead")
     @_performance_tracking
-    def codes(self):
+    def codes(self) -> pd.core.indexes.frozen.FrozenList:
         """
         Returns the codes of the underlying MultiIndex.
 
@@ -524,12 +526,14 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             col.values for col in self._codes
         )
 
-    def get_slice_bound(self, label, side, kind=None):
-        raise NotImplementedError()
+    def get_slice_bound(self, label, side):
+        raise NotImplementedError(
+            "get_slice_bound is not currently implemented."
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def nlevels(self):
+    def nlevels(self) -> int:
         """Integer number of levels in this MultiIndex."""
         return self._num_columns
 
@@ -588,7 +592,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return self.names[level]
 
     @_performance_tracking
-    def isin(self, values, level=None):
+    def isin(self, values, level=None) -> cp.ndarray:
         """Return a boolean array where the index values are in values.
 
         Compute boolean array of whether each index value is found in
@@ -689,23 +693,25 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """Computes the valid set of indices of values in the lookup"""
-        lookup = cudf.DataFrame()
+        lookup_dict = {}
         for i, row in enumerate(row_tuple):
             if isinstance(row, slice) and row == slice(None):
                 continue
-            lookup[i] = cudf.Series(row)
-        frame = cudf.DataFrame(dict(enumerate(index._data.columns)))
+            lookup_dict[i] = row
+        lookup = cudf.DataFrame(lookup_dict)
+        frame = cudf.DataFrame._from_data(
+            ColumnAccessor(dict(enumerate(index._columns)), verify=False)
+        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             data_table = cudf.concat(
                 [
                     frame,
-                    cudf.DataFrame(
-                        {
-                            "idx": cudf.Series(
-                                column.as_column(range(len(frame)))
-                            )
-                        }
+                    cudf.DataFrame._from_data(
+                        ColumnAccessor(
+                            {"idx": column.as_column(range(len(frame)))},
+                            verify=False,
+                        )
                     ),
                 ],
                 axis=1,
@@ -716,7 +722,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Remove this after merge/join
         # obtain deterministic ordering.
         if cudf.get_option("mode.pandas_compatible"):
-            lookup_order = "_" + "_".join(map(str, lookup._data.names))
+            lookup_order = "_" + "_".join(map(str, lookup._column_names))
             lookup[lookup_order] = column.as_column(range(len(lookup)))
             postprocess = operator.methodcaller(
                 "sort_values", by=[lookup_order, "idx"]
@@ -784,7 +790,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             out_index.insert(
                 out_index._num_columns,
                 k,
-                cudf.Series._from_data({None: index._data.columns[k]}),
+                cudf.Series._from_column(index._columns[k]),
             )
 
         # determine if we should downcast from a DataFrame to a Series
@@ -800,21 +806,22 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
         if need_downcast:
             result = result.T
-            return result[result._data.names[0]]
+            return result[result._column_names[0]]
 
         if len(result) == 0 and not slice_access:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             result = cudf.Series._from_data(
-                {}, name=tuple(col[0] for col in index._data.columns)
+                {}, name=tuple(col[0] for col in index._columns)
             )
         elif out_index._num_columns == 1:
             # If there's only one column remaining in the output index, convert
             # it into an Index and name the final index values according
             # to that column's name.
-            *_, last_column = index._data.columns
-            out_index = cudf.Index(last_column)
-            out_index.name = index.names[-1]
+            last_column = index._columns[-1]
+            out_index = cudf.Index._from_column(
+                last_column, name=index.names[-1]
+            )
             index = out_index
         elif out_index._num_columns > 1:
             # Otherwise pop the leftmost levels, names, and codes from the
@@ -850,7 +857,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df.index)
         )
-        indices = cudf.Series(valid_indices)
+        if isinstance(valid_indices, column.ColumnBase):
+            indices = cudf.Series._from_column(valid_indices)
+        else:
+            indices = cudf.Series(valid_indices)
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
@@ -862,7 +872,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         | slice
         | tuple[Any, ...]
         | list[tuple[Any, ...]],
-    ):
+    ) -> None:
         if isinstance(indexer, numbers.Number):
             return
         if isinstance(indexer, tuple):
@@ -890,7 +900,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 [
                     self_col.equals(other_col)
                     for self_col, other_col in zip(
-                        self._data.values(), other._data.values()
+                        self._columns, other._columns
                     )
                 ]
             )
@@ -898,12 +908,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def size(self):
+    def size(self) -> int:
         # The size of a MultiIndex is only dependent on the number of rows.
         return self._num_rows
 
     @_performance_tracking
-    def take(self, indices):
+    def take(self, indices) -> Self:
         if isinstance(indices, cudf.Series) and indices.has_nulls:
             raise ValueError("Column must have no nulls.")
         obj = super().take(indices)
@@ -955,7 +965,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return result
 
     @_performance_tracking
-    def to_frame(self, index=True, name=no_default, allow_duplicates=False):
+    def to_frame(
+        self,
+        index: bool = True,
+        name=no_default,
+        allow_duplicates: bool = False,
+    ) -> cudf.DataFrame:
         """
         Create a DataFrame with the levels of the MultiIndex as columns.
 
@@ -1032,9 +1047,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def get_level_values(self, level):
+    def _level_to_ca_label(self, level) -> tuple[Hashable, int]:
         """
-        Return the values at the requested level
+        Convert a level to a ColumAccessor label and an integer position.
+
+        Useful if self._column_names != self.names.
 
         Parameters
         ----------
@@ -1042,10 +1059,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         Returns
         -------
-        An Index containing the values at the requested level.
+        tuple[Hashable, int]
+            (ColumnAccessor label corresponding to level, integer position of the level)
         """
-        colnames = self._data.names
-        if level not in colnames:
+        colnames = self._column_names
+        try:
+            level_idx = colnames.index(level)
+        except ValueError:
             if isinstance(level, int):
                 if level < 0:
                     level = level + len(colnames)
@@ -1058,37 +1078,51 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
-        else:
-            level_idx = colnames.index(level)
-        level_values = cudf.Index(
+        return level, level_idx
+
+    @_performance_tracking
+    def get_level_values(self, level) -> cudf.Index:
+        """
+        Return the values at the requested level
+
+        Parameters
+        ----------
+        level : int or label
+
+        Returns
+        -------
+        An Index containing the values at the requested level.
+        """
+        level, level_idx = self._level_to_ca_label(level)
+        level_values = cudf.Index._from_column(
             self._data[level], name=self.names[level_idx]
         )
         return level_values
 
-    def _is_numeric(self):
+    def _is_numeric(self) -> bool:
         return False
 
-    def _is_boolean(self):
+    def _is_boolean(self) -> bool:
         return False
 
-    def _is_integer(self):
+    def _is_integer(self) -> bool:
         return False
 
-    def _is_floating(self):
+    def _is_floating(self) -> bool:
         return False
 
-    def _is_object(self):
+    def _is_object(self) -> bool:
         return False
 
-    def _is_categorical(self):
+    def _is_categorical(self) -> bool:
         return False
 
-    def _is_interval(self):
+    def _is_interval(self) -> bool:
         return False
 
     @classmethod
     @_performance_tracking
-    def _concat(cls, objs):
+    def _concat(cls, objs) -> Self:
         source_data = [o.to_frame(index=False) for o in objs]
 
         # TODO: Verify if this is really necessary or if we can rely on
@@ -1098,17 +1132,19 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             for obj in source_data[1:]:
                 obj.columns = colnames
 
-        source_data = cudf.DataFrame._concat(source_data)
+        source_df = cudf.DataFrame._concat(source_data)
         try:
             # Only set names if all objs have the same names
             (names,) = {o.names for o in objs} - {None}
         except ValueError:
-            names = [None] * source_data._num_columns
-        return cudf.MultiIndex.from_frame(source_data, names=names)
+            names = [None] * source_df._num_columns
+        return cudf.MultiIndex.from_frame(source_df, names=names)
 
     @classmethod
     @_performance_tracking
-    def from_tuples(cls, tuples, names=None):
+    def from_tuples(
+        cls, tuples, sortorder: int | None = None, names=None
+    ) -> Self:
         """
         Convert list of tuples to MultiIndex.
 
@@ -1116,6 +1152,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         tuples : list / sequence of tuple-likes
             Each tuple is the index of one row/column.
+        sortorder : int or None
+            Level of sortedness (must be lexicographically sorted by that
+            level).
         names : list / sequence of str, optional
             Names for the levels in the index.
 
@@ -1142,16 +1181,27 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                    names=['number', 'color'])
         """
         # Use Pandas for handling Python host objects
-        pdi = pd.MultiIndex.from_tuples(tuples, names=names)
+        pdi = pd.MultiIndex.from_tuples(
+            tuples, sortorder=sortorder, names=names
+        )
         return cls.from_pandas(pdi)
 
     @_performance_tracking
-    def to_numpy(self):
+    def to_numpy(self) -> np.ndarray:
         return self.values_host
+
+    def to_flat_index(self):
+        """
+        Convert a MultiIndex to an Index of Tuples containing the level values.
+
+        This is not currently implemented
+        """
+        # TODO: Could implement as Index of ListDtype?
+        raise NotImplementedError("to_flat_index is not currently supported.")
 
     @property  # type: ignore
     @_performance_tracking
-    def values_host(self):
+    def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the MultiIndex.
 
@@ -1179,7 +1229,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def values(self):
+    def values(self) -> cp.ndarray:
         """
         Return a CuPy representation of the MultiIndex.
 
@@ -1215,7 +1265,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_frame(cls, df: pd.DataFrame | cudf.DataFrame, names=None):
+    def from_frame(
+        cls,
+        df: pd.DataFrame | cudf.DataFrame,
+        sortorder: int | None = None,
+        names=None,
+    ) -> Self:
         """
         Make a MultiIndex from a DataFrame.
 
@@ -1223,6 +1278,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         df : DataFrame
             DataFrame to be converted to MultiIndex.
+        sortorder : int, optional
+            Level of sortedness (must be lexicographically sorted by that
+            level).
         names : list-like, optional
             If no names are provided, use the column names, or tuple of column
             names if the columns is a MultiIndex. If a sequence, overwrite
@@ -1273,11 +1331,15 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             source_data = df
         names = names if names is not None else source_data._column_names
-        return cls.from_arrays(source_data._columns, names=names)
+        return cls.from_arrays(
+            source_data._columns, sortorder=sortorder, names=names
+        )
 
     @classmethod
     @_performance_tracking
-    def from_product(cls, arrays, names=None):
+    def from_product(
+        cls, iterables, sortorder: int | None = None, names=None
+    ) -> Self:
         """
         Make a MultiIndex from the cartesian product of multiple iterables.
 
@@ -1285,6 +1347,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         iterables : list / sequence of iterables
             Each iterable has unique labels for each level of the index.
+        sortorder : int or None
+            Level of sortedness (must be lexicographically sorted by that
+            level).
         names : list / sequence of str, optional
             Names for the levels in the index.
             If not explicitly provided, names will be inferred from the
@@ -1314,7 +1379,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                    names=['number', 'color'])
         """
         # Use Pandas for handling Python host objects
-        pdi = pd.MultiIndex.from_product(arrays, names=names)
+        pdi = pd.MultiIndex.from_product(
+            iterables, sortorder=sortorder, names=names
+        )
         return cls.from_pandas(pdi)
 
     @classmethod
@@ -1324,7 +1391,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         arrays,
         sortorder=None,
         names=None,
-    ) -> MultiIndex:
+    ) -> Self:
         """
         Convert arrays to MultiIndex.
 
@@ -1364,69 +1431,22 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             raise TypeError(error_msg)
         codes = []
         levels = []
+        names_from_arrays = []
         for array in arrays:
             if not (is_list_like(array) or is_column_like(array)):
                 raise TypeError(error_msg)
             code, level = factorize(array, sort=True)
             codes.append(code)
             levels.append(level)
+            names_from_arrays.append(getattr(array, "name", None))
+        if names is None:
+            names = names_from_arrays
         return cls(
             codes=codes, levels=levels, sortorder=sortorder, names=names
         )
 
     @_performance_tracking
-    def _poplevels(self, level):
-        """
-        Remove and return the specified levels from self.
-
-        Parameters
-        ----------
-        level : level name or index, list
-            One or more levels to remove
-
-        Returns
-        -------
-        Index composed of the removed levels. If only a single level
-        is removed, a flat index is returned. If no levels are specified
-        (empty list), None is returned.
-        """
-        if not pd.api.types.is_list_like(level):
-            level = (level,)
-
-        ilevels = sorted(self._level_index_from_level(lev) for lev in level)
-
-        if not ilevels:
-            return None
-
-        popped_data = {}
-        popped_names = []
-        names = list(self.names)
-
-        # build the popped data and names
-        for i in ilevels:
-            n = self._data.names[i]
-            popped_data[n] = self._data[n]
-            popped_names.append(self.names[i])
-
-        # pop the levels out from self
-        # this must be done iterating backwards
-        for i in reversed(ilevels):
-            n = self._data.names[i]
-            names.pop(i)
-            popped_data[n] = self._data.pop(n)
-
-        # construct the popped result
-        popped = cudf.core.index._index_from_data(popped_data)
-        popped.names = popped_names
-
-        # update self
-        self.names = names
-        self._levels, self._codes = _compute_levels_and_codes(self._data)
-
-        return popped
-
-    @_performance_tracking
-    def swaplevel(self, i=-2, j=-1):
+    def swaplevel(self, i=-2, j=-1) -> Self:
         """
         Swap level i with level j.
         Calling this method does not change the ordering of the values.
@@ -1461,10 +1481,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ('aa', 'b')],
            )
         """
-        name_i = self._data.names[i] if isinstance(i, int) else i
-        name_j = self._data.names[j] if isinstance(j, int) else j
+        name_i = self._column_names[i] if isinstance(i, int) else i
+        name_j = self._column_names[j] if isinstance(j, int) else j
         new_data = {}
-        for k, v in self._data.items():
+        for k, v in self._column_labels_and_values:
             if k not in (name_i, name_j):
                 new_data[k] = v
             elif k == name_i:
@@ -1477,7 +1497,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_performance_tracking
-    def droplevel(self, level=-1):
+    def droplevel(self, level=-1) -> Self | cudf.Index:
         """
         Removes the specified levels from the MultiIndex.
 
@@ -1532,11 +1552,24 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         >>> idx.droplevel(["first", "second"])
         Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
         """
-        mi = self.copy(deep=False)
-        mi._poplevels(level)
-        if mi.nlevels == 1:
-            return mi.get_level_values(mi.names[0])
+        if is_scalar(level):
+            level = (level,)
+        elif len(level) == 0:
+            return self
+
+        new_names = list(self.names)
+        new_data = self._data.copy(deep=False)
+        for i in sorted(
+            (self._level_index_from_level(lev) for lev in level), reverse=True
+        ):
+            new_names.pop(i)
+            new_data.pop(self._data.names[i])
+
+        if len(new_data) == 1:
+            return cudf.core.index._index_from_data(new_data)
         else:
+            mi = MultiIndex._from_data(new_data)
+            mi.names = new_names
             return mi
 
     @_performance_tracking
@@ -1563,7 +1596,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_pandas(cls, multiindex: pd.MultiIndex, nan_as_null=no_default):
+    def from_pandas(
+        cls, multiindex: pd.MultiIndex, nan_as_null=no_default
+    ) -> Self:
         """
         Convert from a Pandas MultiIndex
 
@@ -1598,11 +1633,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @cached_property  # type: ignore
     @_performance_tracking
-    def is_unique(self):
+    def is_unique(self) -> bool:
         return len(self) == len(self.unique())
 
     @property
-    def dtype(self):
+    def dtype(self) -> np.dtype:
         return np.dtype("O")
 
     @_performance_tracking
@@ -1671,7 +1706,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def fillna(self, value):
+    def fillna(self, value) -> Self:
         """
         Fill null values with the specified value.
 
@@ -1712,15 +1747,18 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return super().fillna(value=value)
 
     @_performance_tracking
-    def unique(self):
-        return self.drop_duplicates(keep="first")
+    def unique(self, level: int | None = None) -> Self | cudf.Index:
+        if level is None:
+            return self.drop_duplicates(keep="first")
+        else:
+            return self.get_level_values(level).unique()
 
     @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:
         mi = self.dropna(how="all") if dropna else self
         return len(mi.unique())
 
-    def _clean_nulls_from_index(self):
+    def _clean_nulls_from_index(self) -> Self:
         """
         Convert all na values(if any) in MultiIndex object
         to `<NA>` as a preprocessing step to `__repr__` methods.
@@ -1731,20 +1769,20 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def memory_usage(self, deep=False):
+    def memory_usage(self, deep: bool = False) -> int:
         usage = sum(col.memory_usage for col in self._columns)
         usage += sum(level.memory_usage(deep=deep) for level in self._levels)
         usage += sum(code.memory_usage for code in self._codes)
         return usage
 
     @_performance_tracking
-    def difference(self, other, sort=None):
+    def difference(self, other, sort=None) -> Self:
         if hasattr(other, "to_pandas"):
             other = other.to_pandas()
         return cudf.from_pandas(self.to_pandas().difference(other, sort))
 
     @_performance_tracking
-    def append(self, other):
+    def append(self, other) -> Self:
         """
         Append a collection of MultiIndex objects together
 
@@ -1835,7 +1873,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             return NotImplemented
 
-    def _level_index_from_level(self, level):
+    def _level_index_from_level(self, level) -> int:
         """
         Return level index from given level name or index
         """
@@ -1884,15 +1922,15 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         join_keys = [
             _match_join_keys(lcol, rcol, "inner")
-            for lcol, rcol in zip(target._data.columns, self._data.columns)
+            for lcol, rcol in zip(target._columns, self._columns)
         ]
         join_keys = map(list, zip(*join_keys))
         scatter_map, indices = libcudf.join.join(
             *join_keys,
             how="inner",
         )
-        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
-        result_series = cudf.Series(result)
+        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
             result_series = _get_indexer_basic(
@@ -1962,7 +2000,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         mask[true_inds] = True
         return mask
 
-    def _get_reconciled_name_object(self, other) -> MultiIndex:
+    def _get_reconciled_name_object(self, other) -> Self:
         """
         If the result of a set operation will be self,
         return self, unless the names change, in which
@@ -1988,7 +2026,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ]
 
     @_performance_tracking
-    def union(self, other, sort=None):
+    def union(self, other, sort=None) -> Self:
         if not isinstance(other, MultiIndex):
             msg = "other must be a MultiIndex or a list of tuples"
             try:
@@ -2012,7 +2050,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return self._union(other, sort=sort)
 
     @_performance_tracking
-    def _union(self, other, sort=None):
+    def _union(self, other, sort=None) -> Self:
         # TODO: When to_frame is refactored to return a
         # deep copy in future, we should push most of the common
         # logic between MultiIndex._union & BaseIndex._union into
@@ -2038,7 +2076,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return midx
 
     @_performance_tracking
-    def _intersection(self, other, sort=None):
+    def _intersection(self, other, sort=None) -> Self:
         if self.names != other.names:
             deep = True
             col_names = list(range(0, self.nlevels))
@@ -2081,7 +2119,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             lv if isinstance(lv, int) else level_names.index(lv)
             for lv in levels
         }
-        for i, (name, col) in enumerate(zip(self.names, self._data.columns)):
+        for i, (name, col) in enumerate(zip(self.names, self._columns)):
             if in_levels and i in level_indices:
                 name = f"level_{i}" if name is None else name
                 yield name, col
@@ -2122,14 +2160,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     ) -> Generator[tuple[Any, column.ColumnBase], None, None]:
         """Return the columns and column names for .reset_index"""
         if levels is None:
-            for i, (col, name) in enumerate(
-                zip(self._data.columns, self.names)
-            ):
+            for i, (col, name) in enumerate(zip(self._columns, self.names)):
                 yield f"level_{i}" if name is None else name, col
         else:
             yield from self._split_columns_by_levels(levels, in_levels=True)
 
-    def repeat(self, repeats, axis=None):
+    def repeat(self, repeats, axis=None) -> Self:
         return self._from_data(
             self._data._from_columns_like_self(
                 super()._repeat([*self._columns], repeats, axis)

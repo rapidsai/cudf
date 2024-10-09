@@ -106,7 +106,7 @@ def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
     pa_arr = got.to_arrow().cast(
         pa.decimal128(to_dtype.precision, to_dtype.scale)
     )
-    expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     got = got.astype(to_dtype)
 
@@ -146,7 +146,7 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
         .cast("float64")
         .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
     )
-    expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     got = got.astype(to_dtype)
 
@@ -206,9 +206,9 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
         pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
     )
     if isinstance(to_dtype, Decimal32Dtype):
-        expected = cudf.Series(Decimal32Column.from_arrow(pa_arr))
+        expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
     elif isinstance(to_dtype, Decimal64Dtype):
-        expected = cudf.Series(Decimal64Column.from_arrow(pa_arr))
+        expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
         got = s.astype(to_dtype)
@@ -245,7 +245,7 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
     pa_arr = got.to_arrow().cast(to_dtype, safe=False)
 
     got = got.astype(to_dtype)
-    expected = cudf.Series(NumericalColumn.from_arrow(pa_arr))
+    expected = cudf.Series._from_column(NumericalColumn.from_arrow(pa_arr))
 
     assert_eq(got, expected)
     assert_eq(got.dtype, expected.dtype)
@@ -398,3 +398,13 @@ def test_decimal_overflow():
     s = cudf.Series([1, 2], dtype=cudf.Decimal128Dtype(precision=38, scale=0))
     result = s * Decimal("1.0")
     assert_eq(cudf.Decimal128Dtype(precision=38, scale=1), result.dtype)
+
+
+def test_decimal_binop_upcast_operands():
+    ser1 = cudf.Series([0.51, 1.51, 2.51]).astype(cudf.Decimal64Dtype(18, 2))
+    ser2 = cudf.Series([0.90, 0.96, 0.99]).astype(cudf.Decimal128Dtype(19, 2))
+    result = ser1 + ser2
+    expected = cudf.Series([1.41, 2.47, 3.50]).astype(
+        cudf.Decimal128Dtype(20, 2)
+    )
+    assert_eq(result, expected)

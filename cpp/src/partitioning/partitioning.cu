@@ -27,11 +27,11 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/block/block_scan.cuh>
 #include <cub/device/device_histogram.cuh>
@@ -501,10 +501,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Holds the total number of rows in each partition
   auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_partitions, stream, rmm::mr::get_current_device_resource());
+    num_partitions, stream, cudf::get_current_device_resource_ref());
 
   auto row_partition_offset = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_rows, stream, rmm::mr::get_current_device_resource());
+    num_rows, stream, cudf::get_current_device_resource_ref());
 
   auto const row_hasher = experimental::row::hash::row_hasher(table_to_hash, stream);
   auto const hasher =

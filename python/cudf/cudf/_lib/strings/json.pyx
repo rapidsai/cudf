@@ -5,14 +5,15 @@ from libcpp.utility cimport move
 
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.strings.json cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.json cimport (
     get_json_object as cpp_get_json_object,
     get_json_object_options,
 )
+
+from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
 

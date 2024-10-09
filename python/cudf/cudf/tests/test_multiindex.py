@@ -167,7 +167,9 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = cudf.Index(as_column(["a", "b", "c", "d", "e"]), name="name")
+    stringIndex = cudf.Index._from_column(
+        as_column(["a", "b", "c", "d", "e"]), name="name"
+    )
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -811,8 +813,8 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         mi1 = gdf.groupby(["Date", "Symbol"]).mean().index
         mi2 = mi1.copy(deep=deep)
 
-        lchildren = [col.children for _, col in mi1._data.items()]
-        rchildren = [col.children for _, col in mi2._data.items()]
+        lchildren = [col.children for col in mi1._columns]
+        rchildren = [col.children for col in mi2._columns]
 
         # Flatten
         lchildren = reduce(operator.add, lchildren)
@@ -847,12 +849,8 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._data identity
-        lptrs = [
-            d.base_data.get_ptr(mode="read") for _, d in mi1._data.items()
-        ]
-        rptrs = [
-            d.base_data.get_ptr(mode="read") for _, d in mi2._data.items()
-        ]
+        lptrs = [d.base_data.get_ptr(mode="read") for d in mi1._columns]
+        rptrs = [d.base_data.get_ptr(mode="read") for d in mi2._columns]
 
         assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
     cudf.set_option("copy_on_write", original_cow_setting)
@@ -2170,3 +2168,22 @@ def test_bool_raises():
         lfunc_args_and_kwargs=[[cudf.MultiIndex.from_arrays([range(1)])]],
         rfunc_args_and_kwargs=[[pd.MultiIndex.from_arrays([range(1)])]],
     )
+
+
+def test_unique_level():
+    pd_mi = pd.MultiIndex.from_arrays([[1, 1, 2], [3, 3, 2]])
+    cudf_mi = cudf.MultiIndex.from_pandas(pd_mi)
+
+    result = pd_mi.unique(level=1)
+    expected = cudf_mi.unique(level=1)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index, pd.CategoricalIndex, pd.DatetimeIndex, pd.TimedeltaIndex]
+)
+def test_from_arrays_infer_names(idx):
+    arrays = [idx([1], name="foo"), idx([2], name="bar")]
+    expected = pd.MultiIndex.from_arrays(arrays)
+    result = cudf.MultiIndex.from_arrays(arrays)
+    assert_eq(result, expected)

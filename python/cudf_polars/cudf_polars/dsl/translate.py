@@ -11,13 +11,12 @@ from functools import singledispatch
 from typing import Any
 
 import pyarrow as pa
+import pylibcudf as plc
 from typing_extensions import assert_never
 
 import polars as pl
 import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
-
-import cudf._lib.pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.typing import NodeTraverser
@@ -94,13 +93,6 @@ def _(
         cloud_options = None
     else:
         reader_options, cloud_options = map(json.loads, options)
-    if (
-        typ == "csv"
-        and visitor.version()[0] == 1
-        and reader_options["schema"] is not None
-    ):
-        # Polars 1.7 renames the inner slot from "inner" to "fields".
-        reader_options["schema"] = {"fields": reader_options["schema"]["inner"]}
     file_options = node.file_options
     with_columns = file_options.with_columns
     n_rows = file_options.n_rows

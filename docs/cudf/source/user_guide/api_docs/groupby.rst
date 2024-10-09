@@ -68,7 +68,6 @@ Computations / descriptive stats
    GroupBy.std
    GroupBy.sum
    GroupBy.var
-   GroupBy.corr
    GroupBy.cov
 
 The following methods are available in both ``SeriesGroupBy`` and
@@ -81,6 +80,7 @@ application to columns of a specific data type.
    :toctree: api/
 
    DataFrameGroupBy.bfill
+   DataFrameGroupBy.corr
    DataFrameGroupBy.count
    DataFrameGroupBy.cumcount
    DataFrameGroupBy.cummax
@@ -102,5 +102,6 @@ The following methods are available only for ``SeriesGroupBy`` objects.
 .. autosummary::
    :toctree: api/
 
+   SeriesGroupBy.corr
    SeriesGroupBy.nunique
    SeriesGroupBy.unique

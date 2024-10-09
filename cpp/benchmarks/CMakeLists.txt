@@ -35,6 +35,30 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
 
+add_library(
+  ndsh_data_generator STATIC
+  common/ndsh_data_generator/ndsh_data_generator.cpp common/ndsh_data_generator/table_helpers.cpp
+  common/ndsh_data_generator/random_column_generator.cu
+)
+target_compile_features(ndsh_data_generator PUBLIC cxx_std_17 cuda_std_17)
+
+target_compile_options(
+  ndsh_data_generator PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                             "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
+target_link_libraries(
+  ndsh_data_generator
+  PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
+
+target_include_directories(
+  ndsh_data_generator
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
 
@@ -103,8 +127,8 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::nvbench
-                                $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen
+                                nvbench::nvbench $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -152,16 +176,22 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
-# * apply_boolean_mask benchmark ------------------------------------------------------------------
-ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp)
+# * nds-h benchmark --------------------------------------------------------------------------------
+ConfigureNVBench(NDSH_Q01_NVBENCH ndsh/q01.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q05_NVBENCH ndsh/q05.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q06_NVBENCH ndsh/q06.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
+  stream_compaction/apply_boolean_mask.cpp
   stream_compaction/distinct.cpp
   stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
+  stream_compaction/stream_compaction_common.cpp
   stream_compaction/unique.cpp
   stream_compaction/unique_count.cpp
 )
@@ -201,17 +231,26 @@ ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
 
 # ##################################################################################################
+# * tdigest benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cu)
+
+# ##################################################################################################
 # * type_dispatcher benchmark ---------------------------------------------------------------------
 ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
-ConfigureBench(
-  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
-  reduction/reduce.cpp reduction/scan.cpp
-)
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/rank.cpp reduction/scan_structs.cpp reduction/segmented_reduce.cpp
+  REDUCTION_NVBENCH
+  reduction/anyall.cpp
+  reduction/dictionary.cpp
+  reduction/minmax.cpp
+  reduction/rank.cpp
+  reduction/reduce.cpp
+  reduction/scan.cpp
+  reduction/scan_structs.cpp
+  reduction/segmented_reduce.cpp
 )
 
 # ##################################################################################################
@@ -303,7 +342,7 @@ ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
   TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp text/word_minhash.cpp
 )
 
 # ##################################################################################################
@@ -320,7 +359,6 @@ ConfigureBench(
   string/filter.cpp
   string/repeat_strings.cpp
   string/replace.cpp
-  string/slice.cpp
   string/translate.cpp
   string/url_decode.cu
 )
@@ -341,6 +379,7 @@ ConfigureNVBench(
   string/like.cpp
   string/replace_re.cpp
   string/reverse.cpp
+  string/slice.cpp
   string/split.cpp
   string/split_re.cpp
 )
@@ -352,6 +391,11 @@ ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
+
+# ##################################################################################################
+# * multi buffer memset benchmark
+# ----------------------------------------------------------------------
+ConfigureNVBench(BATCHED_MEMSET_BENCH io/utilities/batched_memset_bench.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

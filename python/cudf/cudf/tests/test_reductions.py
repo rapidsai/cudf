@@ -10,6 +10,7 @@ import pytest
 
 import cudf
 from cudf import Series
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils, assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if, gen_rand
@@ -342,6 +343,10 @@ def test_any_all_axis_none(data, op):
         "median",
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning not given on older versions of pandas",
+)
 def test_reductions_axis_none_warning(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
     pdf = df.to_pandas()
@@ -356,6 +361,30 @@ def test_reductions_axis_none_warning(op):
     ):
         expected = getattr(pdf, op)(axis=None)
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "sum",
+        "product",
+        "std",
+        "var",
+        "kurt",
+        "kurtosis",
+        "skew",
+        "min",
+        "max",
+        "mean",
+        "median",
+    ],
+)
+def test_dataframe_reduction_no_args(op):
+    df = cudf.DataFrame({"a": range(10), "b": range(10)})
+    pdf = df.to_pandas()
+    result = getattr(df, op)()
+    expected = getattr(pdf, op)()
+    assert_eq(result, expected)
 
 
 def test_reduction_column_multiindex():
@@ -374,3 +403,14 @@ def test_dtype_deprecated(op):
     with pytest.warns(FutureWarning):
         result = getattr(ser, op)(dtype=np.dtype(np.int8))
     assert isinstance(result, np.int8)
+
+
+@pytest.mark.parametrize(
+    "columns", [pd.RangeIndex(2), pd.Index([0, 1], dtype="int8")]
+)
+def test_dataframe_axis_0_preserve_column_type_in_index(columns):
+    pd_df = pd.DataFrame([[1, 2]], columns=columns)
+    cudf_df = cudf.DataFrame.from_pandas(pd_df)
+    result = cudf_df.sum(axis=0)
+    expected = pd_df.sum(axis=0)
+    assert_eq(result, expected, check_index_type=True)

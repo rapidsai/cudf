@@ -5,9 +5,8 @@
 import os
 import warnings
 
+import pylibcudf
 import rmm.mr
-
-from cudf._lib import pylibcudf
 
 from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension

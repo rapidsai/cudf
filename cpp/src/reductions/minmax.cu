@@ -24,9 +24,9 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/extrema.h>
 #include <thrust/functional.h>
@@ -107,8 +107,7 @@ rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
  * respectively of the minimums and maximums of the input pairs.
  */
 template <typename T>
-struct minmax_binary_op
-  : public thrust::binary_function<minmax_pair<T>, minmax_pair<T>, minmax_pair<T>> {
+struct minmax_binary_op {
   __device__ minmax_pair<T> operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const
   {
     return minmax_pair<T>{thrust::min(lhs.min_val, rhs.min_val),

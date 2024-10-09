@@ -791,7 +791,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
     can_use_smem_cache;
 
   using DFASimulationCallbackWrapperT =
-    typename cub::If<use_smem_cache, WriteCoalescingT, NonWriteCoalescingT>::Type;
+    cuda::std::conditional_t<use_smem_cache, WriteCoalescingT, NonWriteCoalescingT>;
 
   // Stage 1: Compute the state-transition vector
   if (IS_TRANS_VECTOR_PASS || IS_SINGLE_PASS) {

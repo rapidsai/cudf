@@ -27,9 +27,9 @@
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/distance.h>
 #include <thrust/functional.h>
@@ -71,6 +71,10 @@ struct token_reader_fn {
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
     auto const d_result     = d_tokens + token_offset;  // store tokens here
+    if (nchars == 0) {
+      d_result[0] = string_index_pair{"", 0};
+      return;
+    }
 
     int64_t token_idx = 0;
     auto itr          = d_str.begin();
@@ -148,7 +152,7 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   auto const end   = begin + strings_count;
 
   auto [offsets, total_tokens] = cudf::detail::make_offsets_child_column(
-    begin, end, stream, rmm::mr::get_current_device_resource());
+    begin, end, stream, cudf::get_current_device_resource_ref());
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // build a vector of tokens
@@ -206,8 +210,8 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto const counts = count_matches(
-    *d_strings, *d_prog, strings_count, stream, rmm::mr::get_current_device_resource());
+  auto const counts =
+    count_matches(*d_strings, *d_prog, stream, cudf::get_current_device_resource_ref());
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =
@@ -271,7 +275,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto counts = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto counts = count_matches(*d_strings, *d_prog, stream, mr);
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =

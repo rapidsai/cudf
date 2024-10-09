@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, assert_exceptions_equal
 
@@ -858,6 +859,10 @@ def test_cat_from_scalar(scalar):
     assert_eq(ps, gs)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
+)
 def test_cat_groupby_fillna():
     ps = pd.Series(["a", "b", "c"], dtype="category")
     gs = cudf.from_pandas(ps)
@@ -891,3 +896,59 @@ def test_categorical_maxima(op):
     result = getattr(ser.cat.as_ordered(), op)()
     result_pd = getattr(ser_pd.cat.as_ordered(), op)()
     assert_eq(result, result_pd)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_ordered(ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3], ordered=ordered)
+    cudf_ci = cudf.from_pandas(pd_ci)
+    assert pd_ci.ordered == cudf_ci.ordered
+
+
+@pytest.mark.parametrize("method", ["as_ordered", "as_unordered"])
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_as_ordered(method, ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3], ordered=ordered)
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = getattr(pd_ci, method)()
+    result = getattr(cudf_ci, method)()
+    assert_eq(result, expected)
+
+
+def test_index_add_categories():
+    pd_ci = pd.CategoricalIndex([1, 2, 3])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.add_categories([4])
+    result = cudf_ci.add_categories([4])
+    assert_eq(result, expected)
+
+
+def test_index_remove_categories():
+    pd_ci = pd.CategoricalIndex([1, 2, 3], categories=[1, 2, 3, 4])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.remove_categories([4])
+    result = cudf_ci.remove_categories([4])
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_reorder_categories(ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3], categories=[1, 3, 2, 4])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.reorder_categories([1, 2, 3, 4], ordered=ordered)
+    result = cudf_ci.reorder_categories([1, 2, 3, 4], ordered=ordered)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_index_set_categories(ordered):
+    pd_ci = pd.CategoricalIndex([1, 2, 3])
+    cudf_ci = cudf.from_pandas(pd_ci)
+
+    expected = pd_ci.set_categories([1, 2, 3, 4], ordered=ordered)
+    result = cudf_ci.set_categories([1, 2, 3, 4], ordered=ordered)
+    assert_eq(result, expected)

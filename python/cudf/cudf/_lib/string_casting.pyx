@@ -12,37 +12,40 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_booleans cimport (
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.strings.convert.convert_booleans cimport (
     from_booleans as cpp_from_booleans,
     to_booleans as cpp_to_booleans,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_datetime cimport (
+from pylibcudf.libcudf.strings.convert.convert_datetime cimport (
     is_timestamp as cpp_is_timestamp,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_floats cimport (
+from pylibcudf.libcudf.strings.convert.convert_floats cimport (
     from_floats as cpp_from_floats,
     to_floats as cpp_to_floats,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_integers cimport (
+from pylibcudf.libcudf.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
     hex_to_integers as cpp_hex_to_integers,
     integers_to_hex as cpp_integers_to_hex,
     is_hex as cpp_is_hex,
     to_integers as cpp_to_integers,
 )
-from cudf._lib.pylibcudf.libcudf.strings.convert.convert_ipv4 cimport (
+from pylibcudf.libcudf.strings.convert.convert_ipv4 cimport (
     integers_to_ipv4 as cpp_integers_to_ipv4,
     ipv4_to_integers as cpp_ipv4_to_integers,
     is_ipv4 as cpp_is_ipv4,
 )
-from cudf._lib.pylibcudf.libcudf.types cimport data_type, type_id
+from pylibcudf.libcudf.types cimport data_type, type_id
+
 from cudf._lib.types cimport underlying_type_t_type_id
 
+import pylibcudf as plc
+
 import cudf
-import cudf._lib.pylibcudf as plc
+
 from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 

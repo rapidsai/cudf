@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 import cudf
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -26,3 +27,48 @@ def test_series_agg(attr):
     pd_agg = getattr(pdf.groupby(["a"])["a"], attr)("count")
 
     assert agg.ndim == pd_agg.ndim
+
+
+@pytest.mark.parametrize("func", ["sum", "prod", "mean", "count"])
+@pytest.mark.parametrize("attr", ["agg", "aggregate"])
+def test_dataframe_agg(attr, func):
+    df = cudf.DataFrame({"a": [1, 2, 1, 2], "b": [0, 0, 0, 0]})
+    pdf = df.to_pandas()
+
+    agg = getattr(df.groupby("a"), attr)(func)
+    pd_agg = getattr(pdf.groupby(["a"]), attr)(func)
+
+    assert_eq(agg, pd_agg)
+
+    agg = getattr(df.groupby("a"), attr)({"b": func})
+    pd_agg = getattr(pdf.groupby(["a"]), attr)({"b": func})
+
+    assert_eq(agg, pd_agg)
+
+    agg = getattr(df.groupby("a"), attr)([func])
+    pd_agg = getattr(pdf.groupby(["a"]), attr)([func])
+
+    assert_eq(agg, pd_agg)
+
+    agg = getattr(df.groupby("a"), attr)(foo=("b", func), bar=("a", func))
+    pd_agg = getattr(pdf.groupby(["a"]), attr)(
+        foo=("b", func), bar=("a", func)
+    )
+
+    assert_eq(agg, pd_agg)
+
+    agg = getattr(df.groupby("a"), attr)(
+        foo=cudf.NamedAgg(column="b", aggfunc=func),
+        bar=cudf.NamedAgg(column="a", aggfunc=func),
+    )
+    pd_agg = getattr(pdf.groupby(["a"]), attr)(
+        foo=("b", func), bar=("a", func)
+    )
+
+    assert_eq(agg, pd_agg)
+
+
+def test_dataframe_agg_with_invalid_kwarg():
+    with pytest.raises(TypeError, match="Invalid keyword argument"):
+        df = cudf.DataFrame({"a": [1, 2, 1, 2], "b": [0, 0, 0, 0]})
+        df.groupby("a").agg(foo=set())

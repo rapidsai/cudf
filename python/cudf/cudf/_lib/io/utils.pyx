@@ -7,16 +7,17 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.column cimport Column
-from cudf._lib.pylibcudf.io.datasource cimport Datasource
-from cudf._lib.pylibcudf.libcudf.io.data_sink cimport data_sink
-from cudf._lib.pylibcudf.libcudf.io.datasource cimport datasource
-from cudf._lib.pylibcudf.libcudf.io.types cimport (
+from pylibcudf.io.datasource cimport Datasource
+from pylibcudf.libcudf.io.data_sink cimport data_sink
+from pylibcudf.libcudf.io.datasource cimport datasource
+from pylibcudf.libcudf.io.types cimport (
     column_name_info,
     host_buffer,
     sink_info,
     source_info,
 )
+
+from cudf._lib.column cimport Column
 
 import codecs
 import errno
@@ -178,7 +179,7 @@ cdef update_struct_field_names(
 ):
     # Deprecated, remove in favor of add_col_struct_names
     # when a reader is ported to pylibcudf
-    for i, (name, col) in enumerate(table._data.items()):
+    for i, (name, col) in enumerate(table._column_labels_and_values):
         table._data[name] = update_column_struct_field_names(
             col, schema_info[i]
         )

@@ -64,8 +64,6 @@ markers = [
   "skip_ubsan: Tests known to fail UBSAN check",
 ]
 EOF
-    # append the contents of patch-confest.py to conftest.py
-    cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
@@ -137,7 +135,7 @@ and not test_eof_states \
 and not test_array_tz"
 
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
-PANDAS_CI="1" timeout 60m python -m pytest -p cudf.pandas \
+PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current" \
     --import-mode=importlib \
@@ -146,5 +144,4 @@ PANDAS_CI="1" timeout 60m python -m pytest -p cudf.pandas \
 
 mv *.json ..
 cd ..
-
 rm -rf pandas-testing/pandas-tests/

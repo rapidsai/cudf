@@ -90,7 +90,7 @@ int main(int argc, char** argv)
   // it being set as the default
   // Also, call this before the first libcudf API call to ensure all data is allocated by the same
   // memory resource.
-  rmm::mr::set_current_device_resource(&mr);
+  cudf::set_current_device_resource(&mr);
 
   // Read data
   auto stock_table_with_metadata = read_csv("4stock_5day.csv");

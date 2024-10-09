@@ -25,8 +25,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::detail {
 
@@ -143,7 +142,7 @@ std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
                                              return_dtype,
                                              std::nullopt,
                                              stream,
-                                             rmm::mr::get_current_device_resource());
+                                             cudf::get_current_device_resource_ref());
     }
   }();
   // Blow up results into separate column.

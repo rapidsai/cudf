@@ -20,9 +20,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 
@@ -47,14 +45,15 @@ namespace CUDF_EXPORT cudf {
  * @throws cudf::logic_error if input contains no columns.
  * @throws cudf::logic_error if input columns dtypes are not identical.
  *
- * @param[in] input Table containing columns to interleave
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
- *
+ * @param input Table containing columns to interleave
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The interleaved columns as a single column
  */
 std::unique_ptr<column> interleave_columns(
   table_view const& input,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Repeats the rows from `input` table `count` times to form a new table.
@@ -68,16 +67,18 @@ std::unique_ptr<column> interleave_columns(
  * return = [[8, 4, 7, 8, 4, 7], [5, 2, 3, 5, 2, 3]]
  * ```
  *
- * @param[in] input Table containing rows to be repeated
- * @param[in] count Number of times to tile "rows". Must be non-negative
- * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @param input Table containing rows to be repeated
+ * @param count Number of times to tile "rows". Must be non-negative
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return The table containing the tiled "rows"
  */
 std::unique_ptr<table> tile(
   table_view const& input,
   size_type count,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Configures whether byte casting flips endianness
@@ -95,6 +96,7 @@ enum class flip_endianness : bool { NO, YES };
  *
  * @param input_column Column to be converted to lists of bytes
  * @param endian_configuration Whether to retain or flip the endianness of the elements
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return The column containing the lists of bytes
@@ -102,7 +104,8 @@ enum class flip_endianness : bool { NO, YES };
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,
   flip_endianness endian_configuration,
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 

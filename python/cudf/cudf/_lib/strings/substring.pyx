@@ -10,7 +10,7 @@ from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
 
-import cudf._lib.pylibcudf as plc
+import pylibcudf as plc
 
 
 @acquire_spill_lock()

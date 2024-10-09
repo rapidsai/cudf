@@ -22,9 +22,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <iostream>
 #include <memory>
@@ -41,8 +39,9 @@ namespace io {
  * @file
  */
 
-constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr size_t default_row_group_size_bytes =
+  std::numeric_limits<size_t>::max();                          ///< Infinite bytes per row group
+constexpr size_type default_row_group_size_rows = 1'000'000;   ///< 1 million rows per row group
 constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
 constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
 constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
@@ -76,6 +75,8 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Whether to read and use ARROW schema
   bool _use_arrow_schema = true;
+  // Whether to allow reading matching select columns from mismatched Parquet files.
+  bool _allow_mismatched_pq_schemas = false;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
@@ -137,6 +138,18 @@ class parquet_reader_options {
    * @return `true` if arrow schema is used while reading
    */
   [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
+
+  /**
+   * @brief Returns true/false depending on whether to read matching projected and filter columns
+   * from mismatched Parquet sources.
+   *
+   * @return `true` if mismatched projected and filter columns will be read from mismatched Parquet
+   * sources.
+   */
+  [[nodiscard]] bool is_enabled_allow_mismatched_pq_schemas() const
+  {
+    return _allow_mismatched_pq_schemas;
+  }
 
   /**
    * @brief Returns optional tree of metadata.
@@ -257,6 +270,15 @@ class parquet_reader_options {
    * @param val Boolean value whether to use arrow schema
    */
   void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
+
+  /**
+   * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
+   * Parquet sources.
+   *
+   * @param val Boolean value whether to read matching projected and filter columns from mismatched
+   * Parquet sources.
+   */
+  void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
   /**
    * @brief Sets reader column schema.
@@ -383,6 +405,20 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
+   * Parquet sources.
+   *
+   * @param val Boolean value whether to read matching projected and filter columns from mismatched
+   * Parquet sources.
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)
+  {
+    options._allow_mismatched_pq_schemas = val;
+    return *this;
+  }
+
+  /**
    * @brief Sets reader metadata.
    *
    * @param val Tree of metadata information.
@@ -465,7 +501,7 @@ class parquet_reader_options_builder {
 table_with_metadata read_parquet(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief The chunked parquet reader class to read Parquet file iteratively in to a series of
@@ -503,7 +539,7 @@ class chunked_parquet_reader {
     std::size_t chunk_read_limit,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Constructor for chunked reader.
@@ -529,7 +565,7 @@ class chunked_parquet_reader {
     std::size_t pass_read_limit,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Destructor, destroying the internal reader instance.

@@ -24,16 +24,14 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <iomanip>
 #include <sstream>
 
 namespace cudf::io::detail {
 
-void gather_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
+void gather_column_buffer::allocate_strings_data(bool memset_data, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
   // The contents of _strings will never be directly returned to the user.
@@ -44,7 +42,7 @@ void gather_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
   // default rmm memory resource.
   _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
     cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
-      size, stream, rmm::mr::get_current_device_resource()));
+      size, stream, cudf::get_current_device_resource_ref()));
 }
 
 std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_stream_view stream)
@@ -56,11 +54,12 @@ std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_
   return make_strings_column(*_strings, stream, _mr);
 }
 
-void cudf::io::detail::inline_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
+void cudf::io::detail::inline_column_buffer::allocate_strings_data(bool memset_data,
+                                                                   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(type.id() == type_id::STRING, "allocate_strings_data called for non-string column");
   // size + 1 for final offset. _string_data will be initialized later.
-  _data = create_data(data_type{type_id::INT32}, size + 1, stream, _mr);
+  _data = create_data(data_type{type_to_id<size_type>()}, size + 1, memset_data, stream, _mr);
 }
 
 void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes,
@@ -93,6 +92,7 @@ void copy_buffer_data(string_policy const& buff, string_policy& new_buff)
 template <class string_policy>
 void column_buffer_base<string_policy>::create_with_mask(size_type _size,
                                                          cudf::mask_state null_mask_state,
+                                                         bool memset_data,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
@@ -100,16 +100,20 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
   _mr  = mr;
 
   switch (type.id()) {
-    case type_id::STRING: static_cast<string_policy*>(this)->allocate_strings_data(stream); break;
+    case type_id::STRING:
+      static_cast<string_policy*>(this)->allocate_strings_data(memset_data, stream);
+      break;
 
     // list columns store a buffer of int32's as offsets to represent
     // their individual rows
-    case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, _mr); break;
+    case type_id::LIST:
+      _data = create_data(data_type{type_to_id<size_type>()}, size, memset_data, stream, _mr);
+      break;
 
     // struct columns store no data themselves.  just validity and children.
     case type_id::STRUCT: break;
 
-    default: _data = create_data(type, size, stream, _mr); break;
+    default: _data = create_data(type, size, memset_data, stream, _mr); break;
   }
   if (is_nullable) {
     _null_mask =
@@ -119,10 +123,19 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
 
 template <class string_policy>
 void column_buffer_base<string_policy>::create(size_type _size,
+                                               bool memset_data,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  create_with_mask(_size, mask_state::ALL_NULL, stream, mr);
+  create_with_mask(_size, mask_state::ALL_NULL, memset_data, stream, mr);
+}
+
+template <class string_policy>
+void column_buffer_base<string_policy>::create(size_type _size,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  create_with_mask(_size, mask_state::ALL_NULL, true, stream, mr);
 }
 
 template <class string_policy>

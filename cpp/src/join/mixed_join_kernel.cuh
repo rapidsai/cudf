@@ -19,6 +19,7 @@
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
+#include "mixed_join_kernel.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -39,20 +40,20 @@ namespace cg = cooperative_groups;
 #pragma GCC diagnostic ignored "-Wattributes"
 
 template <cudf::size_type block_size, bool has_nulls>
-CUDF_HIDDEN __launch_bounds__(block_size) __global__
-  void mixed_join(table_device_view left_table,
-                  table_device_view right_table,
-                  table_device_view probe,
-                  table_device_view build,
-                  row_hash const hash_probe,
-                  row_equality const equality_probe,
-                  join_kind const join_type,
-                  cudf::detail::mixed_multimap_type::device_view hash_table_view,
-                  size_type* join_output_l,
-                  size_type* join_output_r,
-                  cudf::ast::detail::expression_device_view device_expression_data,
-                  cudf::size_type const* join_result_offsets,
-                  bool const swap_tables)
+CUDF_KERNEL void __launch_bounds__(block_size)
+  mixed_join(table_device_view left_table,
+             table_device_view right_table,
+             table_device_view probe,
+             table_device_view build,
+             row_hash const hash_probe,
+             row_equality const equality_probe,
+             join_kind const join_type,
+             cudf::detail::mixed_multimap_type::device_view hash_table_view,
+             size_type* join_output_l,
+             size_type* join_output_r,
+             cudf::ast::detail::expression_device_view device_expression_data,
+             cudf::size_type const* join_result_offsets,
+             bool const swap_tables)
 {
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
@@ -109,6 +110,41 @@ CUDF_HIDDEN __launch_bounds__(block_size) __global__
                                     equality);
     }
   }
+}
+
+template <bool has_nulls>
+void launch_mixed_join(table_device_view left_table,
+                       table_device_view right_table,
+                       table_device_view probe,
+                       table_device_view build,
+                       row_hash const hash_probe,
+                       row_equality const equality_probe,
+                       join_kind const join_type,
+                       cudf::detail::mixed_multimap_type::device_view hash_table_view,
+                       size_type* join_output_l,
+                       size_type* join_output_r,
+                       cudf::ast::detail::expression_device_view device_expression_data,
+                       cudf::size_type const* join_result_offsets,
+                       bool const swap_tables,
+                       detail::grid_1d const config,
+                       int64_t shmem_size_per_block,
+                       rmm::cuda_stream_view stream)
+{
+  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+      left_table,
+      right_table,
+      probe,
+      build,
+      hash_probe,
+      equality_probe,
+      join_type,
+      hash_table_view,
+      join_output_l,
+      join_output_r,
+      device_expression_data,
+      join_result_offsets,
+      swap_tables);
 }
 
 }  // namespace detail

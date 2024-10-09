@@ -178,13 +178,19 @@ def test_column_set_equal_length_object_by_mask():
     bool_col = cudf.Series([True, True, True, True, True])._column
 
     data[bool_col] = replace_data
-    assert_eq(cudf.Series(data), cudf.Series(replace_data))
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series._from_column(replace_data),
+    )
 
     data = cudf.Series([0, 0, 1, 1, 1])._column
     bool_col = cudf.Series([True, False, True, False, True])._column
     data[bool_col] = replace_data
 
-    assert_eq(cudf.Series(data), cudf.Series([100, 0, 300, 1, 500]))
+    assert_eq(
+        cudf.Series._from_column(data),
+        cudf.Series([100, 0, 300, 1, 500]),
+    )
 
 
 def test_column_set_unequal_length_object_by_mask():

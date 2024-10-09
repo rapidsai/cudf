@@ -398,8 +398,12 @@ def assert_index_equal(
             )
 
         for level in range(left.nlevels):
-            llevel = cudf.Index(left._columns[level], name=left.names[level])
-            rlevel = cudf.Index(right._columns[level], name=right.names[level])
+            llevel = cudf.Index._from_column(
+                left._columns[level], name=left.names[level]
+            )
+            rlevel = cudf.Index._from_column(
+                right._columns[level], name=right.names[level]
+            )
             mul_obj = f"MultiIndex level [{level}]"
             assert_index_equal(
                 llevel,
@@ -672,7 +676,7 @@ def assert_frame_equal(
 
     if check_like:
         left, right = left.reindex(index=right.index), right
-        right = right[list(left._data.names)]
+        right = right[list(left._column_names)]
 
     # index comparison
     assert_index_equal(

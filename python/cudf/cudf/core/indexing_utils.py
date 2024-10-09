@@ -152,10 +152,6 @@ def destructure_dataframe_iloc_indexer(
         column_names: ColumnLabels = list(
             frame._data.get_labels_by_index(cols)
         )
-        if len(set(column_names)) != len(column_names):
-            raise NotImplementedError(
-                "cudf DataFrames do not support repeated column names"
-            )
     except TypeError:
         raise TypeError(
             "Column indices must be integers, slices, "

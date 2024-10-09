@@ -21,10 +21,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -62,9 +62,10 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
 std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type begin_bit,
                                       size_type end_bit,
+                                      rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mask_to_bools(bitmask, begin_bit, end_bit, cudf::get_default_stream(), mr);
+  return detail::mask_to_bools(bitmask, begin_bit, end_bit, stream, mr);
 }
 }  // namespace cudf
