@@ -7,12 +7,17 @@ files:
       arch: [x86_64]
     includes:
       # Note that clang-tidy is not included here because cudf's preferred
-      # version conflicts with the rest of RAPIDS and that would break any
-      # unified environment.
+      # version conflicts with the rest of RAPIDS as well as its own
+      # clang-format version. Until we update our clang-format version we will
+      # not be able to install both into the same environment. Moreover, using
+      # this version will break compatibility with other RAPIDS libraries that
+      # are still using 16.0.6, and as such will and that would break any
+      # unified environment like that used in unified devcontainers.
       - build_base
       - build_all
       - build_cpp
       - build_python_common
+      - clang_format
       - cuda
       - cuda_version
       - depends_on_cupy
@@ -571,6 +576,12 @@ dependencies:
           - clang==16.0.6
           - clang-tools=16.0.6
           - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
+  clang_format:
+    common:
+      - output_types: conda
+        packages:
+          - clang==16.0.6
+          - clang-tools=16.0.6
   clang_tidy:
     common:
       - output_types: conda
