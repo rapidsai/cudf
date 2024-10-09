@@ -342,7 +342,7 @@ class Scan(IR):
                 reader = plc.io.parquet.ChunkedParquetReader(
                     plc.io.SourceInfo(self.paths),
                     columns=with_columns,
-                    num_rows=n_rows,
+                    nrows=n_rows,
                     skip_rows=self.skip_rows,
                     chunk_read_limit=parquet_options.get("chunk_read_limit", 0),
                     pass_read_limit=parquet_options.get("pass_read_limit", 1024000000),
@@ -369,7 +369,7 @@ class Scan(IR):
                 tbl_w_meta = plc.io.parquet.read_parquet(
                     plc.io.SourceInfo(self.paths),
                     columns=with_columns,
-                    num_rows=n_rows,
+                    nrows=n_rows,
                     skip_rows=self.skip_rows,
                 )
                 df = DataFrame.from_table(
