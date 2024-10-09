@@ -534,6 +534,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   }
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
   if (s->num_rows == 0) { return; }
 
   DecodeValuesFunc<decode_block_size_t, state_buf_t> decode_values;
