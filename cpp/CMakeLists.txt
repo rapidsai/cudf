@@ -159,7 +159,9 @@ if(CUDF_CLANG_TIDY)
     OUTPUT_VARIABLE CLANG_TIDY_OUTPUT
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  string(REGEX MATCH "LLVM version ([0-9]+\\.[0-9]+)\\.[0-9]+" LLVM_VERSION_MATCH "${CLANG_TIDY_OUTPUT}")
+  string(REGEX MATCH "LLVM version ([0-9]+\\.[0-9]+)\\.[0-9]+" LLVM_VERSION_MATCH
+               "${CLANG_TIDY_OUTPUT}"
+  )
   # Discard the patch version and allow it to float. Empirically, results between patch versions are
   # mostly stable, and looking at available packages on some package managers sometimes patch
   # versions are skipped so we don't want to constrain to a patch version that the user can't
