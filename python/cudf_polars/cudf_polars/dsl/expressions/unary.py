@@ -13,13 +13,48 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from cudf_polars.containers import DataFrame
 
-__all__ = ["UnaryFunction", "Len"]
+__all__ = ["Cast", "UnaryFunction", "Len"]
+
+
+class Cast(Expr):
+    """Class representing a cast of an expression."""
+
+    __slots__ = ("children",)
+    _non_child = ("dtype",)
+    children: tuple[Expr]
+
+    def __init__(self, dtype: plc.DataType, value: Expr) -> None:
+        super().__init__(dtype)
+        self.children = (value,)
+        if not dtypes.can_cast(value.dtype, self.dtype):
+            raise NotImplementedError(
+                f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
+            )
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        (child,) = self.children
+        column = child.evaluate(df, context=context, mapping=mapping)
+        return Column(plc.unary.cast(column.obj, self.dtype)).sorted_like(column)
+
+    def collect_agg(self, *, depth: int) -> AggInfo:
+        """Collect information about aggregations in groupbys."""
+        # TODO: Could do with sort-based groupby and segmented filter
+        (child,) = self.children
+        return child.collect_agg(depth=depth)
 
 
 class Len(Expr):
