@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["StringFunction"]
+
 
 class StringFunction(Expr):
     __slots__ = ("name", "options", "children", "_regex_program")

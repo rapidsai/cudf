@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import Column, DataFrame
 
+__all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext"]
+
 
 class AggInfo(NamedTuple):
     requests: list[tuple[Expr | None, plc.aggregation.Aggregation, Expr]]

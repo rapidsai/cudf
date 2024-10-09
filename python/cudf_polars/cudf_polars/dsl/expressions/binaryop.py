@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["BinOp"]
+
 
 class BinOp(Expr):
     __slots__ = ("op", "children")

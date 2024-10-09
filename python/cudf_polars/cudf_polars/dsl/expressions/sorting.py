@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["Sort", "SortBy"]
+
 
 class Sort(Expr):
     __slots__ = ("options", "children")

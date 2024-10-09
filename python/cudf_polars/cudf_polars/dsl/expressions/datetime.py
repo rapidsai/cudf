@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["TemporalFunction"]
+
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")

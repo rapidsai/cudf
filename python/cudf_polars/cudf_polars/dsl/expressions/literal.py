@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["Literal", "LiteralColumn"]
+
 
 class Literal(Expr):
     __slots__ = ("value",)

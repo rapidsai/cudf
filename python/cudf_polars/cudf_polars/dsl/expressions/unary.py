@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["UnaryFunction", "Len"]
+
 
 class Len(Expr):
     """Class representing the length of an expression."""

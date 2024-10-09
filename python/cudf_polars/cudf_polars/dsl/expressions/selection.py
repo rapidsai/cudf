@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["Gather", "Filter"]
+
 
 class Gather(Expr):
     __slots__ = ("children",)

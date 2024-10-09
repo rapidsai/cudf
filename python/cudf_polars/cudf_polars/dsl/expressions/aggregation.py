@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
+__all__ = ["Agg"]
+
 
 class Agg(Expr):
     __slots__ = ("name", "options", "op", "request", "children")
