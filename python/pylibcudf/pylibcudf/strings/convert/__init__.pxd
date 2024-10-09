@@ -6,4 +6,5 @@ from . cimport (
     convert_fixed_point,
     convert_ipv4,
     convert_lists,
+    convert_urls,
 )
