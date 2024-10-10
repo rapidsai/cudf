@@ -379,11 +379,12 @@ std::unique_ptr<column> make_strings_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Construct a batch of STRING type columns given an array of device span of pointer/size
+ * @brief Construct a batch of STRING type columns given an array of device spans of pointer/size
+ * pairs.
  *
  * This function has input/output expectation similar to the `make_strings_column()` API that
  * accepts only one device span of pointer/size pairs. The difference is that, this is designed to
- * create many strings column at once with minimal overhead of multiple kernel launches and
+ * create many strings columns at once with minimal overhead of multiple kernel launches and
  * stream synchronizations.
  *
  * @param input Array of device spans of pointer/size pairs, where each pointer is a device memory
