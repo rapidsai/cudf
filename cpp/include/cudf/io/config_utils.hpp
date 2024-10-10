@@ -35,6 +35,11 @@ bool is_gds_enabled();
  */
 bool is_kvikio_enabled();
 
+/**
+ * @brief Returns true if the current device is the Grace Hopper system.
+ */
+bool is_current_device_grace_hopper();
+
 }  // namespace io::cufile_integration
 
 namespace io::nvcomp_integration {
