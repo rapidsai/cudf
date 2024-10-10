@@ -385,7 +385,7 @@ void generate_parquet_data_sources(double scale_factor,
 
   CUDF_FUNC_RANGE();
   std::for_each(table_names.begin(), table_names.end(), [&](auto const& table_name) {
-    sources[table_name] = cuio_source_sink_pair(io_type::HOST_BUFFER);
+    sources.emplace(table_name, cuio_source_sink_pair(io_type::HOST_BUFFER));
   });
 
   auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
@@ -406,14 +406,14 @@ void generate_parquet_data_sources(double scale_factor,
   auto region = cudf::datagen::generate_region(cudf::get_default_stream(),
                                                cudf::get_current_device_resource_ref());
 
-  write_to_parquet_device_buffer(std::move(orders), ORDERS_SCHEMA, sources["orders"]);
-  write_to_parquet_device_buffer(std::move(lineitem), LINEITEM_SCHEMA, sources["lineitem"]);
-  write_to_parquet_device_buffer(std::move(part), PART_SCHEMA, sources["part"]);
-  write_to_parquet_device_buffer(std::move(partsupp), PARTSUPP_SCHEMA, sources["partsupp"]);
-  write_to_parquet_device_buffer(std::move(customer), CUSTOMER_SCHEMA, sources["customer"]);
-  write_to_parquet_device_buffer(std::move(supplier), SUPPLIER_SCHEMA, sources["supplier"]);
-  write_to_parquet_device_buffer(std::move(nation), NATION_SCHEMA, sources["nation"]);
-  write_to_parquet_device_buffer(std::move(region), REGION_SCHEMA, sources["region"]);
+  write_to_parquet_device_buffer(std::move(orders), ORDERS_SCHEMA, sources.at("orders"));
+  write_to_parquet_device_buffer(std::move(lineitem), LINEITEM_SCHEMA, sources.at("lineitem"));
+  write_to_parquet_device_buffer(std::move(part), PART_SCHEMA, sources.at("part"));
+  write_to_parquet_device_buffer(std::move(partsupp), PARTSUPP_SCHEMA, sources.at("partsupp"));
+  write_to_parquet_device_buffer(std::move(customer), CUSTOMER_SCHEMA, sources.at("customer"));
+  write_to_parquet_device_buffer(std::move(supplier), SUPPLIER_SCHEMA, sources.at("supplier"));
+  write_to_parquet_device_buffer(std::move(nation), NATION_SCHEMA, sources.at("nation"));
+  write_to_parquet_device_buffer(std::move(region), REGION_SCHEMA, sources.at("region"));
   // Restore the original memory resource
   cudf::set_current_device_resource(old_mr);
 }

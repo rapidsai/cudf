@@ -125,7 +125,7 @@ void run_ndsh_q1(nvbench::state& state,
 
   // Read out the `lineitem` table from parquet file
   auto lineitem =
-    read_parquet(sources["lineitem"].make_source_info(), lineitem_cols, std::move(lineitem_pred));
+    read_parquet(sources.at("lineitem").make_source_info(), lineitem_cols, std::move(lineitem_pred));
 
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =

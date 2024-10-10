@@ -84,7 +84,7 @@ void run_ndsh_q6(nvbench::state& state,
   auto const lineitem_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, shipdate_pred_a, shipdate_pred_b);
   auto lineitem =
-    read_parquet(sources["lineitem"].make_source_info(), lineitem_cols, std::move(lineitem_pred));
+    read_parquet(sources.at("lineitem").make_source_info(), lineitem_cols, std::move(lineitem_pred));
 
   // Cast the discount and quantity columns to float32 and append to lineitem table
   auto discout_float =

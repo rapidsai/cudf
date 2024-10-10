@@ -116,16 +116,16 @@ void run_ndsh_q9(nvbench::state& state,
 {
   // Read out the table from parquet files
   auto const lineitem = read_parquet(
-    sources["lineitem"].make_source_info(),
+    sources.at("lineitem").make_source_info(),
     {"l_suppkey", "l_partkey", "l_orderkey", "l_extendedprice", "l_discount", "l_quantity"});
-  auto const nation = read_parquet(sources["nation"].make_source_info(), {"n_nationkey", "n_name"});
+  auto const nation = read_parquet(sources.at("nation").make_source_info(), {"n_nationkey", "n_name"});
   auto const orders =
-    read_parquet(sources["orders"].make_source_info(), {"o_orderkey", "o_orderdate"});
-  auto const part     = read_parquet(sources["part"].make_source_info(), {"p_partkey", "p_name"});
-  auto const partsupp = read_parquet(sources["partsupp"].make_source_info(),
+    read_parquet(sources.at("orders").make_source_info(), {"o_orderkey", "o_orderdate"});
+  auto const part     = read_parquet(sources.at("part").make_source_info(), {"p_partkey", "p_name"});
+  auto const partsupp = read_parquet(sources.at("partsupp").make_source_info(),
                                      {"ps_suppkey", "ps_partkey", "ps_supplycost"});
   auto const supplier =
-    read_parquet(sources["supplier"].make_source_info(), {"s_suppkey", "s_nationkey"});
+    read_parquet(sources.at("supplier").make_source_info(), {"s_suppkey", "s_nationkey"});
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
