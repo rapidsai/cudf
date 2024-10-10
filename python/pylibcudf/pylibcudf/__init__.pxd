@@ -34,7 +34,6 @@ from . cimport (
     transpose,
     types,
     unary,
-    wrappers,
 )
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
@@ -80,6 +79,5 @@ __all__ = [
     "transpose",
     "types",
     "unary",
-    "wrappers",
     "nvtext",
 ]
