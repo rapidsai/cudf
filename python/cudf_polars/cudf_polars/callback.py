@@ -174,28 +174,30 @@ def execute_with_cudf(
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    debug_mode = config.config.get("debug_mode", False)
-    if unsupported := (config.config.keys() - {"raise_on_fail", "debug_mode"}):
+    if unsupported := (config.config.keys() - {"raise_on_fail"}):
         raise ValueError(
             f"Engine configuration contains unsupported settings {unsupported}"
         )
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
-            translator = Translator(nt, debug_mode=debug_mode)
+            translator = Translator(nt)
             ir = translator.translate_ir()
-            if debug_mode and len(translator.errors):
-                unique_errors = set(translator.errors)
-                raise NotImplementedError(
-                    "Query contained unsupported operations", unique_errors
+            if len(translator.errors):
+                unique_errors = sorted(set(translator.errors))
+                error_message = "Query contained unsupported operations"
+                unsupported_ops_exception = NotImplementedError(
+                    error_message, unique_errors
                 )
-            nt.set_udf(
-                partial(
-                    _callback,
-                    ir,
-                    device=device,
-                    memory_resource=memory_resource,
+                if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+                    warnings.warn(error_message, UserWarning, stacklevel=2)
+                if raise_on_fail:
+                    raise unsupported_ops_exception
+            else:
+                nt.set_udf(
+                    partial(
+                        _callback, ir, device=device, memory_resource=memory_resource
+                    )
                 )
-            )
     except exception as e:
         if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
             warnings.warn(

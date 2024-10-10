@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 if TYPE_CHECKING:
     from cudf_polars.typing import NodeTraverser
+
 __all__ = ["Translator", "translate_named_expr"]
 
 
@@ -69,7 +70,14 @@ class Translator:
         Raises
         ------
         NotImplementedError
-            If we can't translate the nodes due to unsupported functionality.
+            If the version of Polars IR is unsupported.
+
+        Notes
+        -----
+        Any expression nodes that cannot be translated are replaced by
+        :class:`expr.ErrorNode` nodes and collected in the the `errors` attribute.
+        After translation is complete, this list of errors should be inspected
+        to determine if the query is supported.
         """
         ctx: AbstractContextManager[None] = (
             set_node(self.visitor, n) if n is not None else noop_context
@@ -86,16 +94,19 @@ class Translator:
             polars_schema = self.visitor.get_schema()
             node = self.visitor.view_current_node()
             schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
-            result = _translate_ir(node, self, schema)
+            try:
+                result = _translate_ir(node, self, schema)
+            except Exception as e:
+                self.errors.append(str(e))
+                return ir.ErrorNode(schema, str(e))
             if any(
                 isinstance(dtype, pl.Null)
                 for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
             ):
                 error = f"No GPU support for {result} with Null column dtype."
-                if self.debug_mode:
-                    self.errors.append(error)
-                    return ir.ErrorNode(polars_schema, error)
-                raise NotImplementedError(error)
+                self.errors.append(error)
+                return ir.ErrorNode(schema, error)
+
             return result
 
     def translate_expr(self, *, n: int) -> expr.Expr:
@@ -111,10 +122,12 @@ class Translator:
         -------
         Translated IR object.
 
-        Raises
-        ------
-        NotImplementedError
-            If any translation fails due to unsupported functionality.
+        Notes
+        -----
+        Any expression nodes that cannot be translated are replaced by
+        :class:`expr.ErrorExpr` nodes and collected in the the `errors` attribute.
+        After translation is complete, this list of errors should be inspected
+        to determine if the query is supported.
         """
         node = self.visitor.view_expression(n)
         dtype = dtypes.from_polars(self.visitor.get_dtype(n))
