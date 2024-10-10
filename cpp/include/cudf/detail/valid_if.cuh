@@ -128,7 +128,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
  * p:             [](size_type col, size_type row){ return col == row; }
  * masks:         [[b00...], [b00...], [b00...]]
  * mask_count:    3
- * mask_num_bits: 2
+ * mask_num_bits: [2]
  * valid_counts:  [0, 0, 0]
  *
  * Example Results:
@@ -148,28 +148,30 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
  * @param valid_counts  Used to obtain the total number of valid bits for each
  *                      mask.
  */
-template <typename InputIterator1,
+template <int32_t block_size,
+          typename InputIterator1,
           typename InputIterator2,
-          typename BinaryPredicate,
-          int32_t block_size>
+          typename MaskSizeIterator,
+          typename BinaryPredicate>
 CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
                                    InputIterator2 begin2,
                                    BinaryPredicate p,
                                    bitmask_type* masks[],
                                    size_type mask_count,
-                                   size_type mask_num_bits,
+                                   MaskSizeIterator mask_num_bits,
                                    size_type* valid_counts)
 {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];
     if (mask == nullptr) { continue; }
 
+    auto const mask_size  = mask_num_bits[mask_idx];
     auto block_offset     = blockIdx.x * blockDim.x;
     auto warp_valid_count = static_cast<size_type>(0);
 
-    while (block_offset < mask_num_bits) {
+    while (block_offset < mask_size) {
       auto const thread_idx    = block_offset + threadIdx.x;
-      auto const thread_active = thread_idx < mask_num_bits;
+      auto const thread_active = thread_idx < mask_size;
       auto const arg_1         = *(begin1 + mask_idx);
       auto const arg_2         = *(begin2 + thread_idx);
       auto const bit_is_valid  = thread_active && p(arg_1, arg_2);
