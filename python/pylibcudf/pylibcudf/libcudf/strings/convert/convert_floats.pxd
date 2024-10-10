@@ -9,12 +9,12 @@ from pylibcudf.libcudf.types cimport data_type
 cdef extern from "cudf/strings/convert/convert_floats.hpp" namespace \
         "cudf::strings" nogil:
     cdef unique_ptr[column] to_floats(
-        column_view input_col,
+        column_view strings,
         data_type output_type) except +
 
     cdef unique_ptr[column] from_floats(
-        column_view input_col) except +
+        column_view floats) except +
 
     cdef unique_ptr[column] is_float(
-        column_view source_strings
+        column_view input
     ) except +

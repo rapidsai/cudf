@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,15 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
+
+#include <nvbench/nvbench.cuh>
 
 #include <algorithm>
 #include <list>
@@ -35,13 +37,10 @@ enum class TreeType {
 };
 
 template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
-class AST : public cudf::benchmark {};
-
-template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
-static void BM_ast_transform(benchmark::State& state)
+static void BM_ast_transform(nvbench::state& state)
 {
-  auto const table_size{static_cast<cudf::size_type>(state.range(0))};
-  auto const tree_levels{static_cast<cudf::size_type>(state.range(1))};
+  auto const table_size  = static_cast<cudf::size_type>(state.get_int64("table_size"));
+  auto const tree_levels = static_cast<cudf::size_type>(state.get_int64("tree_levels"));
 
   // Create table data
   auto const n_cols = reuse_columns ? 1 : tree_levels + 1;
@@ -86,38 +85,22 @@ static void BM_ast_transform(benchmark::State& state)
 
   auto const& expression_tree_root = expressions.back();
 
-  // Execute benchmark
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::compute_column(table, expression_tree_root);
-  }
-
   // Use the number of bytes read from global memory
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) *
-                          (tree_levels + 1) * sizeof(key_type));
-}
+  state.add_global_memory_reads<key_type>(table_size * (tree_levels + 1));
 
-static void CustomRanges(benchmark::internal::Benchmark* b)
-{
-  auto row_counts       = std::vector<cudf::size_type>{100'000, 1'000'000, 10'000'000, 100'000'000};
-  auto operation_counts = std::vector<cudf::size_type>{1, 5, 10};
-  for (auto const& row_count : row_counts) {
-    for (auto const& operation_count : operation_counts) {
-      b->Args({row_count, operation_count});
-    }
-  }
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { cudf::compute_column(table, expression_tree_root); });
 }
 
 #define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
-  BENCHMARK_TEMPLATE_DEFINE_F(AST, name, key_type, tree_type, reuse_columns, nullable)     \
-  (::benchmark::State & st)                                                                \
+  static void name(::nvbench::state& st)                                                   \
   {                                                                                        \
-    BM_ast_transform<key_type, tree_type, reuse_columns, nullable>(st);                    \
+    ::BM_ast_transform<key_type, tree_type, reuse_columns, nullable>(st);                  \
   }                                                                                        \
-  BENCHMARK_REGISTER_F(AST, name)                                                          \
-    ->Apply(CustomRanges)                                                                  \
-    ->Unit(benchmark::kMillisecond)                                                        \
-    ->UseManualTime();
+  NVBENCH_BENCH(name)                                                                      \
+    .set_name(#name)                                                                       \
+    .add_int64_axis("tree_levels", {1, 5, 10})                                             \
+    .add_int64_axis("table_size", {100'000, 1'000'000, 10'000'000, 100'000'000})
 
 AST_TRANSFORM_BENCHMARK_DEFINE(
   ast_int32_imbalanced_unique, int32_t, TreeType::IMBALANCED_LEFT, false, false);

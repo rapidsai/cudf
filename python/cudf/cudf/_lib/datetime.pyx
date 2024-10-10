@@ -13,11 +13,10 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.filling cimport calendrical_month_sequence
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.datetime import DatetimeComponent
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-
-import pylibcudf as plc
 
 
 @acquire_spill_lock()
@@ -40,9 +39,39 @@ def add_months(Column col, Column months):
 
 @acquire_spill_lock()
 def extract_datetime_component(Column col, object field):
-    result = Column.from_pylibcudf(
-        plc.datetime.extract_datetime_component(col.to_pylibcudf(mode="read"), field)
-    )
+
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+    cdef libcudf_datetime.datetime_component component
+
+    component_names = {
+        "year": DatetimeComponent.YEAR,
+        "month": DatetimeComponent.MONTH,
+        "day": DatetimeComponent.DAY,
+        "weekday": DatetimeComponent.WEEKDAY,
+        "hour": DatetimeComponent.HOUR,
+        "minute": DatetimeComponent.MINUTE,
+        "second": DatetimeComponent.SECOND,
+        "millisecond": DatetimeComponent.MILLISECOND,
+        "microsecond": DatetimeComponent.MICROSECOND,
+        "nanosecond": DatetimeComponent.NANOSECOND,
+    }
+    if field == "day_of_year":
+        with nogil:
+            c_result = move(libcudf_datetime.day_of_year(col_view))
+    elif field in component_names:
+        component = component_names[field]
+        with nogil:
+            c_result = move(
+                libcudf_datetime.extract_datetime_component(
+                    col_view,
+                    component
+                )
+            )
+    else:
+        raise ValueError(f"Invalid field: '{field}'")
+
+    result = Column.from_unique_ptr(move(c_result))
 
     if field == "weekday":
         # Pandas counts Monday-Sunday as 0-6
