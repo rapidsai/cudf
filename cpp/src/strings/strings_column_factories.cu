@@ -44,9 +44,10 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  std::vector<std::unique_ptr<column>> offsets_columns(input.size());
-  rmm::device_uvector<int64_t> chars_sizes(input.size(), stream);
-  for (std::size_t idx = 0; idx < input.size(); ++idx) {
+  auto const num_columns = input.size();
+  std::vector<std::unique_ptr<column>> offsets_columns(num_columns);
+  rmm::device_uvector<int64_t> chars_sizes(num_columns, stream);
+  for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const string_pairs = input[idx];
     auto const string_count = static_cast<size_type>(string_pairs.size());
     auto offsets            = make_numeric_column(
@@ -147,14 +148,14 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
                "Size of output exceeds the column size limit",
                std::overflow_error);
 
+  auto const num_columns = input.size();
   if (overflow_count > 0) {
     std::vector<column_string_pairs> long_string_input;
     std::vector<std::size_t> long_string_col_idx;
     long_string_input.reserve(overflow_count);
     long_string_col_idx.reserve(overflow_count);
-    for (std::size_t idx = 0; idx < input.size(); ++idx) {
-      auto const chars_size = chars_sizes[idx];
-      if (chars_size >= threshold) {
+    for (std::size_t idx = 0; idx < num_columns; ++idx) {
+      if (chars_sizes[idx] >= threshold) {
         long_string_input.push_back(input[idx]);
         long_string_col_idx.push_back(idx);
       }
@@ -170,9 +171,9 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     }
   }
 
-  std::vector<std::unique_ptr<column>> chars_cols(input.size());
-  std::vector<std::unique_ptr<column>> output(input.size());
-  for (std::size_t idx = 0; idx < input.size(); ++idx) {
+  std::vector<std::unique_ptr<column>> chars_cols(num_columns);
+  std::vector<std::unique_ptr<column>> output(num_columns);
+  for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const strings_count = static_cast<size_type>(input[idx].size());
     if (strings_count == 0) {
       output[idx] = make_empty_column(type_id::STRING);
@@ -182,14 +183,15 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     auto const chars_size        = chars_sizes[idx];
     auto const valid_count       = valid_counts[idx];
     auto const avg_bytes_per_row = chars_size / std::max(valid_count, 1);
-    auto chars_data              = make_chars_column(offsets_cols[idx]->view(),
+
+    auto chars_data = make_chars_column(offsets_cols[idx]->view(),
                                         chars_size,
                                         avg_bytes_per_row,
                                         input[idx].data(),
                                         strings_count,
                                         stream,
                                         mr);
-    output[idx]                  = make_strings_column(strings_count,
+    output[idx]     = make_strings_column(strings_count,
                                       std::move(offsets_cols[idx]),
                                       chars_data.release(),
                                       strings_count - valid_count,
