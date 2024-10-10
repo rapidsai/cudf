@@ -14,30 +14,27 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "common_utils.hpp"
 
-#include <cudf/io/parquet.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 
 #include <chrono>
-#include <iostream>
-#include <optional>
+#include <iomanip>
 #include <string>
 
 /**
- * @brief Create memory resource for libcudf functions
+ * @file common_utils.cpp
+ * @brief Definitions for common utilities for `parquet_io` examples
  *
- * @param pool Whether to use a pool memory resource.
- * @return Memory resource instance
  */
+
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
 {
   auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
@@ -48,17 +45,11 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
   return cuda_mr;
 }
 
-/**
- * @brief Get encoding type from the keyword
- *
- * @param name encoding keyword name
- * @return corresponding column encoding type
- */
-[[nodiscard]] cudf::io::column_encoding get_encoding_type(std::string name)
+cudf::io::column_encoding get_encoding_type(std::string name)
 {
   using encoding_type = cudf::io::column_encoding;
 
-  static const std::unordered_map<std::string_view, cudf::io::column_encoding> map = {
+  static std::unordered_map<std::string_view, encoding_type> const map = {
     {"DEFAULT", encoding_type::USE_DEFAULT},
     {"DICTIONARY", encoding_type::DICTIONARY},
     {"PLAIN", encoding_type::PLAIN},
@@ -69,26 +60,18 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
   if (map.find(name) != map.end()) { return map.at(name); }
-  throw std::invalid_argument("FATAL: " + std::string(name) +
+  throw std::invalid_argument(name +
                               " is not a valid encoding type.\n\n"
                               "Available encoding types: DEFAULT, DICTIONARY, PLAIN,\n"
                               "DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY,\n"
-                              "DELTA_BYTE_ARRAY\n"
-                              "\n"
-                              "Exiting...\n");
+                              "DELTA_BYTE_ARRAY\n\n");
 }
 
-/**
- * @brief Get compression type from the keyword
- *
- * @param name compression keyword name
- * @return corresponding compression type
- */
-[[nodiscard]] cudf::io::compression_type get_compression_type(std::string name)
+cudf::io::compression_type get_compression_type(std::string name)
 {
   using compression_type = cudf::io::compression_type;
 
-  static const std::unordered_map<std::string_view, cudf::io::compression_type> map = {
+  static std::unordered_map<std::string_view, compression_type> const map = {
     {"NONE", compression_type::NONE},
     {"AUTO", compression_type::AUTO},
     {"SNAPPY", compression_type::SNAPPY},
@@ -97,30 +80,58 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_
 
   std::transform(name.begin(), name.end(), name.begin(), ::toupper);
   if (map.find(name) != map.end()) { return map.at(name); }
-  throw std::invalid_argument("FATAL: " + std::string(name) +
+  throw std::invalid_argument(name +
                               " is not a valid compression type.\n\n"
-                              "Available compression_type types: NONE, AUTO, SNAPPY,\n"
-                              "LZ4, ZSTD\n"
-                              "\n"
-                              "Exiting...\n");
+                              "Available compression types: NONE, AUTO, SNAPPY,\n"
+                              "LZ4, ZSTD\n\n");
 }
 
-/**
- * @brief Get the optional page size stat frequency from they keyword
- *
- * @param use_stats keyword affirmation string such as: Y, T, YES, TRUE, ON
- * @return optional page statistics frequency set to full (STATISTICS_COLUMN)
- */
-[[nodiscard]] std::optional<cudf::io::statistics_freq> get_page_size_stats(std::string use_stats)
+bool get_boolean(std::string input)
 {
-  std::transform(use_stats.begin(), use_stats.end(), use_stats.begin(), ::toupper);
+  std::transform(input.begin(), input.end(), input.begin(), ::toupper);
 
   // Check if the input string matches to any of the following
-  if (not use_stats.compare("ON") or not use_stats.compare("TRUE") or
-      not use_stats.compare("YES") or not use_stats.compare("Y") or not use_stats.compare("T")) {
-    // Full column and offset indices - STATISTICS_COLUMN
-    return std::make_optional(cudf::io::statistics_freq::STATISTICS_COLUMN);
-  }
+  return input == "ON" or input == "TRUE" or input == "YES" or input == "Y" or input == "T";
+}
 
-  return std::nullopt;
+void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
+{
+  try {
+    // Left anti-join the original and transcoded tables
+    // identical tables should not throw an exception and
+    // return an empty indices vector
+    auto const indices = cudf::left_anti_join(lhs_table, rhs_table, cudf::null_equality::EQUAL);
+
+    // No exception thrown, check indices
+    auto const valid = indices->size() == 0;
+    std::cout << "Tables identical: " << valid << "\n\n";
+  } catch (std::exception& e) {
+    std::cerr << e.what() << std::endl << std::endl;
+    throw std::runtime_error("Tables identical: false\n\n");
+  }
+}
+
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,
+                                                rmm::cuda_stream_view stream)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  std::vector<cudf::table_view> table_views;
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [&](auto const& tbl) {
+      return tbl->view();
+    });
+  // Construct the final table
+  return cudf::concatenate(table_views, stream);
+}
+
+std::string current_date_and_time()
+{
+  auto const time       = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  auto const local_time = *std::localtime(&time);
+  // Stringstream to format the date and time
+  std::stringstream ss;
+  ss << std::put_time(&local_time, "%Y-%m-%d-%H-%M-%S");
+  return ss.str();
 }
