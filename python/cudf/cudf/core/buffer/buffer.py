@@ -284,7 +284,7 @@ class BufferOwner(Serializable):
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
-        rmm._lib.device_buffer.copy_ptr_to_host(
+        rmm.pylibrmm.device_buffer.copy_ptr_to_host(
             self.get_ptr(mode="read") + offset, host_buf
         )
         return memoryview(host_buf).toreadonly()
