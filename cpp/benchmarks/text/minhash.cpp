@@ -56,8 +56,8 @@ static void bench_minhash(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);  // output are hashes
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = base64 ? nvtext::minhash64(input, seeds.view(), hash_width)
-                         : nvtext::minhash(input, seeds.view(), hash_width);
+    auto result = base64 ? nvtext::minhash64_permuted(input, seeds.view(), seeds.view(), hash_width)
+                         : nvtext::minhash_permuted(input, seeds.view(), seeds.view(), hash_width);
   });
 }
 
