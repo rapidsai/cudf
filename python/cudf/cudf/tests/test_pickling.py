@@ -40,33 +40,33 @@ def assert_frame_picklable(df):
 
 
 def test_pickle_dataframe_numeric():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
     nelem = 10
     df["keys"] = np.arange(nelem, dtype=np.float64)
-    df["vals"] = np.random.random(nelem)
+    df["vals"] = rng.random(nelem)
 
     check_serialization(df)
 
 
 def test_pickle_dataframe_categorical():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = pd.Categorical(
         ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_serialization(df)
 
 
 def test_memory_usage_dataframe():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
     nelem = 1000
     df["keys"] = hkeys = np.arange(nelem, dtype=np.float64)
-    df["vals"] = hvals = np.random.random(nelem)
+    df["vals"] = hvals = rng.random(nelem)
 
     nbytes = hkeys.nbytes + hvals.nbytes
     sizeof = df.memory_usage().sum()
@@ -98,11 +98,11 @@ def test_pickle_buffer():
 
 @pytest.mark.parametrize("named", [True, False])
 def test_pickle_series(named):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     if named:
-        ser = Series(np.random.random(10), name="a")
+        ser = Series(rng.random(10), name="a")
     else:
-        ser = Series(np.random.random(10))
+        ser = Series(rng.random(10))
 
     pickled = pickle.dumps(ser)
     out = pickle.loads(pickled)

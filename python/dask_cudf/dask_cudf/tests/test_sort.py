@@ -28,7 +28,7 @@ from dask_cudf.tests.utils import xfail_dask_expr
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by, ascending):
-    np.random.seed(0)
+    _ = np.random.default_rng(seed=0)
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
@@ -82,7 +82,7 @@ def test_sort_repartition():
     ],
 )
 def test_sort_values_with_nulls(data, by, ascending, na_position):
-    np.random.seed(0)
+    _ = np.random.default_rng(seed=0)
     cp.random.seed(0)
     df = cudf.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)

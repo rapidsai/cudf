@@ -368,9 +368,13 @@ def test_dataframe_drop_duplicates_method():
 
 
 def test_datetime_drop_duplicates():
-    date_df = cudf.DataFrame()
-    date_df["date"] = pd.date_range("11/20/2018", periods=6, freq="D")
-    date_df["value"] = np.random.sample(len(date_df))
+    rng = np.random.default_rng(seed=0)
+    date_df = cudf.DataFrame(
+        {
+            "date": pd.date_range("11/20/2018", periods=6, freq="D"),
+            "value": rng.random(6),
+        }
+    )
 
     df = concat([date_df, date_df[:4]])
     assert_eq(df[:-4], df.drop_duplicates())
@@ -585,7 +589,8 @@ def test_drop_duplicates_multi_index():
     ]
 
     idx = pd.MultiIndex.from_tuples(list(zip(*arrays)), names=["a", "b"])
-    pdf = pd.DataFrame(np.random.randint(0, 2, (8, 4)), index=idx)
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.integers(0, 2, (8, 4)), index=idx)
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     expected = pdf.drop_duplicates()

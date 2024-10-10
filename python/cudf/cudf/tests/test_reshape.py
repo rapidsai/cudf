@@ -35,6 +35,9 @@ if get_global_manager() is not None:
     pytest_xfail = pytest.mark.skipif
 
 
+rng = np.random.default_rng(seed=0)
+
+
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2])
 @pytest.mark.parametrize("num_value_vars", [0, 1, 2])
 @pytest.mark.parametrize("num_rows", [1, 2, 100])
@@ -48,11 +51,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     id_vars = []
     for i in range(num_id_vars):
         colname = "id" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         elif nulls == "all":
             data[:] = np.nan
@@ -62,11 +63,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     value_vars = []
     for i in range(num_value_vars):
         colname = "val" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         elif nulls == "all":
             data[:] = np.nan
@@ -141,11 +140,9 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     pdf = pd.DataFrame()
     for i in range(num_cols):
         colname = str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -281,7 +278,7 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
         names=["exp", "animal", "hair_length"],
     )
 
-    df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
+    df = pd.DataFrame(rng.standard_normal(size=(4, 4)), columns=columns)
 
     with expect_warning_if(PANDAS_GE_220, FutureWarning):
         expect = df.stack(level=level, future_stack=False)
@@ -310,12 +307,10 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(0, 26, num_rows)).astype(dtype)
+        data = pd.Series(rng.integers(0, 26, num_rows)).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -346,14 +341,10 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(num_cols, 26, num_rows)).astype(
-            dtype
-        )
+        data = pd.Series(rng.integers(num_cols, 26, num_rows)).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -730,8 +721,8 @@ def test_pivot_duplicate_error():
             "A": ["one", "one", "two", "three"] * 6,
             "B": ["A", "B", "C"] * 8,
             "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
-            "D": np.random.randn(24),
-            "E": np.random.randn(24),
+            "D": rng.standard_normal(size=24),
+            "E": rng.standard_normal(size=24),
         }
     ],
 )
@@ -768,8 +759,8 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
             "A": ["one", "one", "two", "three"] * 6,
             "B": ["A", "B", "C"] * 8,
             "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
-            "D": np.random.randn(24),
-            "E": np.random.randn(24),
+            "D": rng.standard_normal(size=24),
+            "E": rng.standard_normal(size=24),
         }
     ],
 )

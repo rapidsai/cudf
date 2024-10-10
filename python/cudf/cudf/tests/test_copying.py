@@ -16,8 +16,9 @@ pytestmark = pytest.mark.spilling
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 def test_repeat(dtype):
-    arr = np.random.rand(10) * 10
-    repeats = np.random.randint(10, size=10)
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(10) * 10
+    repeats = rng.integers(10, size=10)
     psr = pd.Series(arr).astype(dtype)
     gsr = cudf.from_pandas(psr)
 
@@ -25,18 +26,20 @@ def test_repeat(dtype):
 
 
 def test_repeat_index():
+    rng = np.random.default_rng(seed=0)
     arrays = [[1, 1, 2, 2], ["red", "blue", "red", "blue"]]
     psr = pd.MultiIndex.from_arrays(arrays, names=("number", "color"))
     gsr = cudf.from_pandas(psr)
-    repeats = np.random.randint(10, size=4)
+    repeats = rng.integers(10, size=4)
 
     assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
 
 
 def test_repeat_dataframe():
+    rng = np.random.default_rng(seed=0)
     psr = pd.DataFrame({"a": [1, 1, 2, 2]})
     gsr = cudf.from_pandas(psr)
-    repeats = np.random.randint(10, size=4)
+    repeats = rng.integers(10, size=4)
 
     # pd.DataFrame doesn't have repeat() so as a workaround, we are
     # comparing pd.Series.repeat() with cudf.DataFrame.repeat()['a']
@@ -45,7 +48,8 @@ def test_repeat_dataframe():
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_repeat_scalar(dtype):
-    arr = np.random.rand(10) * 10
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(10) * 10
     repeats = 10
     psr = pd.Series(arr).astype(dtype)
     gsr = cudf.from_pandas(psr)

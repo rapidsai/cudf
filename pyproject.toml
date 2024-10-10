@@ -90,6 +90,7 @@ select = [
     "UP007",
     # Import from `collections.abc` instead: `Callable`
     "UP035",
+    "NPY002",
 ]
 ignore = [
     # whitespace before :
