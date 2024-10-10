@@ -1,6 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import cupy
 import pyarrow as pa
 import pylibcudf as plc
 import pytest
@@ -24,9 +23,7 @@ def test_pack_and_unpack(arrow_tbl):
     res = plc.contiguous_split.unpack(packed)
     assert_table_eq(arrow_tbl, res)
 
-    # Copy the buffers to simulate IO
-    metadata = memoryview(bytes(packed.metadata))
-    gpu_data = plc.gpumemoryview(cupy.array(packed.gpu_data, copy=True))
-
-    res = plc.contiguous_split.unpack_from_memoryviews(metadata, gpu_data)
+    res = plc.contiguous_split.unpack_from_memoryviews(
+        packed.metadata, packed.gpu_data
+    )
     assert_table_eq(arrow_tbl, res)
