@@ -112,7 +112,7 @@
 }
 
 void run_ndsh_q9(nvbench::state& state,
-                 std::unordered_map<std::string, parquet_device_buffer>& sources)
+                 std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   // Read out the table from parquet files
   auto const lineitem = read_parquet(
@@ -178,7 +178,7 @@ void ndsh_q9(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
-  std::unordered_map<std::string, parquet_device_buffer> sources;
+  std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
 
