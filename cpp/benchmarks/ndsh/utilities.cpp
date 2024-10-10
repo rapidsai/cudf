@@ -337,7 +337,7 @@ int32_t days_since_epoch(int year, int month, int day)
 
 void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
                                     std::vector<std::string> const& col_names,
-                                    parquet_device_buffer& source)
+                                    cuio_source_sink_pair& source)
 {
   CUDF_FUNC_RANGE();
   auto const stream = cudf::get_default_stream();
@@ -356,10 +356,12 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
 
   // Write parquet data to host buffer
   auto builder =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&h_buffer), table->view());
+    cudf::io::parquet_writer_options::builder(source.make_sink_info(), table->view());
   builder.metadata(table_input_metadata);
   auto const options = builder.build();
-  cudf::io::write_parquet(options);
+  cudf::io::write_parquet(options, stream);
+  // stream.synchronize();
+}
 
   // Copy host buffer to device buffer
   source.d_buffer.resize(h_buffer.size(), stream);
@@ -369,11 +371,11 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
 
 void generate_parquet_data_sources(double scale_factor,
                                    std::vector<std::string> const& table_names,
-                                   std::unordered_map<std::string, parquet_device_buffer>& sources)
+                                   std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   CUDF_FUNC_RANGE();
   std::for_each(table_names.begin(), table_names.end(), [&](auto const& table_name) {
-    sources[table_name] = parquet_device_buffer();
+    sources[table_name] = cuio_source_sink_pair(io_type::HOST_BUFFER);
   });
 
   auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
