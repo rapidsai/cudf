@@ -17,10 +17,10 @@
 #include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cstdlib>
-#include <sstream>
 #include <string>
 
 namespace cudf::io {
@@ -38,12 +38,21 @@ enum class usage_policy : uint8_t { OFF, GDS, ALWAYS, KVIKIO };
  */
 usage_policy get_env_policy()
 {
-  static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "KVIKIO");
-  if (env_val == "OFF") return usage_policy::OFF;
-  if (env_val == "GDS") return usage_policy::GDS;
-  if (env_val == "ALWAYS") return usage_policy::ALWAYS;
-  if (env_val == "KVIKIO") return usage_policy::KVIKIO;
-  CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
+  auto get_policy = [](const std::string& env_val) {
+    if (env_val == "OFF") return usage_policy::OFF;
+    if (env_val == "GDS") return usage_policy::GDS;
+    if (env_val == "ALWAYS") return usage_policy::ALWAYS;
+    if (env_val == "KVIKIO") return usage_policy::KVIKIO;
+    CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
+  };
+
+  if (is_using_grace_hopper()) {
+    static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "OFF");
+    return get_policy(env_val);
+  } else {
+    static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "KVIKIO");
+    return get_policy(env_val);
+  }
 }
 }  // namespace
 
@@ -52,6 +61,28 @@ bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_policy::GDS; }
 
 bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
+
+bool is_using_grace_hopper()
+{
+  int device_idx{};
+  CUDF_CUDA_TRY(cudaGetDevice(&device_idx));
+
+  // Cache the query result to avoid the expensive call to cudaGetDeviceProperties().
+  // Key: device index.
+  // Value: whether the device is a Grace Hopper.
+  static std::unordered_map<int, bool> memo;
+
+  if (auto search = memo.find(device_idx); search == memo.end()) {
+    cudaDeviceProp property{};
+    CUDF_CUDA_TRY(cudaGetDeviceProperties(&property, device_idx));
+    auto* substr_exists = std::strstr(property.name, "GH200");
+    bool result{substr_exists != nullptr};
+    memo[device_idx] = result;
+    return result;
+  } else {
+    return search->second;
+  }
+}
 
 }  // namespace cufile_integration
 

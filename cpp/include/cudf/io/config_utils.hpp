@@ -35,6 +35,11 @@ bool is_gds_enabled();
  */
 bool is_kvikio_enabled();
 
+/**
+ * @brief Returns true if the system is Grace Hopper
+ */
+bool is_using_grace_hopper();
+
 }  // namespace io::cufile_integration
 
 namespace io::nvcomp_integration {
