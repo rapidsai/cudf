@@ -30,6 +30,10 @@
 #include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
+
 #include <cstdlib>
 #include <ctime>
 
@@ -363,16 +367,22 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
   // stream.synchronize();
 }
 
-  // Copy host buffer to device buffer
-  source.d_buffer.resize(h_buffer.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    source.d_buffer.data(), h_buffer.data(), h_buffer.size(), cudaMemcpyDefault, stream.value()));
+inline auto make_managed_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    std::make_shared<rmm::mr::managed_memory_resource>(), rmm::percent_of_free_device_memory(50));
 }
 
 void generate_parquet_data_sources(double scale_factor,
                                    std::vector<std::string> const& table_names,
                                    std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
+  // Set the memory resource to the managed pool
+  auto old_mr = cudf::get_current_device_resource(); // fixme: already pool takes 50% of free memory
+  // TODO: release it, and restore it later?
+  auto managed_pool_mr = make_managed_pool();
+  cudf::set_current_device_resource(managed_pool_mr.get());
+
   CUDF_FUNC_RANGE();
   std::for_each(table_names.begin(), table_names.end(), [&](auto const& table_name) {
     sources[table_name] = cuio_source_sink_pair(io_type::HOST_BUFFER);
@@ -404,4 +414,6 @@ void generate_parquet_data_sources(double scale_factor,
   write_to_parquet_device_buffer(std::move(supplier), SUPPLIER_SCHEMA, sources["supplier"]);
   write_to_parquet_device_buffer(std::move(nation), NATION_SCHEMA, sources["nation"]);
   write_to_parquet_device_buffer(std::move(region), REGION_SCHEMA, sources["region"]);
+  // Restore the original memory resource
+  cudf::set_current_device_resource(old_mr);
 }
