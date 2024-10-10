@@ -3828,6 +3828,30 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringContainsMulti() {
+      ColumnVector[] results = null;
+      try (ColumnVector haystack = ColumnVector.fromStrings("All the leaves are brown",
+          "And the sky is grey",
+          "I've been for a walk",
+          "On a winter's day",
+          null,
+          "");
+          ColumnVector targets = ColumnVector.fromStrings("the", "a");
+           ColumnVector expected0 = ColumnVector.fromBoxedBooleans(true, true, false, false, null, false);
+           ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true, false, true, true, null, false)) {
+        results = haystack.stringContains(targets);
+        assertColumnsAreEqual(results[0], expected0);
+        assertColumnsAreEqual(results[1], expected1);
+      } finally {
+        if (results != null) {
+          for (ColumnVector c : results) {
+            c.close();
+          }
+        }
+      }
+  }
+
+  @Test
   void testStringFindOperations() {
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "1a\"\u0100B1", "a\"\u0100B1", "1a\"\u0100B",
                                       "1a\"\u0100B1\n\t\'", "1a\"\u0100B1\u0453\u1322\u5112", "1a\"\u0100B1Fg26",
