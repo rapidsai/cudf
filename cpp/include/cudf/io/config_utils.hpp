@@ -36,7 +36,7 @@ bool is_gds_enabled();
 bool is_kvikio_enabled();
 
 /**
- * @brief Returns true if the system is Grace Hopper
+ * @brief Returns true if the current device is the Grace Hopper system.
  */
 bool is_using_grace_hopper();
 
