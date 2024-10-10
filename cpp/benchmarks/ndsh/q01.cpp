@@ -104,7 +104,7 @@
 }
 
 void run_ndsh_q1(nvbench::state& state,
-                 std::unordered_map<std::string, parquet_device_buffer>& sources)
+                 std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
