@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -7,6 +8,18 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 
 
 cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
+    cpdef enum class datetime_component(uint8_t):
+        YEAR
+        MONTH
+        DAY
+        WEEKDAY
+        HOUR
+        MINUTE
+        SECOND
+        MILLISECOND
+        MICROSECOND
+        NANOSECOND
+
     cdef unique_ptr[column] extract_year(const column_view& column) except +
     cdef unique_ptr[column] extract_month(const column_view& column) except +
     cdef unique_ptr[column] extract_day(const column_view& column) except +
@@ -22,6 +35,10 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     ) except +
     cdef unique_ptr[column] extract_nanosecond_fraction(
         const column_view& column
+    ) except +
+    cdef unique_ptr[column] extract_datetime_component(
+        const column_view& column,
+        datetime_component component
     ) except +
 
     ctypedef enum rounding_frequency "cudf::datetime::rounding_frequency":

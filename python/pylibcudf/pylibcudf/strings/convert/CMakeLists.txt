@@ -12,7 +12,9 @@
 # the License.
 # =============================================================================
 
-set(cython_sources convert_durations.pyx convert_datetime.pyx)
+set(cython_sources convert_booleans.pyx convert_datetime.pyx convert_durations.pyx
+                   convert_fixed_point.pyx convert_floats.pyx convert_ipv4.pyx convert_urls.pyx
+)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(

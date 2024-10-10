@@ -6,7 +6,7 @@ from pylibcudf.libcudf.column.column cimport column, column_view
 from pylibcudf.libcudf.table.table cimport table, table_view
 from pylibcudf.libcudf.utilities.host_span cimport host_span
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:

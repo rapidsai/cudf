@@ -74,8 +74,10 @@ struct logger_wrapper {
 
 }  // namespace
 
-spdlog::logger& cudf::logger()
+spdlog::logger& cudf::detail::logger()
 {
   static logger_wrapper wrapped{};
   return wrapped.logger_;
 }
+
+spdlog::logger& cudf::logger() { return cudf::detail::logger(); }
