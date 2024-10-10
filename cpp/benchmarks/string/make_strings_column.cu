@@ -55,11 +55,11 @@ std::vector<std::unique_ptr<cudf::column>> make_strings_columns(
 
 }  // namespace
 
-static void BM_make_strings_columns(nvbench::state& state)
+static void BM_make_strings_column_batch(nvbench::state& state)
 {
   auto const num_rows   = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const has_nulls  = static_cast<bool>(state.get_int64("has_nulls"));
   auto const batch_size = static_cast<cudf::size_type>(state.get_int64("batch_size"));
+  auto const has_nulls  = true;
 
   data_profile const table_profile =
     data_profile_builder()
@@ -95,8 +95,7 @@ static void BM_make_strings_columns(nvbench::state& state)
   });
 }
 
-NVBENCH_BENCH(BM_make_strings_columns)
-  .set_name("make_strings_column")
-  .add_int64_axis("num_rows", {1'000'000, 10'000'000, 20'000'000})
-  .add_int64_axis("has_nulls", {0, 1})
-  .add_int64_axis("batch_size", {10, 50, 100, 200});
+NVBENCH_BENCH(BM_make_strings_column_batch)
+  .set_name("make_strings_column_batch")
+  .add_int64_axis("num_rows", {100'000, 500'000, 1'000'000, 2'000'000})
+  .add_int64_axis("batch_size", {10, 20, 50, 100});
