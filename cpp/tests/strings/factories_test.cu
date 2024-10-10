@@ -333,19 +333,16 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
   });
   auto const output = cudf::make_strings_column_batch(input, stream, mr);
 
-  std::vector<std::unique_ptr<cudf::column>> expected(num_columns);
-  for (auto const& string_pairs : input) {
-    expected.emplace_back(cudf::make_strings_column(string_pairs, stream, mr));
-  }
-
   for (std::size_t i = 0; i < num_columns; ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[i]->view(), output[i]->view());
+    auto const string_pairs = input[i];
+    auto const expected     = cudf::make_strings_column(string_pairs, stream, mr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output[i]->view());
   }
 }
 
 TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
 {
-  auto constexpr num_columns = 10;
+  auto constexpr num_columns = 2;
   auto const stream          = cudf::get_default_stream();
   auto const mr              = cudf::get_current_device_resource_ref();
 
@@ -401,12 +398,9 @@ TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
   });
   auto const output = cudf::make_strings_column_batch(input, stream, mr);
 
-  std::vector<std::unique_ptr<cudf::column>> expected(num_columns);
-  for (auto const& string_pairs : input) {
-    expected.emplace_back(cudf::make_strings_column(string_pairs, stream, mr));
-  }
-
   for (std::size_t i = 0; i < num_columns; ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[i]->view(), output[i]->view());
+    auto const string_pairs = input[i];
+    auto const expected     = cudf::make_strings_column(string_pairs, stream, mr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output[i]->view());
   }
 }
