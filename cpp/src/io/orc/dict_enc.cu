@@ -121,7 +121,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                            storage_ref};
 
   // Create a map ref with `cuco::insert` operator
-  auto has_map_insert_ref = hash_map_ref.with_operators(cuco::insert);
+  auto has_map_insert_ref = hash_map_ref.rebind_operators(cuco::insert);
 
   auto const start_row = dict.start_row;
   auto const end_row   = dict.start_row + dict.num_rows;
@@ -218,7 +218,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                            storage_ref};
 
   // Create a map ref with `cuco::insert` operator
-  auto has_map_find_ref = hash_map_ref.with_operators(cuco::find);
+  auto has_map_find_ref = hash_map_ref.rebind_operators(cuco::find);
 
   auto const start_row = dict.start_row;
   auto const end_row   = dict.start_row + dict.num_rows;
