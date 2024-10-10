@@ -7,3 +7,4 @@ nvtext
     edit_distance
     generate_ngrams
     jaccard
+    minhash

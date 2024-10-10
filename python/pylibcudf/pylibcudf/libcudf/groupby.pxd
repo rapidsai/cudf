@@ -22,7 +22,6 @@ from pylibcudf.libcudf.types cimport (
     size_type,
     sorted,
 )
-from pylibcudf.libcudf.utilities.host_span cimport host_span
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
