@@ -84,7 +84,7 @@ struct map_insert_fn {
                                                storage_ref};
 
       // Create a map ref with `cuco::insert` operator
-      auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
+      auto map_insert_ref = hash_map_ref.rebind_operators(cuco::insert);
       auto const t        = threadIdx.x;
 
       // Create atomic refs to the current chunk's num_dict_entries and uniq_data_size
@@ -186,7 +186,7 @@ struct map_find_fn {
                                                storage_ref};
 
       // Create a map ref with `cuco::find` operator
-      auto const map_find_ref = hash_map_ref.with_operators(cuco::find);
+      auto const map_find_ref = hash_map_ref.rebind_operators(cuco::find);
       auto const t            = threadIdx.x;
 
       // Note: Adjust the following loop to use `cg::tiles<map_cg_size>` if needed in the future.
