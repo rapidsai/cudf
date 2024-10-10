@@ -9,7 +9,7 @@ from pylibcudf.libcudf.column.column_view cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
