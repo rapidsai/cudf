@@ -26,3 +26,8 @@ cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
     cdef packed_columns pack (const table_view& input) except +
 
     cdef table_view unpack (const packed_columns& input) except +
+
+    cdef table_view unpack (
+        const uint8_t* metadata,
+        const uint8_t* gpu_data
+    ) except +
