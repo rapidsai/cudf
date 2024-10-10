@@ -32,7 +32,7 @@ from cudf_polars.dsl.nodebase import Node
 from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Hashable, Mapping
 
     import polars as pl
     import polars.type_aliases as pl_types
@@ -298,12 +298,12 @@ class LiteralColumn(Expr):
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
-    def get_hash(self) -> int:
-        """Compute a hash of the column."""
+    def get_hashable(self) -> Hashable:
+        """Compute a hashable representation of the column."""
         # This is stricter than necessary, but we only need this hash
         # for identity in groupby replacements so it's OK. And this
         # way we avoid doing potentially expensive compute.
-        return hash((type(self), self.dtype, id(self.value)))
+        return (type(self), self.dtype, id(self.value))
 
     def do_evaluate(
         self,

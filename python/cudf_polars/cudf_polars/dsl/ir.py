@@ -31,7 +31,7 @@ from cudf_polars.dsl.nodebase import Node
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping, Sequence
+    from collections.abc import Callable, Hashable, MutableMapping, Sequence
     from typing import Literal
 
     from cudf_polars.typing import Schema
@@ -131,12 +131,18 @@ class IR(Node):
     """Mapping from column names to their data types."""
     children: tuple[IR, ...] = ()
 
-    def get_hash(self) -> int:
-        """Hash of node, treating schema dictionary."""
+    def get_hashable(self) -> Hashable:
+        """
+        Hashable representation of node, treating schema dictionary.
+
+        Since the schema is a dictionary, even though it is morally
+        immutable, it is not hashable. We therefore convert it to
+        tuples for hashing purposes.
+        """
         # Schema is the first constructor argument
         args = self._ctor_arguments(self.children)[1:]
         schema_hash = tuple(self.schema.items())
-        return hash((type(self), schema_hash, args))
+        return (type(self), schema_hash, args)
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
@@ -309,21 +315,26 @@ class Scan(IR):
                 "Reading only parquet metadata to produce row index."
             )
 
-    def get_hash(self) -> int:
-        """Hash of the node."""
-        return hash(
-            (
-                type(self),
-                self.typ,
-                json.dumps(self.reader_options),
-                json.dumps(self.cloud_options),
-                tuple(self.paths),
-                tuple(self.with_columns) if self.with_columns is not None else None,
-                self.skip_rows,
-                self.n_rows,
-                self.row_index,
-                self.predicate,
-            )
+    def get_hashable(self) -> Hashable:
+        """
+        Hashable representation of the node.
+
+        The options dictionaries are serialised for hashing purposes
+        as json strings.
+        """
+        schema_hash = tuple(self.schema.items())
+        return (
+            type(self),
+            schema_hash,
+            self.typ,
+            json.dumps(self.reader_options),
+            json.dumps(self.cloud_options),
+            tuple(self.paths),
+            tuple(self.with_columns) if self.with_columns is not None else None,
+            self.skip_rows,
+            self.n_rows,
+            self.row_index,
+            self.predicate,
         )
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
@@ -526,13 +537,15 @@ class DataFrameScan(IR):
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
 
-    def get_hash(self) -> int:
-        """Compute a hash of the node."""
-        # Stricter than necessary, but avoid hashing the dataframe.
+    def get_hashable(self) -> Hashable:
+        """
+        Hashable representation of the node.
+
+        The (heavy) dataframe object is hashed as its id, so this is
+        not stable across runs, or repeat instances of the same equal dataframes.
+        """
         schema_hash = tuple(self.schema.items())
-        return hash(
-            (type(self), schema_hash, id(self.df), self.projection, self.predicate)
-        )
+        return (type(self), schema_hash, id(self.df), self.projection, self.predicate)
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""

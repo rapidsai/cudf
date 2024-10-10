@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Hashable, Sequence
 
     from typing_extensions import Self
 
@@ -55,23 +55,42 @@ class Node:
         """
         return type(self)(*self._ctor_arguments(children))
 
-    def get_hash(self) -> int:
-        """Return a hash of the node."""
-        return hash((type(self), self._ctor_arguments(self.children)))
+    def get_hashable(self) -> Hashable:
+        """
+        Return a hashable object for the node.
+
+        Returns
+        -------
+        Hashable object.
+
+        Notes
+        -----
+        This method is used by the :meth:`__hash__` implementation
+        (which does caching). If your node type needs special-case
+        handling for some of its attributes, override this method, not
+        :meth:`__hash__`.
+        """
+        return (type(self), self._ctor_arguments(self.children))
 
     def __hash__(self) -> int:
-        """Hash of an expression with caching."""
+        """
+        Hash of an expression with caching.
+
+        See Also
+        --------
+        get_hashable
+        """
         try:
             return self._hash_value
         except AttributeError:
-            self._hash_value = self.get_hash()
+            self._hash_value = hash(self.get_hashable())
             return self._hash_value
 
     def is_equal(self, other: Any) -> bool:
         """
         Equality of two expressions.
 
-        Override this in subclasses, rather than __eq__.
+        Override this in subclasses, rather than :meth:`__eq__`.
 
         Parameter
         ---------
@@ -80,7 +99,7 @@ class Node:
 
         Notes
         -----
-        Since nodes are immutable, this does common-subexpression
+        Since nodes are immutable, this does common subexpression
         elimination when two nodes are determined to be equal.
 
         Returns
@@ -100,7 +119,13 @@ class Node:
         return result
 
     def __eq__(self, other: Any) -> bool:
-        """Equality of expressions."""
+        """
+        Equality of expressions.
+
+        See Also
+        --------
+        is_equal
+        """
         if type(self) is not type(other) or hash(self) != hash(other):
             return False
         else:
