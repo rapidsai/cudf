@@ -98,7 +98,7 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
   // list<T>
   constexpr int vals_per_row = 4;
   auto c1_offset_iter        = cudf::detail::make_counting_transform_iterator(
-    0, [vals_per_row](cudf::size_type idx) { return idx * vals_per_row; });
+    0, [](cudf::size_type idx) { return idx * vals_per_row; });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets(c1_offset_iter,
                                                                      c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<T> c1_vals(

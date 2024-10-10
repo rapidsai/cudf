@@ -5,6 +5,8 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
@@ -31,7 +33,10 @@ rapids-print-env
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
-  libcudf libcudf_kafka libcudf-tests libcudf-example
+  "libcudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "libcudf_kafka=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "libcudf-tests=${RAPIDS_VERSION_MAJOR_MINOR}" \
+  "libcudf-example=${RAPIDS_VERSION_MAJOR_MINOR}"
 
 rapids-logger "Check GPU usage"
 nvidia-smi

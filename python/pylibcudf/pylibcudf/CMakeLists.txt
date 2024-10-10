@@ -27,6 +27,7 @@ set(cython_sources
     groupby.pyx
     interop.pyx
     join.pyx
+    json.pyx
     labeling.pyx
     lists.pyx
     merge.pyx
@@ -66,3 +67,4 @@ target_link_libraries(pylibcudf_interop PUBLIC nanoarrow)
 add_subdirectory(libcudf)
 add_subdirectory(strings)
 add_subdirectory(io)
+add_subdirectory(nvtext)
