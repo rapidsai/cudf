@@ -77,17 +77,17 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
   }
 }
 
-template <typename SetType>
+template <typename GlobalSetT>
 __device__ void find_global_mapping(cooperative_groups::thread_block const& block,
                                     cudf::size_type cardinality,
-                                    SetType global_set,
+                                    GlobalSetT global_set,
                                     cudf::size_type* shared_set_indices,
                                     cudf::size_type* global_mapping_index)
 {
+  // for all unique keys in shared memory hash set, stores their matches in
+  // global hash set to `global_mapping_index`
   for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
     auto const input_idx = shared_set_indices[idx];
-    // for a unique key in shared memory hash set, `global_mapping_index` stores
-    // its match in global hash set
     global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx] =
       *global_set.insert_and_find(input_idx).first;
   }
