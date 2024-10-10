@@ -191,11 +191,14 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
                                         strings_count,
                                         stream,
                                         mr);
-    output[idx]     = make_strings_column(strings_count,
-                                      std::move(offsets_cols[idx]),
-                                      chars_data.release(),
-                                      strings_count - valid_count,
-                                      std::move(null_masks[idx]));
+
+    auto const null_count = strings_count - valid_count;
+    output[idx] =
+      make_strings_column(strings_count,
+                          std::move(offsets_cols[idx]),
+                          chars_data.release(),
+                          null_count,
+                          null_count ? std::move(null_masks[idx]) : rmm::device_buffer{});
   }
 
   return output;
