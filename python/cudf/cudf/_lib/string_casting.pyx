@@ -3,8 +3,8 @@
 from cudf._lib.column cimport Column
 
 import pylibcudf as plc
+from pylibcudf.types cimport DataType
 
-import cudf
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.types cimport dtype_to_pylibcudf_type
@@ -17,10 +17,10 @@ def floating_to_string(Column input_col):
     return Column.from_pylibcudf(plc_column)
 
 
-def string_to_floating(Column input_col, object out_type):
+def string_to_floating(Column input_col, DataType out_type):
     plc_column = plc.strings.convert.convert_floats.to_floats(
         input_col.to_pylibcudf(mode="read"),
-        dtype_to_pylibcudf_type(out_type)
+        out_type
     )
     return Column.from_pylibcudf(plc_column)
 
@@ -54,7 +54,7 @@ def stod(Column input_col):
     A Column with strings cast to double
     """
 
-    return string_to_floating(input_col, cudf.dtype("float64"))
+    return string_to_floating(input_col, plc.DataType(plc.TypeId.FLOAT64))
 
 
 def ftos(Column input_col):
@@ -86,7 +86,7 @@ def stof(Column input_col):
     A Column with strings cast to float
     """
 
-    return string_to_floating(input_col, cudf.dtype("float32"))
+    return string_to_floating(input_col, plc.DataType(plc.TypeId.FLOAT32))
 
 
 def integer_to_string(Column input_col):
@@ -96,10 +96,10 @@ def integer_to_string(Column input_col):
     return Column.from_pylibcudf(plc_column)
 
 
-def string_to_integer(Column input_col, object out_type):
+def string_to_integer(Column input_col, DataType out_type):
     plc_column = plc.strings.convert.convert_integers.to_integers(
         input_col.to_pylibcudf(mode="read"),
-        dtype_to_pylibcudf_type(out_type)
+        out_type
     )
     return Column.from_pylibcudf(plc_column)
 
@@ -133,7 +133,7 @@ def stoi8(Column input_col):
     A Column with strings cast to int8
     """
 
-    return string_to_integer(input_col, cudf.dtype("int8"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT8))
 
 
 def i16tos(Column input_col):
@@ -165,7 +165,7 @@ def stoi16(Column input_col):
     A Column with strings cast to int16
     """
 
-    return string_to_integer(input_col, cudf.dtype("int16"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT16))
 
 
 def itos(Column input_col):
@@ -197,7 +197,7 @@ def stoi(Column input_col):
     A Column with strings cast to int32
     """
 
-    return string_to_integer(input_col, cudf.dtype("int32"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT32))
 
 
 def ltos(Column input_col):
@@ -229,7 +229,7 @@ def stol(Column input_col):
     A Column with strings cast to int64
     """
 
-    return string_to_integer(input_col, cudf.dtype("int64"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT64))
 
 
 def ui8tos(Column input_col):
@@ -261,7 +261,7 @@ def stoui8(Column input_col):
     A Column with strings cast to uint8
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint8"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT8))
 
 
 def ui16tos(Column input_col):
@@ -293,7 +293,7 @@ def stoui16(Column input_col):
     A Column with strings cast to uint16
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint16"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT16))
 
 
 def uitos(Column input_col):
@@ -325,7 +325,7 @@ def stoui(Column input_col):
     A Column with strings cast to uint32
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint32"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT32))
 
 
 def ultos(Column input_col):
@@ -357,7 +357,7 @@ def stoul(Column input_col):
     A Column with strings cast to uint64
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint64"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT64))
 
 
 def to_booleans(Column input_col):
@@ -445,8 +445,6 @@ def istimestamp(Column input_col, str format):
     A Column of boolean values identifying strings that matched the format.
 
     """
-    if input_col.size == 0:
-        return cudf.core.column.column_empty(0, dtype=cudf.dtype("bool"))
     plc_column = plc.strings.convert.convert_datetime.is_timestamp(
         input_col.to_pylibcudf(mode="read"),
         format
