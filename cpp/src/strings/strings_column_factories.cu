@@ -27,13 +27,16 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
+
 namespace cudf {
 
 namespace strings::detail {
 
 namespace {
 
-using column_string_pairs = cudf::device_span<thrust::pair<char const*, size_type> const>;
+using string_pair         = thrust::pair<char const*, size_type>;
+using column_string_pairs = cudf::device_span<string_pair const>;
 
 template <typename OutputType>
 std::pair<std::vector<std::unique_ptr<column>>, rmm::device_uvector<int64_t>>
@@ -75,34 +78,44 @@ std::pair<std::vector<rmm::device_buffer>, rmm::device_uvector<size_type>> valid
 {
   auto const d_input =
     cudf::detail::make_device_uvector_async(input, stream, cudf::get_current_device_resource_ref());
-  auto const predicate = [] __device__(thrust::pair<char const*, size_type> pair) -> bool {
-    return pair.first != nullptr;
+  auto const is_valid_fn = [input = d_input.data()] __device__(size_type col_idx,
+                                                               size_type row_idx) -> bool {
+    return input[col_idx][row_idx].first != nullptr;
   };
+  auto const mask_size_fn = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<size_type>([input = d_input.data()] __device__(size_type col_idx) {
+      return static_cast<size_type>(input[col_idx].size());
+    }));
 
-  std::vector<rmm::device_buffer> null_masks(input.size());
-  for (std::size_t idx = 0; idx < input.size(); ++idx) {
+  auto const num_columns = input.size();
+  std::vector<rmm::device_buffer> null_masks(num_columns);
+  for (std::size_t idx = 0; idx < num_columns; ++idx) {
     null_masks[idx] = cudf::create_null_mask(
       static_cast<size_type>(input[idx].size()), mask_state::UNINITIALIZED, stream, mr);
   }
-  std::vector<bitmask_type*> h_masks(input.size());
+  std::vector<bitmask_type*> h_masks(num_columns);
   std::transform(null_masks.begin(), null_masks.end(), h_masks.begin(), [](auto& mask) {
     return reinterpret_cast<bitmask_type*>(mask.data());
   });
-  auto const d_masks = cudf::detail::make_device_uvector_async(
+  auto d_masks = cudf::detail::make_device_uvector_async(
     h_masks, stream, cudf::get_current_device_resource_ref());
 
-  rmm::device_uvector<size_type> valid_counts(input.size(), stream, mr);
+  rmm::device_uvector<size_type> valid_counts(num_columns, stream, mr);
   thrust::uninitialized_fill(
     rmm::exec_policy_nosync(stream), valid_counts.begin(), valid_counts.end(), 0);
+  auto const counting_it = thrust::make_counting_iterator(0);
 
   constexpr size_type block_size{256};
-  auto const grid = cudf::detail::grid_1d{static_cast<int64_t>(input.size()), block_size};
-  cudf::detail::valid_if_batch_kernel<block_size>
+  auto const grid = cudf::detail::grid_1d{static_cast<int64_t>(num_columns), block_size};
+  cudf::detail::valid_if_n_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      device_span<column_string_pairs const>{d_input.data(), d_input.size()},
-      // d_input.data(),
-      predicate,
+      counting_it,
+      counting_it,
+      is_valid_fn,
       d_masks.data(),
+      static_cast<size_type>(num_columns),
+      mask_size_fn,
       valid_counts.data());
 
   return {std::move(null_masks), std::move(valid_counts)};
