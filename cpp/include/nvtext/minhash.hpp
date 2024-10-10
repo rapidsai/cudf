@@ -91,6 +91,34 @@ std::unique_ptr<cudf::column> minhash(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Returns the minhash values for each string
+ *
+ * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * @throw std::invalid_argument if the width < 2
+ * @throw std::invalid_argument if parmA is empty
+ * @throw std::invalid_argument if `parmB.size() != parmA.size()`
+ * @throw std::overflow_error if `parmA.size() * input.size()` exceeds the column size limit
+ *
+ * @param input Strings column to compute minhash
+ * @param parmA Values used for the hash algorithm
+ * @param parmB Values used for the hash algorithm
+ * @param width The character width used for apply substrings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> minhash_permuted(
+  cudf::strings_column_view const& input,
+  cudf::device_span<uint32_t const> parmA,
+  cudf::device_span<uint32_t const> parmB,
+  cudf::size_type width,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Returns the minhash value for each string
  *
  * Hash values are computed from substrings of each string and the
@@ -148,6 +176,34 @@ std::unique_ptr<cudf::column> minhash64(
   cudf::strings_column_view const& input,
   cudf::device_span<uint64_t const> seeds,
   cudf::size_type width             = 4,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns the minhash values for each string
+ *
+ * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * @throw std::invalid_argument if the width < 2
+ * @throw std::invalid_argument if parmA is empty
+ * @throw std::invalid_argument if `parmB.size() != parmA.size()`
+ * @throw std::overflow_error if `parmA.size() * input.size()` exceeds the column size limit
+ *
+ * @param input Strings column to compute minhash
+ * @param parmA Values used for the hash algorithm
+ * @param parmB Values used for the hash algorithm
+ * @param width The character width used for apply substrings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> minhash64_permuted(
+  cudf::strings_column_view const& input,
+  cudf::device_span<uint64_t const> parmA,
+  cudf::device_span<uint64_t const> parmB,
+  cudf::size_type width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
