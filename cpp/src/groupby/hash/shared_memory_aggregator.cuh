@@ -155,6 +155,7 @@ struct update_target_element_shmem<
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
+    // The nullability was checked prior to this call in the `shmem_element_aggregator` functor
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index], Target{1});
