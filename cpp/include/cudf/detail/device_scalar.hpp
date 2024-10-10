@@ -35,6 +35,8 @@ class device_scalar : public rmm::device_scalar<T> {
 #endif
   ~device_scalar() = default;
 
+// Implementation is the same as what compiler should generate
+// Could not use default move constructor as 11.8 compiler fails to generate it
 #ifdef __CUDACC__
 #pragma nv_exec_check_disable
 #endif
