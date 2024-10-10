@@ -229,7 +229,7 @@ def to_parquet_filter(node: expr.Expr) -> pexpr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": True})
+    mapper = CachingVisitor(_to_ast, state={"for_parquet": True})
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -254,7 +254,7 @@ def to_ast(
     -------
     pylibcudf Expressoin if conversion is possible, otherwise None.
     """
-    mapper: Transformer = CachingVisitor(
+    mapper = CachingVisitor(
         _to_ast, state={"for_parquet": False, "name_to_index": name_to_index}
     )
     try:
