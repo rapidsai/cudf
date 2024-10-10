@@ -372,6 +372,53 @@ struct rle_stream {
     return values_processed_shared;
   }
 
+  __device__ inline int skip_runs(int target_count)
+  {
+    // we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip
+    // amount so threads spin like crazy on fill_run_batch(), skipping writing unnecessary run info
+    // then when it hits the one that matters, we don't process it at all and bail as if we never
+    // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
+    // the first time
+    while (cur < end) {
+      // bytes for the varint header
+      uint8_t const* _cur = cur;
+      int const level_run = get_vlq32(_cur, end);
+
+      // run_bytes includes the header size
+      int run_bytes = _cur - cur;
+      int run_size;
+      if (is_literal_run(level_run)) {
+        // from the parquet spec: literal runs always come in multiples of 8 values.
+        run_size = (level_run >> 1) * 8;
+        run_bytes += ((run_size * level_bits) + 7) >> 3;
+      } else {
+        // repeated value run
+        run_size = (level_run >> 1);
+        run_bytes += ((level_bits) + 7) >> 3;
+      }
+
+      if ((output_pos + run_size) > target_count) {
+        return output_pos;  // bail! we've reached the starting run
+      }
+
+      // skip this run
+      output_pos += run_size;
+      cur += run_bytes;
+    }
+
+    return output_pos;  // we skipped everything
+  }
+
+  __device__ inline int skip_decode(int t, int count)
+  {
+    int const output_count = min(count, total_values - cur_values);
+
+    // if level_bits == 0, there's nothing to do
+    // a very common case: columns with no nulls, especially if they are non-nested
+    cur_values = (level_bits == 0) ? output_count : skip_runs(output_count);
+    return cur_values;
+  }
+
   __device__ inline int decode_next(int t) { return decode_next(t, max_output_values); }
 };
 
