@@ -38,7 +38,7 @@ bool is_kvikio_enabled();
 /**
  * @brief Returns true if the current device is the Grace Hopper system.
  */
-bool is_using_grace_hopper();
+bool is_current_device_grace_hopper();
 
 }  // namespace io::cufile_integration
 

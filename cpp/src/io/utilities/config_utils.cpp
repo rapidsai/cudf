@@ -46,7 +46,7 @@ usage_policy get_env_policy()
     CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
   };
 
-  if (is_using_grace_hopper()) {
+  if (is_current_device_grace_hopper()) {
     static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "OFF");
     return get_policy(env_val);
   } else {
@@ -62,7 +62,7 @@ bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_
 
 bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
 
-bool is_using_grace_hopper()
+bool is_current_device_grace_hopper()
 {
   int device_idx{};
   CUDF_CUDA_TRY(cudaGetDevice(&device_idx));
