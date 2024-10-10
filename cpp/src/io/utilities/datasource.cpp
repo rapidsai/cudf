@@ -15,6 +15,7 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -227,6 +228,19 @@ class memory_mapped_source : public file_source {
   }
 
  private:
+  [[nodiscard]] bool should_register_mmap_buffer()
+  {
+    if (_map_addr == nullptr) { return false; }
+
+    auto const policy = getenv_or("LIBCUDF_MMAP_REGISTER_ENABLED", std::string{"AUTO"});
+
+    if (policy == "ON") { return true; }
+    if (policy == "AUTO") { return pageableMemoryAccessUsesHostPageTables(); }
+    if (policy == "OFF") { return false; }
+
+    CUDF_FAIL("Invalid LIBCUDF_MMAP_REGISTER_POLICY value: " + policy);
+  }
+
   /**
    * @brief Page-locks (registers) the memory range of the mapped file.
    *
@@ -234,7 +248,7 @@ class memory_mapped_source : public file_source {
    */
   void register_mmap_buffer(size_t offset, size_t size)
   {
-    if (_map_addr == nullptr or not pageableMemoryAccessUsesHostPageTables()) { return; }
+    if (not should_register_mmap_buffer()) { return; }
 
     // Registered region must be within the mapped region
     _reg_offset = std::max(offset, _map_offset);
@@ -467,15 +481,22 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
   CUDF_EXPECTS(max_size_estimate == 0 or min_size_estimate <= max_size_estimate,
                "Invalid min/max size estimates for datasource creation");
 
-#ifdef CUFILE_FOUND
-  if (cufile_integration::is_always_enabled()) {
-    // avoid mmap as GDS is expected to be used for most reads
+  auto const use_memory_mapping = [] {
+    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"ON"});
+
+    if (policy == "ON") { return true; }
+    if (policy == "OFF") { return false; }
+
+    CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
+  }();
+
+  if (use_memory_mapping) {
+    return std::make_unique<memory_mapped_source>(
+      filepath.c_str(), offset, max_size_estimate, min_size_estimate);
+  } else {
+    // `file_source` reads the file directly without memory mapping
     return std::make_unique<file_source>(filepath.c_str());
   }
-#endif
-  // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(
-    filepath.c_str(), offset, max_size_estimate, min_size_estimate);
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
