@@ -288,7 +288,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
                                std::is_convertible_v<OtherT (*)[], T (*)[]>,  // NOLINT
                              void>* = nullptr>
   constexpr host_span(host_span<OtherT, OtherExtent> const& other) noexcept
-    : base(other.data(), other.size())
+    : base(other.data(), other.size()), _is_device_accessible{other.is_device_accessible()}
   {
   }
 

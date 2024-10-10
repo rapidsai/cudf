@@ -1,16 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
+import pylibcudf as plc
 
 from cudf.core.buffer import acquire_spill_lock
-
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.strings.convert.convert_urls cimport (
-    url_decode as cpp_url_decode,
-    url_encode as cpp_url_encode,
-)
 
 from cudf._lib.column cimport Column
 
@@ -28,17 +20,10 @@ def url_decode(Column source_strings):
     -------
     URL decoded string column
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_url_decode(
-            source_view
-        ))
-
-    return Column.from_unique_ptr(
-        move(c_result)
+    plc_column = plc.strings.convert.convert_urls.url_decode(
+        source_strings.to_pylibcudf(mode="read")
     )
+    return Column.from_pylibcudf(plc_column)
 
 
 @acquire_spill_lock()
@@ -57,14 +42,7 @@ def url_encode(Column source_strings):
     -------
     URL encoded string column
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_url_encode(
-            source_view
-        ))
-
-    return Column.from_unique_ptr(
-        move(c_result)
+    plc_column = plc.strings.convert.convert_urls.url_encode(
+        source_strings.to_pylibcudf(mode="read")
     )
+    return Column.from_pylibcudf(plc_column)
