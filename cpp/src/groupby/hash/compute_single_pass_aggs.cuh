@@ -45,8 +45,8 @@
 namespace cudf::groupby::detail::hash {
 namespace {
 template <typename SetType>
-// TODO pass block
-__device__ void find_local_mapping(cudf::size_type cur_idx,
+__device__ void find_local_mapping(cooperative_groups::thread_block const& block,
+                                   cudf::size_type idx,
                                    cudf::size_type num_input_rows,
                                    SetType shared_set,
                                    bitmask_type const* row_bitmask,
@@ -55,48 +55,50 @@ __device__ void find_local_mapping(cudf::size_type cur_idx,
                                    cudf::size_type* local_mapping_index,
                                    cudf::size_type* shared_set_indices)
 {
-  cudf::size_type result_idx;
-  // TODO: un-init
-  bool inserted;
-  if (cur_idx < num_input_rows and
-      (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))) {
-    auto const result = shared_set.insert_and_find(cur_idx);
+  cudf::size_type result_idx{};
+  bool inserted{};
+  if (idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx))) {
+    auto const result = shared_set.insert_and_find(idx);
     result_idx        = *result.first;
     inserted          = result.second;
     // inserted a new element
     if (result.second) {
       auto const shared_set_index          = atomicAdd(cardinality, 1);
-      shared_set_indices[shared_set_index] = cur_idx;
-      local_mapping_index[cur_idx]         = shared_set_index;
+      shared_set_indices[shared_set_index] = idx;
+      local_mapping_index[idx]             = shared_set_index;
     }
   }
   // Syncing the thread block is needed so that updates in `local_mapping_index` are visible to all
   // threads in the thread block.
-  __syncthreads();
-  if (cur_idx < num_input_rows and
-      (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx))) {
+  block.sync();
+  if (idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx))) {
     // element was already in set
-    if (!inserted) { local_mapping_index[cur_idx] = local_mapping_index[result_idx]; }
+    if (!inserted) { local_mapping_index[idx] = local_mapping_index[result_idx]; }
   }
 }
 
 template <typename SetType>
-__device__ void find_global_mapping(cudf::size_type cur_idx,
+__device__ void find_global_mapping(cooperative_groups::thread_block const& block,
+                                    cudf::size_type cardinality,
                                     SetType global_set,
                                     cudf::size_type* shared_set_indices,
                                     cudf::size_type* global_mapping_index)
 {
-  auto const input_idx = shared_set_indices[cur_idx];
-  global_mapping_index[blockIdx.x * GROUPBY_SHM_MAX_ELEMENTS + cur_idx] =
-    *global_set.insert_and_find(input_idx).first;
+  for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
+    auto const input_idx = shared_set_indices[idx];
+    // for a unique key in shared memory hash set, `global_mapping_index` stores
+    // its match in global hash set
+    global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx] =
+      *global_set.insert_and_find(input_idx).first;
+  }
 }
 
 /*
- * Inserts keys into the shared memory hash set, and stores the row index of the local
- * pre-aggregate table in `local_mapping_index`. If the number of unique keys found in a
- * threadblock exceeds `GROUPBY_CARDINALITY_THRESHOLD`, the threads in that block will exit without
- * updating `global_set` or setting `global_mapping_index`. Else, we insert the unique keys found to
- * the global hash set, and save the row index of the global sparse table in `global_mapping_index`.
+ * @brief Inserts keys into the shared memory hash set, and stores the block-wise rank for a given
+ * row index in `local_mapping_index`. If the number of unique keys found in a threadblock exceeds
+ * `GROUPBY_CARDINALITY_THRESHOLD`, the threads in that block will exit without updating
+ * `global_set` or setting `global_mapping_index`. Else, we insert the unique keys found to the
+ * global hash set, and save the row index of the global sparse table in `global_mapping_index`.
  */
 template <class SetRef, typename GlobalSetType, class WindowExtent>
 CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
@@ -129,10 +131,11 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
 
   auto const stride = cudf::detail::grid_1d::grid_stride();
 
-  for (auto cur_idx = cudf::detail::grid_1d::global_thread_id();
-       cur_idx - block.thread_rank() < num_input_rows;
-       cur_idx += stride) {
-    find_local_mapping(cur_idx,
+  for (auto idx = cudf::detail::grid_1d::global_thread_id();
+       idx - block.thread_rank() < num_input_rows;
+       idx += stride) {
+    find_local_mapping(block,
+                       idx,
                        num_input_rows,
                        shared_set,
                        row_bitmask,
@@ -147,16 +150,12 @@ CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
       if (block.thread_rank() == 0) { *direct_aggregations = true; }
       break;
     }
-
-    block.sync();
   }
 
-  // Insert unique keys from shared to global hash set
+  // Insert unique keys from shared to global hash set if block-cardinality
+  // doesn't exceed the threshold upper-limit
   if (cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
-    for (auto cur_idx = block.thread_rank(); cur_idx < cardinality;
-         cur_idx += block.num_threads()) {
-      find_global_mapping(cur_idx, global_set, shared_set_indices, global_mapping_index);
-    }
+    find_global_mapping(block, cardinality, global_set, shared_set_indices, global_mapping_index);
   }
 
   if (block.thread_rank() == 0) { block_cardinality[block.group_index().x] = cardinality; }
@@ -268,11 +267,9 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
     return populated_keys;
   }
 
-  // 'local_mapping_index' maps from the global row index of the input table to the row index of
-  // the local pre-aggregate table
+  // 'local_mapping_index' maps from the global row index of the input table to its block-wise rank
   rmm::device_uvector<cudf::size_type> local_mapping_index(num_input_rows, stream);
-  // 'global_mapping_index' maps from  the local pre-aggregate table to the row index of
-  // global aggregate table
+  // 'global_mapping_index' maps from the block-wise rank to the row index of global aggregate table
   rmm::device_uvector<cudf::size_type> global_mapping_index(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
                                                             stream);
   rmm::device_uvector<cudf::size_type> block_cardinality(grid_size, stream);
