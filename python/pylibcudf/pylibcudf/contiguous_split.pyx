@@ -82,6 +82,13 @@ cdef class PackedColumns:
         The ownership of the data are transferred to the returned buffers. After
         this call, `self` is empty.
 
+        Examples
+        --------
+        The two buffers can be unpacked using `unpack_from_memoryviews`:
+
+        >>> packed = pylibcudf.contiguous_split.pack(...)
+        >>> pylibcudf.contiguous_split.unpack_from_memoryviews(*packed.release())
+
         Returns
         -------
         memoryview

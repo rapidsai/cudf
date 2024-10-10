@@ -33,7 +33,7 @@ def test_pack_and_unpack_from_memoryviews(arrow_tbl):
     with pytest.raises(ValueError, match="Cannot release empty"):
         packed.release()
 
-    del packed  # `metadata` and `gpudata` should survive
+    del packed  # `metadata` and `gpudata` will survive
 
     res = plc.contiguous_split.unpack_from_memoryviews(metadata, gpudata)
     assert_table_eq(arrow_tbl, res)
