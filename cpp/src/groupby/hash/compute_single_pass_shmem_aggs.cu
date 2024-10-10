@@ -36,36 +36,34 @@
 
 namespace cudf::groupby::detail::hash {
 namespace {
-__device__ void calculate_columns_to_aggregate(int& col_start,
-                                               int& col_end,
+__device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
+                                               cudf::size_type& col_end,
                                                cudf::mutable_table_device_view output_values,
-                                               int num_input_cols,
+                                               cudf::size_type num_input_cols,
                                                std::byte** s_aggregates_pointer,
                                                bool** s_aggregates_valid_pointer,
                                                std::byte* shared_set_aggregates,
                                                cudf::size_type cardinality,
-                                               int total_agg_size)
+                                               cudf::size_type total_agg_size)
 {
-  if (threadIdx.x == 0) {
-    col_start           = col_end;
-    int bytes_allocated = 0;
-    int valid_col_size  = round_to_multiple_of_8(sizeof(bool) * cardinality);
-    while ((bytes_allocated < total_agg_size) && (col_end < num_input_cols)) {
-      int next_col_size =
-        round_to_multiple_of_8(sizeof(output_values.column(col_end).type()) * cardinality);
-      int next_col_total_size = valid_col_size + next_col_size;
-      if (bytes_allocated + next_col_total_size > total_agg_size) { break; }
-      s_aggregates_pointer[col_end] = shared_set_aggregates + bytes_allocated;
-      s_aggregates_valid_pointer[col_end] =
-        reinterpret_cast<bool*>(shared_set_aggregates + bytes_allocated + next_col_size);
-      bytes_allocated += next_col_total_size;
-      col_end++;
-    }
+  col_start                       = col_end;
+  cudf::size_type bytes_allocated = 0;
+  cudf::size_type valid_col_size  = round_to_multiple_of_8(sizeof(bool) * cardinality);
+  while ((bytes_allocated < total_agg_size) && (col_end < num_input_cols)) {
+    cudf::size_type next_col_size =
+      round_to_multiple_of_8(sizeof(output_values.column(col_end).type()) * cardinality);
+    cudf::size_type next_col_total_size = valid_col_size + next_col_size;
+    if (bytes_allocated + next_col_total_size > total_agg_size) { break; }
+    s_aggregates_pointer[col_end] = shared_set_aggregates + bytes_allocated;
+    s_aggregates_valid_pointer[col_end] =
+      reinterpret_cast<bool*>(shared_set_aggregates + bytes_allocated + next_col_size);
+    bytes_allocated += next_col_total_size;
+    col_end++;
   }
 }
 
-__device__ void initialize_shmem_aggregations(int col_start,
-                                              int col_end,
+__device__ void initialize_shmem_aggregations(cudf::size_type col_start,
+                                              cudf::size_type col_end,
                                               cudf::mutable_table_device_view output_values,
                                               std::byte** s_aggregates_pointer,
                                               bool** s_aggregates_valid_pointer,
@@ -84,8 +82,8 @@ __device__ void initialize_shmem_aggregations(int col_start,
   }
 }
 
-__device__ void compute_pre_aggregrations(int col_start,
-                                          int col_end,
+__device__ void compute_pre_aggregrations(cudf::size_type col_start,
+                                          cudf::size_type col_end,
                                           bitmask_type const* row_bitmask,
                                           bool skip_rows_with_nulls,
                                           cudf::table_device_view input_values,
@@ -117,8 +115,8 @@ __device__ void compute_pre_aggregrations(int col_start,
   }
 }
 
-__device__ void compute_final_aggregations(int col_start,
-                                           int col_end,
+__device__ void compute_final_aggregations(cudf::size_type col_start,
+                                           cudf::size_type col_end,
                                            cudf::table_device_view input_values,
                                            cudf::mutable_table_device_view output_values,
                                            cudf::size_type cardinality,
@@ -156,8 +154,8 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                                cudf::table_device_view input_values,
                                                cudf::mutable_table_device_view output_values,
                                                cudf::aggregation::Kind const* d_agg_kinds,
-                                               int total_agg_size,
-                                               int pointer_size)
+                                               cudf::size_type total_agg_size,
+                                               cudf::size_type pointer_size)
 {
   auto const block       = cooperative_groups::this_thread_block();
   auto const cardinality = block_cardinality[block.group_index().x];
@@ -165,8 +163,8 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 
   auto const num_cols = output_values.num_columns();
 
-  __shared__ int col_start;
-  __shared__ int col_end;
+  __shared__ cudf::size_type col_start;
+  __shared__ cudf::size_type col_end;
   extern __shared__ std::byte shared_set_aggregates[];
   std::byte** s_aggregates_pointer =
     reinterpret_cast<std::byte**>(shared_set_aggregates + total_agg_size);
@@ -180,15 +178,17 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
   block.sync();
 
   while (col_end < num_cols) {
-    calculate_columns_to_aggregate(col_start,
-                                   col_end,
-                                   output_values,
-                                   num_cols,
-                                   s_aggregates_pointer,
-                                   s_aggregates_valid_pointer,
-                                   shared_set_aggregates,
-                                   cardinality,
-                                   total_agg_size);
+    if (block.thread_rank() == 0) {
+      calculate_columns_to_aggregate(col_start,
+                                     col_end,
+                                     output_values,
+                                     num_cols,
+                                     s_aggregates_pointer,
+                                     s_aggregates_valid_pointer,
+                                     shared_set_aggregates,
+                                     cardinality,
+                                     total_agg_size);
+    }
     block.sync();
     initialize_shmem_aggregations(col_start,
                                   col_end,
@@ -226,7 +226,7 @@ constexpr size_t get_previous_multiple_of_8(size_t number) { return number / 8 *
 
 }  // namespace
 
-size_t available_shared_memory_size(int grid_size)
+size_t available_shared_memory_size(cudf::size_type grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
@@ -237,9 +237,9 @@ size_t available_shared_memory_size(int grid_size)
   return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
 }
 
-size_t shmem_agg_pointer_size(int num_cols) { return sizeof(void*) * num_cols; }
+size_t shmem_agg_pointer_size(cudf::size_type num_cols) { return sizeof(void*) * num_cols; }
 
-void compute_single_pass_shmem_aggs(int grid_size,
+void compute_single_pass_shmem_aggs(cudf::size_type grid_size,
                                     cudf::size_type num_input_rows,
                                     bitmask_type const* row_bitmask,
                                     bool skip_rows_with_nulls,
