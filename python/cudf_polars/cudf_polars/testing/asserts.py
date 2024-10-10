@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
 
 if TYPE_CHECKING:
     import polars as pl
@@ -96,6 +96,10 @@ def assert_gpu_result_equal(
     )
 
 
+class IRTranslationFailed(Exception):
+    pass
+
+
 def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) -> None:
     """
     Assert that translation of a query raises an exception.
@@ -117,12 +121,23 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     AssertionError
        If the specified exceptions were not raised.
     """
+    translator = Translator(q._ldf.visit())
     try:
-        _ = translate_ir(q._ldf.visit())
-    except exceptions:
-        return
+        _ = translator.translate_ir()
     except Exception as e:
-        raise AssertionError(f"Translation DID NOT RAISE {exceptions}") from e
+        # The only ways an exception is raised in translation is if
+        # ...
+        if (
+            "No support for polars IR" not in str(e)
+            and "Could not compute schema" not in str(e)
+            and "Could not retrieve the current" not in str(e)
+        ):
+            raise IRTranslationFailed("assert_ir_translation_raises failed") from e
+        return
+    if translator.errors:
+        for err in translator.errors:
+            assert any(isinstance(err, err_type) for err_type in exceptions)
+        return
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
 

@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "IR",
+    "ErrorNode",
     "PythonScan",
     "Scan",
     "Cache",
@@ -157,6 +158,14 @@ class IR:
         raise NotImplementedError(
             f"Evaluation of plan {type(self).__name__}"
         )  # pragma: no cover
+
+
+@dataclasses.dataclass
+class ErrorNode(IR):
+    """Represents an error translating the IR."""
+
+    error: str
+    """The error."""
 
 
 @dataclasses.dataclass
