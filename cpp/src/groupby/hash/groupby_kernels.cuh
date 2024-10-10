@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include "multi_pass_kernels.cuh"
-
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/groupby.hpp>
