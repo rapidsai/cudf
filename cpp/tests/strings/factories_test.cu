@@ -281,9 +281,10 @@ TEST_F(StringsBatchConstructionTest, AllNullsColumns)
 
 TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
 {
-  auto constexpr num_columns = 10;
-  auto constexpr num_rows    = 1000;
-  auto const stream          = cudf::get_default_stream();
+  auto constexpr num_columns  = 10;
+  auto constexpr max_num_rows = 1000;
+  auto const stream           = cudf::get_default_stream();
+  auto const mr               = cudf::get_current_device_resource_ref();
 
   std::vector<char const*> h_test_strings{"the quick brown fox jumps over the lazy dog",
                                           "the fat cat lays next to the other accénted cat",
@@ -305,31 +306,36 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
       memcpy(h_buffer.data() + offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
     }
   }
-  auto const d_test_strings = cudf::detail::make_device_uvector_sync(
-    h_buffer, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto const d_test_strings = cudf::detail::make_device_uvector_async(h_buffer, stream, mr);
 
-  std::vector<thrust::host_vector<thrust::pair<char const*, cudf::size_type>>> h_input(num_columns);
-  for (auto& col : h_input) {
+  using pair_type = thrust::pair<char const*, cudf::size_type>;
+  std::vector<std::vector<pair_type>> h_input(num_columns);
+  std::vector<rmm::device_uvector<pair_type>> d_input;
+  d_input.reserve(num_columns);
+  for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
+    auto const num_rows =
+      static_cast<int>(static_cast<double>(col_idx + 1) / num_columns * max_num_rows);
+    auto& col = h_input[col_idx];
     col.resize(num_rows);
-    for (int idx = 0; idx < num_rows; ++idx) {
-      auto const data_idx = idx % static_cast<int>(h_test_strings.size());
-      col[idx] = {
-        d_test_strings.data() + offsets[data_idx],
-        h_test_strings[data_idx] ? strlen(h_test_strings[data_idx]) : 0};
+    for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
+      auto const data_idx = row_idx % static_cast<int>(h_test_strings.size());
+      col[row_idx]        = {d_test_strings.data() + offsets[data_idx],
+                      h_test_strings[data_idx] ? strlen(h_test_strings[data_idx]) : 0};
     }
+    d_input.emplace_back(cudf::detail::make_device_uvector_async(col, stream, mr));
   }
 
   std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input(
     num_columns);
-  std::transform(h_input.begin(), h_input.end(), input.begin(), [](auto const& col) {
+  std::transform(d_input.begin(), d_input.end(), input.begin(), [](auto const& col) {
     return cudf::device_span<thrust::pair<char const*, cudf::size_type> const>{col.data(),
                                                                                col.size()};
   });
-  auto const output = cudf::make_strings_column_batch(input, stream);
+  auto const output = cudf::make_strings_column_batch(input, stream, mr);
 
   std::vector<std::unique_ptr<cudf::column>> expected(num_columns);
   for (auto const& string_pairs : input) {
-    expected.emplace_back(cudf::make_strings_column(string_pairs));
+    expected.emplace_back(cudf::make_strings_column(string_pairs, stream, mr));
   }
 
   for (std::size_t i = 0; i < num_columns; ++i) {
@@ -339,5 +345,68 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
 
 TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
 {
-  //
+  auto constexpr num_columns = 10;
+  auto const stream          = cudf::get_default_stream();
+  auto const mr              = cudf::get_current_device_resource_ref();
+
+  std::vector<char const*> h_test_strings{"the quick brown fox jumps over the lazy dog",
+                                          "the fat cat lays next to the other accénted cat",
+                                          "a slow moving turtlé cannot catch the bird",
+                                          "which can be composéd together to form a more complete",
+                                          "thé result does not include the value in the sum in",
+                                          "",
+                                          nullptr,
+                                          "absent stop words"};
+
+  std::vector<std::size_t> offsets(h_test_strings.size() + 1, 0);
+  for (std::size_t i = 0; i < h_test_strings.size(); ++i) {
+    offsets[i + 1] = offsets[i] + (h_test_strings[i] ? strlen(h_test_strings[i]) : 0);
+  }
+
+  std::vector<char> h_buffer(offsets.back());
+  for (std::size_t i = 0; i < h_test_strings.size(); ++i) {
+    if (h_test_strings[i]) {
+      memcpy(h_buffer.data() + offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
+    }
+  }
+  auto const d_test_strings = cudf::detail::make_device_uvector_async(h_buffer, stream, mr);
+
+  // If we create a column by repeating h_test_strings by `max_cycles` times,
+  // we will have it size around (1.5*INT_MAX) bytes.
+  auto const max_cycles =
+    static_cast<int>(static_cast<int64_t>(std::numeric_limits<int>::max()) * 1.5 / offsets.back());
+
+  using pair_type = thrust::pair<char const*, cudf::size_type>;
+  std::vector<std::vector<pair_type>> h_input(num_columns);
+  std::vector<rmm::device_uvector<pair_type>> d_input;
+  d_input.reserve(num_columns);
+  for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
+    auto const num_rows = static_cast<int>(static_cast<double>(col_idx + 1) / num_columns *
+                                           max_cycles * h_test_strings.size());
+    auto& col           = h_input[col_idx];
+    col.resize(num_rows);
+    for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
+      auto const data_idx = row_idx % static_cast<int>(h_test_strings.size());
+      col[row_idx]        = {d_test_strings.data() + offsets[data_idx],
+                      h_test_strings[data_idx] ? strlen(h_test_strings[data_idx]) : 0};
+    }
+    d_input.emplace_back(cudf::detail::make_device_uvector_async(col, stream, mr));
+  }
+
+  std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input(
+    num_columns);
+  std::transform(d_input.begin(), d_input.end(), input.begin(), [](auto const& col) {
+    return cudf::device_span<thrust::pair<char const*, cudf::size_type> const>{col.data(),
+                                                                               col.size()};
+  });
+  auto const output = cudf::make_strings_column_batch(input, stream, mr);
+
+  std::vector<std::unique_ptr<cudf::column>> expected(num_columns);
+  for (auto const& string_pairs : input) {
+    expected.emplace_back(cudf::make_strings_column(string_pairs, stream, mr));
+  }
+
+  for (std::size_t i = 0; i < num_columns; ++i) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected[i]->view(), output[i]->view());
+  }
 }
