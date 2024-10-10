@@ -288,4 +288,4 @@ class Consumer(CudfKafkaClient):
             (default: infinite (None translated into -1 in the
             library)). (Seconds)
         """
-        return self.ck.poll(timeout)
+        return self.ck_consumer.poll(timeout)
