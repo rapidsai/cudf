@@ -4,9 +4,9 @@ from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.string cimport string
 from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type
-from pylibcudf.libcudf.wrappers.decimals cimport scale_type
 
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
