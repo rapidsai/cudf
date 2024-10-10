@@ -41,15 +41,11 @@ class Translator:
     ----------
     visitor
         Polars NodeTraverser object
-    debug_mode
-        Setting this mode to True allows Translator to collect
-        errors raised during translation
     """
 
-    def __init__(self, visitor: NodeTraverser, *, debug_mode: bool = False):
+    def __init__(self, visitor: NodeTraverser):
         self.visitor = visitor
-        self.debug_mode = debug_mode
-        self.errors: list[str] = []
+        self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -92,20 +88,31 @@ class Translator:
 
         with ctx:
             polars_schema = self.visitor.get_schema()
-            node = self.visitor.view_current_node()
-            schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
+            try:
+                node = self.visitor.view_current_node()
+            except Exception as e:
+                raise NotImplementedError(
+                    "Could not retrieve the current IR node"
+                ) from e
+            try:
+                schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
+            except Exception as e:
+                self.errors.append(e)
+                raise NotImplementedError("Could not compute schema") from e
             try:
                 result = _translate_ir(node, self, schema)
             except Exception as e:
-                self.errors.append(str(e))
+                self.errors.append(e)
                 return ir.ErrorNode(schema, str(e))
             if any(
                 isinstance(dtype, pl.Null)
                 for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
             ):
-                error = f"No GPU support for {result} with Null column dtype."
+                error = NotImplementedError(
+                    f"No GPU support for {result} with Null column dtype."
+                )
                 self.errors.append(error)
-                return ir.ErrorNode(schema, error)
+                return ir.ErrorNode(schema, str(error))
 
             return result
 
@@ -129,12 +136,21 @@ class Translator:
         After translation is complete, this list of errors should be inspected
         to determine if the query is supported.
         """
-        node = self.visitor.view_expression(n)
-        dtype = dtypes.from_polars(self.visitor.get_dtype(n))
+        try:
+            node = self.visitor.view_expression(n)
+        except Exception as e:
+            raise NotImplementedError(
+                "Could not retrieve the current expression"
+            ) from e
+        try:
+            dtype = dtypes.from_polars(self.visitor.get_dtype(n))
+        except Exception as e:
+            self.errors.append(e)
+            raise NotImplementedError("Could not compute schema") from e
         try:
             return _translate_expr(node, self, dtype)
         except Exception as e:
-            self.errors.append(str(e))
+            self.errors.append(e)
             return expr.ErrorExpr(dtype, str(e))
 
 

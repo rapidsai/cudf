@@ -182,14 +182,20 @@ def execute_with_cudf(
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
             translator = Translator(nt)
             ir = translator.translate_ir()
-            if len(translator.errors):
-                unique_errors = sorted(set(translator.errors))
+            ir_translation_errors = translator.errors
+            if len(ir_translation_errors):
+                # TODO: Display these errors in user-friendly way.
+                # tracked in https://github.com/rapidsai/cudf/issues/17051
+                unique_errors = sorted(set(ir_translation_errors), key=lambda e: str(e))
                 error_message = "Query contained unsupported operations"
+                verbose_error_message = (
+                    f"{error_message}\nThe errors were:\n{unique_errors}"
+                )
                 unsupported_ops_exception = NotImplementedError(
                     error_message, unique_errors
                 )
                 if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
-                    warnings.warn(error_message, UserWarning, stacklevel=2)
+                    warnings.warn(verbose_error_message, UserWarning, stacklevel=2)
                 if raise_on_fail:
                     raise unsupported_ops_exception
             else:
