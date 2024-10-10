@@ -1456,6 +1456,11 @@ prefetch_options : dict, default None
     paths. If 'method' is set to 'all' (the default), the only supported
     option is 'blocksize' (default 256 MB). If method is set to 'parquet',
     'columns' and 'row_groups' are also supported (default None).
+libcudf_s3_io : bool, default False
+    WARNING: This is an experimental feature and may be removed at any
+    time without warning or deprecation period.
+    Use libcudf's native S3 backend, if applicable, by preserving S3 file
+    paths such as "s3://my-bucket/my-object".
 
 Returns
 -------
@@ -1638,6 +1643,7 @@ def get_reader_filepath_or_buffer(
     warn_meta=None,
     expand_dir_pattern=None,
     prefetch_options=None,
+    libcudf_s3_io=False,
 ):
     """{docstring}"""
 
@@ -1649,17 +1655,17 @@ def get_reader_filepath_or_buffer(
         )
     ]
     if not input_sources:
-        raise ValueError("Empty input source list: {input_sources}.")
+        raise ValueError(f"Empty input source list: {input_sources}.")
 
     filepaths_or_buffers = []
     string_paths = [isinstance(source, str) for source in input_sources]
     if any(string_paths):
-        # Sources are all strings. Thes strings are typically
+        # Sources are all strings. The strings are typically
         # file paths, but they may also be raw text strings.
 
         # Don't allow a mix of source types
         if not all(string_paths):
-            raise ValueError("Invalid input source list: {input_sources}.")
+            raise ValueError(f"Invalid input source list: {input_sources}.")
 
         # Make sure we define a filesystem (if possible)
         paths = input_sources
@@ -1712,11 +1718,16 @@ def get_reader_filepath_or_buffer(
                 raise FileNotFoundError(
                     f"{input_sources} could not be resolved to any files"
                 )
-            filepaths_or_buffers = _prefetch_remote_buffers(
-                paths,
-                fs,
-                **(prefetch_options or {}),
-            )
+            from s3fs.core import S3FileSystem
+
+            if libcudf_s3_io and isinstance(fs, S3FileSystem):
+                filepaths_or_buffers = [f"s3://{fpath}" for fpath in paths]
+            else:
+                filepaths_or_buffers = _prefetch_remote_buffers(
+                    paths,
+                    fs,
+                    **(prefetch_options or {}),
+                )
         else:
             raw_text_input = True
 
