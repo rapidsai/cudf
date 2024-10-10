@@ -72,18 +72,24 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
   return {std::move(offsets_columns), std::move(chars_sizes)};
 }
 
-std::pair<std::vector<rmm::device_buffer>, rmm::device_uvector<size_type>> valid_if_batch_async(
+}  // namespace
+
+std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<column_string_pairs> const& input,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   auto const num_columns = input.size();
+
+  auto [offsets_cols, d_chars_sizes] =
+    make_offsets_child_column_batch_async<size_type>(input, stream, mr);
+
   std::vector<rmm::device_buffer> null_masks;
   null_masks.reserve(num_columns);
 
-  rmm::device_uvector<size_type> valid_counts(num_columns, stream, mr);
+  rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, mr);
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), valid_counts.begin(), valid_counts.end(), 0);
+    rmm::exec_policy_nosync(stream), d_valid_counts.begin(), d_valid_counts.end(), 0);
 
   for (std::size_t idx = 0; idx < input.size(); ++idx) {
     auto const& string_pairs = input[idx];
@@ -101,22 +107,8 @@ std::pair<std::vector<rmm::device_buffer>, rmm::device_uvector<size_type>> valid
         string_pairs.data(),
         string_count,
         [] __device__(string_pair const pair) -> bool { return pair.first != nullptr; },
-        valid_counts.data() + idx);
+        d_valid_counts.data() + idx);
   }
-
-  return {std::move(null_masks), std::move(valid_counts)};
-}
-
-}  // namespace
-
-std::vector<std::unique_ptr<column>> make_strings_column_batch(
-  std::vector<column_string_pairs> const& input,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  auto [offsets_cols, d_chars_sizes] =
-    make_offsets_child_column_batch_async<size_type>(input, stream, mr);
-  auto [null_masks, d_valid_counts] = valid_if_batch_async(input, stream, mr);
 
   auto const chars_sizes  = cudf::detail::make_host_vector_async(d_chars_sizes, stream);
   auto const valid_counts = cudf::detail::make_host_vector_async(d_valid_counts, stream);
@@ -133,7 +125,6 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
                "Size of output exceeds the column size limit",
                std::overflow_error);
 
-  auto const num_columns = input.size();
   if (overflow_count > 0) {
     std::vector<column_string_pairs> long_string_input;
     std::vector<std::size_t> long_string_col_idx;
