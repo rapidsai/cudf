@@ -196,11 +196,12 @@ using SymbolGroupT = uint8_t;
 /**
  * @brief Definition of the DFA's states
  */
-enum class dfa_states : StateT { VALID, INVALID, NUM_STATES };
+enum class dfa_states : StateT { START, VALID, INVALID, NUM_STATES };
 
 // Aliases for readability of the transition table
-constexpr auto TT_INV = dfa_states::INVALID;
-constexpr auto TT_VLD = dfa_states::VALID;
+constexpr auto TT_START = dfa_states::START;
+constexpr auto TT_INV   = dfa_states::INVALID;
+constexpr auto TT_VLD   = dfa_states::VALID;
 
 /**
  * @brief Definition of the symbol groups
@@ -239,14 +240,17 @@ struct UnwrapTokenFromSymbolOp {
  * invalid lines.
  */
 struct TransduceToken {
+  bool nullify_empty_lines;
   template <typename RelativeOffsetT, typename SymbolT>
   constexpr CUDF_HOST_DEVICE SymbolT operator()(StateT const state_id,
                                                 SymbolGroupT const match_id,
                                                 RelativeOffsetT const relative_offset,
                                                 SymbolT const read_symbol) const
   {
+    bool const is_empty_invalid =
+      (nullify_empty_lines && state_id == static_cast<StateT>(TT_START));
     bool const is_end_of_invalid_line =
-      (state_id == static_cast<StateT>(TT_INV) &&
+      ((state_id == static_cast<StateT>(TT_INV) or is_empty_invalid) &&
        match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER));
 
     if (is_end_of_invalid_line) {
@@ -266,14 +270,17 @@ struct TransduceToken {
     constexpr int32_t num_inv_tokens = 2;
 
     bool const is_delimiter = match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DELIMITER);
+    bool const is_empty_invalid =
+      (nullify_empty_lines && state_id == static_cast<StateT>(TT_START));
 
     // If state is either invalid or we're entering an invalid state, we discard tokens
     bool const is_part_of_invalid_line =
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::ERROR) &&
-       state_id == static_cast<StateT>(TT_VLD));
+       (state_id == static_cast<StateT>(TT_VLD) or state_id == static_cast<StateT>(TT_START)));
 
     // Indicates whether we transition from an invalid line to a potentially valid line
-    bool const is_end_of_invalid_line = (state_id == static_cast<StateT>(TT_INV) && is_delimiter);
+    bool const is_end_of_invalid_line =
+      ((state_id == static_cast<StateT>(TT_INV) or is_empty_invalid) && is_delimiter);
 
     int32_t const emit_count =
       is_end_of_invalid_line ? num_inv_tokens : (is_part_of_invalid_line && !is_delimiter ? 1 : 0);
@@ -284,11 +291,12 @@ struct TransduceToken {
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const transition_table{
   {/* IN_STATE      ERROR   DELIM   OTHER */
-   /* VALID    */ {{TT_INV, TT_VLD, TT_VLD}},
-   /* INVALID  */ {{TT_INV, TT_VLD, TT_INV}}}};
+   /* START    */ {{TT_INV, TT_START, TT_VLD}},
+   /* VALID    */ {{TT_INV, TT_START, TT_VLD}},
+   /* INVALID  */ {{TT_INV, TT_START, TT_INV}}}};
 
 // The DFA's starting state
-constexpr auto start_state = static_cast<StateT>(TT_VLD);
+constexpr auto start_state = static_cast<StateT>(TT_START);
 }  // namespace token_filter
 
 // JSON to stack operator DFA (Deterministic Finite Automata)
@@ -1507,17 +1515,19 @@ void get_stack_context(device_span<SymbolT const> json_in,
 std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
   device_span<PdaTokenT const> tokens,
   device_span<SymbolOffsetT const> token_indices,
+  bool nullify_empty_lines,
   rmm::cuda_stream_view stream)
 {
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
-  using symbol_t  = thrust::tuple<PdaTokenT, SymbolOffsetT>;
-  auto filter_fst = fst::detail::make_fst(
-    fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
-    fst::detail::make_transition_table(token_filter::transition_table),
-    fst::detail::make_translation_functor<symbol_t, 0, 2>(token_filter::TransduceToken{}),
-    stream);
+  using symbol_t = thrust::tuple<PdaTokenT, SymbolOffsetT>;
+  auto filter_fst =
+    fst::detail::make_fst(fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
+                          fst::detail::make_transition_table(token_filter::transition_table),
+                          fst::detail::make_translation_functor<symbol_t, 0, 2>(
+                            token_filter::TransduceToken{nullify_empty_lines}),
+                          stream);
 
   auto const mr = cudf::get_current_device_resource_ref();
   rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
@@ -1664,7 +1674,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     tokens.set_element(0, token_t::LineEnd, stream);
     validate_token_stream(json_in, tokens, tokens_indices, options, stream);
     auto [filtered_tokens, filtered_tokens_indices] =
-      process_token_stream(tokens, tokens_indices, stream);
+      process_token_stream(tokens, tokens_indices, options.is_nullify_empty_lines(), stream);
     tokens         = std::move(filtered_tokens);
     tokens_indices = std::move(filtered_tokens_indices);
   }
