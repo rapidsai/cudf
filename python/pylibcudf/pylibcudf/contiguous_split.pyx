@@ -77,7 +77,7 @@ cdef class PackedColumns:
         return out
 
     def release(self):
-        """Release the metadata (host memory) and the gpu_data (device) memory
+        """Returns the metadata and gpu data, and releases the ownership.
 
         The ownership of the data are transferred to the returned buffers. After
         this call, `self` is empty.
@@ -92,9 +92,9 @@ cdef class PackedColumns:
         Returns
         -------
         memoryview
-            The metadata.
+            The metadata (host memory)
         gpumemoryview
-            The gpu data.
+            The gpu data (device memory)
         """
         if not (dereference(self.c_obj).metadata and dereference(self.c_obj).gpu_data):
             raise ValueError("Cannot release empty PackedColumns")
