@@ -3,6 +3,7 @@
 import pyarrow as pa
 import pylibcudf as plc
 import pytest
+from utils import assert_table_eq
 
 
 def test_list_dtype_roundtrip():
@@ -66,3 +67,10 @@ def test_decimal_other(data_type):
 
     arrow_type = plc.interop.to_arrow(data_type, precision=precision)
     assert arrow_type == pa.decimal128(precision, 0)
+
+
+def test_dlpack():
+    expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
+    plc_table = plc.interop.from_arrow(expected)
+    result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
+    assert_table_eq(expected, result)
