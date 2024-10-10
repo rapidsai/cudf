@@ -17,6 +17,7 @@
 #include "join_common_utils.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/distinct_hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -27,7 +28,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cooperative_groups.h>
