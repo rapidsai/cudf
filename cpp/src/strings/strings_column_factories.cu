@@ -44,8 +44,6 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  nvtx3::scoped_range loop{"make_offsets"};
-
   auto const num_columns = input.size();
   std::vector<std::unique_ptr<column>> offsets_columns(num_columns);
   rmm::device_uvector<int64_t> chars_sizes(num_columns, stream);
@@ -74,77 +72,11 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
   return {std::move(offsets_columns), std::move(chars_sizes)};
 }
 
-#if 1
 std::pair<std::vector<rmm::device_buffer>, rmm::device_uvector<size_type>> valid_if_batch_async(
   std::vector<column_string_pairs> const& input,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  nvtx3::scoped_range loop{"valid_if"};
-
-  auto const d_input =
-    cudf::detail::make_device_uvector_async(input, stream, cudf::get_current_device_resource_ref());
-  auto const is_valid_fn = [input = d_input.data()] __device__(size_type col_idx,
-                                                               size_type row_idx) -> bool {
-    return input[col_idx][row_idx].first != nullptr;
-  };
-  auto const mask_size_fn = cudf::detail::make_counting_transform_iterator(
-    0,
-    cuda::proclaim_return_type<size_type>([input = d_input.data()] __device__(size_type col_idx) {
-      return static_cast<size_type>(input[col_idx].size());
-    }));
-
-  auto const num_columns = input.size();
-  std::vector<rmm::device_buffer> null_masks(num_columns);
-  for (std::size_t idx = 0; idx < num_columns; ++idx) {
-    null_masks[idx] = cudf::create_null_mask(
-      static_cast<size_type>(input[idx].size()), mask_state::UNINITIALIZED, stream, mr);
-  }
-  std::vector<bitmask_type*> h_masks(num_columns);
-  std::transform(null_masks.begin(), null_masks.end(), h_masks.begin(), [](auto& mask) {
-    return reinterpret_cast<bitmask_type*>(mask.data());
-  });
-  auto d_masks = cudf::detail::make_device_uvector_async(
-    h_masks, stream, cudf::get_current_device_resource_ref());
-
-  rmm::device_uvector<size_type> valid_counts(num_columns, stream, mr);
-  thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), valid_counts.begin(), valid_counts.end(), 0);
-  auto const counting_it = thrust::make_counting_iterator(0);
-
-  int64_t max_string_count{0};
-  for (auto const string_pairs : input) {
-    max_string_count = std::max(max_string_count, static_cast<int64_t>(string_pairs.size()));
-  }
-
-  if (max_string_count > 0) {
-    constexpr size_type block_size{256};
-    auto const grid = cudf::detail::grid_1d{max_string_count, block_size};
-    cudf::detail::valid_if_n_kernel<block_size>
-      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-        counting_it,
-        counting_it,
-        is_valid_fn,
-        d_masks.data(),
-        static_cast<size_type>(num_columns),
-        mask_size_fn,
-        valid_counts.data());
-  }
-
-  return {std::move(null_masks), std::move(valid_counts)};
-}
-#else
-std::pair<std::vector<rmm::device_buffer>, rmm::device_uvector<size_type>> valid_if_batch_async(
-  std::vector<column_string_pairs> const& input,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  nvtx3::scoped_range loop{"valid_if"};
-
-  auto is_valid_fn = [] __device__(string_pair const pair) -> bool {
-    return pair.first != nullptr;
-  };
-
   auto const num_columns = input.size();
   std::vector<rmm::device_buffer> null_masks;
   null_masks.reserve(num_columns);
@@ -168,13 +100,12 @@ std::pair<std::vector<rmm::device_buffer>, rmm::device_uvector<size_type>> valid
         reinterpret_cast<bitmask_type*>(null_masks.back().data()),
         string_pairs.data(),
         string_count,
-        is_valid_fn,
+        [] __device__(string_pair const pair) -> bool { return pair.first != nullptr; },
         valid_counts.data() + idx);
   }
 
   return {std::move(null_masks), std::move(valid_counts)};
 }
-#endif
 
 }  // namespace
 
@@ -204,8 +135,6 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
   auto const num_columns = input.size();
   if (overflow_count > 0) {
-    nvtx3::scoped_range loop{"overflow_offsets"};
-
     std::vector<column_string_pairs> long_string_input;
     std::vector<std::size_t> long_string_col_idx;
     long_string_input.reserve(overflow_count);
@@ -230,8 +159,6 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   std::vector<std::unique_ptr<column>> chars_cols(num_columns);
   std::vector<std::unique_ptr<column>> output(num_columns);
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
-    nvtx3::scoped_range loop{"make_output"};
-
     auto const strings_count = static_cast<size_type>(input[idx].size());
     if (strings_count == 0) {
       output[idx] = make_empty_column(type_id::STRING);
@@ -242,16 +169,13 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     auto const valid_count       = valid_counts[idx];
     auto const avg_bytes_per_row = chars_size / std::max(valid_count, 1);
 
-    auto chars_data = [&, &offsets_cols = offsets_cols] {
-      nvtx3::scoped_range loop{"make_chars"};
-      return make_chars_column(offsets_cols[idx]->view(),
-                               chars_size,
-                               avg_bytes_per_row,
-                               input[idx].data(),
-                               strings_count,
-                               stream,
-                               mr);
-    }();
+    auto chars_data = make_chars_column(offsets_cols[idx]->view(),
+                                        chars_size,
+                                        avg_bytes_per_row,
+                                        input[idx].data(),
+                                        strings_count,
+                                        stream,
+                                        mr);
 
     auto const null_count = strings_count - valid_count;
     output[idx] =
