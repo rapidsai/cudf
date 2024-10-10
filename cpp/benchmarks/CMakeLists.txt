@@ -49,7 +49,7 @@ target_compile_options(
 
 target_link_libraries(
   ndsh_data_generator
-  PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp
+  PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp cudf_benchmark_common
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
