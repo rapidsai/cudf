@@ -29,42 +29,33 @@
 
 #include <vector>
 
+namespace {
+
 constexpr int min_row_width = 0;
 constexpr int max_row_width = 50;
 
-static void BM_make_strings_column(nvbench::state& state)
+using string_index_pair = thrust::pair<char const*, cudf::size_type>;
+
+template <bool batch_construction>
+std::vector<std::unique_ptr<cudf::column>> make_strings_columns(
+  std::vector<cudf::device_span<string_index_pair const>> const& input,
+  rmm::cuda_stream_view stream)
 {
-  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const has_nulls = static_cast<bool>(state.get_int64("has_nulls"));
-
-  data_profile const table_profile =
-    data_profile_builder()
-      .distribution(cudf::type_id::STRING, distribution_id::NORMAL, min_row_width, max_row_width)
-      .null_probability(has_nulls ? std::optional<double>{0.1} : std::nullopt);
-  auto const data_table =
-    create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
-
-  using string_index_pair = thrust::pair<char const*, cudf::size_type>;
-  auto const stream       = cudf::get_default_stream();
-  auto input              = rmm::device_uvector<string_index_pair>(data_table->num_rows(), stream);
-  auto const d_data_ptr =
-    cudf::column_device_view::create(data_table->get_column(0).view(), stream);
-  thrust::tabulate(rmm::exec_policy(stream),
-                   input.begin(),
-                   input.end(),
-                   [data_col = *d_data_ptr] __device__(auto const idx) {
-                     if (data_col.is_null(idx)) { return string_index_pair{nullptr, 0}; }
-                     auto const row = data_col.element<cudf::string_view>(idx);
-                     return string_index_pair{row.data(), row.size_bytes()};
-                   });
-
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    [[maybe_unused]] auto const output = cudf::make_strings_column(input, stream);
-  });
+  if constexpr (batch_construction) {
+    return cudf::make_strings_column_batch(input, stream);
+  } else {
+    std::vector<std::unique_ptr<cudf::column>> output;
+    output.reserve(input.size());
+    for (auto const& column_input : input) {
+      output.emplace_back(cudf::make_strings_column(column_input, stream));
+    }
+    return output;
+  }
 }
 
-static void BM_make_strings_column_batch(nvbench::state& state)
+}  // namespace
+
+static void BM_make_strings_columns(nvbench::state& state)
 {
   auto const num_rows   = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const has_nulls  = static_cast<bool>(state.get_int64("has_nulls"));
@@ -77,10 +68,9 @@ static void BM_make_strings_column_batch(nvbench::state& state)
   auto const data_table = create_random_table(
     cycle_dtypes({cudf::type_id::STRING}, batch_size), row_count{num_rows}, table_profile);
 
-  using string_index_pair = thrust::pair<char const*, cudf::size_type>;
-  auto const stream       = cudf::get_default_stream();
-  auto input_data         = std::vector<rmm::device_uvector<string_index_pair>>{};
-  auto input              = std::vector<cudf::device_span<string_index_pair const>>{};
+  auto const stream = cudf::get_default_stream();
+  auto input_data   = std::vector<rmm::device_uvector<string_index_pair>>{};
+  auto input        = std::vector<cudf::device_span<string_index_pair const>>{};
   input_data.reserve(batch_size);
   input.reserve(batch_size);
   for (auto i = 0; i < batch_size; ++i) {
@@ -101,17 +91,12 @@ static void BM_make_strings_column_batch(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    [[maybe_unused]] auto const output = cudf::make_strings_column_batch(input, stream);
+    [[maybe_unused]] auto const output = make_strings_columns<true>(input, stream);
   });
 }
 
-NVBENCH_BENCH(BM_make_strings_column)
+NVBENCH_BENCH(BM_make_strings_columns)
   .set_name("make_strings_column")
-  .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000, 200'000'000})
-  .add_int64_axis("has_nulls", {0, 1});
-
-NVBENCH_BENCH(BM_make_strings_column_batch)
-  .set_name("make_strings_column_batch")
   .add_int64_axis("num_rows", {1'000'000, 10'000'000, 20'000'000})
   .add_int64_axis("has_nulls", {0, 1})
   .add_int64_axis("batch_size", {10, 50, 100, 200});
