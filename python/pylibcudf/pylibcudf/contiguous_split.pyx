@@ -151,7 +151,7 @@ cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data)
     """
     if metadata.nbytes == 0:
         if gpu_data.__cuda_array_interface__["data"][0] != 0:
-            raise ValueError("expect an empty gpu_data when unpackking an empty table")
+            raise ValueError("Expected an empty gpu_data from unpacking an empty table")
         return Table.from_libcudf(make_unique[table](table_view()))
 
     # Extract the raw data pointers
