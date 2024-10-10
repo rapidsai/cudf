@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libc.stdint cimport uint8_t, uintptr_t
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
+from libcpp.vector cimport vector
 from pylibcudf.libcudf.contiguous_split cimport (
     pack as cpp_pack,
     packed_columns,
@@ -12,14 +13,46 @@ from pylibcudf.libcudf.contiguous_split cimport (
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
 from .utils cimport int_to_void_ptr
 
-from types import SimpleNamespace
 
-import numpy as np
+cdef class HostBuffer:
+    """Owning host buffer that implements the buffer protocol"""
+    cdef unique_ptr[vector[uint8_t]] c_obj
+    cdef size_t nbytes
+    cdef Py_ssize_t[1] shape
+    cdef Py_ssize_t[1] strides
 
+    @staticmethod
+    cdef HostBuffer from_unique_ptr(
+        unique_ptr[vector[uint8_t]] vec
+    ):
+        cdef HostBuffer out = HostBuffer()
+        out.c_obj = move(vec)
+        out.nbytes = dereference(out.c_obj).size()
+        out.shape[0] = out.nbytes
+        out.strides[0] = 1
+        return out
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        buffer.buf = dereference(self.c_obj).data()
+        buffer.format = NULL  # byte
+        buffer.internal = NULL
+        buffer.itemsize = 1
+        buffer.len = self.nbytes
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
 
 cdef class PackedColumns:
     """Column data in a serialized format.
@@ -43,43 +76,28 @@ cdef class PackedColumns:
         out.c_obj = move(data)
         return out
 
-    @property
-    def metadata(self):
-        """memoryview of the metadata (host memory)"""
-        cdef size_t size = dereference(dereference(self.c_obj).metadata).size()
-        cdef uint8_t* data = dereference(dereference(self.c_obj).metadata).data()
-        if size == 0:
-            return memoryview(np.ndarray(shape=(0,), dtype="uint8"))
-        return memoryview(
-            np.asarray(
-                SimpleNamespace(
-                    owner = self,
-                    __array_interface__ = {
-                        'data': (<uintptr_t>data, False),
-                        'shape': (size,),
-                        'typestr': '|u1',
-                        'strides': None,
-                        'version': 3,
-                    }
-                )
-            )
-        )
+    def release(self):
+        """Release the metadata (host memory) and the gpu_data (device) memory
 
-    @property
-    def gpu_data(self):
-        """gpumemoryview of the data (device memory)"""
-        cdef size_t size = dereference(dereference(self.c_obj).gpu_data).size()
-        cdef void* data = dereference(dereference(self.c_obj).gpu_data).data()
-        return gpumemoryview(
-            SimpleNamespace(
-                owner = self,
-                __cuda_array_interface__ = {
-                    'data': (<uintptr_t>data, False),
-                    'shape': (size,),
-                    'typestr': '|u1',
-                    'strides': None,
-                    'version': 3,
-                }
+        The ownership of the data are transferred to the returned buffers. After
+        this call, `self` is empty.
+
+        Returns
+        -------
+        memoryview
+            The metadata.
+        gpumemoryview
+            The gpu data.
+        """
+        if not (dereference(self.c_obj).metadata and dereference(self.c_obj).gpu_data):
+            raise ValueError("Cannot release empty PackedColumns")
+
+        return (
+            memoryview(
+                HostBuffer.from_unique_ptr(move(dereference(self.c_obj).metadata))
+            ),
+            gpumemoryview(
+                DeviceBuffer.c_from_unique_ptr(move(dereference(self.c_obj).gpu_data))
             )
         )
 
