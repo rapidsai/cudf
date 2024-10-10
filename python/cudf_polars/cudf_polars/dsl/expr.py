@@ -28,10 +28,11 @@ from polars.exceptions import InvalidOperationError
 from polars.polars import _expr_nodes as pl_expr
 
 from cudf_polars.containers import Column
+from cudf_polars.dsl.nodebase import Node
 from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Hashable, Mapping
 
     import polars as pl
     import polars.type_aliases as pl_types
@@ -69,99 +70,14 @@ class AggInfo(NamedTuple):
     requests: list[tuple[Expr | None, plc.aggregation.Aggregation, Expr]]
 
 
-class Expr:
-    """
-    An abstract expression object.
+class Expr(Node):
+    """An abstract expression object."""
 
-    This contains a (potentially empty) tuple of child expressions,
-    along with non-child data. For uniform reconstruction and
-    implementation of hashing and equality schemes, child classes need
-    to provide a certain amount of metadata when they are defined.
-    Specifically, the ``_non_child`` attribute must list, in-order,
-    the names of the slots that are passed to the constructor. The
-    constructor must take arguments in the order ``(*_non_child,
-    *children).``
-    """
-
-    __slots__ = ("dtype", "_hash_value", "_repr_value")
+    __slots__ = ("dtype",)
+    _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     dtype: plc.DataType
     """Data type of the expression."""
-    _hash_value: int
-    """Caching slot for the hash of the expression."""
-    _repr_value: str
-    """Caching slot for repr of the expression."""
     children: tuple[Expr, ...] = ()
-    """Children of the expression."""
-    _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
-    """Names of non-child data (not Exprs) for reconstruction."""
-
-    # Constructor must take arguments in order (*_non_child, *children)
-    def __init__(self, dtype: plc.DataType) -> None:
-        self.dtype = dtype
-
-    def _ctor_arguments(self, children: Sequence[Expr]) -> Sequence:
-        return (*(getattr(self, attr) for attr in self._non_child), *children)
-
-    def get_hash(self) -> int:
-        """
-        Return the hash of this expr.
-
-        Override this in subclasses, rather than __hash__.
-
-        Returns
-        -------
-        The integer hash value.
-        """
-        return hash((type(self), self._ctor_arguments(self.children)))
-
-    def __hash__(self) -> int:
-        """Hash of an expression with caching."""
-        try:
-            return self._hash_value
-        except AttributeError:
-            self._hash_value = self.get_hash()
-            return self._hash_value
-
-    def is_equal(self, other: Any) -> bool:
-        """
-        Equality of two expressions.
-
-        Override this in subclasses, rather than __eq__.
-
-        Parameter
-        ---------
-        other
-            object to compare to
-
-        Returns
-        -------
-        True if the two expressions are equal, false otherwise.
-        """
-        if type(self) is not type(other):
-            return False  # pragma: no cover; __eq__ trips first
-        return self._ctor_arguments(self.children) == other._ctor_arguments(
-            other.children
-        )
-
-    def __eq__(self, other: Any) -> bool:
-        """Equality of expressions."""
-        if type(self) is not type(other) or hash(self) != hash(other):
-            return False
-        else:
-            return self.is_equal(other)
-
-    def __ne__(self, other: Any) -> bool:
-        """Inequality of expressions."""
-        return not self.__eq__(other)
-
-    def __repr__(self) -> str:
-        """String representation of an expression with caching."""
-        try:
-            return self._repr_value
-        except AttributeError:
-            args = ", ".join(f"{arg!r}" for arg in self._ctor_arguments(self.children))
-            self._repr_value = f"{type(self).__name__}({args})"
-            return self._repr_value
 
     def do_evaluate(
         self,
@@ -351,7 +267,7 @@ class Literal(Expr):
     children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
 
@@ -378,16 +294,16 @@ class LiteralColumn(Expr):
     children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
 
-    def get_hash(self) -> int:
-        """Compute a hash of the column."""
+    def get_hashable(self) -> Hashable:
+        """Compute a hashable representation of the column."""
         # This is stricter than necessary, but we only need this hash
         # for identity in groupby replacements so it's OK. And this
         # way we avoid doing potentially expensive compute.
-        return hash((type(self), self.dtype, id(self.value)))
+        return (type(self), self.dtype, id(self.value))
 
     def do_evaluate(
         self,
@@ -435,6 +351,9 @@ class Col(Expr):
 class Len(Expr):
     children: tuple[()]
 
+    def __init__(self, dtype: plc.DataType) -> None:
+        self.dtype = dtype
+
     def do_evaluate(
         self,
         df: DataFrame,
@@ -472,7 +391,7 @@ class BooleanFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children
@@ -711,7 +630,7 @@ class StringFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children
@@ -957,6 +876,23 @@ class StringFunction(Expr):
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options", "children")
+    _non_child = ("dtype", "name", "options")
+    children: tuple[Expr, ...]
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        name: pl_expr.TemporalFunction,
+        options: tuple[Any, ...],
+        *children: Expr,
+    ) -> None:
+        self.dtype = dtype
+        self.options = options
+        self.name = name
+        self.children = children
+        if self.name not in self._COMPONENT_MAP:
+            raise NotImplementedError(f"Temporal function {self.name}")
+
     _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
         pl_expr.TemporalFunction.Year: plc.datetime.DatetimeComponent.YEAR,
         pl_expr.TemporalFunction.Month: plc.datetime.DatetimeComponent.MONTH,
@@ -969,22 +905,6 @@ class TemporalFunction(Expr):
         pl_expr.TemporalFunction.Microsecond: plc.datetime.DatetimeComponent.MICROSECOND,
         pl_expr.TemporalFunction.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
-    _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
-
-    def __init__(
-        self,
-        dtype: plc.DataType,
-        name: pl_expr.TemporalFunction,
-        options: tuple[Any, ...],
-        *children: Expr,
-    ) -> None:
-        super().__init__(dtype)
-        self.options = options
-        self.name = name
-        self.children = children
-        if self.name not in self._COMPONENT_MAP:
-            raise NotImplementedError(f"Temporal function {self.name}")
 
     def do_evaluate(
         self,
@@ -1068,6 +988,23 @@ class UnaryFunction(Expr):
     _non_child = ("dtype", "name", "options")
     children: tuple[Expr, ...]
 
+    def __init__(
+        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
+    ) -> None:
+        self.dtype = dtype
+        self.name = name
+        self.options = options
+        self.children = children
+
+        if self.name not in UnaryFunction._supported_fns:
+            raise NotImplementedError(f"Unary function {name=}")
+        if self.name in UnaryFunction._supported_cum_aggs:
+            (reverse,) = self.options
+            if reverse:
+                raise NotImplementedError(
+                    "reverse=True is not supported for cumulative aggregations"
+                )
+
     # Note: log, and pow are handled via translation to binops
     _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
         "sin": plc.unary.UnaryOperator.SIN,
@@ -1112,23 +1049,6 @@ class UnaryFunction(Expr):
     _supported_fns = frozenset().union(
         _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
     )
-
-    def __init__(
-        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
-    ) -> None:
-        super().__init__(dtype)
-        self.name = name
-        self.options = options
-        self.children = children
-
-        if self.name not in UnaryFunction._supported_fns:
-            raise NotImplementedError(f"Unary function {name=}")
-        if self.name in UnaryFunction._supported_cum_aggs:
-            (reverse,) = self.options
-            if reverse:
-                raise NotImplementedError(
-                    "reverse=True is not supported for cumulative aggregations"
-                )
 
     def do_evaluate(
         self,
@@ -1310,7 +1230,7 @@ class Sort(Expr):
     def __init__(
         self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (column,)
 
@@ -1350,7 +1270,7 @@ class SortBy(Expr):
         column: Expr,
         *by: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (column, *by)
 
@@ -1383,7 +1303,7 @@ class Gather(Expr):
     children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(
@@ -1425,7 +1345,7 @@ class Filter(Expr):
     children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(
@@ -1452,7 +1372,7 @@ class RollingWindow(Expr):
     children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg,)
         raise NotImplementedError("Rolling window not implemented")
@@ -1464,7 +1384,7 @@ class GroupedRollingWindow(Expr):
     children: tuple[Expr, ...]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg, *by)
         raise NotImplementedError("Grouped rolling window not implemented")
@@ -1476,7 +1396,7 @@ class Cast(Expr):
     children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (value,)
         if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
@@ -1510,7 +1430,7 @@ class Agg(Expr):
     def __init__(
         self, dtype: plc.DataType, name: str, options: Any, *children: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.name = name
         self.options = options
         self.children = children
@@ -1710,7 +1630,7 @@ class Ternary(Expr):
     def __init__(
         self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (when, then, otherwise)
 
     def do_evaluate(
@@ -1742,7 +1662,7 @@ class BinOp(Expr):
         left: Expr,
         right: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         if plc.traits.is_boolean(self.dtype):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
