@@ -46,6 +46,7 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@force-ci-run
     with:
+      force_ci_run_label: "5 - DO NOT MERGE"
       files_yaml: |
         test_cpp:
           - '**'
