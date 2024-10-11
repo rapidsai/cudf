@@ -49,11 +49,11 @@ __device__ inline static void scan_block_exclusive_sum(int thread_bit, block_sca
 }
 
 template <int decode_block_size>
-__device__ inline static void scan_block_exclusive_sum(uint32_t warp_bits,
-                                                       int warp_lane,
-                                                       int warp_index,
-                                                       uint32_t lane_mask,
-                                                       block_scan_results& results)
+__device__ static void scan_block_exclusive_sum(uint32_t warp_bits,
+                                                int warp_lane,
+                                                int warp_index,
+                                                uint32_t lane_mask,
+                                                block_scan_results& results)
 {
   // Compute # warps
   constexpr int num_warps = decode_block_size / cudf::detail::warp_size;
@@ -78,7 +78,7 @@ __device__ inline static void scan_block_exclusive_sum(uint32_t warp_bits,
 }
 
 template <int block_size, bool has_lists_t, typename state_buf>
-__device__ inline void gpuDecodeFixedWidthValues(
+__device__ void gpuDecodeFixedWidthValues(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
   constexpr int num_warps      = block_size / cudf::detail::warp_size;
@@ -983,6 +983,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to gpuDecodeValues
+  // For chunked reads we may not process all of the rows on the page; if not stop early
   int const last_row = s->first_row + s->num_rows;
   while ((s->error == 0) && (processed_count < s->page.num_input_values) &&
          (s->input_row_count <= last_row)) {
