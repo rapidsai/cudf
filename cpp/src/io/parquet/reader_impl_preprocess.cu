@@ -1013,8 +1013,6 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
 {
   CUDF_FUNC_RANGE();
 
-  BIU_RANGE_PUSH("read_column_chunks::1");
-
   auto const& row_groups_info = _pass_itm_data->row_groups;
 
   auto& raw_page_data = _pass_itm_data->raw_page_data;
@@ -1064,9 +1062,6 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
       chunk_count++;
     }
   }
-
-  BIU_RANGE_POP();
-  BIU_RANGE_PUSH("read_column_chunks::2");
 
   // Read compressed chunk data to device memory
   return {total_decompressed_size > 0,
