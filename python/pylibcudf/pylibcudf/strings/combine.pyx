@@ -4,6 +4,9 @@ from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
+from pylibcudf.libcudf.scalar.scalar_factories cimport (
+    make_string_scalar as cpp_make_string_scalar,
+)
 from pylibcudf.libcudf.strings cimport combine as cpp_combine
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.table cimport Table
@@ -18,12 +21,12 @@ from pylibcudf.libcudf.strings.combine import \
 cpdef Column concatenate(
     Table strings_columns,
     ColumnOrScalar separator,
-    Scalar narep,
-    Scalar col_narep,
-    separator_on_nulls separate_nulls,
+    Scalar narep=None,
+    Scalar col_narep=None,
+    separator_on_nulls separate_nulls=separator_on_nulls.YES,
 ):
     """
-    Concatenates all strings in the column into one new string delimited
+    Concatenate all strings in the column into one new string delimited
     by an optional separator string.
 
     Parameters
@@ -39,7 +42,7 @@ cpdef Column concatenate(
 
     col_narep : Scalar
         String that should be used in place of any null strings found in any column.
-        Ignored when separator is a Scalar.
+        An exception is raised when separator is a Scalar.
 
     separate_nulls : SeparatorOnNulls
         If YES, then the separator is included for null rows.
@@ -50,15 +53,25 @@ cpdef Column concatenate(
         New column with concatenated results
     """
     cdef unique_ptr[column] c_result
+    cdef const string_scalar* c_col_narep
+    cdef const string_scalar* c_separator
+
+    if narep is None:
+        narep = Scalar.from_libcudf(
+            cpp_make_string_scalar("".encode())
+        )
     cdef const string_scalar* c_narep = <const string_scalar*>(
         narep.c_obj.get()
     )
-    cdef const string_scalar* c_col_narep = <const string_scalar*>(
-        narep.c_obj.get()
-    )
-    cdef const string_scalar* c_separator
 
     if ColumnOrScalar is Column:
+        if col_narep is None:
+            col_narep = Scalar.from_libcudf(
+                cpp_make_string_scalar("".encode())
+            )
+        c_col_narep = <const string_scalar*>(
+            col_narep.c_obj.get()
+        )
         with nogil:
             c_result = move(
                 cpp_combine.concatenate(
@@ -70,6 +83,10 @@ cpdef Column concatenate(
                 )
             )
     elif ColumnOrScalar is Scalar:
+        if col_narep is not None:
+            raise ValueError(
+                "col_narep cannot be specified when separator is a Scalar"
+            )
         c_separator = <const string_scalar*>(separator.c_obj.get())
         with nogil:
             c_result = move(

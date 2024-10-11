@@ -22,8 +22,6 @@ def concatenate(list source_strings,
         plc.Table([col.to_pylibcudf(mode="read") for col in source_strings]),
         sep.device_value.c_value,
         na_rep.device_value.c_value,
-        cudf._lib.scalar.DeviceScalar("", cudf.dtype("object")).c_value,
-        plc.strings.combine.SeparatorOnNulls.YES,
     )
     return Column.from_pylibcudf(plc_column)
 

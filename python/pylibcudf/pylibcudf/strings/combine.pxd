@@ -15,9 +15,9 @@ ctypedef fused ColumnOrScalar:
 cpdef Column concatenate(
     Table strings_columns,
     ColumnOrScalar separator,
-    Scalar narep,
-    Scalar col_narep,
-    separator_on_nulls separate_nulls,
+    Scalar narep=*,
+    Scalar col_narep=*,
+    separator_on_nulls separate_nulls=*,
 )
 
 cpdef Column join_strings(Column input, Scalar separator, Scalar narep)
