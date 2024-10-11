@@ -27,6 +27,7 @@ set(cython_sources
     groupby.pyx
     interop.pyx
     join.pyx
+    json.pyx
     labeling.pyx
     lists.pyx
     merge.pyx
