@@ -130,7 +130,8 @@ void run_ndsh_q10(nvbench::state& state,
     read_parquet(sources.at("lineitem").make_source_info(),
                  {"l_extendedprice", "l_discount", "l_orderkey", "l_returnflag"},
                  std::move(lineitem_pred));
-  auto const nation = read_parquet(sources.at("nation").make_source_info(), {"n_name", "n_nationkey"});
+  auto const nation =
+    read_parquet(sources.at("nation").make_source_info(), {"n_name", "n_nationkey"});
 
   // Perform the joins
   auto const join_a       = apply_inner_join(customer, nation, {"c_nationkey"}, {"n_nationkey"});
