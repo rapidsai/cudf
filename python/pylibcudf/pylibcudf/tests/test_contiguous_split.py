@@ -21,12 +21,6 @@ param_pyarrow_tables = [
             ],
         }
     ),
-    pytest.param(
-        pa.array([{"a": [1, 2], "b": [3, 4]}]),
-        marks=pytest.mark.xfail(
-            reason="https://github.com/rapidsai/cudf/issues/17061"
-        ),
-    ),
 ]
 
 
