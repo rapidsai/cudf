@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "compute_mapping_indices.hpp"
 #include "compute_single_pass_aggs.hpp"
 #include "compute_single_pass_shmem_aggs.hpp"
 #include "create_sparse_results_table.hpp"
@@ -22,12 +23,8 @@
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
@@ -40,139 +37,10 @@
 #include <cooperative_groups.h>
 #include <cuco/static_set.cuh>
 
-#include <unordered_set>
+#include <algorithm>
+#include <memory>
 
 namespace cudf::groupby::detail::hash {
-namespace {
-template <typename SetType>
-__device__ void find_local_mapping(cooperative_groups::thread_block const& block,
-                                   cudf::size_type idx,
-                                   cudf::size_type num_input_rows,
-                                   SetType shared_set,
-                                   bitmask_type const* row_bitmask,
-                                   bool skip_rows_with_nulls,
-                                   cudf::size_type* cardinality,
-                                   cudf::size_type* local_mapping_index,
-                                   cudf::size_type* shared_set_indices)
-{
-  cudf::size_type result_idx{};
-  bool inserted{};
-  if (idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx))) {
-    auto const result = shared_set.insert_and_find(idx);
-    result_idx        = *result.first;
-    inserted          = result.second;
-    // inserted a new element
-    if (result.second) {
-      auto const shared_set_index          = atomicAdd(cardinality, 1);
-      shared_set_indices[shared_set_index] = idx;
-      local_mapping_index[idx]             = shared_set_index;
-    }
-  }
-  // Syncing the thread block is needed so that updates in `local_mapping_index` are visible to all
-  // threads in the thread block.
-  block.sync();
-  if (idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx))) {
-    // element was already in set
-    if (!inserted) { local_mapping_index[idx] = local_mapping_index[result_idx]; }
-  }
-}
-
-template <typename GlobalSetT>
-__device__ void find_global_mapping(cooperative_groups::thread_block const& block,
-                                    cudf::size_type cardinality,
-                                    GlobalSetT global_set,
-                                    cudf::size_type* shared_set_indices,
-                                    cudf::size_type* global_mapping_index)
-{
-  // for all unique keys in shared memory hash set, stores their matches in
-  // global hash set to `global_mapping_index`
-  for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
-    auto const input_idx = shared_set_indices[idx];
-    global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx] =
-      *global_set.insert_and_find(input_idx).first;
-  }
-}
-
-/*
- * @brief Inserts keys into the shared memory hash set, and stores the block-wise rank for a given
- * row index in `local_mapping_index`. If the number of unique keys found in a threadblock exceeds
- * `GROUPBY_CARDINALITY_THRESHOLD`, the threads in that block will exit without updating
- * `global_set` or setting `global_mapping_index`. Else, we insert the unique keys found to the
- * global hash set, and save the row index of the global sparse table in `global_mapping_index`.
- */
-template <class SetRef, typename GlobalSetType, class WindowExtent>
-CUDF_KERNEL void compute_mapping_indices(GlobalSetType global_set,
-                                         cudf::size_type num_input_rows,
-                                         WindowExtent window_extent,
-                                         bitmask_type const* row_bitmask,
-                                         bool skip_rows_with_nulls,
-                                         cudf::size_type* local_mapping_index,
-                                         cudf::size_type* global_mapping_index,
-                                         cudf::size_type* block_cardinality,
-                                         bool* direct_aggregations)
-{
-  // TODO: indices inserted in each shared memory set
-  __shared__ cudf::size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
-
-  // Shared set initialization
-  __shared__ typename SetRef::window_type windows[window_extent.value()];
-  auto storage     = SetRef::storage_ref_type(window_extent, windows);
-  auto shared_set  = SetRef(cuco::empty_key<cudf::size_type>{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-                           global_set.key_eq(),
-                           probing_scheme_t{global_set.hash_function()},
-                            {},
-                           storage);
-  auto const block = cooperative_groups::this_thread_block();
-  shared_set.initialize(block);
-
-  __shared__ cudf::size_type cardinality;
-  if (block.thread_rank() == 0) { cardinality = 0; }
-  block.sync();
-
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-
-  for (auto idx = cudf::detail::grid_1d::global_thread_id();
-       idx - block.thread_rank() < num_input_rows;
-       idx += stride) {
-    find_local_mapping(block,
-                       idx,
-                       num_input_rows,
-                       shared_set,
-                       row_bitmask,
-                       skip_rows_with_nulls,
-                       &cardinality,
-                       local_mapping_index,
-                       shared_set_indices);
-
-    block.sync();
-
-    if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) {
-      if (block.thread_rank() == 0) { *direct_aggregations = true; }
-      break;
-    }
-  }
-
-  // Insert unique keys from shared to global hash set if block-cardinality
-  // doesn't exceed the threshold upper-limit
-  if (cardinality < GROUPBY_CARDINALITY_THRESHOLD) {
-    find_global_mapping(block, cardinality, global_set, shared_set_indices, global_mapping_index);
-  }
-
-  if (block.thread_rank() == 0) { block_cardinality[block.group_index().x] = cardinality; }
-}
-
-template <typename Kernel>
-int max_occupancy_grid_size(Kernel kernel, cudf::size_type n)
-{
-  int max_active_blocks{-1};
-  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &max_active_blocks, kernel, GROUPBY_BLOCK_SIZE, 0));
-  auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
-  auto const num_blocks = cudf::util::div_rounding_up_safe(n, GROUPBY_BLOCK_SIZE);
-  return std::min(grid_size, num_blocks);
-}
-}  // namespace
-
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
@@ -186,20 +54,6 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream)
 {
-  // GROUPBY_SHM_MAX_ELEMENTS with 0.7 occupancy
-  auto constexpr shared_set_capacity =
-    static_cast<std::size_t>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43);
-  using extent_type            = cuco::extent<cudf::size_type, shared_set_capacity>;
-  using shared_set_type        = cuco::static_set<cudf::size_type,
-                                           extent_type,
-                                           cuda::thread_scope_block,
-                                           typename SetType::key_equal,
-                                           probing_scheme_t,
-                                           cuco::cuda_allocator<cudf::size_type>,
-                                           cuco::storage<GROUPBY_WINDOW_SIZE>>;
-  using shared_set_ref_type    = typename shared_set_type::ref_type<cuco::op::insert_and_find_tag>;
-  auto constexpr window_extent = cuco::make_window_extent<shared_set_ref_type>(extent_type{});
-
   auto const num_input_rows = keys.num_rows();
 
   auto row_bitmask =
@@ -217,9 +71,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  auto const grid_size = max_occupancy_grid_size(
-    compute_mapping_indices<shared_set_ref_type, decltype(global_set_ref), decltype(window_extent)>,
-    num_input_rows);
+  auto const grid_size = max_occupancy_grid_size<decltype(global_set_ref)>(num_input_rows);
   auto const has_sufficient_shmem = available_shared_memory_size(grid_size) >
                                     (shmem_agg_pointer_size(flattened_values.num_columns()) * 2);
   auto const has_dictionary_request = std::any_of(
@@ -274,17 +126,16 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
                                                             stream);
   rmm::device_uvector<cudf::size_type> block_cardinality(grid_size, stream);
   rmm::device_scalar<bool> direct_aggregations(false, stream);
-  compute_mapping_indices<shared_set_ref_type>
-    <<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(global_set_ref,
-                                                   num_input_rows,
-                                                   window_extent,
-                                                   static_cast<bitmask_type*>(row_bitmask.data()),
-                                                   skip_rows_with_nulls,
-                                                   local_mapping_index.data(),
-                                                   global_mapping_index.data(),
-                                                   block_cardinality.data(),
-                                                   direct_aggregations.data());
-  stream.synchronize();
+  compute_mapping_indices(grid_size,
+                          num_input_rows,
+                          global_set_ref,
+                          static_cast<bitmask_type*>(row_bitmask.data()),
+                          skip_rows_with_nulls,
+                          local_mapping_index.data(),
+                          global_mapping_index.data(),
+                          block_cardinality.data(),
+                          direct_aggregations.data(),
+                          stream);
 
   // make table that will hold sparse results
   cudf::table sparse_table = create_sparse_results_table(flattened_values,

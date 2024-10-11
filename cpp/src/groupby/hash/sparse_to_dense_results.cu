@@ -28,12 +28,6 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
-/**
- * @brief Gather sparse results into dense using `gather_map` and add to
- * `dense_cache`
- *
- * @see groupby_null_templated()
- */
 template <typename SetType>
 void sparse_to_dense_results(table_view const& keys,
                              host_span<aggregation_request const> requests,
@@ -64,23 +58,24 @@ void sparse_to_dense_results(table_view const& keys,
   }
 }
 
-template void sparse_to_dense_results<hash_set_ref_t>(table_view const& keys,
-                                                      host_span<aggregation_request const> requests,
-                                                      cudf::detail::result_cache* sparse_results,
-                                                      cudf::detail::result_cache* dense_results,
-                                                      device_span<size_type const> gather_map,
-                                                      hash_set_ref_t set,
-                                                      bool skip_key_rows_with_nulls,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr);
-
-template void sparse_to_dense_results<nullable_hash_set_ref_t>(
+template void sparse_to_dense_results<hash_set_ref_t<cuco::find_tag>>(
   table_view const& keys,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   cudf::detail::result_cache* dense_results,
   device_span<size_type const> gather_map,
-  nullable_hash_set_ref_t set,
+  hash_set_ref_t<cuco::find_tag> set,
+  bool skip_key_rows_with_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template void sparse_to_dense_results<nullable_hash_set_ref_t<cuco::find_tag>>(
+  table_view const& keys,
+  host_span<aggregation_request const> requests,
+  cudf::detail::result_cache* sparse_results,
+  cudf::detail::result_cache* dense_results,
+  device_span<size_type const> gather_map,
+  nullable_hash_set_ref_t<cuco::find_tag> set,
   bool skip_key_rows_with_nulls,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

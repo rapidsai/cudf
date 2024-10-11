@@ -316,6 +316,8 @@ add_library(
   src/filling/sequence.cu
   src/groupby/groupby.cu
   src/groupby/hash/compute_groupby.cu
+  src/groupby/hash/compute_mapping_indices.cu
+  src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/compute_single_pass_aggs_null.cu
   src/groupby/hash/compute_single_pass_shmem_aggs.cu

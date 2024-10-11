@@ -45,6 +45,16 @@ CUDF_HOST_DEVICE auto constexpr GROUPBY_CARDINALITY_THRESHOLD = 128;
 CUDF_HOST_DEVICE auto constexpr GROUPBY_SHM_MAX_ELEMENTS =
   GROUPBY_CARDINALITY_THRESHOLD + GROUPBY_BLOCK_SIZE;
 
+// GROUPBY_SHM_MAX_ELEMENTS with 0.7 occupancy
+/// Shared memory hash set extent type
+using shmem_extent_t =
+  cuco::extent<cudf::size_type,
+               static_cast<cudf::size_type>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43)>;
+
+/// Number of windows needed by each shared memory hash set
+CUDF_HOST_DEVICE auto constexpr window_extent =
+  cuco::make_window_extent<GROUPBY_CG_SIZE, GROUPBY_WINDOW_SIZE>(shmem_extent_t{});
+
 /**
  * @brief Returns the smallest multiple of 8 that is greater than or equal to the given integer.
  */
@@ -87,20 +97,22 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cudf::detail::cuco_allocator<char>,
                                                cuco::storage<GROUPBY_WINDOW_SIZE>>;
 
+template <typename Op>
 using hash_set_ref_t = cuco::static_set_ref<
   cudf::size_type,
   cuda::thread_scope_device,
   row_comparator_t,
   probing_scheme_t,
   cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::window_extent<int64_t>>,
-  cuco::op::find_tag>;
+  Op>;
 
+template <typename Op>
 using nullable_hash_set_ref_t = cuco::static_set_ref<
   cudf::size_type,
   cuda::thread_scope_device,
   nullable_row_comparator_t,
   probing_scheme_t,
   cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::window_extent<int64_t>>,
-  cuco::op::find_tag>;
+  Op>;
 
 }  // namespace cudf::groupby::detail::hash
