@@ -2132,92 +2132,89 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
     orc_table.num_string_columns(), segmentation.num_stripes(), stream);
   if (stripe_dicts.count() == 0) return {std::move(stripe_dicts), {}, {}};
 
+  // Create a single bulk storage to use for all sub-dictionaries
+  auto map_storage = std::make_unique<gpu::storage_type>(
+    total_map_storage_size,
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream});
+
+  // Initialize stripe dictionaries
+  for (auto col_idx : orc_table.string_column_indices) {
+    auto& str_column       = orc_table.column(col_idx);
+    auto const str_col_idx = str_column.str_index();
+    str_column.attach_stripe_dicts(stripe_dicts[str_col_idx],
+                                   stripe_dicts.device_view()[str_col_idx]);
+    for (auto const& stripe : segmentation.stripes) {
+      auto const stripe_idx = stripe.id;
+      auto& sd              = stripe_dicts[str_col_idx][stripe_idx];
+
+      sd.map_slots      = {map_storage->data() + hash_maps_storage_offsets[str_col_idx][stripe_idx],
+                           hash_maps_storage_offsets[str_col_idx][stripe_idx + 1] -
+                             hash_maps_storage_offsets[str_col_idx][stripe_idx]};
+      sd.column_idx     = col_idx;
+      sd.start_row      = segmentation.rowgroups[stripe.first][col_idx].begin;
+      sd.start_rowgroup = stripe.first;
+      sd.num_rows =
+        segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end - sd.start_row;
+
+      sd.entry_count = 0;
+      sd.char_count  = 0;
+    }
+  }
+  stripe_dicts.host_to_device_async(stream);
+
+  map_storage->initialize_async({gpu::KEY_SENTINEL, gpu::VALUE_SENTINEL}, {stream.value()});
+  gpu::populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
+  // Copy the entry counts and char counts from the device to the host
+  stripe_dicts.device_to_host_sync(stream);
+
   // Data owners; can be cleared after encode
   std::vector<rmm::device_uvector<uint32_t>> dict_data_owner;
   std::vector<rmm::device_uvector<uint32_t>> dict_index_owner;
   std::vector<rmm::device_uvector<uint32_t>> dict_order_owner;
-
-  // Scope this section so that `map_storage` is destroyed once no longer needed.
-  {
-    // Create a single bulk storage used by all sub-dictionaries
-    auto map_storage = gpu::storage_type{
-      total_map_storage_size,
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
-
-    // Initialize stripe dictionaries
-    for (auto col_idx : orc_table.string_column_indices) {
-      auto& str_column       = orc_table.column(col_idx);
-      auto const str_col_idx = str_column.str_index();
-      str_column.attach_stripe_dicts(stripe_dicts[str_col_idx],
-                                     stripe_dicts.device_view()[str_col_idx]);
-      for (auto const& stripe : segmentation.stripes) {
-        auto const stripe_idx = stripe.id;
-        auto& sd              = stripe_dicts[str_col_idx][stripe_idx];
-
-        sd.map_slots  = {map_storage.data() + hash_maps_storage_offsets[str_col_idx][stripe_idx],
-                         hash_maps_storage_offsets[str_col_idx][stripe_idx + 1] -
-                           hash_maps_storage_offsets[str_col_idx][stripe_idx]};
-        sd.column_idx = col_idx;
-        sd.start_row  = segmentation.rowgroups[stripe.first][col_idx].begin;
-        sd.start_rowgroup = stripe.first;
-        sd.num_rows =
-          segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end - sd.start_row;
-
-        sd.entry_count = 0;
-        sd.char_count  = 0;
+  // Make decision about which stripes to encode with dictionary encoding
+  for (auto col_idx : orc_table.string_column_indices) {
+    auto& str_column = orc_table.column(col_idx);
+    bool col_use_dictionary{false};
+    for (auto const& stripe : segmentation.stripes) {
+      auto const stripe_idx        = stripe.id;
+      auto const str_col_idx       = str_column.str_index();
+      auto& sd                     = stripe_dicts[str_col_idx][stripe_idx];
+      auto const direct_char_count = std::accumulate(
+        thrust::make_counting_iterator(stripe.first),
+        thrust::make_counting_iterator(stripe.first + stripe.size),
+        0,
+        [&](auto total, auto const& rg) { return total + str_column.rowgroup_char_count(rg); });
+      // Enable dictionary encoding if the dictionary size is smaller than the direct encode size
+      // The estimate excludes the LENGTH stream size, which is present in both cases
+      sd.is_enabled = [&]() {
+        auto const dict_index_size = varint_size(sd.entry_count);
+        return sd.char_count + dict_index_size * sd.entry_count < direct_char_count;
+      }();
+      if (sd.is_enabled) {
+        dict_data_owner.emplace_back(sd.entry_count, stream);
+        sd.data            = dict_data_owner.back();
+        col_use_dictionary = true;
+      } else {
+        // Clear hash map storage as dictionary encoding is not used for this stripe
+        sd.map_slots = {};
       }
     }
-    stripe_dicts.host_to_device_async(stream);
-
-    map_storage.initialize_async({gpu::KEY_SENTINEL, gpu::VALUE_SENTINEL}, {stream.value()});
-    gpu::populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
-    // Copy the entry counts and char counts from the device to the host
-    stripe_dicts.device_to_host_sync(stream);
-
-    // Make decision about which stripes to encode with dictionary encoding
-    for (auto col_idx : orc_table.string_column_indices) {
-      auto& str_column = orc_table.column(col_idx);
-      bool col_use_dictionary{false};
-      for (auto const& stripe : segmentation.stripes) {
-        auto const stripe_idx        = stripe.id;
-        auto const str_col_idx       = str_column.str_index();
-        auto& sd                     = stripe_dicts[str_col_idx][stripe_idx];
-        auto const direct_char_count = std::accumulate(
-          thrust::make_counting_iterator(stripe.first),
-          thrust::make_counting_iterator(stripe.first + stripe.size),
-          0,
-          [&](auto total, auto const& rg) { return total + str_column.rowgroup_char_count(rg); });
-        // Enable dictionary encoding if the dictionary size is smaller than the direct encode size
-        // The estimate excludes the LENGTH stream size, which is present in both cases
-        sd.is_enabled = [&]() {
-          auto const dict_index_size = varint_size(sd.entry_count);
-          return sd.char_count + dict_index_size * sd.entry_count < direct_char_count;
-        }();
-        if (sd.is_enabled) {
-          dict_data_owner.emplace_back(sd.entry_count, stream);
-          sd.data            = dict_data_owner.back();
-          col_use_dictionary = true;
-        } else {
-          // Clear hash map storage as dictionary encoding is not used for this stripe
-          sd.map_slots = {};
-        }
-      }
-      // If any stripe uses dictionary encoding, allocate index storage for the whole column
-      if (col_use_dictionary) {
-        dict_index_owner.emplace_back(str_column.size(), stream);
-        for (auto& sd : stripe_dicts[str_column.str_index()]) {
-          sd.index = dict_index_owner.back();
-        }
+    // If any stripe uses dictionary encoding, allocate index storage for the whole column
+    if (col_use_dictionary) {
+      dict_index_owner.emplace_back(str_column.size(), stream);
+      for (auto& sd : stripe_dicts[str_column.str_index()]) {
+        sd.index = dict_index_owner.back();
       }
     }
-    // Synchronize to ensure the copy is complete before we clear `map_slots`
-    stripe_dicts.host_to_device_sync(stream);
-
-    gpu::collect_map_entries(stripe_dicts, stream);
-    gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
-
-    // `map_storage` is destroyed here as no longer needed.
   }
+  // Synchronize to ensure the copy is complete before we clear `map_slots`
+  stripe_dicts.host_to_device_sync(stream);
+
+  gpu::collect_map_entries(stripe_dicts, stream);
+  gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
+
+  // deallocate hash map storage, unused after this point
+  map_storage.reset();
 
   // Clear map slots and attach order buffers
   auto dictionaries_flat = stripe_dicts.host_view().flat_view();
