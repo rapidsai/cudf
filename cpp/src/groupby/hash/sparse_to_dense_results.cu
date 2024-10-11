@@ -35,14 +35,14 @@ void sparse_to_dense_results(table_view const& keys,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
                              SetType set,
-                             bool skip_key_rows_with_nulls,
+                             bool skip_rows_with_nulls,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
   auto row_bitmask =
     cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
   bitmask_type const* row_bitmask_ptr =
-    skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
+    skip_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
 
   for (auto const& request : requests) {
     auto const& agg_v = request.aggregations;
@@ -65,7 +65,7 @@ template void sparse_to_dense_results<hash_set_ref_t<cuco::find_tag>>(
   cudf::detail::result_cache* dense_results,
   device_span<size_type const> gather_map,
   hash_set_ref_t<cuco::find_tag> set,
-  bool skip_key_rows_with_nulls,
+  bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
@@ -76,7 +76,7 @@ template void sparse_to_dense_results<nullable_hash_set_ref_t<cuco::find_tag>>(
   cudf::detail::result_cache* dense_results,
   device_span<size_type const> gather_map,
   nullable_hash_set_ref_t<cuco::find_tag> set,
-  bool skip_key_rows_with_nulls,
+  bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

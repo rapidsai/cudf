@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@
 
 namespace cudf::groupby::detail::hash {
 template rmm::device_uvector<cudf::size_type> compute_single_pass_aggs<nullable_global_set_t>(
-  cudf::table_view const& keys,
+  int64_t num_rows,
+  bitmask_type const* row_bitmask,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   nullable_global_set_t& global_set,

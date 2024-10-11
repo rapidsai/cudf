@@ -65,21 +65,21 @@ template <typename Equal>
 std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        host_span<aggregation_request const> requests,
                                        cudf::detail::result_cache* cache,
-                                       bool skip_key_rows_with_nulls,
+                                       bool skip_rows_with_nulls,
                                        Equal const& d_row_equal,
                                        row_hash_t const& d_row_hash,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
   // convert to int64_t to avoid potential overflow with large `keys`
-  auto const num_keys = static_cast<int64_t>(keys.num_rows());
+  auto const num_rows = static_cast<int64_t>(keys.num_rows());
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
 
   auto set = cuco::static_set{
-    cuco::extent<int64_t>{num_keys},
+    cuco::extent<int64_t>{num_rows},
     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% occupancy
     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
     d_row_equal,
@@ -89,9 +89,19 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
+  auto row_bitmask =
+    skip_rows_with_nulls
+      ? cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
+      : rmm::device_buffer{};
+
   // Compute all single pass aggs first
-  auto gather_map = compute_single_pass_aggs(
-    keys, requests, &sparse_results, set, skip_key_rows_with_nulls, stream);
+  auto gather_map = compute_single_pass_aggs(num_rows,
+                                             static_cast<bitmask_type*>(row_bitmask.data()),
+                                             requests,
+                                             &sparse_results,
+                                             set,
+                                             skip_rows_with_nulls,
+                                             stream);
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(keys,
@@ -100,7 +110,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                           cache,
                           gather_map,
                           set.ref(cuco::find),
-                          skip_key_rows_with_nulls,
+                          skip_rows_with_nulls,
                           stream,
                           mr);
 
@@ -116,7 +126,7 @@ template std::unique_ptr<table> compute_groupby<row_comparator_t>(
   table_view const& keys,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* cache,
-  bool skip_key_rows_with_nulls,
+  bool skip_rows_with_nulls,
   row_comparator_t const& d_row_equal,
   row_hash_t const& d_row_hash,
   rmm::cuda_stream_view stream,
@@ -126,7 +136,7 @@ template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t>(
   table_view const& keys,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* cache,
-  bool skip_key_rows_with_nulls,
+  bool skip_rows_with_nulls,
   nullable_row_comparator_t const& d_row_equal,
   row_hash_t const& d_row_hash,
   rmm::cuda_stream_view stream,

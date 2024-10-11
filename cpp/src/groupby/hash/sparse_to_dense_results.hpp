@@ -38,7 +38,7 @@ void sparse_to_dense_results(table_view const& keys,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
                              SetType set,
-                             bool skip_key_rows_with_nulls,
+                             bool skip_rows_with_nulls,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash

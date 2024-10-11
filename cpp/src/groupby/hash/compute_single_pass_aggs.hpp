@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 #pragma once
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -31,7 +31,8 @@ namespace cudf::groupby::detail::hash {
  */
 template <typename SetType>
 rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
-  cudf::table_view const& keys,
+  int64_t num_rows,
+  bitmask_type const* row_bitmask,
   cudf::host_span<cudf::groupby::aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   SetType& global_set,
