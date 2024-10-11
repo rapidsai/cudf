@@ -95,6 +95,9 @@ struct hash_functor {
   }
 };
 
+// Probing scheme to use for the hash map
+using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_functor>;
+
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
@@ -107,9 +110,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const& col       = columns[dict.column_idx];
 
   // Make a view of the hash map
-  auto const hash_fn        = hash_functor{col};
-  auto const equality_fn    = equality_functor{col};
-  using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_functor>;
+  auto const hash_fn     = hash_functor{col};
+  auto const equality_fn = equality_functor{col};
 
   storage_ref_type const storage_ref{dict.map_slots.size(), dict.map_slots.data()};
   // Make a view of the hash map.
@@ -204,9 +206,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (not dict.is_enabled) { return; }
 
   // Make a view of the hash map
-  auto const hash_fn        = hash_functor{col};
-  auto const equality_fn    = equality_functor{col};
-  using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_functor>;
+  auto const hash_fn     = hash_functor{col};
+  auto const equality_fn = equality_functor{col};
 
   storage_ref_type const storage_ref{dict.map_slots.size(), dict.map_slots.data()};
   // Make a view of the hash map.
