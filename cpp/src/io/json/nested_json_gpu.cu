@@ -84,7 +84,7 @@ void check_input_size(std::size_t input_size)
 {
   // Transduce() writes symbol offsets that may be as large input_size-1
   CUDF_EXPECTS(input_size == 0 ||
-                 (input_size - 1) <= std::numeric_limits<cudf::io::json::SymbolOffsetT>::max(),
+                 (input_size - 1) <= std::numeric_limits<int32_t>::max(),
                "Given JSON input is too large");
 }
 }  // namespace
