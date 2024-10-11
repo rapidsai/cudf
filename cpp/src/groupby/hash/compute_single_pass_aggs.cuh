@@ -33,9 +33,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
 #include <cuco/static_set.cuh>
+#include <thrust/for_each.h>
 
 #include <algorithm>
 #include <memory>
