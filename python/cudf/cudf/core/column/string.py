@@ -2385,8 +2385,7 @@ class StringMethods(ColumnMethods):
             0    [\n        { "category": "reference",\n       ...
             dtype: object
         """
-
-        options = libstrings.GetJsonObjectOptions(
+        options = plc.json.GetJsonObjectOptions(
             allow_single_quotes=allow_single_quotes,
             strip_quotes_from_single_strings=(
                 strip_quotes_from_single_strings
