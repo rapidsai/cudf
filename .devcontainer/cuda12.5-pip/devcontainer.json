@@ -19,7 +19,7 @@
     "-v",
     "/lib/modules/6.5.0-1019-nvidia-64k:/lib/modules/6.5.0-1019-nvidia-64k",
     "-v",
-    "/usr/local/cuda/gds:/mnt/gds",
+    "/usr/local/cuda-12.4/gds:/mnt/gds",
     "-v",
     "/opt/nvidia/nsight-systems-cli/2024.5.1:/mnt/nsight-systems-cli"
     "-v",
