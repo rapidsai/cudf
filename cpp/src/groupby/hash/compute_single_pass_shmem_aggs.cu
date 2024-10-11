@@ -39,7 +39,7 @@ namespace {
 __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
                                                cudf::size_type& col_end,
                                                cudf::mutable_table_device_view output_values,
-                                               cudf::size_type num_input_cols,
+                                               cudf::size_type output_size,
                                                std::byte** s_aggregates_pointer,
                                                bool** s_aggregates_valid_pointer,
                                                std::byte* shared_set_aggregates,
@@ -48,17 +48,22 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
 {
   col_start                       = col_end;
   cudf::size_type bytes_allocated = 0;
-  cudf::size_type valid_col_size  = round_to_multiple_of_8(sizeof(bool) * cardinality);
-  while ((bytes_allocated < total_agg_size) && (col_end < num_input_cols)) {
-    cudf::size_type next_col_size =
+
+  auto const valid_col_size = round_to_multiple_of_8(sizeof(bool) * cardinality);
+
+  while (bytes_allocated < total_agg_size && col_end < output_size) {
+    auto const next_col_size =
       round_to_multiple_of_8(sizeof(output_values.column(col_end).type()) * cardinality);
-    cudf::size_type next_col_total_size = valid_col_size + next_col_size;
+    auto const next_col_total_size = next_col_size + valid_col_size;
+
     if (bytes_allocated + next_col_total_size > total_agg_size) { break; }
+
     s_aggregates_pointer[col_end] = shared_set_aggregates + bytes_allocated;
     s_aggregates_valid_pointer[col_end] =
       reinterpret_cast<bool*>(shared_set_aggregates + bytes_allocated + next_col_size);
+
     bytes_allocated += next_col_total_size;
-    col_end++;
+    ++col_end;
   }
 }
 
