@@ -16,8 +16,8 @@
 #pragma once
 
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -32,7 +32,7 @@ namespace cudf::groupby::detail::hash {
  * @see groupby_null_templated()
  */
 template <typename SetType>
-void sparse_to_dense_results(table_view const& keys,
+void sparse_to_dense_results(bitmask_type const* row_bitmask,
                              host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,

@@ -20,7 +20,6 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -29,7 +28,7 @@
 
 namespace cudf::groupby::detail::hash {
 template <typename SetType>
-void sparse_to_dense_results(table_view const& keys,
+void sparse_to_dense_results(bitmask_type const* row_bitmask,
                              host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
@@ -39,11 +38,6 @@ void sparse_to_dense_results(table_view const& keys,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  auto row_bitmask =
-    cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first;
-  bitmask_type const* row_bitmask_ptr =
-    skip_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
-
   for (auto const& request : requests) {
     auto const& agg_v = request.aggregations;
     auto const& col   = request.values;
@@ -51,7 +45,7 @@ void sparse_to_dense_results(table_view const& keys,
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
     auto finalizer = hash_compound_agg_finalizer(
-      col, sparse_results, dense_results, gather_map, set, row_bitmask_ptr, stream, mr);
+      col, sparse_results, dense_results, gather_map, set, row_bitmask, stream, mr);
     for (auto&& agg : agg_v) {
       agg->finalize(finalizer);
     }
@@ -59,7 +53,7 @@ void sparse_to_dense_results(table_view const& keys,
 }
 
 template void sparse_to_dense_results<hash_set_ref_t<cuco::find_tag>>(
-  table_view const& keys,
+  bitmask_type const* row_bitmask,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   cudf::detail::result_cache* dense_results,
@@ -70,7 +64,7 @@ template void sparse_to_dense_results<hash_set_ref_t<cuco::find_tag>>(
   rmm::device_async_resource_ref mr);
 
 template void sparse_to_dense_results<nullable_hash_set_ref_t<cuco::find_tag>>(
-  table_view const& keys,
+  bitmask_type const* row_bitmask,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   cudf::detail::result_cache* dense_results,
@@ -79,5 +73,4 @@ template void sparse_to_dense_results<nullable_hash_set_ref_t<cuco::find_tag>>(
   bool skip_rows_with_nulls,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
-
 }  // namespace cudf::groupby::detail::hash

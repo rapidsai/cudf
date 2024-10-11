@@ -104,7 +104,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                              stream);
 
   // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(keys,
+  sparse_to_dense_results(static_cast<bitmask_type*>(row_bitmask.data()),
                           requests,
                           &sparse_results,
                           cache,
