@@ -223,6 +223,9 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+
+  std::printf("In read_batch\n");
+
   datasource::owning_buffer<rmm::device_buffer> bufview =
     get_record_range_raw_input(sources, reader_opts, stream);
 
@@ -235,6 +238,9 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   auto buffer =
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
+  
+  std::printf("Done populating buffer. Now onto parsing\n");
+
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
@@ -405,6 +411,8 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    * or if end_bytes_size is larger than total_source_size.
    */
   if (batch_offsets.size() <= 2) return read_batch(sources, reader_opts, stream, mr);
+
+  std::printf("Concatenating partial tables\n");
 
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
