@@ -377,7 +377,6 @@ def rand_dataframe(
                     ),
                     is_sorted=False,
                     dtype=dtype,
-                    rng=rng,
                 )
             )
         elif dtype == "struct":
@@ -794,6 +793,7 @@ def get_nested_lists(dtype, size, nesting_depth, lists_max_length, rng):
                 lists_max_length=lists_max_length,
                 nesting_depth=nesting_depth,
                 top_level_list=[],
+                rng=rng,
             )
         )
 
@@ -870,7 +870,7 @@ def create_nested_struct_type(max_types_at_each_level, nesting_level, rng):
 
 
 def _generate_string(str_seq: str, rng, length: int = 10) -> str:
-    return "".join(rng.choices(str_seq, k=length))
+    return "".join(rng.choice(list(str_seq), size=length))
 
 
 def _unique_string() -> str:
