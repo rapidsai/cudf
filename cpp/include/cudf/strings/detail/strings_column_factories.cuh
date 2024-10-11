@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_memcpy.cuh>
 #include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
@@ -50,23 +51,12 @@ namespace detail {
 using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
- * @brief Average string byte-length threshold for deciding character-level
- * vs. row-level parallel algorithm.
- *
- * This value was determined by running the factory_benchmark against different
- * string lengths and observing the point where the performance is faster for
- * long strings.
- */
-constexpr size_type FACTORY_BYTES_PER_ROW_THRESHOLD = 64;
-
-/**
  * @brief Gather characters to create a strings column using the given string_index_pair iterator
  *
  * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
  *
  * @param offsets The offsets for the output strings column
  * @param chars_size The size (in bytes) of the chars data
- * @param avg_bytes_per_row The average bytes per row
  * @param begin Iterator to the first string_index_pair
  * @param strings_count The number of strings
  * @param stream CUDA stream used for device memory operations
@@ -76,41 +66,37 @@ constexpr size_type FACTORY_BYTES_PER_ROW_THRESHOLD = 64;
 template <typename IndexPairIterator>
 rmm::device_uvector<char> make_chars_column(column_view const& offsets,
                                             int64_t chars_size,
-                                            int64_t avg_bytes_per_row,
                                             IndexPairIterator begin,
                                             size_type strings_count,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
+  auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
 
-  // use a character-parallel kernel for long string lengths
-  if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
-    auto const str_begin = thrust::make_transform_iterator(
-      begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
-        return string_view{ip.first, ip.second};
-      }));
+  auto const src_ptrs = cudf::detail::make_counting_transform_iterator(
+    0u, cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
+      // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
+      // we have to use `const_cast` to remove `const` qualifier from the source pointer.
+      // This should be fine as long as we only read but not write anything to the source.
+      return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
+    }));
+  auto const src_sizes = cudf::detail::make_counting_transform_iterator(
+    0u, cuda::proclaim_return_type<size_type>([begin] __device__(uint32_t idx) {
+      return begin[idx].second;
+    }));
+  auto const dst_ptrs = cudf::detail::make_counting_transform_iterator(
+    0u,
+    cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
+                                        uint32_t idx) { return output + offsets[idx]; }));
 
-    return gather_chars(str_begin,
-                        thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(strings_count),
-                        d_offsets,
-                        chars_size,
-                        stream,
-                        mr);
-  }
-  // this approach is 2-3x faster for a large number of smaller string lengths
-  auto chars_data = rmm::device_uvector<char>(chars_size, stream, mr);
-  auto d_chars    = chars_data.data();
-  auto copy_chars = [d_chars] __device__(auto item) {
-    string_index_pair const str = thrust::get<0>(item);
-    int64_t const offset        = thrust::get<1>(item);
-    if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
-  };
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_zip_iterator(thrust::make_tuple(begin, d_offsets)),
-                     strings_count,
-                     copy_chars);
+  size_t temp_storage_bytes = 0;
+  cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count);
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+  cub::DeviceMemcpy::Batched(
+    d_temp_storage.data(), temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count);
+
   return chars_data;
 }
 
@@ -152,9 +138,8 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
   // build chars column
-  auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
-  auto chars_data              = make_chars_column(
-    offsets_column->view(), bytes, avg_bytes_per_row, begin, strings_count, stream, mr);
+  auto chars_data =
+    make_chars_column(offsets_column->view(), bytes, begin, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
