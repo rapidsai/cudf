@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Expr",
+    "ErrorExpr",
     "NamedExpr",
     "Literal",
     "Col",
@@ -273,6 +274,12 @@ class Expr:
         raise NotImplementedError(
             f"Collecting aggregation info for {type(self).__name__}"
         )  # pragma: no cover; check_agg trips first
+
+
+class ErrorExpr(Expr):
+    def __init__(self, dtype: plc.DataType, error: str) -> None:
+        super().__init__(dtype)
+        self.error = error
 
 
 class NamedExpr:

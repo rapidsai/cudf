@@ -7,14 +7,16 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.dsl.translate import Translator
 from cudf_polars.testing.asserts import (
+    IRTranslationFailed,
     assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
 
 
-def test_translation_assert_raises():
+def test_translation_assert_raises(monkeypatch):
     df = pl.LazyFrame({"a": [1, 2, 3]})
 
     # This should succeed
@@ -34,6 +36,14 @@ def test_translation_assert_raises():
     with pytest.raises(AssertionError):
         # This should fail, because we can't translate this query, but it doesn't raise E.
         assert_ir_translation_raises(unsupported, E)
+
+    def raise_unimplemented(self):
+        raise NotImplementedError("foo")
+
+    monkeypatch.setattr(Translator, "translate_ir", raise_unimplemented)
+
+    with pytest.raises(IRTranslationFailed):
+        assert_ir_translation_raises(df, NotImplementedError)
 
 
 def test_collect_assert_raises():

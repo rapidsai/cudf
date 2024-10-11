@@ -10,7 +10,7 @@ from polars.testing.asserts import assert_frame_equal
 
 import rmm
 
-from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.ir import IR, ErrorNode
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -21,7 +21,10 @@ def test_polars_verbose_warns(monkeypatch):
     def raise_unimplemented(self):
         raise NotImplementedError("We don't support this")
 
+    original_post_init = IR.__post_init__
     monkeypatch.setattr(IR, "__post_init__", raise_unimplemented)
+    # skip ErrorNode
+    monkeypatch.setattr(ErrorNode, "__post_init__", original_post_init)
     q = pl.LazyFrame({})
     # Ensure that things raise
     assert_ir_translation_raises(q, NotImplementedError)
