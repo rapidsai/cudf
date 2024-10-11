@@ -91,7 +91,7 @@ void write_parquet(cudf::table_view input,
 void print_usage()
 {
   std::cout << "\nUsage: parquet_io <input parquet file> <output parquet file> <encoding type>\n"
-               "                               <compression type> <write page stats: yes/no>\n\n"
+               "                  <compression type> <write page stats: yes/no>\n\n"
                "Available encoding types: DEFAULT, DICTIONARY, PLAIN, DELTA_BINARY_PACKED,\n"
                "                 DELTA_LENGTH_BYTE_ARRAY, DELTA_BYTE_ARRAY\n\n"
                "Available compression types: NONE, AUTO, SNAPPY, LZ4, ZSTD\n\n";
