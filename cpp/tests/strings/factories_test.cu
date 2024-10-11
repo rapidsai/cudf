@@ -364,6 +364,8 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
   }
 }
 
+// The test below requires a huge amount of memory, thus it is disabled by default.
+#ifdef LOCAL_TEST
 TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
 {
   auto constexpr num_columns = 2;
@@ -434,3 +436,4 @@ TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output[i]->view());
   }
 }
+#endif  // LOCAL_TEST
