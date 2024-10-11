@@ -361,8 +361,7 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
 }
 
 // The test below requires a huge amount of memory, thus it is disabled by default.
-#ifdef LOCAL_TEST
-TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
+TEST_F(StringsBatchConstructionTest, DISABLED_CreateLongStringsColumns)
 {
   auto constexpr num_columns = 2;
   auto const stream          = cudf::get_default_stream();
@@ -432,4 +431,3 @@ TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output[i]->view());
   }
 }
-#endif  // LOCAL_TEST
