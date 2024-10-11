@@ -91,16 +91,16 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
                                         uint32_t idx) { return output + offsets[idx]; }));
 
   size_t temp_storage_bytes = 0;
-  cub::DeviceMemcpy::Batched(
-    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count, stream.value());
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count, stream.value()));
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
-  cub::DeviceMemcpy::Batched(d_temp_storage.data(),
-                             temp_storage_bytes,
-                             src_ptrs,
-                             dst_ptrs,
-                             src_sizes,
-                             strings_count,
-                             stream.value());
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                                           temp_storage_bytes,
+                                           src_ptrs,
+                                           dst_ptrs,
+                                           src_sizes,
+                                           strings_count,
+                                           stream.value()));
 
   return chars_data;
 }
