@@ -38,7 +38,7 @@ namespace flatbuf = cudf::io::parquet::flatbuf;
 
 namespace {
 
-cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
+std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
     switch (schema.converted_type.value()) {
@@ -66,7 +66,7 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
       default: return LogicalType{LogicalType::UNDEFINED};
     }
   }
-  return cuda::std::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace
@@ -246,7 +246,7 @@ void metadata::sanitize_schema()
         struct_elem.repetition_type = REQUIRED;
         struct_elem.num_children    = schema_elem.num_children;
         struct_elem.type            = UNDEFINED_TYPE;
-        struct_elem.converted_type  = cuda::std::nullopt;
+        struct_elem.converted_type  = std::nullopt;
 
         // swap children
         struct_elem.children_idx = std::move(schema_elem.children_idx);
