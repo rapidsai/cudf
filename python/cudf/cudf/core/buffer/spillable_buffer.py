@@ -207,7 +207,7 @@ class SpillableBufferOwner(BufferOwner):
                     domain="cudf_python-spill",
                 ):
                     host_mem = host_memory_allocation(self.size)
-                    rmm._lib.device_buffer.copy_ptr_to_host(
+                    rmm.pylibrmm.device_buffer.copy_ptr_to_host(
                         self._ptr, host_mem
                     )
                 self._ptr_desc["memoryview"] = host_mem
@@ -352,7 +352,7 @@ class SpillableBufferOwner(BufferOwner):
             else:
                 assert self._ptr_desc["type"] == "gpu"
                 ret = host_memory_allocation(size)
-                rmm._lib.device_buffer.copy_ptr_to_host(
+                rmm.pylibrmm.device_buffer.copy_ptr_to_host(
                     self._ptr + offset, ret
                 )
                 return ret

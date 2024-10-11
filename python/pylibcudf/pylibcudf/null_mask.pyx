@@ -6,7 +6,8 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf cimport null_mask as cpp_null_mask
 from pylibcudf.libcudf.types cimport mask_state, size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 
@@ -31,8 +32,8 @@ cpdef DeviceBuffer copy_bitmask(Column col):
     Returns
     -------
     rmm.DeviceBuffer
-        A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty ``DeviceBuffer``
-        if ``col`` is not nullable
+        A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty
+        ``DeviceBuffer`` if ``col`` is not nullable
     """
     cdef device_buffer db
 
