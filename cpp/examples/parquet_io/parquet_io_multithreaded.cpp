@@ -406,7 +406,7 @@ int32_t main(int argc, char const** argv)
     timer.print_elapsed_millis();
   }
 
-  // Do we need to write parquet files and validate?
+  // Write parquet files and validate if needed
   if (write_and_validate) {
     // read_mode::CONCATENATE_THREADS returns a vector of `thread_count` tables
     auto const tables = read_parquet_multithreaded<read_mode::CONCATENATE_THREAD>(
