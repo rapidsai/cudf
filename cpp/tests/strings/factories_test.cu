@@ -37,6 +37,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
 #include <thrust/pair.h>
+#include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
 #include <cstring>
@@ -279,6 +280,23 @@ TEST_F(StringsBatchConstructionTest, AllNullsColumns)
   }
 }
 
+namespace {
+
+struct index_to_pair {
+  int const num_test_strings;
+  char const* d_chars;
+  std::size_t const* d_offsets;
+
+  __device__ string_pair operator()(cudf::size_type idx)
+  {
+    auto const data_idx = idx % num_test_strings;
+    return {d_chars + d_offsets[data_idx],
+            static_cast<cudf::size_type>(d_offsets[data_idx + 1] - d_offsets[data_idx])};
+  }
+};
+
+}  // namespace
+
 TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
 {
   auto constexpr num_columns  = 10;
@@ -294,43 +312,43 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
                                           "",
                                           nullptr,
                                           "absent stop words"};
+  auto const num_test_strings = static_cast<int>(h_test_strings.size());
 
-  std::vector<std::size_t> offsets(h_test_strings.size() + 1, 0);
-  for (std::size_t i = 0; i < h_test_strings.size(); ++i) {
-    offsets[i + 1] = offsets[i] + (h_test_strings[i] ? strlen(h_test_strings[i]) : 0);
+  std::vector<std::size_t> h_offsets(num_test_strings + 1, 0);
+  for (int i = 0; i < num_test_strings; ++i) {
+    h_offsets[i + 1] = h_offsets[i] + (h_test_strings[i] ? strlen(h_test_strings[i]) : 0);
   }
 
-  std::vector<char> h_buffer(offsets.back());
-  for (std::size_t i = 0; i < h_test_strings.size(); ++i) {
+  std::vector<char> h_chars(h_offsets.back());
+  for (int i = 0; i < num_test_strings; ++i) {
     if (h_test_strings[i]) {
-      memcpy(h_buffer.data() + offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
+      memcpy(h_chars.data() + h_offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
     }
   }
-  auto const d_test_strings = cudf::detail::make_device_uvector_async(h_buffer, stream, mr);
 
-  using pair_type = thrust::pair<char const*, cudf::size_type>;
-  std::vector<std::vector<pair_type>> h_input(num_columns);
-  std::vector<rmm::device_uvector<pair_type>> d_input;
+  auto const d_offsets = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
+  auto const d_chars   = cudf::detail::make_device_uvector_async(h_chars, stream, mr);
+
+  std::vector<rmm::device_uvector<string_pair>> d_input;
+  std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input;
   d_input.reserve(num_columns);
+  input.reserve(num_columns);
+
   for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
+    // Columns have sizes increase from `max_num_rows / num_columns` to `max_num_rows`.
     auto const num_rows =
       static_cast<int>(static_cast<double>(col_idx + 1) / num_columns * max_num_rows);
-    auto& col = h_input[col_idx];
-    col.resize(num_rows);
-    for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
-      auto const data_idx = row_idx % static_cast<int>(h_test_strings.size());
-      col[row_idx]        = {d_test_strings.data() + offsets[data_idx],
-                      h_test_strings[data_idx] ? strlen(h_test_strings[data_idx]) : 0};
-    }
-    d_input.emplace_back(cudf::detail::make_device_uvector_async(col, stream, mr));
+
+    auto string_pairs = rmm::device_uvector<string_pair>(num_rows, stream);
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     string_pairs.begin(),
+                     string_pairs.end(),
+                     index_to_pair{num_test_strings, d_chars.data(), d_offsets.data()});
+
+    d_input.emplace_back(std::move(string_pairs));
+    input.emplace_back(d_input.back());
   }
 
-  std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input(
-    num_columns);
-  std::transform(d_input.begin(), d_input.end(), input.begin(), [](auto const& col) {
-    return cudf::device_span<thrust::pair<char const*, cudf::size_type> const>{col.data(),
-                                                                               col.size()};
-  });
   auto const output = cudf::make_strings_column_batch(input, stream, mr);
 
   for (std::size_t i = 0; i < num_columns; ++i) {
@@ -354,48 +372,49 @@ TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
                                           "",
                                           nullptr,
                                           "absent stop words"};
+  auto const num_test_strings = static_cast<int>(h_test_strings.size());
 
-  std::vector<std::size_t> offsets(h_test_strings.size() + 1, 0);
-  for (std::size_t i = 0; i < h_test_strings.size(); ++i) {
-    offsets[i + 1] = offsets[i] + (h_test_strings[i] ? strlen(h_test_strings[i]) : 0);
+  std::vector<std::size_t> h_offsets(num_test_strings + 1, 0);
+  for (int i = 0; i < num_test_strings; ++i) {
+    h_offsets[i + 1] = h_offsets[i] + (h_test_strings[i] ? strlen(h_test_strings[i]) : 0);
   }
 
-  std::vector<char> h_buffer(offsets.back());
-  for (std::size_t i = 0; i < h_test_strings.size(); ++i) {
+  std::vector<char> h_chars(h_offsets.back());
+  for (int i = 0; i < num_test_strings; ++i) {
     if (h_test_strings[i]) {
-      memcpy(h_buffer.data() + offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
+      memcpy(h_chars.data() + h_offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
     }
   }
-  auto const d_test_strings = cudf::detail::make_device_uvector_async(h_buffer, stream, mr);
+
+  auto const d_offsets = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
+  auto const d_chars   = cudf::detail::make_device_uvector_async(h_chars, stream, mr);
 
   // If we create a column by repeating h_test_strings by `max_cycles` times,
   // we will have it size around (1.5*INT_MAX) bytes.
-  auto const max_cycles =
-    static_cast<int>(static_cast<int64_t>(std::numeric_limits<int>::max()) * 1.5 / offsets.back());
+  auto const max_cycles = static_cast<int>(static_cast<int64_t>(std::numeric_limits<int>::max()) *
+                                           1.5 / h_offsets.back());
 
-  using pair_type = thrust::pair<char const*, cudf::size_type>;
-  std::vector<std::vector<pair_type>> h_input(num_columns);
-  std::vector<rmm::device_uvector<pair_type>> d_input;
+  std::vector<rmm::device_uvector<string_pair>> d_input;
+  std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input;
   d_input.reserve(num_columns);
+  input.reserve(num_columns);
+
   for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
+    // Columns have sizes increase from `max_cycles * num_test_strings / num_columns` to
+    // `max_cycles * num_test_strings`.
     auto const num_rows = static_cast<int>(static_cast<double>(col_idx + 1) / num_columns *
-                                           max_cycles * h_test_strings.size());
-    auto& col           = h_input[col_idx];
-    col.resize(num_rows);
-    for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
-      auto const data_idx = row_idx % static_cast<int>(h_test_strings.size());
-      col[row_idx]        = {d_test_strings.data() + offsets[data_idx],
-                      h_test_strings[data_idx] ? strlen(h_test_strings[data_idx]) : 0};
-    }
-    d_input.emplace_back(cudf::detail::make_device_uvector_async(col, stream, mr));
+                                           max_cycles * num_test_strings);
+
+    auto string_pairs = rmm::device_uvector<string_pair>(num_rows, stream);
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     string_pairs.begin(),
+                     string_pairs.end(),
+                     index_to_pair{num_test_strings, d_chars.data(), d_offsets.data()});
+
+    d_input.emplace_back(std::move(string_pairs));
+    input.emplace_back(d_input.back());
   }
 
-  std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input(
-    num_columns);
-  std::transform(d_input.begin(), d_input.end(), input.begin(), [](auto const& col) {
-    return cudf::device_span<thrust::pair<char const*, cudf::size_type> const>{col.data(),
-                                                                               col.size()};
-  });
   auto const output = cudf::make_strings_column_batch(input, stream, mr);
 
   for (std::size_t i = 0; i < num_columns; ++i) {
