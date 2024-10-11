@@ -43,7 +43,6 @@ auto constexpr KEEP_ANY     = cudf::duplicate_keep_option::KEEP_ANY;
 auto constexpr KEEP_FIRST   = cudf::duplicate_keep_option::KEEP_FIRST;
 auto constexpr KEEP_LAST    = cudf::duplicate_keep_option::KEEP_LAST;
 auto constexpr KEEP_NONE    = cudf::duplicate_keep_option::KEEP_NONE;
-auto constexpr NULL_EQUAL   = cudf::null_equality::EQUAL;
 auto constexpr NULL_UNEQUAL = cudf::null_equality::UNEQUAL;
 
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;

@@ -52,6 +52,7 @@ option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
+option(CUDF_EXPORT_NVCOMP "Export NVCOMP as a dependency" ON)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(
@@ -314,6 +315,7 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu

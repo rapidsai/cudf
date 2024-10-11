@@ -6,7 +6,7 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.scalar.scalar_factories cimport make_empty_scalar_like
 
-from rmm._lib.memory_resource cimport get_current_device_resource
+from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
 from .column cimport Column
 from .types cimport DataType

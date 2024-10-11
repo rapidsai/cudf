@@ -11,7 +11,7 @@ from pylibcudf.libcudf.types cimport (
     type_id,
 )
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
