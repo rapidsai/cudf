@@ -63,7 +63,7 @@ enum class read_mode {
 /**
  * @brief Functor for multithreaded parquet reading based on the provided read_mode
  */
-template <read_mode READ_FN>
+template <read_mode read_mode>
 struct read_fn {
   std::vector<io_source> const& input_sources;
   std::vector<table_t>& tables;
@@ -82,7 +82,7 @@ struct read_fn {
       auto builder =
         cudf::io::parquet_reader_options::builder(input_sources[curr_file_idx].get_source_info());
       auto const options = builder.build();
-      if constexpr (READ_FN != read_mode::NO_CONCATENATE) {
+      if constexpr (read_mode != read_mode::NO_CONCATENATE) {
         tables_this_thread.push_back(cudf::io::read_parquet(options, stream).tbl);
       } else {
         cudf::io::read_parquet(options, stream);
@@ -90,7 +90,7 @@ struct read_fn {
     }
 
     // Concatenate the tables read by this thread if not NO_CONCATENATE read_mode.
-    if constexpr (READ_FN != read_mode::NO_CONCATENATE) {
+    if constexpr (read_mode != read_mode::NO_CONCATENATE) {
       auto table = concatenate_tables(std::move(tables_this_thread), stream);
       stream.synchronize_no_throw();
       tables[thread_id] = std::move(table);
