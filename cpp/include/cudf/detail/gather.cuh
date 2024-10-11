@@ -42,7 +42,6 @@
 
 #include <thrust/functional.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
@@ -539,13 +538,14 @@ void gather_bitmask(table_device_view input,
 
   constexpr size_type block_size = 256;
   using Selector                 = gather_bitmask_functor<Op, decltype(gather_map_begin)>;
-  auto const selector            = Selector{input, masks, gather_map_begin};
-  auto const counting_it         = thrust::make_counting_iterator(0);
-  auto const mask_size_it        = thrust::make_constant_iterator(mask_size);
+  auto selector                  = Selector{input, masks, gather_map_begin};
+  auto counting_it               = thrust::make_counting_iterator(0);
+  auto kernel =
+    valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
 
   cudf::detail::grid_1d grid{mask_size, block_size, 1};
-  valid_if_n_kernel<block_size><<<grid.num_blocks, block_size, 0, stream.value()>>>(
-    counting_it, counting_it, selector, masks, mask_count, mask_size_it, valid_counts);
+  kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
+    counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
 }
 
 template <typename MapIterator>
