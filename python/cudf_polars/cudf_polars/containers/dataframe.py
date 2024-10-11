@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import pickle
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -146,6 +147,69 @@ class DataFrame:
             Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
         )
 
+    @classmethod
+    def deserialize(cls, header: dict, frames: list[memoryview | plc.gpumemoryview]):
+        """
+        Create an DataFrame from a serialized representation returned by `.serialize()`.
+
+        Parameters
+        ----------
+        header
+            The (unpickled) metadata required to reconstruct the object.
+        frames
+            List of contiguous buffers, which is a mixture of memoryview and gpumemoryviews.
+
+        Returns
+        -------
+        Buffer
+            The deserialized Buffer.
+        """
+        packed_metadata, packed_gpu_data = frames
+        table = plc.contiguous_split.unpack_from_memoryviews(
+            packed_metadata, packed_gpu_data
+        )
+        columns_kwargs = header["columns_kwargs"]
+
+        if table.num_columns() != len(columns_kwargs):
+            raise ValueError("Mismatching columns_kwargs and table length.")
+        return cls(
+            Column(c, **kw)
+            for c, kw in zip(table.columns(), columns_kwargs, strict=True)
+        )
+
+    def serialize(self):
+        """
+        Serialize the table into header and frames.
+
+        Follows the Dask serialization scheme with a picklable header (dict) and
+        a list of frames (contiguous buffers).
+
+        Returns
+        -------
+        header
+            A dict containing any picklabe metadata required to reconstruct the object.
+        frames
+            List of frames, which is a mixture of memoryview and gpumemoryviews.
+        """
+        packed = plc.contiguous_split.pack(self.table)
+
+        # Keyword arguments for `Column.__init__`.
+        columns_kwargs = [
+            {
+                "is_sorted": col.is_sorted,
+                "order": col.order,
+                "name": col.name,
+            }
+            for col in self.columns
+        ]
+        header = {
+            "columns_kwargs": columns_kwargs,
+            # Dask Distributed uses "type-serialized" to dispatch deserialization
+            "type-serialized": pickle.dumps(type(self)),
+            "frame_count": 2,
+        }
+        return header, list(packed.release())
+
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None
     ) -> Self:
@@ -252,3 +316,52 @@ class DataFrame:
         end = max(min(end, self.num_rows), 0)
         (table,) = plc.copying.slice(self.table, [start, end])
         return type(self).from_table(table, self.column_names).sorted_like(self)
+
+
+try:
+    import cupy
+    from distributed.protocol import (
+        dask_deserialize,
+        dask_serialize,
+    )
+    from distributed.protocol.cuda import (
+        cuda_deserialize,
+        cuda_serialize,
+    )
+    from distributed.utils import log_errors
+
+    @cuda_serialize.register(DataFrame)
+    def _(x):
+        with log_errors():
+            return x.serialize()
+
+    @cuda_deserialize.register(DataFrame)
+    def _(header, frames):
+        with log_errors():
+            return DataFrame.deserialize(header, frames)
+
+    @dask_serialize.register(DataFrame)
+    def _(x):
+        with log_errors():
+            header, frames = x.serialize()
+            # Copy GPU buffers to host and record it in the header
+            gpu_frames = [
+                i
+                for i in range(len(frames))
+                if isinstance(frames[i], plc.gpumemoryview)
+            ]
+            for i in gpu_frames:
+                frames[i] = memoryview(cupy.asnumpy(frames[i]))
+            header["gpu_frames"] = gpu_frames
+            return header, frames
+
+    @dask_deserialize.register(DataFrame)
+    def _(header, frames):
+        with log_errors():
+            # Copy GPU buffers back to device memory
+            for i in header.pop("gpu_frames"):
+                frames[i] = plc.gpumemoryview(cupy.asarray(frames[i]))
+            return DataFrame.deserialize(header, frames)
+
+except ImportError:
+    pass  # distributed is probably not installed on the system
