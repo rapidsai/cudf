@@ -35,8 +35,7 @@ namespace strings::detail {
 
 namespace {
 
-using string_pair         = thrust::pair<char const*, size_type>;
-using column_string_pairs = cudf::device_span<string_pair const>;
+using column_string_pairs = cudf::device_span<string_index_pair const>;
 
 template <typename OutputType>
 std::pair<std::vector<std::unique_ptr<column>>, rmm::device_uvector<int64_t>>
@@ -106,7 +105,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
         reinterpret_cast<bitmask_type*>(null_masks.back().data()),
         string_pairs.data(),
         string_count,
-        [] __device__(string_pair const pair) -> bool { return pair.first != nullptr; },
+        [] __device__(string_index_pair const pair) -> bool { return pair.first != nullptr; },
         d_valid_counts.data() + idx);
   }
 
@@ -183,7 +182,6 @@ std::unique_ptr<column> make_strings_column(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
   return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
 }
 
@@ -193,7 +191,6 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
   return cudf::strings::detail::make_strings_column_batch(input, stream, mr);
 }
 
