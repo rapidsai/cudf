@@ -77,24 +77,17 @@ cdef class PackedColumns:
         return out
 
     def release(self):
-        """Returns the metadata and gpu data, and releases the ownership.
+        """Releases and returns the underlying serialized metadata and gpu data.
 
-        The ownership of the data are transferred to the returned buffers. After
+        The ownership of the memory are transferred to the returned buffers. After
         this call, `self` is empty.
-
-        Examples
-        --------
-        The two buffers can be unpacked using `unpack_from_memoryviews`:
-
-        >>> packed = pylibcudf.contiguous_split.pack(...)
-        >>> pylibcudf.contiguous_split.unpack_from_memoryviews(*packed.release())
 
         Returns
         -------
-        memoryview
-            The metadata (host memory)
-        gpumemoryview
-            The gpu data (device memory)
+        memoryview (of a HostBuffer)
+            The serialized metadata as contiguous host memory.
+        gpumemoryview (of a rmm.DeviceBuffer)
+            The serialized gpu data as contiguous device memory.
         """
         if not (dereference(self.c_obj).metadata and dereference(self.c_obj).gpu_data):
             raise ValueError("Cannot release empty PackedColumns")
@@ -111,6 +104,18 @@ cdef class PackedColumns:
 
 cpdef PackedColumns pack(Table input):
     """Deep-copy a table into a serialized contiguous memory format.
+
+    Later use `unpack` or `unpack_from_memoryviews` to unpack the serialized
+    data back into the table.
+
+    Examples
+    --------
+    >>> packed = pylibcudf.contiguous_split.pack(...)
+    >>> # Either unpack the whole `PackedColumns` at once.
+    >>> pylibcudf.contiguous_split.unpack(packed)
+    >>> # Or unpack the two serialized buffers in `PackedColumns`.
+    >>> metadata, gpu_data = packed.release()
+    >>> pylibcudf.contiguous_split.unpack_from_memoryviews(metadata, gpu_data)
 
     For details, see :cpp:func:`cudf::pack`.
 
