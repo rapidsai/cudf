@@ -67,7 +67,8 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
   }
 }
 
-__device__ void initialize_shmem_aggregations(cudf::size_type col_start,
+__device__ void initialize_shmem_aggregations(cooperative_groups::thread_block const& block,
+                                              cudf::size_type col_start,
                                               cudf::size_type col_end,
                                               cudf::mutable_table_device_view output_values,
                                               std::byte** s_aggregates_pointer,
@@ -76,7 +77,7 @@ __device__ void initialize_shmem_aggregations(cudf::size_type col_start,
                                               cudf::aggregation::Kind const* d_agg_kinds)
 {
   for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
-    for (auto idx = threadIdx.x; idx < cardinality; idx += blockDim.x) {
+    for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
       cudf::detail::dispatch_type_and_aggregation(output_values.column(col_idx).type(),
                                                   d_agg_kinds[col_idx],
                                                   initialize_shmem{},
@@ -85,6 +86,7 @@ __device__ void initialize_shmem_aggregations(cudf::size_type col_start,
                                                   s_aggregates_valid_pointer[col_idx]);
     }
   }
+  block.sync();
 }
 
 __device__ void compute_pre_aggregrations(cudf::size_type col_start,
@@ -195,14 +197,16 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                      total_agg_size);
     }
     block.sync();
-    initialize_shmem_aggregations(col_start,
+
+    initialize_shmem_aggregations(block,
+                                  col_start,
                                   col_end,
                                   output_values,
                                   s_aggregates_pointer,
                                   s_aggregates_valid_pointer,
                                   cardinality,
                                   d_agg_kinds);
-    block.sync();
+
     compute_pre_aggregrations(col_start,
                               col_end,
                               row_bitmask,
