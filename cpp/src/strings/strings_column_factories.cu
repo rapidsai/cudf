@@ -112,7 +112,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   auto const chars_sizes  = cudf::detail::make_std_vector_async(d_chars_sizes, stream);
   auto const valid_counts = cudf::detail::make_std_vector_async(d_valid_counts, stream);
 
-  // Except for other stream syncs in `CUB` that we cannot constrol,
+  // Except for other stream syncs in `CUB` that we cannot control,
   // this should be the only stream sync we need in the entire API.
   stream.synchronize();
 
