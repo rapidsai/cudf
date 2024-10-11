@@ -73,10 +73,9 @@ static void BM_make_strings_column_batch(nvbench::state& state)
   auto input        = std::vector<cudf::device_span<string_index_pair const>>{};
   input_data.reserve(batch_size);
   input.reserve(batch_size);
-  for (auto i = 0; i < batch_size; ++i) {
-    auto const d_data_ptr =
-      cudf::column_device_view::create(data_table->get_column(i).view(), stream);
-    auto batch_input = rmm::device_uvector<string_index_pair>(data_table->num_rows(), stream);
+  for (auto const& cv : data_table->view()) {
+    auto const d_data_ptr = cudf::column_device_view::create(cv, stream);
+    auto batch_input      = rmm::device_uvector<string_index_pair>(cv.size(), stream);
     thrust::tabulate(rmm::exec_policy(stream),
                      batch_input.begin(),
                      batch_input.end(),
