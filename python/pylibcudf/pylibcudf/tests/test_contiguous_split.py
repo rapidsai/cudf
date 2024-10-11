@@ -11,6 +11,8 @@ mixed_pyarrow_tables = [
     pa.table({"a": [1, 2, 3]}),
     pa.table({"a": [1], "b": [2], "c": [3]}),
     pa.table({"a": ["a", "bb", "ccc"]}),
+    pa.table({"a": [1, 2, None], "b": [None, 3, 4]})
+    pa.table({"a": [["a", "b"], ["cde"]], "b": [{"alpha": [1, 2], "beta": None}]})
 ]
 
 
