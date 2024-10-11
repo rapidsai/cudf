@@ -171,22 +171,24 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   if (not dict.is_enabled) { return; }
 
-  auto t = threadIdx.x;
+  auto const t = threadIdx.x;
   __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
 
   using cuda::std::memory_order_relaxed;
   if (t == 0) { new (&counter) cuda::atomic<size_type, cuda::thread_scope_block>{0}; }
   __syncthreads();
 
-  for (; t < dict.map_slots.size(); t += block_size) {
-    auto window = dict.map_slots.begin() + t;
-    // Collect all slots from each window.
-    for (auto& slot : *window) {
-      auto const key = slot.first;
-      if (key != KEY_SENTINEL) {
-        auto loc       = counter.fetch_add(1, memory_order_relaxed);
-        dict.data[loc] = key;
-        slot.second    = loc;
+  for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
+    if (t + i < dict.map_slots.size()) {
+      auto window = dict.map_slots.begin() + t + i;
+      // Collect all slots from each window.
+      for (auto& slot : *window) {
+        auto const key = slot.first;
+        if (key != KEY_SENTINEL) {
+          auto loc       = counter.fetch_add(1, memory_order_relaxed);
+          dict.data[loc] = key;
+          slot.second    = loc;
+        }
       }
     }
   }
@@ -226,16 +228,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (thread_index_type cur_row = start_row + t; cur_row < end_row; cur_row += block_size) {
     if (col.is_valid(cur_row)) {
-      dict.index[cur_row] = [&]() {
-        auto const found_slot = has_map_find_ref.find(cur_row);
-
-        // Fail if we didn't find the previously inserted key.
-        cudf_assert(found_slot != has_map_find_ref.end() &&
-                    "Unable to find value in map in dictionary index construction");
-
-        // Return the found value.
-        return found_slot->second;
-      }();
+      auto const found_slot = has_map_find_ref.find(cur_row);
+      // Fail if we didn't find the previously inserted key.
+      cudf_assert(found_slot != has_map_find_ref.end() &&
+                  "Unable to find value in map in dictionary index construction");
+      dict.index[cur_row] = found_slot->second;
     }
   }
 }
