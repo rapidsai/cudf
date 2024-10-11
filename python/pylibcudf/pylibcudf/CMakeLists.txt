@@ -17,6 +17,7 @@ set(cython_sources
     binaryop.pyx
     column.pyx
     column_factories.pyx
+    contiguous_split.pyx
     concatenate.pyx
     copying.pyx
     datetime.pyx
