@@ -11,7 +11,7 @@ class test_manager:
         self.test_env = dict()
 
         # Hot cache (not set) or cold cache (set)
-        # self.test_env["CUDF_BENCHMARK_DROP_CACHE"] = "true"
+        self.test_env["CUDF_BENCHMARK_DROP_CACHE"] = "true"
 
         self.test_env["TMPDIR"] = "/home/coder/cudf/run_benchmark"
         self.test_env["CUFILE_LOGGING_LEVEL"] = "WARN"
@@ -44,7 +44,7 @@ class test_manager:
             "--cuda-memory-usage=true " +\
             "--env-var {} ".format(env_string) +\
             "{} -d 0 -b {} ".format(my_bin, my_option) +\
-            "-a compression_type=SNAPPY -a io_type=FILEPATH -a cardinality=0 -a run_length=1 --timeout 5"
+            "-a compression_type=SNAPPY -a io_type=FILEPATH -a cardinality=0 -a run_length=1 --min-samples 40"
 
         print(full_command)
         subprocess.run([full_command], shell=True,
