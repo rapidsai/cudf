@@ -22,3 +22,9 @@ strings
     split
     strip
     wrap
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Subpackages
+
+    convert/index.rst
