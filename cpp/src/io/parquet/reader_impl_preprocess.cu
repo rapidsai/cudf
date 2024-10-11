@@ -1594,9 +1594,9 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       h_cols_info, _stream, cudf::get_current_device_resource_ref());
 
     cudf::detail::hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
-    auto const num_keys = _input_columns.size() * max_depth * subpass.pages.size();
-    auto constexpr max_keys_per_iter =
-      std::numeric_limits<size_type>::max() / 2;  ///< Maximum 1billion keys per iteration
+    auto const num_keys              = _input_columns.size() * max_depth * subpass.pages.size();
+    auto constexpr max_keys_per_iter = static_cast<size_t>(
+      std::numeric_limits<size_type>::max() / 2);  ///< Maximum 1billion keys per iteration
     auto const num_keys_per_iter =
       num_keys < max_keys_per_iter
         ? num_keys
