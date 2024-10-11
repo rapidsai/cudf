@@ -142,11 +142,7 @@ class Translator:
             raise NotImplementedError(
                 "Could not retrieve the current expression"
             ) from e
-        try:
-            dtype = dtypes.from_polars(self.visitor.get_dtype(n))
-        except Exception as e:
-            self.errors.append(e)
-            raise NotImplementedError("Could not compute schema") from e
+        dtype = dtypes.from_polars(self.visitor.get_dtype(n))
         try:
             return _translate_expr(node, self, dtype)
         except Exception as e:
