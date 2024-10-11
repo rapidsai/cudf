@@ -15,7 +15,6 @@
  */
 
 #include "compute_single_pass_shmem_aggs.hpp"
-#include "create_sparse_results_table.hpp"
 #include "global_memory_aggregator.cuh"
 #include "helpers.cuh"
 #include "shared_memory_aggregator.cuh"
@@ -36,6 +35,9 @@
 
 namespace cudf::groupby::detail::hash {
 namespace {
+// Prepares shared memory data required by each output column, exits if
+// no enough memory space to perform the shared memory aggregation for the
+// current output column
 __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
                                                cudf::size_type& col_end,
                                                cudf::mutable_table_device_view output_values,
@@ -67,6 +69,7 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
   }
 }
 
+// Each block initialize its own shared memory aggregation results
 __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block const& block,
                                               cudf::size_type col_start,
                                               cudf::size_type col_end,
@@ -100,14 +103,13 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
                                           bool** s_aggregates_valid_pointer,
                                           cudf::aggregation::Kind const* d_agg_kinds)
 {
-  // TODO grid_1d utility
-  for (auto cur_idx = blockDim.x * blockIdx.x + threadIdx.x; cur_idx < num_input_rows;
-       cur_idx += blockDim.x * gridDim.x) {
-    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, cur_idx)) {
-      auto map_idx = local_mapping_index[cur_idx];
+  for (auto idx = cudf::detail::grid_1d::global_thread_id(); idx < num_input_rows;
+       idx += cudf::detail::grid_1d::grid_stride()) {
+    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
+      auto const map_idx = local_mapping_index[idx];
 
       for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
-        auto input_col = input_values.column(col_idx);
+        auto const input_col = input_values.column(col_idx);
 
         cudf::detail::dispatch_type_and_aggregation(input_col.type(),
                                                     d_agg_kinds[col_idx],
@@ -116,7 +118,7 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
                                                     map_idx,
                                                     s_aggregates_valid_pointer[col_idx],
                                                     input_col,
-                                                    cur_idx);
+                                                    idx);
       }
     }
   }
@@ -218,6 +220,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                               s_aggregates_valid_pointer,
                               d_agg_kinds);
     block.sync();
+
     compute_final_aggregations(col_start,
                                col_end,
                                input_values,
