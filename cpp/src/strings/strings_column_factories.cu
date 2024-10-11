@@ -27,6 +27,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_memcpy.cuh>
 #include <cuda/functional>
 
 namespace cudf {
@@ -70,6 +71,41 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
   }
 
   return {std::move(offsets_columns), std::move(chars_sizes)};
+}
+
+template <typename IndexPairIterator>
+rmm::device_uvector<char> make_chars(column_view const& offsets,
+                                     int64_t chars_size,
+                                     IndexPairIterator input,
+                                     size_type strings_count,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+{
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
+
+  auto chars_data     = rmm::device_uvector<char>(chars_size, stream, mr);
+  auto const src_ptrs = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<void*>([input] __device__(size_type idx) {
+      return reinterpret_cast<void*>(const_cast<char*>(input[idx].first));
+    }));
+  auto const src_sizes = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<size_type>([input] __device__(size_type idx) {
+      return input[idx].second;
+    }));
+  auto const dst_ptrs = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
+                                        size_type idx) { return output + offsets[idx]; }));
+
+  void* d_temp_storage      = nullptr;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceMemcpy::Batched(
+    d_temp_storage, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count);
+  cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  cub::DeviceMemcpy::Batched(
+    d_temp_storage, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count);
+
+  return chars_data;
 }
 
 }  // namespace
@@ -156,17 +192,11 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
       continue;
     }
 
-    auto const chars_size        = chars_sizes[idx];
-    auto const valid_count       = valid_counts[idx];
-    auto const avg_bytes_per_row = chars_size / std::max(valid_count, 1);
+    auto const chars_size  = chars_sizes[idx];
+    auto const valid_count = valid_counts[idx];
 
-    auto chars_data = make_chars_column(offsets_cols[idx]->view(),
-                                        chars_size,
-                                        avg_bytes_per_row,
-                                        input[idx].data(),
-                                        strings_count,
-                                        stream,
-                                        mr);
+    auto chars_data = make_chars(
+      offsets_cols[idx]->view(), chars_size, input[idx].data(), strings_count, stream, mr);
 
     auto const null_count = strings_count - valid_count;
     output[idx] =
