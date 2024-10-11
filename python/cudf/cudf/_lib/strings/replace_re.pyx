@@ -61,7 +61,7 @@ def replace_multi_re(Column source_strings,
     regular expressions `patterns` with their corresponding
     strings in `repl_strings` in `source_strings`.
     """
-    plc_column = plc.strings.replace_re.replace_re(
+    plc_column = plc.strings.replace_re.replace_re_multi(
         source_strings.to_pylibcudf(mode="read"),
         patterns,
         repl_strings.to_pylibcudf(mode="read")
