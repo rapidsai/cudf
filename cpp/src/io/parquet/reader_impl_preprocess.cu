@@ -1086,8 +1086,6 @@ void reader::impl::read_compressed_data()
 
   auto& chunks = pass.chunks;
 
-  BIU_RANGE_PUSH("read_compressed_data::read_chunks_tasks wait");
-
   auto const [has_compressed_data, read_chunks_tasks] = read_column_chunks();
   pass.has_compressed_data                            = has_compressed_data;
 
