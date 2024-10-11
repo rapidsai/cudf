@@ -45,6 +45,8 @@
 
 struct StringsFactoriesTest : public cudf::test::BaseFixture {};
 
+using string_pair = thrust::pair<char const*, cudf::size_type>;
+
 TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 {
   std::vector<char const*> h_test_strings{"the quick brown fox jumps over the lazy dog",
@@ -62,7 +64,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   cudf::size_type count = (cudf::size_type)h_test_strings.size();
   thrust::host_vector<char> h_buffer(memsize);
   rmm::device_uvector<char> d_buffer(memsize, cudf::get_default_stream());
-  thrust::host_vector<thrust::pair<char const*, cudf::size_type>> strings(count);
+  thrust::host_vector<string_pair> strings(count);
   thrust::host_vector<cudf::size_type> h_offsets(count + 1);
   cudf::size_type offset = 0;
   cudf::size_type nulls  = 0;
@@ -70,12 +72,12 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   for (cudf::size_type idx = 0; idx < count; ++idx) {
     char const* str = h_test_strings[idx];
     if (!str) {
-      strings[idx] = thrust::pair<char const*, cudf::size_type>{nullptr, 0};
+      strings[idx] = string_pair{nullptr, 0};
       nulls++;
     } else {
       auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
-      strings[idx] = thrust::pair<char const*, cudf::size_type>{d_buffer.data() + offset, length};
+      strings[idx] = string_pair{d_buffer.data() + offset, length};
       offset += length;
     }
     h_offsets[idx + 1] = offset;
@@ -202,14 +204,12 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
     cudf::make_strings_column(0, std::move(d_offsets), d_chars.release(), 0, d_nulls.release());
   cudf::test::expect_column_empty(results->view());
 
-  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> d_strings{
-    0, cudf::get_default_stream()};
+  rmm::device_uvector<string_pair> d_strings{0, cudf::get_default_stream()};
   results = cudf::make_strings_column(d_strings);
   cudf::test::expect_column_empty(results->view());
 }
 
 namespace {
-using string_pair = thrust::pair<char const*, cudf::size_type>;
 
 struct string_view_to_pair {
   __device__ string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
@@ -244,11 +244,9 @@ TEST_F(StringsBatchConstructionTest, EmptyColumns)
   auto constexpr num_columns = 10;
   auto const stream          = cudf::get_default_stream();
 
-  auto const d_string_pairs =
-    rmm::device_uvector<thrust::pair<char const*, cudf::size_type>>{0, stream};
-  auto const input =
-    std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>>(
-      num_columns, {d_string_pairs.data(), d_string_pairs.size()});
+  auto const d_string_pairs = rmm::device_uvector<string_pair>{0, stream};
+  auto const input          = std::vector<cudf::device_span<string_pair const>>(
+    num_columns, {d_string_pairs.data(), d_string_pairs.size()});
   auto const output = cudf::make_strings_column_batch(input, stream);
 
   auto const expected_col = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -263,15 +261,13 @@ TEST_F(StringsBatchConstructionTest, AllNullsColumns)
   auto constexpr num_rows    = 100;
   auto const stream          = cudf::get_default_stream();
 
-  auto d_string_pairs =
-    rmm::device_uvector<thrust::pair<char const*, cudf::size_type>>{num_rows, stream};
+  auto d_string_pairs = rmm::device_uvector<string_pair>{num_rows, stream};
   thrust::uninitialized_fill_n(rmm::exec_policy(stream),
                                d_string_pairs.data(),
                                d_string_pairs.size(),
-                               thrust::pair<char const*, cudf::size_type>{nullptr, 0});
-  auto const input =
-    std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>>(
-      num_columns, {d_string_pairs.data(), d_string_pairs.size()});
+                               string_pair{nullptr, 0});
+  auto const input = std::vector<cudf::device_span<string_pair const>>(
+    num_columns, {d_string_pairs.data(), d_string_pairs.size()});
   auto const output = cudf::make_strings_column_batch(input, stream);
 
   auto const expected_col = cudf::make_strings_column(d_string_pairs);
@@ -335,7 +331,7 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
   auto const d_is_null = cudf::detail::make_device_uvector_async(is_null, stream, mr);
 
   std::vector<rmm::device_uvector<string_pair>> d_input;
-  std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input;
+  std::vector<cudf::device_span<string_pair const>> input;
   d_input.reserve(num_columns);
   input.reserve(num_columns);
 
@@ -407,7 +403,7 @@ TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
                                            1.5 / h_offsets.back());
 
   std::vector<rmm::device_uvector<string_pair>> d_input;
-  std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input;
+  std::vector<cudf::device_span<string_pair const>> input;
   d_input.reserve(num_columns);
   input.reserve(num_columns);
 
