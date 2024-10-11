@@ -19,7 +19,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -240,6 +239,21 @@ TEST_F(StringsExtractTests, SpecialNewLines)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
+TEST_F(StringsExtractTests, NestedQuantifier)
+{
+  auto input   = cudf::test::strings_column_wrapper({"TEST12 1111 2222 3333 4444 5555",
+                                                     "0000 AAAA 9999 BBBB 8888",
+                                                     "7777 6666 4444 3333",
+                                                     "12345 3333 4444 1111 ABCD"});
+  auto sv      = cudf::strings_column_view(input);
+  auto pattern = std::string(R"((\d{4}\s){4})");
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::extract(sv, *prog);
+  // fixed quantifier on capture group only honors the last group
+  auto expected = cudf::test::strings_column_wrapper({"4444 ", "", "", "1111 "}, {1, 0, 0, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+}
+
 TEST_F(StringsExtractTests, EmptyExtractTest)
 {
   std::vector<char const*> h_strings{nullptr, "AAA", "AAA_A", "AAA_AAA_", "A__", ""};
@@ -275,8 +289,8 @@ TEST_F(StringsExtractTests, ExtractAllTest)
 
   auto pattern = std::string("(\\d+) (\\w+)");
 
-  bool valids[] = {true, true, true, false, false, false, true};
-  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  std::array valids{true, true, true, false, false, false, true};
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW expected({LCW{"123", "banana", "7", "eleven"},
                 LCW{"41", "apple"},
                 LCW{"6", "péar", "0", "pair"},
@@ -284,7 +298,7 @@ TEST_F(StringsExtractTests, ExtractAllTest)
                 LCW{},
                 LCW{},
                 LCW{"4", "paré"}},
-               valids);
+               valids.data());
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::extract_all_record(sv, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);

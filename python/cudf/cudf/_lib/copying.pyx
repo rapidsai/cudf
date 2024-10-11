@@ -8,7 +8,7 @@ from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 import pylibcudf
 
@@ -384,7 +384,7 @@ cdef class _CPackedColumns:
 
         p.column_names = input_table._column_names
         p.column_dtypes = {}
-        for name, col in input_table._data.items():
+        for name, col in input_table._column_labels_and_values:
             if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 

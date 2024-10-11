@@ -35,9 +35,9 @@
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
-  typename std::conditional<std::is_same_v<T, cudf::string_view>,
-                            cudf::test::strings_column_wrapper,
-                            cudf::test::fixed_width_column_wrapper<T, SourceElementT>>::type;
+  std::conditional_t<std::is_same_v<T, cudf::string_view>,
+                     cudf::test::strings_column_wrapper,
+                     cudf::test::fixed_width_column_wrapper<T, SourceElementT>>;
 using column     = cudf::column;
 using table      = cudf::table;
 using table_view = cudf::table_view;
@@ -172,7 +172,7 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
                        cudf::io::parquet::detail::Type ptype,
-                       cuda::std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype);
+                       std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype);
 
 void expect_compression_stats_empty(std::shared_ptr<cudf::io::writer_compression_statistics> stats);
 

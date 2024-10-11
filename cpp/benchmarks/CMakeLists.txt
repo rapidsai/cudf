@@ -177,11 +177,11 @@ ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * nds-h benchmark --------------------------------------------------------------------------------
-ConfigureNVBench(NDSH_Q1 ndsh/q01.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q5 ndsh/q05.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q6 ndsh/q06.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q9 ndsh/q09.cpp ndsh/utilities.cpp)
-ConfigureNVBench(NDSH_Q10 ndsh/q10.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q01_NVBENCH ndsh/q01.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q05_NVBENCH ndsh/q05.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q06_NVBENCH ndsh/q06.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
@@ -231,6 +231,11 @@ ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
 
 # ##################################################################################################
+# * tdigest benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cu)
+
+# ##################################################################################################
 # * type_dispatcher benchmark ---------------------------------------------------------------------
 ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 
@@ -240,6 +245,7 @@ ConfigureNVBench(
   REDUCTION_NVBENCH
   reduction/anyall.cpp
   reduction/dictionary.cpp
+  reduction/histogram.cpp
   reduction/minmax.cpp
   reduction/rank.cpp
   reduction/reduce.cpp
@@ -265,8 +271,13 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_max_multithreaded.cpp
-  groupby/group_nunique.cpp groupby/group_rank.cpp groupby/group_struct_keys.cpp
+  GROUPBY_NVBENCH
+  groupby/group_histogram.cpp
+  groupby/group_max.cpp
+  groupby/group_max_multithreaded.cpp
+  groupby/group_nunique.cpp
+  groupby/group_rank.cpp
+  groupby/group_struct_keys.cpp
 )
 
 # ##################################################################################################
@@ -325,11 +336,11 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
-ConfigureBench(AST_BENCH ast/transform.cpp)
+ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
+ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
@@ -386,11 +397,6 @@ ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_READER_OPTION_NVBENCH io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
-
-# ##################################################################################################
-# * multi buffer memset benchmark
-# ----------------------------------------------------------------------
-ConfigureNVBench(BATCHED_MEMSET_BENCH io/utilities/batched_memset_bench.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

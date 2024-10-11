@@ -236,26 +236,26 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
 
   /// Constructor from container
   /// @param in The container to construct the span from
-  template <
-    typename C,
-    // Only supported containers of types convertible to T
-    std::enable_if_t<is_host_span_supported_container<C>::value &&
-                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                             std::declval<C&>().data()))> (*)[],
-                                           T (*)[]>>* = nullptr>
+  template <typename C,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<is_host_span_supported_container<C>::value &&
+                             std::is_convertible_v<
+                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
+                                 std::declval<C&>().data()))> (*)[],
+                               T (*)[]>>* = nullptr>  // NOLINT
   constexpr host_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
   /// Constructor from const container
   /// @param in The container to construct the span from
-  template <
-    typename C,
-    // Only supported containers of types convertible to T
-    std::enable_if_t<is_host_span_supported_container<C>::value &&
-                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                             std::declval<C&>().data()))> (*)[],
-                                           T (*)[]>>* = nullptr>
+  template <typename C,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<is_host_span_supported_container<C>::value &&
+                             std::is_convertible_v<
+                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
+                                 std::declval<C&>().data()))> (*)[],
+                               T (*)[]>>* = nullptr>  // NOLINT
   constexpr host_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
@@ -264,7 +264,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   /// @param in The host_vector to construct the span from
   template <typename OtherT,
             // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>
+            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
   constexpr host_span(cudf::detail::host_vector<OtherT>& in)
     : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
   {
@@ -274,7 +274,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   /// @param in The host_vector to construct the span from
   template <typename OtherT,
             // Only supported containers of types convertible to T
-            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>
+            std::enable_if_t<std::is_convertible_v<OtherT (*)[], T (*)[]>>* = nullptr>  // NOLINT
   constexpr host_span(cudf::detail::host_vector<OtherT> const& in)
     : base(in.data(), in.size()), _is_device_accessible{in.get_allocator().is_device_accessible()}
   {
@@ -285,10 +285,10 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   template <typename OtherT,
             std::size_t OtherExtent,
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                               std::is_convertible_v<OtherT (*)[], T (*)[]>,
+                               std::is_convertible_v<OtherT (*)[], T (*)[]>,  // NOLINT
                              void>* = nullptr>
   constexpr host_span(host_span<OtherT, OtherExtent> const& other) noexcept
-    : base(other.data(), other.size())
+    : base(other.data(), other.size()), _is_device_accessible{other.is_device_accessible()}
   {
   }
 
@@ -333,26 +333,26 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
 
   /// Constructor from container
   /// @param in The container to construct the span from
-  template <
-    typename C,
-    // Only supported containers of types convertible to T
-    std::enable_if_t<is_device_span_supported_container<C>::value &&
-                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                             std::declval<C&>().data()))> (*)[],
-                                           T (*)[]>>* = nullptr>
+  template <typename C,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<is_device_span_supported_container<C>::value &&
+                             std::is_convertible_v<
+                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
+                                 std::declval<C&>().data()))> (*)[],
+                               T (*)[]>>* = nullptr>  // NOLINT
   constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
   /// Constructor from const container
   /// @param in The container to construct the span from
-  template <
-    typename C,
-    // Only supported containers of types convertible to T
-    std::enable_if_t<is_device_span_supported_container<C>::value &&
-                     std::is_convertible_v<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
-                                             std::declval<C&>().data()))> (*)[],
-                                           T (*)[]>>* = nullptr>
+  template <typename C,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<is_device_span_supported_container<C>::value &&
+                             std::is_convertible_v<
+                               std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
+                                 std::declval<C&>().data()))> (*)[],
+                               T (*)[]>>* = nullptr>  // NOLINT
   constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
@@ -362,7 +362,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
   template <typename OtherT,
             std::size_t OtherExtent,
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
-                               std::is_convertible_v<OtherT (*)[], T (*)[]>,
+                               std::is_convertible_v<OtherT (*)[], T (*)[]>,  // NOLINT
                              void>* = nullptr>
   constexpr device_span(device_span<OtherT, OtherExtent> const& other) noexcept
     : base(other.data(), other.size())

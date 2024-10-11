@@ -64,7 +64,7 @@ def _write_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_bytes=None,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
@@ -149,7 +149,7 @@ def write_to_dataset(
     return_metadata=False,
     statistics="ROWGROUP",
     int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_bytes=None,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,
@@ -205,7 +205,7 @@ def write_to_dataset(
         If ``False``, timestamps will not be altered.
     row_group_size_bytes: integer or None, default None
         Maximum size of each stripe of the output.
-        If None, 134217728 (128MB) will be used.
+        If None, no limit on row group stripe size will be used.
     row_group_size_rows: integer or None, default None
         Maximum number of rows of each stripe of the output.
         If None, 1000000 will be used.
@@ -980,7 +980,7 @@ def to_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
+    row_group_size_bytes=None,
     row_group_size_rows=None,
     max_page_size_bytes=None,
     max_page_size_rows=None,

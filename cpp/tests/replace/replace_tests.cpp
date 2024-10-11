@@ -356,7 +356,7 @@ void test_replace(cudf::host_span<T const> input_column,
 
   for (size_t i = 0; i < values_to_replace_column.size(); i++) {
     size_t k  = 0;
-    auto pred = [=, &k, &reference_result, &expected_valid, &isReplaced](T element) {
+    auto pred = [=, &k, &expected_valid, &isReplaced](T element) {
       bool toBeReplaced = false;
       if (!isReplaced[k]) {
         if (!input_has_nulls || expected_valid[k]) {
@@ -503,7 +503,7 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
   const size_t REPLACE_SIZE = 10000;
 
   thrust::host_vector<TypeParam> input_column(DATA_SIZE);
-  std::generate(std::begin(input_column), std::end(input_column), [REPLACE_SIZE]() {
+  std::generate(std::begin(input_column), std::end(input_column), []() {
     return std::rand() % (REPLACE_SIZE);
   });
 

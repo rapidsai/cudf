@@ -10,5 +10,9 @@ from pylibcudf.libcudf.table.table cimport table
 cdef extern from "cudf/strings/extract.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[table] extract(
-        column_view source_strings,
-        regex_program) except +
+        column_view input,
+        regex_program prog) except +
+
+    cdef unique_ptr[column] extract_all_record(
+        column_view input,
+        regex_program prog) except +

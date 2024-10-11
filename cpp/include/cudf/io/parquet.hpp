@@ -39,8 +39,9 @@ namespace io {
  * @file
  */
 
-constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  ///< 128MB per row group
-constexpr size_type default_row_group_size_rows = 1000000;     ///< 1 million rows per row group
+constexpr size_t default_row_group_size_bytes =
+  std::numeric_limits<size_t>::max();                          ///< Infinite bytes per row group
+constexpr size_type default_row_group_size_rows = 1'000'000;   ///< 1 million rows per row group
 constexpr size_t default_max_page_size_bytes    = 512 * 1024;  ///< 512KB per page
 constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per page
 constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
@@ -1199,7 +1200,7 @@ class parquet_writer_options : public parquet_writer_options_base {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit parquet_writer_options(sink_info const& sink, table_view const& table);
+  explicit parquet_writer_options(sink_info const& sink, table_view table);
 
  public:
   /**

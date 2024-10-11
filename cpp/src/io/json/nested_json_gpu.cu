@@ -618,12 +618,14 @@ struct PdaSymbolToSymbolGroupId {
     constexpr auto pda_sgid_lookup_size =
       static_cast<int32_t>(sizeof(tos_sg_to_pda_sgid) / sizeof(tos_sg_to_pda_sgid[0]));
     // We map the delimiter character to LINE_BREAK symbol group id, and the newline character
-    // to OTHER. Note that delimiter cannot be any of opening(closing) brace, bracket, quote,
+    // to WHITE_SPACE. Note that delimiter cannot be any of opening(closing) brace, bracket, quote,
     // escape, comma, colon or whitespace characters.
+    auto constexpr newline    = '\n';
+    auto constexpr whitespace = ' ';
     auto const symbol_position =
       symbol == delimiter
-        ? static_cast<int32_t>('\n')
-        : (symbol == '\n' ? static_cast<int32_t>(delimiter) : static_cast<int32_t>(symbol));
+        ? static_cast<int32_t>(newline)
+        : (symbol == newline ? static_cast<int32_t>(whitespace) : static_cast<int32_t>(symbol));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +
@@ -2079,10 +2081,12 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  parse_opts.dayfirst   = options.is_enabled_dayfirst();
-  parse_opts.keepquotes = options.is_enabled_keep_quotes();
-  parse_opts.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
-  parse_opts.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  parse_opts.dayfirst              = options.is_enabled_dayfirst();
+  parse_opts.keepquotes            = options.is_enabled_keep_quotes();
+  parse_opts.normalize_whitespace  = options.is_enabled_normalize_whitespace();
+  parse_opts.mixed_types_as_string = options.is_enabled_mixed_types_as_string();
+  parse_opts.trie_true             = cudf::detail::create_serialized_trie({"true"}, stream);
+  parse_opts.trie_false            = cudf::detail::create_serialized_trie({"false"}, stream);
   std::vector<std::string> na_values{"", "null"};
   na_values.insert(na_values.end(), options.get_na_values().begin(), options.get_na_values().end());
   parse_opts.trie_na = cudf::detail::create_serialized_trie(na_values, stream);
