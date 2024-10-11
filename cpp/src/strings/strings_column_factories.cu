@@ -90,7 +90,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   thrust::uninitialized_fill(
     rmm::exec_policy_nosync(stream), d_valid_counts.begin(), d_valid_counts.end(), 0);
 
-  for (std::size_t idx = 0; idx < input.size(); ++idx) {
+  for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const& string_pairs = input[idx];
     auto const string_count  = static_cast<size_type>(string_pairs.size());
     null_masks.emplace_back(
@@ -112,7 +112,8 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
   auto const chars_sizes  = cudf::detail::make_std_vector_async(d_chars_sizes, stream);
   auto const valid_counts = cudf::detail::make_std_vector_async(d_valid_counts, stream);
 
-  // This should be the only stream sync in the entire API.
+  // Except for other stream syncs in `CUB` that we cannot constrol,
+  // this should be the only stream sync we need in the entire API.
   stream.synchronize();
 
   auto const threshold = cudf::strings::get_offset64_threshold();
