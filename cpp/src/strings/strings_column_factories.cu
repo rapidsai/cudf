@@ -109,8 +109,8 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
         d_valid_counts.data() + idx);
   }
 
-  auto const chars_sizes  = cudf::detail::make_host_vector_async(d_chars_sizes, stream);
-  auto const valid_counts = cudf::detail::make_host_vector_async(d_valid_counts, stream);
+  auto const chars_sizes  = cudf::detail::make_std_vector_async(d_chars_sizes, stream);
+  auto const valid_counts = cudf::detail::make_std_vector_async(d_valid_counts, stream);
 
   // This should be the only stream sync in the entire API.
   stream.synchronize();
