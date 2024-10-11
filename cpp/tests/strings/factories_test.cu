@@ -286,11 +286,12 @@ struct index_to_pair {
   int const num_test_strings;
   char const* d_chars;
   std::size_t const* d_offsets;
+  int const* is_null;
 
   __device__ string_pair operator()(cudf::size_type idx)
   {
     auto const data_idx = idx % num_test_strings;
-    return {d_chars + d_offsets[data_idx],
+    return {is_null[data_idx] ? nullptr : d_chars + d_offsets[data_idx],
             static_cast<cudf::size_type>(d_offsets[data_idx + 1] - d_offsets[data_idx])};
   }
 };
@@ -320,14 +321,18 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
   }
 
   std::vector<char> h_chars(h_offsets.back());
+  std::vector<int> is_null(num_test_strings, 0);
   for (int i = 0; i < num_test_strings; ++i) {
     if (h_test_strings[i]) {
       memcpy(h_chars.data() + h_offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
+    } else {
+      is_null[i] = 1;
     }
   }
 
   auto const d_offsets = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
   auto const d_chars   = cudf::detail::make_device_uvector_async(h_chars, stream, mr);
+  auto const d_is_null = cudf::detail::make_device_uvector_async(is_null, stream, mr);
 
   std::vector<rmm::device_uvector<string_pair>> d_input;
   std::vector<cudf::device_span<thrust::pair<char const*, cudf::size_type> const>> input;
@@ -340,10 +345,11 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
       static_cast<int>(static_cast<double>(col_idx + 1) / num_columns * max_num_rows);
 
     auto string_pairs = rmm::device_uvector<string_pair>(num_rows, stream);
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
-                     string_pairs.begin(),
-                     string_pairs.end(),
-                     index_to_pair{num_test_strings, d_chars.data(), d_offsets.data()});
+    thrust::tabulate(
+      rmm::exec_policy_nosync(stream),
+      string_pairs.begin(),
+      string_pairs.end(),
+      index_to_pair{num_test_strings, d_chars.begin(), d_offsets.begin(), d_is_null.begin()});
 
     d_input.emplace_back(std::move(string_pairs));
     input.emplace_back(d_input.back());
@@ -380,14 +386,18 @@ TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
   }
 
   std::vector<char> h_chars(h_offsets.back());
+  std::vector<int> is_null(num_test_strings, 0);
   for (int i = 0; i < num_test_strings; ++i) {
     if (h_test_strings[i]) {
       memcpy(h_chars.data() + h_offsets[i], h_test_strings[i], strlen(h_test_strings[i]));
+    } else {
+      is_null[i] = 1;
     }
   }
 
   auto const d_offsets = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
   auto const d_chars   = cudf::detail::make_device_uvector_async(h_chars, stream, mr);
+  auto const d_is_null = cudf::detail::make_device_uvector_async(is_null, stream, mr);
 
   // If we create a column by repeating h_test_strings by `max_cycles` times,
   // we will have it size around (1.5*INT_MAX) bytes.
@@ -406,10 +416,11 @@ TEST_F(StringsBatchConstructionTest, CreateLongStringsColumns)
                                            max_cycles * num_test_strings);
 
     auto string_pairs = rmm::device_uvector<string_pair>(num_rows, stream);
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
-                     string_pairs.begin(),
-                     string_pairs.end(),
-                     index_to_pair{num_test_strings, d_chars.data(), d_offsets.data()});
+    thrust::tabulate(
+      rmm::exec_policy_nosync(stream),
+      string_pairs.begin(),
+      string_pairs.end(),
+      index_to_pair{num_test_strings, d_chars.begin(), d_offsets.begin(), d_is_null.begin()});
 
     d_input.emplace_back(std::move(string_pairs));
     input.emplace_back(d_input.back());
