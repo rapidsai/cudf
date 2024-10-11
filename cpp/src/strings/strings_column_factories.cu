@@ -159,7 +159,7 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     auto const chars_size  = chars_sizes[idx];
     auto const valid_count = valid_counts[idx];
 
-    auto chars_data = make_chars_column(
+    auto chars_data = make_chars_buffer(
       offsets_cols[idx]->view(), chars_size, input[idx].data(), strings_count, stream, mr);
 
     auto const null_count = strings_count - valid_count;

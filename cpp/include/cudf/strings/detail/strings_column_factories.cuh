@@ -64,7 +64,7 @@ using string_index_pair = thrust::pair<char const*, size_type>;
  * @return An array of chars gathered from the input string_index_pair iterator
  */
 template <typename IndexPairIterator>
-rmm::device_uvector<char> make_chars_column(column_view const& offsets,
+rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
                                             int64_t chars_size,
                                             IndexPairIterator begin,
                                             size_type strings_count,
@@ -92,10 +92,15 @@ rmm::device_uvector<char> make_chars_column(column_view const& offsets,
 
   size_t temp_storage_bytes = 0;
   cub::DeviceMemcpy::Batched(
-    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count);
+    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count, stream.value());
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
-  cub::DeviceMemcpy::Batched(
-    d_temp_storage.data(), temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count);
+  cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                             temp_storage_bytes,
+                             src_ptrs,
+                             dst_ptrs,
+                             src_sizes,
+                             strings_count,
+                             stream.value());
 
   return chars_data;
 }
@@ -139,7 +144,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
 
   // build chars column
   auto chars_data =
-    make_chars_column(offsets_column->view(), bytes, begin, strings_count, stream, mr);
+    make_chars_buffer(offsets_column->view(), bytes, begin, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
