@@ -1062,7 +1062,7 @@ This module offers an optional testing component which defines the
 following IMPORTED GLOBAL  targets:
 
  cudf::cudftestutil          - The main cudf testing library
- cudf::cudftestutil_impl     - Symbol definitions for cudf::cudftestutil
+ cudf::cudftestutil_impl     - C++ and CUDA sources to compile for definitions in cudf::cudftestutil
     ]=]
 )
 
