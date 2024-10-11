@@ -245,6 +245,7 @@ ConfigureNVBench(
   REDUCTION_NVBENCH
   reduction/anyall.cpp
   reduction/dictionary.cpp
+  reduction/histogram.cpp
   reduction/minmax.cpp
   reduction/rank.cpp
   reduction/reduce.cpp
@@ -270,8 +271,13 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_max_multithreaded.cpp
-  groupby/group_nunique.cpp groupby/group_rank.cpp groupby/group_struct_keys.cpp
+  GROUPBY_NVBENCH
+  groupby/group_histogram.cpp
+  groupby/group_max.cpp
+  groupby/group_max_multithreaded.cpp
+  groupby/group_nunique.cpp
+  groupby/group_rank.cpp
+  groupby/group_struct_keys.cpp
 )
 
 # ##################################################################################################

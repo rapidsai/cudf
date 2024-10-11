@@ -1302,24 +1302,24 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
   std::array<int64_t, 9> expected_null_counts{4, 4, 4, 6, 4, 6, 4, 5, 11};
-  std::vector<int64_t> const expected_def_hists[] = {{1, 1, 2, 3},
-                                                     {1, 3, 10},
-                                                     {1, 1, 2, 10},
-                                                     {1, 1, 2, 2, 8},
-                                                     {1, 1, 1, 1, 10},
-                                                     {1, 1, 1, 1, 2, 8},
-                                                     {1, 3, 9},
-                                                     {1, 3, 1, 8},
-                                                     {1, 0, 4, 1, 1, 4, 9}};
-  std::vector<int64_t> const expected_rep_hists[] = {{4, 3},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 5},
-                                                     {4, 4, 5},
-                                                     {4, 6, 2, 8}};
+  std::vector<std::vector<int64_t>> const expected_def_hists = {{1, 1, 2, 3},
+                                                                {1, 3, 10},
+                                                                {1, 1, 2, 10},
+                                                                {1, 1, 2, 2, 8},
+                                                                {1, 1, 1, 1, 10},
+                                                                {1, 1, 1, 1, 2, 8},
+                                                                {1, 3, 9},
+                                                                {1, 3, 1, 8},
+                                                                {1, 0, 4, 1, 1, 4, 9}};
+  std::vector<std::vector<int64_t>> const expected_rep_hists = {{4, 3},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 5},
+                                                                {4, 4, 5},
+                                                                {4, 6, 2, 8}};
 
   auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)

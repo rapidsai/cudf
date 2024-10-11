@@ -169,6 +169,64 @@ TEST_F(MinHashTest, MultiSeedWithNullInputRow)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
 
+TEST_F(MinHashTest, PermutedMultiSeed)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"doc 1",
+                                        "this is doc 2",
+                                        "doc 3",
+                                        "d",
+                                        "The quick brown fox jumpéd over the lazy brown dog.",
+                                        "line six",
+                                        "line seven",
+                                        "line eight",
+                                        "line nine",
+                                        "line ten"});
+
+  auto view = cudf::strings_column_view(input);
+
+  auto zero  = thrust::counting_iterator<uint32_t>(0);
+  auto seeds = cudf::test::fixed_width_column_wrapper<uint32_t>(zero, zero + 3);
+  auto results =
+    nvtext::minhash_permuted(view, cudf::column_view(seeds), cudf::column_view(seeds), 4);
+
+  using LCW = cudf::test::lists_column_wrapper<uint32_t>;
+  // clang-format off
+  LCW expected({LCW{1207251914u, 1207251915u, 2414503830u},
+                LCW{  21141582u,   21141583u,   42283166u},
+                LCW{1207251914u, 1207251915u, 2414503830u},
+                LCW{ 655955059u,  655955060u, 1311910120u},
+                LCW{  86520422u,   86520423u,  173040846u},
+                LCW{ 640477688u,  640477689u, 1280955378u},
+                LCW{ 640477688u,  640477689u, 1119757432u},
+                LCW{ 304329233u,  304329234u,  608658468u},
+                LCW{ 640477688u,  640477689u, 1253170324u},
+                LCW{ 640477688u,  640477689u,  109416974u}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto seeds64 = cudf::test::fixed_width_column_wrapper<uint64_t>({0, 1, 2});
+  auto results64 =
+    nvtext::minhash64_permuted(view, cudf::column_view(seeds64), cudf::column_view(seeds64), 4);
+
+  using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
+  // clang-format off
+  LCW64 expected64({
+    LCW64{  774489391575805754ul,  774489391575805755ul, 1355379376230368507ul},
+    LCW64{ 3232308021562742685ul,  536921680321302593ul,    3662418748204373ul},
+    LCW64{13145552576991307582ul, 1616337530922837828ul,  926832052631981697ul},
+    LCW64{14660046701545912182ul,  824988646263748477ul, 1649977292527496946ul},
+    LCW64{  398062025280761388ul,   44496840736841087ul,   88993681473682166ul},
+    LCW64{ 2837259098848821044ul,  531416089635127094ul, 1062832179270254188ul},
+    LCW64{ 2105419906076957667ul,  291144650667480443ul,  582289301334960878ul},
+    LCW64{ 1273320923074904938ul,  584582941553763022ul,   77252561447143819ul},
+    LCW64{ 3456065052701055601ul,  584582941553763022ul, 1169165883107526036ul},
+    LCW64{10664519708968191209ul,  304692340605188099ul,  152114268187701233ul}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
+}
+
 TEST_F(MinHashTest, WordsMinHash)
 {
   using LCWS    = cudf::test::lists_column_wrapper<cudf::string_view>;

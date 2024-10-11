@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,11 @@ using cudf::test::iterators::no_nulls;
 using cudf::test::iterators::nulls_at;
 
 auto constexpr null = int32_t{0};  // NULL representation for int32_t;
+
+// clang-tidy doesn't think std::transform can handle a
+// thrust::constant_iterator, so this is a workaround that uses nulls_at
+// instead of no_nulls
+auto no_nulls_list() { return nulls_at({}); }
 
 struct OffsetRowWindowTest : public cudf::test::BaseFixture {
   static ints_column const _keys;    // {0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
@@ -210,7 +215,8 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Grouped_0_to_2)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *run_rolling(*AGG_COLLECT_LIST),
-    lists_column{{{1, 2}, {2, 3}, {3, 4}, {4, 5}, {5}, {}, {7, 8}, {8, 9}, {9}, {}}, no_nulls});
+    lists_column{{{1, 2}, {2, 3}, {3, 4}, {4, 5}, {5}, {}, {7, 8}, {8, 9}, {9}, {}},
+                 no_nulls_list()});
 }
 
 TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_0_to_2)
@@ -250,7 +256,7 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_0_to_2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *run_rolling(*AGG_COLLECT_LIST),
     lists_column{{{1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}, {7, 8}, {8, 9}, {9}, {}},
-                 no_nulls});
+                 no_nulls_list()});
 }
 
 // To test that preceding bounds are clamped correctly at group boundaries.

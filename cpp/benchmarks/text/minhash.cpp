@@ -56,15 +56,15 @@ static void bench_minhash(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);  // output are hashes
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = base64 ? nvtext::minhash64(input, seeds.view(), hash_width)
-                         : nvtext::minhash(input, seeds.view(), hash_width);
+    auto result = base64 ? nvtext::minhash64_permuted(input, seeds.view(), seeds.view(), hash_width)
+                         : nvtext::minhash_permuted(input, seeds.view(), seeds.view(), hash_width);
   });
 }
 
 NVBENCH_BENCH(bench_minhash)
   .set_name("minhash")
-  .add_int64_axis("num_rows", {16364, 65456})
-  .add_int64_axis("row_width", {256, 512, 1024})
-  .add_int64_axis("hash_width", {5, 10, 20})
-  .add_int64_axis("seed_count", {2, 26, 260})
+  .add_int64_axis("num_rows", {15000, 30000, 60000})
+  .add_int64_axis("row_width", {6000, 28000, 50000})
+  .add_int64_axis("hash_width", {12, 24})
+  .add_int64_axis("seed_count", {26, 260})
   .add_int64_axis("hash_type", {32, 64});

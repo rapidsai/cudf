@@ -8,7 +8,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef extern from "cudf/strings/udf/udf_string.hpp" namespace \
