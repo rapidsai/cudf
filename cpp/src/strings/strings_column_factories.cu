@@ -146,7 +146,6 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     }
   }
 
-  std::vector<std::unique_ptr<column>> chars_cols(num_columns);
   std::vector<std::unique_ptr<column>> output(num_columns);
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const strings_count = static_cast<size_type>(input[idx].size());
