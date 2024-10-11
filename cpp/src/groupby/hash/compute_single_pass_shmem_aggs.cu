@@ -58,6 +58,7 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
       round_to_multiple_of_8(sizeof(output_values.column(col_end).type()) * cardinality);
     auto const next_col_total_size = next_col_size + valid_col_size;
 
+    // TODO: it seems early exit will break the followup calculatons. To verify
     if (bytes_allocated + next_col_total_size > total_agg_size) { break; }
 
     s_aggregates_pointer[col_end] = shared_set_aggregates + bytes_allocated;
@@ -107,10 +108,8 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
        idx += cudf::detail::grid_1d::grid_stride()) {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx)) {
       auto const map_idx = local_mapping_index[idx];
-
       for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
         auto const input_col = input_values.column(col_idx);
-
         cudf::detail::dispatch_type_and_aggregation(input_col.type(),
                                                     d_agg_kinds[col_idx],
                                                     shmem_element_aggregator{},
