@@ -88,34 +88,43 @@ __device__ inline void gpuDecodeFixedWidthValues(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  int const dtype    = s->col.physical_type;
-  uint32_t dtype_len = s->dtype_len;
+  int const dtype          = s->col.physical_type;
+  uint32_t const dtype_len = s->dtype_len;
 
-  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
   int pos = start;
   while (pos < end) {
     int const batch_size = min(max_batch_size, end - pos);
     int const target_pos = pos + batch_size;
-    int src_pos          = pos + t;
+    int const thread_pos = pos + t;
 
     // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
-    int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)];
-    if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+    int const dst_pos = [&]() {
+      int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
+      if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+      return dst_pos;
+    }();
 
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
     // before first_row) in the flat hierarchy case.
-    if (src_pos < target_pos && dst_pos >= 0) {
+    if (thread_pos < target_pos && dst_pos >= 0) {
       // nesting level that is storing actual leaf values
 
       // src_pos represents the logical row position we want to read from. But in the case of
       // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
       // has to take into account the # of values we have to skip in the page to get to the
       // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-      if constexpr (has_lists_t) { src_pos += skipped_leaf_values; }
+      int const src_pos = [&]() {
+        if constexpr (has_lists_t) {
+          return thread_pos + skipped_leaf_values;
+        } else {
+          return thread_pos;
+        }
+      }();
 
-      void* dst = data_out + static_cast<size_t>(dst_pos) * dtype_len;
+      void* const dst = data_out + static_cast<size_t>(dst_pos) * dtype_len;
 
       if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
         switch (dtype) {
@@ -179,7 +188,7 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   auto const data_len   = thrust::distance(s->data_start, s->data_end);
   auto const num_values = data_len / s->dtype_len_in;
 
-  uint32_t const skipped_leaf_values = s->page.skipped_leaf_values;
+  int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   // decode values
   int pos = start;
@@ -187,24 +196,34 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
     int const batch_size = min(max_batch_size, end - pos);
 
     int const target_pos = pos + batch_size;
-    int src_pos          = pos + t;
+    int const thread_pos = pos + t;
 
     // the position in the output column/buffer
-    int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)];
-    if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+    // Index from value buffer (doesn't include nulls) to final array (has gaps for nulls)
+    int const dst_pos = [&]() {
+      int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(thread_pos)];
+      if constexpr (!has_lists_t) { dst_pos -= s->first_row; }
+      return dst_pos;
+    }();
 
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
     // before first_row) in the flat hierarchy case.
-    if (src_pos < target_pos && dst_pos >= 0) {
+    if (thread_pos < target_pos && dst_pos >= 0) {
       // src_pos represents the logical row position we want to read from. But in the case of
       // nested hierarchies (lists), there is no 1:1 mapping of rows to values. So src_pos
       // has to take into account the # of values we have to skip in the page to get to the
       // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
-      if constexpr (has_lists_t) { src_pos += skipped_leaf_values; }
+      int const src_pos = [&]() {
+        if constexpr (has_lists_t) {
+          return thread_pos + skipped_leaf_values;
+        } else {
+          return thread_pos;
+        }
+      }();
 
-      uint32_t dtype_len = s->dtype_len;
-      uint8_t const* src = s->data_start + src_pos;
-      uint8_t* dst       = data_out + static_cast<size_t>(dst_pos) * dtype_len;
+      uint32_t const dtype_len = s->dtype_len;
+      uint8_t const* const src = s->data_start + src_pos;
+      uint8_t* const dst       = data_out + static_cast<size_t>(dst_pos) * dtype_len;
       auto const is_decimal =
         s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
 
@@ -292,12 +311,15 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
     int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
     // definition level
-    int d = 1;
-    if (t >= batch_size) {
-      d = -1;
-    } else if (def) {
-      d = static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
-    }
+    int const d = [&]() {
+      if (t >= batch_size) {
+        return -1;
+      } else if (def) {
+        return static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
+      } else {
+        return 1;
+      }
+    }();
 
     int const thread_value_count = t;
     int const block_value_count  = batch_size;
@@ -358,6 +380,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
         if (is_valid) {
           int const dst_pos = value_count + thread_value_count;
           int const src_pos = max_depth_valid_count + thread_valid_count;
+
           sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
         }
         // update stuff
@@ -414,16 +437,17 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
     // use definition level & row bounds to determine if is valid
-    int is_valid;
-    if (t >= batch_size) {
-      is_valid = 0;
-    } else if (def) {
-      int const def_level =
-        static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
-      is_valid = ((def_level > 0) && in_row_bounds) ? 1 : 0;
-    } else {
-      is_valid = in_row_bounds;
-    }
+    int const is_valid = [&]() {
+      if (t >= batch_size) {
+        return 0;
+      } else if (def) {
+        int const def_level =
+          static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
+        return ((def_level > 0) && in_row_bounds) ? 1 : 0;
+      } else {
+        return in_row_bounds;
+      }
+    }();
 
     // thread and block validity count
     using block_scan = cub::BlockScan<int, decode_block_size>;
@@ -588,25 +612,25 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
 
     // get definition level, use repetition level to get start/end depth
     // different for each thread, as each thread has a different r/d
-    int def_level = -1, start_depth = -1, end_depth = -1;
-    if (within_batch) {
-      int const index = rolling_index<state_buf::nz_buf_size>(value_count + t);
-      int rep_level   = static_cast<int>(rep[index]);
-      if constexpr (nullable) {
-        if (def != nullptr) {
-          def_level = static_cast<int>(def[index]);
-          end_depth = s->nesting_info[def_level].end_depth;
-        } else {
-          def_level = 1;
-          end_depth = max_depth;
-        }
-      } else {
-        end_depth = max_depth;
-      }
+    auto const [def_level, start_depth, end_depth] = [&]() {
+      if (!within_batch) { return cuda::std::make_tuple(-1, -1, -1); }
 
-      // computed by generate_depth_remappings()
-      start_depth = s->nesting_info[rep_level].start_depth;
-    }
+      int const index       = rolling_index<state_buf::nz_buf_size>(value_count + t);
+      int const rep_level   = static_cast<int>(rep[index]);
+      int const start_depth = s->nesting_info[rep_level].start_depth;
+
+      if constexpr (!nullable) {
+        return cuda::std::make_tuple(-1, start_depth, max_depth);
+      } else {
+        if (def != nullptr) {
+          int const def_level = static_cast<int>(def[index]);
+          return cuda::std::make_tuple(
+            def_level, start_depth, s->nesting_info[def_level].end_depth);
+        } else {
+          return cuda::std::make_tuple(1, start_depth, max_depth);
+        }
+      }
+    }();
 
     // Determine value count & row index
     //  track (page-relative) row index for the thread so we can compare against input bounds
@@ -644,12 +668,13 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
       auto& ni = s->nesting_info[d_idx];
 
       // everything up to the max_def_level is a non-null value
-      int is_valid;
-      if constexpr (nullable) {
-        is_valid = ((def_level >= ni.max_def_level) && in_nesting_bounds) ? 1 : 0;
-      } else {
-        is_valid = in_nesting_bounds;
-      }
+      int const is_valid = [&](int input_def_level) {
+        if constexpr (nullable) {
+          return ((input_def_level >= ni.max_def_level) && in_nesting_bounds) ? 1 : 0;
+        } else {
+          return in_nesting_bounds;
+        }
+      }(def_level);
 
       // VALID COUNT:
       // Not all values visited by this block will represent a value at this nesting level.
@@ -726,7 +751,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
       // if this is valid and we're at the leaf, output dst_pos
       // Read value_count before the sync, so that when thread 0 modifies it we've already read its
       // value
-      int current_value_count = ni.value_count;
+      int const current_value_count = ni.value_count;
       __syncthreads();  // guard against modification of ni.value_count below
       if (d_idx == max_depth) {
         if (is_valid) {
@@ -944,21 +969,21 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
   if constexpr (has_lists_t) {
-    if (s->page.skipped_leaf_values > 0) {
+    auto const skipped_leaf_values = s->page.skipped_leaf_values;
+    if (skipped_leaf_values > 0) {
       if (should_process_nulls) {
-        skip_decode<decode_block_size_t>(def_decoder, s->page.skipped_leaf_values, t);
+        skip_decode<decode_block_size_t>(def_decoder, skipped_leaf_values, t);
       }
-      processed_count =
-        skip_decode<decode_block_size_t>(rep_decoder, s->page.skipped_leaf_values, t);
+      processed_count = skip_decode<decode_block_size_t>(rep_decoder, skipped_leaf_values, t);
       if constexpr (has_dict_t) {
-        skip_decode<decode_block_size_t>(dict_stream, s->page.skipped_leaf_values, t);
+        skip_decode<decode_block_size_t>(dict_stream, skipped_leaf_values, t);
       }
     }
   }
 
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to gpuDecodeValues
-  int last_row = s->first_row + s->num_rows;
+  int const last_row = s->first_row + s->num_rows;
   while ((s->error == 0) && (processed_count < s->page.num_input_values) &&
          (s->input_row_count <= last_row)) {
     int next_valid_count;
