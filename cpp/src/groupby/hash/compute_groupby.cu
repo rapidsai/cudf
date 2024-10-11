@@ -23,6 +23,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -91,7 +92,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 
   auto row_bitmask =
     skip_rows_with_nulls
-      ? cudf::detail::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
+      ? cudf::bitmask_and(keys, stream, cudf::get_current_device_resource_ref()).first
       : rmm::device_buffer{};
 
   // Compute all single pass aggs first

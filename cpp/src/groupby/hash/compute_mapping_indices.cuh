@@ -19,7 +19,6 @@
 #include "helpers.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/types.hpp>

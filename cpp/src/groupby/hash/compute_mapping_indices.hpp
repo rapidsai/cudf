@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

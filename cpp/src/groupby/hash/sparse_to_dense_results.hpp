@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>

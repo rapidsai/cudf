@@ -24,7 +24,6 @@
 #include "single_pass_functors.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_device_view.cuh>
