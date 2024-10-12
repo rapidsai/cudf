@@ -168,13 +168,9 @@ class DataFrame:
         table = plc.contiguous_split.unpack_from_memoryviews(
             packed_metadata, packed_gpu_data
         )
-        columns_kwargs = header["columns_kwargs"]
-
-        if table.num_columns() != len(columns_kwargs):
-            raise ValueError("Mismatching columns_kwargs and table length.")
         return cls(
             Column(c, **kw)
-            for c, kw in zip(table.columns(), columns_kwargs, strict=True)
+            for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
         )
 
     def serialize(self):
