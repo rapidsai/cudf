@@ -1061,7 +1061,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
   // Free up temp memory used for decoding.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    _out_buffers[level].resize(0);
+    // _out_buffers[level].resize(0);
 
     auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
