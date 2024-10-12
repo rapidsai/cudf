@@ -14,13 +14,9 @@
 
 set(cython_sources partition.pyx split.pyx)
 
-# Set the Cython flags to include annotation
-set(CYTHON_FLAGS "--annotate")
-
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_strings_ ASSOCIATED_TARGETS cudf
-                   CYTHON_FLAGS "${CYTHON_FLAGS}" # Pass the annotate flag to cython
 )

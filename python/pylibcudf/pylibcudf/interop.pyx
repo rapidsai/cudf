@@ -131,7 +131,7 @@ def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
     cdef unique_ptr[table] c_result
     with nogil:
         # The libcudf function here will release the stream.
-        c_result = move(cpp_from_arrow_stream(c_stream))
+        c_result = cpp_from_arrow_stream(c_stream)
 
     return Table.from_libcudf(move(c_result))
 
@@ -166,7 +166,7 @@ def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
 
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_from_arrow_column(c_schema, c_array))
+        c_result = cpp_from_arrow_column(c_schema, c_array)
 
     # The capsule destructors should release automatically for us, but we
     # choose to do it explicitly here for clarity.
