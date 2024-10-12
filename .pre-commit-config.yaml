@@ -95,6 +95,12 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
+      - id: no-unseeded-default-rng
+        name: no-unseeded-default-rng
+        description: 'Enforce that no non-seeded default_rng is used'
+        entry: 'default_rng\(\)'
+        language: pygrep
+        types: [python]
       - id: cmake-format
         name: cmake-format
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format
@@ -141,7 +147,6 @@ repos:
     hooks:
       - id: ruff
         files: python/.*$
-        args: [ "--fix" ]
       - id: ruff-format
         files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
