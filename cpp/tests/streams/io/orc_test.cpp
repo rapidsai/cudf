@@ -123,3 +123,26 @@ TEST_F(ORCTest, ORCReader)
   auto meta        = read_orc_metadata(cudf::io::source_info{filepath});
   auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 }
+
+TEST_F(ORCTest, ORCChunkedReader)
+{
+  auto tab      = construct_table();
+  auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, tab);
+  cudf::io::write_orc(out_opts, cudf::test::get_default_stream());
+
+  auto const read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).build();
+  auto reader = cudf::io::chunked_orc_reader(static_cast<std::size_t>(0UL),
+                                             static_cast<std::size_t>(1UL),
+                                             static_cast<cudf::size_type>(10000),
+                                             read_opts);
+
+  auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
+
+  do {
+    auto chunk = reader.read_chunk();
+    out_tables.emplace_back(std::move(chunk.tbl));
+  } while (reader.has_next());
+}
