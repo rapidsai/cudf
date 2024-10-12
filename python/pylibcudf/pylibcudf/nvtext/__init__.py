@@ -7,5 +7,5 @@ __all__ = [
     "generate_ngrams",
     "jaccard",
     "minhash",
-    "ngrams_tokenize"
+    "ngrams_tokenize",
 ]
