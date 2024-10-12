@@ -455,7 +455,9 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
                 dg.ColumnParameters(
                     40,
                     0.2,
-                    lambda: np.random.default_rng().integers(0, 100, size=40),
+                    lambda: np.random.default_rng(seed=None).integers(
+                        0, 100, size=40
+                    ),
                     True,
                 ),
             ],
