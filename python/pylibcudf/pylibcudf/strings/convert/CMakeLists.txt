@@ -18,7 +18,6 @@ set(cython_sources
 )
 
 set(linked_libraries cudf::cudf)
-
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
