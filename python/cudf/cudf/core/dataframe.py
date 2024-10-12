@@ -5118,6 +5118,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         useful for big DataFrames and fine-tune memory optimization:
 
         >>> import numpy as np
+        >>> rng = np.random.default_rng(seed=0)
         >>> random_strings_array = rng.choice(['a', 'b', 'c'], 10 ** 6)
         >>> df = cudf.DataFrame({
         ...     'column_1': rng.choice(['a', 'b', 'c'], 10 ** 6),

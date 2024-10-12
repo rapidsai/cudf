@@ -178,7 +178,13 @@ if get_global_manager() is not None:
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _binops)
-def test_series_binop(binop, obj_class):
+def test_series_binop(request, binop, obj_class):
+    request.applymarker(
+        pytest.mark.xfail(
+            binop is operator.floordiv,
+            reason="https://github.com/rapidsai/cudf/issues/17073",
+        )
+    )
     nelem = 1000
     arr1 = utils.gen_rand("float64", nelem) * 10000
     # Keeping a low value because CUDA 'pow' has 2 full range error
@@ -186,13 +192,15 @@ def test_series_binop(binop, obj_class):
 
     sr1 = Series(arr1)
     sr2 = Series(arr2)
+    psr1 = sr1.to_pandas()
+    psr2 = sr2.to_pandas()
 
     if obj_class == "Index":
         sr1 = Index(sr1)
         sr2 = Index(sr2)
 
+    expect = binop(psr1, psr2)
     result = binop(sr1, sr2)
-    expect = binop(pd.Series(arr1), pd.Series(arr2))
 
     if obj_class == "Index":
         result = Series(result)
