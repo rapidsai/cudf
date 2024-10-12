@@ -95,7 +95,7 @@ class ParquetReader(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if param == "columns" and values == ALL_POSSIBLE_VALUES:
                 col_size = self._rand(len(self._df.columns))

@@ -91,7 +91,7 @@ class IOFuzz:
         return dtypes_meta, num_rows, num_cols, seed
 
     def set_rand_params(self, params):
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=None)
         params_dict = {
             param: rng.choice(values) for param, values in params.items()
         }

@@ -105,7 +105,7 @@ class JSONReader(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if param == "dtype" and values == ALL_POSSIBLE_VALUES:
                 dtype_val = rng.choice(
@@ -181,7 +181,7 @@ class JSONWriter(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if param == "dtype" and values == ALL_POSSIBLE_VALUES:
                 dtype_val = rng.choice(

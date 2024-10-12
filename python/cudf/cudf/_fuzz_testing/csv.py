@@ -77,7 +77,7 @@ class CSVReader(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if values == ALL_POSSIBLE_VALUES:
                 if param == "usecols":
@@ -179,7 +179,7 @@ class CSVWriter(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if values == ALL_POSSIBLE_VALUES:
                 if param == "columns":
