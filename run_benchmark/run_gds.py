@@ -18,10 +18,16 @@ class test_manager:
         self.color_end = '\x1b[0m'
 
     def run_bench_command(self, subtest_env):
-        my_bin = "/home/coder/cudf/cpp/build/latest/benchmarks/PARQUET_READER_NVBENCH"
-        my_option = "parquet_read_io_compression"
+        # Parquet
+        # my_bin = "/home/coder/cudf/cpp/build/latest/benchmarks/PARQUET_READER_NVBENCH"
+        # my_option = "parquet_read_io_compression"
+        # full_command = "{} -d 0 -b {} -a compression_type=SNAPPY -a io_type=FILEPATH -a cardinality=0 -a run_length=1 --min-samples 40".format(
+        #     my_bin, my_option)
 
-        full_command = "{} -d 0 -b {} -a compression_type=SNAPPY -a io_type=FILEPATH -a cardinality=0 -a run_length=1 --min-samples 40".format(
+        # CSV
+        my_bin = "/home/coder/cudf/cpp/build/latest/benchmarks/CSV_READER_NVBENCH"
+        my_option = "csv_read_io"
+        full_command = "{} -d 0 -b {} -a io=FILEPATH --min-samples 40".format(
             my_bin, my_option)
 
         subprocess.run([full_command], shell=True,
