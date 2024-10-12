@@ -101,6 +101,7 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
                                            src_sizes,
                                            strings_count,
                                            stream.value()));
+  stream.synchronize();
 
   return chars_data;
 }
