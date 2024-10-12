@@ -130,18 +130,18 @@ auto chunked_read(std::string const& filepath,
     }
     ++num_chunks;
 
-    if (chunk.tbl->num_columns() == 3) {
-      auto col2  = chunk.tbl->get_column(2).view();
-      auto slice = cudf::slice(col2, {0, 5})[0];
-      printf("\ncol2, chunk %d: \n", num_chunks);
-      cudf::test::print(slice);
-    }
-
     out_tables.emplace_back(std::move(chunk.tbl));
   } while (reader.has_next());
 
   if (num_chunks > 1) {
     CUDF_EXPECTS(out_tables.front()->num_rows() != 0, "Number of rows in the new chunk is zero.");
+  }
+
+  if (out_tables.front()->num_columns() == 3) {
+    auto col2  = out_tables.front()->get_column(2).view();
+    auto slice = cudf::slice(col2, {0, 5})[0];
+    printf("\ncol2, chunk %d: \n", num_chunks);
+    cudf::test::print(slice);
   }
 
   auto out_tviews = std::vector<cudf::table_view>{};
