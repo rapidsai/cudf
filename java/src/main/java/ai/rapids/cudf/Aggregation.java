@@ -70,7 +70,9 @@ abstract class Aggregation {
         TDIGEST(31), // This can take a delta argument for accuracy level
         MERGE_TDIGEST(32), // This can take a delta argument for accuracy level
         HISTOGRAM(33),
-        MERGE_HISTOGRAM(34);
+        MERGE_HISTOGRAM(34),
+        HLLPP(35),
+        MERGE_HLLPP(36);
 
         final int nativeId;
 
@@ -912,6 +914,66 @@ abstract class Aggregation {
         }
     }
 
+    private static final class HLLAggregation extends Aggregation {
+        private final int num_registers_per_sketch;
+
+        public HLLAggregation(Kind kind, int num_registers_per_sketch) {
+            super(kind);
+            this.num_registers_per_sketch = num_registers_per_sketch;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createHLLAgg(kind.nativeId, num_registers_per_sketch);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + num_registers_per_sketch;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof HLLAggregation) {
+                HLLAggregation o = (HLLAggregation) other;
+                return o.num_registers_per_sketch == this.num_registers_per_sketch;
+            }
+            return false;
+        }
+    }
+
+    static final class MergeHLLAggregation extends Aggregation {
+        private final int num_registers_per_sketch;
+
+        public MergeHLLAggregation(Kind kind, int num_registers_per_sketch) {
+            super(kind);
+            this.num_registers_per_sketch = num_registers_per_sketch;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createHLLAgg(kind.nativeId, num_registers_per_sketch);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + num_registers_per_sketch;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof MergeHLLAggregation) {
+                MergeHLLAggregation o = (MergeHLLAggregation) other;
+                return o.num_registers_per_sketch == this.num_registers_per_sketch;
+            }
+            return false;
+        }
+    }
+
     static TDigestAggregation createTDigest(int delta) {
         return new TDigestAggregation(Kind.TDIGEST, delta);
     }
@@ -938,6 +1000,14 @@ abstract class Aggregation {
 
     static MergeHistogramAggregation mergeHistogram() {
         return new MergeHistogramAggregation();
+    }
+
+    static HLLAggregation HLLPP(int numRegistersPerSketch) {
+        return new HLLAggregation(Kind.HLLPP, numRegistersPerSketch);
+    }
+
+    static MergeHLLAggregation mergeHLLPP(int numRegistersPerSketch) {
+        return new MergeHLLAggregation(Kind.MERGE_HLLPP, numRegistersPerSketch);
     }
 
     /**
@@ -990,4 +1060,6 @@ abstract class Aggregation {
      * Create a TDigest aggregation.
      */
     private static native long createTDigestAgg(int kind, int delta);
+
+    private static native long createHLLAgg(int kind, int numRegistersPerSketch);
 }

@@ -749,6 +749,22 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
                      mr));
 }
 
+template <>
+void aggregate_result_functor::operator()<aggregation::HLLPP>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  int const precision = dynamic_cast<cudf::detail::hyper_log_log_aggregation const&>(agg).precision;
+  cache.add_result(values,
+                   agg,
+                   detail::group_hyper_log_log_plus_plus(get_grouped_values(),
+                                                         helper.num_groups(stream),
+                                                         helper.group_labels(stream),
+                                                         precision,
+                                                         stream,
+                                                         mr));
+}
+
 /**
  * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
  *
@@ -789,6 +805,24 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                                                               max_centroids,
                                                               stream,
                                                               mr));
+}
+
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_HLLPP>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  int const precision =
+    dynamic_cast<cudf::detail::merge_hyper_log_log_aggregation const&>(agg).precision;
+
+  cache.add_result(values,
+                   agg,
+                   detail::group_merge_hyper_log_log_plus_plus(get_grouped_values(),
+                                                               helper.num_groups(stream),
+                                                               helper.group_labels(stream),
+                                                               precision,
+                                                               stream,
+                                                               mr));
 }
 
 }  // namespace detail

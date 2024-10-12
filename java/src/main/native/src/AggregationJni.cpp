@@ -100,7 +100,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv*
           return cudf::make_histogram_aggregation();
         case 34:  // MERGE_HISTOGRAM
           return cudf::make_merge_histogram_aggregation();
-
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
       }
     }();
@@ -291,6 +290,29 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
       nans_equal ? cudf::nan_equality::ALL_EQUAL : cudf::nan_equality::UNEQUAL;
     std::unique_ptr<cudf::aggregation> ret =
       cudf::make_merge_sets_aggregation(null_equality, nan_equality);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHLLAgg(JNIEnv* env,
+                                                                     jclass class_object,
+                                                                     jint kind,
+                                                                     jint precision)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::aggregation> ret;
+    // These numbers come from Aggregation.java and must stay in sync
+    switch (kind) {
+      case 35:  // HLLPP
+        ret = cudf::make_hyper_log_log_aggregation(precision);
+        break;
+      case 36:  // MERGE_HLLPP
+        ret = cudf::make_merge_hyper_log_log_aggregation(precision);
+        break;
+      default: throw std::logic_error("Unsupported HyperLogLog++ Aggregation Operation");
+    }
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);

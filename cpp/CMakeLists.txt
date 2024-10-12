@@ -422,6 +422,7 @@ add_library(
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
   src/groupby/sort/group_histogram.cu
+  src/groupby/sort/group_hyper_log_log_plus_plus.cu
   src/groupby/sort/group_m2.cu
   src/groupby/sort/group_max.cu
   src/groupby/sort/group_min.cu

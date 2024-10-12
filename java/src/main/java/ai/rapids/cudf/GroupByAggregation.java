@@ -337,4 +337,12 @@ public final class GroupByAggregation {
   public static GroupByAggregation mergeHistogram() {
     return new GroupByAggregation(Aggregation.mergeHistogram());
   }
+
+  public static GroupByAggregation HLLPP(int numRegistersPerSketch) {
+    return new GroupByAggregation(Aggregation.HLLPP(numRegistersPerSketch));
+  }
+
+  public static GroupByAggregation mergeHLL(int numRegistersPerSketch) {
+    return new GroupByAggregation(Aggregation.mergeHLLPP(numRegistersPerSketch));
+  }
 }

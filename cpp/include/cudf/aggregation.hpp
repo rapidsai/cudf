@@ -84,43 +84,45 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,             ///< sum reduction
-    PRODUCT,         ///< product reduction
-    MIN,             ///< min reduction
-    MAX,             ///< max reduction
-    COUNT_VALID,     ///< count number of valid elements
-    COUNT_ALL,       ///< count number of elements
-    ANY,             ///< any reduction
-    ALL,             ///< all reduction
-    SUM_OF_SQUARES,  ///< sum of squares reduction
-    MEAN,            ///< arithmetic mean reduction
-    M2,              ///< sum of squares of differences from the mean
-    VARIANCE,        ///< variance
-    STD,             ///< standard deviation
-    MEDIAN,          ///< median reduction
-    QUANTILE,        ///< compute specified quantile(s)
-    ARGMAX,          ///< Index of max element
-    ARGMIN,          ///< Index of min element
-    NUNIQUE,         ///< count number of unique elements
-    NTH_ELEMENT,     ///< get the nth element
-    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    EWMA,            ///< get exponential weighted moving average at current index
-    RANK,            ///< get rank of current index
-    COLLECT_LIST,    ///< collect values into a list
-    COLLECT_SET,     ///< collect values into a list without duplicate entries
-    LEAD,            ///< window function, accesses row at specified offset following current row
-    LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX  UDF based reduction
-    CUDA,            ///< CUDA UDF based reduction
-    MERGE_LISTS,     ///< merge multiple lists values into one list
-    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,        ///< merge partial values of M2 aggregation,
-    COVARIANCE,      ///< covariance between two sets of elements
-    CORRELATION,     ///< correlation between two sets of elements
-    TDIGEST,         ///< create a tdigest from a set of input values
-    MERGE_TDIGEST,   ///< create a tdigest by merging multiple tdigests together
-    HISTOGRAM,       ///< compute frequency of each element
-    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation,
+    SUM,              ///< sum reduction
+    PRODUCT,          ///< product reduction
+    MIN,              ///< min reduction
+    MAX,              ///< max reduction
+    COUNT_VALID,      ///< count number of valid elements
+    COUNT_ALL,        ///< count number of elements
+    ANY,              ///< any reduction
+    ALL,              ///< all reduction
+    SUM_OF_SQUARES,   ///< sum of squares reduction
+    MEAN,             ///< arithmetic mean reduction
+    M2,               ///< sum of squares of differences from the mean
+    VARIANCE,         ///< variance
+    STD,              ///< standard deviation
+    MEDIAN,           ///< median reduction
+    QUANTILE,         ///< compute specified quantile(s)
+    ARGMAX,           ///< Index of max element
+    ARGMIN,           ///< Index of min element
+    NUNIQUE,          ///< count number of unique elements
+    NTH_ELEMENT,      ///< get the nth element
+    ROW_NUMBER,       ///< get row-number of current index (relative to rolling window)
+    EWMA,             ///< get exponential weighted moving average at current index
+    RANK,             ///< get rank of current index
+    COLLECT_LIST,     ///< collect values into a list
+    COLLECT_SET,      ///< collect values into a list without duplicate entries
+    LEAD,             ///< window function, accesses row at specified offset following current row
+    LAG,              ///< window function, accesses row at specified offset preceding current row
+    PTX,              ///< PTX  UDF based reduction
+    CUDA,             ///< CUDA UDF based reduction
+    MERGE_LISTS,      ///< merge multiple lists values into one list
+    MERGE_SETS,       ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2,         ///< merge partial values of M2 aggregation,
+    COVARIANCE,       ///< covariance between two sets of elements
+    CORRELATION,      ///< correlation between two sets of elements
+    TDIGEST,          ///< create a tdigest from a set of input values
+    MERGE_TDIGEST,    ///< create a tdigest by merging multiple tdigests together
+    HISTOGRAM,        ///< compute frequency of each element
+    MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation
+    HLLPP,  ///< approximating the number of distinct items by using hyper log log plus plus (HLLPP)
+    MERGE_HLLPP  ///< merge partial values of HLLPP aggregation
   };
 
   aggregation() = delete;
@@ -769,6 +771,12 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
  */
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
+
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_hyper_log_log_aggregation(int num_registers_per_sketch);
+
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_hyper_log_log_aggregation(int const num_registers_per_sketch);
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

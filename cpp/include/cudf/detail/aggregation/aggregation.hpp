@@ -104,6 +104,10 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class tdigest_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class merge_tdigest_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class hyper_log_log_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class merge_hyper_log_log_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -144,6 +148,8 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class tdigest_aggregation const& agg);
   virtual void visit(class merge_tdigest_aggregation const& agg);
   virtual void visit(class ewma_aggregation const& agg);
+  virtual void visit(class hyper_log_log_aggregation const& agg);
+  virtual void visit(class merge_hyper_log_log_aggregation const& agg);
 };
 
 /**
@@ -1187,6 +1193,54 @@ class merge_tdigest_aggregation final : public groupby_aggregation, public reduc
 };
 
 /**
+ * @brief Derived aggregation class for specifying TDIGEST aggregation
+ */
+class hyper_log_log_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  explicit hyper_log_log_aggregation(int const precision_)
+    : aggregation{HLLPP}, precision(precision_)
+  {
+  }
+
+  int const precision;
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<hyper_log_log_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
+ */
+class merge_hyper_log_log_aggregation final : public groupby_aggregation,
+                                              public reduce_aggregation {
+ public:
+  explicit merge_hyper_log_log_aggregation(int const precision_)
+    : aggregation{MERGE_HLLPP}, precision(precision_)
+  {
+  }
+  int const precision;
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<merge_hyper_log_log_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
  * The output column for an `ARGMAX` aggregation is initialized with the
@@ -1319,6 +1373,12 @@ struct target_type_impl<SourceType, aggregation::M2> {
   using type = double;
 };
 
+// Always use list for HLLPP
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::HLLPP> {
+  using type = list_view;
+};
+
 // Always use `double` for VARIANCE
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::VARIANCE> {
@@ -1424,6 +1484,12 @@ struct target_type_impl<Source, aggregation::MERGE_SETS> {
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = struct_view;
+};
+
+// Always use list for MERGE_HLLPP
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::MERGE_HLLPP> {
+  using type = list_view;
 };
 
 // Use list for MERGE_HISTOGRAM
@@ -1579,6 +1645,10 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
     case aggregation::EWMA:
       return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
+    case aggregation::HLLPP:
+      return f.template operator()<aggregation::HLLPP>(std::forward<Ts>(args)...);
+    case aggregation::MERGE_HLLPP:
+      return f.template operator()<aggregation::MERGE_HLLPP>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");

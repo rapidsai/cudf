@@ -237,6 +237,18 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
 
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, hyper_log_log_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, merge_hyper_log_log_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
 // aggregation_finalizer ----------------------------------------
 
 void aggregation_finalizer::visit(aggregation const& agg) {}
@@ -406,6 +418,16 @@ void aggregation_finalizer::visit(tdigest_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(merge_tdigest_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(hyper_log_log_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(merge_hyper_log_log_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -916,6 +938,32 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_merge_tdigest_aggregation<groupby_aggregation>(int max_centroids);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_merge_tdigest_aggregation<reduce_aggregation>(int max_centroids);
+
+/// Factory to create a HLLPP aggregation
+template <typename Base>
+std::unique_ptr<Base> make_hyper_log_log_aggregation(int const precision)
+{
+  return std::make_unique<detail::hyper_log_log_aggregation>(precision);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_hyper_log_log_aggregation<aggregation>(
+  int precision);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_hyper_log_log_aggregation<groupby_aggregation>(int precision);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_hyper_log_log_aggregation<reduce_aggregation>(int precision);
+
+/// Factory to create a MERGE_HLLPP aggregation
+template <typename Base>
+std::unique_ptr<Base> make_merge_hyper_log_log_aggregation(int const precision)
+{
+  return std::make_unique<detail::merge_hyper_log_log_aggregation>(precision);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_merge_hyper_log_log_aggregation<aggregation>(
+  int const precision);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_merge_hyper_log_log_aggregation<groupby_aggregation>(int const precision);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_merge_hyper_log_log_aggregation<reduce_aggregation>(int const precision);
 
 namespace detail {
 namespace {
