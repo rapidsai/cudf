@@ -175,7 +175,7 @@ class memory_mapped_source : public file_source {
       // Buffer registration is exclusive (can't overlap with other registered buffers) so we
       // register the lower estimate; this avoids issues when reading adjacent ranges from the same
       // file from multiple threads
-      register_mmap_buffer(offset, min_size_estimate);
+      register_mmap_buffer();
     }
   }
 
