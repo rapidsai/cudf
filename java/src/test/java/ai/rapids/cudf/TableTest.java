@@ -24,7 +24,7 @@ import ai.rapids.cudf.HostColumnVector.DataType;
 import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
-
+import ai.rapids.cudf.Table.TestBuilder;
 import ai.rapids.cudf.ast.BinaryOperation;
 import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
@@ -58,7 +58,9 @@ import static ai.rapids.cudf.AssertUtils.assertPartialColumnsAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertPartialTablesAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertTableTypes;
 import static ai.rapids.cudf.AssertUtils.assertTablesAreEqual;
+import static ai.rapids.cudf.ColumnWriterOptions.listBuilder;
 import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
+import static ai.rapids.cudf.ColumnWriterOptions.structBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -10014,6 +10016,17 @@ public class TableTest extends CudfTestBase {
       try (Table ret = t.sample(8, true, 0)) {
         assertEquals(ret.getRowCount(), 8);
       }
+    }
+  }
+
+  @Test
+  void testGroupByHLL() {
+    // A trivial test:
+    try (Table input = new Table.TestBuilder().column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
+             .column(0, 1, -2, 3, -4, -5, -6, 7, -8, 9)
+             .build()){
+        input.groupBy(0).aggregate(GroupByAggregation.M2()
+               .onColumn(1));
     }
   }
 }

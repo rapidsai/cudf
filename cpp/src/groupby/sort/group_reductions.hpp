@@ -539,6 +539,19 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr);
 
+std::unique_ptr<column> group_hyper_log_log(column_view const& values,
+                                            size_type num_groups,
+                                            cudf::device_span<size_type const> group_offsets,
+                                            int const num_registers_per_sketch,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr);
+
+std::unique_ptr<column> group_merge_hyper_log_log(column_view const& values,
+                                                  size_type num_groups,
+                                                  cudf::device_span<size_type const> group_offsets,
+                                                  int const num_registers_per_sketch,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr);
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf
