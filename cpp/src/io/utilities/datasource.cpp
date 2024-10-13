@@ -175,7 +175,7 @@ class memory_mapped_source : public file_source {
       // Buffer registration is exclusive (can't overlap with other registered buffers) so we
       // register the lower estimate; this avoids issues when reading adjacent ranges from the same
       // file from multiple threads
-      register_mmap_buffer();
+      register_mmap_buffer(offset, min_size_estimate);
     }
   }
 
@@ -232,12 +232,40 @@ class memory_mapped_source : public file_source {
    *
    * Fixes nvbugs/4215160
    */
-  void register_mmap_buffer() {}
+  void register_mmap_buffer(size_t offset, size_t size)
+  {
+    if (_map_addr == nullptr or not pageableMemoryAccessUsesHostPageTables()) { return; }
+
+    // Registered region must be within the mapped region
+    _reg_offset = std::max(offset, _map_offset);
+    _reg_size   = std::min(size != 0 ? size : _map_size, (_map_offset + _map_size) - _reg_offset);
+
+    _reg_addr         = static_cast<std::byte*>(_map_addr) - _map_offset + _reg_offset;
+    auto const result = cudaHostRegister(_reg_addr, _reg_size, cudaHostRegisterReadOnly);
+    if (result != cudaSuccess) {
+      _reg_addr = nullptr;
+      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
+    }
+  }
 
   /**
    * @brief Unregisters the memory range of the mapped file.
    */
-  void unregister_mmap_buffer() {}
+  void unregister_mmap_buffer()
+  {
+    if (_reg_addr == nullptr) { return; }
+
+    auto const result = cudaHostUnregister(_reg_addr);
+    if (result == cudaSuccess) {
+      _reg_addr = nullptr;
+    } else {
+      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
+    }
+  }
 
   void map(int fd, size_t offset, size_t size)
   {
