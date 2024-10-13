@@ -6,7 +6,6 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport numeric_scalar
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport device_span
 
 
 cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
