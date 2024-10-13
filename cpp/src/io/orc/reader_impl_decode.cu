@@ -728,6 +728,9 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
   auto const stripe_end   = stripe_range.end;
   auto const stripe_count = stripe_range.size();
 
+  printf("decode stripes from %d to %d\n", (int)stripe_start, (int)stripe_end);
+  fflush(stdout);
+
   // The start index of loaded stripes. They are different from decoding stripes.
   auto const load_stripe_range =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1];
@@ -861,6 +864,10 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
+      printf("read data stripe %d, stripe id = %d\n",
+             (int)(stripe_idx - load_stripe_start),
+             (int)stripe_idx);
+
       auto const dst_base =
         static_cast<uint8_t*>(stripe_data[stripe_idx - load_stripe_start].data());
       auto const num_rows_in_stripe = static_cast<int64_t>(stripe_info->numberOfRows);
@@ -969,12 +976,23 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
       // Just save the decompressed data and clear out the raw data to free up memory.
       stripe_data[stripe_start - load_stripe_start] = std::move(decomp_data);
+
+      printf("overwrite stripe data at %d \n", (int)(stripe_start - load_stripe_start));
+      fflush(stdout);
+
       for (std::size_t i = 1; i < stripe_count; ++i) {
         stripe_data[i + stripe_start - load_stripe_start] = {};
+
+        printf("clear stripe data at %d \n", (int)(i + stripe_start - load_stripe_start));
+        fflush(stdout);
       }
 
     } else {
+      printf("no decomp\n");
+
       if (row_groups.size().first) {
+        printf("parse row group\n");
+
         chunks.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
@@ -1065,12 +1083,17 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
     auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      _file_itm_data.decomp_buffers.emplace_back(
-        std::move(stripe_data[stripe_start - load_stripe_start]));
+      printf("  decomp - clear stripe data at %d \n\n\n", (int)(stripe_start - load_stripe_start));
+      fflush(stdout);
+
+      stripe_data[stripe_start - load_stripe_start] = {};
     } else {
       for (std::size_t i = 0; i < stripe_count; ++i) {
-        _file_itm_data.decomp_buffers.emplace_back(
-          std::move(stripe_data[i + stripe_start - load_stripe_start]));
+        printf("  NO decomp - clear stripe data at %d \n\n\n",
+               (int)(i + stripe_start - load_stripe_start));
+        fflush(stdout);
+
+        stripe_data[i + stripe_start - load_stripe_start] = {};
       }
     }
   }

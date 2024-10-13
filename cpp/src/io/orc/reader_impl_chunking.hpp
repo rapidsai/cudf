@@ -156,8 +156,6 @@ struct file_intermediate_data {
   // This can only be implemented after chunked output is ready.
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
 
-  std::vector<rmm::device_buffer> decomp_buffers;
-
   // Store the size of each stripe at each nested level.
   // This is used to initialize the stripe_data buffers.
   std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
