@@ -1062,6 +1062,15 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
     num_processed_lvl_columns += num_lvl_columns;
   }  // end loop level
 
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
+    for (std::size_t i = 0; i < stripe_count; ++i) {
+      printf("stripe data size: %d \n",
+             (int)stripe_data[i + stripe_start - load_stripe_start].size());
+      fflush(stdout);
+    }
+  }
+
   // Now generate a table from the decoded result.
   std::vector<std::unique_ptr<column>> out_columns;
   _out_metadata = get_meta_with_user_data();
@@ -1076,6 +1085,15 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
+
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
+    for (std::size_t i = 0; i < stripe_count; ++i) {
+      printf("stripe data size: %d \n",
+             (int)stripe_data[i + stripe_start - load_stripe_start].size());
+      fflush(stdout);
+    }
+  }
 
   // Free up temp memory used for decoding.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
