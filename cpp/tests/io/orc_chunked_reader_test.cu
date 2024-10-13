@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
@@ -120,10 +121,6 @@ auto chunked_read(std::string const& filepath,
   auto num_chunks = 0;
   auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
 
-  // TODO: remove this scope, when we get rid of mem stat in the reader.
-  // This is to avoid use-after-free of memory resource created by the mem stat object.
-  auto mr = cudf::get_current_device_resource_ref();
-
   do {
     auto chunk = reader.read_chunk();
     // If the input file is empty, the first call to `read_chunk` will return an empty table.
@@ -132,6 +129,7 @@ auto chunked_read(std::string const& filepath,
       CUDF_EXPECTS(chunk.tbl->num_rows() != 0, "Number of rows in the new chunk is zero.");
     }
     ++num_chunks;
+
     out_tables.emplace_back(std::move(chunk.tbl));
   } while (reader.has_next());
 
@@ -139,15 +137,27 @@ auto chunked_read(std::string const& filepath,
     CUDF_EXPECTS(out_tables.front()->num_rows() != 0, "Number of rows in the new chunk is zero.");
   }
 
+  if (out_tables.front()->num_columns() == 3) {
+    auto col2  = out_tables.front()->get_column(2).view();
+    auto slice = cudf::slice(col2, {0, 5})[0];
+    printf("\ncol2, chunk %d: \n", num_chunks);
+    cudf::test::print(slice);
+  }
+
   auto out_tviews = std::vector<cudf::table_view>{};
   for (auto const& tbl : out_tables) {
     out_tviews.emplace_back(tbl->view());
   }
 
-  // return std::pair(cudf::concatenate(out_tviews), num_chunks);
+  auto tmp = cudf::concatenate(out_tviews);
+  if (tmp->num_columns() == 3) {
+    auto col2  = tmp->get_column(2).view();
+    auto slice = cudf::slice(col2, {0, 5})[0];
+    printf("\n\nconcatenated: \n");
+    cudf::test::print(slice);
+  }
 
-  // TODO: remove this
-  return std::pair(cudf::concatenate(out_tviews, cudf::get_default_stream(), mr), num_chunks);
+  return std::pair(std::move(tmp), num_chunks);
 }
 
 auto chunked_read(std::string const& filepath,
