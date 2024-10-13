@@ -36,7 +36,7 @@ cpdef Column normalize_spaces(Column input):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column normalize_characters(Column input, bool do_lower):
+cpdef Column normalize_characters(Column input, bool do_lower_case):
     """
     Normalizes strings characters for tokenizing.
 

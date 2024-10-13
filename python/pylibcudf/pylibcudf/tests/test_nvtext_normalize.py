@@ -36,6 +36,4 @@ def test_normalize_characters(input_data, do_lower):
         expected = pa.array(
             ["éâîô eaio", "ĂĆĖÑÜ", "ACENU", " $ 24 . 08", " [ a , bb ] "]
         )
-    print(plc.interop.to_arrow(result))
-    print(expected)
     assert_column_eq(result, expected)
