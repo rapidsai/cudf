@@ -59,6 +59,6 @@ cpdef Column normalize_characters(Column input, bool do_lower_case):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = cpp_normalize_characters(input.view(), do_lower)
+        c_result = cpp_normalize_characters(input.view(), do_lower_case)
 
     return Column.from_libcudf(move(c_result))
