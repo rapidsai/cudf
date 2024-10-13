@@ -1063,14 +1063,14 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     _out_buffers[level].resize(0);
 
-    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
-    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      stripe_data[stripe_start - load_stripe_start] = {};
-    } else {
-      for (std::size_t i = 0; i < stripe_count; ++i) {
-        stripe_data[i + stripe_start - load_stripe_start] = {};
-      }
-    }
+    // auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
+    // if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+    //   stripe_data[stripe_start - load_stripe_start] = {};
+    // } else {
+    //   for (std::size_t i = 0; i < stripe_count; ++i) {
+    //     stripe_data[i + stripe_start - load_stripe_start] = {};
+    //   }
+    // }
   }
 
   // Output table range is reset to start from the first position.
