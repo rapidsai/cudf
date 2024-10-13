@@ -1057,7 +1057,6 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
         orc_col_meta.id, 0, *_col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
       return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
     });
-  _stream.synchronize();
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
 
   // Free up temp memory used for decoding.
@@ -1066,10 +1065,12 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
     auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      stripe_data[stripe_start - load_stripe_start] = {};
+      _file_itm_data.decomp_buffers.emplace_back(
+        std::move(stripe_data[stripe_start - load_stripe_start]));
     } else {
       for (std::size_t i = 0; i < stripe_count; ++i) {
-        stripe_data[i + stripe_start - load_stripe_start] = {};
+        _file_itm_data.decomp_buffers.emplace_back(
+          std::move(stripe_data[i + stripe_start - load_stripe_start]));
       }
     }
   }
