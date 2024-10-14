@@ -104,7 +104,7 @@ repos:
       - id: no-np-random-seed
         name: no-np-random-seed
         description: 'Enforce that default_rng is used instead of np.random.seed'
-        entry: 'random.seed\('
+        entry: '.random.seed\('
         language: pygrep
         types: [python]
       - id: cmake-format
