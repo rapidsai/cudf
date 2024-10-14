@@ -112,7 +112,6 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
       keys, requests, cache, skip_rows_with_nulls, d_row_equal, d_row_hash, stream, mr);
   }
 }
-
 }  // namespace
 
 /**

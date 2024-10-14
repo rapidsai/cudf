@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include "helpers.cuh"
@@ -23,16 +22,13 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuco/static_set_ref.cuh>
 #include <cuda/atomic>
 #include <cuda/std/type_traits>
 
-#include <cmath>
-
 namespace cudf::groupby::detail::hash {
-
 template <typename SetType>
 struct var_hash_functor {
   SetType set;
@@ -49,13 +45,13 @@ struct var_hash_functor {
                    column_device_view sum,
                    column_device_view count,
                    size_type ddof)
-    : set(set),
-      row_bitmask(row_bitmask),
-      target(target),
-      source(source),
-      sum(sum),
-      count(count),
-      ddof(ddof)
+    : set{set},
+      row_bitmask{row_bitmask},
+      target{target},
+      source{source},
+      sum{sum},
+      count{count},
+      ddof{ddof}
   {
   }
 
@@ -111,5 +107,4 @@ struct var_hash_functor {
     }
   }
 };
-
 }  // namespace cudf::groupby::detail::hash
