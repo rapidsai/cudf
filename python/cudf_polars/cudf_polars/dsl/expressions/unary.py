@@ -38,11 +38,14 @@ class Cast(Expr):
             or value.dtype.id() == plc.TypeId.STRING
         ):
             if not (
-                self.dtype.id() == plc.TypeId.STRING
-                and value.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-            ) or (
-                self.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-                and value.dtype.id() == plc.TypeId.STRING
+                (
+                    self.dtype.id() == plc.TypeId.STRING
+                    and value.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                )
+                or (
+                    self.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                    and value.dtype.id() == plc.TypeId.STRING
+                )
             ):
                 raise NotImplementedError("Only string to float cast is supported")
         elif not dtypes.can_cast(value.dtype, self.dtype):
@@ -60,7 +63,16 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context, mapping=mapping)
-        return Column(plc.unary.cast(column.obj, self.dtype)).sorted_like(column)
+        if (
+            self.dtype.id() == plc.TypeId.STRING
+            or column.obj.type().id() == plc.TypeId.STRING
+        ):
+            result = plc.strings.convert.convert_floats.to_floats(
+                column.obj, self.dtype
+            )
+        else:
+            result = plc.unary.cast(column.obj, self.dtype)
+        return Column(result).sorted_like(column)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
