@@ -206,6 +206,7 @@ include(cmake/thirdparty/get_fmt.cmake)
 include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
+include(cmake/thirdparty/get_arrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
 
@@ -806,7 +807,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow ${ARROW_LIBRARIES}
 )
 
 # Add Conda library, and include paths if specified
