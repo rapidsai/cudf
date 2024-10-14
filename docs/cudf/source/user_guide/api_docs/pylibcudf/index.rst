@@ -22,6 +22,7 @@ This page provides API documentation for pylibcudf.
     hashing
     interop
     join
+    json
     labeling
     lists
     merge
@@ -50,3 +51,4 @@ This page provides API documentation for pylibcudf.
 
     io/index.rst
     strings/index.rst
+    nvtext/index.rst

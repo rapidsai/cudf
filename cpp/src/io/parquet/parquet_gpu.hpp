@@ -395,7 +395,7 @@ struct ColumnChunkDesc {
                            uint8_t def_level_bits_,
                            uint8_t rep_level_bits_,
                            Compression codec_,
-                           cuda::std::optional<LogicalType> logical_type_,
+                           std::optional<LogicalType> logical_type_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
@@ -441,12 +441,12 @@ struct ColumnChunkDesc {
   int32_t num_data_pages{};                           // number of data pages
   int32_t num_dict_pages{};                           // number of dictionary pages
   PageInfo const* dict_page{};
-  string_index_pair* str_dict_index{};  // index for string dictionary
-  bitmask_type** valid_map_base{};      // base pointers of valid bit map for this column
-  void** column_data_base{};            // base pointers of column data
-  void** column_string_base{};          // base pointers of column string data
-  Compression codec{};                  // compressed codec enum
-  cuda::std::optional<LogicalType> logical_type{};  // logical type
+  string_index_pair* str_dict_index{};        // index for string dictionary
+  bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
+  void** column_data_base{};                  // base pointers of column data
+  void** column_string_base{};                // base pointers of column string data
+  Compression codec{};                        // compressed codec enum
+  std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
@@ -796,6 +796,18 @@ void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                          int level_type_size,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
+
+/**
+ * @brief Writes the final offsets to the corresponding list and string buffer end addresses in a
+ * batched manner.
+ *
+ * @param offsets Host span of final offsets
+ * @param buff_addrs Host span of corresponding output col buffer end addresses
+ * @param stream CUDA stream to use
+ */
+void WriteFinalOffsets(host_span<size_type const> offsets,
+                       host_span<size_type* const> buff_addrs,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the string column data stored in the pages

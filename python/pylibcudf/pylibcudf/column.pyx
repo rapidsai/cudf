@@ -8,7 +8,7 @@ from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar

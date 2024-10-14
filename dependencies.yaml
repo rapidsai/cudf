@@ -15,6 +15,7 @@ files:
       - depends_on_cupy
       - depends_on_libkvikio
       - depends_on_librmm
+      - depends_on_nvcomp
       - depends_on_rmm
       - develop
       - docs
@@ -152,6 +153,13 @@ files:
       - build_cpp
       - depends_on_libkvikio
       - depends_on_librmm
+  py_run_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: project
+    includes:
+      - depends_on_nvcomp
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -367,9 +375,27 @@ dependencies:
           - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
+          - spdlog>=1.14.1,<1.15
+  depends_on_nvcomp:
+    common:
+      - output_types: conda
+        packages:
           # Align nvcomp version with rapids-cmake
           - nvcomp==4.0.1
-          - spdlog>=1.14.1,<1.15
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - nvidia-nvcomp-cu12==4.0.1
+          - matrix:
+              cuda: "11.*"
+            packages:
+              - nvidia-nvcomp-cu11==4.0.1
+          - matrix:
+            packages:
+              - nvidia-nvcomp==4.0.1
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -395,9 +421,18 @@ dependencies:
           - cython>=3.0.3
   pyarrow_run:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda]
         packages:
           - pyarrow>=14.0.0,<18.0.0a0
+      - output_types: [requirements, pyproject]
+        packages:
+          # pyarrow 17.0.0 wheels have a subtle issue around threading that
+          # can cause segmentation faults around imports on arm. It appears to
+          # be highly dependent on the exact build configuration, so we'll just
+          # avoid 17.0.0 for now unless we observe similar issues in future
+          # releases as well.
+          - pyarrow>=14.0.0,<18.0.0a0; platform_machine=='x86_64'
+          - pyarrow>=14.0.0,<18.0.0a0,!=17.0.0; platform_machine=='aarch64'
   cuda_version:
     specific:
       - output_types: conda
@@ -576,7 +611,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - &numpy numpy>=1.23,<3.0a0
-          - pandas>=2.0,<2.2.3dev0
+          - pandas>=2.0,<2.2.4dev0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -722,6 +757,10 @@ dependencies:
             packages:
               - *numba-cuda-dep
               - pandas==2.0.*
+          - matrix: {dependencies: "latest"}
+            packages:
+              - numba-cuda==0.0.15
+              - pandas==2.2.3
           - matrix:
             packages:
       - output_types: conda
