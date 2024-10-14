@@ -91,7 +91,12 @@ struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target
     DeviceType* target_casted = reinterpret_cast<DeviceType*>(target);
 
     target_casted[idx] = get_identity<DeviceType, k>();
-    target_mask[idx] = !(k == cudf::aggregation::COUNT_ALL || k == cudf::aggregation::COUNT_VALID);
+
+    if (k == cudf::aggregation::COUNT_ALL || k == cudf::aggregation::COUNT_VALID) {
+      target_mask[idx] = true;
+    } else {
+      target_mask[idx] = false;
+    }
   }
 };
 

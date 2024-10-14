@@ -56,7 +56,8 @@ struct update_target_element_shmem<
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-    if (target_mask[target_index]) { target_mask[target_index] = false; }
+
+    if (!target_mask[target_index]) { target_mask[target_index] = true; }
   }
 };
 
@@ -78,7 +79,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_max(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (target_mask[target_index]) { target_mask[target_index] = false; }
+    if (!target_mask[target_index]) { target_mask[target_index] = true; }
   }
 };
 
@@ -101,7 +102,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (target_mask[target_index]) { target_mask[target_index] = false; }
+    if (!target_mask[target_index]) { target_mask[target_index] = true; }
   }
 };
 
@@ -121,7 +122,7 @@ struct update_target_element_shmem<
     auto value            = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target_casted[target_index], value * value);
 
-    if (target_mask[target_index]) { target_mask[target_index] = false; }
+    if (!target_mask[target_index]) { target_mask[target_index] = true; }
   }
 };
 
@@ -141,7 +142,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_mul(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_mask[target_index]) { target_mask[target_index] = false; }
+    if (!target_mask[target_index]) { target_mask[target_index] = true; }
   }
 };
 
@@ -205,7 +206,7 @@ struct update_target_element_shmem<
       }
     }
 
-    if (target_mask[target_index]) { target_mask[target_index] = false; }
+    if (!target_mask[target_index]) { target_mask[target_index] = true; }
   }
 };
 
@@ -231,7 +232,7 @@ struct update_target_element_shmem<
       }
     }
 
-    if (target_mask[target_index]) { target_mask[target_index] = false; }
+    if (!target_mask[target_index]) { target_mask[target_index] = true; }
   }
 };
 
