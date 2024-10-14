@@ -101,6 +101,12 @@ repos:
         entry: 'default_rng\(\)'
         language: pygrep
         types: [python]
+      - id: no-np-random-seed
+        name: no-np-random-seed
+        description: 'Enforce that default_rng is used instead of np.random.seed'
+        entry: 'random.seed\('
+        language: pygrep
+        types: [python]
       - id: cmake-format
         name: cmake-format
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format
