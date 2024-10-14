@@ -114,7 +114,7 @@ def make_recursive(
 
     Notes
     -----
-    All transformation functions *must* be pure.
+    All transformation functions *must* be free of side-effects.
 
     Usually, prefer a :class:`CachingVisitor`, but if we know that we
     don't need caching in a transformation and then this no-op
@@ -155,7 +155,7 @@ class CachingVisitor(Generic[U_contra, V_co]):
 
     Notes
     -----
-    All transformation functions *must* be pure.
+    All transformation functions *must* be free of side-effects.
 
     Returns
     -------
