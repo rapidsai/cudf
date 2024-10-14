@@ -145,24 +145,11 @@ class hostdevice_vector {
    *
    * @return A typed hostdevice_span of the hostdevice_vector's data
    */
-  [[nodiscard]] operator hostdevice_span<T>()
-  {
-    return hostdevice_span<T>{h_data.data(), d_data.data(), size()};
-  }
+  [[nodiscard]] operator hostdevice_span<T>() { return {host_span<T>{h_data}, device_ptr()}; }
 
-  /**
-   * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
-   *
-   * @param offset The offset of the first element in the subspan
-   * @param count The number of elements in the subspan
-   * @return A typed hostdevice_span of the hostdevice_vector's data
-   */
-  [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
+  [[nodiscard]] operator hostdevice_span<T const>() const
   {
-    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
-    CUDF_EXPECTS(count <= d_data.size() - offset,
-                 "The span with given offset and count is out of bounds.");
-    return hostdevice_span<T>{h_data.data() + offset, d_data.data() + offset, count};
+    return {host_span<T const>{h_data}, device_ptr()};
   }
 
  private:

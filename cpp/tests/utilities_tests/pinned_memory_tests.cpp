@@ -29,6 +29,12 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
+using cudf::host_span;
+using cudf::detail::host_2dspan;
+using cudf::detail::hostdevice_2dvector;
+using cudf::detail::hostdevice_span;
+using cudf::detail::hostdevice_vector;
+
 class PinnedMemoryTest : public cudf::test::BaseFixture {
   size_t prev_copy_threshold;
   size_t prev_alloc_threshold;
@@ -134,10 +140,10 @@ TEST_F(PinnedMemoryTest, HostSpan)
   auto test_ctors = [](auto&& vec) {
     auto const is_vec_device_accessible = vec.get_allocator().is_device_accessible();
     // Test conversion from a vector
-    auto const span = cudf::host_span<int16_t>{vec};
+    auto const span = host_span<int16_t>{vec};
     EXPECT_EQ(span.is_device_accessible(), is_vec_device_accessible);
     // Test conversion from host_span with different type
-    auto const span_converted = cudf::host_span<int16_t const>{span};
+    auto const span_converted = host_span<int16_t const>{span};
     EXPECT_EQ(span_converted.is_device_accessible(), is_vec_device_accessible);
   };
 
@@ -152,17 +158,17 @@ TEST_F(PinnedMemoryTest, HostSpan)
   // hostdevice vectors use pinned memory for the host side; test that host_span can be constructed
   // from a hostdevice_vector with correct device accessibility
 
-  cudf::detail::hostdevice_vector<int16_t> hd_vec(10, stream);
-  auto const span = cudf::host_span<int16_t>{hd_vec};
+  hostdevice_vector<int16_t> hd_vec(10, stream);
+  auto const span = host_span<int16_t>{hd_vec};
   EXPECT_TRUE(span.is_device_accessible());
 
   // test host_view and operator[]
   {
-    cudf::detail::hostdevice_2dvector<int16_t> hd_2dvec(10, 10, stream);
+    hostdevice_2dvector<int16_t> hd_2dvec(10, 10, stream);
     auto const span2d = hd_2dvec.host_view().flat_view();
     EXPECT_TRUE(span2d.is_device_accessible());
 
-    auto const span2d_from_cast = cudf::detail::host_2dspan<int16_t>{hd_2dvec};
+    auto const span2d_from_cast = host_2dspan<int16_t>{hd_2dvec};
     EXPECT_TRUE(span2d_from_cast.flat_view().is_device_accessible());
 
     auto const row_span = hd_2dvec[0];
@@ -171,14 +177,20 @@ TEST_F(PinnedMemoryTest, HostSpan)
 
   // test const versions of host_view and operator[]
   {
-    cudf::detail::hostdevice_2dvector<int16_t> const const_hd_2dvec(10, 10, stream);
+    hostdevice_2dvector<int16_t> const const_hd_2dvec(10, 10, stream);
     auto const const_span2d = const_hd_2dvec.host_view().flat_view();
     EXPECT_TRUE(const_span2d.is_device_accessible());
 
-    auto const const_span2d_from_cast = cudf::detail::host_2dspan<int16_t const>{const_hd_2dvec};
+    auto const const_span2d_from_cast = host_2dspan<int16_t const>{const_hd_2dvec};
     EXPECT_TRUE(const_span2d_from_cast.flat_view().is_device_accessible());
 
     auto const const_row_span = const_hd_2dvec[0];
     EXPECT_TRUE(const_row_span.is_device_accessible());
+  }
+
+  // test hostdevice_span
+  {
+    hostdevice_span<int16_t> hd_span(hd_vec);
+    EXPECT_TRUE(host_span<int16_t>{hd_span}.is_device_accessible());
   }
 }
