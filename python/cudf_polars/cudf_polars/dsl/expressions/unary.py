@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
 import pylibcudf as plc
+from pylibcudf.traits import is_floating_point, is_integral_not_bool
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
@@ -21,6 +22,10 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
 
 __all__ = ["Cast", "UnaryFunction", "Len"]
+
+
+def _is_int_or_float(dtype: plc.DataType) -> bool:
+    return is_integral_not_bool(dtype) or is_floating_point(dtype)
 
 
 class Cast(Expr):
@@ -38,12 +43,9 @@ class Cast(Expr):
             or value.dtype.id() == plc.TypeId.STRING
         ):
             if not (
-                (
-                    self.dtype.id() == plc.TypeId.STRING
-                    and value.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
-                )
+                (self.dtype.id() == plc.TypeId.STRING and _is_int_or_float(value.dtype))
                 or (
-                    self.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                    _is_int_or_float(self.dtype)
                     and value.dtype.id() == plc.TypeId.STRING
                 )
             ):
@@ -67,9 +69,22 @@ class Cast(Expr):
             self.dtype.id() == plc.TypeId.STRING
             or column.obj.type().id() == plc.TypeId.STRING
         ):
-            result = plc.strings.convert.convert_floats.to_floats(
-                column.obj, self.dtype
-            )
+            if self.dtype.id() == plc.TypeId.STRING:
+                if is_floating_point(column.obj.type()):
+                    result = plc.strings.convert.convert_floats.from_floats(column.obj)
+                else:
+                    result = plc.strings.convert.convert_integers.from_integers(
+                        column.obj
+                    )
+            else:
+                if is_floating_point(self.dtype):
+                    result = plc.strings.convert.convert_floats.to_floats(
+                        column.obj, self.dtype
+                    )
+                else:
+                    result = plc.strings.convert.convert_integers.to_integers(
+                        column.obj, self.dtype
+                    )
         else:
             result = plc.unary.cast(column.obj, self.dtype)
         return Column(result).sorted_like(column)
