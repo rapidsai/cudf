@@ -19,7 +19,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -237,6 +236,21 @@ TEST_F(StringsExtractTests, SpecialNewLines)
   prog = cudf::strings::regex_program::create("q(q.*l)l", cudf::strings::regex_flags::EXT_NEWLINE);
   expected = cudf::test::strings_column_wrapper({"", "", "", "", "", ""}, {0, 0, 0, 0, 0, 0});
   results  = cudf::strings::extract(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+}
+
+TEST_F(StringsExtractTests, NestedQuantifier)
+{
+  auto input   = cudf::test::strings_column_wrapper({"TEST12 1111 2222 3333 4444 5555",
+                                                     "0000 AAAA 9999 BBBB 8888",
+                                                     "7777 6666 4444 3333",
+                                                     "12345 3333 4444 1111 ABCD"});
+  auto sv      = cudf::strings_column_view(input);
+  auto pattern = std::string(R"((\d{4}\s){4})");
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::extract(sv, *prog);
+  // fixed quantifier on capture group only honors the last group
+  auto expected = cudf::test::strings_column_wrapper({"4444 ", "", "", "1111 "}, {1, 0, 0, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 

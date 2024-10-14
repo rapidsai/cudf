@@ -6,7 +6,7 @@ from libcpp.vector cimport vector
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
@@ -26,3 +26,8 @@ cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
     cdef packed_columns pack (const table_view& input) except +
 
     cdef table_view unpack (const packed_columns& input) except +
+
+    cdef table_view unpack (
+        const uint8_t* metadata,
+        const uint8_t* gpu_data
+    ) except +
