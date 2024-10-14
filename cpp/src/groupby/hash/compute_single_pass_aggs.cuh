@@ -67,7 +67,8 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
-  auto const grid_size            = max_occupancy_grid_size<decltype(global_set_ref)>(num_rows);
+  auto const grid_size =
+    max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
   auto const has_sufficient_shmem = available_shared_memory_size(grid_size) >
                                     (shmem_agg_pointer_size(flattened_values.num_columns()) * 2);
   auto const has_dictionary_request = std::any_of(
