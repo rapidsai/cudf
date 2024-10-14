@@ -35,6 +35,16 @@
 
 namespace cudf::groupby::detail::hash {
 namespace {
+/// Computes number of *actual* bitmask_type elements needed
+__device__ constexpr size_type num_bitmask_words(size_type number_of_bits)
+{
+  // TODO: This duplicates `cudf::num_bitmask_words`. Converting it into
+  // a public host-device utility will require non-trivial effort, so the
+  // cleanup will be addressed in a separate PR.
+  return cudf::util::div_rounding_up_safe<size_type>(number_of_bits,
+                                                     detail::size_in_bits<bitmask_type>());
+}
+
 // Prepares shared memory data required by each output column, exits if
 // no enough memory space to perform the shared memory aggregation for the
 // current output column
