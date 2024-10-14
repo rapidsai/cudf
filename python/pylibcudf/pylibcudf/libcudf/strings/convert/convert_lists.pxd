@@ -9,6 +9,6 @@ cdef extern from "cudf/strings/convert/convert_lists.hpp" namespace \
         "cudf::strings" nogil:
 
     cdef unique_ptr[column] format_list_column(
-        column_view input_col,
+        column_view input,
         string_scalar na_rep,
         column_view separators) except +
