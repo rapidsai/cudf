@@ -70,7 +70,7 @@ rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
   auto const grid_size =
     max_occupancy_grid_size<typename SetType::ref_type<cuco::insert_and_find_tag>>(num_rows);
   auto const has_sufficient_shmem = available_shared_memory_size(grid_size) >
-                                    (shmem_agg_pointer_size(flattened_values.num_columns()) * 2);
+                                    (shmem_offsets_size(flattened_values.num_columns()) * 2);
   auto const has_dictionary_request = std::any_of(
     requests.begin(), requests.end(), [](cudf::groupby::aggregation_request const& request) {
       return cudf::is_dictionary(request.values.type());

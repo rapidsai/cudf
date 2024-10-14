@@ -30,8 +30,8 @@ namespace cudf::groupby::detail::hash {
 template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_shmem {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const
   {
@@ -45,8 +45,8 @@ struct update_target_element_shmem<
   cudf::aggregation::MIN,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -56,7 +56,7 @@ struct update_target_element_shmem<
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-    if (target_null[target_index]) { target_null[target_index] = false; }
+    if (target_mask[target_index]) { target_mask[target_index] = false; }
   }
 };
 
@@ -66,8 +66,8 @@ struct update_target_element_shmem<
   cudf::aggregation::MAX,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -78,7 +78,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_max(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (target_null[target_index]) { target_null[target_index] = false; }
+    if (target_mask[target_index]) { target_mask[target_index] = false; }
   }
 };
 
@@ -89,8 +89,8 @@ struct update_target_element_shmem<
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
                          !cudf::is_timestamp<Source>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -101,7 +101,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_add(&target_casted[target_index],
                              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
-    if (target_null[target_index]) { target_null[target_index] = false; }
+    if (target_mask[target_index]) { target_mask[target_index] = false; }
   }
 };
 
@@ -111,8 +111,8 @@ struct update_target_element_shmem<
   cudf::aggregation::SUM_OF_SQUARES,
   cuda::std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -121,7 +121,7 @@ struct update_target_element_shmem<
     auto value            = static_cast<Target>(source.element<Source>(source_index));
     cudf::detail::atomic_add(&target_casted[target_index], value * value);
 
-    if (target_null[target_index]) { target_null[target_index] = false; }
+    if (target_mask[target_index]) { target_mask[target_index] = false; }
   }
 };
 
@@ -131,8 +131,8 @@ struct update_target_element_shmem<
   cudf::aggregation::PRODUCT,
   cuda::std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -141,7 +141,7 @@ struct update_target_element_shmem<
     cudf::detail::atomic_mul(&target_casted[target_index],
                              static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_null[target_index]) { target_null[target_index] = false; }
+    if (target_mask[target_index]) { target_mask[target_index] = false; }
   }
 };
 
@@ -152,8 +152,8 @@ struct update_target_element_shmem<
   cuda::std::enable_if_t<
     cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_VALID>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -170,8 +170,8 @@ struct update_target_element_shmem<
   cuda::std::enable_if_t<
     cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_ALL>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -190,8 +190,8 @@ struct update_target_element_shmem<
   cuda::std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMAX>() and
                          cudf::is_relationally_comparable<Source, Source>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -205,7 +205,7 @@ struct update_target_element_shmem<
       }
     }
 
-    if (target_null[target_index]) { target_null[target_index] = false; }
+    if (target_mask[target_index]) { target_mask[target_index] = false; }
   }
 };
 
@@ -216,8 +216,8 @@ struct update_target_element_shmem<
   cuda::std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMIN>() and
                          cudf::is_relationally_comparable<Source, Source>()>> {
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -231,15 +231,15 @@ struct update_target_element_shmem<
       }
     }
 
-    if (target_null[target_index]) { target_null[target_index] = false; }
+    if (target_mask[target_index]) { target_mask[target_index] = false; }
   }
 };
 
 struct shmem_element_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
   __device__ void operator()(std::byte* target,
+                             bool* target_mask,
                              cudf::size_type target_index,
-                             bool* target_null,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
@@ -247,7 +247,7 @@ struct shmem_element_aggregator {
       if (source.is_null(source_index)) { return; }
     }
     update_target_element_shmem<Source, k>{}(
-      target, target_index, target_null, source, source_index);
+      target, target_mask, target_index, source, source_index);
   }
 };
 }  // namespace cudf::groupby::detail::hash

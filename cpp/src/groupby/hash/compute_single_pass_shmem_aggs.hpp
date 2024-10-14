@@ -25,7 +25,7 @@ namespace cudf::groupby::detail::hash {
 
 size_t available_shared_memory_size(int grid_size);
 
-size_t shmem_agg_pointer_size(int num_cols);
+size_t shmem_offsets_size(int num_cols);
 
 void compute_single_pass_shmem_aggs(int grid_size,
                                     cudf::size_type num_input_rows,

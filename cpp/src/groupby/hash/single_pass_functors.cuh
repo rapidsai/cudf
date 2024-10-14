@@ -74,41 +74,35 @@ __device__ T get_identity()
 template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
 struct initialize_target_element {
   __device__ void operator()(std::byte* target,
-                             cudf::size_type target_index,
-                             bool* target_null) const noexcept
+                             bool* target_mask,
+                             cudf::size_type idx) const noexcept
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
 };
 
-// TODO: are the conditions correctly checked?
 template <typename Target, cudf::aggregation::Kind k>
 struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target, k>()>> {
   __device__ void operator()(std::byte* target,
-                             cudf::size_type target_index,
-                             bool* target_null) const noexcept
+                             bool* target_mask,
+                             cudf::size_type idx) const noexcept
   {
-    using DeviceType            = cudf::device_storage_type_t<Target>;
-    DeviceType* target_casted   = reinterpret_cast<DeviceType*>(target);
-    target_casted[target_index] = get_identity<DeviceType, k>();
+    using DeviceType          = cudf::device_storage_type_t<Target>;
+    DeviceType* target_casted = reinterpret_cast<DeviceType*>(target);
 
-    if (k == cudf::aggregation::COUNT_ALL || k == cudf::aggregation::COUNT_VALID) {
-      target_null[target_index] = false;
-    } else {
-      target_null[target_index] = true;
-    }
+    target_casted[idx] = get_identity<DeviceType, k>();
+    target_mask[idx] = !(k == cudf::aggregation::COUNT_ALL || k == cudf::aggregation::COUNT_VALID);
   }
 };
 
 struct initialize_shmem {
   template <typename Target, cudf::aggregation::Kind k>
+  // TODO naming
   __device__ void operator()(std::byte* target,
-                             cudf::size_type target_index,
-                             bool* target_null) const noexcept
+                             bool* target_mask,
+                             cudf::size_type idx) const noexcept
   {
-    // TODO: typecasting work for every datatype
-
-    initialize_target_element<Target, k>{}(target, target_index, target_null);
+    initialize_target_element<Target, k>{}(target, target_mask, idx);
   }
 };
 

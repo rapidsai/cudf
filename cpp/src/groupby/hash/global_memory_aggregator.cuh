@@ -33,8 +33,8 @@ struct update_target_element_gmem {
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
@@ -49,8 +49,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::MIN>;
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
@@ -70,8 +70,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::MAX>;
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
@@ -92,8 +92,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using DeviceType          = cudf::detail::underlying_target_t<Source, aggregation::SUM>;
     DeviceType* source_casted = reinterpret_cast<DeviceType*>(source);
@@ -114,8 +114,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::SUM_OF_SQUARES>;
 
@@ -137,8 +137,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::PRODUCT>;
 
@@ -162,8 +162,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
 
@@ -186,8 +186,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using Target = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_ALL>;
 
@@ -209,8 +209,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using Target             = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMAX>;
     Target* source_casted    = reinterpret_cast<Target*>(source);
@@ -238,8 +238,8 @@ struct update_target_element_gmem<
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     using Target             = cudf::detail::target_type_t<Source, cudf::aggregation::ARGMIN>;
     Target* source_casted    = reinterpret_cast<Target*>(source);
@@ -264,14 +264,14 @@ struct gmem_element_aggregator {
                              cudf::size_type target_index,
                              cudf::column_device_view source_column,
                              std::byte* source,
-                             cudf::size_type source_index,
-                             bool* source_null) const noexcept
+                             bool* source_mask,
+                             cudf::size_type source_index) const noexcept
   {
     if constexpr (k != cudf::aggregation::COUNT_ALL) {
-      if (source_null[source_index]) { return; }
+      if (source_mask[source_index]) { return; }
     }
     update_target_element_gmem<Source, k>{}(
-      target, target_index, source_column, source, source_index, source_null);
+      target, target_index, source_column, source, source_mask, source_index);
   }
 };
 
