@@ -130,6 +130,7 @@ class IR(Node):
     schema: Schema
     """Mapping from column names to their data types."""
     children: tuple[IR, ...] = ()
+    """Child IR nodes that are inputs to this one."""
 
     def get_hashable(self) -> Hashable:
         """
@@ -645,6 +646,14 @@ class GroupBy(IR):
         "children",
     )
     _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
+    keys: tuple[expr.NamedExpr, ...]
+    """Grouping keys."""
+    agg_requests: tuple[expr.NamedExpr, ...]
+    """Aggregation expressions."""
+    maintain_order: bool
+    """Preserve order in groupby."""
+    options: Any
+    """Arbitrary options."""
     children: tuple[IR]
 
     def __init__(
@@ -1024,6 +1033,8 @@ class HStack(IR):
 
     __slots__ = ("columns", "should_broadcast", "children")
     _non_child = ("schema", "columns", "should_broadcast")
+    should_broadcast: bool
+    """Should the resulting evaluated columns be broadcast to the same length."""
     children: tuple[IR]
 
     def __init__(
@@ -1062,6 +1073,15 @@ class Distinct(IR):
 
     __slots__ = ("keep", "subset", "zlice", "stable", "children")
     _non_child = ("schema", "keep", "subset", "zlice", "stable")
+    keep: plc.stream_compaction.DuplicateKeepOption
+    """Which distinct value to keep."""
+    subset: frozenset[str] | None
+    """Which columns should be used to define distinctness. If None,
+    then all columns are used."""
+    zlice: tuple[int, int] | None
+    """Optional slice to apply to the result."""
+    stable: bool
+    """Should the result maintain ordering."""
     children: tuple[IR]
 
     def __init__(
@@ -1134,6 +1154,16 @@ class Sort(IR):
 
     __slots__ = ("by", "order", "null_order", "stable", "zlice", "children")
     _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
+    by: tuple[expr.NamedExpr, ...]
+    """Sort keys."""
+    order: tuple[plc.types.Order, ...]
+    """Sort order for each sort key."""
+    null_order: tuple[plc.types.NullOrder, ...]
+    """Null sorting location for each sort key."""
+    stable: bool
+    """Should the sort be stable?"""
+    zlice: tuple[int, int] | None
+    """Optional slice to apply to the result."""
     children: tuple[IR]
 
     def __init__(
@@ -1196,11 +1226,11 @@ class Slice(IR):
 
     __slots__ = ("offset", "length", "children")
     _non_child = ("schema", "offset", "length")
-    children: tuple[IR]
     offset: int
     """Start of the slice."""
     length: int
     """Length of the slice."""
+    children: tuple[IR]
 
     def __init__(self, schema: Schema, offset: int, length: int, df: IR):
         self.schema = schema
@@ -1220,6 +1250,8 @@ class Filter(IR):
 
     __slots__ = ("mask", "children")
     _non_child = ("schema", "mask")
+    mask: expr.NamedExpr
+    """Expression to produce the filter mask."""
     children: tuple[IR]
 
     def __init__(self, schema: Schema, mask: expr.NamedExpr, df: IR):
@@ -1262,8 +1294,11 @@ class MapFunction(IR):
 
     __slots__ = ("name", "options", "children")
     _non_child = ("schema", "name", "options")
-    children: tuple[IR]
+    name: str
+    """Name of the function to apply"""
     options: Any
+    """Arbitrary name-specific options"""
+    children: tuple[IR]
 
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
@@ -1383,6 +1418,8 @@ class Union(IR):
 
     __slots__ = ("zlice", "children")
     _non_child = ("schema", "zlice")
+    zlice: tuple[int, int] | None
+    """Optional slice to apply to the result."""
 
     def __init__(self, schema: Schema, zlice: tuple[int, int] | None, *children: IR):
         self.schema = schema
