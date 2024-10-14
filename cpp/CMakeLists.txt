@@ -206,6 +206,7 @@ include(cmake/thirdparty/get_fmt.cmake)
 include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
+set(CUDF_USE_ARROW_STATIC OFF)
 include(cmake/thirdparty/get_arrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)

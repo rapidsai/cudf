@@ -31,6 +31,7 @@ find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
 include(rapids-cpm)
 rapids_cpm_init()
 include(../../cpp/cmake/thirdparty/get_dlpack.cmake)
+include(../LinkPyarrowHeaders.cmake)
 
 include(rapids-cython-core)
 

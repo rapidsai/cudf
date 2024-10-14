@@ -68,7 +68,7 @@ dependencies:
 - polars>=1.8,<1.9
 - pre-commit
 - ptxcompiler
-- pyarrow>=14.0.0,<18.0.0a0
+- pyarrow==16.1.0
 - pydata-sphinx-theme!=0.14.2
 - pytest-benchmark
 - pytest-cases>=3.8.2

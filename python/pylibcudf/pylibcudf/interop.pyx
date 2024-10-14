@@ -13,6 +13,12 @@ from functools import singledispatch
 from pyarrow import lib as pa
 
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.fixed_point.fixed_point cimport (
+    decimal32,
+    decimal64,
+    decimal128,
+    scale_type,
+)
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
@@ -23,19 +29,8 @@ from pylibcudf.libcudf.interop cimport (
     from_arrow_stream as cpp_from_arrow_stream,
     to_arrow as cpp_to_arrow,
 )
+from pylibcudf.libcudf.scalar.scalar cimport fixed_point_scalar, scalar
 from pylibcudf.libcudf.table.table cimport table
-
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
-    fixed_point_scalar,
-    scalar,
-)
-from cudf._lib.pylibcudf.libcudf.table.table cimport table
-from cudf._lib.pylibcudf.libcudf.wrappers.decimals cimport (
-    decimal32,
-    decimal64,
-    decimal128,
-    scale_type,
-)
 
 from .column cimport Column
 from .scalar cimport Scalar
