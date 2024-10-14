@@ -13,7 +13,7 @@ rapids-dependency-file-generator \
   --file-key clang_tidy \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n clang_tidy
+:-rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n clang_tidy
 
 # Temporarily allow unbound variables for conda activation.
 set +u
@@ -31,7 +31,7 @@ git clone https://github.com/include-what-you-use/include-what-you-use.git
 pushd include-what-you-use
 # IWYU's CMake build uses some Python scripts that assume that the cwd is
 # importable, so support that legacy behavior.
-export PYTHONPATH=${PWD}:${PYTHONPATH}
+export PYTHONPATH=${PWD}:${PYTHONPATH:-}
 cmake -S . -B build -GNinja --install-prefix=${CONDA_PREFIX}
 cmake --build build
 cmake --install build
