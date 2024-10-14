@@ -117,8 +117,11 @@ class hostdevice_vector {
     return d_data.element(element_index, stream);
   }
 
-  operator cudf::host_span<T>() { return {host_ptr(), size()}; }
-  operator cudf::host_span<T const>() const { return {host_ptr(), size()}; }
+  operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }
+  operator cudf::host_span<T const>() const
+  {
+    return host_span<T const>{h_data}.subspan(0, size());
+  }
 
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
@@ -182,26 +185,27 @@ class hostdevice_2dvector {
   {
   }
 
-  operator device_2dspan<T>() { return {_data.device_ptr(), _size}; }
-  operator device_2dspan<T const>() const { return {_data.device_ptr(), _size}; }
+  operator device_2dspan<T>() { return {device_span<T>{_data}, _size.second}; }
+  operator device_2dspan<T const>() const { return {device_span<T const>{_data}, _size.second}; }
 
   device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
-  device_2dspan<T> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
+  device_2dspan<T const> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
 
-  operator host_2dspan<T>() { return {_data.host_ptr(), _size}; }
-  operator host_2dspan<T const>() const { return {_data.host_ptr(), _size}; }
+  operator host_2dspan<T>() { return {host_span<T>{_data}, _size.second}; }
+  operator host_2dspan<T const>() const { return {host_span<T const>{_data}, _size.second}; }
 
   host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
-  host_2dspan<T> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
+  host_2dspan<T const> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
 
   host_span<T> operator[](size_t row)
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T>{_data}.subspan(row * _size.second, _size.second);
   }
 
   host_span<T const> operator[](size_t row) const
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T const>{_data}.subspan(row * _size.second, _size.second);
+    ;
   }
 
   auto size() const noexcept { return _size; }
