@@ -75,9 +75,11 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
   auto const valid_col_size = round_to_multiple_of_8(sizeof(bool) * cardinality);
 
   while (bytes_allocated < total_agg_size && col_end < output_size) {
-    auto const col_idx       = col_end;
-    auto const next_col_size = round_to_multiple_of_8(
-      cudf::type_dispatcher(output_values.column(col_idx).type(), size_of_functor{}) * cardinality);
+    auto const col_idx = col_end;
+    auto const next_col_size =
+      round_to_multiple_of_8(cudf::type_dispatcher<cudf::dispatch_storage_type>(
+                               output_values.column(col_idx).type(), size_of_functor{}) *
+                             cardinality);
     auto const next_col_total_size = next_col_size + valid_col_size;
 
     // TODO: it seems early exit will break the followup calculatons. To verify
