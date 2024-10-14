@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-rapids-logger "Create clang-tidy conda environment"
+rapids-logger "Create checks conda environment"
 . /opt/conda/etc/profile.d/conda.sh
 
 ENV_YAML_DIR="$(mktemp -d)"

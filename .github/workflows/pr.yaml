@@ -14,6 +14,8 @@ jobs:
     needs:
       - changed-files
       - checks
+      # TODO: Before merging this PR, this check needs to be moved to nightly.yaml
+      - clang-tidy
       - conda-cpp-build
       - conda-cpp-checks
       - conda-cpp-tests
@@ -94,6 +96,12 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
     with:
       enable_check_generated_files: false
+  clang-tidy:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
+    with:
+      build_type: pull-request
+      run_script: "ci/clang_tidy.sh"
   conda-cpp-build:
     needs: checks
     secrets: inherit
