@@ -164,7 +164,7 @@ class IR(Node):
         *args
             Positional arguments specified in IR._eval_arguments.
         **kwargs
-            Key-word arguments specified in IR._eval_arguments.
+            Key-word arguments. This should be empty!
 
         Returns
         -------
