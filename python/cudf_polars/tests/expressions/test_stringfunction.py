@@ -40,74 +40,21 @@ def ldf(with_nulls):
     )
 
 
+@pytest.fixture(params=[pl.Float32, pl.Float64, pl.Int8, pl.Int16, pl.Int32, pl.Int64])
+def numeric_type(request):
+    return request.param
+
+
 @pytest.fixture
-def str_to_float_data(with_nulls):
-    a = [
-        "1.1",
-        "2.2",
-        "3.3",
-        "4.4",
-        "5.5",
-        "6.6",
-        "7.7",
-        "8.8",
-        "9.9",
-        "10.10",
-        "11.11",
-        "12.12",
-    ]
+def str_to_numeric_data(with_nulls):
+    a = ["1", "2", "3", "4", "5", "6"]
     if with_nulls:
         a[4] = None
-        a[-3] = None
     return pl.LazyFrame({"a": a})
 
 
 @pytest.fixture
-def str_to_integer_data(with_nulls):
-    a = [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "6",
-        "7",
-        "8",
-        "9",
-        "10",
-        "11",
-        "12",
-    ]
-    if with_nulls:
-        a[4] = None
-        a[-3] = None
-    return pl.LazyFrame({"a": a})
-
-
-@pytest.fixture
-def str_from_float_data(with_nulls):
-    a = [
-        1.1,
-        2.2,
-        3.3,
-        4.4,
-        5.5,
-        6.6,
-        7.7,
-        8.8,
-        9.9,
-        10.10,
-        11.11,
-        12.12,
-    ]
-    if with_nulls:
-        a[4] = None
-        a[-3] = None
-    return pl.LazyFrame({"a": a})
-
-
-@pytest.fixture
-def str_from_integer_data(with_nulls):
+def str_from_numeric_data(with_nulls, numeric_type):
     a = [
         1,
         2,
@@ -115,17 +62,10 @@ def str_from_integer_data(with_nulls):
         4,
         5,
         6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
     ]
     if with_nulls:
         a[4] = None
-        a[-3] = None
-    return pl.LazyFrame({"a": a})
+    return pl.LazyFrame({"a": pl.Series(a, dtype=numeric_type)})
 
 
 slice_cases = [
@@ -427,23 +367,11 @@ def test_unsupported_regex_raises(pattern):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.mark.parametrize("dtype", [pl.Float32, pl.Float64])
-def test_string_to_float(str_to_float_data, dtype):
-    query = str_to_float_data.select(pl.col("a").cast(dtype))
+def test_string_to_numeric(str_to_numeric_data, numeric_type):
+    query = str_to_numeric_data.select(pl.col("a").cast(numeric_type))
     assert_gpu_result_equal(query)
 
 
-@pytest.mark.parametrize("dtype", [pl.Int8, pl.Int16, pl.Int32, pl.Int64])
-def test_string_to_integer(str_to_integer_data, dtype):
-    query = str_to_integer_data.select(pl.col("a").cast(dtype))
-    assert_gpu_result_equal(query)
-
-
-def test_string_from_float(str_from_float_data):
-    query = str_from_float_data.select(pl.col("a").cast(pl.String))
-    assert_gpu_result_equal(query)
-
-
-def test_string_from_integer(str_from_integer_data):
-    query = str_from_integer_data.select(pl.col("a").cast(pl.String))
+def test_string_from_numeric(str_from_numeric_data):
+    query = str_from_numeric_data.select(pl.col("a").cast(pl.String))
     assert_gpu_result_equal(query)
