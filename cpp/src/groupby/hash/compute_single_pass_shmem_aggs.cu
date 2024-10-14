@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -35,6 +36,16 @@
 
 namespace cudf::groupby::detail::hash {
 namespace {
+/// Functor used by type dispatcher returning the size of the underlying C++ type
+struct size_of_functor {
+  template <typename T>
+  __device__ constexpr cudf::size_type operator()()
+  {
+    return sizeof(T);
+  }
+};
+
+/*
 /// Computes number of *actual* bitmask_type elements needed
 __device__ constexpr size_type num_bitmask_words(size_type number_of_bits)
 {
@@ -42,8 +53,9 @@ __device__ constexpr size_type num_bitmask_words(size_type number_of_bits)
   // a public host-device utility will require non-trivial effort, so the
   // cleanup will be addressed in a separate PR.
   return cudf::util::div_rounding_up_safe<size_type>(number_of_bits,
-                                                     detail::size_in_bits<bitmask_type>());
+                                                     cudf::detail::size_in_bits<bitmask_type>());
 }
+*/
 
 // Prepares shared memory data required by each output column, exits if
 // no enough memory space to perform the shared memory aggregation for the
@@ -64,8 +76,9 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
   auto const valid_col_size = round_to_multiple_of_8(sizeof(bool) * cardinality);
 
   while (bytes_allocated < total_agg_size && col_end < output_size) {
+    auto const col_idx       = col_end;
     auto const next_col_size = round_to_multiple_of_8(
-      sizeof(cudf::id_to_type(output_values.column(col_end).type().id())) * cardinality);
+      cudf::type_dispatcher(output_values.column(col_idx).type(), size_of_functor{}) * cardinality);
     auto const next_col_total_size = next_col_size + valid_col_size;
 
     // TODO: it seems early exit will break the followup calculatons. To verify
