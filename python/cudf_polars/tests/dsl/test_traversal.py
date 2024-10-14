@@ -5,7 +5,11 @@ from __future__ import annotations
 
 import pylibcudf as plc
 
-from cudf_polars.dsl import expr
+import polars as pl
+from polars.testing import assert_frame_equal
+
+from cudf_polars import translate_ir
+from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     make_recursive,
@@ -96,3 +100,58 @@ def test_noop_visitor():
 
     renamed = mapper(e2)
     assert renamed == make_expr(dt, "c", "c")
+
+
+def test_rewrite_ir_node():
+    df = pl.LazyFrame({"a": [1, 2, 1], "b": [1, 3, 4]})
+    q = df.group_by("a").agg(pl.col("b").sum()).sort("b")
+
+    orig = translate_ir(q._ldf.visit())
+
+    new_df = pl.DataFrame({"a": [1, 1, 2], "b": [-1, -2, -4]})
+
+    def replace_df(node, rec):
+        if isinstance(node, ir.DataFrameScan):
+            return ir.DataFrameScan(
+                node.schema, new_df._df, node.projection, node.predicate
+            )
+        return reuse_if_unchanged(node, rec)
+
+    mapper = CachingVisitor(replace_df)
+
+    new = mapper(orig)
+
+    result = new.evaluate(cache={}).to_polars()
+
+    expect = pl.DataFrame({"a": [2, 1], "b": [-4, -3]})
+
+    assert_frame_equal(result, expect)
+
+
+def test_rewrite_scan_node(tmp_path):
+    left = pl.LazyFrame({"a": [1, 2, 3], "b": [1, 3, 4]})
+    right = pl.DataFrame({"a": [1, 4, 2], "c": [1, 2, 3]})
+
+    right.write_parquet(tmp_path / "right.pq")
+
+    right_s = pl.scan_parquet(tmp_path / "right.pq")
+
+    q = left.join(right_s, on="a", how="inner")
+
+    def replace_scan(node, rec):
+        if isinstance(node, ir.Scan):
+            return ir.DataFrameScan(
+                node.schema, right._df, node.with_columns, node.predicate
+            )
+        return reuse_if_unchanged(node, rec)
+
+    mapper = CachingVisitor(replace_scan)
+
+    orig = translate_ir(q._ldf.visit())
+    new = mapper(orig)
+
+    result = new.evaluate(cache={}).to_polars()
+
+    expect = q.collect()
+
+    assert_frame_equal(result, expect, check_row_order=False)
