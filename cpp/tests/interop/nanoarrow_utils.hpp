@@ -256,8 +256,7 @@ std::enable_if_t<std::is_same_v<T, bool>, nanoarrow::UniqueArray> get_nanoarrow_
     ArrowBitmap out;
     ArrowBitmapInit(&out);
     NANOARROW_THROW_NOT_OK(ArrowBitmapResize(&out, b.size(), 1));
-    // TODO: Investigate clang-tidy issue further after nanoarrow is made compliant
-    std::memset(out.buffer.data, 0, out.buffer.size_bytes);  // NOLINT
+    std::memset(out.buffer.data, 0, out.buffer.size_bytes);
 
     for (size_t i = 0; i < b.size(); ++i) {
       ArrowBitSetTo(out.buffer.data, i, static_cast<uint8_t>(b[i]));
