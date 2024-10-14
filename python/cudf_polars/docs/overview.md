@@ -164,11 +164,11 @@ the `Node` class.
 
 ## Defining nodes
 
-A concrete node type (`cudf-polars` has ones for expressions `Expr`
-and ones for plan nodes `IR`), should inherit from `Node`. Nodes have
+A concrete node type (`cudf-polars` has expression nodes, `Expr`;
+and plan nodes, `IR`), should inherit from `Node`. Nodes have
 two types of data:
 
-1. `children`: a tuple (possibly empty) of concrete nodes
+1. `children`: a tuple (possibly empty) of concrete nodes;
 2. non-child: arbitrary data attached to the node that is _not_ a
    concrete node.
 
@@ -247,11 +247,11 @@ the logical plan in any case, so is reasonably natural.
 
 As well as just representing and evaluating nodes. We also provide
 facilities for traversing a tree of nodes and defining transformation
-rules in `dsl/traversal.py`. The simplest is `traversal`, this yields
-all _unique_ nodes in an expression parent before child, children
-in-order left to right (i.e. a pre-order traversal). Use this if you
-want to know some specific thing about an expression. For example, to
-determine if an expression contains a `Literal` node:
+rules in `dsl/traversal.py`. The simplest is `traversal`, a
+[pre-order](https://en.wikipedia.org/wiki/Tree_traversal) visit of all
+unique nodes in an expression. Use this if you want to know some
+specific thing about an expression. For example, to determine if an
+expression contains a `Literal` node:
 
 ```python
 def has_literal(node: Expr) -> bool:
