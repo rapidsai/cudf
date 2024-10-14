@@ -484,6 +484,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     }
   }
 
+  _stream.synchronize();
   //
   // Load stripe data into memory:
   //
