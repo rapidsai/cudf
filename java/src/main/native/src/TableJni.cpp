@@ -55,8 +55,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <arrow/api.h>
-#include <arrow/c/bridge.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 
@@ -1069,15 +1067,6 @@ void append_flattened_child_names(cudf::io::column_name_info const& info,
   names.push_back(info.name);
   for (cudf::io::column_name_info const& child : info.children) {
     append_flattened_child_names(child, names);
-  }
-}
-
-// Recursively make schema and its children nullable
-void set_nullable(ArrowSchema* schema)
-{
-  schema->flags |= ARROW_FLAG_NULLABLE;
-  for (int i = 0; i < schema->n_children; ++i) {
-    set_nullable(schema->children[i]);
   }
 }
 
@@ -2717,13 +2706,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
     // The pointer to the shared_ptr<> is returned as a jlong.
     using result_t = std::shared_ptr<arrow::Table>;
 
-    auto got_arrow_schema = cudf::to_arrow_schema(*tview, state->get_column_metadata(*tview));
-    cudf::jni::set_nullable(got_arrow_schema.get());
-    auto got_arrow_array = cudf::to_arrow_host(*tview);
-    auto batch =
-      arrow::ImportRecordBatch(&got_arrow_array->array, got_arrow_schema.get()).ValueOrDie();
-    auto result = arrow::Table::FromRecordBatches({batch}).ValueOrDie();
-
+    auto result = cudf::to_arrow(*tview, state->get_column_metadata(*tview));
     return ptr_as_jlong(new result_t{result});
   }
   CATCH_STD(env, 0)
@@ -2834,21 +2817,7 @@ Java_ai_rapids_cudf_Table_convertArrowTableToCudf(JNIEnv* env, jclass, jlong arr
 
   try {
     cudf::jni::auto_set_device(env);
-
-    ArrowSchema sch;
-    if (!arrow::ExportSchema(*handle->get()->schema(), &sch).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
-    }
-    auto batch = handle->get()->CombineChunksToBatch().ValueOrDie();
-    ArrowArray arr;
-    if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
-    }
-    auto ret = cudf::from_arrow(&sch, &arr);
-    arr.release(&arr);
-    sch.release(&sch);
-
-    return convert_table_for_return(env, ret);
+    return convert_table_for_return(env, cudf::from_arrow(*(handle->get())));
   }
   CATCH_STD(env, 0)
 }
