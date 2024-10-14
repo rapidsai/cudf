@@ -161,6 +161,9 @@ def test_murmurhash3_x86_32(pa_scalar_input_column, plc_scalar_input_tbl):
     assert_column_eq(got, expect)
 
 
+# def test_murmurhash_x86_32_list_struct TODO
+
+
 def test_murmurhash3_x64_128(pa_scalar_input_column, plc_scalar_input_tbl):
     def py_hasher(val):
         hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
