@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Literal, Protocol, Union
+from collections.abc import Hashable, Mapping
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, Union
 
 import pylibcudf as plc
 
@@ -17,6 +17,18 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
     import polars as pl
+
+    from cudf_polars.dsl import expr, ir
+
+__all__: list[str] = [
+    "PolarsIR",
+    "PolarsExpr",
+    "NodeTraverser",
+    "OptimizationArgs",
+    "GenericTransformer",
+    "ExprTransformer",
+    "IRTransformer",
+]
 
 PolarsIR: TypeAlias = Union[
     pl_ir.PythonScan,
@@ -107,3 +119,28 @@ OptimizationArgs: TypeAlias = Literal[
     "cluster_with_columns",
     "no_optimization",
 ]
+
+
+U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
+V_co = TypeVar("V_co", covariant=True)
+
+
+class GenericTransformer(Protocol[U_contra, V_co]):
+    """Abstract protocol for recursive visitors."""
+
+    def __call__(self, __value: U_contra) -> V_co:
+        """Apply the visitor to the node."""
+        ...
+
+    @property
+    def state(self) -> Mapping[str, Any]:
+        """Arbitrary immutable state."""
+        ...
+
+
+# Quotes to avoid circular import
+ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr"]
+"""Protocol for transformation of Expr nodes."""
+
+IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR"]
+"""Protocol for transformation of IR nodes."""
