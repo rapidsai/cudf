@@ -33,7 +33,19 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
-        if not dtypes.can_cast(value.dtype, self.dtype):
+        if (
+            self.dtype.id() == plc.TypeId.STRING
+            or value.dtype.id() == plc.TypeId.STRING
+        ):
+            if not (
+                self.dtype.id() == plc.TypeId.STRING
+                and value.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+            ) or (
+                self.dtype.id() in {plc.TypeId.FLOAT32, plc.TypeId.FLOAT64}
+                and value.dtype.id() == plc.TypeId.STRING
+            ):
+                raise NotImplementedError("Only string to float cast is supported")
+        elif not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
                 f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
             )

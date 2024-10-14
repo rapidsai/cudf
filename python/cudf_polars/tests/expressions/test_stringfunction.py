@@ -40,6 +40,28 @@ def ldf(with_nulls):
     )
 
 
+@pytest.fixture
+def str_to_float_data(with_nulls):
+    a = [
+        "1.1",
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5",
+        "6.6",
+        "7.7",
+        "8.8",
+        "9.9",
+        "10.10",
+        "11.11",
+        "12.12",
+    ]
+    if with_nulls:
+        a[4] = None
+        a[-3] = None
+    return pl.LazyFrame({"a": a})
+
+
 slice_cases = [
     (1, 3),
     (0, 3),
@@ -337,3 +359,8 @@ def test_unsupported_regex_raises(pattern):
 
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_string_to_float(str_to_float_data):
+    query = str_to_float_data.select(pl.col("a").cast(pl.Float64))
+    assert_gpu_result_equal(query)
