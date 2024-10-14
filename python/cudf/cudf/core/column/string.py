@@ -5349,7 +5349,7 @@ class StringMethods(ColumnMethods):
         )
 
     def minhash_permuted(
-        self, a: ColumnLike, b: ColumnLike, width: int = 4
+        self, seed: np.uint32, a: ColumnLike, b: ColumnLike, width: int = 4
     ) -> SeriesOrIndex:
         a_column = column.as_column(a)
         if a_column.dtype != np.uint32:
@@ -5363,7 +5363,7 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(
             libstrings.minhash_permuted(
-                self._column, a_column, b_column, width
+                self._column, seed, a_column, b_column, width
             )
         )
 
@@ -5408,7 +5408,7 @@ class StringMethods(ColumnMethods):
         )
 
     def minhash64_permuted(
-        self, a: ColumnLike, b: ColumnLike, width: int = 4
+        self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int = 4
     ) -> SeriesOrIndex:
         a_column = column.as_column(a)
         if a_column.dtype != np.uint64:
@@ -5422,7 +5422,7 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(
             libstrings.minhash64_permuted(
-                self._column, a_column, b_column, width
+                self._column, seed, a_column, b_column, width
             )
         )
 

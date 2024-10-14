@@ -59,7 +59,13 @@ cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
 
     return Column.from_libcudf(move(c_result))
 
-cpdef Column minhash_permuted(Column input, Column a, Column b, size_type width):
+cpdef Column minhash_permuted(
+    Column input,
+    uint32_t seed,
+    Column a,
+    Column b,
+    size_type width
+):
     """
     Returns the minhash values for each string.
     This function uses MurmurHash3_x86_32 for the hash algorithm.
@@ -70,6 +76,8 @@ cpdef Column minhash_permuted(Column input, Column a, Column b, size_type width)
     ----------
     input : Column
         Strings column to compute minhash
+    seed : uint32_t
+        Seed used for the hash function
     a : Column
         Seed value(s) used for the hash algorithm.
     b : Column
@@ -88,6 +96,7 @@ cpdef Column minhash_permuted(Column input, Column a, Column b, size_type width)
         c_result = move(
             cpp_minhash_permuted(
                 input.view(),
+                seed,
                 a.view(),
                 b.view(),
                 width
@@ -135,10 +144,16 @@ cpdef Column minhash64(Column input, ColumnOrScalar seeds, size_type width=4):
 
     return Column.from_libcudf(move(c_result))
 
-cpdef Column minhash64_permuted(Column input, Column a, Column b, size_type width):
+cpdef Column minhash64_permuted(
+    Column input,
+    uint64_t seed,
+    Column a,
+    Column b,
+    size_type width
+):
     """
     Returns the minhash values for each string.
-    This function uses MurmurHash3_x128_65 for the hash algorithm.
+    This function uses MurmurHash3_x64_128 for the hash algorithm.
 
     For details, see :cpp:func:`minhash`.
 
@@ -146,6 +161,8 @@ cpdef Column minhash64_permuted(Column input, Column a, Column b, size_type widt
     ----------
     input : Column
         Strings column to compute minhash
+    seed : uint64_t
+        Seed used for the hash function
     a : Column
         Seed value(s) used for the hash algorithm.
     b : Column
@@ -164,6 +181,7 @@ cpdef Column minhash64_permuted(Column input, Column a, Column b, size_type widt
         c_result = move(
             cpp_minhash64_permuted(
                 input.view(),
+                seed,
                 a.view(),
                 b.view(),
                 width

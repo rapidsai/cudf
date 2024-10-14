@@ -24,6 +24,7 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] minhash_permuted(
         const column_view &strings,
+        const uint32_t seed,
         const column_view &a,
         const column_view &b,
         const size_type width,
@@ -43,6 +44,7 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] minhash64_permuted(
         const column_view &strings,
+        const uint64_t seed,
         const column_view &a,
         const column_view &b,
         const size_type width,

@@ -1,5 +1,7 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint32_t, uint64_t
+
 from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
@@ -18,9 +20,10 @@ def minhash(Column input, Column seeds, int width=4):
 
 
 @acquire_spill_lock()
-def minhash_permuted(Column input, Column a, Column b, int width):
+def minhash_permuted(Column input, uint32_t seed, Column a, Column b, int width):
     result = nvtext.minhash.minhash_permuted(
         input.to_pylibcudf(mode="read"),
+        seed,
         a.to_pylibcudf(mode="read"),
         b.to_pylibcudf(mode="read"),
         width,
@@ -39,9 +42,10 @@ def minhash64(Column input, Column seeds, int width=4):
 
 
 @acquire_spill_lock()
-def minhash64_permuted(Column input, Column a, Column b, int width):
+def minhash64_permuted(Column input, uint64_t seed, Column a, Column b, int width):
     result = nvtext.minhash.minhash64_permuted(
         input.to_pylibcudf(mode="read"),
+        seed,
         a.to_pylibcudf(mode="read"),
         b.to_pylibcudf(mode="read"),
         width,

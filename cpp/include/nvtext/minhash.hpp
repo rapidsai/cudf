@@ -103,6 +103,7 @@ std::unique_ptr<cudf::column> minhash(
  * @throw std::overflow_error if `parmA.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
+ * @param seed  Seed value used for the hash algorithm
  * @param parmA Values used for the hash algorithm
  * @param parmB Values used for the hash algorithm
  * @param width The character width used for apply substrings
@@ -112,6 +113,7 @@ std::unique_ptr<cudf::column> minhash(
  */
 std::unique_ptr<cudf::column> minhash_permuted(
   cudf::strings_column_view const& input,
+  uint32_t seed,
   cudf::device_span<uint32_t const> parmA,
   cudf::device_span<uint32_t const> parmB,
   cudf::size_type width,
@@ -192,6 +194,7 @@ std::unique_ptr<cudf::column> minhash64(
  * @throw std::overflow_error if `parmA.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
+ * @param seed  Seed value used for the hash algorithm
  * @param parmA Values used for the hash algorithm
  * @param parmB Values used for the hash algorithm
  * @param width The character width used for apply substrings
@@ -201,6 +204,7 @@ std::unique_ptr<cudf::column> minhash64(
  */
 std::unique_ptr<cudf::column> minhash64_permuted(
   cudf::strings_column_view const& input,
+  uint64_t seed,
   cudf::device_span<uint64_t const> parmA,
   cudf::device_span<uint64_t const> parmB,
   cudf::size_type width,
