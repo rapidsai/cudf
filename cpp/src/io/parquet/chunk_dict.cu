@@ -194,17 +194,12 @@ struct map_find_fn {
            val_idx += block_size) {
         // Find the key using a single thread for best performance for now.
         if (data_col.is_valid(val_idx)) {
+          auto const found_slot = map_find_ref.find(val_idx);
+          // Fail if we didn't find the previously inserted key.
+          cudf_assert(found_slot != map_find_ref.end() &&
+                      "Unable to find value in map in dictionary index construction");
           // No need for atomic as this is not going to be modified by any other thread.
-          chunk->dict_index[val_idx - s_ck_start_val_idx] = [&]() {
-            auto const found_slot = map_find_ref.find(val_idx);
-
-            // Fail if we didn't find the previously inserted key.
-            cudf_assert(found_slot != map_find_ref.end() &&
-                        "Unable to find value in map in dictionary index construction");
-
-            // Return the found value.
-            return found_slot->second;
-          }();
+          chunk->dict_index[val_idx - s_ck_start_val_idx] = found_slot->second;
         }
       }
     } else {
