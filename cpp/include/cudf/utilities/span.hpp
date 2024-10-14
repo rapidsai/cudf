@@ -222,6 +222,10 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
 
   constexpr host_span() noexcept : base() {}  // required to compile on centos
 
+  /// Constructor from pointer and size
+  /// @param data Pointer to the first element in the span
+  /// @param size The number of elements in the span
+  /// @param is_device_accessible Whether the data is device accessible (e.g. pinned memory)
   constexpr host_span(T* data, std::size_t size, bool is_device_accessible)
     : base(data, size), _is_device_accessible{is_device_accessible}
   {
