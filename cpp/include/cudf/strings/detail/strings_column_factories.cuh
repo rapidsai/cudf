@@ -27,7 +27,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cub/device/device_memcpy.cuh>
 #include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
