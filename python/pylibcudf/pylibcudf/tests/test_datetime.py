@@ -1,26 +1,12 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import datetime
-import functools
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
-
-
-@pytest.fixture
-def date_column(has_nulls):
-    values = [
-        datetime.date(1999, 1, 1),
-        datetime.date(2024, 10, 12),
-        datetime.date(1, 1, 1),
-        datetime.date(9999, 1, 1),
-    ]
-    if has_nulls:
-        values[2] = None
-    return plc.interop.from_arrow(pa.array(values, type=pa.date32()))
 
 
 @pytest.fixture(scope="module", params=["s", "ms", "us", "ns"])
@@ -40,24 +26,35 @@ def datetime_column(has_nulls, request):
     )
 
 
-@pytest.mark.parametrize(
-    "component, pc_fun",
-    [
-        ("year", pc.year),
-        ("month", pc.month),
-        ("day", pc.day),
-        ("weekday", functools.partial(pc.day_of_week, count_from_zero=False)),
-        ("hour", pc.hour),
-        ("minute", pc.minute),
-        ("second", pc.second),
-        ("millisecond", pc.millisecond),
-        ("microsecond", pc.microsecond),
-        ("nanosecond", pc.nanosecond),
+@pytest.fixture(
+    params=[
+        ("year", plc.datetime.DatetimeComponent.YEAR),
+        ("month", plc.datetime.DatetimeComponent.MONTH),
+        ("day", plc.datetime.DatetimeComponent.DAY),
+        ("day_of_week", plc.datetime.DatetimeComponent.WEEKDAY),
+        ("hour", plc.datetime.DatetimeComponent.HOUR),
+        ("minute", plc.datetime.DatetimeComponent.MINUTE),
+        ("second", plc.datetime.DatetimeComponent.SECOND),
+        ("millisecond", plc.datetime.DatetimeComponent.MILLISECOND),
+        ("microsecond", plc.datetime.DatetimeComponent.MICROSECOND),
+        ("nanosecond", plc.datetime.DatetimeComponent.NANOSECOND),
     ],
+    ids=lambda x: x[0],
 )
-def test_extraction(datetime_column, component, pc_fun):
+def component(request):
+    return request.param
+
+
+def test_extract_datetime_component(datetime_column, component):
+    attr, component = component
+    kwargs = {}
+    if attr == "day_of_week":
+        kwargs = {"count_from_zero": False}
     got = plc.datetime.extract_datetime_component(datetime_column, component)
     # libcudf produces an int16, arrow produces an int64
-    expect = pc_fun(plc.interop.to_arrow(datetime_column)).cast(pa.int16())
+
+    expect = getattr(pc, attr)(
+        plc.interop.to_arrow(datetime_column), **kwargs
+    ).cast(pa.int16())
 
     assert_column_eq(expect, got)

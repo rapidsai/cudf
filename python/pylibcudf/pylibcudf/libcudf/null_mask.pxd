@@ -6,7 +6,7 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, mask_state, size_type
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:

@@ -56,8 +56,15 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_link_libraries(
     ${CMAKE_TEST_NAME}
-    PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
-            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
+    PRIVATE cudf::cudftestutil
+            cudf::cudftestutil_impl
+            GTest::gmock
+            GTest::gmock_main
+            GTest::gtest
+            GTest::gtest_main
+            nvtx3::nvtx3-cpp
+            $<TARGET_NAME_IF_EXISTS:conda_env>
+            "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -385,6 +392,8 @@ ConfigureTest(
 # * utilities tests -------------------------------------------------------------------------------
 ConfigureTest(
   UTILITIES_TEST
+  utilities_tests/batched_memcpy_tests.cu
+  utilities_tests/batched_memset_tests.cu
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
@@ -395,7 +404,6 @@ ConfigureTest(
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
-  utilities_tests/batched_memset_tests.cu
 )
 
 # ##################################################################################################
