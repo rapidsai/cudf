@@ -146,7 +146,8 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
   }
 }
 
-__device__ void compute_final_aggregations(cudf::size_type col_start,
+__device__ void compute_final_aggregations(cooperative_groups::thread_block const& block,
+                                           cudf::size_type col_start,
                                            cudf::size_type col_end,
                                            cudf::table_device_view input_values,
                                            cudf::mutable_table_device_view output_values,
@@ -156,8 +157,8 @@ __device__ void compute_final_aggregations(cudf::size_type col_start,
                                            bool** s_aggregates_valid_pointer,
                                            cudf::aggregation::Kind const* d_agg_kinds)
 {
-  for (auto cur_idx = threadIdx.x; cur_idx < cardinality; cur_idx += blockDim.x) {
-    auto out_idx = global_mapping_index[blockIdx.x * GROUPBY_SHM_MAX_ELEMENTS + cur_idx];
+  for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
+    auto out_idx = global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto output_col = output_values.column(col_idx);
 
@@ -168,10 +169,11 @@ __device__ void compute_final_aggregations(cudf::size_type col_start,
                                                   out_idx,
                                                   input_values.column(col_idx),
                                                   s_aggregates_pointer[col_idx],
-                                                  cur_idx,
+                                                  idx,
                                                   s_aggregates_valid_pointer[col_idx]);
     }
   }
+  block.sync();
 }
 
 /* Takes the local_mapping_index and global_mapping_index to compute
@@ -243,7 +245,8 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                               d_agg_kinds);
     block.sync();
 
-    compute_final_aggregations(col_start,
+    compute_final_aggregations(block,
+                               col_start,
                                col_end,
                                input_values,
                                output_values,
@@ -252,7 +255,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                s_aggregates_pointer,
                                s_aggregates_valid_pointer,
                                d_agg_kinds);
-    block.sync();
   }
 }
 
