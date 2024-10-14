@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-IR: TypeAlias = Union[
+PolarsIR: TypeAlias = Union[
     pl_ir.PythonScan,
     pl_ir.Scan,
     pl_ir.Cache,
@@ -38,7 +38,7 @@ IR: TypeAlias = Union[
     pl_ir.ExtContext,
 ]
 
-Expr: TypeAlias = Union[
+PolarsExpr: TypeAlias = Union[
     pl_expr.Function,
     pl_expr.Window,
     pl_expr.Literal,
@@ -68,7 +68,7 @@ class NodeTraverser(Protocol):
         """Set the current plan node to n."""
         ...
 
-    def view_current_node(self) -> IR:
+    def view_current_node(self) -> PolarsIR:
         """Convert current plan node to python rep."""
         ...
 
@@ -80,7 +80,7 @@ class NodeTraverser(Protocol):
         """Get the datatype of the given expression id."""
         ...
 
-    def view_expression(self, n: int) -> Expr:
+    def view_expression(self, n: int) -> PolarsExpr:
         """Convert the given expression to python rep."""
         ...
 
