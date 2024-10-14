@@ -45,7 +45,7 @@ def metadata_from_arrow_type(
 def assert_column_eq(
     lhs: pa.Array | plc.Column,
     rhs: pa.Array | plc.Column,
-    check_field_nullability=False,
+    check_field_nullability=True,
 ) -> None:
     """Verify that a pylibcudf array and PyArrow array are equal.
 
@@ -60,9 +60,7 @@ def assert_column_eq(
         on child fields are equal.
 
         Useful for checking roundtripping of lossy formats like JSON that may not
-        preserve this information. Also, our Arrow interop functions make different
-        choices by default than pyarrow field constructors since the interop functions
-        may make data-dependent choices.
+        preserve this information.
     """
     # Nested types require children metadata to be passed to the conversion function.
     if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(

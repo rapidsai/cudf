@@ -69,6 +69,9 @@ include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
 target_link_libraries(interop PUBLIC nanoarrow)
 
+set(targets_using_arrow_headers interop avro csv orc json parquet)
+link_to_pyarrow_headers("${targets_using_arrow_headers}")
+
 add_subdirectory(io)
 add_subdirectory(nvtext)
 add_subdirectory(strings)
