@@ -16,8 +16,8 @@
 
 #include "flatten_single_pass_aggs.hpp"
 #include "groupby_kernels.cuh"
-#include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
+#include "sparse_to_dense_results.hpp"
 #include "var_hash_functor.cuh"
 
 #include <cudf/column/column_factories.hpp>
@@ -40,37 +40,6 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
-/**
- * @brief Gather sparse results into dense using `gather_map` and add to
- * `dense_cache`
- *
- * @see groupby_null_templated()
- */
-template <typename SetType>
-void sparse_to_dense_results(table_view const& keys,
-                             host_span<aggregation_request const> requests,
-                             cudf::detail::result_cache* sparse_results,
-                             cudf::detail::result_cache* dense_results,
-                             device_span<size_type const> gather_map,
-                             SetType set,
-                             bitmask_type const* row_bitmask,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-{
-  for (auto const& request : requests) {
-    auto const& agg_v = request.aggregations;
-    auto const& col   = request.values;
-
-    // Given an aggregation, this will get the result from sparse_results and
-    // convert and return dense, compacted result
-    auto finalizer = hash_compound_agg_finalizer(
-      col, sparse_results, dense_results, gather_map, set, row_bitmask, stream, mr);
-    for (auto&& agg : agg_v) {
-      agg->finalize(finalizer);
-    }
-  }
-}
-
 // make table that will hold sparse results
 auto create_sparse_results_table(table_view const& flattened_values,
                                  std::vector<aggregation::Kind> aggs,
@@ -232,8 +201,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   auto gather_map = extract_populated_keys(set, keys.num_rows(), stream);
 
   // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(keys,
-                          requests,
+  sparse_to_dense_results(requests,
                           &sparse_results,
                           cache,
                           gather_map,
