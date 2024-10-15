@@ -31,8 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cooperative_groups.h>
-
-#include <cstddef>
+#include <cuda/std/cstddef>
 
 namespace cudf::groupby::detail::hash {
 namespace {
@@ -86,7 +85,7 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
                                               cudf::size_type col_start,
                                               cudf::size_type col_end,
                                               cudf::mutable_table_device_view output_values,
-                                              std::byte* shmem_agg_storage,
+                                              cuda::std::byte* shmem_agg_storage,
                                               cudf::size_type* shmem_agg_res_offsets,
                                               cudf::size_type* shmem_agg_mask_offsets,
                                               cudf::size_type cardinality,
@@ -94,8 +93,8 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
 {
   for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
     for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
-      std::byte* target =
-        reinterpret_cast<std::byte*>(shmem_agg_storage + shmem_agg_res_offsets[col_idx]);
+      cuda::std::byte* target =
+        reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + shmem_agg_res_offsets[col_idx]);
       bool* target_mask =
         reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
       cudf::detail::dispatch_type_and_aggregation(output_values.column(col_idx).type(),
@@ -116,7 +115,7 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
                                           cudf::table_device_view source,
                                           cudf::size_type num_input_rows,
                                           cudf::size_type* local_mapping_index,
-                                          std::byte* shmem_agg_storage,
+                                          cuda::std::byte* shmem_agg_storage,
                                           cudf::size_type* shmem_agg_res_offsets,
                                           cudf::size_type* shmem_agg_mask_offsets,
                                           cudf::aggregation::Kind const* d_agg_kinds)
@@ -129,8 +128,8 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
       for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
         auto const source_col = source.column(col_idx);
 
-        std::byte* target =
-          reinterpret_cast<std::byte*>(shmem_agg_storage + shmem_agg_res_offsets[col_idx]);
+        cuda::std::byte* target =
+          reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + shmem_agg_res_offsets[col_idx]);
         bool* target_mask =
           reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
 
@@ -154,7 +153,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                            cudf::mutable_table_device_view target,
                                            cudf::size_type cardinality,
                                            cudf::size_type* global_mapping_index,
-                                           std::byte* shmem_agg_storage,
+                                           cuda::std::byte* shmem_agg_storage,
                                            cudf::size_type* agg_res_offsets,
                                            cudf::size_type* agg_mask_offsets,
                                            cudf::aggregation::Kind const* d_agg_kinds)
@@ -166,8 +165,8 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto target_col = target.column(col_idx);
 
-      std::byte* source =
-        reinterpret_cast<std::byte*>(shmem_agg_storage + agg_res_offsets[col_idx]);
+      cuda::std::byte* source =
+        reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + agg_res_offsets[col_idx]);
       bool* source_mask = reinterpret_cast<bool*>(shmem_agg_storage + agg_mask_offsets[col_idx]);
 
       cudf::detail::dispatch_type_and_aggregation(input_values.column(col_idx).type(),
@@ -206,7 +205,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 
   __shared__ cudf::size_type col_start;
   __shared__ cudf::size_type col_end;
-  extern __shared__ std::byte shmem_agg_storage[];
+  extern __shared__ cuda::std::byte shmem_agg_storage[];
 
   cudf::size_type* shmem_agg_res_offsets =
     reinterpret_cast<cudf::size_type*>(shmem_agg_storage + total_agg_size);

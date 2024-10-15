@@ -23,6 +23,8 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/std/cstddef>
+
 namespace cudf::groupby::detail::hash {
 
 // TODO: TO BE REMOVED
@@ -73,7 +75,7 @@ __device__ T get_identity()
 
 template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
 struct initialize_target_element {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
   {
@@ -83,7 +85,7 @@ struct initialize_target_element {
 
 template <typename Target, cudf::aggregation::Kind k>
 struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target, k>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
   {
@@ -103,7 +105,7 @@ struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target
 struct initialize_shmem {
   template <typename Target, cudf::aggregation::Kind k>
   // TODO naming
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
   {

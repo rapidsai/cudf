@@ -23,13 +23,14 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.cuh>
 
+#include <cuda/std/cstddef>
 #include <cuda/std/type_traits>
 
 namespace cudf::groupby::detail::hash {
 
 template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_shmem {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -44,7 +45,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::MIN,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -66,7 +67,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::MAX,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -89,7 +90,7 @@ struct update_target_element_shmem<
   cudf::aggregation::SUM,
   cuda::std::enable_if_t<cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
                          !cudf::is_timestamp<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -111,7 +112,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::SUM_OF_SQUARES,
   cuda::std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -131,7 +132,7 @@ struct update_target_element_shmem<
   Source,
   cudf::aggregation::PRODUCT,
   cuda::std::enable_if_t<cudf::detail::is_product_supported<Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -152,12 +153,13 @@ struct update_target_element_shmem<
   cudf::aggregation::COUNT_VALID,
   cuda::std::enable_if_t<
     cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_VALID>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
+    // The nullability was checked prior to this call in the `shmem_element_aggregator` functor
     using Target          = cudf::detail::target_type_t<Source, cudf::aggregation::COUNT_VALID>;
     Target* target_casted = reinterpret_cast<Target*>(target);
     cudf::detail::atomic_add(&target_casted[target_index], Target{1});
@@ -170,7 +172,7 @@ struct update_target_element_shmem<
   cudf::aggregation::COUNT_ALL,
   cuda::std::enable_if_t<
     cudf::detail::is_valid_aggregation<Source, cudf::aggregation::COUNT_ALL>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -190,7 +192,7 @@ struct update_target_element_shmem<
   cudf::aggregation::ARGMAX,
   cuda::std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMAX>() and
                          cudf::is_relationally_comparable<Source, Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -216,7 +218,7 @@ struct update_target_element_shmem<
   cudf::aggregation::ARGMIN,
   cuda::std::enable_if_t<cudf::detail::is_valid_aggregation<Source, cudf::aggregation::ARGMIN>() and
                          cudf::is_relationally_comparable<Source, Source>()>> {
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
@@ -238,7 +240,7 @@ struct update_target_element_shmem<
 
 struct shmem_element_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
-  __device__ void operator()(std::byte* target,
+  __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
