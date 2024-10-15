@@ -15,9 +15,31 @@
   ],
   "hostRequirements": {"gpu": "optional"},
   "features": {
+    "ghcr.io/rapidsai/devcontainers/features/cuda:24.12": {
+        "version": "12.5",
+        "installCompilers": false,
+        "installProfilers": true,
+        "installDevPackages": false,
+        "installcuDNN": false,
+        "installcuTensor": false,
+        "installNCCL": false,
+        "installCUDARuntime": false,
+        "installNVRTC": false,
+        "installOpenCL": false,
+        "installcuBLAS": false,
+        "installcuSPARSE": false,
+        "installcuFFT": false,
+        "installcuFile": false,
+        "installcuRAND": false,
+        "installcuSOLVER": false,
+        "installNPP": false,
+        "installnvJPEG": false,
+        "pruneStaticLibs": true
+      },
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.12": {}
   },
   "overrideFeatureInstallOrder": [
+    "ghcr.io/rapidsai/devcontainers/features/cuda",
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
   ],
   "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.5-envs}"],
