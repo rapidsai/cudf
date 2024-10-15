@@ -9,8 +9,8 @@ from pylibcudf.libcudf.types cimport size_type
 
 cdef extern from "nvtext/stemmer.hpp" namespace "nvtext" nogil:
     ctypedef enum letter_type:
-        CONSONANT 'nvtext::letter_type::CONSONANT'
-        VOWEL 'nvtext::letter_type::VOWEL'
+        CONSONANT "nvtext::letter_type::CONSONANT"
+        VOWEL "nvtext::letter_type::VOWEL"
 
     cdef unique_ptr[column] porter_stemmer_measure(
         const column_view & strings
