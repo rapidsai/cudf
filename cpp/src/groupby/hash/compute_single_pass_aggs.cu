@@ -16,8 +16,8 @@
 
 #include "compute_single_pass_aggs.hpp"
 #include "flatten_single_pass_aggs.hpp"
-#include "groupby_kernels.cuh"
 #include "helpers.cuh"
+#include "single_pass_functors.cuh"
 #include "var_hash_functor.cuh"
 
 #include <cudf/column/column_factories.hpp>
