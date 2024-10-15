@@ -7,10 +7,14 @@ cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_other
 
+RAPIDS_VERSION="$(rapids-version)"
+
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  dask-cudf cudf_kafka custreamz
+  "dask-cudf=${RAPIDS_VERSION}" \
+  "cudf_kafka=${RAPIDS_VERSION}" \
+  "custreamz=${RAPIDS_VERSION}"
 
 rapids-logger "Check GPU usage"
 nvidia-smi

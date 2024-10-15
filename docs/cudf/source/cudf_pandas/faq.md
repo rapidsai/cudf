@@ -181,6 +181,32 @@ There are a few known limitations that you should be aware of:
    ```
 - `cudf.pandas` (and cuDF in general) is only compatible with pandas 2. Version
   24.02 of cudf was the last to support pandas 1.5.x.
+- In order for `cudf.pandas` to produce a proxy array that ducktypes as a NumPy
+  array, we create a proxy type that actually subclasses `numpy.ndarray`. We can
+  verify this with an isinstance check.
+
+  ```python
+  %load_ext cudf.pandas
+  import pandas as pd
+  import numpy as np
+
+  arr = pd.Series([1, 1, 2]).unique() # returns a proxy array
+  isinstance(arr, np.ndarray) # returns True, where arr is a proxy array
+  ```
+  Because the proxy type ducktypes as a NumPy array, NumPy functions may attempt to
+  access internal members, such as the [data buffer](https://numpy.org/doc/stable/dev/internals.html#internal-organization-of-numpy-arrays), via the NumPy C API.
+  However, our proxy mechanism is designed to proxy function calls at the Python
+  level, which is incompatible with these types of accesses. To handle these
+  situations, we perform an eager device-to-host (DtoH) copy, which sets the data
+  buffer correctly but incurs the cost of extra time when creating the proxy array.
+  In the previous example, creating `arr` performed this kind of implicit DtoH transfer.
+
+  With this approach, we also get compatibility with third party libraries like `torch`.
+
+  ```python
+  import torch
+  x = torch.from_numpy(arr)
+  ```
 
 ## Can I force running on the CPU?
 
