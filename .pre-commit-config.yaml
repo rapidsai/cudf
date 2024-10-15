@@ -95,16 +95,15 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
-      - id: no-unseeded-default-rng
-        name: no-unseeded-default-rng
-        description: 'Enforce that no non-seeded default_rng is used'
-        entry: 'default_rng\(\)'
-        language: pygrep
-        types: [python]
-      - id: no-np-random-seed
-        name: no-np-random-seed
-        description: 'Enforce that default_rng is used instead of np.random.seed'
-        entry: 'np.random.seed\('
+      - id: use-only-default-rng
+        name: use-only-default-rng
+        description: 'Enforce that `default_rng` is used instead of `np.random.seed` and it must be seeded.'
+        entry: |
+            (?x)
+            # no unseeded default_rng
+            |default_rng\(\)
+            # no np.random.seed
+            |np.random.seed\(
         language: pygrep
         types: [python]
       - id: cmake-format
