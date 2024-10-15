@@ -187,8 +187,9 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(not targets.is_empty(), "Must specify at least one target string.");
-  CUDF_EXPECTS(not targets.has_nulls(), "Target strings cannot be null");
+  CUDF_EXPECTS(
+    not targets.is_empty(), "Must specify at least one target string.", std::invalid_argument);
+  CUDF_EXPECTS(not targets.has_nulls(), "Target strings cannot be null", std::invalid_argument);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_targets = column_device_view::create(targets.parent(), stream);
