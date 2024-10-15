@@ -2724,3 +2724,37 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   EXPECT_EQ(result_table.num_columns(), expected->num_columns());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
 }
+
+TEST_F(ParquetReaderTest, ListsWideTable)
+{
+  auto constexpr num_rows = 5;
+  auto constexpr num_cols = 30'000;  // fails for 32769+
+  auto constexpr seed     = 0xceed;
+
+  std::mt19937 engine{seed};
+
+  auto str_list_nulls = make_parquet_string_list_col(engine, num_rows, 5, 32, true);
+  auto str_list       = make_parquet_string_list_col(engine, num_rows, 5, 32, false);
+
+  std::vector<cudf::column_view> cols{str_list_nulls->view(), str_list->view()};
+  cols.reserve(num_cols);
+
+  auto const initial_size = cols.size();
+  std::for_each(thrust::make_counting_iterator<int32_t>(0),
+                thrust::make_counting_iterator<int32_t>(num_cols - initial_size),
+                [&](auto i) { cols.push_back(cols[i % initial_size]); });
+
+  cudf::table_view expected(cols);
+
+  // Use a host buffer for faster I/O
+  std::vector<char> buffer;
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build();
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
+  auto const [result, _] = cudf::io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
+}
