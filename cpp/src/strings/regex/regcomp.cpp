@@ -710,9 +710,7 @@ class regex_parser {
     std::stack<int> lbra_stack;
     auto repeat_start_index = -1;
 
-    for (std::size_t index = 0; index < in.size(); index++) {
-      auto const item = in[index];
-
+    for (auto const item : in) {
       if (item.type != COUNTED && item.type != COUNTED_LAZY) {
         out.push_back(item);
         if (item.type == LBRA || item.type == LBRA_NC) {
