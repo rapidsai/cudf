@@ -368,8 +368,10 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/compute_groupby.cu
   src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
+  src/groupby/hash/hash_compound_agg_finalizer.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
