@@ -26,6 +26,8 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         unique_ptr[column] table
         unique_ptr[column] bin_coefficients
         unique_ptr[column] bin_offsets
+        unique_ptr[column] cp_metadata
+        unique_ptr[column] aux_cp_table
 
     cdef unique_ptr[hashed_vocabulary] load_vocabulary_file(
         const string &filename_hashed_vocabulary
@@ -33,7 +35,7 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
 
     cdef tokenizer_result subword_tokenize(
         const column_view & strings,
-        hashed_vocabulary & hashed_vocablary_obj,
+        hashed_vocabulary & hashed_vocabulary_obj,
         uint32_t max_sequence_length,
         uint32_t stride,
         bool do_lower,

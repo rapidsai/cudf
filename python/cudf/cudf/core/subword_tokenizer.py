@@ -6,8 +6,11 @@ import warnings
 
 import cupy as cp
 
-from cudf._lib.nvtext.subword_tokenize import (
+from pylibcudf.nvtext.subword_tokenize import (
     Hashed_Vocabulary as cpp_hashed_vocabulary,
+)
+
+from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize_inmem_hash as cpp_subword_tokenize,
 )
 
