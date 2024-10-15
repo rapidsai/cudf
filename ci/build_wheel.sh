@@ -42,3 +42,5 @@ python -m pip wheel \
     --no-deps \
     --disable-pip-version-check \
     .
+
+sccache --show-adv-stats
