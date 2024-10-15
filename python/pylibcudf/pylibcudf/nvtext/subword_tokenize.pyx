@@ -15,6 +15,10 @@ from pylibcudf.libcudf.nvtext.subword_tokenize cimport (
 
 
 cdef class Hashed_Vocabulary:
+    """The vocabulary data for use with the subword_tokenize function.
+
+    For details, see :cpp:class:`cudf::nvtext::hashed_vocabulary`.
+    """
     def __cinit__(self, hash_file):
         cdef string c_hash_file = <string>str(hash_file).encode()
         with nogil:
@@ -70,10 +74,10 @@ cpdef tuple[Column, Column, Column] subword_tokenize(
         input stream to lower-case and strip accents from those characters.
         If false, accented and uppercase characters are not transformed.
     do_truncate : bool
-            If true, the tokenizer will discard all the token-ids after
-            ``max_sequence_length`` for each input string. If false, it
-            will use a new row in the output token-ids to continue
-            generating the output.
+        If true, the tokenizer will discard all the token-ids after
+        ``max_sequence_length`` for each input string. If false, it
+        will use a new row in the output token-ids to continue
+        generating the output.
 
     Returns
     -------
