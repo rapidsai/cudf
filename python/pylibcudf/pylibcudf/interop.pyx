@@ -43,7 +43,7 @@ from .types cimport DataType, type_id
 
 import os
 
-USE_LEGACY_INTEROP = bool(os.environ.get("USE_LEGACY_INTEROP", 0))
+USE_LEGACY_INTEROP = bool(int(os.environ.get("USE_LEGACY_INTEROP", 0)))
 
 
 ARROW_TO_PYLIBCUDF_TYPES = {
