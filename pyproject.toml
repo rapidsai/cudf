@@ -90,6 +90,7 @@ select = [
     "UP007",
     # Import from `collections.abc` instead: `Callable`
     "UP035",
+    # usage of legacy `np.random` function calls
     "NPY002",
 ]
 ignore = [
