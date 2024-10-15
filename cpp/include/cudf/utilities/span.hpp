@@ -414,7 +414,7 @@ class base_2dspan {
    * @param flat_view The flattened 2D span
    * @param columns Number of columns
    */
-  constexpr base_2dspan(RowType<T, dynamic_extent> flat_view, size_t columns) noexcept
+  constexpr base_2dspan(RowType<T, dynamic_extent> flat_view, size_t columns)
     : _flat{flat_view}, _size{columns == 0 ? 0 : flat_view.size() / columns, columns}
   {
     CUDF_EXPECTS(_size.first * _size.second == flat_view.size(), "Invalid 2D span size");
