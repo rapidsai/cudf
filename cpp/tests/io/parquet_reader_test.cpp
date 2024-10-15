@@ -2728,13 +2728,23 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
 TEST_F(ParquetReaderTest, ListsWideTable)
 {
   auto constexpr num_rows = 5;
-  auto constexpr num_cols = 30'000;  // fails for 32769+
+  auto constexpr num_cols = 30'000;
   auto constexpr seed     = 0xceed;
 
   std::mt19937 engine{seed};
 
   auto str_list_nulls = make_parquet_string_list_col(engine, num_rows, 5, 32, true);
-  std::vector<cudf::column_view> cols(num_cols, str_list_nulls->view());
+  auto str_list       = make_parquet_string_list_col(engine, num_rows, 5, 32, false);
+
+  // switch between nullable and non-nullable
+  std::vector<cudf::column_view> cols(num_cols);
+  bool with_nulls = false;
+  std::generate_n(cols.begin(), num_cols, [&]() {
+    auto const view = with_nulls ? str_list_nulls->view() : str_list->view();
+    with_nulls      = not with_nulls;
+    return view;
+  });
+
   cudf::table_view expected(cols);
 
   // Use a host buffer for faster I/O
