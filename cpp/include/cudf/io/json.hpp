@@ -125,6 +125,8 @@ class json_reader_options {
   // Normalize unquoted spaces and tabs
   bool _normalize_whitespace = false;
 
+  bool _nullify_empty_lines = false;
+
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
@@ -314,6 +316,13 @@ class json_reader_options {
   [[nodiscard]] bool is_enabled_normalize_whitespace() const { return _normalize_whitespace; }
 
   /**
+   * @brief Whether the reader should nullify empty lines for json lines format with recovery mode
+   *
+   * @returns true if the reader should nullify empty lines, false otherwise
+   */
+  [[nodiscard]] bool is_nullify_empty_lines() const { return _nullify_empty_lines; }
+
+  /**
    * @brief Queries the JSON reader's behavior on invalid JSON lines.
    *
    * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
@@ -501,6 +510,14 @@ class json_reader_options {
    * characters i.e. tabs and spaces
    */
   void enable_normalize_whitespace(bool val) { _normalize_whitespace = val; }
+
+  /**
+   * @brief Set whether the reader should nullify empty lines for json lines format with recovery
+   * mode
+   *
+   * @param val Boolean value to indicate whether the reader should nullify empty lines
+   */
+  void nullify_empty_lines(bool val) { _nullify_empty_lines = val; }
 
   /**
    * @brief Specifies the JSON reader's behavior on invalid JSON lines.
@@ -776,6 +793,19 @@ class json_reader_options_builder {
   json_reader_options_builder& normalize_whitespace(bool val)
   {
     options._normalize_whitespace = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should nullify empty lines for json lines format with recovery
+   * mode
+   *
+   * @param val Boolean value to indicate whether the reader should nullify empty lines
+   * @return this for chaining
+   */
+  json_reader_options_builder& nullify_empty_lines(bool val)
+  {
+    options._nullify_empty_lines = val;
     return *this;
   }
 
