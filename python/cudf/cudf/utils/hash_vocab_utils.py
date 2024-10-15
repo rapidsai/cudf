@@ -108,7 +108,7 @@ def _find_hash_for_internal(hash_bin, rng):
             return bins, a, b
 
 
-def _perfect_hash(integers, rng, max_constant):
+def _perfect_hash(integers, max_constant, rng):
     num_top_level_bins = len(integers) // 4
 
     init_bins, init_a, init_b = _pick_initial_a_b(
@@ -264,7 +264,7 @@ def hash_vocab(
         hash_table,
         inner_table_coeffs,
         offsets_into_ht,
-    ) = _perfect_hash(keys, rng, 10)
+    ) = _perfect_hash(keys, 10, rng)
 
     _pack_keys_and_values(hash_table, hashed_vocab)
     _store_func(

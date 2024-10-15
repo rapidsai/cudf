@@ -31,14 +31,14 @@ def dask_client():
 
 
 def test_1d_distributed(dask_client):
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=42)
     ts = pd.Series(rng.random(100))
     m = 10
     return stumpy.stumped(dask_client, ts, m)
 
 
 def test_multidimensional_distributed_timeseries(dask_client):
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=42)
     # Each row represents data from a different dimension while each column represents
     # data from the same dimension
     your_time_series = rng.random(3, 1000)

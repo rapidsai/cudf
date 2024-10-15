@@ -3903,7 +3903,7 @@ def test_select_dtype_datetime_with_frequency():
 
 
 def test_dataframe_describe_exclude():
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     data_length = 10000
 
     df = cudf.DataFrame()
@@ -3919,7 +3919,7 @@ def test_dataframe_describe_exclude():
 
 
 def test_dataframe_describe_include():
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     data_length = 10000
 
     df = cudf.DataFrame()
@@ -3934,7 +3934,7 @@ def test_dataframe_describe_include():
 
 
 def test_dataframe_describe_default():
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     data_length = 10000
 
     df = cudf.DataFrame()
@@ -3948,7 +3948,7 @@ def test_dataframe_describe_default():
 
 
 def test_series_describe_include_all():
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     data_length = 10000
 
     df = cudf.DataFrame()
@@ -3971,7 +3971,7 @@ def test_series_describe_include_all():
 
 
 def test_dataframe_describe_percentiles():
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     data_length = 10000
     sample_percentiles = [0.0, 0.1, 0.33, 0.84, 0.4, 0.99]
 

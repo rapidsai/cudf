@@ -23,7 +23,7 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
     reason="function names change across versions of pandas, so making sure it only runs on latest version of pandas",
 )
 def test_profiler():
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=42)
     with Profiler() as profiler:
         df = pd.DataFrame(
             {

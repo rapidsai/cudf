@@ -252,7 +252,7 @@ def test_cat_series_binop_error():
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
 def test_categorical_unique(num_elements):
     # create categorical series
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     pd_cat = pd.Categorical(
         pd.Series(
             rng.choice(

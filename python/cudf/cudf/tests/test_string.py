@@ -133,9 +133,14 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         cupy.asarray(np.array([True] * 5)),
         cupy.asarray(np.array([False] * 5)),
-        rng.integers(0, 2, 5).astype("bool").tolist(),
-        rng.integers(0, 2, 5).astype("bool"),
-        cupy.asarray(rng.integers(0, 2, 5).astype("bool")),
+        np.random.default_rng(seed=0)
+        .integers(0, 2, 5)
+        .astype("bool")
+        .tolist(),
+        np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool"),
+        cupy.asarray(
+            np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool")
+        ),
     ],
 )
 def test_string_bool_mask(ps_gs, item):
@@ -1079,6 +1084,7 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(rng.random(size=(5, 5)))
     gdf = cudf.DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
