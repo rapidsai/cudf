@@ -232,13 +232,20 @@ files:
       key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
-  py_rapids_build_cudf_polars:
+  py_build_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
     extras:
       table: build-system
     includes:
       - rapids_build_setuptools
+  py_rapids_build_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes: []
   py_run_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
