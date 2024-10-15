@@ -257,9 +257,8 @@ struct gmem_element_aggregator {
                              bool* source_mask,
                              cudf::size_type source_index) const noexcept
   {
-    if constexpr (k != cudf::aggregation::COUNT_ALL) {
-      if (!source_mask[source_index]) { return; }
-    }
+    if (!source_mask[source_index]) { return; }
+
     update_target_element_gmem<Source, k>{}(
       target, target_index, source_column, source, source_index);
   }
