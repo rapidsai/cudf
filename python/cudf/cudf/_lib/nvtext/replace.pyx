@@ -2,20 +2,10 @@
 
 from cudf.core.buffer import acquire_spill_lock
 
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.nvtext.replace cimport (
-    filter_tokens as cpp_filter_tokens,
-    replace_tokens as cpp_replace_tokens,
-)
-from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport DeviceScalar
+from pylibcudf import nvtext
 
 
 @acquire_spill_lock()
@@ -30,27 +20,14 @@ def replace_tokens(Column strings,
     provided.
     """
 
-    cdef DeviceScalar delimiter = py_delimiter.device_value
-
-    cdef column_view c_strings = strings.view()
-    cdef column_view c_targets = targets.view()
-    cdef column_view c_replacements = replacements.view()
-
-    cdef const string_scalar* c_delimiter = <const string_scalar*>delimiter\
-        .get_raw_ptr()
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_replace_tokens(
-                c_strings,
-                c_targets,
-                c_replacements,
-                c_delimiter[0],
-            )
+    return Column.from_pylibcudf(
+        nvtext.replace.replace_tokens(
+            strings.to_pylibcudf(mode="read"),
+            targets.to_pylibcudf(mode="read"),
+            replacements.to_pylibcudf(mode="read"),
+            py_delimiter.device_value.c_value,
         )
-
-    return Column.from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()
@@ -65,24 +42,11 @@ def filter_tokens(Column strings,
     character provided.
     """
 
-    cdef DeviceScalar replacement = py_replacement.device_value
-    cdef DeviceScalar delimiter = py_delimiter.device_value
-
-    cdef column_view c_strings = strings.view()
-    cdef const string_scalar* c_repl = <const string_scalar*>replacement\
-        .get_raw_ptr()
-    cdef const string_scalar* c_delimiter = <const string_scalar*>delimiter\
-        .get_raw_ptr()
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_filter_tokens(
-                c_strings,
-                min_token_length,
-                c_repl[0],
-                c_delimiter[0],
-            )
+    return Column.from_pylibcudf(
+        nvtext.replace.filter_tokens(
+            strings.to_pylibcudf(mode="read"),
+            min_token_length,
+            py_replacement.device_value.c_value,
+            py_delimiter.device_value.c_value,
         )
-
-    return Column.from_unique_ptr(move(c_result))
+    )
