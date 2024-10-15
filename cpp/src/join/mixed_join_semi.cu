@@ -184,7 +184,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe = row_hash.device_hasher(has_nulls);
 
-  hash_set_ref_type const row_set_ref = row_set.ref(cuco::contains).with_hash_function(hash_probe);
+  hash_set_ref_type const row_set_ref =
+    row_set.ref(cuco::contains).rebind_hash_function(hash_probe);
 
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
