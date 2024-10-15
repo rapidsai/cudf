@@ -16,7 +16,7 @@ RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-f
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/libcudf_*.whl)" > /tmp/constraints.txt
 export PIP_CONSTRAINT="/tmp/constraints.txt"
 
-./ci/build_wheel.sh ${package_dir}
+./ci/build_wheel.sh pylibcudf ${package_dir}
 
 python -m auditwheel repair \
     --exclude libcudf.so \

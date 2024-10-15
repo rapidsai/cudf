@@ -262,6 +262,13 @@ files:
       table: build-system
     includes:
       - rapids_build_setuptools
+  py_rapids_build_dask_cudf:
+    output: pyproject
+    pyproject_dir: python/dask_cudf
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes: []
   py_run_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -319,6 +326,13 @@ files:
       table: build-system
     includes:
       - rapids_build_setuptools
+  py_rapids_build_custreamz:
+    output: pyproject
+    pyproject_dir: python/custreamz
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes: []
   py_run_custreamz:
     output: pyproject
     pyproject_dir: python/custreamz
