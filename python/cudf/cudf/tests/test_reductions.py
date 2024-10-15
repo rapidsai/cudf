@@ -62,7 +62,7 @@ def test_sum_string():
 )
 @pytest.mark.parametrize("nelem", params_sizes)
 def test_sum_decimal(dtype, nelem):
-    data = [str(x) for x in gen_rand("int64", nelem) / 100]
+    data = [str(x) for x in gen_rand("int64", nelem, seed=0) / 100]
 
     expected = pd.Series([Decimal(x) for x in data]).sum()
     got = cudf.Series(data).astype(dtype).sum()

@@ -125,24 +125,21 @@ def test_rank_error_arguments(pdf):
     )
 
 
-rng = np.random.default_rng(seed=0)
-
-sort_group_args = [
-    np.full((3,), np.nan),
-    100 * rng.random(10),
-    np.full((3,), np.inf),
-    np.full((3,), -np.inf),
-]
-sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
-
-
 @pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "elem,dtype",
     list(
         product(
-            combinations_with_replacement(sort_group_args, 4),
-            sort_dtype_args,
+            combinations_with_replacement(
+                [
+                    np.full((3,), np.nan),
+                    100 * np.random.default_rng(seed=0).random(10),
+                    np.full((3,), np.inf),
+                    np.full((3,), -np.inf),
+                ],
+                4,
+            ),
+            [np.int32, np.int64, np.float32, np.float64],
         )
     ),
 )

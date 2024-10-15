@@ -703,6 +703,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
+                seed=0,
             )
             for dtype in supported_stat_types
         }
@@ -985,7 +986,7 @@ def test_orc_string_stream_offset_issue():
 
 def generate_list_struct_buff(size=100_000):
     rd = random.Random(1)
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 
@@ -1132,7 +1133,7 @@ def gen_map_buff(size):
     from pyarrow import orc
 
     rd = random.Random(1)
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 

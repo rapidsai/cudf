@@ -55,8 +55,11 @@ class ColumnParameters:
         self.cardinality = cardinality
         self.null_frequency = null_frequency
         if generator is None:
+            rng = np.random.default_rng(seed=0)
             self.generator = lambda: [
-                np.random.default_rng(seed=0).integers(0, 100)
+                _generate_string(
+                    string.ascii_letters, rng, rng.integers(4, 8).item()
+                )
                 for _ in range(100)
             ]
         else:

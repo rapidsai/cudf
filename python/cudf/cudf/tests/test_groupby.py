@@ -1323,7 +1323,7 @@ def test_empty_groupby(func):
 
 
 def test_groupby_unsupported_columns():
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     pd_cat = pd.Categorical(
         pd.Series(rng.choice(["a", "b", 1], 3), dtype="category")
     )

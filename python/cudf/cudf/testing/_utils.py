@@ -210,7 +210,7 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
 
 
 def gen_rand(dtype, size, **kwargs):
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=kwargs.get("seed", 0))
     dtype = cudf.dtype(dtype)
     if dtype.kind == "f":
         res = rng.random(size=size).astype(dtype)

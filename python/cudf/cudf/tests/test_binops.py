@@ -588,7 +588,7 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
 )
 def test_series_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
-    random_series = utils.gen_rand(dtype, 100, low=10)
+    random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
 
     # gpu series
     gs = Series(random_series)
@@ -644,7 +644,7 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     cpu_func, gpu_func = funcs
 
     # create random series
-    random_series = utils.gen_rand(dtype, 100, low=10)
+    random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
 
     # gpu series
     gs = Series(random_series)

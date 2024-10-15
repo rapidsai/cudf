@@ -31,7 +31,7 @@ dtypes = sorted(
 @pytest.fixture(params=dtypes, ids=dtypes)
 def pandas_input(request):
     dtype = request.param
-    rng = np.random.default_rng(seed=None)
+    rng = np.random.default_rng(seed=0)
     size = 100
 
     def random_ints(dtype, size):

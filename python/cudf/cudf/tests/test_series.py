@@ -27,8 +27,6 @@ from cudf.testing._utils import (
     gen_rand,
 )
 
-rng = np.random.default_rng(seed=0)
-
 
 def _series_na_data():
     return [
@@ -521,7 +519,7 @@ def test_series_factorize_sort(data, sort):
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_series_datetime_value_counts(data, nulls, normalize, dropna):
     psr = data.copy()
-
+    rng = np.random.default_rng(seed=0)
     if len(data) > 0:
         if nulls == "one":
             p = rng.integers(0, len(data))
@@ -548,7 +546,7 @@ def test_series_datetime_value_counts(data, nulls, normalize, dropna):
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
 def test_categorical_value_counts(dropna, normalize, num_elements):
     # create categorical series
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=12)
     pd_cat = pd.Categorical(
         pd.Series(
             rng.choice(list(ascii_letters + digits), num_elements),
@@ -588,6 +586,7 @@ def test_categorical_value_counts(dropna, normalize, num_elements):
 @pytest.mark.parametrize("dropna", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
 def test_series_value_counts(dropna, normalize):
+    rng = np.random.default_rng(seed=0)
     for size in [10**x for x in range(5)]:
         arr = rng.integers(low=-1, high=10, size=size)
         mask = arr != -1
@@ -716,8 +715,8 @@ def test_series_mode(gs, dropna):
 @pytest.mark.parametrize(
     "arr",
     [
-        rng.normal(-100, 100, 1000),
-        rng.integers(-50, 50, 1000),
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat([-0.6459412758761901], 100),
         np.repeat(np.nan, 100),
@@ -733,7 +732,7 @@ def test_series_round(arr, decimals):
     expected = pser.round(decimals)
 
     assert_eq(result, expected)
-
+    rng = np.random.default_rng(seed=0)
     # with nulls, maintaining existing null mask
     arr = arr.astype("float64")  # for pandas nulls
     arr.ravel()[rng.choice(arr.shape[0], arr.shape[0] // 2, replace=False)] = (
@@ -1728,7 +1727,7 @@ def test_series_truncate_datetimeindex():
         [],
         [0, 12, 14],
         [0, 14, 12, 12, 3, 10, 12, 14],
-        rng.integers(-100, 100, 200),
+        np.random.default_rng(seed=0).integers(-100, 100, 200),
         pd.Series([0.0, 1.0, None, 10.0]),
         [None, None, None, None],
         [np.nan, None, -1, 2, 3],
@@ -1737,7 +1736,7 @@ def test_series_truncate_datetimeindex():
 @pytest.mark.parametrize(
     "values",
     [
-        rng.integers(-100, 100, 10),
+        np.random.default_rng(seed=0).integers(-100, 100, 10),
         [],
         [np.nan, None, -1, 2, 3],
         [1.0, 12.0, None, None, 120],
@@ -1748,6 +1747,7 @@ def test_series_truncate_datetimeindex():
     ],
 )
 def test_isin_numeric(data, values):
+    rng = np.random.default_rng(seed=0)
     index = rng.integers(0, 100, len(data))
     psr = pd.Series(data, index=index)
     gsr = cudf.Series.from_pandas(psr, nan_as_null=False)

@@ -63,9 +63,6 @@ if get_global_manager() is not None:
     pytest_xfail = pytest.mark.skipif
 
 
-rng = np.random.default_rng(seed=0)
-
-
 @contextmanager
 def _hide_ufunc_warnings(eval_str):
     # pandas raises warnings for some inputs to the following ufuncs:
@@ -1241,6 +1238,7 @@ def test_empty_dataframe_to_cupy():
 
     df = cudf.DataFrame()
     nelem = 123
+    rng = np.random.default_rng(seed=0)
     for k in "abc":
         df[k] = rng.random(nelem)
 
@@ -1253,6 +1251,7 @@ def test_dataframe_to_cupy():
     df = cudf.DataFrame()
 
     nelem = 123
+    rng = np.random.default_rng(seed=0)
     for k in "abcd":
         df[k] = rng.random(nelem)
 
@@ -1282,6 +1281,7 @@ def test_dataframe_to_cupy_null_values():
     na = -10000
 
     refvalues = {}
+    rng = np.random.default_rng(seed=0)
     for k in "abcd":
         df[k] = data = rng.random(nelem)
         bitmask = utils.random_bitmask(nelem)
@@ -1324,6 +1324,7 @@ def test_dataframe_append_empty():
 
 
 def test_dataframe_setitem_from_masked_object():
+    rng = np.random.default_rng(seed=0)
     ary = rng.standard_normal(100)
     mask = np.zeros(100, dtype=bool)
     mask[:20] = True
@@ -2225,7 +2226,7 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     # against pandas nullable types as they are the ones that closely
     # resemble `cudf` dtypes behavior.
     pdf = pd.DataFrame()
-
+    rng = np.random.default_rng(seed=0)
     null_rep = np.nan if dtype in ["float32", "float64"] else None
     np_dtype = dtype
     dtype = np.dtype(dtype)
@@ -2709,6 +2710,7 @@ def test_iteritems(gdf):
 def test_quantile(q, numeric_only):
     ts = pd.date_range("2018-08-24", periods=5, freq="D")
     td = pd.to_timedelta(np.arange(5), unit="h")
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {"date": ts, "delta": td, "val": rng.standard_normal(len(ts))}
     )
@@ -2847,6 +2849,7 @@ def test_cuda_array_interface(dtype):
 @pytest.mark.parametrize("nchunks", [1, 2, 5, 10])
 @pytest.mark.parametrize("data_type", dtypes)
 def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
+    rng = np.random.default_rng(seed=0)
     np_list_data = [
         rng.integers(0, 100, nelem).astype(data_type) for i in range(nchunks)
     ]
@@ -4104,6 +4107,7 @@ def test_ndim():
     ],
 )
 def test_dataframe_round(decimals):
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
             "floats": np.arange(0.5, 10.5, 1),
@@ -5817,6 +5821,7 @@ def test_memory_usage(deep, index, set_index):
 @pytest_xfail
 def test_memory_usage_string():
     rows = int(100)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
@@ -5843,6 +5848,7 @@ def test_memory_usage_string():
 
 def test_memory_usage_cat():
     rows = int(100)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
@@ -5876,6 +5882,7 @@ def test_memory_usage_list():
 def test_memory_usage_multi(rows):
     # We need to sample without replacement to guarantee that the size of the
     # levels are always the same.
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
@@ -6704,8 +6711,16 @@ def test_dataframe_init_1d_list(data, columns):
         (cupy.array([11, 123, -2342, 232]), ["z"], [0, 1, 1, 0]),
         (cupy.array([11, 123, -2342, 232]), ["z"], [1, 2, 3, 4]),
         (cupy.array([11, 123, -2342, 232]), ["z"], ["a", "z", "d", "e"]),
-        (rng.standard_normal(size=(2, 4)), ["a", "b", "c", "d"], ["a", "b"]),
-        (rng.standard_normal(size=(2, 4)), ["a", "b", "c", "d"], [1, 0]),
+        (
+            np.random.default_rng(seed=0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            ["a", "b"],
+        ),
+        (
+            np.random.default_rng(seed=0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            [1, 0],
+        ),
         (cupy.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
         (cupy.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
     ],
@@ -6879,6 +6894,7 @@ def test_dataframe_info_basic():
     memory usage: 859.0+ bytes
     """
     )
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         rng.standard_normal(size=(10, 10)),
         index=["a", "2", "3", "4", "5", "6", "7", "8", "100", "1111"],
