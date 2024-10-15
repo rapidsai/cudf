@@ -166,6 +166,12 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
   return hashes;
 }
 
+// Number of seeds to process per thread.
+// The intermediate values are stored in shared-memory and therefore limits the count.
+// Regardless, this value was found to be the most efficient size for both uint32 and uint64
+// hash types based on benchmarks
+CUDF_HOST_DEVICE constexpr std::size_t seeds_chunk_size = 16;
+
 template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
 CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_strings,
                                          hash_value_type seed,
@@ -188,7 +194,7 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   auto const begin = d_str.data() + (lane_idx);
   auto const end   = d_str.data() + d_str.size_bytes();
 
-  constexpr std::size_t seed_chunk   = 16;  // based on block-size==256
+  // constants used for the permutation calculations
   constexpr uint64_t mersenne_prime  = (1UL << 61) - 1;
   constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
 
@@ -197,13 +203,13 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
 
   auto const hasher = HashFunction(seed);
 
-  for (std::size_t i = 0; i < parmA.size(); i += seed_chunk) {
+  for (std::size_t i = 0; i < parmA.size(); i += seeds_chunk_size) {
     // initialize working memory
-    auto const tile_hashes = block_hashes + (lane_idx * seed_chunk);
-    thrust::uninitialized_fill(thrust::seq, tile_hashes, tile_hashes + seed_chunk, init);
+    auto const tile_hashes = block_hashes + (lane_idx * seeds_chunk_size);
+    thrust::uninitialized_fill(thrust::seq, tile_hashes, tile_hashes + seeds_chunk_size, init);
     __syncthreads();
 
-    auto const seed_count = cuda::std::min(seed_chunk, parmA.size() - i);
+    auto const seed_count = cuda::std::min(seeds_chunk_size, parmA.size() - i);
 
     // each lane hashes 'width' substrings of d_str
     for (auto itr = begin; itr < end; itr += tile_size) {
@@ -223,9 +229,9 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
       }
 
       for (std::size_t seed_idx = i; seed_idx < (i + seed_count); ++seed_idx) {
-        hash_value_type const hv =  // seed_idx ==  0 ? hv1 :
+        hash_value_type const hv =
           ((hv1 * parmA[seed_idx] + parmB[seed_idx]) % mersenne_prime) & hash_max;
-        auto const block_idx    = ((seed_idx % seed_chunk) * tile_size) + lane_idx;
+        auto const block_idx    = ((seed_idx % seeds_chunk_size) * tile_size) + lane_idx;
         block_hashes[block_idx] = cuda::std::min(hv, block_hashes[block_idx]);
       }
     }
@@ -261,7 +267,6 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
   auto const seed_hashes = working_memory + offset - offset0;  // hashes_offset
 
   auto const d_str    = cudf::string_view(d_strings.head<char>() + offset, size_bytes);
-  auto const init     = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
   auto const lane_idx = idx % tile_size;
 
   auto const begin  = d_str.data() + (lane_idx);
@@ -320,20 +325,20 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   auto const begin = seed_hashes + (lane_idx);
   auto const end   = seed_hashes + hashes_size;
 
-  constexpr std::size_t seed_chunk   = 16;  // based on block-size==256
+  // constants used in the permutation calculations
   constexpr uint64_t mersenne_prime  = (1UL << 61) - 1;
   constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
 
   extern __shared__ char shmem[];
   auto const block_hashes = reinterpret_cast<hash_value_type*>(shmem);
 
-  for (std::size_t i = 0; i < parmA.size(); i += seed_chunk) {
+  for (std::size_t i = 0; i < parmA.size(); i += seeds_chunk_size) {
     // initialize working memory
-    auto const tile_hashes = block_hashes + (lane_idx * seed_chunk);
-    thrust::uninitialized_fill(thrust::seq, tile_hashes, tile_hashes + seed_chunk, init);
+    auto const tile_hashes = block_hashes + (lane_idx * seeds_chunk_size);
+    thrust::uninitialized_fill(thrust::seq, tile_hashes, tile_hashes + seeds_chunk_size, init);
     __syncthreads();
 
-    auto const seed_count = cuda::std::min(seed_chunk, parmA.size() - i);
+    auto const seed_count = cuda::std::min(seeds_chunk_size, parmA.size() - i);
 
     // each lane hashes 'width' substrings of d_str
     for (auto itr = begin; itr < end; itr += tile_size) {
@@ -341,9 +346,9 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
       if (hv1 == 0) { continue; }  // skips intermediate UTF-8 bytes
 
       for (std::size_t seed_idx = i; seed_idx < (i + seed_count); ++seed_idx) {
-        hash_value_type const hv =  // seed_idx == 0 ? hv1 :
+        hash_value_type const hv =
           ((hv1 * parmA[seed_idx] + parmB[seed_idx]) % mersenne_prime) & hash_max;
-        auto const block_idx    = ((seed_idx % seed_chunk) * tile_size) + lane_idx;
+        auto const block_idx    = ((seed_idx % seeds_chunk_size) * tile_size) + lane_idx;
         block_hashes[block_idx] = cuda::std::min(hv, block_hashes[block_idx]);
       }
     }
@@ -391,12 +396,12 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                           mr);
   auto d_hashes = hashes->mutable_view().data<hash_value_type>();
 
-  // 16 seeds can be held in shared-memory: 32K/block_size(256)/sizeof(hash_value_type) = ~16
-  auto const shmem_size = block_size * 16 * sizeof(hash_value_type);
+  // Found to be the most efficient shared memory size for both hash types
+  constexpr auto shmem_size = block_size * seeds_chunk_size * sizeof(hash_value_type);
 
   cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * tile_size,
                              block_size};
-#if 1
+#if 0
   minhash_permuted_kernel<HashFunction>
     <<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
       *d_strings, seed, parmA, parmB, width, d_hashes);
