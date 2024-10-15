@@ -351,10 +351,16 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    * JSON inputs.
    */
   std::size_t const total_source_size = sources_size(sources, 0, 0);
-  std::size_t chunk_offset            = reader_opts.get_byte_range_offset();
-  std::size_t chunk_size              = reader_opts.get_byte_range_size();
-  chunk_size                          = !chunk_size ? total_source_size - chunk_offset
-                                                    : std::min(chunk_size, total_source_size - chunk_offset);
+
+  // Batching is enabled only for JSONL inputs, not regular JSON files
+  CUDF_EXPECTS(
+    reader_opts.is_enabled_lines() || total_source_size < std::numeric_limits<int32_t>::max(),
+    "Parsing Regular JSON inputs of size greater than INT_MAX bytes is not supported");
+
+  std::size_t chunk_offset = reader_opts.get_byte_range_offset();
+  std::size_t chunk_size   = reader_opts.get_byte_range_size();
+  chunk_size               = !chunk_size ? total_source_size - chunk_offset
+                                         : std::min(chunk_size, total_source_size - chunk_offset);
 
   std::size_t const size_per_subchunk      = estimate_size_per_subchunk(chunk_size);
   std::size_t const batch_size_upper_bound = get_batch_size_upper_bound();
