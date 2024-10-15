@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
 import pylibcudf as plc
-from pylibcudf.traits import is_floating_point, is_integral_not_bool
+from pylibcudf.traits import is_floating_point
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
@@ -24,10 +24,6 @@ if TYPE_CHECKING:
 __all__ = ["Cast", "UnaryFunction", "Len"]
 
 
-def _is_int_or_float(dtype: plc.DataType) -> bool:
-    return is_integral_not_bool(dtype) or is_floating_point(dtype)
-
-
 class Cast(Expr):
     """Class representing a cast of an expression."""
 
@@ -38,21 +34,9 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         super().__init__(dtype)
         self.children = (value,)
-        if (
-            self.dtype.id() == plc.TypeId.STRING
-            or value.dtype.id() == plc.TypeId.STRING
-        ):
-            if not (
-                (self.dtype.id() == plc.TypeId.STRING and _is_int_or_float(value.dtype))
-                or (
-                    _is_int_or_float(self.dtype)
-                    and value.dtype.id() == plc.TypeId.STRING
-                )
-            ):
-                raise NotImplementedError("Only string to float cast is supported")
-        elif not dtypes.can_cast(value.dtype, self.dtype):
+        if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
-                f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
+                f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
             )
 
     def do_evaluate(
@@ -69,25 +53,27 @@ class Cast(Expr):
             self.dtype.id() == plc.TypeId.STRING
             or column.obj.type().id() == plc.TypeId.STRING
         ):
-            if self.dtype.id() == plc.TypeId.STRING:
-                if is_floating_point(column.obj.type()):
-                    result = plc.strings.convert.convert_floats.from_floats(column.obj)
-                else:
-                    result = plc.strings.convert.convert_integers.from_integers(
-                        column.obj
-                    )
-            else:
-                if is_floating_point(self.dtype):
-                    result = plc.strings.convert.convert_floats.to_floats(
-                        column.obj, self.dtype
-                    )
-                else:
-                    result = plc.strings.convert.convert_integers.to_integers(
-                        column.obj, self.dtype
-                    )
+            result = self._handle_string_cast(column)
         else:
             result = plc.unary.cast(column.obj, self.dtype)
         return Column(result).sorted_like(column)
+
+    def _handle_string_cast(self, column: Column) -> plc.Column:
+        if self.dtype.id() == plc.TypeId.STRING:
+            if is_floating_point(column.obj.type()):
+                result = plc.strings.convert.convert_floats.from_floats(column.obj)
+            else:
+                result = plc.strings.convert.convert_integers.from_integers(column.obj)
+        else:
+            if is_floating_point(self.dtype):
+                result = plc.strings.convert.convert_floats.to_floats(
+                    column.obj, self.dtype
+                )
+            else:
+                result = plc.strings.convert.convert_integers.to_integers(
+                    column.obj, self.dtype
+                )
+        return result
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
