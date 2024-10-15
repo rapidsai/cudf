@@ -104,11 +104,11 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
   if (cudf::detail::has_nested_columns(keys)) {
     auto const d_row_equal = comparator.equal_to<true>(has_null, null_keys_are_equal);
     return compute_groupby<nullable_row_comparator_t>(
-      keys, requests, cache, skip_rows_with_nulls, d_row_equal, d_row_hash, stream, mr);
+      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
   } else {
     auto const d_row_equal = comparator.equal_to<false>(has_null, null_keys_are_equal);
     return compute_groupby<row_comparator_t>(
-      keys, requests, cache, skip_rows_with_nulls, d_row_equal, d_row_hash, stream, mr);
+      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
   }
 }
 }  // namespace
