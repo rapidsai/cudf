@@ -29,7 +29,7 @@ cpdef Table transpose(Table input_table):
     cdef Table owner_table
 
     with nogil:
-        c_result = move(cpp_transpose.transpose(input_table.view()))
+        c_result = cpp_transpose.transpose(input_table.view())
 
     owner_table = Table(
         [Column.from_libcudf(move(c_result.first))] * c_result.second.num_columns()
