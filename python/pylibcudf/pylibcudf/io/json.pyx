@@ -59,7 +59,7 @@ cdef json_reader_options _setup_json_reader_options(
         json_recovery_mode_t recovery_mode):
 
     cdef vector[data_type] types_vec
-    cdef json_reader_options opts = move(
+    cdef json_reader_options opts = (
         json_reader_options.builder(source_info.c_obj)
         .compression(compression)
         .lines(lines)
