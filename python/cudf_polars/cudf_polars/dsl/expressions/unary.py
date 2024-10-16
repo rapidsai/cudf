@@ -9,7 +9,15 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
 import pylibcudf as plc
+from pylibcudf.strings.convert.convert_floats import from_floats, is_float, to_floats
+from pylibcudf.strings.convert.convert_integers import (
+    from_integers,
+    is_integer,
+    to_integers,
+)
 from pylibcudf.traits import is_floating_point
+
+from polars.exceptions import InvalidOperationError
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
@@ -61,18 +69,32 @@ class Cast(Expr):
     def _handle_string_cast(self, column: Column) -> plc.Column:
         if self.dtype.id() == plc.TypeId.STRING:
             if is_floating_point(column.obj.type()):
-                result = plc.strings.convert.convert_floats.from_floats(column.obj)
+                result = from_floats(column.obj)
             else:
-                result = plc.strings.convert.convert_integers.from_integers(column.obj)
+                result = from_integers(column.obj)
         else:
             if is_floating_point(self.dtype):
-                result = plc.strings.convert.convert_floats.to_floats(
-                    column.obj, self.dtype
-                )
+                floats = is_float(column.obj)
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        floats,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("Conversion from `str` failed.")
+                result = to_floats(column.obj, self.dtype)
             else:
-                result = plc.strings.convert.convert_integers.to_integers(
-                    column.obj, self.dtype
-                )
+                integers = is_integer(column.obj)
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        integers,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("Conversion from `str` failed.")
+                result = to_integers(column.obj, self.dtype)
         return result
 
     def collect_agg(self, *, depth: int) -> AggInfo:

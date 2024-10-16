@@ -375,3 +375,13 @@ def test_string_to_numeric(str_to_numeric_data, numeric_type):
 def test_string_from_numeric(str_from_numeric_data):
     query = str_from_numeric_data.select(pl.col("a").cast(pl.String))
     assert_gpu_result_equal(query)
+
+
+def test_string_to_numeric_invalid(numeric_type):
+    df = pl.LazyFrame({"a": ["a", "b", "c"]})
+    q = df.select(pl.col("a").cast(numeric_type))
+    assert_collect_raises(
+        q,
+        polars_except=pl.exceptions.InvalidOperationError,
+        cudf_except=pl.exceptions.ComputeError,
+    )
