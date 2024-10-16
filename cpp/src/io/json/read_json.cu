@@ -210,20 +210,28 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
   }
 
-  // Add delimiter to end of buffer iff 
-  //        (i) We are reading till the end of the last source i.e. should_load_till_last_source is true
-  //        (ii) The last character in bufspan is not newline. 
-  // For (ii) in the case of Spark, if the last character is not a newline, it could be the case that there are characters after the newline in the last record. We then consider those characters to be a part of a new (possibly empty) line.
+  // Add delimiter to end of buffer iff
+  //        (i) We are reading till the end of the last source i.e. should_load_till_last_source is
+  //        true (ii) The last character in bufspan is not newline.
+  // For (ii) in the case of Spark, if the last character is not a newline, it could be the case
+  // that there are characters after the newline in the last record. We then consider those
+  // characters to be a part of a new (possibly empty) line.
   size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
-  if(num_chars) {
+  if (num_chars) {
     char last_char;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &last_char, reinterpret_cast<char*>(buffer.data()) + readbufspan.size() - 1, sizeof(char), cudaMemcpyDeviceToHost, stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(&last_char,
+                                  reinterpret_cast<char*>(buffer.data()) + readbufspan.size() - 1,
+                                  sizeof(char),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
-    if(last_char != '\n') {
+    if (last_char != '\n') {
       last_char = '\n';
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        reinterpret_cast<char*>(buffer.data()) + readbufspan.size(), &last_char, sizeof(char), cudaMemcpyHostToDevice, stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<char*>(buffer.data()) + readbufspan.size(),
+                                    &last_char,
+                                    sizeof(char),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
       num_chars++;
     }
   }
@@ -255,7 +263,7 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   auto buffer =
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
-  
+
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 

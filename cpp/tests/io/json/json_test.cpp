@@ -18,14 +18,13 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
-
-#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/io/json.hpp>
@@ -2981,7 +2980,7 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
  * @brief Test fixture for parametrized JSON reader tests
  */
 struct JsonReaderEmptyRecordTest : public cudf::test::BaseFixture,
-                             public testing::WithParamInterface<bool> {};
+                                   public testing::WithParamInterface<bool> {};
 
 // Parametrize qualifying JSON tests for optionally nullifying empty records
 INSTANTIATE_TEST_CASE_P(JsonReaderEmptyRecordTest,
@@ -2990,7 +2989,7 @@ INSTANTIATE_TEST_CASE_P(JsonReaderEmptyRecordTest,
 
 TEST_P(JsonReaderEmptyRecordTest, HandlingEmptyRecords)
 {
-  std::string data = R"(   
+  std::string data                     = R"(
     {"key": "1"}
     {"key": "})";
   bool const enable_nullify_empty_rows = GetParam();
@@ -3009,14 +3008,14 @@ TEST_P(JsonReaderEmptyRecordTest, HandlingEmptyRecords)
   EXPECT_EQ(result.metadata.schema_info[0].name, "key");
   auto const result_view = result.tbl->view().column(0);
 
-  if(!enable_nullify_empty_rows) {
+  if (!enable_nullify_empty_rows) {
     EXPECT_EQ(result.tbl->num_rows(), 2);
     cudf::test::strings_column_wrapper expected{{"1", ""}, cudf::test::iterators::nulls_at({1})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view, expected);
-  }
-  else {
+  } else {
     EXPECT_EQ(result.tbl->num_rows(), 3);
-    cudf::test::strings_column_wrapper expected{{"", "1", ""}, cudf::test::iterators::nulls_at({0, 2})};
+    cudf::test::strings_column_wrapper expected{{"", "1", ""},
+                                                cudf::test::iterators::nulls_at({0, 2})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view, expected);
   }
 }
