@@ -28,8 +28,7 @@ namespace strings {
  */
 
 /**
- * @brief Returns a table of columns of boolean values for each string where true indicates
- * the target string was found within that string in the provided column
+ * @brief Searches for the given target strings within each string in the provided column
  *
  * Each column in the result table corresponds to the result for the target string at the same
  * ordinal. i.e. 0th column is the BOOL8 column result for the 0th target string, 1th for 1th,
@@ -38,7 +37,7 @@ namespace strings {
  * If the target is not found for a string, false is returned for that entry in the output column.
  * If the target is an empty string, true is returned for all non-null entries in the output column.
  *
- * Any null string entries return corresponding null entries in the output columns.
+ * Any null input strings return corresponding null entries in the output columns.
  *
  * @code{.pseudo}
  * input = ["a", "b", "c"]
@@ -47,6 +46,8 @@ namespace strings {
  *   column 0: [true, false, false]
  *   column 1: [false, false, true]
  * @endcode
+ *
+ * @throw std::invalid_argument if `targets` is empty or contains nulls
  *
  * @param input Strings instance for this operation
  * @param targets UTF-8 encoded strings to search for in each string in `input`
@@ -61,8 +62,8 @@ std::unique_ptr<table> contains_multiple(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a lists column with character position values where each
- * of the target strings are found in each string.
+ * @brief Searches for the given target strings within each string in the provided column
+ * and returns the position the targets were found
  *
  * The size of the output column is `input.size()`.
  * Each row of the output column is of size `targets.size()`.
@@ -78,7 +79,7 @@ std::unique_ptr<table> contains_multiple(
  *           [-1,-1, 1 ]}  // for "def": "a" and "b" not found, "e" at  pos 1
  * @endcode
  *
- * @throw cudf::logic_error if `targets` is empty or contains nulls
+ * @throw , std::invalid_argument if `targets` is empty or contains nulls
  *
  * @param input Strings instance for this operation
  * @param targets Strings to search for in each string
