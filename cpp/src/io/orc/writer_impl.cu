@@ -20,6 +20,7 @@
  */
 
 #include "io/comp/nvcomp_adapter.hpp"
+#include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
 #include "writer_impl.hpp"
@@ -2110,7 +2111,9 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
                                        bool sort_dictionaries,
                                        rmm::cuda_stream_view stream)
 {
-  std::vector<std::vector<rmm::device_uvector<gpu::slot_type>>> hash_maps_storage(
+  // Variable to keep track of the current total map storage size
+  size_t total_map_storage_size = 0;
+  std::vector<std::vector<size_t>> hash_maps_storage_offsets(
     orc_table.string_column_indices.size());
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
@@ -2119,13 +2122,20 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
         stripe.size == 0 ? 0
                          : segmentation.rowgroups[stripe.first + stripe.size - 1][col_idx].end -
                              segmentation.rowgroups[stripe.first][col_idx].begin;
-      hash_maps_storage[str_column.str_index()].emplace_back(stripe_num_rows * 1.43, stream);
+      hash_maps_storage_offsets[str_column.str_index()].emplace_back(total_map_storage_size);
+      total_map_storage_size += stripe_num_rows * gpu::occupancy_factor;
     }
+    hash_maps_storage_offsets[str_column.str_index()].emplace_back(total_map_storage_size);
   }
 
   hostdevice_2dvector<gpu::stripe_dictionary> stripe_dicts(
     orc_table.num_string_columns(), segmentation.num_stripes(), stream);
   if (stripe_dicts.count() == 0) return {std::move(stripe_dicts), {}, {}};
+
+  // Create a single bulk storage to use for all sub-dictionaries
+  auto map_storage = std::make_unique<gpu::storage_type>(
+    total_map_storage_size,
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream});
 
   // Initialize stripe dictionaries
   for (auto col_idx : orc_table.string_column_indices) {
@@ -2137,7 +2147,9 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       auto const stripe_idx = stripe.id;
       auto& sd              = stripe_dicts[str_col_idx][stripe_idx];
 
-      sd.map_slots      = hash_maps_storage[str_col_idx][stripe_idx];
+      sd.map_slots      = {map_storage->data() + hash_maps_storage_offsets[str_col_idx][stripe_idx],
+                           hash_maps_storage_offsets[str_col_idx][stripe_idx + 1] -
+                             hash_maps_storage_offsets[str_col_idx][stripe_idx]};
       sd.column_idx     = col_idx;
       sd.start_row      = segmentation.rowgroups[stripe.first][col_idx].begin;
       sd.start_rowgroup = stripe.first;
@@ -2150,7 +2162,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   }
   stripe_dicts.host_to_device_async(stream);
 
-  gpu::initialize_dictionary_hash_maps(stripe_dicts, stream);
+  map_storage->initialize_async({gpu::KEY_SENTINEL, gpu::VALUE_SENTINEL}, {stream.value()});
   gpu::populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
   // Copy the entry counts and char counts from the device to the host
   stripe_dicts.device_to_host_sync(stream);
@@ -2184,8 +2196,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
         col_use_dictionary = true;
       } else {
         // Clear hash map storage as dictionary encoding is not used for this stripe
-        hash_maps_storage[str_col_idx][stripe_idx] = rmm::device_uvector<gpu::slot_type>(0, stream);
-        sd.map_slots                               = {};
+        sd.map_slots = {};
       }
     }
     // If any stripe uses dictionary encoding, allocate index storage for the whole column
@@ -2203,7 +2214,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
 
   // deallocate hash map storage, unused after this point
-  hash_maps_storage.clear();
+  map_storage.reset();
 
   // Clear map slots and attach order buffers
   auto dictionaries_flat = stripe_dicts.host_view().flat_view();

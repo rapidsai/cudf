@@ -28,7 +28,7 @@ namespace strings {
  */
 
 /**
- * @brief Decodes each string using URL encoding.
+ * @brief Encodes each string using URL encoding.
  *
  * Converts mostly non-ascii characters and control characters into UTF-8 hex code-points
  * prefixed with '%'. For example, the space character must be converted to characters '%20' where
@@ -49,7 +49,7 @@ std::unique_ptr<column> url_encode(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Encodes each string using URL encoding.
+ * @brief Decodes each string using URL encoding.
  *
  * Converts all character sequences starting with '%' into character code-points
  * interpreting the 2 following characters as hex values to create the code-point.
