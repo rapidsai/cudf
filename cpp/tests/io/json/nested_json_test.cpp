@@ -864,7 +864,7 @@ TEST_F(JsonTest, PostProcessTokenStream)
 
   // Run system-under-test
   auto [d_filtered_tokens, d_filtered_indices] =
-    cuio_json::detail::process_token_stream(d_tokens, d_offsets, false, stream);
+    cuio_json::detail::process_token_stream(d_tokens, d_offsets, stream);
 
   auto const filtered_tokens  = cudf::detail::make_std_vector_async(d_filtered_tokens, stream);
   auto const filtered_indices = cudf::detail::make_std_vector_async(d_filtered_indices, stream);
