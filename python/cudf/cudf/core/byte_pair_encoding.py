@@ -25,7 +25,9 @@ class BytePairEncoder:
     """
 
     def __init__(self, merges_pair: "cudf.Series"):
-        self.merge_pairs = cpp_merge_pairs(merges_pair._column)
+        self.merge_pairs = cpp_merge_pairs(
+            merges_pair._column.to_pylibcudf(mode="read")
+        )
 
     def __call__(self, text, separator: str = " ") -> cudf.Series:
         """
