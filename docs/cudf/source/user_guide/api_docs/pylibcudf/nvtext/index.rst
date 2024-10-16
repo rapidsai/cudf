@@ -8,3 +8,4 @@ nvtext
     generate_ngrams
     jaccard
     minhash
+    tokenize
