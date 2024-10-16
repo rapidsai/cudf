@@ -127,7 +127,7 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
 
   std::size_t const total_source_size       = sources_size(sources, 0, 0);
   auto constexpr num_delimiter_chars        = 1;
-  auto const num_extra_delimiters           = num_delimiter_chars * (sources.size() - 1);
+  auto const num_extra_delimiters           = num_delimiter_chars * sources.size();
   compression_type const reader_compression = reader_opts.get_compression();
   std::size_t const chunk_offset            = reader_opts.get_byte_range_offset();
   std::size_t chunk_size                    = reader_opts.get_byte_range_size();
@@ -135,10 +135,10 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
   CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
                "Invalid offsetting",
                std::invalid_argument);
-  auto should_load_all_sources = !chunk_size || chunk_size >= total_source_size - chunk_offset;
-  chunk_size = should_load_all_sources ? total_source_size - chunk_offset : chunk_size;
+  auto should_load_till_last_source = !chunk_size || chunk_size >= total_source_size - chunk_offset;
+  chunk_size = should_load_till_last_source ? total_source_size - chunk_offset : chunk_size;
 
-  int num_subchunks_prealloced        = should_load_all_sources ? 0 : max_subchunks_prealloced;
+  int num_subchunks_prealloced        = should_load_till_last_source ? 0 : max_subchunks_prealloced;
   std::size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
 
   // The allocation for single source compressed input is estimated by assuming a ~4:1
@@ -165,7 +165,7 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
     // return empty owning datasource buffer
     auto empty_buf = rmm::device_buffer(0, stream);
     return datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf));
-  } else if (!should_load_all_sources) {
+  } else if (!should_load_till_last_source) {
     // Find next delimiter
     std::int64_t next_delim_pos     = -1;
     std::size_t next_subchunk_start = chunk_offset + chunk_size;
@@ -209,10 +209,29 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
       next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
   }
+
+  // Add delimiter to end of buffer iff 
+  //        (i) We are reading till the end of the last source i.e. should_load_till_last_source is true
+  //        (ii) The last character in bufspan is not newline. 
+  // For (ii) in the case of Spark, if the last character is not a newline, it could be the case that there are characters after the newline in the last record. We then consider those characters to be a part of a new (possibly empty) line.
+  size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
+  if(num_chars) {
+    char last_char;
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      &last_char, reinterpret_cast<char*>(buffer.data()) + readbufspan.size() - 1, sizeof(char), cudaMemcpyDeviceToHost, stream.value()));
+    stream.synchronize();
+    if(last_char != '\n') {
+      last_char = '\n';
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        reinterpret_cast<char*>(buffer.data()) + readbufspan.size(), &last_char, sizeof(char), cudaMemcpyHostToDevice, stream.value()));
+      num_chars++;
+    }
+  }
+
   return datasource::owning_buffer<rmm::device_buffer>(
     std::move(buffer),
     reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
-    readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
+    num_chars);
 }
 
 // Helper function to read the current batch using byte range offsets and size
@@ -223,8 +242,6 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  std::printf("In read_batch\n");
 
   datasource::owning_buffer<rmm::device_buffer> bufview =
     get_record_range_raw_input(sources, reader_opts, stream);
@@ -239,8 +256,6 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
   
-  std::printf("Done populating buffer. Now onto parsing\n");
-
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
@@ -411,8 +426,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    * or if end_bytes_size is larger than total_source_size.
    */
   if (batch_offsets.size() <= 2) return read_batch(sources, reader_opts, stream, mr);
-
-  std::printf("Concatenating partial tables\n");
 
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};

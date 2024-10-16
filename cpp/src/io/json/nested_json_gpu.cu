@@ -296,7 +296,7 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const trans
    /* INVALID  */ {{TT_INV, TT_START, TT_INV}}}};
 
 // The DFA's starting state
-constexpr auto start_state = static_cast<StateT>(TT_START);
+constexpr auto start_state = static_cast<StateT>(TT_VLD);
 }  // namespace token_filter
 
 // JSON to stack operator DFA (Deterministic Finite Automata)
@@ -1518,17 +1518,6 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   bool nullify_empty_lines,
   rmm::cuda_stream_view stream)
 {
-
-  auto h_tokens_gpu = cudf::detail::make_host_vector_sync(tokens, stream);
-  std::printf("h_tokens_gpu = ");
-  for(size_t i = 0; i < h_tokens_gpu.size(); i++)
-    std::printf("%d ", h_tokens_gpu[i]);
-  auto h_token_indices_gpu = cudf::detail::make_host_vector_sync(token_indices, stream);
-  std::printf("\nh_token_indices_gpu = ");
-  for(size_t i = 0; i < h_token_indices_gpu.size(); i++)
-    std::printf("%d ", h_token_indices_gpu[i]);
-  std::printf("\n");
-
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
@@ -2102,8 +2091,6 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 
-  std::printf("in parsing_options\n");
-
   parse_opts.dayfirst              = options.is_enabled_dayfirst();
   parse_opts.keepquotes            = options.is_enabled_keep_quotes();
   parse_opts.normalize_whitespace  = options.is_enabled_normalize_whitespace();
@@ -2113,8 +2100,6 @@ cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& opt
   std::vector<std::string> na_values{"", "null"};
   na_values.insert(na_values.end(), options.get_na_values().begin(), options.get_na_values().end());
   parse_opts.trie_na = cudf::detail::create_serialized_trie(na_values, stream);
-
-  std::printf("in parsing_options\n");
 
   return parse_opts;
 }

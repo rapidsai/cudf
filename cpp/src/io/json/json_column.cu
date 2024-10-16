@@ -303,9 +303,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  std::printf("Inside device_json_column_to_cudf_column\n");
-
   auto validity_size_check = [](device_json_column& json_col) {
     CUDF_EXPECTS(json_col.validity.size() >= bitmask_allocation_size_bytes(json_col.num_rows),
                  "valid_count is too small");
@@ -505,27 +502,10 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 {
   CUDF_FUNC_RANGE();
 
-  std::printf("In device_parse_nested_json\n");
-
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
-
-    std::printf("Before get_token_stream\n");
-
     const auto [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
-
-    auto h_tokens_gpu = cudf::detail::make_host_vector_sync(tokens_gpu, stream);
-    std::printf("h_tokens_gpu = ");
-    for(size_t i = 0; i < h_tokens_gpu.size(); i++)
-      std::printf("%d ", h_tokens_gpu[i]);
-    auto h_token_indices_gpu = cudf::detail::make_host_vector_sync(token_indices_gpu, stream);
-    std::printf("\nh_token_indices_gpu = ");
-    for(size_t i = 0; i < h_token_indices_gpu.size(); i++)
-      std::printf("%d ", h_token_indices_gpu[i]);
-
-    std::printf("\nAfter get_token_stream\n");
-
     // gpu tree generation
     // Note that to normalize whitespaces in nested columns coerced to be string, we need the column
     // to either be of mixed type or we need to request the column to be returned as string by
@@ -541,8 +521,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
   print_tree(h_input, gpu_tree, stream);
 #endif
-
-  std::printf("After get_tree_representation\n");
 
   bool const is_array_of_arrays = [&]() {
     std::array<node_t, 2> h_node_categories = {NC_ERR, NC_ERR};
@@ -575,8 +553,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                0);
 
   // Get internal JSON column
-  std::printf("Before make_device_json_column_dispatch\n");
-
   make_device_json_column_dispatch(options.is_enabled_experimental(),
                                    d_input,
                                    gpu_tree,
@@ -588,21 +564,12 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                    stream,
                                    mr);
 
-  std::printf("After make_device_json_column_dispatch\n");
-
   // data_root refers to the root column of the data represented by the given JSON string
   auto& data_root =
     options.is_enabled_lines() ? root_column : root_column.child_columns.begin()->second;
 
-  std::cout << "data_root.type = " << static_cast<std::underlying_type<json_col_t>::type>(data_root.type) << std::endl;
-  std::cout << "data_root.child_columns = ";
-  for(auto const& [key, val] : data_root.child_columns) {
-    std::cout << key << std::endl;
-  }
-
   // Zero row entries
   if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
-    std::printf("zero row entries\n");
     return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
@@ -616,14 +583,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   // Slice off the root list column, which has only a single row that contains all the structs
   auto& root_struct_col = data_root.child_columns.begin()->second;
-  std::cout << "root_struct_col.type = " << static_cast<std::underlying_type<json_col_t>::type>(root_struct_col.type) << std::endl;
-  std::cout << "root_struct_col.child_columns = ";
-  for(auto const& [key, val] : root_struct_col.child_columns) {
-    std::cout << key << std::endl;
-  }
 
   // Initialize meta data to be populated while recursing through the tree of columns
-  std::printf("here\n");
   std::vector<std::unique_ptr<column>> out_columns;
   std::vector<column_name_info> out_column_names;
   auto parse_opt = parsing_options(options, stream);
@@ -631,7 +592,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   // Iterate over the struct's child columns and convert to cudf column
   size_type column_index = 0;
   for (auto const& col_name : root_struct_col.column_order) {
-    std::printf("here1\n");
     auto& json_col = root_struct_col.child_columns.find(col_name)->second;
 
     std::optional<schema_element> child_schema_element = std::visit(
