@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -28,6 +29,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf {
 
@@ -99,7 +104,8 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
     if (string_count == 0) { continue; }
 
     constexpr size_type block_size{256};
-    auto const grid = cudf::detail::grid_1d{static_cast<int64_t>(string_count), block_size};
+    auto const grid =
+      cudf::detail::grid_1d{static_cast<thread_index_type>(string_count), block_size};
     cudf::detail::valid_if_kernel<block_size>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
         reinterpret_cast<bitmask_type*>(null_masks.back().data()),
