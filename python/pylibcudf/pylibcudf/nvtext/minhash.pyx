@@ -48,13 +48,11 @@ cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
         raise TypeError("Must pass a Column or Scalar")
 
     with nogil:
-        c_result = move(
-            cpp_minhash(
-                input.view(),
-                seeds.view() if ColumnOrScalar is Column else
-                dereference(<numeric_scalar[uint32_t]*>seeds.c_obj.get()),
-                width
-            )
+        c_result = cpp_minhash(
+            input.view(),
+            seeds.view() if ColumnOrScalar is Column else
+            dereference(<numeric_scalar[uint32_t]*>seeds.c_obj.get()),
+            width
         )
 
     return Column.from_libcudf(move(c_result))
@@ -133,13 +131,11 @@ cpdef Column minhash64(Column input, ColumnOrScalar seeds, size_type width=4):
         raise TypeError("Must pass a Column or Scalar")
 
     with nogil:
-        c_result = move(
-            cpp_minhash64(
-                input.view(),
-                seeds.view() if ColumnOrScalar is Column else
-                dereference(<numeric_scalar[uint64_t]*>seeds.c_obj.get()),
-                width
-            )
+        c_result = cpp_minhash64(
+            input.view(),
+            seeds.view() if ColumnOrScalar is Column else
+            dereference(<numeric_scalar[uint64_t]*>seeds.c_obj.get()),
+            width
         )
 
     return Column.from_libcudf(move(c_result))
@@ -212,11 +208,9 @@ cpdef Column word_minhash(Column input, Column seeds):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_word_minhash(
-                input.view(),
-                seeds.view()
-            )
+        c_result = cpp_word_minhash(
+            input.view(),
+            seeds.view()
         )
 
     return Column.from_libcudf(move(c_result))
@@ -244,11 +238,9 @@ cpdef Column word_minhash64(Column input, Column seeds):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_word_minhash64(
-                input.view(),
-                seeds.view()
-            )
+        c_result = cpp_word_minhash64(
+            input.view(),
+            seeds.view()
         )
 
     return Column.from_libcudf(move(c_result))
