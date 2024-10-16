@@ -304,10 +304,10 @@ is seen again.
 
 Finally, for writing transformations that take nodes and deliver new
 nodes (e.g. rewrite rules), we have a final utility
-`reuse_if_unchanged` which can be used as a base case transformation
+`reuse_if_unchanged` that can be used as a base case transformation
 for node to node rewrites. It is a depth-first visit that transforms
 children but only returns a new node with new children if the rewrite
-on children changed things.
+of children returned new nodes.
 
 To see how these pieces fit together, let us consider writing a
 `rename` function that takes an expression (potentially with
