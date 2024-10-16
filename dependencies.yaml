@@ -232,13 +232,20 @@ files:
       key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
-  py_rapids_build_cudf_polars:
+  py_build_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
     extras:
       table: build-system
     includes:
       - rapids_build_setuptools
+  py_rapids_build_cudf_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_polars
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes: []
   py_run_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -262,6 +269,13 @@ files:
       table: build-system
     includes:
       - rapids_build_setuptools
+  py_rapids_build_dask_cudf:
+    output: pyproject
+    pyproject_dir: python/dask_cudf
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes: []
   py_run_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -319,6 +333,13 @@ files:
       table: build-system
     includes:
       - rapids_build_setuptools
+  py_rapids_build_custreamz:
+    output: pyproject
+    pyproject_dir: python/custreamz
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes: []
   py_run_custreamz:
     output: pyproject
     pyproject_dir: python/custreamz
