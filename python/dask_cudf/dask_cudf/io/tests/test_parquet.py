@@ -15,7 +15,11 @@ from dask.utils import natural_sort_key
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
+from dask_cudf.tests.utils import (
+    require_dask_expr,
+    skip_dask_expr,
+    xfail_dask_expr,
+)
 
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
@@ -615,3 +619,24 @@ def test_timezone_column(tmpdir):
     got = dask_cudf.read_parquet(path)
     expect = cudf.read_parquet(path)
     dd.assert_eq(got, expect)
+
+
+@require_dask_expr()
+@pytest.mark.parametrize("min_part_size", ["1B", "1GB"])
+def test_read_parquet_arrow_filesystem(tmpdir, min_part_size):
+    tmp_path = str(tmpdir)
+    with dask.config.set(
+        {
+            "dataframe.backend": "cudf",
+            "dataframe.parquet.minimum-partition-size": min_part_size,
+        }
+    ):
+        dd.from_dict(
+            {"x": range(1000), "y": ["a", "b", "c", "d"] * 250},
+            npartitions=10,
+        ).to_parquet(tmp_path, write_index=False)
+        df = cudf.read_parquet(tmp_path)
+        ddf = dask_cudf.read_parquet(tmp_path, filesystem="arrow")
+        dd.assert_eq(df, ddf, check_index=False)
+        assert isinstance(ddf._meta, cudf.DataFrame)
+        assert isinstance(ddf.compute(), cudf.DataFrame)
