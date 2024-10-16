@@ -70,16 +70,22 @@ class datasource {
     virtual ~buffer() {}
 
     /**
+     * @brief Disallow callers to pass an lvalue Container.
+     */
+    template <typename Container>
+    static std::unique_ptr<buffer> create(Container&) = delete;
+
+    /**
      * @brief Factory to construct a datasource buffer object from a container.
      *
      * @tparam Container Type of the container to construct the buffer from
-     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @param moved_data_owner The container to construct the buffer from (ownership is transferred)
      * @return Constructed buffer object
      */
     template <typename Container>
-    static std::unique_ptr<buffer> create(Container&& data_owner)
+    static std::unique_ptr<buffer> create(Container&& moved_data_owner)
     {
-      return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
+      return std::make_unique<owning_buffer<Container>>(std::forward<Container>(moved_data_owner));
     }
   };
 
