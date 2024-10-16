@@ -1,10 +1,9 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
+import cudf
 import cupy
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import gen_rand, random_bitmask
 

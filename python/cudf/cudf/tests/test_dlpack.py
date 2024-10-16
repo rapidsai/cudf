@@ -3,13 +3,12 @@
 import itertools
 from contextlib import ExitStack as does_not_raise
 
+import cudf
 import cupy
 import numpy as np
 import pytest
-from packaging import version
-
-import cudf
 from cudf.testing import assert_eq
+from packaging import version
 
 nelems = [0, 3, 10]
 dtype = [np.uint16, np.int32, np.float64]

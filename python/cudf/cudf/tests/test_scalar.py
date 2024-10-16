@@ -4,15 +4,12 @@ import datetime
 import re
 from decimal import Decimal
 
+import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from packaging import version
-
 import rmm
-
-import cudf
 from cudf._lib.copying import get_element
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -20,6 +17,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
 )
+from packaging import version
 
 
 @pytest.fixture(autouse=True)

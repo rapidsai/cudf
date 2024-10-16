@@ -7,12 +7,11 @@ import os
 from io import BytesIO, StringIO
 from pathlib import Path
 
+import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (

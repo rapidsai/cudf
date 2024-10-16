@@ -9,15 +9,11 @@ import textwrap
 from decimal import Decimal
 from functools import partial
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
-from numpy.testing import assert_array_equal
-
 import rmm
-
-import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
 from cudf.core._compat import (
@@ -37,6 +33,8 @@ from cudf.testing._utils import (
     expect_warning_if,
 )
 from cudf.testing.dataset_generator import rand_dataframe
+from numba import cuda
+from numpy.testing import assert_array_equal
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")

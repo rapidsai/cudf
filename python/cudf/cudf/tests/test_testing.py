@@ -1,11 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf.core.column.column import as_column
 from cudf.testing import (
     assert_frame_equal,

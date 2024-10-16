@@ -4,9 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import stumpy
-from pandas._testing import assert_equal
-
 from dask.distributed import Client, LocalCluster
+from pandas._testing import assert_equal
 
 
 def stumpy_assert_equal(expected, got):

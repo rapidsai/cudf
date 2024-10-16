@@ -2,15 +2,13 @@
 
 from datetime import datetime
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
 from dask.base import tokenize
 from dask.dataframe import assert_eq
 from dask.dataframe.methods import is_categorical_dtype
-
-import cudf
 
 
 def test_is_categorical_dispatch():

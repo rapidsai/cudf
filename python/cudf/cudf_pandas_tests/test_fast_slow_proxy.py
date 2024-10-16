@@ -9,7 +9,6 @@ from io import StringIO
 
 import numpy as np
 import pytest
-
 from cudf.pandas.fast_slow_proxy import (
     _fast_arg,
     _FunctionProxy,

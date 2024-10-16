@@ -7,9 +7,8 @@ from typing import Any, Iterable, Mapping, Sequence, Tuple, cast
 
 import cupy as cp
 import numpy as np
-from numba.cuda import as_cuda_array
-
 import rmm
+from numba.cuda import as_cuda_array
 
 import cudf
 from cudf.core.buffer import Buffer, as_buffer

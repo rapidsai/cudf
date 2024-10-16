@@ -3,13 +3,12 @@
 import os
 from io import BytesIO
 
+import cudf
 import fastavro
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 
 if not os.environ.get("RUN_HDFS_TESTS"):

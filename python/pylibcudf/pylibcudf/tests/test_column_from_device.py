@@ -3,9 +3,8 @@
 import pyarrow as pa
 import pylibcudf as plc
 import pytest
-from utils import assert_column_eq
-
 import rmm
+from utils import assert_column_eq
 
 VALID_TYPES = [
     pa.int8(),

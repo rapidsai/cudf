@@ -2,12 +2,11 @@
 
 from concurrent.futures import ThreadPoolExecutor
 
+import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.datasets import randomdata

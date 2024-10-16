@@ -1,8 +1,7 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import confluent_kafka as ck
-from cudf_kafka._lib.kafka import KafkaDatasource
-
 import cudf
+from cudf_kafka._lib.kafka import KafkaDatasource
 
 
 # Base class for anything class that needs to interact with Apache Kafka

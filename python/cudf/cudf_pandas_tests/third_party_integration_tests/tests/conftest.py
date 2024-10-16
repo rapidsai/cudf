@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     import _pytest.python
 
 from _pytest.stash import StashKey
-
 from cudf.pandas.module_accelerator import disable_module_accelerator
 
 file_handle_key = StashKey[BinaryIO]()

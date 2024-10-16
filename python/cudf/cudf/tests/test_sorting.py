@@ -6,7 +6,6 @@ from itertools import product
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column import NumericalColumn

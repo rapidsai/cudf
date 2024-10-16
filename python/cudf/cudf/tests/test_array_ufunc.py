@@ -5,11 +5,10 @@ import warnings
 from contextlib import contextmanager
 from functools import reduce
 
+import cudf
 import cupy as cp
 import numpy as np
 import pytest
-
-import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_LT_300,

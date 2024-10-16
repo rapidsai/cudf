@@ -1,11 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import Series
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import assert_eq

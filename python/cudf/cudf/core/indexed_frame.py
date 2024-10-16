@@ -21,9 +21,8 @@ from uuid import uuid4
 import cupy as cp
 import numpy as np
 import pandas as pd
-from typing_extensions import Self
-
 import pylibcudf
+from typing_extensions import Self
 
 import cudf
 import cudf._lib as libcudf

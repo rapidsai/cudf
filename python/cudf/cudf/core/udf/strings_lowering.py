@@ -9,6 +9,8 @@ from numba.core.datamodel import default_manager
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
+)
+from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 

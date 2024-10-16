@@ -1,7 +1,6 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import numpy as np
-
 from cudf import Series
 
 

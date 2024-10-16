@@ -4,14 +4,14 @@ import weakref
 from datetime import datetime
 from itertools import combinations
 
+import cudf
 import cupy
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing import _utils as utils, assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     INTEGER_TYPES,
     assert_exceptions_equal,

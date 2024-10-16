@@ -9,12 +9,11 @@ from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
 
+import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import read_csv
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,

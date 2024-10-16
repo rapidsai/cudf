@@ -5,7 +5,6 @@ import ast
 import functools
 
 import pyarrow as pa
-
 import pylibcudf as plc
 from pylibcudf.expressions import (
     ASTOperator,

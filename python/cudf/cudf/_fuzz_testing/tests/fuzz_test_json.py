@@ -3,9 +3,8 @@
 import io
 import sys
 
-import pandas as pd
-
 import cudf
+import pandas as pd
 from cudf._fuzz_testing.json import JSONReader, JSONWriter
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.utils import ALL_POSSIBLE_VALUES, run_test

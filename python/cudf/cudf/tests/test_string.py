@@ -7,13 +7,12 @@ from contextlib import ExitStack as does_not_raise
 from decimal import Decimal
 from sys import getsizeof
 
+import cudf
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf import concat
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index

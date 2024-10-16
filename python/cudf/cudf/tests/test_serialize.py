@@ -3,13 +3,13 @@
 import itertools
 import pickle
 
+import cudf
 import msgpack
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
-from cudf.testing import _utils as utils, assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing import assert_eq
 
 
 @pytest.mark.parametrize(

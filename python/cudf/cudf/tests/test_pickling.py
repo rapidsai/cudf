@@ -5,7 +5,6 @@ import pickle
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf import DataFrame, Index, RangeIndex, Series
 from cudf.core.buffer import as_buffer
 from cudf.testing import assert_eq

@@ -3,12 +3,11 @@
 import os
 from string import ascii_letters
 
+import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES
 

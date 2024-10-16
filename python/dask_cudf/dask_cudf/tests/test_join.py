@@ -2,13 +2,11 @@
 
 from functools import partial
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
 from dask import dataframe as dd
-
-import cudf
 
 import dask_cudf
 

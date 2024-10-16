@@ -9,17 +9,15 @@ import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 
+import cudf
+import cudf.core.buffer.spill_manager
+import cudf.options
 import cupy
 import numpy as np
 import pandas
 import pandas.testing
 import pytest
-
 import rmm
-
-import cudf
-import cudf.core.buffer.spill_manager
-import cudf.options
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,

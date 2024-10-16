@@ -16,15 +16,12 @@ from collections import OrderedDict, defaultdict, namedtuple
 from contextlib import contextmanager
 from copy import copy
 
+import cudf
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from numba import cuda
-from packaging import version
-
-import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -34,7 +31,8 @@ from cudf.core._compat import (
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
-from cudf.testing import _utils as utils, assert_eq, assert_neq
+from cudf.testing import _utils as utils
+from cudf.testing import assert_eq, assert_neq
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
@@ -44,6 +42,8 @@ from cudf.testing._utils import (
     expect_warning_if,
     gen_rand,
 )
+from numba import cuda
+from packaging import version
 
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling

@@ -5,13 +5,12 @@ import socket
 from contextlib import contextmanager
 from io import BytesIO, StringIO
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-from fsspec.core import get_fs_token_paths
-
-import cudf
 from cudf.testing import assert_eq
+from fsspec.core import get_fs_token_paths
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")

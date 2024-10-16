@@ -6,11 +6,10 @@ import warnings
 from contextlib import contextmanager
 from textwrap import dedent
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, assert_exceptions_equal

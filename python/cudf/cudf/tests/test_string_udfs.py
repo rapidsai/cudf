@@ -1,16 +1,11 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
+import cudf
 import numba
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
-from numba.core.typing import signature as nb_signature
-from numba.types import CPointer, void
-
 import rmm
-
-import cudf
 from cudf._lib.strings_udf import (
     column_from_udf_string_array,
     column_to_string_view_array,
@@ -24,6 +19,9 @@ from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
 from cudf.testing import assert_eq
 from cudf.testing._utils import sv_to_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
+from numba import cuda
+from numba.core.typing import signature as nb_signature
+from numba.types import CPointer, void
 
 _PTX_FILE = _ptx_file()
 

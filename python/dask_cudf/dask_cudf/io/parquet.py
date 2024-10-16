@@ -6,10 +6,10 @@ from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
 import pandas as pd
-from pyarrow import dataset as pa_ds, parquet as pq
-
 from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
+from pyarrow import dataset as pa_ds
+from pyarrow import parquet as pq
 
 try:
     from dask.dataframe.io.parquet import (

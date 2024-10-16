@@ -1,10 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
+import cudf
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.core.column import as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.testing import assert_eq

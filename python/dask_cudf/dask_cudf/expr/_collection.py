@@ -3,21 +3,25 @@
 import warnings
 from functools import cached_property
 
-from dask_expr import (
-    DataFrame as DXDataFrame,
-    FrameBase,
-    Index as DXIndex,
-    Series as DXSeries,
-    get_collection_type,
-)
-from dask_expr._collection import new_collection
-from dask_expr._util import _raise_if_object_series
-
+import cudf
 from dask import config
 from dask.dataframe.core import is_dataframe_like
 from dask.typing import no_default
-
-import cudf
+from dask_expr import (
+    DataFrame as DXDataFrame,
+)
+from dask_expr import (
+    FrameBase,
+    get_collection_type,
+)
+from dask_expr import (
+    Index as DXIndex,
+)
+from dask_expr import (
+    Series as DXSeries,
+)
+from dask_expr._collection import new_collection
+from dask_expr._util import _raise_if_object_series
 
 _LEGACY_WORKAROUND = (
     "To enable the 'legacy' dask-cudf API, set the "
@@ -219,9 +223,8 @@ def _create_array_collection_with_meta(expr):
     # `new_dd_object` for DataFrame -> Array conversion.
     # This can be removed if dask#11017 is resolved
     # (See: https://github.com/dask/dask/issues/11017)
-    import numpy as np
-
     import dask.array as da
+    import numpy as np
     from dask.blockwise import Blockwise
     from dask.highlevelgraph import HighLevelGraph
 

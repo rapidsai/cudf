@@ -2,17 +2,16 @@
 
 import random
 
+import cudf
 import cupy as cp
+import dask
 import numpy as np
 import pandas as pd
 import pytest
-
-import dask
 from dask import dataframe as dd
-from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
+from dask.dataframe.core import make_meta as dask_make_meta
+from dask.dataframe.core import meta_nonempty
 from dask.utils import M
-
-import cudf
 
 import dask_cudf
 from dask_cudf.tests.utils import (
@@ -915,7 +914,6 @@ def test_correct_meta():
     # Need these local imports in this specific order.
     # For context: https://github.com/rapidsai/cudf/issues/7946
     import pandas as pd
-
     from dask import dataframe as dd
 
     import dask_cudf  # noqa: F401

@@ -1,11 +1,10 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import sys
 
+import cudf
 import numpy as np
 import pandas as pd
-
-import cudf
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.parquet import ParquetReader, ParquetWriter
 from cudf._fuzz_testing.utils import (

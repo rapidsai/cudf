@@ -2,11 +2,10 @@
 
 import math
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 

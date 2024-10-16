@@ -2,12 +2,11 @@
 
 import datetime
 import os
-import zoneinfo
-
-import pandas as pd
-import pytest
 
 import cudf
+import pandas as pd
+import pytest
+import zoneinfo
 from cudf import date_range
 from cudf.testing import assert_eq
 

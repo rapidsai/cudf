@@ -4,15 +4,14 @@ import datetime
 import operator
 import warnings
 
+import cudf
+import cudf.testing.dataset_generator as dataset_generator
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas._testing as tm
 import pyarrow as pa
 import pytest
-
-import cudf
-import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,

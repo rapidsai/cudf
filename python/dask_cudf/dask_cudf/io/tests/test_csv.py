@@ -4,14 +4,12 @@ import gzip
 import os
 import warnings
 
+import cudf
+import dask
 import numpy as np
 import pandas as pd
 import pytest
-
-import dask
 from dask import dataframe as dd
-
-import cudf
 
 import dask_cudf
 

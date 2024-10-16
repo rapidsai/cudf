@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Sequence, cast, overload
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-
 import pylibcudf as plc
 
 import cudf
 import cudf.api.types
 from cudf import _lib as libcudf
-from cudf._lib import string_casting as str_cast, strings as libstrings
+from cudf._lib import string_casting as str_cast
+from cudf._lib import strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype

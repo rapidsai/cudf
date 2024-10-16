@@ -4,11 +4,10 @@ import warnings
 from contextlib import contextmanager
 from decimal import Decimal
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq

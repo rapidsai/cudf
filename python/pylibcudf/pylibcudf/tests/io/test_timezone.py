@@ -1,8 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-import zoneinfo
-
 import pylibcudf as plc
 import pytest
+import zoneinfo
 
 
 def test_make_timezone_transition_table():

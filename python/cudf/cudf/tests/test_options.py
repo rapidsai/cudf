@@ -1,11 +1,10 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from contextlib import redirect_stdout
 from io import StringIO
 
-import pytest
-
 import cudf
+import pytest
 
 
 @pytest.fixture(scope="class", autouse=False)

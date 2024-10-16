@@ -1,10 +1,9 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if

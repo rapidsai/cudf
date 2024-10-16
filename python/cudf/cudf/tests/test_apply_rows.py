@@ -1,8 +1,7 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-import pytest
-
 import cudf
+import pytest
 from cudf.core.column import column
 from cudf.testing import assert_eq
 from cudf.testing._utils import gen_rand_series

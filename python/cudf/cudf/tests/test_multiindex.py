@@ -12,13 +12,12 @@ import re
 from contextlib import contextmanager
 from io import BytesIO
 
+import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf.api.extensions import no_default
 from cudf.core.column import as_column
 from cudf.testing import assert_eq, assert_neq

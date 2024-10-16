@@ -12,16 +12,12 @@ from contextlib import contextmanager
 from io import BytesIO
 from string import ascii_letters
 
+import cudf
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from fsspec.core import get_fs_token_paths
-from packaging import version
-from pyarrow import parquet as pq
-
-import cudf
 from cudf._lib.parquet import read_parquet_chunked
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.parquet import (
@@ -29,8 +25,12 @@ from cudf.io.parquet import (
     ParquetWriter,
     merge_parquet_filemetadata,
 )
-from cudf.testing import assert_eq, dataset_generator as dg
+from cudf.testing import assert_eq
+from cudf.testing import dataset_generator as dg
 from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
+from fsspec.core import get_fs_token_paths
+from packaging import version
+from pyarrow import parquet as pq
 
 
 @contextmanager

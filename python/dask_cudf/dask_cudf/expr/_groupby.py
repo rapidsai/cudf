@@ -1,15 +1,17 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from cudf.core.groupby.groupby import _deprecate_collect
+from dask.dataframe.groupby import Aggregation
 from dask_expr._groupby import (
     GroupBy as DXGroupBy,
+)
+from dask_expr._groupby import (
     SeriesGroupBy as DXSeriesGroupBy,
+)
+from dask_expr._groupby import (
     SingleAggregation,
 )
 from dask_expr._util import is_scalar
-
-from dask.dataframe.groupby import Aggregation
-
-from cudf.core.groupby.groupby import _deprecate_collect
 
 ##
 ## Custom groupby classes

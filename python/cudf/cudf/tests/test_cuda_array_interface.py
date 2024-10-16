@@ -3,13 +3,12 @@
 import types
 from contextlib import ExitStack as does_not_raise
 
+import cudf
 import cupy
 import numba.cuda
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import assert_eq
 from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES

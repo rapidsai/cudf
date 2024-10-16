@@ -4,7 +4,6 @@ import os
 import warnings
 
 import pytest
-
 from cudf.utils.hash_vocab_utils import hash_vocab
 
 

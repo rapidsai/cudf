@@ -2,11 +2,9 @@
 import math
 import operator
 
+import cudf
 import numpy as np
 import pytest
-from numba import cuda
-
-import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.missing import NA
 from cudf.core.udf._ops import (
@@ -23,6 +21,7 @@ from cudf.testing._utils import (
     parametrize_numeric_dtypes_pairwise,
     sv_to_udf_str,
 )
+from numba import cuda
 
 
 @pytest.fixture(scope="module")

@@ -2,15 +2,15 @@
 
 import textwrap
 
+import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import given, settings, strategies as st
-
-import cudf
 from cudf.testing import _utils as utils
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 repr_categories = [
     "uint16",

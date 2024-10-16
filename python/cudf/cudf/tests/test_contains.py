@@ -2,11 +2,10 @@
 
 import datetime
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import Series
 from cudf.core.index import Index, RangeIndex
 from cudf.testing import assert_eq

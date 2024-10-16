@@ -7,7 +7,6 @@ Test related to Cut
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf.core.cut import cut
 from cudf.testing import assert_eq
 

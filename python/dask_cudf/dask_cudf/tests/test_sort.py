@@ -1,13 +1,11 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
+import cudf
 import cupy as cp
+import dask
 import numpy as np
 import pytest
-
-import dask
 from dask import dataframe as dd
-
-import cudf
 
 import dask_cudf
 from dask_cudf.tests.utils import xfail_dask_expr

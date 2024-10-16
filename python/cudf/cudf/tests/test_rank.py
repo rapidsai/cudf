@@ -5,7 +5,6 @@ from itertools import chain, combinations_with_replacement, product
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf import DataFrame
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal

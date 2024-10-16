@@ -39,8 +39,10 @@ from cudf.core.column import (
 )
 from cudf.core.column.categorical import (
     _DEFAULT_CATEGORICAL_VALUE,
-    CategoricalAccessor as CategoricalAccessor,
     CategoricalColumn,
+)
+from cudf.core.column.categorical import (
+    CategoricalAccessor as CategoricalAccessor,
 )
 from cudf.core.column.column import concat_columns
 from cudf.core.column.lists import ListMethods

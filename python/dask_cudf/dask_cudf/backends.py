@@ -4,14 +4,14 @@ import warnings
 from collections.abc import Iterator
 from functools import partial
 
+import cudf
 import cupy as cp
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from packaging.version import Version
-from pandas.api.types import is_scalar
-
-import dask.dataframe as dd
+from cudf.api.types import is_string_dtype
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.dataframe.backends import (
@@ -41,10 +41,8 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
-
-import cudf
-from cudf.api.types import is_string_dtype
-from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
+from packaging.version import Version
+from pandas.api.types import is_scalar
 
 from .core import DataFrame, Index, Series
 
@@ -727,14 +725,13 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             # This code path uses PyArrow for IO, which is only
             # beneficial for remote storage (e.g. S3)
 
-            from fsspec.utils import stringify_path
-            from pyarrow import fs as pa_fs
-
             # CudfReadParquetPyarrowFS requires import of distributed beforehand
             # (See: https://github.com/dask/dask/issues/11352)
             import distributed  # noqa: F401
             from dask.core import flatten
             from dask.dataframe.utils import pyarrow_strings_enabled
+            from fsspec.utils import stringify_path
+            from pyarrow import fs as pa_fs
 
             from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
 

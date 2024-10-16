@@ -1,15 +1,13 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import cudf
+import dask
 import numba.cuda
 import pytest
-
-import dask
+from cudf.testing import assert_eq
 from dask import dataframe as dd
 from dask.distributed import Client
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
-
-import cudf
-from cudf.testing import assert_eq
 
 import dask_cudf
 

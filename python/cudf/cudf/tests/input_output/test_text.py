@@ -2,9 +2,8 @@
 
 from io import StringIO
 
-import pytest
-
 import cudf
+import pytest
 from cudf.testing import assert_eq
 
 

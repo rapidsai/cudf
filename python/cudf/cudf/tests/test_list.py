@@ -3,12 +3,11 @@
 import functools
 import operator
 
+import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
 from cudf.api.types import is_scalar

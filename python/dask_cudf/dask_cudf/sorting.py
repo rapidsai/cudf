@@ -4,10 +4,12 @@ import warnings
 from collections.abc import Iterator
 from functools import wraps
 
+import cudf
 import cupy
 import numpy as np
 import tlz as toolz
-
+from cudf.api.types import _is_categorical_dtype
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 from dask import config
 from dask.base import tokenize
 from dask.dataframe import methods
@@ -15,10 +17,6 @@ from dask.dataframe.core import DataFrame, Index, Series
 from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
-
-import cudf
-from cudf.api.types import _is_categorical_dtype
-from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 _SHUFFLE_SUPPORT = ("tasks", "p2p")  # "disk" not supported
 

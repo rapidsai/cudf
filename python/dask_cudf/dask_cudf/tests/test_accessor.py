@@ -1,16 +1,14 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
+import dask
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.testing import assert_series_equal
-
-import dask
-from dask import dataframe as dd
-
 from cudf import DataFrame, Series, date_range
 from cudf.testing import assert_eq
 from cudf.testing._utils import does_not_raise
+from dask import dataframe as dd
+from pandas.testing import assert_series_equal
 
 import dask_cudf
 from dask_cudf.tests.utils import xfail_dask_expr

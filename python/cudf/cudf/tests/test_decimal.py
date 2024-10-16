@@ -3,12 +3,10 @@
 import decimal
 from decimal import Decimal
 
+import cudf
 import numpy as np
 import pyarrow as pa
 import pytest
-from packaging import version
-
-import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 from cudf.testing import assert_eq
@@ -19,6 +17,7 @@ from cudf.testing._utils import (
     _decimal_series,
     expect_warning_if,
 )
+from packaging import version
 
 data_ = [
     [Decimal("1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],

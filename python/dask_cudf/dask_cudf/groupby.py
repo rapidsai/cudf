@@ -3,20 +3,20 @@ from __future__ import annotations
 
 from functools import wraps
 
+import cudf
 import numpy as np
 import pandas as pd
-
+from cudf.core.groupby.groupby import _deprecate_collect
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 from dask.dataframe.core import (
     DataFrame as DaskDataFrame,
+)
+from dask.dataframe.core import (
     aca,
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.utils import funcname
-
-import cudf
-from cudf.core.groupby.groupby import _deprecate_collect
-from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 from dask_cudf.sorting import _deprecate_shuffle_kwarg
 

@@ -5,11 +5,10 @@ Tests related to is_unique, is_monotonic_increasing &
 is_monotonic_decreasing attributes
 """
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import Index, MultiIndex, Series
 from cudf.core.index import CategoricalIndex, DatetimeIndex, RangeIndex
 from cudf.testing import assert_eq

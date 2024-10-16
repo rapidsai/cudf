@@ -1,12 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
 from cudf.testing import assert_eq

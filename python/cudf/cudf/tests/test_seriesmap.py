@@ -3,11 +3,10 @@
 from itertools import product
 from math import floor
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import Series
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal

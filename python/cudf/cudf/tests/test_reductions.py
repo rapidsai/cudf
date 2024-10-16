@@ -4,15 +4,15 @@
 from decimal import Decimal
 from itertools import product
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing import _utils as utils, assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if, gen_rand
 
 params_dtype = NUMERIC_TYPES

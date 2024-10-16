@@ -2,7 +2,6 @@
 
 import numpy as np
 import pytest
-
 from cudf import DataFrame, Series
 from cudf.testing import assert_eq
 

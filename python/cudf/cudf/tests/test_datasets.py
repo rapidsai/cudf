@@ -1,8 +1,7 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-import numpy as np
-
 import cudf
+import numpy as np
 from cudf.testing import assert_eq
 
 

@@ -21,15 +21,6 @@ import nbformat
 import numpy as np
 import pyarrow as pa
 import pytest
-from nbconvert.preprocessors import ExecutePreprocessor
-from numba import (
-    NumbaDeprecationWarning,
-    __version__ as numba_version,
-    vectorize,
-)
-from packaging import version
-from pytz import utc
-
 from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
@@ -38,6 +29,16 @@ from cudf.pandas.fast_slow_proxy import (
     is_proxy_object,
 )
 from cudf.testing import assert_eq
+from nbconvert.preprocessors import ExecutePreprocessor
+from numba import (
+    NumbaDeprecationWarning,
+    vectorize,
+)
+from numba import (
+    __version__ as numba_version,
+)
+from packaging import version
+from pytz import utc
 
 if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")

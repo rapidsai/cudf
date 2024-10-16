@@ -3,11 +3,10 @@
 import io
 import os
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 
 gcsfs = pytest.importorskip("gcsfs")

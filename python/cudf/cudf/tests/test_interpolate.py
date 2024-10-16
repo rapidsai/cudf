@@ -1,8 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-import pytest
-
 import cudf
+import pytest
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if

@@ -8,7 +8,6 @@ from io import BytesIO
 import fsspec
 import pandas as pd
 import pytest
-
 from dask.dataframe import assert_eq
 
 import dask_cudf

@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import cudf
 import cupy as cp
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.core.buffer import as_buffer
 from cudf.core.column import as_column, build_column
 from cudf.core.df_protocol import (

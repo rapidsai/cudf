@@ -1,10 +1,9 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import re
 
 import numpy as np
 import pytest
-
 from cudf import DateOffset
 
 INT64MAX = np.iinfo("int64").max

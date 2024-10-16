@@ -11,9 +11,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
 import nvtx
-from typing_extensions import Self
-
 import rmm
+from typing_extensions import Self
 
 from cudf.core.buffer.buffer import (
     Buffer,

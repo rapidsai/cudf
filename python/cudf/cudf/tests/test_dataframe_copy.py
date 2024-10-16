@@ -5,7 +5,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf.core.dataframe import DataFrame
 from cudf.testing import assert_eq, assert_neq
 from cudf.testing._utils import ALL_TYPES

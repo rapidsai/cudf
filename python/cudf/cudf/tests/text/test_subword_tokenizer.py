@@ -1,11 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import os
 
+import cudf
 import cupy
 import numpy as np
 import pytest
-
-import cudf
 from cudf.core.subword_tokenizer import SubwordTokenizer
 from cudf.testing import assert_eq
 

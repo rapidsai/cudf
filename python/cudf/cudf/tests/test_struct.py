@@ -1,11 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf.core.dtypes import StructDtype
 from cudf.testing import assert_eq
 from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES
