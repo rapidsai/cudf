@@ -192,7 +192,6 @@ class hostdevice_2dvector {
   host_span<T const> operator[](size_t row) const
   {
     return host_span<T const>{_data}.subspan(row * _size.second, _size.second);
-    ;
   }
 
   auto size() const noexcept { return _size; }
