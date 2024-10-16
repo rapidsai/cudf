@@ -44,10 +44,8 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.drop_nulls(
-                source_table.view(), c_keys, keep_threshold
-            )
+        c_result = cpp_stream_compaction.drop_nulls(
+            source_table.view(), c_keys, keep_threshold
         )
     return Table.from_libcudf(move(c_result))
 
@@ -74,10 +72,8 @@ cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.drop_nulls(
-                source_table.view(), c_keys, keep_threshold
-            )
+        c_result = cpp_stream_compaction.drop_nulls(
+            source_table.view(), c_keys, keep_threshold
         )
     return Table.from_libcudf(move(c_result))
 
@@ -101,10 +97,8 @@ cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
     """
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.apply_boolean_mask(
-                source_table.view(), boolean_mask.view()
-            )
+        c_result = cpp_stream_compaction.apply_boolean_mask(
+            source_table.view(), boolean_mask.view()
         )
     return Table.from_libcudf(move(c_result))
 
@@ -144,10 +138,8 @@ cpdef Table unique(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.unique(
-                input.view(), c_keys, keep, nulls_equal
-            )
+        c_result = cpp_stream_compaction.unique(
+            input.view(), c_keys, keep, nulls_equal
         )
     return Table.from_libcudf(move(c_result))
 
@@ -185,10 +177,8 @@ cpdef Table distinct(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.distinct(
-                input.view(), c_keys, keep, nulls_equal, nans_equal
-            )
+        c_result = cpp_stream_compaction.distinct(
+            input.view(), c_keys, keep, nulls_equal, nans_equal
         )
     return Table.from_libcudf(move(c_result))
 
@@ -221,10 +211,8 @@ cpdef Column distinct_indices(
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.distinct_indices(
-                input.view(), keep, nulls_equal, nans_equal
-            )
+        c_result = cpp_stream_compaction.distinct_indices(
+            input.view(), keep, nulls_equal, nans_equal
         )
     return Column.from_libcudf(move(c_result))
 
@@ -262,10 +250,8 @@ cpdef Table stable_distinct(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.stable_distinct(
-                input.view(), c_keys, keep, nulls_equal, nans_equal
-            )
+        c_result = cpp_stream_compaction.stable_distinct(
+            input.view(), c_keys, keep, nulls_equal, nans_equal
         )
     return Table.from_libcudf(move(c_result))
 
