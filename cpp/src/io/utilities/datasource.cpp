@@ -142,10 +142,7 @@ class file_source : public datasource {
  */
 class memory_mapped_source : public file_source {
  public:
-  explicit memory_mapped_source(char const* filepath,
-                                size_t offset,
-                                size_t max_size_estimate,
-                                size_t min_size_estimate)
+  explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
     : file_source(filepath)
   {
     if (_file.size() != 0) {
@@ -393,11 +390,9 @@ class user_datasource_wrapper : public datasource {
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
-                                               size_t max_size_estimate,
-                                               size_t min_size_estimate)
+                                               size_t max_size_estimate)
 {
-  CUDF_EXPECTS(max_size_estimate == 0 or min_size_estimate <= max_size_estimate,
-               "Invalid min/max size estimates for datasource creation");
+  CUDF_EXPECTS(max_size_estimate == 0, "Invalid max size estimate for datasource creation");
 
 #ifdef CUFILE_FOUND
   if (cufile_integration::is_always_enabled()) {
@@ -406,8 +401,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
   }
 #endif
   // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(
-    filepath.c_str(), offset, max_size_estimate, min_size_estimate);
+  return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
