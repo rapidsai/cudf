@@ -52,6 +52,7 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
                                                                 reader_opts.get_compression(),
                                                                 reader_opts.get_byte_range_offset(),
                                                                 reader_opts.get_byte_range_size(),
+                                                                reader_opts.get_delimiter(),
                                                                 stream);
     // Note: we cannot reuse cudf::io::json::detail::find_first_delimiter since the
     // return type of that function is size_type. However, when the chunk_size is
