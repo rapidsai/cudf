@@ -2727,20 +2727,20 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
 
 TEST_F(ParquetReaderTest, ListsWideTable)
 {
-  auto constexpr num_rows = 5;
-  auto constexpr num_cols = 32'769;  // for slightly over 2B keys
+  auto constexpr num_rows = 2;
+  auto constexpr num_cols = 10'923;  // for slightly over 2B keys
   auto constexpr seed     = 0xceed;
 
   std::mt19937 engine{seed};
 
-  auto str_list_nulls = make_parquet_string_list_col(engine, num_rows, 5, 32, true);
-  auto str_list       = make_parquet_string_list_col(engine, num_rows, 5, 32, false);
+  auto list_list       = make_parquet_list_list_col<int32_t>(0, num_rows, 1, 1, false);
+  auto list_list_nulls = make_parquet_list_list_col<int32_t>(0, num_rows, 1, 1, true);
 
   // switch between nullable and non-nullable
   std::vector<cudf::column_view> cols(num_cols);
   bool with_nulls = false;
   std::generate_n(cols.begin(), num_cols, [&]() {
-    auto const view = with_nulls ? str_list_nulls->view() : str_list->view();
+    auto const view = with_nulls ? list_list_nulls->view() : list_list->view();
     with_nulls      = not with_nulls;
     return view;
   });
