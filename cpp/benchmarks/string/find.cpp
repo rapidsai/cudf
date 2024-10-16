@@ -73,6 +73,27 @@ static void bench_find_string(nvbench::state& state)
   } else if (api == "contains") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::contains(input, target); });
+  } else if (api == "multi-contains") {
+    constexpr int iters = 10;
+    std::vector<std::string> match_targets({" abc",
+                                            "W43",
+                                            "0987 5W43",
+                                            "123 abc",
+                                            "23 abc",
+                                            "3 abc",
+                                            "é",
+                                            "7 5W43",
+                                            "87 5W43",
+                                            "987 5W43"});
+    auto multi_targets = std::vector<std::string>{};
+    for (int i = 0; i < iters; i++) {
+      multi_targets.emplace_back(match_targets[i % match_targets.size()]);
+    }
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::test::strings_column_wrapper multi_targets_column(multi_targets.begin(),
+                                                              multi_targets.end());
+      cudf::strings::multi_contains(input, cudf::strings_column_view(multi_targets_column));
+    });
   } else if (api == "starts_with") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::starts_with(input, target); });
@@ -84,7 +105,8 @@ static void bench_find_string(nvbench::state& state)
 
 NVBENCH_BENCH(bench_find_string)
   .set_name("find_string")
-  .add_string_axis("api", {"find", "find_multi", "contains", "starts_with", "ends_with"})
+  .add_string_axis("api",
+                   {"find", "find_multi", "contains", "starts_with", "ends_with", "multi-contains"})
   .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
   .add_int64_axis("num_rows", {260'000, 1'953'000, 16'777'216})
   .add_int64_axis("hit_rate", {20, 80});  // percentage

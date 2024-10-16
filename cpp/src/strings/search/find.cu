@@ -13,13 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/list_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -35,10 +38,15 @@
 #include <cuda/atomic>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
+#include <thrust/find.h>
 #include <thrust/for_each.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/sort.h>
 #include <thrust/transform.h>
+
+#include <algorithm>  // For std::min
 
 namespace cudf {
 namespace strings {
@@ -415,6 +423,297 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
 }
 
 /**
+ * Each string uses a warp(32 threads) to handle all the targets.
+ * Each thread uses num_targets bools shared memory to store temp result for each lane.
+ */
+CUDF_KERNEL void multi_contains_warp_parallel_multi_scalars_fn(
+  column_device_view const d_strings,
+  column_device_view const d_targets,
+  cudf::device_span<char> const d_target_first_bytes,
+  column_device_view const d_target_indexes_for_first_bytes,
+  cudf::device_span<bool*> d_results)
+{
+  auto const num_targets = d_targets.size();
+  auto const num_rows    = d_strings.size();
+
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= num_rows) { return; }
+
+  auto const lane_idx = idx % cudf::detail::warp_size;
+  if (d_strings.is_null(str_idx)) { return; }  // bitmask will set result to null.
+  // get the string for this warp
+  auto const d_str = d_strings.element<string_view>(str_idx);
+
+  /**
+   * size of shared_bools = targets_size * block_size
+   * each thread uses targets_size bools
+   */
+  extern __shared__ bool shared_bools[];
+
+  // initialize temp result:
+  // set true if target is empty, set false otherwise
+  for (int target_idx = 0; target_idx < num_targets; target_idx++) {
+    auto const d_target = d_targets.element<string_view>(target_idx);
+    shared_bools[threadIdx.x * num_targets + target_idx] = d_target.size_bytes() == 0;
+  }
+
+  for (size_type str_byte_idx = lane_idx; str_byte_idx < d_str.size_bytes();
+       str_byte_idx += cudf::detail::warp_size) {
+    // 1. check the first chars using binary search on first char set
+    char c = *(d_str.data() + str_byte_idx);
+    auto first_byte_ptr =
+      thrust::lower_bound(thrust::seq, d_target_first_bytes.begin(), d_target_first_bytes.end(), c);
+    if (not(first_byte_ptr != d_target_first_bytes.end() && *first_byte_ptr == c)) {
+      // first char is not matched for all targets
+      // Note: first bytes does not work for empty target.
+      // For empty target, already set result as found
+      continue;
+    }
+
+    // 2. check the 2nd chars
+    int first_char_index_in_list = first_byte_ptr - d_target_first_bytes.begin();
+    // get possible targets
+    auto const possible_targets_list =
+      cudf::list_device_view{d_target_indexes_for_first_bytes, first_char_index_in_list};
+    for (auto list_idx = 0; list_idx < possible_targets_list.size();
+         ++list_idx) {  // iterate possible targets
+      auto target_idx     = possible_targets_list.element<size_type>(list_idx);
+      int temp_result_idx = threadIdx.x * num_targets + target_idx;
+      if (!shared_bools[temp_result_idx]) {  // not found before
+        auto const d_target = d_targets.element<string_view>(target_idx);
+        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
+          // first char already checked, only need to check the [2nd, end) chars if has.
+          bool found = true;
+          for (auto i = 1; i < d_target.size_bytes(); i++) {
+            if (*(d_str.data() + str_byte_idx + i) != *(d_target.data() + i)) {
+              found = false;
+              break;
+            }
+          }
+          if (found) { shared_bools[temp_result_idx] = true; }
+        }
+      }
+    }
+  }
+
+  // wait all lanes are done in a warp
+  __syncwarp();
+
+  if (lane_idx == 0) {
+    for (int target_idx = 0; target_idx < num_targets; target_idx++) {
+      bool found = false;
+      for (int lane_idx = 0; lane_idx < cudf::detail::warp_size; lane_idx++) {
+        int temp_idx = (threadIdx.x + lane_idx) * num_targets + target_idx;
+        if (shared_bools[temp_idx]) {
+          found = true;
+          break;
+        }
+      }
+      d_results[target_idx][str_idx] = found;
+    }
+  }
+}
+
+CUDF_KERNEL void multi_contains_using_indexes_fn(
+  column_device_view const d_strings,
+  column_device_view const d_targets,
+  cudf::device_span<char> const d_target_first_bytes,
+  column_device_view const d_target_indexes_for_first_bytes,
+  cudf::device_span<bool*> d_results)
+{
+  auto const str_idx     = static_cast<size_type>(cudf::detail::grid_1d::global_thread_id());
+  auto const num_targets = d_targets.size();
+  auto const num_rows    = d_strings.size();
+  if (str_idx >= num_rows) { return; }
+  if (d_strings.is_null(str_idx)) { return; }  // bitmask will set result to null.
+  auto const d_str = d_strings.element<string_view>(str_idx);
+
+  // initialize temp result:
+  // set true if target is empty, set false otherwise
+  for (auto target_idx = 0; target_idx < num_targets; ++target_idx) {
+    auto const d_target            = d_targets.element<string_view>(target_idx);
+    d_results[target_idx][str_idx] = d_target.size_bytes() == 0;
+  }
+
+  for (auto str_byte_idx = 0; str_byte_idx < d_str.size_bytes();
+       ++str_byte_idx) {  // iterate the start index in the string
+
+    // 1. check the first chars using binary search on first char set
+    char c = *(d_str.data() + str_byte_idx);
+    auto first_byte_ptr =
+      thrust::lower_bound(thrust::seq, d_target_first_bytes.begin(), d_target_first_bytes.end(), c);
+
+    if (not(first_byte_ptr != d_target_first_bytes.end() && *first_byte_ptr == c)) {
+      // first char is not matched for all targets
+      // Note: first bytes does not work for empty target.
+      // For empty target, already set result as found
+      continue;
+    }
+
+    int first_char_index_in_list = first_byte_ptr - d_target_first_bytes.begin();
+    // get possible targets
+    auto const possible_targets_list =
+      cudf::list_device_view{d_target_indexes_for_first_bytes, first_char_index_in_list};
+
+    for (auto list_idx = 0; list_idx < possible_targets_list.size();
+         ++list_idx) {  // iterate possible targets
+      auto target_idx = possible_targets_list.element<size_type>(list_idx);
+      if (!d_results[target_idx][str_idx]) {  // not found before
+        auto const d_target = d_targets.element<string_view>(target_idx);
+        if (d_str.size_bytes() - str_byte_idx >= d_target.size_bytes()) {
+          // first char already checked, only need to check the [2nd, end) chars if has.
+          bool found = true;
+          for (auto i = 1; i < d_target.size_bytes(); i++) {
+            if (*(d_str.data() + str_byte_idx + i) != *(d_target.data() + i)) {
+              found = false;
+              break;
+            }
+          }
+          if (found) { d_results[target_idx][str_idx] = true; }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Execute multi contains.
+ * First index the first char for all targets.
+ * Index the first char:
+ *   collect first char for all targets and do uniq and sort,
+ *   then index the targets for the first char.
+ *   e.g.:
+ *     targets: xa xb ac ad af
+ *     first char set is: (a, x)
+ *     index result is:
+ *       {
+ *         a: [2, 3, 4],   // indexes for: ac ad af
+ *         x: [0, 1]       // indexes for: xa xb
+ *       }
+ * when do searching:
+ *   find (binary search) from `first char set` for a char in string:
+ *     if char in string is not in ['a', 'x'], fast skip
+ *     if char in string is 'x', then only need to try ["xa", "xb"] targets.
+ *     if char in string is 'a', then only need to try ["ac", "ad", "af"] targets.
+ *
+ */
+std::vector<std::unique_ptr<column>> multi_contains(bool warp_parallel,
+                                                    strings_column_view const& input,
+                                                    strings_column_view const& targets,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  auto const num_targets = static_cast<size_type>(targets.size());
+  CUDF_EXPECTS(not targets.is_empty(), "Must specify at least one target string.");
+
+  // 1. copy targets from device to host
+  auto const h_targets_child = cudf::detail::make_std_vector_sync<char>(
+    cudf::device_span<char const>(targets.chars_begin(stream), targets.chars_size(stream)), stream);
+
+  // Note: targets may be sliced, so should find the correct first offset
+  auto first_offset            = targets.offset();
+  auto const targets_offsets   = targets.offsets();
+  auto const h_targets_offsets = cudf::detail::make_std_vector_sync(
+    cudf::device_span<int const>{targets_offsets.data<int>() + first_offset,
+                                 static_cast<size_t>(targets.size() + 1)},
+    stream);
+
+  // 2. index the first characters for all targets
+  std::map<char, std::vector<size_type>> indexes;
+  for (auto i = 0; i < targets.size(); i++) {
+    auto target_begin_offset = h_targets_offsets[i];
+    auto target_end_offset   = h_targets_offsets[i + 1];
+    if (target_end_offset - target_begin_offset > 0) {
+      char first_char = h_targets_child[target_begin_offset];
+      auto not_exist  = indexes.find(first_char) == indexes.end();
+      if (not_exist) { indexes[first_char] = std::vector<size_type>(); }
+      indexes[first_char].push_back(i);
+    }
+  }
+  thrust::host_vector<char> h_first_bytes   = {};
+  thrust::host_vector<size_type> h_offsets  = {0};
+  thrust::host_vector<size_type> h_elements = {};
+  for (const auto& pair : indexes) {
+    h_first_bytes.push_back(pair.first);
+    h_elements.insert(h_elements.end(), pair.second.begin(), pair.second.end());
+    h_offsets.push_back(h_elements.size());
+  }
+
+  // 3. copy first char set and first char indexes to device
+  auto d_first_bytes  = cudf::detail::make_device_uvector_async(h_first_bytes, stream, mr);
+  auto d_offsets      = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
+  auto d_elements     = cudf::detail::make_device_uvector_async(h_elements, stream, mr);
+  auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                       h_offsets.size(),
+                                                       d_offsets.release(),
+                                                       rmm::device_buffer{},  // null mask
+                                                       0                      // null size
+  );
+  auto element_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                                       h_elements.size(),
+                                                       d_elements.release(),
+                                                       rmm::device_buffer{},  // null mask
+                                                       0                      // null size
+  );
+  auto list_column    = cudf::make_lists_column(h_first_bytes.size(),
+                                             std::move(offsets_column),
+                                             std::move(element_column),
+                                             0,                     // null count
+                                             rmm::device_buffer{},  // null mask
+                                             stream,
+                                             mr);
+  auto d_list_column  = column_device_view::create(list_column->view(), stream);
+
+  // 4. Create output columns.
+  auto const results_iter =
+    thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>(0), [&](int i) {
+      return make_numeric_column(data_type{type_id::BOOL8},
+                                 input.size(),
+                                 cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                 input.null_count(),
+                                 stream,
+                                 mr);
+    });
+  auto results_list =
+    std::vector<std::unique_ptr<column>>(results_iter, results_iter + targets.size());
+  auto device_results_list = [&] {
+    auto host_results_pointer_iter =
+      thrust::make_transform_iterator(results_list.begin(), [](auto const& results_column) {
+        return results_column->mutable_view().template data<bool>();
+      });
+    auto host_results_pointers = std::vector<bool*>(
+      host_results_pointer_iter, host_results_pointer_iter + results_list.size());
+    return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
+  }();
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+  auto const d_targets = column_device_view::create(targets.parent(), stream);
+
+  // 5. execute the kernel
+  constexpr int block_size = 256;
+
+  if (warp_parallel) {
+    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    int shared_mem_size = block_size * targets.size();
+    multi_contains_warp_parallel_multi_scalars_fn<<<grid.num_blocks,
+                                                    grid.num_threads_per_block,
+                                                    shared_mem_size,
+                                                    stream.value()>>>(
+      *d_strings, *d_targets, d_first_bytes, *d_list_column, device_results_list);
+  } else {
+    cudf::detail::grid_1d grid{input.size(), block_size};
+    multi_contains_using_indexes_fn<<<grid.num_blocks,
+                                      grid.num_threads_per_block,
+                                      0,
+                                      stream.value()>>>(
+      *d_strings, *d_targets, d_first_bytes, *d_list_column, device_results_list);
+  }
+
+  return results_list;
+}
+
+/**
  * @brief Utility to return a bool column indicating the presence of
  * a given target string in a strings column.
  *
@@ -534,6 +833,16 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   return results;
 }
 
+std::unique_ptr<column> contains_small_strings_impl(strings_column_view const& input,
+                                                    string_scalar const& target,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::device_async_resource_ref mr)
+{
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) != string_view::npos;
+  };
+  return contains_fn(input, target, pfn, stream, mr);
+}
 }  // namespace
 
 std::unique_ptr<column> contains(strings_column_view const& input,
@@ -548,10 +857,47 @@ std::unique_ptr<column> contains(strings_column_view const& input,
   }
 
   // benchmark measurements showed this to be faster for smaller strings
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) != string_view::npos;
-  };
-  return contains_fn(input, target, pfn, stream, mr);
+  return contains_small_strings_impl(input, target, stream, mr);
+}
+
+std::unique_ptr<table> multi_contains(strings_column_view const& input,
+                                      strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(not targets.has_nulls(), "Target strings cannot be null");
+  auto result_columns = [&] {
+    if ((input.null_count() < input.size()) &&
+        ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+      // Large strings.
+      // use warp parallel when the average string width is greater than the threshold
+
+      static constexpr int target_group_size = 16;
+      if (targets.size() <= target_group_size) {
+        return multi_contains(/**warp parallel**/ true, input, targets, stream, mr);
+      } else {
+        // Too many targets will consume more shared memory, so split targets
+        std::vector<std::unique_ptr<column>> ret_columns;
+        size_type num_groups = (targets.size() + target_group_size - 1) / target_group_size;
+        for (size_type group_idx = 0; group_idx < num_groups; group_idx++) {
+          size_type start_target = group_idx * target_group_size;
+          size_type end_target   = std::min(start_target + target_group_size, targets.size());
+          auto target_goup =
+            cudf::detail::slice(targets.parent(), start_target, end_target, stream);
+          auto bool_columns = multi_contains(
+            /**warp parallel**/ true, input, strings_column_view(target_goup), stream, mr);
+          for (auto& c : bool_columns) {
+            ret_columns.push_back(std::move(c));  // take the ownership
+          }
+        }
+        return ret_columns;
+      }
+    } else {
+      // Small strings. Searching for multiple targets in one thread seems to work fastest.
+      return multi_contains(/**warp parallel**/ false, input, targets, stream, mr);
+    }
+  }();
+  return std::make_unique<table>(std::move(result_columns));
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
@@ -630,6 +976,15 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::contains(strings, target, stream, mr);
+}
+
+std::unique_ptr<table> multi_contains(strings_column_view const& strings,
+                                      strings_column_view const& targets,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::multi_contains(strings, targets, stream, mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
