@@ -174,11 +174,13 @@ if(CUDF_CLANG_TIDY)
         "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
     )
   endif()
+
+  find_program(IWYU_EXE NAMES include-what-you-use iwyu REQUIRED)
 endif()
 
 # Turn on the clang-tidy property for a target excluding the files specified in SKIPPED_FILES.
 function(enable_clang_tidy target)
-  set(_tidy_options)
+  set(_tidy_options ENABLE_IWYU)
   set(_tidy_one_value)
   set(_tidy_multi_value SKIPPED_FILES)
   cmake_parse_arguments(
@@ -191,6 +193,9 @@ function(enable_clang_tidy target)
     set_target_properties(
       ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
     )
+    if(_TIDY_ENABLE_IWYU)
+      set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+    endif()
     foreach(file IN LISTS _TIDY_SKIPPED_FILES)
       set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
     endforeach()
@@ -767,7 +772,9 @@ target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-enable_clang_tidy(cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp)
+enable_clang_tidy(
+  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp ENABLE_IWYU
+)
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
   # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
