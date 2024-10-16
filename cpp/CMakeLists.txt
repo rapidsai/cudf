@@ -88,6 +88,7 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
+option(CUDF_CLANG_TIDY "Enable clang-tidy checking" OFF)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -143,6 +144,58 @@ message(VERBOSE "CUDF: LIBCUDF_LOGGING_LEVEL = '${LIBCUDF_LOGGING_LEVEL}'.")
 if(NOT CUDF_GENERATED_INCLUDE_DIR)
   set(CUDF_GENERATED_INCLUDE_DIR ${CUDF_BINARY_DIR})
 endif()
+
+# ##################################################################################################
+# * clang-tidy configuration ----------------------------------------------------------------------
+if(CUDF_CLANG_TIDY)
+  find_program(
+    CLANG_TIDY_EXE
+    NAMES "clang-tidy"
+    DOC "Path to clang-tidy executable" REQUIRED
+  )
+
+  execute_process(
+    COMMAND ${CLANG_TIDY_EXE} --version
+    OUTPUT_VARIABLE CLANG_TIDY_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  string(REGEX MATCH "LLVM version ([0-9]+\\.[0-9]+)\\.[0-9]+" LLVM_VERSION_MATCH
+               "${CLANG_TIDY_OUTPUT}"
+  )
+  # Discard the patch version and allow it to float. Empirically, results between patch versions are
+  # mostly stable, and looking at available packages on some package managers sometimes patch
+  # versions are skipped so we don't want to constrain to a patch version that the user can't
+  # install.
+  set(LLVM_VERSION "${CMAKE_MATCH_1}")
+  set(expected_clang_tidy_version 19.1)
+  if(NOT expected_clang_tidy_version VERSION_EQUAL LLVM_VERSION)
+    message(
+      FATAL_ERROR
+        "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
+    )
+  endif()
+endif()
+
+# Turn on the clang-tidy property for a target excluding the files specified in SKIPPED_FILES.
+function(enable_clang_tidy target)
+  set(_tidy_options)
+  set(_tidy_one_value)
+  set(_tidy_multi_value SKIPPED_FILES)
+  cmake_parse_arguments(
+    _TIDY "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
+  )
+
+  if(CUDF_CLANG_TIDY)
+    # clang will complain about unused link libraries on the compile line unless we specify
+    # -Qunused-arguments.
+    set_target_properties(
+      ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
+    )
+    foreach(file IN LISTS _TIDY_SKIPPED_FILES)
+      set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
+    endforeach()
+  endif()
+endfunction()
 
 # ##################################################################################################
 # * conda environment -----------------------------------------------------------------------------
@@ -715,6 +768,7 @@ target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
+enable_clang_tidy(cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp)
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
   # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
