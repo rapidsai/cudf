@@ -92,9 +92,6 @@ class datasource {
    * this case, `max_size_estimate` can include padding after the byte range, to include additional
    * data that may be needed for processing.
    *
-   * @throws cudf::logic_error if the minimum size estimate is greater than the maximum size
-   * estimate
-   *
    * @param[in] filepath Path to the file to use
    * @param[in] offset Starting byte offset from which data will be read (the default is zero)
    * @param[in] max_size_estimate Upper estimate of the data range that will be read (the default is
