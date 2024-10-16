@@ -49,9 +49,7 @@ cdef class Table:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
-        cdef vector[unique_ptr[column]] c_columns = move(
-            dereference(libcudf_tbl).release()
-        )
+        cdef vector[unique_ptr[column]] c_columns = dereference(libcudf_tbl).release()
 
         cdef vector[unique_ptr[column]].size_type i
         return Table([

@@ -138,7 +138,7 @@ cdef class Column:
 
         cdef size_type null_count = libcudf_col.get().null_count()
 
-        cdef column_contents contents = move(libcudf_col.get().release())
+        cdef column_contents contents = libcudf_col.get().release()
 
         # Note that when converting to cudf Column objects we'll need to pull
         # out the base object.
@@ -247,7 +247,7 @@ cdef class Column:
         cdef const scalar* c_scalar = slr.get()
         cdef unique_ptr[column] c_result
         with nogil:
-            c_result = move(make_column_from_scalar(dereference(c_scalar), size))
+            c_result = make_column_from_scalar(dereference(c_scalar), size)
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
@@ -269,7 +269,7 @@ cdef class Column:
         cdef Scalar slr = Scalar.empty_like(like)
         cdef unique_ptr[column] c_result
         with nogil:
-            c_result = move(make_column_from_scalar(dereference(slr.get()), size))
+            c_result = make_column_from_scalar(dereference(slr.get()), size)
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
@@ -373,7 +373,7 @@ cdef class Column:
         """Create a copy of the column."""
         cdef unique_ptr[column] c_result
         with nogil:
-            c_result = move(make_unique[column](self.view()))
+            c_result = make_unique[column](self.view())
         return Column.from_libcudf(move(c_result))
 
 

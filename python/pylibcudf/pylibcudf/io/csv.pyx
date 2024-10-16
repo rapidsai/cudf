@@ -168,7 +168,7 @@ def read_csv(
     cdef vector[data_type] c_dtypes_list
     cdef map[string, data_type] c_dtypes_map
 
-    cdef csv_reader_options options = move(
+    cdef csv_reader_options options = (
         csv_reader_options.builder(source_info.c_obj)
         .compression(compression)
         .mangle_dupe_cols(mangle_dupe_cols)
