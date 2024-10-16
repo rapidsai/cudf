@@ -65,50 +65,32 @@ include = [
 ]
 exclude = ["*tests*"]
 
-[tool.isort]
-line_length = 79
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-combine_as_imports = true
-order_by_type = true
-known_dask = [
-    "dask",
-    "distributed",
-    "dask_cuda",
-]
-known_rapids = [
-    "rmm",
-    "cudf",
-    "dask_cudf",
-]
-known_first_party = [
-    "streamz",
-]
-default_section = "THIRDPARTY"
-sections = [
-    "FUTURE",
-    "STDLIB",
-    "THIRDPARTY",
-    "DASK",
-    "RAPIDS",
-    "FIRSTPARTY",
-    "LOCALFOLDER",
-]
-skip = [
-    "thirdparty",
-    ".eggs",
-    ".git",
-    ".hg",
-    ".mypy_cache",
-    ".tox",
-    ".venv",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "__init__.py",
-]
+[tool.ruff.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+known-first-party = ["streamz"]
+known-third-party = ["dask", "distributed", "dask_cuda", "rmm", "cudf", "dask_cudf"]
+section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
+
+[tool.ruff.isort.sections]
+dask = ["dask", "distributed", "dask_cuda"]
+rapids = ["rmm", "cudf", "dask_cudf"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+
+[tool.ruff.extend-exclude]
+"thirdparty" = true
+".eggs" = true
+".git" = true
+".hg" = true
+".mypy_cache" = true
+".tox" = true
+".venv" = true
+"_build" = true
+"buck-out" = true
+"build" = true
+"dist" = true
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"

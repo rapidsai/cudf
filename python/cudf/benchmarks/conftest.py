@@ -66,7 +66,6 @@ from utils import (  # noqa: E402
 
 # Turn off isort until we upgrade to 5.8.0
 # https://github.com/pycqa/isort/issues/1594
-# isort: off
 from config import (  # noqa: W0611, E402, F401
     NUM_COLS,
     NUM_ROWS,
@@ -75,8 +74,6 @@ from config import (  # noqa: W0611, E402, F401
     pytest_sessionfinish,
     pytest_sessionstart,
 )
-
-# isort: on
 
 
 @pytest_cases.fixture(params=[0, 1], ids=["AxisIndex", "AxisColumn"])
