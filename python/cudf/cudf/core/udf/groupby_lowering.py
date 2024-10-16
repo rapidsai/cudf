@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from functools import partial
 
@@ -29,9 +29,7 @@ def group_reduction_impl_basic(context, builder, sig, args, function):
     retty = sig.return_type
 
     # a variable logically corresponding to the calling `Group`
-    grp = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[0]
-    )
+    grp = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
 
     # what specific (numba) GroupType
     grp_type = sig.args[0]
@@ -55,12 +53,8 @@ def group_corr(context, builder, sig, args):
     """
     Instruction boilerplate used for calling a groupby correlation
     """
-    lhs_grp = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[0]
-    )
-    rhs_grp = cgutils.create_struct_proxy(sig.args[1])(
-        context, builder, value=args[1]
-    )
+    lhs_grp = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
+    rhs_grp = cgutils.create_struct_proxy(sig.args[1])(context, builder, value=args[1])
 
     device_func = call_cuda_functions["corr"][
         (
@@ -74,12 +68,8 @@ def group_corr(context, builder, sig, args):
         device_func,
         nb_signature(
             types.float64,
-            types.CPointer(
-                sig.args[0].group_scalar_type
-            ),  # this group calls corr
-            types.CPointer(
-                sig.args[1].group_scalar_type
-            ),  # this group is passed
+            types.CPointer(sig.args[0].group_scalar_type),  # this group calls corr
+            types.CPointer(sig.args[1].group_scalar_type),  # this group is passed
             group_size_type,
         ),
         (
@@ -120,9 +110,7 @@ def group_reduction_impl_idx_max_or_min(context, builder, sig, args, function):
     """
     retty = sig.return_type
 
-    grp = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[0]
-    )
+    grp = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
     grp_type = sig.args[0]
 
     if grp_type.index_type != index_default_type:
@@ -154,18 +142,12 @@ cuda_Group_mean = partial(group_reduction_impl_basic, function="mean")
 cuda_Group_std = partial(group_reduction_impl_basic, function="std")
 cuda_Group_var = partial(group_reduction_impl_basic, function="var")
 
-cuda_Group_idxmax = partial(
-    group_reduction_impl_idx_max_or_min, function="idxmax"
-)
-cuda_Group_idxmin = partial(
-    group_reduction_impl_idx_max_or_min, function="idxmin"
-)
+cuda_Group_idxmax = partial(group_reduction_impl_idx_max_or_min, function="idxmax")
+cuda_Group_idxmin = partial(group_reduction_impl_idx_max_or_min, function="idxmin")
 
 
 def cuda_Group_size(context, builder, sig, args):
-    grp = cgutils.create_struct_proxy(sig.args[0])(
-        context, builder, value=args[0]
-    )
+    grp = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
     return grp.size
 
 
@@ -181,10 +163,6 @@ for ty in SUPPORTED_GROUPBY_NUMBA_TYPES:
     cuda_lower("GroupType.mean", GroupType(ty))(cuda_Group_mean)
     cuda_lower("GroupType.std", GroupType(ty))(cuda_Group_std)
     cuda_lower("GroupType.var", GroupType(ty))(cuda_Group_var)
-    cuda_lower("GroupType.idxmax", GroupType(ty, types.int64))(
-        cuda_Group_idxmax
-    )
-    cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(
-        cuda_Group_idxmin
-    )
+    cuda_lower("GroupType.idxmax", GroupType(ty, types.int64))(cuda_Group_idxmax)
+    cuda_lower("GroupType.idxmin", GroupType(ty, types.int64))(cuda_Group_idxmin)
     cuda_lower("GroupType.corr", GroupType(ty), GroupType(ty))(group_corr)

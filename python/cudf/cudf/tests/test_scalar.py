@@ -202,11 +202,7 @@ def test_scalar_roundtrip(value):
 
 @pytest.mark.parametrize(
     "dtype",
-    NUMERIC_TYPES
-    + DATETIME_TYPES
-    + TIMEDELTA_TYPES
-    + ["object"]
-    + TEST_DECIMAL_TYPES,
+    NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"] + TEST_DECIMAL_TYPES,
 )
 def test_null_scalar(dtype):
     s = cudf.Scalar(None, dtype=dtype)
@@ -242,9 +238,7 @@ def test_nat_to_null_scalar_succeeds(value):
     assert s.dtype == value.dtype
 
 
-@pytest.mark.parametrize(
-    "value", [None, np.datetime64("NaT"), np.timedelta64("NaT")]
-)
+@pytest.mark.parametrize("value", [None, np.datetime64("NaT"), np.timedelta64("NaT")])
 def test_generic_null_scalar_construction_fails(value):
     with pytest.raises(TypeError):
         cudf.Scalar(value)
@@ -403,9 +397,7 @@ def test_device_scalar_direct_construction(value, decimal_type):
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_construct_from_scalar(value):
     value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
-    x = cudf.Scalar(
-        value, value.dtype if not isinstance(value, Decimal) else None
-    )
+    x = cudf.Scalar(value, value.dtype if not isinstance(value, Decimal) else None)
     y = cudf.Scalar(x)
     assert x.value == y.value or np.isnan(x.value) and np.isnan(y.value)
 

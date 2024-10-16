@@ -63,9 +63,7 @@ params_query_env_fn = [
 ]
 
 
-@pytest.mark.parametrize(
-    "data,fn", product(params_query_data, params_query_env_fn)
-)
+@pytest.mark.parametrize("data,fn", product(params_query_data, params_query_env_fn))
 def test_query_ref_env(data, fn):
     # prepare
     nelem, seed = data

@@ -37,9 +37,7 @@ def even_option(empty_option_environment):
         if not x % 2 == 0:
             raise ValueError(f"Invalid option value {x}")
 
-    cudf.options._register_option(
-        "even_option", 0, "An even option.", validator
-    )
+    cudf.options._register_option("even_option", 0, "An even option.", validator)
     yield
     del cudf.options._OPTIONS["even_option"]
 
@@ -60,9 +58,7 @@ class TestCleanOptions:
         with redirect_stdout(s):
             cudf.describe_option("odd_option")
         s.seek(0)
-        expected = (
-            "odd_option:\n\tAn odd option.\n\t[Default: 1] [Current: 1]\n"
-        )
+        expected = "odd_option:\n\tAn odd option.\n\t[Default: 1] [Current: 1]\n"
         assert expected == s.read()
 
     def test_option_description_all(odd_option, even_option):
@@ -82,14 +78,9 @@ def test_empty_option_context(default_integer_bitwidth):
     prev_setting = cudf.get_option("default_integer_bitwidth")
     cudf.set_option("default_integer_bitwidth", default_integer_bitwidth)
     with cudf.option_context():
-        assert (
-            cudf.get_option("default_integer_bitwidth")
-            == default_integer_bitwidth
-        )
+        assert cudf.get_option("default_integer_bitwidth") == default_integer_bitwidth
 
-    assert (
-        cudf.get_option("default_integer_bitwidth") == default_integer_bitwidth
-    )
+    assert cudf.get_option("default_integer_bitwidth") == default_integer_bitwidth
     cudf.set_option("default_integer_bitwidth", prev_setting)
 
 
@@ -106,15 +97,9 @@ def test_option_context(pandas_compatible, default_integer_bitwidth):
         default_integer_bitwidth,
     ):
         assert cudf.get_option("mode.pandas_compatible") is pandas_compatible
-        assert (
-            cudf.get_option("default_integer_bitwidth")
-            is default_integer_bitwidth
-        )
+        assert cudf.get_option("default_integer_bitwidth") is default_integer_bitwidth
 
-    assert (
-        cudf.get_option("mode.pandas_compatible")
-        is prev_pandas_compatible_setting
-    )
+    assert cudf.get_option("mode.pandas_compatible") is prev_pandas_compatible_setting
     assert cudf.get_option("default_integer_bitwidth") is prev_width_setting
 
 

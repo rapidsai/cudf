@@ -81,9 +81,7 @@ class IndexMeta(type):
 
     def __call__(cls, data, *args, **kwargs):
         if kwargs.get("tupleize_cols", True) is not True:
-            raise NotImplementedError(
-                "tupleize_cols is currently not supported."
-            )
+            raise NotImplementedError("tupleize_cols is currently not supported.")
 
         if cls is Index:
             return as_index(
@@ -159,8 +157,7 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
             index_class_type = IntervalIndex
         else:
             raise NotImplementedError(
-                "Unsupported column type passed to "
-                f"create an Index: {type(values)}"
+                "Unsupported column type passed to " f"create an Index: {type(values)}"
             )
     else:
         index_class_type = cudf.MultiIndex
@@ -170,9 +167,7 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
 def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     """Validate start/stop/step argument in RangeIndex.__init__"""
     if not is_integer(arg):
-        raise TypeError(
-            f"{arg_name} must be an integer, not {type(arg).__name__}"
-        )
+        raise TypeError(f"{arg_name} must be an integer, not {type(arg).__name__}")
     return int(arg)
 
 
@@ -221,9 +216,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     _range: range
 
     @_performance_tracking
-    def __init__(
-        self, start, stop=None, step=1, dtype=None, copy=False, name=None
-    ):
+    def __init__(self, start, stop=None, step=1, dtype=None, copy=False, name=None):
         if not cudf.api.types.is_hashable(name):
             raise ValueError("Name must be a hashable value.")
         self._name = name
@@ -591,9 +584,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ):
             other = other.item()
         if isinstance(other, (int, np.integer)):
-            return RangeIndex(
-                self.start * other, self.stop * other, self.step * other
-            )
+            return RangeIndex(self.start * other, self.stop * other, self.step * other)
         return self._as_int_index().__mul__(other)
 
     @_performance_tracking
@@ -609,9 +600,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        return self._as_int_index().__array_ufunc__(
-            ufunc, method, *inputs, **kwargs
-        )
+        return self._as_int_index().__array_ufunc__(ufunc, method, *inputs, **kwargs)
 
     @_performance_tracking
     def get_indexer(self, target, limit=None, method=None, tolerance=None):
@@ -766,9 +755,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         # calculate parameters for the RangeIndex describing the
         # intersection disregarding the lower bounds
-        tmp_start = (
-            first.start + (second.start - first.start) * first.step // gcd * s
-        )
+        tmp_start = first.start + (second.start - first.start) * first.step // gcd * s
         new_step = first.step * second.step // gcd
         no_steps = -(-(int_low - tmp_start) // abs(new_step))
         new_start = tmp_start + abs(new_step) * no_steps
@@ -787,13 +774,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if isinstance(other, RangeIndex) and self.equals(other):
             return self[:0]._get_reconciled_name_object(other)
 
-        return self._try_reconstruct_range_index(
-            super().difference(other, sort=sort)
-        )
+        return self._try_reconstruct_range_index(super().difference(other, sort=sort))
 
-    def _try_reconstruct_range_index(
-        self, index: BaseIndex
-    ) -> Self | BaseIndex:
+    def _try_reconstruct_range_index(self, index: BaseIndex) -> Self | BaseIndex:
         if isinstance(index, RangeIndex) or index.dtype.kind not in "iu":
             return index
         # Evenly spaced values can return a
@@ -862,9 +845,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # could use some optimization.
         return self._as_int_index()._binaryop(other, op=op)
 
-    def join(
-        self, other, how="left", level=None, return_indexers=False, sort=False
-    ):
+    def join(self, other, how="left", level=None, return_indexers=False, sort=False):
         if how in {"left", "right"} or self.equals(other):
             # pandas supports directly merging RangeIndex objects and can
             # intelligently create RangeIndex outputs depending on the type of
@@ -879,14 +860,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
                     sort=sort,
                 )
                 if return_indexers:
-                    return tuple(
-                        cudf.from_pandas(result[0]), result[1], result[2]
-                    )
+                    return tuple(cudf.from_pandas(result[0]), result[1], result[2])
                 else:
                     return cudf.from_pandas(result)
-        return self._as_int_index().join(
-            other, how, level, return_indexers, sort
-        )
+        return self._as_int_index().join(other, how, level, return_indexers, sort)
 
     @property  # type: ignore
     @_performance_tracking
@@ -961,9 +938,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         no_steps = len(self) - 1
         if no_steps == -1:
             return np.nan
-        elif (meth == "min" and self.step > 0) or (
-            meth == "max" and self.step < 0
-        ):
+        elif (meth == "min" and self.step > 0) or (meth == "max" and self.step < 0):
             return self.start
 
         return self.start + self.step * no_steps
@@ -1104,13 +1079,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
-    def _from_column(
-        cls, column: ColumnBase, *, name: Hashable = None
-    ) -> Self:
+    def _from_column(cls, column: ColumnBase, *, name: Hashable = None) -> Self:
         if cls is Index:
-            ca = cudf.core.column_accessor.ColumnAccessor(
-                {name: column}, verify=False
-            )
+            ca = cudf.core.column_accessor.ColumnAccessor({name: column}, verify=False)
             return _index_from_data(ca)
         else:
             return super()._from_column(column, name=name)
@@ -1125,9 +1096,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
-    def _from_data_like_self(
-        cls, data: MutableMapping, name: Any = no_default
-    ) -> Self:
+    def _from_data_like_self(cls, data: MutableMapping, name: Any = no_default) -> Self:
         out = _index_from_data(data, name)
         if name is not no_default:
             out.name = name
@@ -1194,9 +1163,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             other_name = getattr(other, "name", self.name)
 
         ret.name = (
-            self.name
-            if cudf.utils.utils._is_same_name(self.name, other_name)
-            else None
+            self.name if cudf.utils.utils._is_same_name(self.name, other_name) else None
         )
 
         # pandas returns numpy arrays when the outputs are boolean. We
@@ -1220,9 +1187,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         non_empties = [index for index in objs if len(index)]
         if len(objs) != len(non_empties):
             # Do not remove until pandas-3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
             warning_msg = (
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
@@ -1235,9 +1200,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if not all(objs[0].dtype == index.dtype for index in objs[1:]):
                     warnings.warn(warning_msg, FutureWarning)
             else:
-                common_all_type = find_common_type(
-                    [index.dtype for index in objs]
-                )
+                common_all_type = find_common_type([index.dtype for index in objs])
                 common_non_empty_type = find_common_type(
                     [index.dtype for index in non_empties]
                 )
@@ -1284,9 +1247,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             check_dtypes = True
 
         try:
-            return self._column.equals(
-                other._column, check_dtypes=check_dtypes
-            )
+            return self._column.equals(other._column, check_dtypes=check_dtypes)
         except TypeError:
             return False
 
@@ -1336,9 +1297,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if not self.is_unique:
             raise ValueError("Cannot get index for a non-unique Index.")
 
-        is_sorted = (
-            self.is_monotonic_increasing or self.is_monotonic_decreasing
-        )
+        is_sorted = self.is_monotonic_increasing or self.is_monotonic_decreasing
 
         if not is_sorted and method is not None:
             raise ValueError(
@@ -1392,9 +1351,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if not is_scalar(key):
             raise TypeError("Should be a scalar-like")
 
-        is_sorted = (
-            self.is_monotonic_increasing or self.is_monotonic_decreasing
-        )
+        is_sorted = self.is_monotonic_increasing or self.is_monotonic_decreasing
 
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
             self, [as_column([key])], is_sorted
@@ -1406,9 +1363,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if lower_bound + 1 == upper_bound:
             # Search result is unique, return int.
             return (
-                lower_bound
-                if is_sorted
-                else sort_inds.element_indexing(lower_bound)  # type: ignore[union-attr]
+                lower_bound if is_sorted else sort_inds.element_indexing(lower_bound)  # type: ignore[union-attr]
             )
 
         if is_sorted:
@@ -1457,9 +1412,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                     )
                 )
                 break_idx = output.find("ordered=")
-                output = (
-                    output[:break_idx].replace("'", "") + output[break_idx:]
-                )
+                output = output[:break_idx].replace("'", "") + output[break_idx:]
             else:
                 # Too many non-unique categories will cause
                 # the output to take too long. In this case, we
@@ -1471,9 +1424,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 )
                 pd_preprocess = pd.CategoricalIndex(pd_cats)
                 data_repr = repr(pd_preprocess).split("\n")
-                pd_preprocess.dtype._categories = (
-                    preprocess.categories.to_pandas()
-                )
+                pd_preprocess.dtype._categories = preprocess.categories.to_pandas()
                 pd_preprocess.dtype._ordered = preprocess.dtype.ordered
                 cats_repr = repr(pd_preprocess).split("\n")
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
@@ -1659,9 +1610,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.Index:
-        result = self._column.to_pandas(
-            nullable=nullable, arrow_type=arrow_type
-        )
+        result = self._column.to_pandas(nullable=nullable, arrow_type=arrow_type)
         result.name = self.name
         return result
 
@@ -1783,9 +1732,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if is_string_dtype(self.dtype):
             return StringMethods(parent=self)
         else:
-            raise AttributeError(
-                "Can only use .str accessor with string values!"
-            )
+            raise AttributeError("Can only use .str accessor with string values!")
 
     @cache
     @_warn_no_dask_cudf
@@ -1941,9 +1888,7 @@ class DatetimeIndex(Index):
         return self
 
     @classmethod
-    def _from_data(
-        cls, data: MutableMapping, name: Any = no_default, freq: Any = None
-    ):
+    def _from_data(cls, data: MutableMapping, name: Any = no_default, freq: Any = None):
         result = super()._from_data(data, name)
         result._freq = _validate_freq(freq)
         return result
@@ -2016,9 +1961,7 @@ class DatetimeIndex(Index):
         date_format : str
             Date format string (e.g. "%Y-%m-%d").
         """
-        return Index._from_column(
-            self._column.strftime(date_format), name=self.name
-        )
+        return Index._from_column(self._column.strftime(date_format), name=self.name)
 
     @property
     def asi8(self) -> cupy.ndarray:
@@ -2082,9 +2025,7 @@ class DatetimeIndex(Index):
         return self.to_pandas().to_pydatetime()
 
     def to_julian_date(self) -> Index:
-        return Index._from_column(
-            self._column.to_julian_date(), name=self.name
-        )
+        return Index._from_column(self._column.to_julian_date(), name=self.name)
 
     def to_period(self, freq) -> pd.PeriodIndex:
         return self.to_pandas().to_period(freq=freq)
@@ -2095,9 +2036,7 @@ class DatetimeIndex(Index):
 
         Currently not implemented.
         """
-        return type(self)._from_column(
-            self._column.normalize(), name=self.name
-        )
+        return type(self)._from_column(self._column.normalize(), name=self.name)
 
     @property
     def time(self) -> np.ndarray:
@@ -2650,9 +2589,7 @@ class DatetimeIndex(Index):
         >>> gIndex.floor("T")
         DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        return type(self)._from_column(
-            self._column.floor(freq), name=self.name
-        )
+        return type(self)._from_column(self._column.floor(freq), name=self.name)
 
     @_performance_tracking
     def round(self, freq: str) -> Self:
@@ -2690,9 +2627,7 @@ class DatetimeIndex(Index):
         >>> dt_idx.round('T')
         DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        return type(self)._from_column(
-            self._column.round(freq), name=self.name
-        )
+        return type(self)._from_column(self._column.round(freq), name=self.name)
 
     def tz_localize(
         self,
@@ -2742,9 +2677,7 @@ class DatetimeIndex(Index):
         to 'NaT'.
         """  # noqa: E501
         result_col = self._column.tz_localize(tz, ambiguous, nonexistent)
-        return DatetimeIndex._from_column(
-            result_col, name=self.name, freq=self._freq
-        )
+        return DatetimeIndex._from_column(result_col, name=self.name, freq=self._freq)
 
     def tz_convert(self, tz: str | None) -> Self:
         """
@@ -2988,9 +2921,7 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_column(
-            self._column.floor(freq), name=self.name
-        )
+        return type(self)._from_column(self._column.floor(freq), name=self.name)
 
     def round(self, freq: str) -> Self:
         """
@@ -2998,9 +2929,7 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return type(self)._from_column(
-            self._column.round(freq), name=self.name
-        )
+        return type(self)._from_column(self._column.round(freq), name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3009,9 +2938,7 @@ class TimedeltaIndex(Index):
         Number of days for each element.
         """
         # Need to specifically return `int64` to avoid overflow.
-        return Index._from_column(
-            self._column.days.astype("int64"), name=self.name
-        )
+        return Index._from_column(self._column.days.astype("int64"), name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3019,9 +2946,7 @@ class TimedeltaIndex(Index):
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return Index._from_column(
-            self._column.seconds.astype("int32"), name=self.name
-        )
+        return Index._from_column(self._column.seconds.astype("int32"), name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3136,8 +3061,7 @@ class CategoricalIndex(Index):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
                 raise ValueError(
-                    "Cannot specify `categories` or "
-                    "`ordered` together with `dtype`."
+                    "Cannot specify `categories` or " "`ordered` together with `dtype`."
                 )
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
@@ -3147,9 +3071,7 @@ class CategoricalIndex(Index):
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
             data = column.as_column(data)
         else:
-            data = column.as_column(
-                data, dtype="category" if dtype is None else dtype
-            )
+            data = column.as_column(data, dtype="category" if dtype is None else dtype)
             # dtype has already been taken care
             dtype = None
 
@@ -3300,9 +3222,7 @@ class CategoricalIndex(Index):
             or as reordered categories.
         """
         return type(self)._from_column(
-            self._column.set_categories(
-                new_categories, ordered=ordered, rename=rename
-            ),
+            self._column.set_categories(new_categories, ordered=ordered, rename=rename),
             name=self.name,
         )
 
@@ -3395,8 +3315,7 @@ def interval_range(
         end = start + periods * freq
 
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype)
-        for x in (start, periods, freq, end)
+        not _is_non_decimal_numeric_dtype(x.dtype) for x in (start, periods, freq, end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
 
@@ -3687,9 +3606,7 @@ class IntervalIndex(Index):
         """
         return self._column.overlaps(other).values
 
-    def set_closed(
-        self, closed: Literal["left", "right", "both", "neither"]
-    ) -> Self:
+    def set_closed(self, closed: Literal["left", "right", "both", "neither"]) -> Self:
         """
         Return an identical IntervalArray closed on the specified side.
 
@@ -3699,9 +3616,7 @@ class IntervalIndex(Index):
             Whether the intervals are closed on the left-side, right-side, both
             or neither.
         """
-        return type(self)._from_column(
-            self._column.set_closed(closed), name=self.name
-        )
+        return type(self)._from_column(self._column.set_closed(closed), name=self.name)
 
     def to_tuples(self, na_tuple: bool = True) -> pd.Index:
         """
@@ -3769,9 +3684,7 @@ def as_index(
         - Index for all other inputs.
     """
     if nan_as_null is no_default:
-        nan_as_null = (
-            False if cudf.get_option("mode.pandas_compatible") else None
-        )
+        nan_as_null = False if cudf.get_option("mode.pandas_compatible") else None
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)
@@ -3855,9 +3768,7 @@ def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
             next_ is not None and obj.start != next_
         )
         if non_consecutive:
-            result = Index._from_column(
-                concat_columns([x._column for x in indexes])
-            )
+            result = Index._from_column(concat_columns([x._column for x in indexes]))
             return result
         if step is not None:
             next_ = obj[-1] + step

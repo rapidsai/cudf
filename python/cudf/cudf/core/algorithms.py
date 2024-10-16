@@ -113,9 +113,7 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else Index._from_column(
-        cats
-    )
+    return labels, cats.values if return_cupy_array else Index._from_column(cats)
 
 
 def _interpolation(column: ColumnBase, index: BaseIndex) -> ColumnBase:
@@ -250,9 +248,7 @@ def unique(values):
     array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
     if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):
-        raise ValueError(
-            "Must pass cudf.Series, cudf.Index, or cupy.ndarray object"
-        )
+        raise ValueError("Must pass cudf.Series, cudf.Index, or cupy.ndarray object")
     if isinstance(values, cp.ndarray):
         # pandas.unique will not sort the values in the result
         # while cupy.unique documents it will, so we pass cupy.ndarray
@@ -261,9 +257,7 @@ def unique(values):
     if isinstance(values, cudf.Series):
         if get_option("mode.pandas_compatible"):
             if isinstance(values.dtype, cudf.CategoricalDtype):
-                raise NotImplementedError(
-                    "cudf.Categorical is not implemented"
-                )
+                raise NotImplementedError("cudf.Categorical is not implemented")
             else:
                 return cp.asarray(values.unique())
     return values.unique()

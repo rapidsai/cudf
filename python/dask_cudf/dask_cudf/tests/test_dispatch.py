@@ -30,9 +30,7 @@ def test_pyarrow_conversion_dispatch(preserve_index, index):
         to_pyarrow_table_dispatch,
     )
 
-    df1 = cudf.DataFrame(
-        np.random.randn(10, 3), columns=list("abc"), index=index
-    )
+    df1 = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"), index=index)
     df2 = from_pyarrow_table_dispatch(
         df1, to_pyarrow_table_dispatch(df1, preserve_index=preserve_index)
     )

@@ -243,9 +243,7 @@ def _DataFrame__dir__(self):
 
 
 def ignore_ipython_canary_check(self, **kwargs):
-    raise AttributeError(
-        "_ipython_canary_method_should_not_exist_ doesn't exist"
-    )
+    raise AttributeError("_ipython_canary_method_should_not_exist_ doesn't exist")
 
 
 DataFrame = make_final_proxy_type(
@@ -325,9 +323,7 @@ def Index__setattr__(self, name, value):
         setattr(self._fsproxy_wrapped, "name", value)
     if name == "names":
         setattr(self._fsproxy_wrapped, "names", value)
-    return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
-        name, value
-    )
+    return _FastSlowAttribute("__setattr__").__get__(self, type(self))(name, value)
 
 
 Index = make_final_proxy_type(
@@ -1013,9 +1009,7 @@ except ImportError:
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
-register_proxy_func(pd.read_pickle)(
-    _FunctionProxy(_Unusable(), pd.read_pickle)
-)
+register_proxy_func(pd.read_pickle)(_FunctionProxy(_Unusable(), pd.read_pickle))
 
 register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
 
@@ -1123,9 +1117,7 @@ _TextFileReader = make_intermediate_proxy_type(
     "_TextFileReader", _Unusable, pd.io.parsers.readers.TextFileReader
 )
 
-_XportReader = make_intermediate_proxy_type(
-    "_XportReader", _Unusable, pd_XportReader
-)
+_XportReader = make_intermediate_proxy_type("_XportReader", _Unusable, pd_XportReader)
 
 _SAS7BDATReader = make_intermediate_proxy_type(
     "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader
@@ -1153,9 +1145,7 @@ HolidayCalendarMetaClass = make_final_proxy_type(
 @register_proxy_func(pd_HolidayCalendarFactory)
 def holiday_calendar_factory_wrapper(*args, **kwargs):
     # Call the original HolidayCalendarFactory
-    result = _FunctionProxy(_Unusable(), pd_HolidayCalendarFactory)(
-        *args, **kwargs
-    )
+    result = _FunctionProxy(_Unusable(), pd_HolidayCalendarFactory)(*args, **kwargs)
     # Return the slow proxy of the result
     return result._fsproxy_slow
 

@@ -167,9 +167,7 @@ class ColumnAccessor(abc.MutableMapping):
             f"rangeindex={self.rangeindex}, "
             f"label_dtype={self.label_dtype})"
         )
-        column_info = "\n".join(
-            [f"{name}: {col.dtype}" for name, col in self.items()]
-        )
+        column_info = "\n".join([f"{name}: {col.dtype}" for name, col in self.items()])
         return f"{type_info}\n{column_info}"
 
     def _from_columns_like_self(
@@ -286,9 +284,7 @@ class ColumnAccessor(abc.MutableMapping):
             # Determine if we can return a RangeIndex
             if self.rangeindex:
                 if not self.names:
-                    return pd.RangeIndex(
-                        start=0, stop=0, step=1, name=self.name
-                    )
+                    return pd.RangeIndex(start=0, stop=0, step=1, name=self.name)
                 elif cudf.api.types.infer_dtype(self.names) == "integer":
                     if len(self.names) == 1:
                         start = cast(int, self.names[0])
@@ -312,9 +308,7 @@ class ColumnAccessor(abc.MutableMapping):
             )
         return result
 
-    def insert(
-        self, name: abc.Hashable, value: ColumnBase, loc: int = -1
-    ) -> None:
+    def insert(self, name: abc.Hashable, value: ColumnBase, loc: int = -1) -> None:
         """
         Insert column into the ColumnAccessor at the specified location.
 
@@ -420,9 +414,7 @@ class ColumnAccessor(abc.MutableMapping):
             return (self.names[index],)
         elif (bn := len(index)) > 0 and all(map(is_bool, index)):
             if bn != (n := len(self.names)):
-                raise IndexError(
-                    f"Boolean mask has wrong length: {bn} not {n}"
-                )
+                raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
             if isinstance(index, (pd.Series, cudf.Series)):
                 # Don't allow iloc indexing with series
                 raise NotImplementedError(
@@ -478,9 +470,7 @@ class ColumnAccessor(abc.MutableMapping):
         ColumnAccessor
         """
         if not self.multiindex:
-            raise ValueError(
-                "swaplevel is only valid for self.multiindex=True"
-            )
+            raise ValueError("swaplevel is only valid for self.multiindex=True")
 
         i = _get_level(i, self.nlevels, self.level_names)
         j = _get_level(j, self.nlevels, self.level_names)
@@ -535,20 +525,14 @@ class ColumnAccessor(abc.MutableMapping):
         # Special-casing for boolean mask
         if (bn := len(key)) > 0 and all(map(is_bool, key)):
             if bn != (n := len(self.names)):
-                raise IndexError(
-                    f"Boolean mask has wrong length: {bn} not {n}"
-                )
+                raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
             data = dict(
-                item
-                for item, keep in zip(self._grouped_data.items(), key)
-                if keep
+                item for item, keep in zip(self._grouped_data.items(), key) if keep
             )
         else:
             data = {k: self._grouped_data[k] for k in key}
             if len(data) != len(key):
-                raise ValueError(
-                    "Selecting duplicate column labels is not supported."
-                )
+                raise ValueError("Selecting duplicate column labels is not supported.")
         if self.multiindex:
             data = dict(_to_flat_dict_inner(data))
         return type(self)(
@@ -624,9 +608,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def _pad_key(
-        self, key: abc.Hashable, pad_value: str | slice = ""
-    ) -> abc.Hashable:
+    def _pad_key(self, key: abc.Hashable, pad_value: str | slice = "") -> abc.Hashable:
         """
         Pad the provided key to a length equal to the number
         of levels.
@@ -724,9 +706,7 @@ class ColumnAccessor(abc.MutableMapping):
             for key, value in self._data.items()
         }
         new_ncols = len(self)
-        self._level_names = (
-            self._level_names[:level] + self._level_names[level + 1 :]
-        )
+        self._level_names = self._level_names[:level] + self._level_names[level + 1 :]
 
         if len(self._level_names) == 1:
             # can't use nlevels, as it depends on multiindex
@@ -785,9 +765,7 @@ def _get_level(
         if x < 0:
             x += nlevels
         if x >= nlevels:
-            raise IndexError(
-                f"Level {x} out of bounds. Index has {nlevels} levels."
-            )
+            raise IndexError(f"Level {x} out of bounds. Index has {nlevels} levels.")
         return x
     else:
         x = level_names.index(x)

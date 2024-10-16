@@ -38,9 +38,7 @@ def test_dataset_timeseries():
     assert gdf["y"].head().dtype == float
     assert len(gdf) == 10
 
-    gdf = cudf.datasets.randomdata(
-        nrows=20, dtypes={"id": int, "a": int, "b": float}
-    )
+    gdf = cudf.datasets.randomdata(nrows=20, dtypes={"id": int, "a": int, "b": float})
     assert gdf["id"].head().dtype == int
     assert gdf["a"].head().dtype == int
     assert gdf["b"].head().dtype == float

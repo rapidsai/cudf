@@ -9,9 +9,7 @@ from utils import assert_column_eq
 
 @pytest.fixture(scope="module")
 def string_col():
-    return pa.array(
-        ["AbC", "de", "FGHI", "j", "kLm", "nOPq", None, "RsT", None, "uVw"]
-    )
+    return pa.array(["AbC", "de", "FGHI", "j", "kLm", "nOPq", None, "RsT", None, "uVw"])
 
 
 def test_to_upper(string_col):

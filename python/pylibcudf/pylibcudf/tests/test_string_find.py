@@ -178,9 +178,7 @@ def test_rfind(data_col, target_scalar):
 
     expected = pa.array(
         [
-            elem.rfind(py_target)
-            if not (elem is None or py_target is None)
-            else None
+            elem.rfind(py_target) if not (elem is None or py_target is None) else None
             for elem in pa_data_col.to_pylist()
         ],
         type=pa.int32(),
@@ -197,9 +195,7 @@ def test_contains(data_col, target_scalar):
     got = plc.strings.find.contains(plc_data_col, plc_target_scalar)
     expected = pa.array(
         [
-            py_target in elem
-            if not (elem is None or py_target is None)
-            else None
+            py_target in elem if not (elem is None or py_target is None) else None
             for elem in pa_data_col.to_pylist()
         ],
         type=pa.bool_(),

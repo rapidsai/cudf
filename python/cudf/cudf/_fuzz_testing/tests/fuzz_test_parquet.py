@@ -71,9 +71,7 @@ def parquet_writer_test(pdf):
         "compression": ["snappy", None],
     },
 )
-def parquet_writer_test_rowgroup_index_compression(
-    pdf, compression, row_group_size
-):
+def parquet_writer_test_rowgroup_index_compression(pdf, compression, row_group_size):
     pd_file_name = "cpu_pdf.parquet"
     gd_file_name = "gpu_pdf.parquet"
 

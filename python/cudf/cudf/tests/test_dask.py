@@ -3,9 +3,7 @@
 import cudf
 import pytest
 
-is_dataframe_like = pytest.importorskip(
-    "dask.dataframe.utils"
-).is_dataframe_like
+is_dataframe_like = pytest.importorskip("dask.dataframe.utils").is_dataframe_like
 is_index_like = pytest.importorskip("dask.dataframe.utils").is_index_like
 is_series_like = pytest.importorskip("dask.dataframe.utils").is_series_like
 

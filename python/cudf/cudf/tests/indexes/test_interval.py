@@ -78,9 +78,7 @@ def test_interval_range_empty(closed):
 @pytest.mark.parametrize("end", [6, 8, 10, 43, 70])
 def test_interval_range_freq_basic(start, end, freq, closed):
     pindex = pd.interval_range(start=start, end=end, freq=freq, closed=closed)
-    gindex = cudf.interval_range(
-        start=start, end=end, freq=freq, closed=closed
-    )
+    gindex = cudf.interval_range(start=start, end=end, freq=freq, closed=closed)
 
     assert_eq(pindex, gindex)
 
@@ -96,9 +94,7 @@ def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
     pindex = pd.interval_range(
         start=start_val, end=end_val, freq=freq_val, closed="left"
     )
-    gindex = cudf.interval_range(
-        start=start, end=end, freq=freq, closed="left"
-    )
+    gindex = cudf.interval_range(start=start, end=end, freq=freq, closed="left")
     if gindex.dtype.subtype.kind == "f":
         gindex = gindex.astype(
             cudf.IntervalDtype(subtype="float64", closed=gindex.dtype.closed)
@@ -118,12 +114,8 @@ def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
 @pytest.mark.parametrize("start", [0, 0.0, 1.0, 1, 2, 2.0, 3.0, 3])
 @pytest.mark.parametrize("end", [4, 4.0, 5.0, 5, 6, 6.0, 7.0, 7])
 def test_interval_range_periods_basic(start, end, periods, closed):
-    pindex = pd.interval_range(
-        start=start, end=end, periods=periods, closed=closed
-    )
-    gindex = cudf.interval_range(
-        start=start, end=end, periods=periods, closed=closed
-    )
+    pindex = pd.interval_range(start=start, end=end, periods=periods, closed=closed)
+    gindex = cudf.interval_range(start=start, end=end, periods=periods, closed=closed)
 
     assert_eq(pindex, gindex)
 
@@ -135,15 +127,11 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
     start, end, periods = start_t(0), end_t(4), periods_t(1)
     start_val = start.value if isinstance(start, cudf.Scalar) else start
     end_val = end.value if isinstance(end, cudf.Scalar) else end
-    periods_val = (
-        periods.value if isinstance(periods, cudf.Scalar) else periods
-    )
+    periods_val = periods.value if isinstance(periods, cudf.Scalar) else periods
     pindex = pd.interval_range(
         start=start_val, end=end_val, periods=periods_val, closed="left"
     )
-    gindex = cudf.interval_range(
-        start=start, end=end, periods=periods, closed="left"
-    )
+    gindex = cudf.interval_range(start=start, end=end, periods=periods, closed="left")
 
     assert_eq(pindex, gindex)
 
@@ -172,12 +160,8 @@ def test_interval_range_periods_warnings():
 @pytest.mark.parametrize("freq", [1, 2, 3, 4])
 @pytest.mark.parametrize("end", [4, 8, 9, 10])
 def test_interval_range_periods_freq_end(end, freq, periods, closed):
-    pindex = pd.interval_range(
-        end=end, freq=freq, periods=periods, closed=closed
-    )
-    gindex = cudf.interval_range(
-        end=end, freq=freq, periods=periods, closed=closed
-    )
+    pindex = pd.interval_range(end=end, freq=freq, periods=periods, closed=closed)
+    gindex = cudf.interval_range(end=end, freq=freq, periods=periods, closed=closed)
 
     assert_eq(pindex, gindex)
 
@@ -189,15 +173,11 @@ def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
     periods, freq, end = periods_t(2), freq_t(3), end_t(10)
     freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
     end_val = end.value if isinstance(end, cudf.Scalar) else end
-    periods_val = (
-        periods.value if isinstance(periods, cudf.Scalar) else periods
-    )
+    periods_val = periods.value if isinstance(periods, cudf.Scalar) else periods
     pindex = pd.interval_range(
         end=end_val, freq=freq_val, periods=periods_val, closed="left"
     )
-    gindex = cudf.interval_range(
-        end=end, freq=freq, periods=periods, closed="left"
-    )
+    gindex = cudf.interval_range(end=end, freq=freq, periods=periods, closed="left")
 
     assert_eq(pindex, gindex)
 
@@ -207,12 +187,8 @@ def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
 @pytest.mark.parametrize("freq", [1, 2, 3, 4])
 @pytest.mark.parametrize("start", [1, 4, 9, 12])
 def test_interval_range_periods_freq_start(start, freq, periods, closed):
-    pindex = pd.interval_range(
-        start=start, freq=freq, periods=periods, closed=closed
-    )
-    gindex = cudf.interval_range(
-        start=start, freq=freq, periods=periods, closed=closed
-    )
+    pindex = pd.interval_range(start=start, freq=freq, periods=periods, closed=closed)
+    gindex = cudf.interval_range(start=start, freq=freq, periods=periods, closed=closed)
 
     assert_eq(pindex, gindex)
 
@@ -224,15 +200,11 @@ def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
     periods, freq, start = periods_t(2), freq_t(3), start_t(9)
     freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
     start_val = start.value if isinstance(start, cudf.Scalar) else start
-    periods_val = (
-        periods.value if isinstance(periods, cudf.Scalar) else periods
-    )
+    periods_val = periods.value if isinstance(periods, cudf.Scalar) else periods
     pindex = pd.interval_range(
         start=start_val, freq=freq_val, periods=periods_val, closed="left"
     )
-    gindex = cudf.interval_range(
-        start=start, freq=freq, periods=periods, closed="left"
-    )
+    gindex = cudf.interval_range(start=start, freq=freq, periods=periods, closed="left")
 
     # pandas upcasts to 64 bit https://github.com/pandas-dev/pandas/issues/57268
     # using Series to use check_dtype
@@ -340,9 +312,7 @@ def test_interval_index_from_breaks(closed):
     ],
 )
 def test_interval_range_floating(start, stop, freq, periods):
-    expected = pd.interval_range(
-        start=start, end=stop, freq=freq, periods=periods
-    )
+    expected = pd.interval_range(start=start, end=stop, freq=freq, periods=periods)
     got = interval_range(start=start, end=stop, freq=freq, periods=periods)
     assert_eq(expected, got)
 

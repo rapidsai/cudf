@@ -105,9 +105,7 @@ def test_series_nunique(nan_as_null, dropna):
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
-    cudf_series = cudf.Series(
-        [1.0, 2.0, 3.0, np.nan, None], nan_as_null=nan_as_null
-    )
+    cudf_series = cudf.Series([1.0, 2.0, 3.0, np.nan, None], nan_as_null=nan_as_null)
     if nan_as_null is True:
         pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None])
     else:
@@ -147,9 +145,7 @@ def test_exact_quantiles(int_method):
     df = pd.DataFrame(arr)
     gdf_series = cudf.Series(arr)
 
-    q1 = gdf_series.quantile(
-        quant_values, interpolation=int_method, exact=True
-    )
+    q1 = gdf_series.quantile(quant_values, interpolation=int_method, exact=True)
 
     q2 = df.quantile(quant_values, interpolation=int_method)
 
@@ -166,9 +162,7 @@ def test_exact_quantiles_int(int_method):
     df = pd.DataFrame(arr)
     gdf_series = cudf.Series(arr)
 
-    q1 = gdf_series.quantile(
-        quant_values, interpolation=int_method, exact=True
-    )
+    q1 = gdf_series.quantile(quant_values, interpolation=int_method, exact=True)
 
     q2 = df.quantile(quant_values, interpolation=int_method)
 
@@ -284,9 +278,7 @@ def test_kurt_skew_error(op):
         cudf.Series(np.zeros(100)),
         cudf.Series(np.repeat(np.nan, 100)),
         cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
-        cudf.Series(
-            [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
-        ),
+        cudf.Series([5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False),
         cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         cudf.Series([], dtype="float64"),
         cudf.Series([-3]),
@@ -370,9 +362,7 @@ def test_series_pct_change(data, periods, fill_method):
             )
         ):
             expected = ps.pct_change(periods=periods, fill_method=fill_method)
-        np.testing.assert_array_almost_equal(
-            got.to_numpy(na_value=np.nan), expected
-        )
+        np.testing.assert_array_almost_equal(got.to_numpy(na_value=np.nan), expected)
 
 
 @pytest.mark.parametrize(
@@ -465,14 +455,12 @@ def test_corr1d(data1, data2, method):
 
     ps1_align, ps2_align = ps1.align(ps2, join="inner")
 
-    is_singular = (
-        len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0
-    ) or (len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0)
+    is_singular = (len(ps1_align.dropna()) == 1 and len(ps2_align.dropna()) > 0) or (
+        len(ps2_align.dropna()) == 1 and len(ps1_align.dropna()) > 0
+    )
     is_identical = (
         len(ps1_align.dropna().unique()) == 1 and len(ps2_align.dropna()) > 0
-    ) or (
-        len(ps2_align.dropna().unique()) == 1 and len(ps1_align.dropna()) > 0
-    )
+    ) or (len(ps2_align.dropna().unique()) == 1 and len(ps1_align.dropna()) > 0)
 
     # Pearson correlation leads to division by 0 when either sample size is 1.
     # Spearman allows for size 1 samples, but will error if all data in a
@@ -539,9 +527,7 @@ def test_nans_stats(data, ops, skipna):
     psr = pd.Series(data, dtype="float64" if len(data) == 0 else None)
     gsr = cudf.from_pandas(psr)
 
-    assert_eq(
-        getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
-    )
+    assert_eq(getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna))
 
     gsr = cudf.Series(
         data, dtype="float64" if len(data) == 0 else None, nan_as_null=False
@@ -605,9 +591,7 @@ def test_cov_corr_datetime_timedelta(data1, data2, dtype):
 @pytest.mark.parametrize(
     "data",
     [
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
+        randomdata(nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
@@ -637,9 +621,7 @@ def test_kurtosis_df(data, null_flag, numeric_only):
 @pytest.mark.parametrize(
     "data",
     [
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
+        randomdata(nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])

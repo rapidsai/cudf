@@ -126,9 +126,7 @@ def test_categorical_basic(data):
 
     assert_eq(pdsr.cat.categories, dsr.cat.categories)
 
-    np.testing.assert_array_equal(
-        pdsr.cat.codes.values, result.cat.codes.values_host
-    )
+    np.testing.assert_array_equal(pdsr.cat.codes.values, result.cat.codes.values_host)
 
     string = str(result)
     expect_str = """
@@ -228,12 +226,8 @@ def test_categorical_compare_ordered(data):
     assert pdsr1.cat.ordered
 
     # Test ordered operators
-    np.testing.assert_array_equal(
-        pdsr1 < pdsr2, (dsr1 < dsr2).compute().values_host
-    )
-    np.testing.assert_array_equal(
-        pdsr1 > pdsr2, (dsr1 > dsr2).compute().values_host
-    )
+    np.testing.assert_array_equal(pdsr1 < pdsr2, (dsr1 < dsr2).compute().values_host)
+    np.testing.assert_array_equal(pdsr1 > pdsr2, (dsr1 > dsr2).compute().values_host)
 
 
 #############################################################################
@@ -256,9 +250,7 @@ def test_string_slicing(data):
 
 
 def test_categorical_categories():
-    df = DataFrame(
-        {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
-    )
+    df = DataFrame({"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)})
     df["a"] = df["a"].astype("category")
     pdf = df.to_pandas(nullable=False)
 
@@ -286,9 +278,7 @@ def test_categorical_as_known():
     # the global set of categories (before and after
     # calling `compute`), then we need to check that
     # the initial order of rows was preserved.
-    assert set(expected.cat.categories) == set(
-        actual.cat.categories.values_host
-    )
+    assert set(expected.cat.categories) == set(actual.cat.categories.values_host)
     assert set(expected.compute().cat.categories) == set(
         actual.compute().cat.categories.values_host
     )
@@ -329,10 +319,7 @@ def data_test_non_numeric():
 
 
 def data_test_nested():
-    return [
-        list(list(y for y in range(x % 5)) for x in range(i))
-        for i in range(40)
-    ]
+    return [list(list(y for y in range(x % 5)) for x in range(i)) for i in range(40)]
 
 
 def data_test_sort():
@@ -543,9 +530,7 @@ def test_struct_explode(data):
 
 def test_tz_localize():
     data = Series(date_range("2000-04-01", "2000-04-03", freq="h"))
-    expect = data.dt.tz_localize(
-        "US/Eastern", ambiguous="NaT", nonexistent="NaT"
-    )
+    expect = data.dt.tz_localize("US/Eastern", ambiguous="NaT", nonexistent="NaT")
     got = dask_cudf.from_cudf(data, 2).dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
@@ -560,9 +545,7 @@ def test_tz_localize():
     "data",
     [
         date_range("2000-04-01", "2000-04-03", freq="h").tz_localize("UTC"),
-        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize(
-            "US/Eastern"
-        ),
+        date_range("2000-04-01", "2000-04-03", freq="h").tz_localize("US/Eastern"),
     ],
 )
 def test_tz_convert(data):

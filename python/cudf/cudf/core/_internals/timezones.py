@@ -111,9 +111,7 @@ def _find_and_read_tzfile_tzdata(
 def _read_tzfile_as_columns(
     tzdir, zone_name: str
 ) -> tuple[DatetimeColumn, TimeDeltaColumn]:
-    transition_times_and_offsets = make_timezone_transition_table(
-        tzdir, zone_name
-    )
+    transition_times_and_offsets = make_timezone_transition_table(tzdir, zone_name)
 
     if not transition_times_and_offsets:
         from cudf.core.column.column import as_column
@@ -128,11 +126,7 @@ def check_ambiguous_and_nonexistent(
     ambiguous: Literal["NaT"], nonexistent: Literal["NaT"]
 ) -> tuple[Literal["NaT"], Literal["NaT"]]:
     if ambiguous != "NaT":
-        raise NotImplementedError(
-            "Only ambiguous='NaT' is currently supported"
-        )
+        raise NotImplementedError("Only ambiguous='NaT' is currently supported")
     if nonexistent != "NaT":
-        raise NotImplementedError(
-            "Only nonexistent='NaT' is currently supported"
-        )
+        raise NotImplementedError("Only nonexistent='NaT' is currently supported")
     return ambiguous, nonexistent

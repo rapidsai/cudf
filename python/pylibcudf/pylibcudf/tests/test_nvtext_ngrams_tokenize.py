@@ -31,7 +31,5 @@ def test_ngrams_tokenize(input_col, ngrams, delim, sep):
         plc.interop.from_arrow(pa.scalar(delim)),
         plc.interop.from_arrow(pa.scalar(sep)),
     )
-    expected = pa.array(
-        ngrams_tokenize(input_col.to_pylist(), ngrams, delim, sep)
-    )
+    expected = pa.array(ngrams_tokenize(input_col.to_pylist(), ngrams, delim, sep))
     assert_column_eq(result, expected)

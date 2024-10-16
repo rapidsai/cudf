@@ -34,9 +34,7 @@ def test_dataframe_setitem_scaler_bool():
     [pd.DataFrame({"a": [1, 2, 3]}), pd.DataFrame({"a": ["x", "y", "z"]})],
 )
 @pytest.mark.parametrize("arg", [["a"], "a", "b"])
-@pytest.mark.parametrize(
-    "value", [-10, pd.DataFrame({"a": [-1, -2, -3]}), "abc"]
-)
+@pytest.mark.parametrize("value", [-10, pd.DataFrame({"a": [-1, -2, -3]}), "abc"])
 def test_dataframe_setitem_columns(df, arg, value):
     gdf = cudf.from_pandas(df)
     cudf_replace_value = value
@@ -79,22 +77,16 @@ def test_dataframe_setitem_new_columns(df, arg, value):
 
 # set_item_series inconsistency
 def test_series_setitem_index():
-    df = pd.DataFrame(
-        data={"b": [-1, -2, -3], "c": [1, 2, 3]}, index=[1, 2, 3]
-    )
+    df = pd.DataFrame(data={"b": [-1, -2, -3], "c": [1, 2, 3]}, index=[1, 2, 3])
 
     df["b"] = pd.Series(data=[12, 11, 10], index=[3, 2, 1])
-    gdf = cudf.DataFrame(
-        data={"b": [-1, -2, -3], "c": [1, 2, 3]}, index=[1, 2, 3]
-    )
+    gdf = cudf.DataFrame(data={"b": [-1, -2, -3], "c": [1, 2, 3]}, index=[1, 2, 3])
     gdf["b"] = cudf.Series(data=[12, 11, 10], index=[3, 2, 1])
     assert_eq(df, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
-@pytest.mark.parametrize(
-    "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
-)
+@pytest.mark.parametrize("arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]])
 def test_series_set_item(psr, arg):
     gsr = cudf.from_pandas(psr)
 
@@ -118,9 +110,7 @@ def test_series_setitem_singleton_range():
 @pytest.mark.parametrize(
     "index",
     [
-        pd.MultiIndex.from_frame(
-            pd.DataFrame({"b": [3, 2, 1], "c": ["a", "b", "c"]})
-        ),
+        pd.MultiIndex.from_frame(pd.DataFrame({"b": [3, 2, 1], "c": ["a", "b", "c"]})),
         ["a", "b", "c"],
     ],
 )
@@ -392,9 +382,7 @@ def test_loc_setitem_string_11298(value):
 
 @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/11944")
 def test_loc_setitem_list_11944():
-    df = pd.DataFrame(
-        data={"a": ["yes", "no"], "b": [["l1", "l2"], ["c", "d"]]}
-    )
+    df = pd.DataFrame(data={"a": ["yes", "no"], "b": [["l1", "l2"], ["c", "d"]]})
     cdf = cudf.from_pandas(df)
     df.loc[df.a == "yes", "b"] = [["hello"]]
     cdf.loc[df.a == "yes", "b"] = [["hello"]]
@@ -459,16 +447,10 @@ def test_loc_setitem_series_index_alignment_13031(other_index):
         pd.Series([1, 2, 3], index=pd.RangeIndex(0, 3)),
         pd.Series([1, 2, 3], index=pd.RangeIndex(start=2, stop=-1, step=-1)),
         pd.Series([1, 2, 3], index=pd.RangeIndex(start=1, stop=6, step=2)),
-        pd.Series(
-            [1, 2, 3, 4, 5], index=pd.RangeIndex(start=1, stop=-9, step=-2)
-        ),
-        pd.Series(
-            [1, 2, 3, 4, 5], index=pd.RangeIndex(start=1, stop=-12, step=-3)
-        ),
+        pd.Series([1, 2, 3, 4, 5], index=pd.RangeIndex(start=1, stop=-9, step=-2)),
+        pd.Series([1, 2, 3, 4, 5], index=pd.RangeIndex(start=1, stop=-12, step=-3)),
         pd.Series([1, 2, 3, 4], index=pd.RangeIndex(start=1, stop=14, step=4)),
-        pd.Series(
-            [1, 2, 3, 4], index=pd.RangeIndex(start=1, stop=-14, step=-4)
-        ),
+        pd.Series([1, 2, 3, 4], index=pd.RangeIndex(start=1, stop=-14, step=-4)),
     ],
 )
 @pytest.mark.parametrize("arg", list(range(-20, 20)) + [5.6, 3.1])

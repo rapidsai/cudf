@@ -65,22 +65,12 @@ def assert_column_eq(
         may make data-dependent choices.
     """
     # Nested types require children metadata to be passed to the conversion function.
-    if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(
-        rhs, plc.Column
-    ):
-        rhs = plc.interop.to_arrow(
-            rhs, metadata=metadata_from_arrow_type(lhs.type)
-        )
-    elif isinstance(lhs, plc.Column) and isinstance(
-        rhs, (pa.Array, pa.ChunkedArray)
-    ):
-        lhs = plc.interop.to_arrow(
-            lhs, metadata=metadata_from_arrow_type(rhs.type)
-        )
+    if isinstance(lhs, (pa.Array, pa.ChunkedArray)) and isinstance(rhs, plc.Column):
+        rhs = plc.interop.to_arrow(rhs, metadata=metadata_from_arrow_type(lhs.type))
+    elif isinstance(lhs, plc.Column) and isinstance(rhs, (pa.Array, pa.ChunkedArray)):
+        lhs = plc.interop.to_arrow(lhs, metadata=metadata_from_arrow_type(rhs.type))
     else:
-        raise ValueError(
-            "One of the inputs must be a Column and the other an Array"
-        )
+        raise ValueError("One of the inputs must be a Column and the other an Array")
 
     if isinstance(lhs, pa.ChunkedArray):
         lhs = lhs.combine_chunks()
@@ -95,9 +85,7 @@ def assert_column_eq(
                 child_type = child_field.type
                 if isinstance(child_field.type, (pa.StructType, pa.ListType)):
                     child_type = _make_fields_nullable(child_type)
-                new_fields.append(
-                    pa.field(child_field.name, child_type, nullable=True)
-                )
+                new_fields.append(pa.field(child_field.name, child_type, nullable=True))
             else:
                 new_fields.append(child_field)
 
@@ -194,9 +182,7 @@ def assert_table_and_meta_eq(
     plc_table = plc_table_w_meta.tbl
 
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert (
-        plc_shape == pa_table.shape
-    ), f"{plc_shape} is not equal to {pa_table.shape}"
+    assert plc_shape == pa_table.shape, f"{plc_shape} is not equal to {pa_table.shape}"
 
     if not check_types_if_empty and plc_table.num_rows() == 0:
         return
@@ -319,9 +305,7 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
     df = pa_table.to_pandas()
     mode = "w"
     if "compression" in kwargs:
-        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[
-            kwargs["compression"]
-        ]
+        kwargs["compression"] = COMPRESSION_TYPE_TO_PANDAS[kwargs["compression"]]
         if kwargs["compression"] is not None and format != "json":
             # pandas json method only supports mode="w"/"a"
             mode = "wb"
@@ -365,9 +349,7 @@ LIST_PA_TYPES = [
 
 # We must explicitly specify this type via a field to ensure we don't include
 # nullability accidentally.
-DEFAULT_STRUCT_TESTING_TYPE = pa.struct(
-    [pa.field("v", pa.int64(), nullable=False)]
-)
+DEFAULT_STRUCT_TESTING_TYPE = pa.struct([pa.field("v", pa.int64(), nullable=False)])
 NESTED_STRUCT_TESTING_TYPE = pa.struct(
     [
         pa.field("a", pa.int64(), nullable=False),

@@ -83,9 +83,7 @@ def _nonempty_index(idx):
     elif isinstance(idx, cudf.Index):
         return cudf.Index(np.arange(2, dtype=idx.dtype), name=idx.name)
 
-    raise TypeError(
-        f"Don't know how to handle index of type {type(idx).__name__}"
-    )
+    raise TypeError(f"Don't know how to handle index of type {type(idx).__name__}")
 
 
 def _nest_list_data(data, leaf_type):
@@ -117,9 +115,7 @@ def _get_non_empty_data(
         return cudf.core.column.CategoricalColumn(
             data=None,
             size=codes.size,
-            dtype=cudf.CategoricalDtype(
-                categories=categories, ordered=s.dtype.ordered
-            ),
+            dtype=cudf.CategoricalDtype(categories=categories, ordered=s.dtype.ordered),
             children=(codes,),  # type: ignore[arg-type]
         )
     elif isinstance(s.dtype, cudf.ListDtype):
@@ -141,15 +137,11 @@ def _get_non_empty_data(
         date_data = cudf.date_range("2001-01-01", periods=2, freq=s.time_unit)  # type: ignore[attr-defined]
         return date_data.tz_localize(str(s.dtype.tz))._column
     elif s.dtype.kind in "fiubmM":
-        return cudf.core.column.as_column(
-            np.arange(start=0, stop=2, dtype=s.dtype)
-        )
+        return cudf.core.column.as_column(np.arange(start=0, stop=2, dtype=s.dtype))
     elif isinstance(s.dtype, cudf.core.dtypes.DecimalDtype):
         return cudf.core.column.as_column(range(2), dtype=s.dtype)
     else:
-        raise TypeError(
-            f"Don't know how to handle column of type {type(s).__name__}"
-        )
+        raise TypeError(f"Don't know how to handle column of type {type(s).__name__}")
 
 
 @meta_nonempty.register(cudf.Series)
@@ -253,9 +245,7 @@ def make_meta_object_cudf(x, index=None):
         return _empty_series(x[0], x[1], index=index)
     elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
-            raise ValueError(
-                f"Expected iterable of tuples of (name, dtype), got {x}"
-            )
+            raise ValueError(f"Expected iterable of tuples of (name, dtype), got {x}")
         return cudf.DataFrame(
             {c: _empty_series(c, d, index=index) for (c, d) in x},
             columns=[c for c, d in x],
@@ -301,9 +291,7 @@ def concat_cudf(
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
-@categorical_dtype_dispatch.register(
-    (cudf.DataFrame, cudf.Series, cudf.BaseIndex)
-)
+@categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
 @_dask_cudf_performance_tracking
 def categorical_dtype_cudf(categories=None, ordered=False):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
@@ -345,15 +333,11 @@ def percentile_cudf(a, q, interpolation="linear"):
         result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
         return (
-            pd.Categorical.from_codes(
-                result, a.dtype.categories, a.dtype.ordered
-            ),
+            pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered),
             n,
         )
     if a.dtype.kind == "M":
-        result = a.quantile(
-            [i / 100.0 for i in q], interpolation=interpolation
-        )
+        result = a.quantile([i / 100.0 for i in q], interpolation=interpolation)
 
         if q[0] == 0:
             # https://github.com/dask/dask/issues/6864
@@ -362,9 +346,7 @@ def percentile_cudf(a, q, interpolation="linear"):
     if not np.issubdtype(a.dtype, np.number):
         interpolation = "nearest"
     return (
-        a.quantile(
-            [i / 100.0 for i in q], interpolation=interpolation
-        ).to_pandas(),
+        a.quantile([i / 100.0 for i in q], interpolation=interpolation).to_pandas(),
         n,
     )
 
@@ -377,9 +359,7 @@ def _get_pyarrow_schema_cudf(obj, preserve_index=None, **kwargs):
             f"`pyarrow_schema_dispatch`: {list(kwargs)}"
         )
 
-    return _cudf_to_table(
-        meta_nonempty(obj), preserve_index=preserve_index
-    ).schema
+    return _cudf_to_table(meta_nonempty(obj), preserve_index=preserve_index).schema
 
 
 @to_pyarrow_table_dispatch.register(cudf.DataFrame)
@@ -406,9 +386,7 @@ def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
 
 @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
 @_dask_cudf_performance_tracking
-def union_categoricals_cudf(
-    to_union, sort_categories=False, ignore_order=False
-):
+def union_categoricals_cudf(to_union, sort_categories=False, ignore_order=False):
     return cudf.api.types._union_categoricals(
         to_union, sort_categories=False, ignore_order=False
     )
@@ -451,8 +429,7 @@ def group_split_cudf(df, c, k, ignore_index=False):
 @_dask_cudf_performance_tracking
 def sizeof_cudf_dataframe(df):
     return int(
-        sum(col.memory_usage for col in df._data.columns)
-        + df._index.memory_usage()
+        sum(col.memory_usage for col in df._data.columns) + df._index.memory_usage()
     )
 
 
@@ -643,9 +620,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
             "read_hdf is not yet implemented in cudf/dask_cudf. "
             "Moving to cudf from pandas. Expect poor performance!"
         )
-        return _default_backend(dd.read_hdf, *args, **kwargs).to_backend(
-            "cudf"
-        )
+        return _default_backend(dd.read_hdf, *args, **kwargs).to_backend("cudf")
 
 
 # Define "cudf" backend entrypoint for dask-expr

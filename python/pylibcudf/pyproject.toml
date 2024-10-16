@@ -53,32 +53,19 @@ test = [
 Homepage = "https://github.com/rapidsai/cudf"
 Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["cudf"]
 known-third-party = ["dask", "distributed", "dask_cuda", "rmm"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 dask = ["dask", "distributed", "dask_cuda"]
 rapids = ["rmm"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
-
-[tool.ruff.extend-exclude]
-"thirdparty" = true
-".eggs" = true
-".git" = true
-".hg" = true
-".mypy_cache" = true
-".tox" = true
-".venv" = true
-"_build" = true
-"buck-out" = true
-"build" = true
-"dist" = true
 
 [tool.pytest.ini_options]
 # --import-mode=importlib because two test_json.py exists and tests directory is not a structured module

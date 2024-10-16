@@ -75,9 +75,7 @@ def run_udf_test(data, func, dtype):
     comparing it with the equivalent pandas result
     """
     if dtype == "str":
-        output = rmm.DeviceBuffer(
-            size=len(data) * _get_extensionty_size(udf_string)
-        )
+        output = rmm.DeviceBuffer(size=len(data) * _get_extensionty_size(udf_string))
     else:
         dtype = np.dtype(dtype)
         output = cudf.core.column.column_empty(len(data), dtype=dtype)

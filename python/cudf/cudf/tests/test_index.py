@@ -191,9 +191,7 @@ def test_pandas_as_index():
     pdf_int_index = pd.Index([1, 2, 3, 4, 5])
     pdf_uint_index = pd.Index([1, 2, 3, 4, 5])
     pdf_float_index = pd.Index([1.0, 2.0, 3.0, 4.0, 5.0])
-    pdf_datetime_index = pd.DatetimeIndex(
-        [1000000, 2000000, 3000000, 4000000, 5000000]
-    )
+    pdf_datetime_index = pd.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
     pdf_category_index = pd.CategoricalIndex(["a", "b", "c", "b", "a"])
 
     # Define cudf Indexes
@@ -219,9 +217,7 @@ def test_pandas_as_index():
 
     assert_eq(
         pdf_category_index.codes,
-        gdf_category_index.codes.astype(
-            pdf_category_index.codes.dtype
-        ).to_numpy(),
+        gdf_category_index.codes.astype(pdf_category_index.codes.dtype).to_numpy(),
     )
 
 
@@ -706,9 +702,7 @@ def test_index_argsort(data):
         pd.Index([1, 10, 2, 100, -10], name="abc"),
         pd.Index(["z", "x", "a", "c", "b"]),
         pd.Index(["z", "x", "a", "c", "b"], dtype="category"),
-        pd.Index(
-            [-10.2, 100.1, -100.2, 0.0, 0.23], name="this is a float index"
-        ),
+        pd.Index([-10.2, 100.1, -100.2, 0.0, 0.23], name="this is a float index"),
         pd.Index([102, 1001, 1002, 0.0, 23], dtype="datetime64[ns]"),
         pd.Index([13240.2, 1001, 100.2, 0.0, 23], dtype="datetime64[ns]"),
         pd.RangeIndex(0, 10, 1),
@@ -722,12 +716,8 @@ def test_index_sort_values(data, ascending, return_indexer):
     pdi = data
     gdi = cudf.from_pandas(pdi)
 
-    expected = pdi.sort_values(
-        ascending=ascending, return_indexer=return_indexer
-    )
-    actual = gdi.sort_values(
-        ascending=ascending, return_indexer=return_indexer
-    )
+    expected = pdi.sort_values(ascending=ascending, return_indexer=return_indexer)
+    actual = gdi.sort_values(ascending=ascending, return_indexer=return_indexer)
 
     if return_indexer:
         expected_indexer = expected[1]
@@ -1111,11 +1101,7 @@ def test_index_append_error(data, other):
     gd_data = Index(data)
     gd_other = Index(other)
 
-    got_dtype = (
-        gd_other.dtype
-        if gd_data.dtype == np.dtype("object")
-        else gd_data.dtype
-    )
+    got_dtype = gd_other.dtype if gd_data.dtype == np.dtype("object") else gd_data.dtype
     with pytest.raises(
         TypeError,
         match=re.escape(
@@ -1272,9 +1258,7 @@ def test_index_append_list(data, other):
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"])
 @pytest.mark.parametrize("name", [1, "a", None])
 def test_index_basic(data, dtype, name):
     pdi = pd.Index(data, dtype=dtype, name=name)
@@ -1397,9 +1381,7 @@ def test_multiindex_append(data, other):
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"])
 def test_index_empty(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
     gdi = cudf.Index(data, dtype=dtype)
@@ -1408,9 +1390,7 @@ def test_index_empty(data, dtype):
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"])
 def test_index_size(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
     gdi = cudf.Index(data, dtype=dtype)
@@ -1419,9 +1399,7 @@ def test_index_size(data, dtype):
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"])
 def test_index_drop_duplicates(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
     gdi = cudf.Index(data, dtype=dtype)
@@ -1435,9 +1413,7 @@ def test_dropna_bad_how():
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"])
 def test_index_tolist(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
 
@@ -1453,9 +1429,7 @@ def test_index_tolist(data, dtype):
 
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"])
 def test_index_iter_error(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
 
@@ -1471,9 +1445,7 @@ def test_index_iter_error(data, dtype):
 
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3, 4, 5]])
-@pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"])
 def test_index_values_host(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
     pdi = pd.Index(data, dtype=dtype)
@@ -1587,9 +1559,7 @@ def test_multiindex_from_arrow():
 
 
 def test_index_equals_categories():
-    lhs = cudf.CategoricalIndex(
-        ["a", "b", "c", "b", "a"], categories=["a", "b", "c"]
-    )
+    lhs = cudf.CategoricalIndex(["a", "b", "c", "b", "a"], categories=["a", "b", "c"])
     rhs = cudf.CategoricalIndex(
         ["a", "b", "c", "b", "a"], categories=["a", "b", "c", "_"]
     )
@@ -1963,8 +1933,7 @@ def test_get_indexer_single_duplicate_string(idx, key, method):
 
     if (
         # `method` only applicable to monotonic index
-        (not pi.is_monotonic_increasing and method is not None)
-        or not pi.is_unique
+        (not pi.is_monotonic_increasing and method is not None) or not pi.is_unique
     ):
         assert_exceptions_equal(
             lfunc=pi.get_indexer,
@@ -2070,15 +2039,11 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
     pi = idx
     gi = cudf.from_pandas(pi)
 
-    with expect_warning_if(
-        isinstance(key, tuple), pd.errors.PerformanceWarning
-    ):
+    with expect_warning_if(isinstance(key, tuple), pd.errors.PerformanceWarning):
         key_flag = key not in pi
 
     if key_flag:
-        with expect_warning_if(
-            isinstance(key, tuple), pd.errors.PerformanceWarning
-        ):
+        with expect_warning_if(isinstance(key, tuple), pd.errors.PerformanceWarning):
             assert_exceptions_equal(
                 lfunc=pi.get_loc,
                 rfunc=gi.get_loc,
@@ -2249,9 +2214,7 @@ def test_get_loc_multi_string(idx, key):
         ),
     ],
 )
-@pytest.mark.parametrize(
-    "key", [[("a", "b", "c"), ("b", "c", "a")], [("z", "z", "z")]]
-)
+@pytest.mark.parametrize("key", [[("a", "b", "c"), ("b", "c", "a")], [("z", "z", "z")]])
 @pytest.mark.parametrize("method", [None, "ffill", "bfill"])
 def test_get_indexer_multi_string(idx, key, method):
     pi = idx.sort_values()
@@ -2294,9 +2257,7 @@ def test_get_indexer_multi_string(idx, key, method):
 def test_get_indexer_invalid(idx1, idx2):
     idx1 = idx1()
     idx2 = idx2()
-    assert_eq(
-        idx1.get_indexer(idx2), idx1.to_pandas().get_indexer(idx2.to_pandas())
-    )
+    assert_eq(idx1.get_indexer(idx2), idx1.to_pandas().get_indexer(idx2.to_pandas()))
 
 
 @pytest.mark.parametrize(
@@ -2474,9 +2435,7 @@ def test_index_type_methods(data, func):
         assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "resolution", ["D", "h", "min", "s", "ms", "us", "ns"]
-)
+@pytest.mark.parametrize("resolution", ["D", "h", "min", "s", "ms", "us", "ns"])
 def test_index_datetime_ceil(resolution):
     cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
     pidx = cuidx.to_pandas()
@@ -2487,9 +2446,7 @@ def test_index_datetime_ceil(resolution):
     assert_eq(pidx_ceil, cuidx_ceil)
 
 
-@pytest.mark.parametrize(
-    "resolution", ["D", "h", "min", "s", "ms", "us", "ns"]
-)
+@pytest.mark.parametrize("resolution", ["D", "h", "min", "s", "ms", "us", "ns"])
 def test_index_datetime_floor(resolution):
     cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
     pidx = cuidx.to_pandas()
@@ -2500,9 +2457,7 @@ def test_index_datetime_floor(resolution):
     assert_eq(pidx_floor, cuidx_floor)
 
 
-@pytest.mark.parametrize(
-    "resolution", ["D", "h", "min", "s", "ms", "us", "ns"]
-)
+@pytest.mark.parametrize("resolution", ["D", "h", "min", "s", "ms", "us", "ns"])
 def test_index_datetime_round(resolution):
     cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
     pidx = cuidx.to_pandas()
@@ -2688,9 +2643,7 @@ def test_index_constructor_integer(default_integer_bitwidth):
 
 def test_index_constructor_float(default_float_bitwidth):
     got = cudf.Index([1.0, 2.0, 3.0])
-    expect = cudf.Index(
-        [1.0, 2.0, 3.0], dtype=f"float{default_float_bitwidth}"
-    )
+    expect = cudf.Index([1.0, 2.0, 3.0], dtype=f"float{default_float_bitwidth}")
 
     assert_eq(expect, got)
 
@@ -2726,9 +2679,7 @@ def test_rangeindex_take_default_user_option(default_integer_bitwidth):
     # configuration for take operation.
     idx = cudf.RangeIndex(0, 100)
     actual = idx.take([0, 3, 7, 62])
-    expected = cudf.Index(
-        [0, 3, 7, 62], dtype=f"int{default_integer_bitwidth}"
-    )
+    expected = cudf.Index([0, 3, 7, 62], dtype=f"int{default_integer_bitwidth}")
     assert_eq(expected, actual)
 
 
@@ -2771,9 +2722,7 @@ def test_rangeindex_binops_user_option(
     # configuration for binary operation.
     idx = cudf.RangeIndex(1, 5)
     actual = op(idx)
-    expected = cudf.Index(
-        expected, dtype=f"{expected_kind}{default_integer_bitwidth}"
-    )
+    expected = cudf.Index(expected, dtype=f"{expected_kind}{default_integer_bitwidth}")
     assert_eq(
         expected,
         actual,
@@ -3084,9 +3033,7 @@ def test_empty_index_init():
     assert_eq(pidx, gidx)
 
 
-@pytest.mark.parametrize(
-    "data", [[1, 2, 3], ["ab", "cd", "e", None], range(0, 10)]
-)
+@pytest.mark.parametrize("data", [[1, 2, 3], ["ab", "cd", "e", None], range(0, 10)])
 @pytest.mark.parametrize("data_name", [None, 1, "abc"])
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("name", [None, no_default, 1, "abc"])

@@ -29,9 +29,7 @@ sort_dtype_args = [
 sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
 
 
-@pytest.mark.parametrize(
-    "nelem,dtype", list(product(sort_nelem_args, sort_dtype_args))
-)
+@pytest.mark.parametrize("nelem,dtype", list(product(sort_nelem_args, sort_dtype_args)))
 def test_dataframe_sort_values(nelem, dtype):
     np.random.seed(0)
     df = DataFrame()
@@ -57,9 +55,7 @@ def test_dataframe_sort_values_ignore_index(index, ignore_index):
             reason="Unstable sorting by pandas(numpy): https://github.com/pandas-dev/pandas/issues/57531"
         )
 
-    gdf = DataFrame(
-        {"a": [1, 3, 5, 2, 4], "b": [1, 1, 2, 2, 3], "c": [9, 7, 7, 7, 1]}
-    )
+    gdf = DataFrame({"a": [1, 3, 5, 2, 4], "b": [1, 1, 2, 2, 3], "c": [9, 7, 7, 7, 1]})
     gdf = gdf.set_index(index)
 
     pdf = gdf.to_pandas()
@@ -80,9 +76,7 @@ def test_series_sort_values_ignore_index(ignore_index):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "nelem,sliceobj", list(product([10, 100], sort_slice_args))
-)
+@pytest.mark.parametrize("nelem,sliceobj", list(product([10, 100], sort_slice_args)))
 def test_dataframe_sort_values_sliced(nelem, sliceobj):
     np.random.seed(0)
     df = pd.DataFrame()
@@ -111,9 +105,7 @@ def test_series_argsort(nelem, dtype, asc):
     np.testing.assert_array_equal(expected, res.to_numpy())
 
 
-@pytest.mark.parametrize(
-    "nelem,asc", list(product(sort_nelem_args, [True, False]))
-)
+@pytest.mark.parametrize("nelem,asc", list(product(sort_nelem_args, [True, False])))
 def test_series_sort_index(nelem, asc):
     np.random.seed(0)
     sr = Series(100 * np.random.random(nelem))
@@ -212,9 +204,7 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
-def test_dataframe_multi_column(
-    num_cols, num_rows, dtype, ascending, na_position
-):
+def test_dataframe_multi_column(num_cols, num_rows, dtype, ascending, na_position):
     np.random.seed(0)
     by = list(string.ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
@@ -229,9 +219,7 @@ def test_dataframe_multi_column(
     got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
 
-    assert_eq(
-        got[by].reset_index(drop=True), expect[by].reset_index(drop=True)
-    )
+    assert_eq(got[by].reset_index(drop=True), expect[by].reset_index(drop=True))
 
 
 @pytest.mark.parametrize("num_cols", [1, 2, 3])
@@ -253,9 +241,7 @@ def test_dataframe_multi_column_nulls(
         if nulls == "some":
             idx = np.array([], dtype="int64")
             if num_rows > 0:
-                idx = np.random.choice(
-                    num_rows, size=int(num_rows / 4), replace=False
-                )
+                idx = np.random.choice(num_rows, size=int(num_rows / 4), replace=False)
             data[idx] = np.nan
         elif nulls == "all":
             data[:] = np.nan
@@ -266,21 +252,13 @@ def test_dataframe_multi_column_nulls(
     got = gdf.sort_values(by, ascending=ascending, na_position=na_position)
     expect = pdf.sort_values(by, ascending=ascending, na_position=na_position)
 
-    assert_eq(
-        got[by].reset_index(drop=True), expect[by].reset_index(drop=True)
-    )
+    assert_eq(got[by].reset_index(drop=True), expect[by].reset_index(drop=True))
 
 
-@pytest.mark.parametrize(
-    "ascending", list(product((True, False), (True, False)))
-)
+@pytest.mark.parametrize("ascending", list(product((True, False), (True, False))))
 @pytest.mark.parametrize("na_position", ["first", "last"])
-def test_dataframe_multi_column_nulls_multiple_ascending(
-    ascending, na_position
-):
-    pdf = pd.DataFrame(
-        {"a": [3, 1, None, 2, 2, None, 1], "b": [1, 2, 3, 4, 5, 6, 7]}
-    )
+def test_dataframe_multi_column_nulls_multiple_ascending(ascending, na_position):
+    pdf = pd.DataFrame({"a": [3, 1, None, 2, 2, None, 1], "b": [1, 2, 3, 4, 5, 6, 7]})
     gdf = DataFrame.from_pandas(pdf)
     expect = pdf.sort_values(
         by=["a", "b"], ascending=ascending, na_position=na_position
@@ -338,12 +316,8 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
         _check_scatter_by_map(
             df.scatter_by_map("a", map_size, keep_index=keep), df["a"]
         )
-    _check_scatter_by_map(
-        df.scatter_by_map("b", map_size, keep_index=keep), df["b"]
-    )
-    _check_scatter_by_map(
-        df.scatter_by_map("c", map_size, keep_index=keep), df["c"]
-    )
+    _check_scatter_by_map(df.scatter_by_map("b", map_size, keep_index=keep), df["b"])
+    _check_scatter_by_map(df.scatter_by_map("c", map_size, keep_index=keep), df["c"])
     with pytest.warns(UserWarning):
         _check_scatter_by_map(
             df.scatter_by_map("d", map_size, keep_index=keep), df["d"]
@@ -373,12 +347,8 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             isinstance(frame.index, type(df2.index))
 
 
-@pytest.mark.parametrize(
-    "nelem,dtype", list(product(sort_nelem_args, sort_dtype_args))
-)
-@pytest.mark.parametrize(
-    "kind", ["quicksort", "mergesort", "heapsort", "stable"]
-)
+@pytest.mark.parametrize("nelem,dtype", list(product(sort_nelem_args, sort_dtype_args)))
+@pytest.mark.parametrize("kind", ["quicksort", "mergesort", "heapsort", "stable"])
 def test_dataframe_sort_values_kind(nelem, dtype, kind):
     np.random.seed(0)
     df = DataFrame()

@@ -16,9 +16,7 @@ def column(request, has_nulls):
     return plc.interop.from_arrow(pa.array(values, type=typ))
 
 
-@pytest.mark.parametrize(
-    "round_mode", ["half_towards_infinity", "half_to_even"]
-)
+@pytest.mark.parametrize("round_mode", ["half_towards_infinity", "half_to_even"])
 @pytest.mark.parametrize("decimals", [0, 1, 2, 5])
 def test_round(column, round_mode, decimals):
     method = {

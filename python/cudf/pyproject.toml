@@ -131,29 +131,16 @@ provider = "scikit_build_core.metadata.regex"
 input = "cudf/VERSION"
 regex = "(?P<value>.*)"
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["cudf"]
 known-third-party = ["dask", "distributed", "dask_cuda", "rmm", "pylibcudf"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 dask = ["dask", "distributed", "dask_cuda"]
 rapids = ["rmm", "pylibcudf"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
-
-[tool.ruff.extend-exclude]
-"thirdparty" = true
-".eggs" = true
-".git" = true
-".hg" = true
-".mypy_cache" = true
-".tox" = true
-".venv" = true
-"_build" = true
-"buck-out" = true
-"build" = true
-"dist" = true

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import logging
 import random
@@ -60,17 +60,14 @@ class ParquetReader(IOFuzz):
                 | {"list", "decimal64"}
             )
 
-            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
-            )
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self, dtypes_list)
             self._current_params["dtypes_meta"] = dtypes_meta
             seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols
         logging.info(
-            f"Generating DataFrame with rows: {num_rows} "
-            f"and columns: {num_cols}"
+            f"Generating DataFrame with rows: {num_rows} " f"and columns: {num_cols}"
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
@@ -145,16 +142,13 @@ class ParquetWriter(IOFuzz):
                 - {"uint32"}
                 | {"list", "decimal64"}
             )
-            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
-            )
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self, dtypes_list)
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
         logging.info(
-            f"Generating DataFrame with rows: {num_rows} "
-            f"and columns: {num_cols}"
+            f"Generating DataFrame with rows: {num_rows} " f"and columns: {num_cols}"
         )
 
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)

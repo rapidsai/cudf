@@ -16,12 +16,8 @@ from cudf.testing import assert_eq
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
 def test_range_index(testrange):
-    index = RangeIndex(
-        start=testrange[0], stop=testrange[1], step=testrange[2]
-    )
-    index_pd = pd.RangeIndex(
-        start=testrange[0], stop=testrange[1], step=testrange[2]
-    )
+    index = RangeIndex(start=testrange[0], stop=testrange[1], step=testrange[2])
+    index_pd = pd.RangeIndex(start=testrange[0], stop=testrange[1], step=testrange[2])
 
     assert index.is_unique == index_pd.is_unique
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
@@ -87,9 +83,7 @@ def test_string_index(testlist):
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
 
 
-@pytest.mark.parametrize(
-    "testlist", [["c", "d", "e", "f"], ["z", "y", "x", "r"]]
-)
+@pytest.mark.parametrize("testlist", [["c", "d", "e", "f"], ["z", "y", "x", "r"]])
 def test_categorical_index(testlist):
     # Assuming unordered categorical data cannot be "monotonic"
     raw_cat = pd.Categorical(testlist, ordered=True)
@@ -182,12 +176,8 @@ def test_multiindex():
     gdf = cudf.from_pandas(pdf)
 
     assert pdf.index.is_unique == gdf.index.is_unique
-    assert (
-        pdf.index.is_monotonic_increasing == gdf.index.is_monotonic_increasing
-    )
-    assert (
-        pdf.index.is_monotonic_decreasing == gdf.index.is_monotonic_decreasing
-    )
+    assert pdf.index.is_monotonic_increasing == gdf.index.is_monotonic_increasing
+    assert pdf.index.is_monotonic_decreasing == gdf.index.is_monotonic_decreasing
 
 
 @pytest.mark.parametrize(

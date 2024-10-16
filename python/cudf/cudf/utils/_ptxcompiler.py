@@ -92,12 +92,8 @@ def safe_get_versions():
         try:
             # allow user to specify driver/runtime
             # versions manually, if necessary
-            driver_version = os.environ[
-                "PTXCOMPILER_KNOWN_DRIVER_VERSION"
-            ].split(".")
-            runtime_version = os.environ[
-                "PTXCOMPILER_KNOWN_RUNTIME_VERSION"
-            ].split(".")
+            driver_version = os.environ["PTXCOMPILER_KNOWN_DRIVER_VERSION"].split(".")
+            runtime_version = os.environ["PTXCOMPILER_KNOWN_RUNTIME_VERSION"].split(".")
             driver_version, runtime_version = (
                 tuple(map(int, driver_version)),
                 tuple(map(int, runtime_version)),

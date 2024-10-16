@@ -90,9 +90,7 @@ class CudfFrameBase(FrameBase):
             index = self._meta.to_pandas().var(numeric_only=True).index
             frame = frame[list(index)]
         return new_collection(
-            frame.expr.var(
-                axis, skipna, ddof, numeric_only, split_every=split_every
-            )
+            frame.expr.var(axis, skipna, ddof, numeric_only, split_every=split_every)
         )
 
     def rename_axis(
@@ -101,9 +99,7 @@ class CudfFrameBase(FrameBase):
         from dask_cudf.expr._expr import RenameAxisCudf
 
         return new_collection(
-            RenameAxisCudf(
-                self, mapper=mapper, index=index, columns=columns, axis=axis
-            )
+            RenameAxisCudf(self, mapper=mapper, index=index, columns=columns, axis=axis)
         )
 
 
@@ -233,9 +229,7 @@ def _create_array_collection_with_meta(expr):
     name = result._name
     meta = result._meta
     divisions = result.divisions
-    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
-        (d,) for d in meta.shape[1:]
-    )
+    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple((d,) for d in meta.shape[1:])
     if len(chunks) > 1:
         if isinstance(dsk, HighLevelGraph):
             layer = dsk.layers[name]

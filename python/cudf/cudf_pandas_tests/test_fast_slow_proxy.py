@@ -116,9 +116,7 @@ def test_fast_slow_arg_function_closure(function_proxy, final_proxy):
     assert _fast_arg(func)() == (fast_x, fast_y.method())
 
 
-def test_fast_slow_arg_function_global(
-    monkeypatch, function_proxy, final_proxy
-):
+def test_fast_slow_arg_function_global(monkeypatch, function_proxy, final_proxy):
     fast_x, slow_x, x = function_proxy
     fast_y, slow_y, y = final_proxy
 
@@ -338,9 +336,7 @@ def test_doc(fast_and_intermediate_with_doc, slow_and_intermediate_with_doc):
     assert inspect.getdoc(Pxy().prop) == inspect.getdoc(Slow().prop)
     assert inspect.getdoc(Pxy.method) == inspect.getdoc(Slow.method)
     assert inspect.getdoc(Pxy().method) == inspect.getdoc(Slow().method)
-    assert inspect.getdoc(Pxy().intermediate()) == inspect.getdoc(
-        Slow().intermediate()
-    )
+    assert inspect.getdoc(Pxy().intermediate()) == inspect.getdoc(Slow().intermediate())
     assert inspect.getdoc(Pxy().intermediate().method) == inspect.getdoc(
         Slow().intermediate().method
     )
@@ -534,9 +530,7 @@ def test_tuple_with_attrs_transform():
     assert a != b
     assert b != c
     assert a != d
-    transform = partial(
-        _transform_arg, attribute_name="_fsproxy_fast", seen=set()
-    )
+    transform = partial(_transform_arg, attribute_name="_fsproxy_fast", seen=set())
     aprime = transform(a)
     bprime = transform(b)
     cprime = transform(c)

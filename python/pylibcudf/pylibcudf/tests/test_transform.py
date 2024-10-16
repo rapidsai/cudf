@@ -14,8 +14,7 @@ def test_nans_to_nulls(has_nans):
         values = [1, 4, 5, None, 3, None]
 
     replaced = [
-        None if (v is None or (v is not None and math.isnan(v))) else v
-        for v in values
+        None if (v is None or (v is not None and math.isnan(v))) else v for v in values
     ]
 
     h_input = pa.array(values, type=pa.float32())

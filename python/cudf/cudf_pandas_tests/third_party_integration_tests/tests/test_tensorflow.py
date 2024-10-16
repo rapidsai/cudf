@@ -29,9 +29,7 @@ def df():
         "oldpeak": rng.uniform(0.0, 6.2, size=(nrows,)),
         "slope": rng.randint(1, 4, size=(nrows,), dtype="int64"),
         "ca": rng.randint(0, 4, size=(nrows,), dtype="int64"),
-        "thal": rng.choice(
-            ["fixed", "normal", "reversible", "1", "2"], size=(nrows,)
-        ),
+        "thal": rng.choice(["fixed", "normal", "reversible", "1", "2"], size=(nrows,)),
         "target": rng.randint(0, 2, size=(nrows,), dtype="int64"),
     }
 
@@ -72,9 +70,7 @@ def test_dataframe_as_array(model_gen, df, target):
     numeric_feature_names = ["age", "thalach", "trestbps", "chol", "oldpeak"]
     numeric_features = df[numeric_feature_names]
 
-    numeric_features = tf.convert_to_tensor(
-        numeric_features.values, dtype=tf.float32
-    )
+    numeric_features = tf.convert_to_tensor(numeric_features.values, dtype=tf.float32)
 
     model = model_gen(numeric_features)
     model.fit(numeric_features, target, epochs=1, batch_size=BATCH_SIZE)
@@ -89,9 +85,7 @@ def test_dataframe_as_dataset(model_gen, df, target):
     numeric_feature_names = ["age", "thalach", "trestbps", "chol", "oldpeak"]
     numeric_features = df[numeric_feature_names]
 
-    numeric_features = tf.convert_to_tensor(
-        numeric_features.values, dtype=tf.float32
-    )
+    numeric_features = tf.convert_to_tensor(numeric_features.values, dtype=tf.float32)
 
     dataset = tf.data.Dataset.from_tensor_slices((numeric_features, target))
     dataset = dataset.shuffle(SHUFFLE_BUFFER).batch(BATCH_SIZE)
@@ -151,9 +145,7 @@ def test_dataframe_as_dictionary_with_keras_input_layer(df, target):
     numeric_dict_ds = tf.data.Dataset.from_tensor_slices(
         (dict(numeric_features), target)
     )
-    numeric_dict_batches = numeric_dict_ds.shuffle(SHUFFLE_BUFFER).batch(
-        BATCH_SIZE
-    )
+    numeric_dict_batches = numeric_dict_ds.shuffle(SHUFFLE_BUFFER).batch(BATCH_SIZE)
     model.fit(numeric_dict_batches, epochs=1)
 
     # Predict

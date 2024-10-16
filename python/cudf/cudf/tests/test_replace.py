@@ -367,9 +367,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     pdata = container(data)
 
     if np.dtype(data_dtype).kind not in ("f"):
-        data_dtype = cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[
-            np.dtype(data_dtype)
-        ]
+        data_dtype = cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[np.dtype(data_dtype)]
     pdata = pdata.astype(data_dtype)
 
     # Explicitly using nans_as_nulls=True
@@ -396,18 +394,18 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
         cudf.Series(["-74.56", None, "-23.73", "34.55", "2.89", None]).astype(
             Decimal32Dtype(7, 2)
         ),
-        cudf.Series(
-            ["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan]
-        ).astype(Decimal64Dtype(8, 3)),
-        cudf.Series(
-            ["2.964", None, "57.432", "-989.330", None, "56.444"]
-        ).astype(Decimal64Dtype(8, 3)),
-        cudf.Series(
-            [np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan]
-        ).astype(Decimal64Dtype(10, 4)),
-        cudf.Series(
-            ["2.964", None, "54347.432", "-989.330", None, "56.444"]
-        ).astype(Decimal128Dtype(20, 7)),
+        cudf.Series(["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan]).astype(
+            Decimal64Dtype(8, 3)
+        ),
+        cudf.Series(["2.964", None, "57.432", "-989.330", None, "56.444"]).astype(
+            Decimal64Dtype(8, 3)
+        ),
+        cudf.Series([np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan]).astype(
+            Decimal64Dtype(10, 4)
+        ),
+        cudf.Series(["2.964", None, "54347.432", "-989.330", None, "56.444"]).astype(
+            Decimal128Dtype(20, 7)
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -492,10 +490,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
     else:
         fill_value_cudf = fill_value
 
-    if (
-        isinstance(fill_value_cudf, cudf.Series)
-        and gsr.dtype != fill_value_cudf.dtype
-    ):
+    if isinstance(fill_value_cudf, cudf.Series) and gsr.dtype != fill_value_cudf.dtype:
         assert_exceptions_equal(
             lfunc=psr.fillna,
             rfunc=gsr.fillna,
@@ -676,26 +671,16 @@ def test_fillna_datetime(psr_data, fill_value, inplace):
             dtype="datetime64[ns]",
         ),
         # Timedelta
-        np.array(
-            [10, 100, 1000, None, None, 10, 100, 1000], dtype="datetime64[ns]"
-        ),
-        np.array(
-            [None, None, 10, None, 1000, 100, 10], dtype="datetime64[ns]"
-        ),
-        np.array(
-            [10, 100, None, None, 1000, None, None], dtype="datetime64[ns]"
-        ),
+        np.array([10, 100, 1000, None, None, 10, 100, 1000], dtype="datetime64[ns]"),
+        np.array([None, None, 10, None, 1000, 100, 10], dtype="datetime64[ns]"),
+        np.array([10, 100, None, None, 1000, None, None], dtype="datetime64[ns]"),
         # String
         np.array(
             ["10", "100", "1000", None, None, "10", "100", "1000"],
             dtype="object",
         ),
-        np.array(
-            [None, None, "1000", None, "10", "100", "10"], dtype="object"
-        ),
-        np.array(
-            ["10", "100", None, None, "1000", None, None], dtype="object"
-        ),
+        np.array([None, None, "1000", None, "10", "100", "10"], dtype="object"),
+        np.array(["10", "100", None, None, "1000", None, None], dtype="object"),
     ],
 )
 @pytest.mark.parametrize("container", [pd.Series, pd.DataFrame])
@@ -726,9 +711,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
     "df",
     [
         pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]}),
-        pd.DataFrame(
-            {"a": [1, 2, None], "b": [None, None, 5]}, index=["a", "p", "z"]
-        ),
+        pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]}, index=["a", "p", "z"]),
         pd.DataFrame({"a": [1, 2, 3]}),
     ],
 )
@@ -963,9 +946,7 @@ def test_series_multiple_times_with_nulls():
 
 
 @pytest.mark.parametrize("series_dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize(
-    "replacement", [128, 128.0, 128.5, 32769, 32769.0, 32769.5]
-)
+@pytest.mark.parametrize("replacement", [128, 128.0, 128.5, 32769, 32769.0, 32769.5])
 def test_numeric_series_replace_dtype(series_dtype, replacement):
     psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=series_dtype)
     sr = cudf.from_pandas(psr)
@@ -1000,15 +981,13 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         sr.replace([0, 1], [replacement])
 
     # Both lists of equal length
-    if (
-        np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}
-    ) or (not can_replace):
+    if (np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}) or (
+        not can_replace
+    ):
         with pytest.raises(TypeError):
             sr.replace([2, 3], [replacement, replacement])
     else:
-        expect = psr.replace([2, 3], [replacement, replacement]).astype(
-            psr.dtype
-        )
+        expect = psr.replace([2, 3], [replacement, replacement]).astype(psr.dtype)
         got = sr.replace([2, 3], [replacement, replacement])
         assert_eq(expect, got)
 
@@ -1118,9 +1097,7 @@ def test_replace_df_error():
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_clip(lower, upper, inplace):
-    pdf = pd.DataFrame(
-        {"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]}
-    )
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]})
     gdf = cudf.from_pandas(pdf)
 
     got = gdf.clip(lower=lower, upper=upper, inplace=inplace)
@@ -1157,9 +1134,7 @@ def test_dataframe_category_clip(lower, upper, inplace):
     [([2, 7.4], [4, 7.9, "d"]), ([2, 7.4, "a"], [4, 7.9, "d"])],
 )
 def test_dataframe_exceptions_for_clip(lower, upper):
-    gdf = cudf.DataFrame(
-        {"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]}
-    )
+    gdf = cudf.DataFrame({"a": [1, 2, 3, 4, 5], "b": [7.1, 7.24, 7.5, 7.8, 8.11]})
 
     with pytest.raises(ValueError):
         gdf.clip(lower=lower, upper=upper)
@@ -1368,9 +1343,7 @@ def test_replace_nulls(gsr, old, new, expected):
 
 def test_fillna_columns_multiindex():
     columns = pd.MultiIndex.from_tuples([("a", "b"), ("d", "e")])
-    pdf = pd.DataFrame(
-        {"0": [1, 2, None, 3, None], "1": [None, None, None, None, 4]}
-    )
+    pdf = pd.DataFrame({"0": [1, 2, None, 3, None], "1": [None, None, None, None, 4]})
     pdf.columns = columns
     gdf = cudf.from_pandas(pdf)
 

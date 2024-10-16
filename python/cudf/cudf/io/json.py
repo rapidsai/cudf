@@ -42,9 +42,7 @@ def read_json(
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
     if engine != "cudf" and keep_quotes:
-        raise ValueError(
-            "keep_quotes='True' is supported only with engine='cudf'"
-        )
+        raise ValueError("keep_quotes='True' is supported only with engine='cudf'")
 
     if engine == "cudf":
         if dtype is None:
@@ -118,9 +116,7 @@ def read_json(
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is True else dtype
         unspecified_dtypes = {
-            name: dtype
-            for name, dtype in df._dtypes
-            if name not in specified_dtypes
+            name: dtype for name, dtype in df._dtypes if name not in specified_dtypes
         }
         default_dtypes = {}
 
@@ -179,13 +175,9 @@ def to_json(
         if ioutils.is_fsspec_open_file(path_or_buf):
             with path_or_buf as file_obj:
                 file_obj = ioutils.get_IOBase_writer(file_obj)
-                libjson.write_json(
-                    cudf_val, path_or_buf=file_obj, *args, **kwargs
-                )
+                libjson.write_json(cudf_val, path_or_buf=file_obj, *args, **kwargs)
         else:
-            libjson.write_json(
-                cudf_val, path_or_buf=path_or_buf, *args, **kwargs
-            )
+            libjson.write_json(cudf_val, path_or_buf=path_or_buf, *args, **kwargs)
 
         if return_as_string:
             path_or_buf.seek(0)
@@ -209,6 +201,5 @@ def to_json(
         )
     else:
         raise ValueError(
-            f"`engine` only support {{'auto', 'cudf', 'pandas'}}, "
-            f"got: {engine}"
+            f"`engine` only support {{'auto', 'cudf', 'pandas'}}, " f"got: {engine}"
         )

@@ -190,8 +190,7 @@ class SubwordTokenizer:
 
         if padding != "max_length":
             error_msg = (
-                "Only padding to the provided max_length"
-                "is currently supported"
+                "Only padding to the provided max_length" "is currently supported"
             )
             raise NotImplementedError(error_msg)
 
@@ -201,8 +200,7 @@ class SubwordTokenizer:
 
         if return_tensors not in {"cp", "pt", "tf"}:
             error_msg = (
-                "Only cupy(cp), pytorch(pt) and tensorflow(tf) "
-                "tensors are supported"
+                "Only cupy(cp), pytorch(pt) and tensorflow(tf) " "tensors are supported"
             )
             raise NotImplementedError(error_msg)
 
@@ -220,9 +218,7 @@ class SubwordTokenizer:
 
         tokenizer_output = {
             "input_ids": cp.asarray(input_ids).reshape(-1, max_length),
-            "attention_mask": cp.asarray(attention_mask).reshape(
-                -1, max_length
-            ),
+            "attention_mask": cp.asarray(attention_mask).reshape(-1, max_length),
             "metadata": cp.asarray(metadata).reshape(-1, 3),
         }
 
@@ -249,9 +245,7 @@ def _bert_add_special_tokens(token_o):
     seq_end_col = cp.clip(seq_end_col + 1, a_min=None, a_max=max_length - 1)
 
     _bert_add_special_tokens_input_ids(token_o["input_ids"], seq_end_col)
-    _bert_add_special_tokens_attention_mask(
-        token_o["attention_mask"], seq_end_col
-    )
+    _bert_add_special_tokens_attention_mask(token_o["attention_mask"], seq_end_col)
     _bert_add_special_tokens_metadata(token_o["metadata"], max_length)
 
     return token_o
@@ -267,9 +261,7 @@ def _bert_add_special_tokens_input_ids(input_ids, seq_end_col):
     input_ids[:, 0] = 101
     # Mark end of sequence [SEP]
 
-    input_ids[
-        cp.arange(0, input_ids.shape[0], dtype=cp.uint32), seq_end_col
-    ] = 102
+    input_ids[cp.arange(0, input_ids.shape[0], dtype=cp.uint32), seq_end_col] = 102
 
 
 def _bert_add_special_tokens_attention_mask(attention_mask, seq_end_col):
@@ -293,6 +285,4 @@ def _bert_add_special_tokens_metadata(metadata, max_length):
     # metadata seq starts from plus 1
     metadata[:, 1] = metadata[:, 1] + 1
     # clip done to take overflow into account
-    metadata[:, 2] = cp.clip(
-        metadata[:, 2] + 1, a_min=None, a_max=max_length - 2
-    )
+    metadata[:, 2] = cp.clip(metadata[:, 2] + 1, a_min=None, a_max=max_length - 2)

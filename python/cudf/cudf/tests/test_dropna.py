@@ -159,9 +159,7 @@ def test_dropna_subset_cols(data, subset):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
-    assert_eq(
-        pdf.dropna(axis=1, subset=subset), gdf.dropna(axis=1, subset=subset)
-    )
+    assert_eq(pdf.dropna(axis=1, subset=subset), gdf.dropna(axis=1, subset=subset))
 
 
 # TODO: can't test with subset=[] below since Pandas
@@ -187,9 +185,7 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expected = pdf.dropna(
-        axis=1, thresh=thresh, subset=subset, inplace=inplace
-    )
+    expected = pdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
     actual = gdf.dropna(axis=1, thresh=thresh, subset=subset, inplace=inplace)
 
     if inplace:

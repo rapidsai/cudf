@@ -69,29 +69,16 @@ version = {file = "dask_cudf/VERSION"}
 [tool.setuptools.packages.find]
 exclude = ["*tests*"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["dask_cudf"]
 known-third-party = ["dask", "distributed", "dask_cuda", "rmm", "cudf"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 dask = ["dask", "distributed", "dask_cuda"]
 rapids = ["rmm", "cudf"]
-
-[tool.ruff.extend-exclude]
-"thirdparty" = true
-".eggs" = true
-".git" = true
-".hg" = true
-".mypy_cache" = true
-".tox" = true
-".venv" = true
-"_build" = true
-"buck-out" = true
-"build" = true
-"dist" = true
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"

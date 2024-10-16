@@ -17,9 +17,7 @@ from cudf.testing import assert_eq
 @pytest.mark.parametrize("bins", [1, 2, 3])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize(
-    "ordered", [True]
-)  # if ordered is False we need labels
+@pytest.mark.parametrize("ordered", [True])  # if ordered is False we need labels
 @pytest.mark.parametrize("precision", [1, 2, 3])
 def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
     # will test optional labels, retbins and duplicates separately
@@ -56,9 +54,7 @@ def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
 @pytest.mark.parametrize(
     "labels", [["bad", "medium", "good"], ["A", "B", "C"], [1, 2, 3], False]
 )
-def test_cut_labels(
-    x, bins, right, include_lowest, ordered, precision, labels
-):
+def test_cut_labels(x, bins, right, include_lowest, ordered, precision, labels):
     pcat = pd.cut(
         x=x,
         bins=bins,
@@ -86,9 +82,7 @@ def test_cut_labels(
 @pytest.mark.parametrize("bins", [3])  # labels must be the same len as bins
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize(
-    "ordered", [False]
-)  # labels must be unique if ordered=True
+@pytest.mark.parametrize("ordered", [False])  # labels must be unique if ordered=True
 @pytest.mark.parametrize("precision", [1, 2, 3])
 @pytest.mark.parametrize(
     "labels", [["bad", "good", "good"], ["B", "A", "B"], [1, 2, 2], False]

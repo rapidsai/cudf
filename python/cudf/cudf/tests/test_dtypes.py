@@ -27,9 +27,7 @@ def test_cdt_basic():
     assert_eq(sr.dtype.categories, psr.dtype.categories)
 
 
-@pytest.mark.parametrize(
-    "data", [None, [], ["a"], [1], [1.0], ["a", "b", "c"]]
-)
+@pytest.mark.parametrize("data", [None, [], ["a"], [1], [1.0], ["a", "b", "c"]])
 @pytest.mark.parametrize("ordered", [None, False, True])
 def test_cdt_eq(data, ordered):
     dt = cudf.CategoricalDtype(categories=data, ordered=ordered)
@@ -37,14 +35,10 @@ def test_cdt_eq(data, ordered):
     assert dt == dt
     assert dt == cudf.CategoricalDtype(categories=None, ordered=ordered)
     assert dt == cudf.CategoricalDtype(categories=data, ordered=ordered)
-    assert not dt == cudf.CategoricalDtype(
-        categories=data, ordered=not ordered
-    )
+    assert not dt == cudf.CategoricalDtype(categories=data, ordered=not ordered)
 
 
-@pytest.mark.parametrize(
-    "data", [None, [], ["a"], [1], [1.0], ["a", "b", "c"]]
-)
+@pytest.mark.parametrize("data", [None, [], ["a"], [1], [1.0], ["a", "b", "c"]])
 @pytest.mark.parametrize("ordered", [None, False, True])
 def test_cdf_to_pandas(data, ordered):
     assert (
@@ -98,10 +92,7 @@ def test_list_nested_dtype():
 )
 def test_struct_dtype_pyarrow_round_trip(fields):
     pa_type = pa.struct(
-        {
-            k: cudf.utils.dtypes.np_to_pa_dtype(np.dtype(v))
-            for k, v in fields.items()
-        }
+        {k: cudf.utils.dtypes.np_to_pa_dtype(np.dtype(v)) for k, v in fields.items()}
     )
     expect = pa_type
     got = StructDtype.from_arrow(expect).to_arrow()
@@ -109,12 +100,8 @@ def test_struct_dtype_pyarrow_round_trip(fields):
 
 
 def test_struct_dtype_eq():
-    lhs = StructDtype(
-        {"a": "int32", "b": StructDtype({"c": "int64", "ab": "int32"})}
-    )
-    rhs = StructDtype(
-        {"a": "int32", "b": StructDtype({"c": "int64", "ab": "int32"})}
-    )
+    lhs = StructDtype({"a": "int32", "b": StructDtype({"c": "int64", "ab": "int32"})})
+    rhs = StructDtype({"a": "int32", "b": StructDtype({"c": "int64", "ab": "int32"})})
     assert lhs == rhs
     rhs = StructDtype({"a": "int32", "b": "int64"})
     assert lhs != rhs
@@ -199,17 +186,13 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
     if isinstance(column.dtype, ListDtype):
         return array.type.equals(
             column.dtype.to_arrow()
-        ) and assert_column_array_dtype_equal(
-            column.base_children[1], array.values
-        )
+        ) and assert_column_array_dtype_equal(column.base_children[1], array.values)
     elif isinstance(column.dtype, StructDtype):
         return array.type.equals(column.dtype.to_arrow()) and all(
             assert_column_array_dtype_equal(child, array.field(i))
             for i, child in enumerate(column.base_children)
         )
-    elif isinstance(
-        column.dtype, (Decimal128Dtype, Decimal64Dtype, Decimal32Dtype)
-    ):
+    elif isinstance(column.dtype, (Decimal128Dtype, Decimal64Dtype, Decimal32Dtype)):
         return array.type.equals(column.dtype.to_arrow())
     elif isinstance(column.dtype, CategoricalDtype):
         raise NotImplementedError()
@@ -254,9 +237,7 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
         [
             {
                 "name": "var0",
-                "val": [
-                    {"name": "var1", "val": None, "type": "optional<struct>"}
-                ],
+                "val": [{"name": "var1", "val": None, "type": "optional<struct>"}],
                 "type": "list",
             },
             {},

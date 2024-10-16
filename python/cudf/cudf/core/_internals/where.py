@@ -81,9 +81,9 @@ def _check_and_cast_columns_with_other(
             )
         return _normalize_categorical(source_col, other.astype(source_dtype))
 
-    if _is_non_decimal_numeric_dtype(source_dtype) and as_column(
-        other
-    ).can_cast_safely(source_dtype):
+    if _is_non_decimal_numeric_dtype(source_dtype) and as_column(other).can_cast_safely(
+        source_dtype
+    ):
         common_dtype = source_dtype
     else:
         common_dtype = find_common_type(

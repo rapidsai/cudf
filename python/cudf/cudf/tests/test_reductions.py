@@ -79,9 +79,7 @@ def test_product(dtype, nelem):
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
-            data[np.random.randint(low=0, high=nelem, size=1)] = (
-                np.random.uniform() * 2
-            )
+            data[np.random.randint(low=0, high=nelem, size=1)] = np.random.uniform() * 2
     else:
         data = gen_rand(dtype, nelem)
 
@@ -388,9 +386,7 @@ def test_dataframe_reduction_no_args(op):
 
 
 def test_reduction_column_multiindex():
-    idx = cudf.MultiIndex.from_tuples(
-        [("a", 1), ("a", 2)], names=["foo", "bar"]
-    )
+    idx = cudf.MultiIndex.from_tuples([("a", 1), ("a", 2)], names=["foo", "bar"])
     df = cudf.DataFrame(np.array([[1, 3], [2, 4]]), columns=idx)
     result = df.mean()
     expected = df.to_pandas().mean()
@@ -405,9 +401,7 @@ def test_dtype_deprecated(op):
     assert isinstance(result, np.int8)
 
 
-@pytest.mark.parametrize(
-    "columns", [pd.RangeIndex(2), pd.Index([0, 1], dtype="int8")]
-)
+@pytest.mark.parametrize("columns", [pd.RangeIndex(2), pd.Index([0, 1], dtype="int8")])
 def test_dataframe_axis_0_preserve_column_type_in_index(columns):
     pd_df = pd.DataFrame([[1, 2]], columns=columns)
     cudf_df = cudf.DataFrame.from_pandas(pd_df)

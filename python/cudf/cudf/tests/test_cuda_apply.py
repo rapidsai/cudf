@@ -140,10 +140,7 @@ def test_df_apply_custom_chunks_blkct_tpb(nelem, blkct, tpb):
 
     expect_out1 = extra2 * in1 - extra1 * in2 + in3
     expect_out2 = np.hstack(
-        [
-            tpb * np.arange(e - s)
-            for s, e in zip(chunks, chunks[1:] + [len(df)])
-        ]
+        [tpb * np.arange(e - s) for s, e in zip(chunks, chunks[1:] + [len(df)])]
     )
 
     outdf = df.apply_chunks(

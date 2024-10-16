@@ -293,8 +293,8 @@ In order to run doxygen as a linter on C++/CUDA code, run
 ./ci/checks/doxygen.sh
 ```
 
-Python code runs several linters including [Ruff](https://docs.astral.sh/ruff/) 
-with its various rules  for Black-like formating or Isort.
+Python code runs several linters including [Ruff](https://docs.astral.sh/ruff/)
+with its various rules  for Black-like formatting or Isort.
 
 cuDF also uses [codespell](https://github.com/codespell-project/codespell) to find spelling
 mistakes, and this check is run as a pre-commit hook. To apply the suggested spelling fixes,

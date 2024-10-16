@@ -29,9 +29,7 @@ def read_text(
         iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
     )
-    filepath_or_buffer = ioutils._select_single_source(
-        filepath_or_buffer, "read_text"
-    )
+    filepath_or_buffer = ioutils._select_single_source(filepath_or_buffer, "read_text")
 
     return cudf.Series._from_column(
         libtext.read_text(

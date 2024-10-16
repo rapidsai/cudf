@@ -52,10 +52,7 @@ def test_filter_characters(data_col, trans_table, keep):
         else:
             new_val = ""
             for ch in val:
-                if (
-                    ch in flat_trans
-                    and keep == plc.strings.translate.FilterType.KEEP
-                ):
+                if ch in flat_trans and keep == plc.strings.translate.FilterType.KEEP:
                     new_val += ch
                 elif (
                     ch not in flat_trans

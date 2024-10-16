@@ -46,11 +46,7 @@ def test_profiler():
         "_Timestamp.__add__",
     }
     for name, func in per_function_stats.items():
-        assert (
-            len(func["cpu"]) == 0
-            if "Time" not in name
-            else len(func["gpu"]) == 0
-        )
+        assert len(func["cpu"]) == 0 if "Time" not in name else len(func["gpu"]) == 0
 
     per_line_stats = profiler.per_line_stats
     calls = [

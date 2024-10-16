@@ -137,16 +137,12 @@ def _setup_numba():
 
 class _CUDFNumbaConfig:
     def __enter__(self):
-        self.CUDA_LOW_OCCUPANCY_WARNINGS = (
-            numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
-        )
+        self.CUDA_LOW_OCCUPANCY_WARNINGS = numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
         numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
         self.CAPTURED_ERRORS = numba_config.CAPTURED_ERRORS
         numba_config.CAPTURED_ERRORS = "new_style"
 
     def __exit__(self, exc_type, exc_value, traceback):
-        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = (
-            self.CUDA_LOW_OCCUPANCY_WARNINGS
-        )
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = self.CUDA_LOW_OCCUPANCY_WARNINGS
         numba_config.CAPTURED_ERRORS = self.CAPTURED_ERRORS

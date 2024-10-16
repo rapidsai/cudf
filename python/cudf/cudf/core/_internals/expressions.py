@@ -124,9 +124,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
                 f"Unsupported literal {repr(node.value)} of type "
                 "{type(node.value).__name__}"
             )
-        self.stack.append(
-            Literal(plc.interop.from_arrow(pa.scalar(node.value)))
-        )
+        self.stack.append(Literal(plc.interop.from_arrow(pa.scalar(node.value))))
 
     def visit_UnaryOp(self, node):
         self.visit(node.operand)
@@ -212,8 +210,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
         # Assuming only unary functions are supported, which is checked above.
         if len(node.args) != 1 or node.keywords:
             raise ValueError(
-                f"Function {node.func} only accepts one positional "
-                "argument."
+                f"Function {node.func} only accepts one positional " "argument."
             )
         self.visit(node.args[0])
 

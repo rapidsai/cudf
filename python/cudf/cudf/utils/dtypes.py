@@ -53,8 +53,7 @@ np_dtypes_to_pandas_dtypes = {
     np.dtype("float64"): pd.Float64Dtype(),
 }
 pandas_dtypes_to_np_dtypes = {
-    pd_dtype: np_dtype
-    for np_dtype, pd_dtype in np_dtypes_to_pandas_dtypes.items()
+    pd_dtype: np_dtype for np_dtype, pd_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
 pyarrow_dtypes_to_pandas_dtypes = {
@@ -125,17 +124,11 @@ def _find_common_type_decimal(dtypes):
     p = s + lhs
 
     if p > cudf.Decimal64Dtype.MAX_PRECISION:
-        return cudf.Decimal128Dtype(
-            min(cudf.Decimal128Dtype.MAX_PRECISION, p), s
-        )
+        return cudf.Decimal128Dtype(min(cudf.Decimal128Dtype.MAX_PRECISION, p), s)
     elif p > cudf.Decimal32Dtype.MAX_PRECISION:
-        return cudf.Decimal64Dtype(
-            min(cudf.Decimal64Dtype.MAX_PRECISION, p), s
-        )
+        return cudf.Decimal64Dtype(min(cudf.Decimal64Dtype.MAX_PRECISION, p), s)
     else:
-        return cudf.Decimal32Dtype(
-            min(cudf.Decimal32Dtype.MAX_PRECISION, p), s
-        )
+        return cudf.Decimal32Dtype(min(cudf.Decimal32Dtype.MAX_PRECISION, p), s)
 
 
 def cudf_dtype_from_pydata_dtype(dtype):
@@ -162,9 +155,7 @@ def cudf_dtype_to_pa_type(dtype):
     Python dtype.
     """
     if isinstance(dtype, cudf.CategoricalDtype):
-        raise NotImplementedError(
-            "No conversion from Categorical to pyarrow type"
-        )
+        raise NotImplementedError("No conversion from Categorical to pyarrow type")
     elif isinstance(
         dtype,
         (cudf.StructDtype, cudf.ListDtype, cudf.core.dtypes.DecimalDtype),
@@ -198,15 +189,12 @@ def to_cudf_compatible_scalar(val, dtype=None):
     If `val` is None, returns None.
     """
 
-    if cudf._lib.scalar._is_null_host_scalar(val) or isinstance(
-        val, cudf.Scalar
-    ):
+    if cudf._lib.scalar._is_null_host_scalar(val) or isinstance(val, cudf.Scalar):
         return val
 
     if not cudf.api.types._is_scalar_or_zero_d_array(val):
         raise ValueError(
-            f"Cannot convert value of type {type(val).__name__} "
-            "to cudf scalar"
+            f"Cannot convert value of type {type(val).__name__} " "to cudf scalar"
         )
 
     if isinstance(val, Decimal):
@@ -215,9 +203,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
 
-    if (
-        (dtype is None) and isinstance(val, str)
-    ) or cudf.api.types.is_string_dtype(dtype):
+    if ((dtype is None) and isinstance(val, str)) or cudf.api.types.is_string_dtype(
+        dtype
+    ):
         dtype = "str"
 
         if isinstance(val, str) and val.endswith("\x00"):
@@ -229,9 +217,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
             # the string value directly (cudf.DeviceScalar will DTRT)
             return val
 
-    tz_error_msg = (
-        "Cannot covert a timezone-aware timestamp to timezone-naive scalar."
-    )
+    tz_error_msg = "Cannot covert a timezone-aware timestamp to timezone-naive scalar."
     if isinstance(val, pd.Timestamp):
         if val.tz is not None:
             raise NotImplementedError(tz_error_msg)
@@ -423,9 +409,7 @@ def _get_nan_for_dtype(dtype):
 
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
-    error = TypeError(
-        f"{op} not supported between {dtype_l} and {dtype_r} scalars"
-    )
+    error = TypeError(f"{op} not supported between {dtype_l} and {dtype_r} scalars")
 
     to_numpy_ops = {
         "__add__": _ADD_TYPES,
@@ -456,9 +440,7 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     for valid_combo in allowed:
         ltype, rtype, outtype = valid_combo
-        if np.can_cast(dtype_l.char, ltype) and np.can_cast(
-            dtype_r.char, rtype
-        ):
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(dtype_r.char, rtype):
             return outtype
 
     raise error
@@ -518,23 +500,14 @@ def find_common_type(dtypes):
     if len(dtypes) == 1:
         return dtypes.pop()
 
-    if any(
-        isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
-    ):
+    if any(isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes):
         if all(cudf.api.types.is_numeric_dtype(dtype) for dtype in dtypes):
             return _find_common_type_decimal(
-                [
-                    dtype
-                    for dtype in dtypes
-                    if cudf.api.types.is_decimal_dtype(dtype)
-                ]
+                [dtype for dtype in dtypes if cudf.api.types.is_decimal_dtype(dtype)]
             )
         else:
             return cudf.dtype("O")
-    elif any(
-        isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
-        for dtype in dtypes
-    ):
+    elif any(isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)) for dtype in dtypes):
         # TODO: As list dtypes allow casting
         # to identical types, improve this logic of returning a
         # common dtype, for example:

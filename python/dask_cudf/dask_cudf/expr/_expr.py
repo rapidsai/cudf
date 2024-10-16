@@ -112,9 +112,7 @@ class RenameAxisCudf(RenameAxis):
         if index != no_default:
             df.index.name = index
             return df
-        raise NotImplementedError(
-            "Only `index` is supported for the cudf backend"
-        )
+        raise NotImplementedError("Only `index` is supported for the cudf backend")
 
 
 class ToCudfBackend(Elemwise):
@@ -132,9 +130,7 @@ class ToCudfBackend(Elemwise):
         return to_cudf_dispatch(df, **options)
 
     def _simplify_down(self):
-        if isinstance(
-            self.frame._meta, (cudf.DataFrame, cudf.Series, cudf.Index)
-        ):
+        if isinstance(self.frame._meta, (cudf.DataFrame, cudf.Series, cudf.Index)):
             # We already have cudf data
             return self.frame
 

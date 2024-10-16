@@ -60,15 +60,11 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None):
         # Recurse over the public API of modules (objects defined in the
         # module's __all__)
         if inspect.ismodule(member):
-            yield from _find_doctests_in_obj(
-                member, finder, criteria=_name_in_all
-            )
+            yield from _find_doctests_in_obj(member, finder, criteria=_name_in_all)
         # Recurse over the public API of classes (attributes not prefixed with
         # an underscore)
         if inspect.isclass(member):
-            yield from _find_doctests_in_obj(
-                member, finder, criteria=_is_public_name
-            )
+            yield from _find_doctests_in_obj(member, finder, criteria=_is_public_name)
 
 
 class TestDoctests:

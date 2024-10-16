@@ -63,9 +63,7 @@ def test_interpolate_series(data, method, axis):
     assert_eq(expect, got, check_dtype=psr.dtype != "object")
 
 
-@pytest.mark.parametrize(
-    "data,index", [([2.0, None, 4.0, None, 2.0], [1, 2, 3, 2, 1])]
-)
+@pytest.mark.parametrize("data,index", [([2.0, None, 4.0, None, 2.0], [1, 2, 3, 2, 1])])
 def test_interpolate_series_unsorted_index(data, index):
     gsr = cudf.Series(data, index=index)
     psr = gsr.to_pandas()

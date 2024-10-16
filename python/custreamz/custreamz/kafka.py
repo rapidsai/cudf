@@ -128,8 +128,7 @@ class Consumer(CudfKafkaClient):
 
         if topic is None:
             raise ValueError(
-                "ERROR: You must specify the topic "
-                "that you want to consume from"
+                "ERROR: You must specify the topic " "that you want to consume from"
             )
 
         kafka_datasource = KafkaDatasource(

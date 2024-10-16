@@ -163,8 +163,7 @@ def _external_only_api(func, alternative=""):
         lineno = pre_frame.lineno
         if _cudf_root in fn and _tests_root not in fn:
             raise RuntimeError(
-                f"External-only API called in {fn} at line {lineno}. "
-                f"{alternative}"
+                f"External-only API called in {fn} at line {lineno}. " f"{alternative}"
             )
         return func(*args, **kwargs)
 
@@ -226,9 +225,7 @@ class GetAttrGetItemMixin:
         try:
             return self[key]
         except KeyError:
-            raise AttributeError(
-                f"{type(self).__name__} object has no attribute {key}"
-            )
+            raise AttributeError(f"{type(self).__name__} object has no attribute {key}")
 
 
 class NotIterable:
@@ -371,9 +368,7 @@ def _is_same_name(left_name, right_name):
                     right_name, decimal.Decimal
                 ):
                     return left_name.is_nan() and right_name.is_nan()
-                if isinstance(left_name, float) and isinstance(
-                    right_name, float
-                ):
+                if isinstance(left_name, float) and isinstance(right_name, float):
                     return np.isnan(left_name) and np.isnan(right_name)
                 if isinstance(left_name, np.datetime64) and isinstance(
                     right_name, np.datetime64

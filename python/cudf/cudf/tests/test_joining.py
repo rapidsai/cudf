@@ -70,15 +70,11 @@ def assert_join_results_equal(expect, got, how, **kwargs):
             **kwargs,
         )
     elif isinstance(expect, (pd.DataFrame, cudf.DataFrame)):
-        if not len(
-            expect.columns
-        ):  # can't sort_values() on a df without columns
+        if not len(expect.columns):  # can't sort_values() on a df without columns
             return assert_eq(expect, got, **kwargs)
 
         assert_eq(
-            expect.sort_values(expect.columns.to_list()).reset_index(
-                drop=True
-            ),
+            expect.sort_values(expect.columns.to_list()).reset_index(drop=True),
             got.sort_values(got.columns.to_list()).reset_index(drop=True),
             **kwargs,
         )
@@ -150,9 +146,7 @@ def _check_series(expect, got):
     nanfilled_equal = np.all(
         expect.fillna(magic).values == got.fillna(magic).to_numpy()
     )
-    msg = "direct_equal={}, nanfilled_equal={}".format(
-        direct_equal, nanfilled_equal
-    )
+    msg = "direct_equal={}, nanfilled_equal={}".format(direct_equal, nanfilled_equal)
     assert direct_equal or nanfilled_equal, msg
 
 
@@ -167,9 +161,7 @@ def test_dataframe_join_suffix():
 
     left = df.set_index("a")
     right = df.set_index("c")
-    msg = (
-        "there are overlapping columns but lsuffix and rsuffix are not defined"
-    )
+    msg = "there are overlapping columns but lsuffix and rsuffix are not defined"
     with pytest.raises(ValueError, match=msg):
         left.join(right)
 
@@ -245,9 +237,7 @@ def test_dataframe_join_mismatch_cats(how):
             "data_col_left": [10, 20, 30, 40, 50],
         }
     )
-    pdf2 = pd.DataFrame(
-        {"join_col": ["c", "e", "f"], "data_col_right": [6, 7, 8]}
-    )
+    pdf2 = pd.DataFrame({"join_col": ["c", "e", "f"], "data_col_right": [6, 7, 8]})
 
     pdf1["join_col"] = pdf1["join_col"].astype("category")
     pdf2["join_col"] = pdf2["join_col"].astype("category")
@@ -316,9 +306,7 @@ def test_dataframe_merge_on(on):
 
     for col in list(pddf_joined.columns):
         if col.count("_y") > 0:
-            join_result[col] = (
-                join_result[col].astype(np.float64).fillna(np.nan)
-            )
+            join_result[col] = join_result[col].astype(np.float64).fillna(np.nan)
             join_result_cudf[col] = (
                 join_result_cudf[col].astype(np.float64).fillna(np.nan)
             )
@@ -330,9 +318,9 @@ def test_dataframe_merge_on(on):
         .reset_index(drop=True)
     )
 
-    pdf_result = pddf_joined.sort_values(
-        list(pddf_joined.columns)
-    ).reset_index(drop=True)
+    pdf_result = pddf_joined.sort_values(list(pddf_joined.columns)).reset_index(
+        drop=True
+    )
 
     assert_join_results_equal(cdf_result, pdf_result, how="left")
 
@@ -475,9 +463,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
             match="No common columns to perform merge on",
         ):
             pdf_left.merge(pdf_right)
-        with pytest.raises(
-            ValueError, match="No common columns to perform merge on"
-        ):
+        with pytest.raises(ValueError, match="No common columns to perform merge on"):
             gdf_left.merge(gdf_right)
     elif not [value for value in pdf_left if value in pdf_right]:
         with pytest.raises(
@@ -485,9 +471,7 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
             match="No common columns to perform merge on",
         ):
             pdf_left.merge(pdf_right)
-        with pytest.raises(
-            ValueError, match="No common columns to perform merge on"
-        ):
+        with pytest.raises(ValueError, match="No common columns to perform merge on"):
             gdf_left.merge(gdf_right)
     else:
         pdf_result = pdf_left.merge(pdf_right, how=how)
@@ -547,9 +531,7 @@ def test_empty_joins(how, left_empty, right_empty):
 
 def test_merge_left_index_zero():
     left = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
-    right = pd.DataFrame(
-        {"y": [10, 20, 30, 6, 5, 4]}, index=[0, 1, 2, 3, 4, 6]
-    )
+    right = pd.DataFrame({"y": [10, 20, 30, 6, 5, 4]}, index=[0, 1, 2, 3, 4, 6])
     gleft = cudf.from_pandas(left)
     gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, left_on="x", right_on="y")
@@ -569,9 +551,7 @@ def test_merge_left_index_zero():
 )
 def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
     left = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[0, 1, 2, 3, 4, 5])
-    right = pd.DataFrame(
-        {"y": [10, 20, 30, 6, 5, 4]}, index=[0, 1, 2, 3, 4, 6]
-    )
+    right = pd.DataFrame({"y": [10, 20, 30, 6, 5, 4]}, index=[0, 1, 2, 3, 4, 6])
     gleft = cudf.from_pandas(left)
     gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
@@ -590,9 +570,7 @@ def test_merge_left_right_index_left_right_on_zero_kwargs(kwargs):
 )
 def test_merge_left_right_index_left_right_on_kwargs(kwargs):
     left = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6]}, index=[1, 2, 3, 4, 5, 6])
-    right = pd.DataFrame(
-        {"y": [10, 20, 30, 6, 5, 4]}, index=[1, 2, 3, 4, 5, 7]
-    )
+    right = pd.DataFrame({"y": [10, 20, 30, 6, 5, 4]}, index=[1, 2, 3, 4, 5, 7])
     gleft = cudf.from_pandas(left)
     gright = cudf.from_pandas(right)
     pd_merge = left.merge(right, **kwargs)
@@ -683,9 +661,7 @@ def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
         assert gd_merge.empty
 
 
-@pytest.mark.parametrize(
-    "hows", [{"how": "inner"}, {"how": "left"}, {"how": "outer"}]
-)
+@pytest.mark.parametrize("hows", [{"how": "inner"}, {"how": "left"}, {"how": "outer"}])
 @pytest.mark.parametrize(
     "ons",
     [
@@ -724,12 +700,8 @@ def test_merge_sort(ons, hows):
     gd_merge = gd_merge.drop(kwargs["on"], axis=1)
     if not pd_merge.empty:
         # check to make sure the non join key columns are the same
-        pd_merge = pd_merge.sort_values(list(pd_merge.columns)).reset_index(
-            drop=True
-        )
-        gd_merge = gd_merge.sort_values(list(gd_merge.columns)).reset_index(
-            drop=True
-        )
+        pd_merge = pd_merge.sort_values(list(pd_merge.columns)).reset_index(drop=True)
+        gd_merge = gd_merge.sort_values(list(gd_merge.columns)).reset_index(drop=True)
 
     assert_join_results_equal(pd_merge, gd_merge, how="left")
 
@@ -847,9 +819,7 @@ def test_join_empty_table_dtype():
         ),
         (
             pd.Series(["dog", "cat", "fish", "bug"] * 2).astype("category"),
-            pd.Series(["bird", "cat", "mouse", "snake"] * 2).astype(
-                "category"
-            ),
+            pd.Series(["bird", "cat", "mouse", "snake"] * 2).astype("category"),
         ),
     ],
 )
@@ -1084,9 +1054,7 @@ def test_typecast_on_join_no_float_round():
     exp_By = ["a", "b", "c", None, None]
     exp_join_col = cudf.Series(exp_join_data, dtype="float32")
 
-    expect = cudf.DataFrame(
-        {"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By}
-    )
+    expect = cudf.DataFrame({"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By})
 
     got = gdf_l.merge(gdf_r, on="join_col", how="left")
 
@@ -1146,12 +1114,8 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
 def test_decimal_typecast_inner(dtype):
     other_data = ["a", "b", "c", "d", "e"]
 
-    join_data_l = cudf.Series(["1.6", "9.5", "7.2", "8.7", "2.3"]).astype(
-        dtype
-    )
-    join_data_r = cudf.Series(["1.6", "9.5", "7.2", "4.5", "2.3"]).astype(
-        dtype
-    )
+    join_data_l = cudf.Series(["1.6", "9.5", "7.2", "8.7", "2.3"]).astype(dtype)
+    join_data_r = cudf.Series(["1.6", "9.5", "7.2", "4.5", "2.3"]).astype(dtype)
 
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
@@ -1187,12 +1151,8 @@ def test_decimal_typecast_inner(dtype):
 def test_decimal_typecast_left(dtype):
     other_data = ["a", "b", "c", "d"]
 
-    join_data_l = cudf.Series(["95.05", "384.26", "74.22", "1456.94"]).astype(
-        dtype
-    )
-    join_data_r = cudf.Series(
-        ["95.05", "62.4056", "74.22", "1456.9472"]
-    ).astype(dtype)
+    join_data_l = cudf.Series(["95.05", "384.26", "74.22", "1456.94"]).astype(dtype)
+    join_data_r = cudf.Series(["95.05", "62.4056", "74.22", "1456.9472"]).astype(dtype)
 
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
@@ -1228,12 +1188,8 @@ def test_decimal_typecast_left(dtype):
 )
 def test_decimal_typecast_outer(dtype):
     other_data = ["a", "b", "c"]
-    join_data_l = cudf.Series(["741.248", "1029.528", "3627.292"]).astype(
-        dtype
-    )
-    join_data_r = cudf.Series(["9284.103", "1029.528", "948.637"]).astype(
-        dtype
-    )
+    join_data_l = cudf.Series(["741.248", "1029.528", "3627.292"]).astype(dtype)
+    join_data_r = cudf.Series(["9284.103", "1029.528", "948.637"]).astype(dtype)
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
     exp_join_data = ["9284.103", "948.637", "1029.528", "741.248", "3627.292"]
@@ -1264,12 +1220,8 @@ def test_decimal_typecast_outer(dtype):
 def test_mixed_decimal_typecast(dtype_l, dtype_r):
     other_data = ["a", "b", "c", "d"]
 
-    join_data_l = cudf.Series(["95.05", "34.6", "74.22", "14.94"]).astype(
-        dtype_r
-    )
-    join_data_r = cudf.Series(["95.05", "62.4056", "74.22", "1.42"]).astype(
-        dtype_l
-    )
+    join_data_l = cudf.Series(["95.05", "34.6", "74.22", "14.94"]).astype(dtype_r)
+    join_data_r = cudf.Series(["95.05", "62.4056", "74.22", "1.42"]).astype(dtype_l)
 
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
@@ -1589,9 +1541,7 @@ def test_index_join(lhs, rhs, how, level):
 
 def test_index_join_corner_cases():
     l_pdf = pd.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
-    r_pdf = pd.DataFrame(
-        {"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]}
-    )
+    r_pdf = pd.DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]})
     l_df = cudf.from_pandas(l_pdf)
     r_df = cudf.from_pandas(r_pdf)
 
@@ -1648,9 +1598,7 @@ def test_index_join_corner_cases():
 
 def test_index_join_exception_cases():
     l_df = cudf.DataFrame({"a": [2, 3, 1, 4], "b": [3, 7, 8, 1]})
-    r_df = cudf.DataFrame(
-        {"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]}
-    )
+    r_df = cudf.DataFrame({"a": [1, 5, 4, 0], "b": [3, 9, 8, 4], "c": [2, 3, 6, 0]})
 
     # Join between two MultiIndex
     lhs = ["a", "b"]
@@ -1792,9 +1740,7 @@ def test_typecast_on_join_indexes_matching_categorical():
         cudf.DataFrame({"b": [2, 3, 4], "c": [4, 5, 6]}),
     ],
 )
-@pytest.mark.parametrize(
-    "how", ["left", "inner", "outer", "leftanti", "leftsemi"]
-)
+@pytest.mark.parametrize("how", ["left", "inner", "outer", "leftanti", "leftsemi"])
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -1824,9 +1770,7 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
 
 
 @pytest.mark.xfail(reason="Cannot sort values of list dtype")
-@pytest.mark.parametrize(
-    "how", ["left", "inner", "right", "leftanti", "leftsemi"]
-)
+@pytest.mark.parametrize("how", ["left", "inner", "right", "leftanti", "leftsemi"])
 def test_merge_with_lists(how):
     pd_left = pd.DataFrame(
         {
@@ -1857,9 +1801,7 @@ def test_join_renamed_index():
     ).set_index([0, 1])
     df.index.names = ["a", "b"]  # doesn't actually change df._index._data
 
-    expect = df.to_pandas().merge(
-        df.to_pandas(), left_index=True, right_index=True
-    )
+    expect = df.to_pandas().merge(df.to_pandas(), left_index=True, right_index=True)
     got = df.merge(df, left_index=True, right_index=True, how="inner")
     assert_join_results_equal(expect, got, how="inner")
 
@@ -2120,9 +2062,7 @@ def test_string_join_values_nulls():
 )
 def test_merge_mixed_index_columns(left_on, right_on):
     left = pd.DataFrame({"a": [1, 2, 1, 2], "b": [2, 3, 3, 4]}).set_index("a")
-    right = pd.DataFrame({"a": [1, 2, 1, 3], "b": [2, 30, 3, 4]}).set_index(
-        "a"
-    )
+    right = pd.DataFrame({"a": [1, 2, 1, 3], "b": [2, 30, 3, 4]}).set_index("a")
 
     left["c"] = 10
 
@@ -2167,12 +2107,8 @@ def test_join_on_index_with_duplicate_names():
     # overall, we *should* be able to join on them:
     lhs = pd.DataFrame({"a": [1, 2, 3]})
     rhs = pd.DataFrame({"b": [1, 2, 3]})
-    lhs.index = pd.MultiIndex.from_tuples(
-        [(1, 1), (1, 2), (2, 1)], names=["x", "x"]
-    )
-    rhs.index = pd.MultiIndex.from_tuples(
-        [(1, 1), (1, 3), (2, 1)], names=["x", "x"]
-    )
+    lhs.index = pd.MultiIndex.from_tuples([(1, 1), (1, 2), (2, 1)], names=["x", "x"])
+    rhs.index = pd.MultiIndex.from_tuples([(1, 1), (1, 3), (2, 1)], names=["x", "x"])
     expect = lhs.join(rhs, how="inner")
 
     lhs = cudf.from_pandas(lhs)
@@ -2186,9 +2122,7 @@ def test_join_redundant_params():
     lhs = cudf.DataFrame(
         {"a": [1, 2, 3], "c": [2, 3, 4]}, index=cudf.Index([0, 1, 2], name="c")
     )
-    rhs = cudf.DataFrame(
-        {"b": [1, 2, 3]}, index=cudf.Index([0, 1, 2], name="a")
-    )
+    rhs = cudf.DataFrame({"b": [1, 2, 3]}, index=cudf.Index([0, 1, 2], name="a"))
     with pytest.raises(ValueError):
         lhs.merge(rhs, on="a", left_index=True)
     with pytest.raises(ValueError):
@@ -2201,11 +2135,7 @@ def test_join_redundant_params():
 
 def test_join_multiindex_index():
     # test joining a MultiIndex with an Index with overlapping name
-    lhs = (
-        cudf.DataFrame({"a": [2, 3, 1], "b": [3, 4, 2]})
-        .set_index(["a", "b"])
-        .index
-    )
+    lhs = cudf.DataFrame({"a": [2, 3, 1], "b": [3, 4, 2]}).set_index(["a", "b"]).index
     rhs = cudf.DataFrame({"a": [1, 4, 3]}).set_index("a").index
     expect = lhs.to_pandas().join(rhs.to_pandas(), how="inner")
     got = lhs.join(rhs, how="inner")

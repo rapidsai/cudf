@@ -65,10 +65,7 @@ def pytest_collection_modifyitems(
     for item in items:
         if current_pass == "gold" and "xfail_gold" in item.keywords:
             swap_xfail(item, "xfail_gold")
-        elif (
-            current_pass == "cudf_pandas"
-            and "xfail_cudf_pandas" in item.keywords
-        ):
+        elif current_pass == "cudf_pandas" and "xfail_cudf_pandas" in item.keywords:
             swap_xfail(item, "xfail_cudf_pandas")
         elif current_pass == "compare" and "xfail_compare" in item.keywords:
             swap_xfail(item, "xfail_compare")
@@ -132,9 +129,7 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
         # result
         testfunction = pyfuncitem.obj
         funcargs = pyfuncitem.funcargs
-        testargs = {
-            arg: funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames
-        }
+        testargs = {arg: funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames}
         result = testfunction(**testargs)
         # Tuple-based key-value pairs, key is the node-id
         try:

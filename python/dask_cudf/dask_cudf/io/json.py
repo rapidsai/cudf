@@ -44,9 +44,7 @@ def _read_json_partition(
         dfs = []
         for i, source in enumerate(sources):
             df = cudf.read_json(source, **kwargs)
-            df[include_path_column] = as_column(
-                converted_paths[i], length=len(df)
-            )
+            df[include_path_column] = as_column(converted_paths[i], length=len(df))
             dfs.append(df)
         return cudf.concat(dfs)
     else:
@@ -123,9 +121,7 @@ def read_json(
     if lines is None:
         lines = orient == "records"
     if orient != "records" and lines:
-        raise ValueError(
-            'Line-delimited JSON is only available with orient="records".'
-        )
+        raise ValueError('Line-delimited JSON is only available with orient="records".')
     if blocksize and (orient != "records" or not lines):
         raise ValueError(
             "JSON file chunking only allowed for JSON-lines"
@@ -159,8 +155,7 @@ def read_json(
                 )[1]
                 offsets = np.concatenate([[0], counts.cumsum()])
                 inputs = [
-                    paths[offsets[i] : offsets[i + 1]]
-                    for i in range(len(offsets) - 1)
+                    paths[offsets[i] : offsets[i + 1]] for i in range(len(offsets) - 1)
                 ]
 
     if inputs:

@@ -164,8 +164,7 @@ else:
 def test_join_ordering_pandas_compat(request, left, right, sort, how):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
-            and how == "right",
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION and how == "right",
             reason="TODO: Result ording of suffix'ed columns is incorrect",
         )
     )
@@ -246,9 +245,7 @@ def test_merge_combinations(
             expected = expected.sort_values("key")
         if not other_unique:
             other_value_counts = other["key"].value_counts()
-            repeats = other_value_counts.reindex(
-                expected["key"].values, fill_value=1
-            )
+            repeats = other_value_counts.reindex(expected["key"].values, fill_value=1)
             repeats = repeats.astype(np.intp)
             expected = expected["key"].repeat(repeats.values)
             expected = expected.to_frame()

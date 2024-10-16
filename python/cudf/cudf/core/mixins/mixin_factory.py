@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import inspect
 
@@ -59,9 +59,7 @@ class Operation:
         retfunc.__annotations__.pop("op", None)
         retfunc_params = [
             v
-            for k, v in inspect.signature(
-                self._base_operation
-            ).parameters.items()
+            for k, v in inspect.signature(self._base_operation).parameters.items()
             if k != "op"
         ]
         retfunc.__signature__ = inspect.Signature(retfunc_params)
@@ -230,12 +228,10 @@ def _create_delegating_mixin(
 
             base_operation = getattr(cls, base_operation_name)
             for operation in valid_operations:
-                if _should_define_operation(
-                    cls, operation, base_operation_name
-                ):
-                    docstring_format_args = getattr(
-                        cls, docstring_attr, {}
-                    ).get(operation, {})
+                if _should_define_operation(cls, operation, base_operation_name):
+                    docstring_format_args = getattr(cls, docstring_attr, {}).get(
+                        operation, {}
+                    )
                     op_attr = Operation(
                         operation, docstring_format_args, base_operation
                     )

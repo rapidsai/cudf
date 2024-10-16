@@ -60,9 +60,7 @@ def test_quantile(col_data, interp_opt, q, exact):
     ordered_indices = plc.interop.from_arrow(
         pc.cast(pc.sort_indices(pa_col_data), pa.int32())
     )
-    res = plc.quantiles.quantile(
-        plc_col_data, q, interp_opt, ordered_indices, exact
-    )
+    res = plc.quantiles.quantile(plc_col_data, q, interp_opt, ordered_indices, exact)
 
     pa_interp_opt = interp_mapping[interp_opt]
 
@@ -112,15 +110,10 @@ def _pyarrow_quantiles(
                     pa_tbl_data.columns
                 )
             if column_order is None:
-                column_order = [plc.types.Order.ASCENDING] * len(
-                    pa_tbl_data.columns
-                )
+                column_order = [plc.types.Order.ASCENDING] * len(pa_tbl_data.columns)
 
             if not all(
-                [
-                    null_prec == null_precedence[0]
-                    for null_prec in null_precedence
-                ]
+                [null_prec == null_precedence[0] for null_prec in null_precedence]
             ):
                 raise NotImplementedError(
                     "Having varying null precendences is not implemented!"
@@ -129,9 +122,7 @@ def _pyarrow_quantiles(
             pa_tbl_data = pa_tbl_data.sort_by(
                 [
                     (name, order_mapper[order])
-                    for name, order in zip(
-                        pa_tbl_data.column_names, column_order
-                    )
+                    for name, order in zip(pa_tbl_data.column_names, column_order)
                 ],
                 null_placement="at_start"
                 if null_precedence[0] == plc.types.NullOrder.BEFORE
@@ -197,9 +188,7 @@ def test_quantiles(
 )
 def test_quantiles_invalid_interp(plc_tbl_data, invalid_interp):
     with pytest.raises(ValueError):
-        plc.quantiles.quantiles(
-            plc_tbl_data, q=np.array([0.1]), interp=invalid_interp
-        )
+        plc.quantiles.quantiles(plc_tbl_data, q=np.array([0.1]), interp=invalid_interp)
 
 
 @pytest.mark.parametrize(

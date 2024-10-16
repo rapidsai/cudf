@@ -26,9 +26,7 @@ Dtype = Union["ExtensionDtype", str, np.dtype]
 DtypeObj = Union["ExtensionDtype", np.dtype]
 
 # scalars
-DatetimeLikeScalar = TypeVar(
-    "DatetimeLikeScalar", Period, Timestamp, Timedelta
-)
+DatetimeLikeScalar = TypeVar("DatetimeLikeScalar", Period, Timestamp, Timedelta)
 ScalarLike = Any
 
 # columns
@@ -43,6 +41,4 @@ SeriesOrSingleColumnIndex = Union["cudf.Series", "cudf.core.index.Index"]
 
 # Groupby aggregation
 AggType = Union[str, Callable]
-MultiColumnAggType = Union[
-    AggType, Iterable[AggType], Dict[Any, Iterable[AggType]]
-]
+MultiColumnAggType = Union[AggType, Iterable[AggType], Dict[Any, Iterable[AggType]]]

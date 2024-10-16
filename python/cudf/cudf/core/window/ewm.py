@@ -111,9 +111,7 @@ class ExponentialMovingWindow(_RollingBase):
         method: Literal["single", "table"] = "single",
     ):
         if min_periods != 0:
-            raise NotImplementedError(
-                "min_periods is currently not supported."
-            )
+            raise NotImplementedError("min_periods is currently not supported.")
         if ignore_na is not False:
             raise NotImplementedError("ignore_na is currently not supported.")
         if axis != 0:
@@ -139,16 +137,12 @@ class ExponentialMovingWindow(_RollingBase):
         """
         raise NotImplementedError("online is currently not supported.")
 
-    def mean(
-        self, numeric_only: bool = False, engine=None, engine_kwargs=None
-    ):
+    def mean(self, numeric_only: bool = False, engine=None, engine_kwargs=None):
         """
         Calculate the ewm (exponential weighted moment) mean.
         """
         if numeric_only is not False:
-            raise NotImplementedError(
-                "numeric_only is currently not supported."
-            )
+            raise NotImplementedError("numeric_only is currently not supported.")
         if engine is not None:
             raise NotImplementedError(
                 "engine is non-functional and added for compatibility with pandas."
@@ -168,9 +162,7 @@ class ExponentialMovingWindow(_RollingBase):
     def std(self, bias: bool = False, numeric_only: bool = False):
         raise NotImplementedError("std not yet supported.")
 
-    def corr(
-        self, other, pairwise: bool | None = None, numeric_only: bool = False
-    ):
+    def corr(self, other, pairwise: bool | None = None, numeric_only: bool = False):
         raise NotImplementedError("corr not yet supported.")
 
     def cov(
@@ -182,9 +174,7 @@ class ExponentialMovingWindow(_RollingBase):
     ):
         raise NotImplementedError("cov not yet supported.")
 
-    def _apply_agg_column(
-        self, source_column: ColumnBase, agg_name: str
-    ) -> ColumnBase:
+    def _apply_agg_column(self, source_column: ColumnBase, agg_name: str) -> ColumnBase:
         if not is_numeric_dtype(source_column.dtype):
             raise TypeError("No numeric types to aggregate")
 
@@ -212,9 +202,7 @@ def get_center_of_mass(
 ) -> float:
     valid_count = count_not_none(comass, span, halflife, alpha)
     if valid_count > 1:
-        raise ValueError(
-            "comass, span, halflife, and alpha are mutually exclusive"
-        )
+        raise ValueError("comass, span, halflife, and alpha are mutually exclusive")
 
     # Convert to center of mass; domain checks ensure 0 < alpha <= 1
     if comass is not None:

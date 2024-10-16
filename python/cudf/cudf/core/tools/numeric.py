@@ -96,9 +96,7 @@ def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
         input is received, regardless of ``errors`` parameter.
     """
     if dtype_backend is not None:
-        raise NotImplementedError(
-            "dtype_backend is not currently implemented."
-        )
+        raise NotImplementedError("dtype_backend is not currently implemented.")
     if errors not in {"raise", "ignore", "coerce"}:
         raise ValueError("invalid error value specified")
     elif errors == "ignore":
@@ -112,9 +110,7 @@ def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
     if downcast not in {None, "integer", "signed", "unsigned", "float"}:
         raise ValueError("invalid downcasting method provided")
 
-    if not can_convert_to_column(arg) or (
-        hasattr(arg, "ndim") and arg.ndim > 1
-    ):
+    if not can_convert_to_column(arg) or (hasattr(arg, "ndim") and arg.ndim > 1):
         raise ValueError("arg must be column convertible")
 
     col = as_column(arg)

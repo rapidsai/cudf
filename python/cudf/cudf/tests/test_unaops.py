@@ -121,8 +121,7 @@ def test_scalar_no_negative_bools():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Boolean scalars in cuDF do not "
-            "support negation, use logical not"
+            "Boolean scalars in cuDF do not " "support negation, use logical not"
         ),
     ):
         -x

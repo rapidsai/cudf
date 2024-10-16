@@ -103,9 +103,7 @@ class _Resampler(GroupBy):
     @classmethod
     def deserialize(cls, header, frames):
         obj_type = pickle.loads(header["obj_type"])
-        obj = obj_type.deserialize(
-            header["obj"], frames[: header["num_obj_frames"]]
-        )
+        obj = obj_type.deserialize(header["obj"], frames[: header["num_obj_frames"]])
         grouping = _ResampleGrouping.deserialize(
             header["grouping"], frames[header["num_obj_frames"] :]
         )
@@ -190,9 +188,7 @@ class _ResampleGrouping(_Grouping):
                 "Resampling by DateOffset objects is not yet supported."
             )
         if not isinstance(freq, str):
-            raise TypeError(
-                f"Unsupported type for freq: {type(freq).__name__}"
-            )
+            raise TypeError(f"Unsupported type for freq: {type(freq).__name__}")
         # convert freq to a pd.DateOffset:
         offset = pd.tseries.frequencies.to_offset(freq)
 
@@ -291,9 +287,9 @@ class _ResampleGrouping(_Grouping):
 
         # replace self._key_columns with the binned key column:
         self._key_columns = [
-            cast_bin_labels._gather(
-                bin_numbers, check_bounds=False
-            )._column.astype(result_type)
+            cast_bin_labels._gather(bin_numbers, check_bounds=False)._column.astype(
+                result_type
+            )
         ]
 
 
@@ -340,9 +336,7 @@ def _get_timestamp_range_edges(
         if isinstance(origin, pd.Timestamp) and (origin.tz is None) != (
             index_tz is None
         ):
-            raise ValueError(
-                "The origin must have the same timezone as the index."
-            )
+            raise ValueError("The origin must have the same timezone as the index.")
         elif origin == "epoch":
             # set the epoch based on the timezone to have similar bins results
             # when resampling on the same kind of indexes on different

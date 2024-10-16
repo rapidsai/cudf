@@ -104,10 +104,7 @@ def _generate_column(column_params, num_rows):
         # Construct set of values to sample from where
         # set size = cardinality
 
-        if (
-            isinstance(column_params.dtype, str)
-            and column_params.dtype == "category"
-        ):
+        if isinstance(column_params.dtype, str) and column_params.dtype == "category":
             vals = pa.array(
                 column_params.generator,
                 size=column_params.cardinality,
@@ -115,9 +112,7 @@ def _generate_column(column_params, num_rows):
             )
             return pa.DictionaryArray.from_arrays(
                 dictionary=vals,
-                indices=np.random.randint(
-                    low=0, high=len(vals), size=num_rows
-                ),
+                indices=np.random.randint(low=0, high=len(vals), size=num_rows),
                 mask=np.random.choice(
                     [True, False],
                     size=num_rows,
@@ -178,9 +173,7 @@ def _generate_column(column_params, num_rows):
             else None,
             size=num_rows,
             safe=False,
-            type=None
-            if isinstance(arrow_type, pa.lib.Decimal128Type)
-            else arrow_type,
+            type=None if isinstance(arrow_type, pa.lib.Decimal128Type) else arrow_type,
         )
         if isinstance(arrow_type, pa.lib.Decimal128Type):
             vals = vals.cast(arrow_type, safe=False)
@@ -242,10 +235,7 @@ def get_dataframe(parameters, use_threads):
     # Get schema for each column
     table_fields = []
     for i, column_params in enumerate(parameters.column_parameters):
-        if (
-            isinstance(column_params.dtype, str)
-            and column_params.dtype == "category"
-        ):
+        if isinstance(column_params.dtype, str) and column_params.dtype == "category":
             arrow_type = pa.dictionary(
                 index_type=pa.int64(),
                 value_type=np_to_pa_dtype(
@@ -280,9 +270,7 @@ def get_dataframe(parameters, use_threads):
     # Generate data
     if not use_threads:
         for i, column_params in enumerate(parameters.column_parameters):
-            column_data[i] = _generate_column(
-                column_params, parameters.num_rows
-            )
+            column_data[i] = _generate_column(column_params, parameters.num_rows)
     else:
         pool = Pool(pa.cpu_count())
         column_data = pool.starmap(
@@ -398,9 +386,7 @@ def rand_dataframe(
                 )
             )
         elif dtype == "decimal64":
-            max_precision = meta.get(
-                "max_precision", cudf.Decimal64Dtype.MAX_PRECISION
-            )
+            max_precision = meta.get("max_precision", cudf.Decimal64Dtype.MAX_PRECISION)
             precision = np.random.randint(1, max_precision)
             scale = np.random.randint(0, precision)
             dtype = cudf.Decimal64Dtype(precision=precision, scale=scale)
@@ -414,9 +400,7 @@ def rand_dataframe(
                 )
             )
         elif dtype == "decimal32":
-            max_precision = meta.get(
-                "max_precision", cudf.Decimal32Dtype.MAX_PRECISION
-            )
+            max_precision = meta.get("max_precision", cudf.Decimal32Dtype.MAX_PRECISION)
             precision = np.random.randint(1, max_precision)
             scale = np.random.randint(0, precision)
             dtype = cudf.Decimal32Dtype(precision=precision, scale=scale)
@@ -684,13 +668,9 @@ def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
             for _ in range(cardinality)
         ]
     elif dtype.kind == "M":
-        values = datetime_generator(dtype=dtype, size=cardinality)().astype(
-            dtype
-        )
+        values = datetime_generator(dtype=dtype, size=cardinality)().astype(dtype)
     elif dtype.kind == "m":
-        values = timedelta_generator(dtype=dtype, size=cardinality)().astype(
-            dtype
-        )
+        values = timedelta_generator(dtype=dtype, size=cardinality)().astype(dtype)
     elif dtype.kind == "b":
         values = boolean_generator(cardinality)().astype(dtype)
     else:

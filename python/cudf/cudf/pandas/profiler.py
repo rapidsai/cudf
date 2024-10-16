@@ -138,16 +138,11 @@ class Profiler:
     def _tracefunc(self, frame, event, arg):
         if event == "line" and frame.f_code.co_filename == self._currfile:
             key = "".join(inspect.stack()[1].code_context)
-            if not any(
-                ignore_word in key for ignore_word in Profiler._IGNORE_LIST
-            ):
+            if not any(ignore_word in key for ignore_word in Profiler._IGNORE_LIST):
                 self._currkey = (frame.f_lineno, self._currfile, key)
                 self._results.setdefault(self._currkey, {})
                 self._timer[self._currkey] = time.perf_counter()
-        elif (
-            event == "call"
-            and frame.f_code.co_name == "_fast_slow_function_call"
-        ):
+        elif event == "call" and frame.f_code.co_name == "_fast_slow_function_call":
             if self._currkey is not None:
                 self._timer[self._currkey] = time.perf_counter()
 
@@ -163,23 +158,18 @@ class Profiler:
             ):
                 func_name = self.get_namespaced_function_name(func_obj)
                 self._call_stack.append((func_name, time.perf_counter()))
-        elif (
-            event == "return"
-            and frame.f_code.co_name == "_fast_slow_function_call"
-        ):
+        elif event == "return" and frame.f_code.co_name == "_fast_slow_function_call":
             if self._currkey is not None and arg is not None:
                 if arg[1]:  # fast
                     run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey]["gpu_time"] = (
-                        run_time
-                        + self._results[self._currkey].get("gpu_time", 0)
-                    )
+                    self._results[self._currkey]["gpu_time"] = run_time + self._results[
+                        self._currkey
+                    ].get("gpu_time", 0)
                 else:
                     run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey]["cpu_time"] = (
-                        run_time
-                        + self._results[self._currkey].get("cpu_time", 0)
-                    )
+                    self._results[self._currkey]["cpu_time"] = run_time + self._results[
+                        self._currkey
+                    ].get("cpu_time", 0)
 
             frame_locals = inspect.getargvalues(frame).locals
             if (

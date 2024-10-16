@@ -125,9 +125,7 @@ class Merge:
         self.sort = sort or (
             cudf.get_option("mode.pandas_compatible") and how == "outer"
         )
-        self.preserve_key_order = cudf.get_option(
-            "mode.pandas_compatible"
-        ) and how in {
+        self.preserve_key_order = cudf.get_option("mode.pandas_compatible") and how in {
             "inner",
             "outer",
             "left",
@@ -139,20 +137,10 @@ class Merge:
         # don't have any other args, so we can apply it directly to left_on and
         # right_on.
         self._using_left_index = bool(left_index)
-        left_on = (
-            lhs.index._column_names
-            if left_index
-            else left_on
-            if left_on
-            else on
-        )
+        left_on = lhs.index._column_names if left_index else left_on if left_on else on
         self._using_right_index = bool(right_index)
         right_on = (
-            rhs.index._column_names
-            if right_index
-            else right_on
-            if right_on
-            else on
+            rhs.index._column_names if right_index else right_on if right_on else on
         )
 
         if left_on or right_on:
@@ -196,8 +184,7 @@ class Merge:
                 for lkey, rkey in zip(self._left_keys, self._right_keys)
                 if lkey.name == rkey.name
                 and not (
-                    isinstance(lkey, _IndexIndexer)
-                    or isinstance(rkey, _IndexIndexer)
+                    isinstance(lkey, _IndexIndexer) or isinstance(rkey, _IndexIndexer)
                 )
             }
         )
@@ -235,11 +222,7 @@ class Merge:
         key_order = list(
             itertools.chain.from_iterable(
                 libcudf.copying.gather(
-                    [
-                        cudf.core.column.as_column(
-                            range(n), dtype=size_type_dtype
-                        )
-                    ],
+                    [cudf.core.column.as_column(range(n), dtype=size_type_dtype)],
                     map_,
                     nullify=null,
                 )
@@ -279,17 +262,13 @@ class Merge:
             left_key.set(self.lhs, lcol_casted)
             right_key.set(self.rhs, rcol_casted)
 
-        left_rows, right_rows = self._gather_maps(
-            left_join_cols, right_join_cols
-        )
+        left_rows, right_rows = self._gather_maps(left_join_cols, right_join_cols)
         gather_kwargs = {
             "keep_index": self._using_left_index or self._using_right_index,
         }
         left_result = (
             self.lhs._gather(
-                GatherMap.from_column_unchecked(
-                    left_rows, len(self.lhs), nullify=True
-                ),
+                GatherMap.from_column_unchecked(left_rows, len(self.lhs), nullify=True),
                 **gather_kwargs,
             )
             if left_rows is not None
@@ -315,9 +294,7 @@ class Merge:
             result = self._sort_result(result)
         return result
 
-    def _merge_results(
-        self, left_result: cudf.DataFrame, right_result: cudf.DataFrame
-    ):
+    def _merge_results(self, left_result: cudf.DataFrame, right_result: cudf.DataFrame):
         # Merge the DataFrames `left_result` and `right_result` into a single
         # `DataFrame`, suffixing column names if necessary.
 
@@ -338,9 +315,7 @@ class Merge:
         # All columns from the left table make it into the output. Non-key
         # columns that share a name with a column in the right table are
         # suffixed with the provided suffix.
-        common_names = set(left_result._column_names) & set(
-            right_result._column_names
-        )
+        common_names = set(left_result._column_names) & set(right_result._column_names)
         cols_to_suffix = common_names - self._key_columns_with_same_name
         data = {
             (f"{name}{self.lsuffix}" if name in cols_to_suffix else name): col
@@ -363,9 +338,7 @@ class Merge:
         # - either one of `lhs` or `rhs` have a MultiIndex columns,
         #   and the other is empty (i.e., no columns)
         if self.lhs._data and self.rhs._data:
-            multiindex_columns = (
-                self.lhs._data.multiindex and self.rhs._data.multiindex
-            )
+            multiindex_columns = self.lhs._data.multiindex and self.rhs._data.multiindex
         elif self.lhs._data:
             multiindex_columns = self.lhs._data.multiindex
         elif self.rhs._data:
@@ -385,9 +358,7 @@ class Merge:
 
         # Construct result from data and index:
         return (
-            left_result._data.__class__(
-                data=data, multiindex=multiindex_columns
-            ),
+            left_result._data.__class__(data=data, multiindex=multiindex_columns),
             index,
         )
 

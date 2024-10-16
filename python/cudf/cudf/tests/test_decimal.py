@@ -102,9 +102,7 @@ def test_typecast_from_float_to_decimal(request, data, from_dtype, to_dtype):
     )
     got = data.astype(from_dtype)
 
-    pa_arr = got.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale)
-    )
+    pa_arr = got.to_arrow().cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     got = got.astype(to_dtype)
@@ -346,15 +344,9 @@ def test_series_construction_with_nulls(input_obj):
 @pytest.mark.parametrize(
     "data",
     [
+        {"a": _decimal_series(["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0))},
         {
-            "a": _decimal_series(
-                ["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0)
-            )
-        },
-        {
-            "a": _decimal_series(
-                ["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0)
-            ),
+            "a": _decimal_series(["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0)),
             "b": _decimal_series(
                 ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
             ),
@@ -363,12 +355,8 @@ def test_series_construction_with_nulls(input_obj):
             ),
         },
         {
-            "a": _decimal_series(
-                ["1", None, "3"], dtype=cudf.Decimal64Dtype(1, 0)
-            ),
-            "b": _decimal_series(
-                ["1.0", "2.0", None], dtype=cudf.Decimal64Dtype(2, 1)
-            ),
+            "a": _decimal_series(["1", None, "3"], dtype=cudf.Decimal64Dtype(1, 0)),
+            "b": _decimal_series(["1.0", "2.0", None], dtype=cudf.Decimal64Dtype(2, 1)),
             "c": _decimal_series(
                 [None, "20.2", "30.3"], dtype=cudf.Decimal64Dtype(3, 1)
             ),
@@ -403,7 +391,5 @@ def test_decimal_binop_upcast_operands():
     ser1 = cudf.Series([0.51, 1.51, 2.51]).astype(cudf.Decimal64Dtype(18, 2))
     ser2 = cudf.Series([0.90, 0.96, 0.99]).astype(cudf.Decimal128Dtype(19, 2))
     result = ser1 + ser2
-    expected = cudf.Series([1.41, 2.47, 3.50]).astype(
-        cudf.Decimal128Dtype(20, 2)
-    )
+    expected = cudf.Series([1.41, 2.47, 3.50]).astype(cudf.Decimal128Dtype(20, 2))
     assert_eq(result, expected)

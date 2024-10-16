@@ -36,9 +36,7 @@ def count_failures(log_file_name, pattern):
                 and line["when"] == "call"
                 and line["outcome"] == "failed"
             ):
-                line_module_name = line["location"][0].removeprefix(
-                    PANDAS_TEST_PREFIX
-                )
+                line_module_name = line["location"][0].removeprefix(PANDAS_TEST_PREFIX)
                 if fnmatch(line_module_name, pattern):
                     if "longrepr" in line and line["longrepr"]:
                         if isinstance(line["longrepr"], (tuple, list)):

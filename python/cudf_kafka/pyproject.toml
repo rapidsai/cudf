@@ -32,32 +32,19 @@ test = [
 Homepage = "https://github.com/rapidsai/cudf"
 Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["cudf_kafka"]
 known-third-party = ["dask", "distributed", "dask_cuda", "streamz", "rmm", "cudf", "dask_cudf"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 dask = ["dask", "distributed", "dask_cuda", "streamz"]
 rapids = ["rmm", "cudf", "dask_cudf"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
-
-[tool.ruff.extend-exclude]
-"thirdparty" = true
-".eggs" = true
-".git" = true
-".hg" = true
-".mypy_cache" = true
-".tox" = true
-".venv" = true
-"_build" = true
-"buck-out" = true
-"build" = true
-"dist" = true
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"

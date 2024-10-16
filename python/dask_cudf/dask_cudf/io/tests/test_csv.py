@@ -84,9 +84,9 @@ def test_csv_roundtrip_filepath(tmp_path):
 
 
 def test_read_csv(tmp_path):
-    df = dask.datasets.timeseries(
-        dtypes={"x": int, "y": int}, freq="120s"
-    ).reset_index(drop=True)
+    df = dask.datasets.timeseries(dtypes={"x": int, "y": int}, freq="120s").reset_index(
+        drop=True
+    )
 
     csv_path = str(tmp_path / "data-*.csv")
     df.to_csv(csv_path, index=False)
@@ -113,9 +113,9 @@ def test_raises_FileNotFoundError():
 
 
 def test_read_csv_w_bytes(tmp_path):
-    df = dask.datasets.timeseries(
-        dtypes={"x": int, "y": int}, freq="120s"
-    ).reset_index(drop=True)
+    df = dask.datasets.timeseries(dtypes={"x": int, "y": int}, freq="120s").reset_index(
+        drop=True
+    )
     df = pd.DataFrame(dict(x=np.arange(20), y=np.arange(20)))
     df.to_csv(tmp_path / "data-*.csv", index=False)
 
@@ -167,11 +167,7 @@ def test_read_csv_compression_file_list(tmp_path):
 def test_read_csv_blocksize_none(tmp_path, compression, size):
     df = pd.DataFrame(dict(x=np.arange(size), y=np.arange(size)))
 
-    path = (
-        tmp_path / "data.csv.gz"
-        if compression == "gzip"
-        else tmp_path / "data.csv"
-    )
+    path = tmp_path / "data.csv.gz" if compression == "gzip" else tmp_path / "data.csv"
 
     # Types need to be specified for empty csv files
     if size == 0:
@@ -259,6 +255,4 @@ def test_read_csv_nrows(csv_end_bad_lines):
 
 def test_read_csv_nrows_error(csv_end_bad_lines):
     with pytest.raises(ValueError):
-        dask_cudf.read_csv(
-            csv_end_bad_lines, nrows=2, blocksize="100 MiB"
-        ).compute()
+        dask_cudf.read_csv(csv_end_bad_lines, nrows=2, blocksize="100 MiB").compute()

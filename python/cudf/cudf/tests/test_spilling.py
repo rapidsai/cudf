@@ -108,9 +108,7 @@ gen_df_data_nbytes = single_column_df()._data._data["a"].data.nbytes
 def spilled_and_unspilled(manager: SpillManager) -> tuple[int, int]:
     """Get bytes spilled and unspilled known by the manager"""
     spilled = sum(buf.size for buf in manager.buffers() if buf.is_spilled)
-    unspilled = sum(
-        buf.size for buf in manager.buffers() if not buf.is_spilled
-    )
+    unspilled = sum(buf.size for buf in manager.buffers() if not buf.is_spilled)
     return spilled, unspilled
 
 
@@ -340,9 +338,7 @@ def test_spill_to_device_limit(manager: SpillManager):
     assert single_column_df_data(df3).is_spilled
 
 
-@pytest.mark.parametrize(
-    "manager", [{"device_memory_limit": 0}], indirect=True
-)
+@pytest.mark.parametrize("manager", [{"device_memory_limit": 0}], indirect=True)
 def test_zero_device_limit(manager: SpillManager):
     assert manager._device_memory_limit == 0
     df1 = single_column_df()
@@ -447,12 +443,8 @@ def test_get_spill_lock(manager: SpillManager):
         futures_with_spill_lock = []
         futures_without_spill_lock = []
         for _ in range(100):
-            futures_with_spill_lock.append(
-                executor.submit(f, sleep=True, nest=1)
-            )
-            futures_without_spill_lock.append(
-                executor.submit(f, sleep=True, nest=1)
-            )
+            futures_with_spill_lock.append(executor.submit(f, sleep=True, nest=1))
+            futures_without_spill_lock.append(executor.submit(f, sleep=True, nest=1))
         all(isinstance(f.result(), SpillLock) for f in futures_with_spill_lock)
         all(f is None for f in futures_without_spill_lock)
 
@@ -512,9 +504,7 @@ def test_serialize_dask_dataframe(manager: SpillManager):
     protocol = pytest.importorskip("distributed.protocol")
 
     df1 = single_column_df(target="gpu")
-    header, frames = protocol.serialize(
-        df1, serializers=("dask",), on_error="raise"
-    )
+    header, frames = protocol.serialize(df1, serializers=("dask",), on_error="raise")
     buf = single_column_df_data(df1)
     assert len(frames) == 1
     assert isinstance(frames[0], memoryview)
@@ -533,9 +523,7 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     protocol = pytest.importorskip("distributed.protocol")
 
     df1 = single_column_df(target="gpu")
-    header, frames = protocol.serialize(
-        df1, serializers=("cuda",), on_error="raise"
-    )
+    header, frames = protocol.serialize(df1, serializers=("cuda",), on_error="raise")
     buf: SpillableBuffer = single_column_df_data(df1)
     assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
@@ -634,9 +622,7 @@ def test_memoryview_slice(manager: SpillManager, dtype):
 def test_statistics(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
-    buf: SpillableBuffer = as_buffer(
-        data=rmm.DeviceBuffer(size=10), exposed=False
-    )
+    buf: SpillableBuffer = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
     buf.spill(target="cpu")
 
     if manager.statistics.level == 0:
@@ -660,8 +646,7 @@ def test_statistics_expose(manager: SpillManager):
     assert len(manager.statistics.spill_totals) == 0
 
     buffers: list[SpillableBuffer] = [
-        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
-        for _ in range(10)
+        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False) for _ in range(10)
     ]
 
     # Expose the first buffer
@@ -686,8 +671,7 @@ def test_statistics_expose(manager: SpillManager):
 
     # Create and spill 10 new buffers
     buffers: list[SpillableBuffer] = [
-        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
-        for _ in range(10)
+        as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False) for _ in range(10)
     ]
 
     manager.spill_to_device_limit(0)
