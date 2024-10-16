@@ -2728,7 +2728,7 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
 TEST_F(ParquetReaderTest, ListsWideTable)
 {
   auto constexpr num_rows = 2;
-  auto constexpr num_cols = 10'923;  // for slightly over 2B keys
+  auto constexpr num_cols = 26'755;  // for slightly over 2B keys
   auto constexpr seed     = 0xceed;
 
   std::mt19937 engine{seed};
