@@ -6,8 +6,8 @@ strings
 
     capitalize
     char_types
-    contains
     combine
+    contains
     extract
     find
     find_multiple

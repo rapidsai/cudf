@@ -26,8 +26,8 @@ cpdef Column concatenate(
     separator_on_nulls separate_nulls=separator_on_nulls.YES,
 ):
     """
-    Concatenate all strings in the column into one new string delimited
-    by an optional separator string.
+    Concatenate all columns in the table horizontally into one new string
+    delimited by an optional separator string.
 
     Parameters
     ----------
