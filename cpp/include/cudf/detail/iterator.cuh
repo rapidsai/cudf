@@ -66,8 +66,8 @@ namespace detail {
  * @param f The unary function to apply to the counting iterator.
  * @return A transform iterator that applies `f` to a counting iterator
  */
-template <typename UnaryFunction>
-CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(cudf::size_type start,
+template <typename CountingIterType, typename UnaryFunction>
+CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(CountingIterType start,
                                                               UnaryFunction f)
 {
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
