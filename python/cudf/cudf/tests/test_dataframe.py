@@ -11146,3 +11146,12 @@ def test_from_pandas_preserve_column_dtype():
     df = pd.DataFrame([[1, 2]], columns=pd.Index([1, 2], dtype="int8"))
     result = cudf.DataFrame.from_pandas(df)
     pd.testing.assert_index_equal(result.columns, df.columns, exact=True)
+
+
+def test_dataframe_init_column():
+    s = cudf.Series([1, 2, 3])
+    with pytest.raises(TypeError):
+        cudf.DataFrame(s._column)
+    expect = cudf.DataFrame({"a": s})
+    actual = cudf.DataFrame._from_arrays(s._column, columns=["a"])
+    assert_eq(expect, actual)
