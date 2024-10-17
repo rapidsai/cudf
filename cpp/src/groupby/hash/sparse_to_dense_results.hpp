@@ -27,8 +27,6 @@ namespace cudf::groupby::detail::hash {
 /**
  * @brief Gather sparse results into dense using `gather_map` and add to
  * `dense_cache`
- *
- * @see groupby_null_templated()
  */
 template <typename SetType>
 void sparse_to_dense_results(host_span<aggregation_request const> requests,
