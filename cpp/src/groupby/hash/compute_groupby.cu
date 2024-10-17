@@ -38,10 +38,6 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
-/**
- * @brief Computes and returns a device vector containing all populated keys in
- * `map`.
- */
 template <typename SetType>
 rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
                                                       size_type num_keys,
@@ -53,12 +49,6 @@ rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
   populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
   return populated_keys;
 }
-
-template rmm::device_uvector<size_type> extract_populated_keys<global_set_t>(
-  global_set_t const& key_set, size_type num_keys, rmm::cuda_stream_view stream);
-
-template rmm::device_uvector<size_type> extract_populated_keys<nullable_global_set_t>(
-  nullable_global_set_t const& key_set, size_type num_keys, rmm::cuda_stream_view stream);
 
 template <typename Equal, typename Hash>
 std::unique_ptr<table> compute_groupby(table_view const& keys,
@@ -123,6 +113,12 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                               stream,
                               mr);
 }
+
+template rmm::device_uvector<size_type> extract_populated_keys<global_set_t>(
+  global_set_t const& key_set, size_type num_keys, rmm::cuda_stream_view stream);
+
+template rmm::device_uvector<size_type> extract_populated_keys<nullable_global_set_t>(
+  nullable_global_set_t const& key_set, size_type num_keys, rmm::cuda_stream_view stream);
 
 template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(
   table_view const& keys,
