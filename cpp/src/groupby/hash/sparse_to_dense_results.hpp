@@ -36,8 +36,8 @@ namespace cudf::groupby::detail::hash {
  * @param[in] gather_map Gather map indicating valid elements in `sparse_results`
  * @param[in] set Device hash set ref
  * @param[in] row_bitmask Bitmask indicating the validity of input keys
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned table
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate the returned table
  */
 template <typename SetRef>
 void sparse_to_dense_results(host_span<aggregation_request const> requests,
