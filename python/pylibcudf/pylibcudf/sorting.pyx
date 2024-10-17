@@ -36,12 +36,10 @@ cpdef Column sorted_order(Table source_table, list column_order, list null_prece
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.sorted_order(
-                source_table.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.sorted_order(
+            source_table.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -74,12 +72,10 @@ cpdef Column stable_sorted_order(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.stable_sorted_order(
-                source_table.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.stable_sorted_order(
+            source_table.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -118,15 +114,13 @@ cpdef Column rank(
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_sorting.rank(
-                input_view.view(),
-                method,
-                column_order,
-                null_handling,
-                null_precedence,
-                percentage,
-            )
+        c_result = cpp_sorting.rank(
+            input_view.view(),
+            method,
+            column_order,
+            null_handling,
+            null_precedence,
+            percentage,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -154,12 +148,10 @@ cpdef bool is_sorted(Table tbl, list column_order, list null_precedence):
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.is_sorted(
-                tbl.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.is_sorted(
+            tbl.view(),
+            c_orders,
+            c_null_precedence,
         )
     return c_result
 
@@ -197,14 +189,12 @@ cpdef Table segmented_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.segmented_sort_by_key(
-                values.view(),
-                keys.view(),
-                segment_offsets.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.segmented_sort_by_key(
+            values.view(),
+            keys.view(),
+            segment_offsets.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))
 
@@ -243,14 +233,12 @@ cpdef Table stable_segmented_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.stable_segmented_sort_by_key(
-                values.view(),
-                keys.view(),
-                segment_offsets.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.stable_segmented_sort_by_key(
+            values.view(),
+            keys.view(),
+            segment_offsets.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))
 
@@ -285,13 +273,11 @@ cpdef Table sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.sort_by_key(
-                values.view(),
-                keys.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.sort_by_key(
+            values.view(),
+            keys.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))
 
@@ -326,13 +312,11 @@ cpdef Table stable_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.stable_sort_by_key(
-                values.view(),
-                keys.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.stable_sort_by_key(
+            values.view(),
+            keys.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))
 
@@ -360,12 +344,10 @@ cpdef Table sort(Table source_table, list column_order, list null_precedence):
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.sort(
-                source_table.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.sort(
+            source_table.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))
 
@@ -393,11 +375,9 @@ cpdef Table stable_sort(Table source_table, list column_order, list null_precede
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.stable_sort(
-                source_table.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_sorting.stable_sort(
+            source_table.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))

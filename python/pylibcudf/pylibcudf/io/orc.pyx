@@ -252,7 +252,7 @@ cpdef TableWithMetadata read_orc(
     """
     cdef orc_reader_options opts
     cdef vector[vector[size_type]] c_stripes
-    opts = move(
+    opts = (
         orc_reader_options.builder(source_info.c_obj)
         .use_index(use_index)
         .build()

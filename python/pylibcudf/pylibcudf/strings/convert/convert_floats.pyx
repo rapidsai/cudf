@@ -33,11 +33,9 @@ cpdef Column to_floats(Column strings, DataType output_type):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_floats.to_floats(
-                strings.view(),
-                output_type.c_obj,
-            )
+        c_result = cpp_convert_floats.to_floats(
+            strings.view(),
+            output_type.c_obj,
         )
 
     return Column.from_libcudf(move(c_result))
@@ -63,11 +61,7 @@ cpdef Column from_floats(Column floats):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_floats.from_floats(
-                floats.view(),
-            )
-        )
+        c_result = cpp_convert_floats.from_floats(floats.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -92,10 +86,6 @@ cpdef Column is_float(Column input):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_floats.is_float(
-                input.view(),
-            )
-        )
+        c_result = cpp_convert_floats.is_float(input.view())
 
     return Column.from_libcudf(move(c_result))
