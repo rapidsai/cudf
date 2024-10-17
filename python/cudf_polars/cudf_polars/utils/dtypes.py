@@ -141,5 +141,8 @@ def from_polars(dtype: pl.DataType) -> plc.DataType:
         # Recurse to catch unsupported inner types
         _ = from_polars(dtype.inner)
         return plc.DataType(plc.TypeId.LIST)
+    elif isinstance(dtype, pl.Decimal):
+        # TODO: Loses precision and just goes to max precision of 38
+        return plc.DataType(plc.TypeId.DECIMAL128, scale=-dtype.scale)
     else:
         raise NotImplementedError(f"{dtype=} conversion not supported")
