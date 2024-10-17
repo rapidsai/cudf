@@ -38,7 +38,7 @@ cpdef DeviceBuffer copy_bitmask(Column col):
     cdef device_buffer db
 
     with nogil:
-        db = move(cpp_null_mask.copy_bitmask(col.view()))
+        db = cpp_null_mask.copy_bitmask(col.view())
 
     return buffer_to_python(move(db))
 
@@ -90,7 +90,7 @@ cpdef DeviceBuffer create_null_mask(
     cdef device_buffer db
 
     with nogil:
-        db = move(cpp_null_mask.create_null_mask(size, state))
+        db = cpp_null_mask.create_null_mask(size, state)
 
     return buffer_to_python(move(db))
 
@@ -114,7 +114,7 @@ cpdef tuple bitmask_and(list columns):
     cdef pair[device_buffer, size_type] c_result
 
     with nogil:
-        c_result = move(cpp_null_mask.bitmask_and(c_table.view()))
+        c_result = cpp_null_mask.bitmask_and(c_table.view())
 
     return buffer_to_python(move(c_result.first)), c_result.second
 
@@ -138,6 +138,6 @@ cpdef tuple bitmask_or(list columns):
     cdef pair[device_buffer, size_type] c_result
 
     with nogil:
-        c_result = move(cpp_null_mask.bitmask_or(c_table.view()))
+        c_result = cpp_null_mask.bitmask_or(c_table.view())
 
     return buffer_to_python(move(c_result.first)), c_result.second
