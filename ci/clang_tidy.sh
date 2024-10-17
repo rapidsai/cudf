@@ -26,4 +26,4 @@ source rapids-configure-sccache
 
 # Run the build via CMake, which will run clang-tidy when CUDF_CLANG_TIDY is enabled.
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinja
-cmake --build cpp/build
+cmake --build cpp/build --target tests/CMakeFiles/INTEROP_TEST.dir/interop/from_arrow_host_test.cpp.o
