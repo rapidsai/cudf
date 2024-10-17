@@ -622,6 +622,10 @@ def test_timezone_column(tmpdir):
 
 
 @require_dask_expr()
+@pytest.mark.skipif(
+    not dask_cudf.backends.PYARROW_GE_15,
+    reason="Requires pyarrow 15",
+)
 @pytest.mark.parametrize("min_part_size", ["1B", "1GB"])
 def test_read_parquet_arrow_filesystem(tmpdir, min_part_size):
     tmp_path = str(tmpdir)
