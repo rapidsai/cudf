@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compute_groupby.cuh"
 #include "compute_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "sparse_to_dense_results.hpp"
