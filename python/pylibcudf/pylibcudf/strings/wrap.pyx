@@ -32,11 +32,9 @@ cpdef Column wrap(Column input, size_type width):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_wrap.wrap(
-                input.view(),
-                width,
-            )
+        c_result = cpp_wrap.wrap(
+            input.view(),
+            width,
         )
 
     return Column.from_libcudf(move(c_result))

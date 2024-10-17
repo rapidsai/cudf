@@ -33,11 +33,9 @@ cpdef Table make_timezone_transition_table(str tzif_dir, str timezone_name):
     cdef string c_tzname = timezone_name.encode()
 
     with nogil:
-        c_result = move(
-            cpp_make_timezone_transition_table(
-                make_optional[string](c_tzdir),
-                c_tzname
-            )
+        c_result = cpp_make_timezone_transition_table(
+            make_optional[string](c_tzdir),
+            c_tzname
         )
 
     return Table.from_libcudf(move(c_result))

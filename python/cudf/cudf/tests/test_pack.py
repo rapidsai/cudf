@@ -24,11 +24,11 @@ from cudf.testing import assert_eq
 
 
 def test_sizeof_packed_dataframe():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
     nelem = 1000
     df["keys"] = hkeys = np.arange(nelem, dtype=np.float64)
-    df["vals"] = hvals = np.random.random(nelem)
+    df["vals"] = hvals = rng.random(nelem)
     packed = pack(df)
 
     nbytes = hkeys.nbytes + hvals.nbytes
@@ -67,46 +67,46 @@ def assert_packed_frame_equality(df):
 
 
 def test_packed_dataframe_equality_numeric():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     nelem = 10
     df["keys"] = np.arange(nelem, dtype=np.float64)
-    df["vals"] = np.random.random(nelem)
+    df["vals"] = rng.random(nelem)
 
     check_packed_equality(df)
 
 
 def test_packed_dataframe_equality_categorical():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = pd.Categorical(
         ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_equality(df)
 
 
 def test_packed_dataframe_equality_list():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(list([i, i + 1, i + 2] for i in range(10)))
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_equality(df)
 
 
 def test_packed_dataframe_equality_struct():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(
         list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_equality(df)
 
@@ -135,46 +135,46 @@ def assert_packed_frame_unique_pointers(df):
 
 
 def test_packed_dataframe_unique_pointers_numeric():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     nelem = 10
     df["keys"] = np.arange(nelem, dtype=np.float64)
-    df["vals"] = np.random.random(nelem)
+    df["vals"] = rng.random(nelem)
 
     check_packed_unique_pointers(df)
 
 
 def test_packed_dataframe_unique_pointers_categorical():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = pd.Categorical(
         ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_unique_pointers(df)
 
 
 def test_packed_dataframe_unique_pointers_list():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(list([i, i + 1, i + 2] for i in range(10)))
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_unique_pointers(df)
 
 
 def test_packed_dataframe_unique_pointers_struct():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(
         list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_unique_pointers(df)
 
@@ -208,46 +208,46 @@ def assert_packed_frame_picklable(df):
 
 
 def test_pickle_packed_dataframe_numeric():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     nelem = 10
     df["keys"] = np.arange(nelem, dtype=np.float64)
-    df["vals"] = np.random.random(nelem)
+    df["vals"] = rng.random(nelem)
 
     check_packed_pickled_equality(df)
 
 
 def test_pickle_packed_dataframe_categorical():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = pd.Categorical(
         ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_pickled_equality(df)
 
 
 def test_pickle_packed_dataframe_list():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(list([i, i + 1, i + 2] for i in range(10)))
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_pickled_equality(df)
 
 
 def test_pickle_packed_dataframe_struct():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(
         list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_pickled_equality(df)
 
@@ -273,45 +273,45 @@ def assert_packed_frame_serializable(df):
 
 
 def test_serialize_packed_dataframe_numeric():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     nelem = 10
     df["keys"] = np.arange(nelem, dtype=np.float64)
-    df["vals"] = np.random.random(nelem)
+    df["vals"] = rng.random(nelem)
 
     check_packed_serialized_equality(df)
 
 
 def test_serialize_packed_dataframe_categorical():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = pd.Categorical(
         ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_serialized_equality(df)
 
 
 def test_serialize_packed_dataframe_list():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(list([i, i + 1, i + 2] for i in range(10)))
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_serialized_equality(df)
 
 
 def test_serialize_packed_dataframe_struct():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = Series(
         list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_packed_serialized_equality(df)
