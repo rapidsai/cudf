@@ -524,7 +524,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   bool const is_array_of_arrays = [&]() {
     // array of arrays not supported because null is always a struct in this mode
-    if(options.recovery_mode()==cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL) {
+    if (options.recovery_mode() == cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL) {
       return false;
     }
     std::array<node_t, 2> h_node_categories = {NC_ERR, NC_ERR};
