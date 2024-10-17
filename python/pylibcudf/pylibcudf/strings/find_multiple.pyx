@@ -29,11 +29,9 @@ cpdef Column find_multiple(Column input, Column targets):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_find_multiple.find_multiple(
-                input.view(),
-                targets.view()
-            )
+        c_result = cpp_find_multiple.find_multiple(
+            input.view(),
+            targets.view()
         )
 
     return Column.from_libcudf(move(c_result))

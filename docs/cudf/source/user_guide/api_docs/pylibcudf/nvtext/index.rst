@@ -7,3 +7,5 @@ nvtext
     edit_distance
     generate_ngrams
     jaccard
+    minhash
+    ngrams_tokenize
