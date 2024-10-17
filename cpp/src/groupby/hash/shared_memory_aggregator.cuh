@@ -27,11 +27,8 @@
 namespace cudf::groupby::detail::hash {
 template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_shmem {
-  __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
-                             cudf::size_type target_index,
-                             cudf::column_device_view source,
-                             cudf::size_type source_index) const
+  __device__ void operator()(
+    cuda::std::byte*, bool*, cudf::size_type, cudf::column_device_view, cudf::size_type) const
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }

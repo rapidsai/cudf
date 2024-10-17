@@ -49,10 +49,10 @@ using underlying_source_t =
 
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct update_target_element {
-  __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
+  __device__ void operator()(mutable_column_device_view,
+                             size_type,
+                             column_device_view,
+                             size_type) const noexcept
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
@@ -203,10 +203,10 @@ struct update_target_from_dictionary {
   template <typename Source,
             aggregation::Kind k,
             cuda::std::enable_if_t<is_dictionary<Source>()>* = nullptr>
-  __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
+  __device__ void operator()(mutable_column_device_view,
+                             size_type,
+                             column_device_view,
+                             size_type) const noexcept
   {
   }
 };
