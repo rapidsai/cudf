@@ -334,7 +334,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // Count the number of targets in the entire column.
   // Note this may over-count in the case where a target spans adjacent strings.
-  rmm::device_scalar<int64_t> d_count(0, stream);
+  cudf::detail::device_scalar<int64_t> d_count(0, stream);
   auto const num_blocks = util::div_rounding_up_safe(
     util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
   count_targets<<<num_blocks, block_size, 0, stream.value()>>>(fn, chars_bytes, d_count.data());

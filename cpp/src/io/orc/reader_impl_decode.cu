@@ -22,6 +22,7 @@
 #include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -32,7 +33,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -451,7 +451,7 @@ void decode_stream_data(int64_t num_dicts,
     update_null_mask(chunks, out_buffers, stream, mr);
   }
 
-  rmm::device_scalar<size_type> error_count(0, stream);
+  cudf::detail::device_scalar<size_type> error_count(0, stream);
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
                            row_groups,

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -94,8 +95,8 @@ class scalar {
   [[nodiscard]] bool const* validity_data() const;
 
  protected:
-  data_type _type{type_id::EMPTY};     ///< Logical type of value in the scalar
-  rmm::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
+  data_type _type{type_id::EMPTY};              ///< Logical type of value in the scalar
+  cudf::detail::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
 
   /**
    * @brief Move constructor for scalar.

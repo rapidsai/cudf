@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -27,7 +28,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -134,7 +134,7 @@ struct var_functor {
 
     // set nulls
     auto result_view  = mutable_column_device_view::create(*result, stream);
-    auto null_count   = rmm::device_scalar<cudf::size_type>(0, stream, mr);
+    auto null_count   = cudf::detail::device_scalar<cudf::size_type>(0, stream, mr);
     auto d_null_count = null_count.data();
     thrust::for_each_n(
       rmm::exec_policy(stream),

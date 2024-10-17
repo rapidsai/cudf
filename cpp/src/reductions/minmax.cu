@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
@@ -69,18 +70,18 @@ struct minmax_pair {
  * @param num_items number of items to reduce
  * @param binary_op binary operator used to reduce
  * @param stream CUDA stream to run kernels on.
- * @return rmm::device_scalar<OutputType>
+ * @return cudf::detail::device_scalar<OutputType>
  */
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type>
-rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
-                                             size_type num_items,
-                                             Op binary_op,
-                                             rmm::cuda_stream_view stream)
+auto reduce_device(InputIterator d_in,
+                   size_type num_items,
+                   Op binary_op,
+                   rmm::cuda_stream_view stream)
 {
   OutputType identity{};
-  rmm::device_scalar<OutputType> result{identity, stream};
+  cudf::detail::device_scalar<OutputType> result{identity, stream};
 
   // Allocate temporary storage
   size_t storage_bytes = 0;

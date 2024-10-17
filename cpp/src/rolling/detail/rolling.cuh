@@ -33,6 +33,7 @@
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/unary.hpp>
@@ -49,7 +50,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/climits>
@@ -1105,7 +1105,7 @@ struct rolling_window_launcher {
       auto const d_inp_ptr         = column_device_view::create(input, stream);
       auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
       auto const d_out_ptr = mutable_column_device_view::create(output->mutable_view(), stream);
-      auto d_valid_count   = rmm::device_scalar<size_type>{0, stream};
+      auto d_valid_count   = cudf::detail::device_scalar<size_type>{0, stream};
 
       auto constexpr block_size = 256;
       auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
@@ -1271,7 +1271,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
     udf_agg._output_type, input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
-  rmm::device_scalar<size_type> device_valid_count{0, stream};
+  cudf::detail::device_scalar<size_type> device_valid_count{0, stream};
 
   std::string kernel_name =
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //

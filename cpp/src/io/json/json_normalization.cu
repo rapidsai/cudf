@@ -16,6 +16,7 @@
 
 #include "io/fst/lookup_tables.cuh"
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -24,7 +25,6 @@
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -316,7 +316,7 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
                           stream);
 
   rmm::device_buffer outbuf(indata.size() * 2, stream, mr);
-  rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
+  cudf::detail::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
   parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
                    static_cast<SymbolOffsetT>(indata.size()),
                    static_cast<SymbolT*>(outbuf.data()),
@@ -401,7 +401,7 @@ std::
                           stream);
 
   rmm::device_uvector<size_type> outbuf_indices(inbuf.size(), stream, mr);
-  rmm::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
+  cudf::detail::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
   parser.Transduce(inbuf.data(),
                    static_cast<SymbolOffsetT>(inbuf.size()),
                    thrust::make_discard_iterator(),
