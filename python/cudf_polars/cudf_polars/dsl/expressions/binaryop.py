@@ -24,9 +24,8 @@ __all__ = ["BinOp"]
 
 
 class BinOp(Expr):
-    __slots__ = ("op", "children")
+    __slots__ = ("op",)
     _non_child = ("dtype", "op")
-    children: tuple[Expr, Expr]
 
     def __init__(
         self,

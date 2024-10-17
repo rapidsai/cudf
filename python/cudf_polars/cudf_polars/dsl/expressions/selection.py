@@ -23,9 +23,8 @@ __all__ = ["Gather", "Filter"]
 
 
 class Gather(Expr):
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("dtype",)
-    children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
         self.dtype = dtype
@@ -65,9 +64,8 @@ class Gather(Expr):
 
 
 class Filter(Expr):
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("dtype",)
-    children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
         self.dtype = dtype

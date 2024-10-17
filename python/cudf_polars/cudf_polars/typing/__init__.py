@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from cudf_polars.dsl import expr, ir
+    from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
     "PolarsIR",
@@ -123,6 +123,7 @@ OptimizationArgs: TypeAlias = Literal[
 
 U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
+NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
 
 
 class GenericTransformer(Protocol[U_contra, V_co]):

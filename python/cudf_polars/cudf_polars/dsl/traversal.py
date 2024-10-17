@@ -5,15 +5,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Hashable
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Generic
+
+from cudf_polars.typing import U_contra, V_co
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, MutableMapping
 
-    from cudf_polars.dsl import expr, ir
-    from cudf_polars.dsl.nodebase import Node
-    from cudf_polars.typing import ExprTransformer, GenericTransformer, IRTransformer
+    from cudf_polars.typing import GenericTransformer, NodeT
 
 
 __all__: list[str] = [
@@ -24,7 +23,7 @@ __all__: list[str] = [
 ]
 
 
-def traversal(node: Node) -> Generator[Node, None, None]:
+def traversal(node: NodeT) -> Generator[NodeT, None, None]:
     """
     Pre-order traversal of nodes in an expression.
 
@@ -50,18 +49,7 @@ def traversal(node: Node) -> Generator[Node, None, None]:
                 lifo.append(child)
 
 
-# reuse_if_unchanged can either be applied to expressions, in which
-# case we need an ExprTransformer...
-@overload
-def reuse_if_unchanged(node: expr.Expr, fn: ExprTransformer) -> expr.Expr: ...
-
-
-# .. or to plan nodes (IR), in which case we need an IRTransformer
-@overload
-def reuse_if_unchanged(node: ir.IR, fn: IRTransformer) -> ir.IR: ...
-
-
-def reuse_if_unchanged(node, fn):
+def reuse_if_unchanged(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> NodeT:
     """
     Recipe for transforming nodes that returns the old object if unchanged.
 
@@ -86,10 +74,6 @@ def reuse_if_unchanged(node, fn):
     if all(new == old for new, old in zip(new_children, node.children, strict=True)):
         return node
     return node.reconstruct(new_children)
-
-
-U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
-V_co = TypeVar("V_co", covariant=True)
 
 
 def make_recursive(

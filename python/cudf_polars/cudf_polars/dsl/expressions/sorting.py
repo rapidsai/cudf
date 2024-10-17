@@ -23,9 +23,8 @@ __all__ = ["Sort", "SortBy"]
 
 
 class Sort(Expr):
-    __slots__ = ("options", "children")
+    __slots__ = ("options",)
     _non_child = ("dtype", "options")
-    children: tuple[Expr]
 
     def __init__(
         self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
@@ -59,9 +58,8 @@ class Sort(Expr):
 
 
 class SortBy(Expr):
-    __slots__ = ("options", "children")
+    __slots__ = ("options",)
     _non_child = ("dtype", "options")
-    children: tuple[Expr, ...]
 
     def __init__(
         self,

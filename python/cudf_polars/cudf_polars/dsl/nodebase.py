@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Sequence
@@ -15,8 +15,10 @@ if TYPE_CHECKING:
 
 __all__: list[str] = ["Node"]
 
+T = TypeVar("T", bound="Node[Any]")
 
-class Node:
+
+class Node(Generic[T]):
     """
     An abstract node type.
 
@@ -35,14 +37,14 @@ class Node:
     __slots__ = ("_hash_value", "_repr_value", "children")
     _hash_value: int
     _repr_value: str
-    children: tuple[Node, ...]
+    children: tuple[T, ...]
     _non_child: ClassVar[tuple[str, ...]] = ()
 
-    def _ctor_arguments(self, children: Sequence[Node]) -> Sequence:
+    def _ctor_arguments(self, children: Sequence[T]) -> Sequence[Any | T]:
         return (*(getattr(self, attr) for attr in self._non_child), *children)
 
     def reconstruct(
-        self, children: Sequence[Node]
+        self, children: Sequence[T]
     ) -> Self:  # pragma: no cover; not yet used
         """
         Rebuild this node with new children.
@@ -117,7 +119,7 @@ class Node:
             other.children
         )
         # Eager CSE for nodes that match.
-        if result and len(self.children) > 0:
+        if result:
             self.children = other.children
         return result
 
