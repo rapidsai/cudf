@@ -5,6 +5,7 @@ from . cimport (
     capitalize,
     case,
     char_types,
+    combine,
     contains,
     convert,
     extract,
