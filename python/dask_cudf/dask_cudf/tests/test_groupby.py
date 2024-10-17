@@ -30,21 +30,21 @@ def assert_cudf_groupby_layers(ddf):
 
 @pytest.fixture(params=["non_null", "null"])
 def pdf(request):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # note that column name "x" is a substring of the groupby key;
     # this gives us coverage for cudf#10829
     pdf = pd.DataFrame(
         {
-            "xx": np.random.randint(0, 5, size=10000),
-            "x": np.random.normal(size=10000),
-            "y": np.random.normal(size=10000),
+            "xx": rng.integers(0, 5, size=10000),
+            "x": rng.normal(size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
     # insert nulls into dataframe at random
     if request.param == "null":
-        pdf = pdf.mask(np.random.choice([True, False], size=pdf.shape))
+        pdf = pdf.mask(rng.choice([True, False], size=pdf.shape))
 
     return pdf
 
@@ -173,11 +173,12 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
     ],
 )
 def test_groupby_multi_column(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "a": np.random.randint(0, 20, size=1000),
-            "b": np.random.randint(0, 5, size=1000),
-            "x": np.random.normal(size=1000),
+            "a": rng.integers(0, 20, size=1000),
+            "b": rng.integers(0, 5, size=1000),
+            "x": rng.normal(size=1000),
         }
     )
 
@@ -371,11 +372,12 @@ def test_groupby_string_index_name(myindex):
     ],
 )
 def test_groupby_split_out_multiindex(agg_func):
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 10, 100),
-            "b": np.random.randint(0, 5, 100),
-            "c": np.random.random(100),
+            "a": rng.integers(0, 10, 100),
+            "b": rng.integers(0, 5, 100),
+            "c": rng.random(100),
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
@@ -419,12 +421,13 @@ def test_groupby_multiindex_reset_index(npartitions):
     ],
 )
 def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 10, 10),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "dd": np.random.randint(0, 5, 10),
+            "a": rng.integers(0, 10, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "dd": rng.integers(0, 5, 10),
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
@@ -437,8 +440,9 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
 
 
 def test_groupby_reset_index_drop_True():
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
-        {"a": np.random.randint(0, 10, 10), "b": np.random.randint(0, 5, 10)}
+        {"a": rng.integers(0, 10, 10), "b": rng.integers(0, 5, 10)}
     )
     ddf = dask_cudf.from_cudf(df, 5)
     pddf = dd.from_pandas(df.to_pandas(), 5)
@@ -653,10 +657,11 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )
 def test_groupby_agg_redirect(aggregations):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
@@ -758,10 +763,11 @@ def test_groupby_with_list_of_series():
     ],
 )
 def test_groupby_nested_dict(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
@@ -794,10 +800,11 @@ def test_groupby_nested_dict(func):
     ],
 )
 def test_groupby_all_columns(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
