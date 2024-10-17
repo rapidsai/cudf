@@ -787,7 +787,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif isinstance(data, ColumnBase):
             raise TypeError(
                 "Use cudf.DataFrame._from_arrays for constructing a DataFrame from "
-                "ColumnAccessor or Use cudf.DataFrame._from_data by passing a dict "
+                "ColumnBase or Use cudf.DataFrame._from_data by passing a dict "
                 "of column name and column as key-value pair."
             )
         elif hasattr(data, "__cuda_array_interface__"):
