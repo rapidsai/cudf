@@ -43,6 +43,7 @@ set(cython_sources
     scalar.pyx
     search.pyx
     stream_compaction.pyx
+    strings_udf.pyx
     sorting.pyx
     table.pyx
     traits.pyx
@@ -59,6 +60,7 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
 
+target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
 target_include_directories(pylibcudf_interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
 
 include(${rapids-cmake-dir}/export/find_package_root.cmake)

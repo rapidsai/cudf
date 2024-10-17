@@ -13,7 +13,8 @@ from rmm.librmm.device_buffer cimport device_buffer
 
 cdef extern from "cudf/strings/udf/udf_string.hpp" namespace \
         "cudf::strings::udf" nogil:
-    cdef cppclass udf_string
+    cdef cppclass udf_string:
+        udf_string()
 
 cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
         "cudf::strings::udf" nogil:

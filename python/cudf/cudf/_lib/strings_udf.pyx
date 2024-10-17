@@ -1,72 +1,46 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t, uint16_t, uintptr_t
-
-from pylibcudf.libcudf.strings_udf cimport (
-    get_character_cases_table as cpp_get_character_cases_table,
-    get_character_flags_table as cpp_get_character_flags_table,
-    get_special_case_mapping_table as cpp_get_special_case_mapping_table,
-)
-
-import numpy as np
-
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
+import pylibcudf as plc
 
 from cudf.core.buffer import as_buffer
 
-from pylibcudf.libcudf.column.column cimport column, column_view
-from pylibcudf.libcudf.strings_udf cimport (
-    column_from_udf_string_array as cpp_column_from_udf_string_array,
-    free_udf_string_array as cpp_free_udf_string_array,
-    get_cuda_build_version as cpp_get_cuda_build_version,
-    to_string_view_array as cpp_to_string_view_array,
-    udf_string,
-)
-from rmm.librmm.device_buffer cimport device_buffer
+from pylibcudf.libcudf.strings_udf cimport udf_string
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from cudf._lib.column cimport Column
 
+import numpy as np
+
 
 def get_cuda_build_version():
-    return cpp_get_cuda_build_version()
+    return plc.strings_udf.get_cuda_build_version()
 
 
 def column_to_string_view_array(Column strings_col):
-    cdef unique_ptr[device_buffer] c_buffer
-    cdef column_view input_view = strings_col.view()
-    with nogil:
-        c_buffer = move(cpp_to_string_view_array(input_view))
-
-    db = DeviceBuffer.c_from_unique_ptr(move(c_buffer))
-    return as_buffer(db, exposed=True)
+    return as_buffer(
+        plc.strings_udf.column_to_string_view_array(
+            strings_col.to_pylibcudf(mode="read")
+        ),
+        exposed=True
+    )
 
 
 def column_from_udf_string_array(DeviceBuffer d_buffer):
-    cdef size_t size = int(d_buffer.c_size() / sizeof(udf_string))
-    cdef udf_string* data = <udf_string*>d_buffer.c_data()
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_column_from_udf_string_array(data, size))
-        cpp_free_udf_string_array(data, size)
-
-    result = Column.from_unique_ptr(move(c_result))
-
-    return result
+    return Column.from_pylibcudf(
+        plc.strings_udf.column_from_udf_string_array(
+            <udf_string*>d_buffer.c_data(),
+            int(d_buffer.c_size() / sizeof(udf_string))
+        )
+    )
 
 
 def get_character_flags_table_ptr():
-    cdef const uint8_t* tbl_ptr = cpp_get_character_flags_table()
-    return np.uintp(<uintptr_t>tbl_ptr)
+    return np.uintp(plc.strings_udf.get_character_flags_table())
 
 
 def get_character_cases_table_ptr():
-    cdef const uint16_t* tbl_ptr = cpp_get_character_cases_table()
-    return np.uintp(<uintptr_t>tbl_ptr)
+    return np.uintp(plc.strings_udf.get_character_cases_table())
 
 
 def get_special_case_mapping_table_ptr():
-    cdef const void* tbl_ptr = cpp_get_special_case_mapping_table()
-    return np.uintp(<uintptr_t>tbl_ptr)
+    return np.uintp(plc.strings_udf.get_special_case_mapping_table())
