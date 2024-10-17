@@ -98,7 +98,7 @@ void compute_single_pass_aggs(int64_t num_keys,
     agg_kinds, stream, cudf::get_current_device_resource_ref());
 
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     num_keys,
     hash::compute_single_pass_aggs_fn{

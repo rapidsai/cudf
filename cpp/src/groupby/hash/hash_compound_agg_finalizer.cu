@@ -173,7 +173,7 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation c
   cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
 
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     col.size(),
     var_hash_functor{
