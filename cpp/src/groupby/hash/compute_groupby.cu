@@ -37,6 +37,7 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
+namespace {
 /**
  * @brief Computes and returns a device vector containing all populated keys in
  * `map`.
@@ -51,7 +52,7 @@ rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
 
   populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
   return populated_keys;
-}
+}  // namespace
 
 /**
  * @brief Computes groupby using hash table.
