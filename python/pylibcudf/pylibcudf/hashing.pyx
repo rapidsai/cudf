@@ -44,11 +44,9 @@ cpdef Column murmurhash3_x86_32(
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_murmurhash3_x86_32(
-                input.view(),
-                seed
-            )
+        c_result = cpp_murmurhash3_x86_32(
+            input.view(),
+            seed
         )
 
     return Column.from_libcudf(move(c_result))
@@ -76,11 +74,9 @@ cpdef Table murmurhash3_x64_128(
     """
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(
-            cpp_murmurhash3_x64_128(
-                input.view(),
-                seed
-            )
+        c_result = cpp_murmurhash3_x64_128(
+            input.view(),
+            seed
         )
 
     return Table.from_libcudf(move(c_result))
@@ -109,11 +105,9 @@ cpdef Column xxhash_64(
 
     cdef unique_ptr[column] c_result
     with  nogil:
-        c_result = move(
-            cpp_xxhash_64(
-                input.view(),
-                seed
-            )
+        c_result = cpp_xxhash_64(
+            input.view(),
+            seed
         )
 
     return Column.from_libcudf(move(c_result))
@@ -138,7 +132,7 @@ cpdef Column md5(Table input):
 
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_md5(input.view()))
+        c_result = cpp_md5(input.view())
     return Column.from_libcudf(move(c_result))
 
 cpdef Column sha1(Table input):
@@ -158,7 +152,7 @@ cpdef Column sha1(Table input):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_sha1(input.view()))
+        c_result = cpp_sha1(input.view())
     return Column.from_libcudf(move(c_result))
 
 
@@ -179,7 +173,7 @@ cpdef Column sha224(Table input):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_sha224(input.view()))
+        c_result = cpp_sha224(input.view())
     return Column.from_libcudf(move(c_result))
 
 
@@ -200,7 +194,7 @@ cpdef Column sha256(Table input):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_sha256(input.view()))
+        c_result = cpp_sha256(input.view())
     return Column.from_libcudf(move(c_result))
 
 
@@ -221,7 +215,7 @@ cpdef Column sha384(Table input):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_sha384(input.view()))
+        c_result = cpp_sha384(input.view())
     return Column.from_libcudf(move(c_result))
 
 
@@ -242,5 +236,5 @@ cpdef Column sha512(Table input):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_sha512(input.view()))
+        c_result = cpp_sha512(input.view())
     return Column.from_libcudf(move(c_result))
