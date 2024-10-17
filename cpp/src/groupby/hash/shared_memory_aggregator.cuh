@@ -255,6 +255,7 @@ struct shmem_element_aggregator {
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
+    // Check nullability for all aggregation kinds but `COUNT_ALL`
     if constexpr (k != cudf::aggregation::COUNT_ALL) {
       if (source.is_null(source_index)) { return; }
     }

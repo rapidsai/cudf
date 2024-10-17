@@ -266,6 +266,8 @@ struct gmem_element_aggregator {
                              bool* source_mask,
                              cudf::size_type source_index) const noexcept
   {
+    // Early exit for all aggregation kinds since shared memory aggregation of
+    // `COUNT_ALL` is always valid
     if (!source_mask[source_index]) { return; }
 
     update_target_element_gmem<Source, k>{}(
