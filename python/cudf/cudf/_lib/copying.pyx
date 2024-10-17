@@ -8,7 +8,7 @@ from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 import pylibcudf
 
