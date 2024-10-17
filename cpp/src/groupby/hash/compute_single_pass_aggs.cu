@@ -39,6 +39,7 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
+namespace {
 // make table that will hold sparse results
 auto create_sparse_results_table(table_view const& flattened_values,
                                  std::vector<aggregation::Kind> aggs,
@@ -72,6 +73,7 @@ auto create_sparse_results_table(table_view const& flattened_values,
   cudf::detail::initialize_with_identity(table_view, aggs, stream);
   return sparse_table;
 }
+}  // namespace
 
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
