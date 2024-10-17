@@ -5,6 +5,7 @@ from . cimport (
     convert_durations,
     convert_fixed_point,
     convert_floats,
+    convert_integers,
     convert_ipv4,
     convert_lists,
     convert_urls,

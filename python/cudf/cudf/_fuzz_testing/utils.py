@@ -40,8 +40,11 @@ _PANDAS_TO_AVRO_SCHEMA_MAP = {
 }
 
 
-def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
+def _generate_rand_meta(
+    obj, dtypes_list, null_frequency_override=None, seed=0
+):
     obj._current_params = {}
+    rng = np.random.default_rng(seed=seed)
     num_rows = obj._rand(obj._max_rows)
     num_cols = obj._rand(obj._max_columns)
 
@@ -69,12 +72,12 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
                 meta["max_string_length"] = obj._max_string_length
         elif dtype == "list":
             if obj._max_lists_length is None:
-                meta["lists_max_length"] = np.random.randint(0, 2000000000)
+                meta["lists_max_length"] = rng.integers(0, 2000000000)
             else:
                 meta["lists_max_length"] = obj._max_lists_length
 
             if obj._max_lists_nesting_depth is None:
-                meta["nesting_max_depth"] = np.random.randint(
+                meta["nesting_max_depth"] = rng.integers(
                     1, np.iinfo("int64").max
                 )
             else:
@@ -85,7 +88,7 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             )
         elif dtype == "struct":
             if obj._max_lists_nesting_depth is None:
-                meta["nesting_max_depth"] = np.random.randint(2, 10)
+                meta["nesting_max_depth"] = rng.integers(2, 10)
             else:
                 meta["nesting_max_depth"] = obj._max_lists_nesting_depth
 
@@ -95,9 +98,7 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
                 meta["max_null_frequency"] = obj._max_struct_null_frequency
 
             if obj._max_struct_types_at_each_level is None:
-                meta["max_types_at_each_level"] = np.random.randint(
-                    low=1, high=10
-                )
+                meta["max_types_at_each_level"] = rng.integers(low=1, high=10)
             else:
                 meta["max_types_at_each_level"] = (
                     obj._max_struct_types_at_each_level

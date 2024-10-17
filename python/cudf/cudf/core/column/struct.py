@@ -68,12 +68,7 @@ class StructColumn(ColumnBase):
             return self.size + self.offset
 
     def to_arrow(self) -> pa.Array:
-        children = [
-            pa.nulls(len(child))
-            if len(child) == child.null_count
-            else child.to_arrow()
-            for child in self.children
-        ]
+        children = [child.to_arrow() for child in self.children]
 
         pa_type = pa.struct(
             {
