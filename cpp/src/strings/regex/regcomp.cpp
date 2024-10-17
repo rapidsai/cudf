@@ -710,19 +710,17 @@ class regex_parser {
     std::stack<int> lbra_stack;
     auto repeat_start_index = -1;
 
-    for (std::size_t index = 0; index < in.size(); index++) {
-      auto const item = in[index];
-
+    for (auto const item : in) {
       if (item.type != COUNTED && item.type != COUNTED_LAZY) {
         out.push_back(item);
         if (item.type == LBRA || item.type == LBRA_NC) {
-          lbra_stack.push(index);
+          lbra_stack.push(out.size() - 1);
           repeat_start_index = -1;
         } else if (item.type == RBRA) {
           repeat_start_index = lbra_stack.top();
           lbra_stack.pop();
         } else if ((item.type & ITEM_MASK) != OPERATOR_MASK) {
-          repeat_start_index = index;
+          repeat_start_index = out.size() - 1;
         }
       } else {
         // item is of type COUNTED or COUNTED_LAZY
@@ -731,26 +729,39 @@ class regex_parser {
         CUDF_EXPECTS(repeat_start_index >= 0, "regex: invalid counted quantifier location");
 
         // range of affected item(s) to repeat
-        auto const begin = in.begin() + repeat_start_index;
-        auto const end   = in.begin() + index;
+        auto const begin = out.begin() + repeat_start_index;
+        auto const end   = out.end();
+
         // count range values
         auto const n = item.d.count.n;  // minimum count
         auto const m = item.d.count.m;  // maximum count
-
         assert(n >= 0 && "invalid repeat count value n");
         // zero-repeat edge-case: need to erase the previous items
-        if (n == 0) { out.erase(out.end() - (index - repeat_start_index), out.end()); }
+        if (n == 0) { out.erase(begin, end); }
 
-        // minimum repeats (n)
-        for (int j = 1; j < n; j++) {
-          out.insert(out.end(), begin, end);
+        std::vector<regex_parser::Item> repeat_copy(begin, end);
+        // special handling for quantified capture groups
+        if ((n > 1) && (*begin).type == LBRA) {
+          (*begin).type = LBRA_NC;  // change first one to non-capture
+          // add intermediate groups as non-capture
+          std::vector<regex_parser::Item> ncg_copy(begin, end);
+          for (int j = 1; j < (n - 1); j++) {
+            out.insert(out.end(), ncg_copy.begin(), ncg_copy.end());
+          }
+          // add the last entry as a regular capture-group
+          out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
+        } else {
+          // minimum repeats (n)
+          for (int j = 1; j < n; j++) {
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
+          }
         }
 
         // optional maximum repeats (m)
         if (m >= 0) {
           for (int j = n; j < m; j++) {
             out.emplace_back(LBRA_NC, 0);
-            out.insert(out.end(), begin, end);
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
           }
           for (int j = n; j < m; j++) {
             out.emplace_back(RBRA, 0);
@@ -760,8 +771,9 @@ class regex_parser {
           // infinite repeats
           if (n > 0) {  // append '+' after last repetition
             out.emplace_back(item.type == COUNTED ? PLUS : PLUS_LAZY, 0);
-          } else {  // copy it once then append '*'
-            out.insert(out.end(), begin, end);
+          } else {
+            // copy it once then append '*'
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
             out.emplace_back(item.type == COUNTED ? STAR : STAR_LAZY, 0);
           }
         }
