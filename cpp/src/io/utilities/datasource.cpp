@@ -39,6 +39,32 @@ namespace io {
 namespace {
 
 /**
+ * @brief Helper function to safely check the ssize_t return value from read()
+ * against a size_t read_size.
+ *
+ * @param bytes_read Supplies the return value from a read().  Negative values
+ * are assumed to indicate an error.
+ *
+ * @param read_size Supplies the expected number of bytes to have been read.
+ *
+ * @return True iff bytes_read is non-negative and equal to read_size, false
+ * otherwise.
+ */
+static inline bool check_read(ssize_t bytes_read, size_t read_size) {
+  return (bytes_read >= 0) && (static_cast<size_t>(bytes_read) == read_size);
+}
+
+/**
+ * @brief Helper macro for wrapping a check_read() call in a CUDF_EXPECTS().
+ *
+ * @param bytes_read Supplies the return value from a read().
+ *
+ * @param read_size Supplies the expected number of bytes to have been read.
+ */
+#define CUDF_EXPECTS_READ_SUCCESS(bytes_read, read_size) \
+  CUDF_EXPECTS(check_read(bytes_read, read_size), "read failed")
+
+/**
  * @brief Base class for file input. Only implements direct device reads.
  */
 class file_source : public datasource {
@@ -60,10 +86,11 @@ class file_source : public datasource {
     lseek(_file.desc(), offset, SEEK_SET);
 
     // Clamp length to available data
-    ssize_t const read_size = std::min(size, _file.size() - offset);
+    auto const read_size = get_read_size(size, offset);
 
     std::vector<uint8_t> v(read_size);
-    CUDF_EXPECTS(read(_file.desc(), v.data(), read_size) == read_size, "read failed");
+    auto const bytes_read = read(_file.desc(), v.data(), read_size);
+    CUDF_EXPECTS_READ_SUCCESS(bytes_read, read_size);
     return buffer::create(std::move(v));
   }
 
@@ -72,10 +99,9 @@ class file_source : public datasource {
     lseek(_file.desc(), offset, SEEK_SET);
 
     // Clamp length to available data
-    auto const read_size = std::min(size, _file.size() - offset);
-
-    CUDF_EXPECTS(read(_file.desc(), dst, read_size) == static_cast<ssize_t>(read_size),
-                 "read failed");
+    auto const read_size = get_read_size(size, offset);
+    auto const bytes_read = read(_file.desc(), dst, read_size);
+    CUDF_EXPECTS_READ_SUCCESS(bytes_read, read_size);
     return read_size;
   }
 
@@ -99,7 +125,7 @@ class file_source : public datasource {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
-    auto const read_size = std::min(size, _file.size() - offset);
+    auto const read_size = get_read_size(size, offset);
     if (!_kvikio_file.closed()) { return _kvikio_file.pread(dst, read_size, offset); }
     return _cufile_in->read_async(offset, read_size, dst, stream);
   }
@@ -190,7 +216,7 @@ class memory_mapped_source : public file_source {
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, +_file.size() - offset);
+    auto const read_size = get_read_size(size, offset);
 
     // If the requested range is outside of the mapped region, read from the file
     if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
@@ -214,7 +240,7 @@ class memory_mapped_source : public file_source {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     // Clamp length to available data
-    auto const read_size = std::min(size, +_file.size() - offset);
+    auto const read_size = get_read_size(size, offset);
 
     // If the requested range is outside of the mapped region, read from the file
     if (offset < _map_offset or offset + read_size > (_map_offset + _map_size)) {
@@ -315,7 +341,7 @@ class device_buffer_source final : public datasource {
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    auto const count  = std::min(size, this->size() - offset);
+    auto const count  = get_read_size(size, offset);
     auto const stream = cudf::get_default_stream();
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
@@ -325,7 +351,7 @@ class device_buffer_source final : public datasource {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    auto const count  = std::min(size, this->size() - offset);
+    auto const count  = get_read_size(size, offset);
     auto const stream = cudf::get_default_stream();
     auto h_data       = cudf::detail::make_host_vector_async(
       cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
@@ -340,7 +366,7 @@ class device_buffer_source final : public datasource {
                                         uint8_t* dst,
                                         rmm::cuda_stream_view stream) override
   {
-    auto const count = std::min(size, this->size() - offset);
+    auto const count = get_read_size(size, offset);
     CUDF_CUDA_TRY(
       cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
     return std::async(std::launch::deferred, [count] { return count; });
@@ -462,20 +488,77 @@ class user_datasource_wrapper : public datasource {
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
                                                size_t max_size_estimate,
-                                               size_t min_size_estimate)
+                                               size_t min_size_estimate,
+                                               datasource_kind kind,
+                                               std::optional<const datasource_params&> params)
 {
   CUDF_EXPECTS(max_size_estimate == 0 or min_size_estimate <= max_size_estimate,
                "Invalid min/max size estimates for datasource creation");
 
-#ifdef CUFILE_FOUND
-  if (cufile_integration::is_always_enabled()) {
-    // avoid mmap as GDS is expected to be used for most reads
-    return std::make_unique<file_source>(filepath.c_str());
-  }
+  switch (kind) {
+    case datasource_kind::KVIKIO:
+    case datasource_kind::KVIKIO_COMPAT:
+    case datasource_kind::KVIKIO_GDS: {
+      kvikio_datasource_params new_params;
+      if (params) {
+        if (auto kvikio_params = std::get_if<kvikio_datasource_params>(&params.value())) {
+          // Copy the user-provided parameters into our local variable.
+          new_params = *kvikio_params;
+        } else {
+          throw cudf::logic_error("Invalid parameters for KVIKIO-based datasource.");
+        }
+      }
+      if (kind == datasource_kind::KVIKIO_COMPAT) {
+        // Forcibly-set the compatibility mode to true, regardless of what may
+        // already be present in the params.  The `kind` parameter has requested
+        // `KVIKIO_COMPAT`, and that takes precedence over the `use_compat_mode`
+        // parameter in the `kvikio_datasource_params`.
+        new_params.use_compat_mode = true;
+      } else if (kind == datasource_kind::KVIKIO_GDS) {
+        // GDS is unique in that we are expected to throw a cudf::runtime_error
+        // if GDS is not available.  The first chance we have to do this is
+        // here, by way of fencing against CUFILE_FOUND.
+#ifndef CUFILE_FOUND
+        throw cudf::runtime_error("GDS is not available because cuFile is not enabled.");
 #endif
-  // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(
-    filepath.c_str(), offset, max_size_estimate, min_size_estimate);
+        // The next check is done against the `is_gds_enabled()` function in
+        // `cufile_integration`.  If GDS is not enabled, we throw a runtime
+        // error here as well.
+        if (!cufile_integration::is_gds_enabled()) {
+          throw cudf::runtime_error("cuFile reports GDS is not available.");
+        }
+        // Forcibly-set the compatibility mode to false, regardless of what may
+        // already be present in the params.  The `kind` parameter has requested
+        // `KVIKIO_GDS`, and that takes precedence over the `use_compat_mode`
+        // parameter in the `kvikio_datasource_params`.
+        new_params.use_compat_mode = false;
+      } else {
+        CUDF_EXPECTS(kind == datasource_kind::KVIKIO,
+                     "Invariant check failed: kind != datasource_kind::KVIKIO");
+        // We don't need to do any special handling for `KVIKIO` here.
+      }
+      return std::make_unique<kvikio_source>(filepath.c_str(), new_params);
+    }
+    case datasource_kind::HOST:
+      return std::make_unique<host_source>(filepath.c_str());
+    case datasource_kind::ODIRECT: {
+      odirect_datasource_params new_params;
+      if (params) {
+        if (auto odirect_params = std::get_if<odirect_datasource_params>(&params.value())) {
+          // Copy the user-provided parameters into our local variable.
+          new_params = *odirect_params;
+        } else {
+          throw cudf::logic_error("Invalid parameters for O_DIRECT-based datasource.");
+        }
+      }
+      return std::make_unique<odirect_source>(filepath.c_str(), new_params);
+    }
+    case datasource_kind::HOST_MMAP:
+      return std::make_unique<memory_mapped_source>(
+        filepath.c_str(), offset, max_size_estimate, min_size_estimate);
+    default:
+      CUDF_FAIL("Unsupported datasource kind");
+  }
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
