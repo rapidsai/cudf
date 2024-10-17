@@ -46,6 +46,7 @@ auto create_sparse_results_table(table_view const& flattened_values,
 {
   // TODO single allocation - room for performance improvement
   std::vector<std::unique_ptr<column>> sparse_columns;
+  sparse_columns.reserve(flatten_values.num_columns());
   std::transform(
     flattened_values.begin(),
     flattened_values.end(),
