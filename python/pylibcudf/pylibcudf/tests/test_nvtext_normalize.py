@@ -8,16 +8,14 @@ from utils import assert_column_eq
 
 @pytest.fixture(scope="module")
 def norm_spaces_input_data():
-    arr1 = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]"]
-    arr2 = ["a b", "  c  d\n", "e \t f "]
-    return pa.array(arr1), pa.array(arr2)
+    arr = ["a b", "  c  d\n", "e \t f "]
+    return pa.array(arr)
 
 
 @pytest.fixture(scope="module")
 def norm_chars_input_data():
-    arr1 = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]"]
-    arr2 = ["a b", "  c  d\n", "e \t f "]
-    return pa.array(arr1), pa.array(arr2)
+    arr = ["éâîô\teaio", "ĂĆĖÑÜ", "ACENU", "$24.08", "[a,bb]"]
+    return pa.array(arr)
 
 
 def test_normalize_spaces(norm_spaces_input_data):
