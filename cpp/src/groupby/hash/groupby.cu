@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "compute_groupby.cuh"
+#include "compute_groupby.hpp"
 #include "groupby/common/utils.hpp"
 #include "helpers.cuh"
 

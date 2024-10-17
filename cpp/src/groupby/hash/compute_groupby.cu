@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "compute_groupby.cuh"
+#include "compute_groupby.hpp"
 #include "compute_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "sparse_to_dense_results.hpp"
@@ -38,7 +38,6 @@
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
-namespace {
 /**
  * @brief Computes and returns a device vector containing all populated keys in
  * `map`.
@@ -60,40 +59,13 @@ template rmm::device_uvector<size_type> extract_populated_keys<global_set_t>(
 
 template rmm::device_uvector<size_type> extract_populated_keys<nullable_global_set_t>(
   nullable_global_set_t const& key_set, size_type num_keys, rmm::cuda_stream_view stream);
-}  // namespace
 
-/**
- * @brief Computes groupby using hash table.
- *
- * First, we create a hash table that stores the indices of unique rows in
- * `keys`. The upper limit on the number of values in this map is the number
- * of rows in `keys`.
- *
- * To store the results of aggregations, we create temporary sparse columns
- * which have the same size as input value columns. Using the hash map, we
- * determine the location within the sparse column to write the result of the
- * aggregation into.
- *
- * The sparse column results of all aggregations are stored into the cache
- * `sparse_results`. This enables the use of previously calculated results in
- * other aggregations.
- *
- * All the aggregations which can be computed in a single pass are computed
- * first, in a combined kernel. Then using these results, aggregations that
- * require multiple passes, will be computed.
- *
- * Finally, using the hash map, we generate a vector of indices of populated
- * values in sparse result columns. Then, for each aggregation originally
- * requested in `requests`, we gather sparse results into a column of dense
- * results using the aforementioned index vector. Dense results are stored into
- * the in/out parameter `cache`.
- */
-template <typename Equal>
+template <typename Equal, typename Hash>
 std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        host_span<aggregation_request const> requests,
                                        bool skip_rows_with_nulls,
                                        Equal const& d_row_equal,
-                                       row_hash_t const& d_row_hash,
+                                       Hash const& d_row_hash,
                                        cudf::detail::result_cache* cache,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
@@ -152,7 +124,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                               mr);
 }
 
-template std::unique_ptr<table> compute_groupby<row_comparator_t>(
+template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(
   table_view const& keys,
   host_span<aggregation_request const> requests,
   bool skip_rows_with_nulls,
@@ -162,7 +134,7 @@ template std::unique_ptr<table> compute_groupby<row_comparator_t>(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t>(
+template std::unique_ptr<table> compute_groupby<nullable_row_comparator_t, row_hash_t>(
   table_view const& keys,
   host_span<aggregation_request const> requests,
   bool skip_rows_with_nulls,
