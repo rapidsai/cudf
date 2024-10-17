@@ -5,7 +5,7 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
-RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+RAPIDS_VERSION="$(rapids-version)"
 
 rapids-logger "Generate notebook testing dependencies"
 
@@ -32,8 +32,8 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  "cudf=${RAPIDS_VERSION_MAJOR_MINOR}" \
-  "libcudf=${RAPIDS_VERSION_MAJOR_MINOR}"
+  "cudf=${RAPIDS_VERSION}" \
+  "libcudf=${RAPIDS_VERSION}"
 
 NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
 pushd notebooks
