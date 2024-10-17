@@ -91,10 +91,7 @@ cpdef Column replace_re(
 
         return Column.from_libcudf(move(c_result))
     else:
-        raise TypeError(
-            "Must pass either a RegexProgram and a Scalar or a list\
-            and a Column for pattern and replacement, respectively."
-        )
+        raise TypeError("Must pass either a RegexProgram and a Scalar or a list")
 
 
 cpdef Column replace_with_backrefs(
