@@ -71,6 +71,7 @@ rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
  * the in/out parameter `cache`.
  *
  * @tparam Equal Device row comparator type
+ * @tparam Hash Device row hasher type
  *
  * @param keys Table whose rows act as the groupby keys
  * @param requests The set of columns to aggregate and the aggregations to perform
