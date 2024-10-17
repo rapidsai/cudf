@@ -1,9 +1,7 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
-import zoneinfo
-
-import pandas as pd
-
 import cudf
+import pandas as pd
+import zoneinfo
 from cudf.testing import assert_eq
 
 

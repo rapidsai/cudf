@@ -28,15 +28,11 @@ class _RollingBase:
 
     obj: cudf.DataFrame | cudf.Series
 
-    def _apply_agg_column(
-        self, source_column: ColumnBase, agg_name: str
-    ) -> ColumnBase:
+    def _apply_agg_column(self, source_column: ColumnBase, agg_name: str) -> ColumnBase:
         raise NotImplementedError
 
     def _apply_agg(self, agg_name: str) -> cudf.DataFrame | cudf.Series:
-        applied = (
-            self._apply_agg_column(col, agg_name) for col in self.obj._columns
-        )
+        applied = (self._apply_agg_column(col, agg_name) for col in self.obj._columns)
         return self.obj._from_data_like_self(
             self.obj._data._from_columns_like_self(applied)
         )
@@ -270,12 +266,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             end = as_column(end, dtype="int32")
 
             idx = as_column(range(len(start)))
-            preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
-            following_window = (end - idx - cudf.Scalar(1, "int32")).astype(
-                "int32"
-            )
+            preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype("int32")
+            following_window = (end - idx - cudf.Scalar(1, "int32")).astype("int32")
             window = None
         else:
             preceding_window = as_column(self.window)
@@ -461,18 +453,14 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             if self.min_periods is None:
                 min_periods = window
         else:
-            if isinstance(
-                window, (numba.cuda.devicearray.DeviceNDArray, BaseIndexer)
-            ):
+            if isinstance(window, (numba.cuda.devicearray.DeviceNDArray, BaseIndexer)):
                 # window is a device_array of window sizes or BaseIndexer
                 self.window = window
                 self.min_periods = min_periods
                 return
 
             if not isinstance(self.obj.index, cudf.core.index.DatetimeIndex):
-                raise ValueError(
-                    "window must be an integer for non datetime index"
-                )
+                raise ValueError("window must be an integer for non datetime index")
 
             self._time_window = True
 
@@ -528,14 +516,10 @@ class RollingGroupby(Rolling):
         # of `groupby.grouping.keys` and `groupby.obj`.
         # As an optimization, avoid gathering those twice.
         self._group_keys = groupby.grouping.keys.take(sort_order)
-        obj = groupby.obj.drop(columns=groupby.grouping._named_columns).take(
-            sort_order
-        )
+        obj = groupby.obj.drop(columns=groupby.grouping._named_columns).take(sort_order)
 
         gb_size = groupby.size().sort_index()
-        self._group_starts = (
-            gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
-        )
+        self._group_starts = gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 

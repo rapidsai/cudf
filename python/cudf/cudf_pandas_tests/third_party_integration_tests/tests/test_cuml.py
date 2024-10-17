@@ -23,9 +23,7 @@ def assert_cuml_equal(expect, got):
     # Handle equality
     if isinstance(expect, KMeans) and isinstance(got, KMeans):
         # same clusters
-        np.testing.assert_allclose(
-            expect.cluster_centers_, got.cluster_centers_
-        )
+        np.testing.assert_allclose(expect.cluster_centers_, got.cluster_centers_)
     elif isinstance(expect, np.ndarray) and isinstance(got, np.ndarray):
         np.testing.assert_allclose(expect, got)
     elif isinstance(expect, tuple) and isinstance(got, tuple):

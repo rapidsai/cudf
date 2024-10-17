@@ -79,16 +79,13 @@ class JSONReader(IOFuzz):
             # issue is fixed:
             # https://github.com/rapidsai/cudf/issues/7086
             # dtypes_list.extend(["list"])
-            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
-            )
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self, dtypes_list)
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
         logging.info(
-            f"Generating DataFrame with rows: {num_rows} "
-            f"and columns: {num_cols}"
+            f"Generating DataFrame with rows: {num_rows} " f"and columns: {num_cols}"
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
@@ -154,16 +151,13 @@ class JSONWriter(IOFuzz):
             # issue is fixed:
             # https://github.com/rapidsai/cudf/issues/7086
             # dtypes_list.extend(["list"])
-            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
-            )
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self, dtypes_list)
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
         logging.info(
-            f"Generating DataFrame with rows: {num_rows} "
-            f"and columns: {num_cols}"
+            f"Generating DataFrame with rows: {num_rows} " f"and columns: {num_cols}"
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)

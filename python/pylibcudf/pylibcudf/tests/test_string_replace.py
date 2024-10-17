@@ -60,9 +60,7 @@ def test_replace(data_col, scalar_repl_target, scalar_repl, maxrepl):
     pa_data_col, plc_data_col = data_col
     pa_target, plc_target = scalar_repl_target
     pa_repl, plc_repl = scalar_repl
-    got = plc.strings.replace.replace(
-        plc_data_col, plc_target, plc_repl, maxrepl
-    )
+    got = plc.strings.replace.replace(plc_data_col, plc_target, plc_repl, maxrepl)
 
     expected = pc.replace_substring(
         pa_data_col,
@@ -79,9 +77,7 @@ def test_replace_slice(data_col, scalar_repl, startstop):
     pa_data_col, plc_data_col = data_col
     pa_repl, plc_repl = scalar_repl
     start, stop = startstop
-    got = plc.strings.replace.replace_slice(
-        plc_data_col, plc_repl, start, stop
-    )
+    got = plc.strings.replace.replace_slice(plc_data_col, plc_repl, start, stop)
 
     if stop == -1:
         # pyarrow doesn't support -1 as stop, so just set to really big number
@@ -99,9 +95,7 @@ def test_replace_col(data_col, col_repl_target, col_repl):
     pa_data_col, plc_data_col = data_col
     pa_target, plc_target = col_repl_target
     pa_repl, plc_repl = col_repl
-    got = plc.strings.replace.replace_multiple(
-        plc_data_col, plc_target, plc_repl
-    )
+    got = plc.strings.replace.replace_multiple(plc_data_col, plc_target, plc_repl)
 
     # There's nothing in pyarrow that does string replace with columns
     # for targets/repls, so let's implement our own in python

@@ -17,7 +17,6 @@ import sys
 
 import numpy as np
 import pandas as pd
-
 from cudf import DataFrame, Index, Series
 from cudf._lib.copying import pack, unpack
 from cudf.testing import assert_eq
@@ -35,9 +34,7 @@ def test_sizeof_packed_dataframe():
     sizeof = sys.getsizeof(packed)
     assert sizeof < nbytes
 
-    serialized_nbytes = len(
-        pickle.dumps(packed, protocol=pickle.HIGHEST_PROTOCOL)
-    )
+    serialized_nbytes = len(pickle.dumps(packed, protocol=pickle.HIGHEST_PROTOCOL))
 
     # assert at least sizeof bytes were serialized
     assert serialized_nbytes >= sizeof
@@ -81,9 +78,7 @@ def test_packed_dataframe_equality_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical(
-        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
-    )
+    df["keys"] = pd.Categorical(["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"])
     df["vals"] = np.random.random(len(df))
 
     check_packed_equality(df)
@@ -103,9 +98,7 @@ def test_packed_dataframe_equality_struct():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = Series(
-        list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
-    )
+    df["keys"] = Series(list({"0": i, "1": i + 1, "2": i + 2} for i in range(10)))
     df["vals"] = np.random.random(len(df))
 
     check_packed_equality(df)
@@ -149,9 +142,7 @@ def test_packed_dataframe_unique_pointers_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical(
-        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
-    )
+    df["keys"] = pd.Categorical(["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"])
     df["vals"] = np.random.random(len(df))
 
     check_packed_unique_pointers(df)
@@ -171,9 +162,7 @@ def test_packed_dataframe_unique_pointers_struct():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = Series(
-        list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
-    )
+    df["keys"] = Series(list({"0": i, "1": i + 1, "2": i + 2} for i in range(10)))
     df["vals"] = np.random.random(len(df))
 
     check_packed_unique_pointers(df)
@@ -192,9 +181,7 @@ def check_packed_pickled_equality(df):
     assert_packed_frame_picklable(sortvaldf)
     # out-of-band
     buffers = []
-    serialbytes = pickle.dumps(
-        pack(df), protocol=5, buffer_callback=buffers.append
-    )
+    serialbytes = pickle.dumps(pack(df), protocol=5, buffer_callback=buffers.append)
     for b in buffers:
         assert isinstance(b, pickle.PickleBuffer)
     loaded = unpack(pickle.loads(serialbytes, buffers=buffers))
@@ -222,9 +209,7 @@ def test_pickle_packed_dataframe_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical(
-        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
-    )
+    df["keys"] = pd.Categorical(["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"])
     df["vals"] = np.random.random(len(df))
 
     check_packed_pickled_equality(df)
@@ -244,9 +229,7 @@ def test_pickle_packed_dataframe_struct():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = Series(
-        list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
-    )
+    df["keys"] = Series(list({"0": i, "1": i + 1, "2": i + 2} for i in range(10)))
     df["vals"] = np.random.random(len(df))
 
     check_packed_pickled_equality(df)
@@ -287,9 +270,7 @@ def test_serialize_packed_dataframe_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical(
-        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
-    )
+    df["keys"] = pd.Categorical(["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"])
     df["vals"] = np.random.random(len(df))
 
     check_packed_serialized_equality(df)
@@ -309,9 +290,7 @@ def test_serialize_packed_dataframe_struct():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = Series(
-        list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
-    )
+    df["keys"] = Series(list({"0": i, "1": i + 1, "2": i + 2} for i in range(10)))
     df["vals"] = np.random.random(len(df))
 
     check_packed_serialized_equality(df)

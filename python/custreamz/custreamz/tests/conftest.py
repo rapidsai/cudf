@@ -2,6 +2,7 @@
 import socket
 
 import pytest
+
 from custreamz import kafka
 
 
@@ -14,9 +15,7 @@ def kafka_client():
         s.shutdown(2)
         s.close()
     except Exception:
-        pytest.skip(
-            "A running Kafka instance must be available to run these tests"
-        )
+        pytest.skip("A running Kafka instance must be available to run these tests")
 
     kafka_configs = {
         "metadata.broker.list": "localhost:9092",

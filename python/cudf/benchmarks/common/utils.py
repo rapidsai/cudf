@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Common utilities for fixture creation and benchmarking."""
 
@@ -42,9 +42,7 @@ def make_boolean_mask_column(size):
     return cudf.core.column.as_column(rstate.randint(0, 2, size).astype(bool))
 
 
-def benchmark_with_object(
-    cls, *, dtype="int", nulls=None, cols=None, rows=None
-):
+def benchmark_with_object(cls, *, dtype="int", nulls=None, cols=None, rows=None):
     """Pass "standard" cudf fixtures to functions without renaming parameters.
 
     The fixture generation logic in conftest.py provides a plethora of useful

@@ -119,9 +119,7 @@ class Frame(BinaryOperand, Scannable):
             key = f"column_{metadata}"
             if key in header:
                 kwargs[metadata] = pickle.loads(header[key])
-        col_accessor = ColumnAccessor(
-            data=dict(zip(column_names, columns)), **kwargs
-        )
+        col_accessor = ColumnAccessor(data=dict(zip(column_names, columns)), **kwargs)
         return cls_deserialize._from_data(col_accessor)
 
     @classmethod
@@ -159,15 +157,11 @@ class Frame(BinaryOperand, Scannable):
         return frame._copy_type_metadata(self)
 
     @_performance_tracking
-    def _mimic_inplace(
-        self, result: Self, inplace: bool = False
-    ) -> Self | None:
+    def _mimic_inplace(self, result: Self, inplace: bool = False) -> Self | None:
         if inplace:
             for col in self._column_names:
                 if col in result._data:
-                    self._data[col]._mimic_inplace(
-                        result._data[col], inplace=True
-                    )
+                    self._data[col]._mimic_inplace(result._data[col], inplace=True)
             self._data = result._data
             return None
         else:
@@ -417,9 +411,7 @@ class Frame(BinaryOperand, Scannable):
         # Internal function to implement to_cupy and to_numpy, which are nearly
         # identical except for the attribute they access to generate values.
 
-        def to_array(
-            col: ColumnBase, dtype: np.dtype
-        ) -> cupy.ndarray | numpy.ndarray:
+        def to_array(col: ColumnBase, dtype: np.dtype) -> cupy.ndarray | numpy.ndarray:
             if na_value is not None:
                 col = col.fillna(na_value)
             array = get_array(col)
@@ -444,16 +436,12 @@ class Frame(BinaryOperand, Scannable):
                 dtype = find_common_type([dtype for _, dtype in self._dtypes])
 
             if not isinstance(dtype, numpy.dtype):
-                raise NotImplementedError(
-                    f"{dtype} cannot be exposed as an array"
-                )
+                raise NotImplementedError(f"{dtype} cannot be exposed as an array")
 
         if self.ndim == 1:
             return to_array(self._columns[0], dtype)
         else:
-            matrix = module.empty(
-                shape=(len(self), ncol), dtype=dtype, order="F"
-            )
+            matrix = module.empty(shape=(len(self), ncol), dtype=dtype, order="F")
             for i, col in enumerate(self._columns):
                 # TODO: col.values may fail if there is nullable data or an
                 # unsupported dtype. We may want to catch and provide a more
@@ -532,9 +520,7 @@ class Frame(BinaryOperand, Scannable):
                 "array always copies the data."
             )
 
-        return self._to_array(
-            lambda col: col.values_host, numpy, copy, dtype, na_value
-        )
+        return self._to_array(lambda col: col.values_host, numpy, copy, dtype, na_value)
 
     @_performance_tracking
     def where(self, cond, other=None, inplace: bool = False) -> Self | None:
@@ -725,9 +711,7 @@ class Frame(BinaryOperand, Scannable):
 
         if method:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "
@@ -735,9 +719,7 @@ class Frame(BinaryOperand, Scannable):
                 FutureWarning,
             )
             if method not in {"ffill", "bfill", "pad", "backfill"}:
-                raise NotImplementedError(
-                    f"Fill method {method} is not supported"
-                )
+                raise NotImplementedError(f"Fill method {method} is not supported")
             if method == "pad":
                 method = "ffill"
             elif method == "backfill":
@@ -759,9 +741,7 @@ class Frame(BinaryOperand, Scannable):
 
         return self._mimic_inplace(
             self._from_data_like_self(
-                self._data._from_columns_like_self(
-                    filled_columns, verify=False
-                )
+                self._data._from_columns_like_self(filled_columns, verify=False)
             ),
             inplace=inplace,
         )
@@ -794,9 +774,7 @@ class Frame(BinaryOperand, Scannable):
 
         column_order = [libcudf.types.Order[key] for key in column_order]
 
-        null_precedence = [
-            libcudf.types.NullOrder[key] for key in null_precedence
-        ]
+        null_precedence = [libcudf.types.NullOrder[key] for key in null_precedence]
 
         return self._from_columns_like_self(
             libcudf.quantiles.quantile_table(
@@ -863,8 +841,7 @@ class Frame(BinaryOperand, Scannable):
         # This needs be removed once we have hooked libcudf dictionary32
         # with categorical.
         if any(
-            isinstance(x.type, pa.DictionaryType)
-            and isinstance(x, pa.ChunkedArray)
+            isinstance(x.type, pa.DictionaryType) and isinstance(x, pa.ChunkedArray)
             for x in data
         ):
             data = data.combine_chunks()
@@ -896,9 +873,7 @@ class Frame(BinaryOperand, Scannable):
                 for name in dict_dictionaries.keys()
             }
 
-            for name, codes in zip(
-                dict_indices_table.column_names, indices_columns
-            ):
+            for name, codes in zip(dict_indices_table.column_names, indices_columns):
                 categories = cudf_dictionaries_columns[name]
                 codes = as_unsigned_codes(len(categories), codes)
                 cudf_category_frame[name] = CategoricalColumn(
@@ -915,9 +890,7 @@ class Frame(BinaryOperand, Scannable):
         # Handle non-dict arrays
         cudf_non_category_frame = {
             name: col
-            for name, col in zip(
-                data.column_names, libcudf.interop.from_arrow(data)
-            )
+            for name, col in zip(data.column_names, libcudf.interop.from_arrow(data))
         }
 
         result = {**cudf_non_category_frame, **cudf_category_frame}
@@ -925,19 +898,13 @@ class Frame(BinaryOperand, Scannable):
         # There are some special cases that need to be handled
         # based on metadata.
         for name in result:
-            if (
-                len(result[name]) == 0
-                and pandas_dtypes.get(name) == "categorical"
-            ):
+            if len(result[name]) == 0 and pandas_dtypes.get(name) == "categorical":
                 # When pandas_dtype is a categorical column and the size
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
                 result[name] = result[name].astype("category")
-            elif (
-                pandas_dtypes.get(name) == "empty"
-                and np_dtypes.get(name) == "object"
-            ):
+            elif pandas_dtypes.get(name) == "empty" and np_dtypes.get(name) == "object":
                 # When a string column has all null values, pandas_dtype is
                 # is specified as 'empty' and np_dtypes as 'object',
                 # hence handling this special case to type-cast the empty
@@ -995,10 +962,7 @@ class Frame(BinaryOperand, Scannable):
         index: [[1,2,3]]
         """
         return pa.Table.from_pydict(
-            {
-                str(name): col.to_arrow()
-                for name, col in self._column_labels_and_values
-            }
+            {str(name): col.to_arrow() for name, col in self._column_labels_and_values}
         )
 
     @_performance_tracking
@@ -1009,9 +973,7 @@ class Frame(BinaryOperand, Scannable):
         Frame.
         """
         return [
-            i
-            for i, name in enumerate(self._column_names)
-            if name in set(column_names)
+            i for i, name in enumerate(self._column_names) if name in set(column_names)
         ]
 
     @_performance_tracking
@@ -1284,15 +1246,11 @@ class Frame(BinaryOperand, Scannable):
             for col, val in zip(self._columns, values)
         ]
         sources = [
-            col
-            if is_dtype_equal(col.dtype, common_dtype)
-            else col.astype(common_dtype)
+            col if is_dtype_equal(col.dtype, common_dtype) else col.astype(common_dtype)
             for col, common_dtype in zip(self._columns, common_dtype_list)
         ]
         values = [
-            val
-            if is_dtype_equal(val.dtype, common_dtype)
-            else val.astype(common_dtype)
+            val if is_dtype_equal(val.dtype, common_dtype) else val.astype(common_dtype)
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
@@ -1434,9 +1392,7 @@ class Frame(BinaryOperand, Scannable):
         """
         return [
             self._from_columns_like_self(
-                libcudf.copying.columns_split(list(self._columns), splits)[
-                    split_idx
-                ],
+                libcudf.copying.columns_split(list(self._columns), splits)[split_idx],
                 self._column_names,
             )
             for split_idx in range(len(splits) + 1)
@@ -1587,9 +1543,7 @@ class Frame(BinaryOperand, Scannable):
         return self._from_data_like_self(
             self._data._from_columns_like_self(
                 (
-                    col.unary_operator("not")
-                    if col.dtype.kind == "b"
-                    else -1 * col
+                    col.unary_operator("not") if col.dtype.kind == "b" else -1 * col
                     for col in self._columns
                 )
             )
@@ -1871,19 +1825,13 @@ class Frame(BinaryOperand, Scannable):
         dict
             Name and unique value counts of each column in frame.
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement nunique"
-        )
+        raise NotImplementedError(f"{type(self).__name__} does not implement nunique")
 
     @staticmethod
     @_performance_tracking
-    def _repeat(
-        columns: list[ColumnBase], repeats, axis=None
-    ) -> list[ColumnBase]:
+    def _repeat(columns: list[ColumnBase], repeats, axis=None) -> list[ColumnBase]:
         if axis is not None:
-            raise NotImplementedError(
-                "Only axis=`None` supported at this time."
-            )
+            raise NotImplementedError("Only axis=`None` supported at this time.")
 
         if not is_scalar(repeats):
             repeats = as_column(repeats)

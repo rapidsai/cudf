@@ -4,13 +4,11 @@ import itertools
 import os
 import pathlib
 
+import cudf
 import cupy as cp
 import numpy as np
 import pytest
-
 import rmm  # noqa: F401
-
-import cudf
 from cudf.testing import assert_eq
 
 _CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)

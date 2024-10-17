@@ -66,7 +66,6 @@ from utils import (  # noqa: E402
 
 # Turn off isort until we upgrade to 5.8.0
 # https://github.com/pycqa/isort/issues/1594
-# isort: off
 from config import (  # noqa: W0611, E402, F401
     NUM_COLS,
     NUM_ROWS,
@@ -75,8 +74,6 @@ from config import (  # noqa: W0611, E402, F401
     pytest_sessionfinish,
     pytest_sessionstart,
 )
-
-# isort: on
 
 
 @pytest_cases.fixture(params=[0, 1], ids=["AxisIndex", "AxisColumn"])
@@ -93,10 +90,7 @@ for dtype, column_generator in column_generators.items():
             string.ascii_lowercase
         ), "make_dataframe only supports a maximum of 26 columns"
         return cudf.DataFrame(
-            {
-                f"{string.ascii_lowercase[i]}": column_generator(nr)
-                for i in range(nc)
-            }
+            {f"{string.ascii_lowercase[i]}": column_generator(nr) for i in range(nc)}
         )
 
     for nr in NUM_ROWS:
@@ -108,9 +102,7 @@ for dtype, column_generator in column_generators.items():
         # https://github.com/smarie/python-pytest-cases/issues/278
         # Once that is fixed we could remove all the extraneous `request`
         # fixtures in these fixtures.
-        def series_nulls_false(
-            request, nr=nr, column_generator=column_generator
-        ):
+        def series_nulls_false(request, nr=nr, column_generator=column_generator):
             return cudf.Series(column_generator(nr))
 
         make_fixture(
@@ -120,9 +112,7 @@ for dtype, column_generator in column_generators.items():
             fixtures,
         )
 
-        def series_nulls_true(
-            request, nr=nr, column_generator=column_generator
-        ):
+        def series_nulls_true(request, nr=nr, column_generator=column_generator):
             s = cudf.Series(column_generator(nr))
             s.iloc[::2] = None
             return s
@@ -135,9 +125,7 @@ for dtype, column_generator in column_generators.items():
         )
 
         # For now, not bothering to include a nullable index fixture.
-        def index_nulls_false(
-            request, nr=nr, column_generator=column_generator
-        ):
+        def index_nulls_false(request, nr=nr, column_generator=column_generator):
             return cudf.Index(column_generator(nr))
 
         make_fixture(

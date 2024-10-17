@@ -119,9 +119,7 @@ def ndarray__array_ufunc__(self, ufunc, method, *inputs, **kwargs):
             result[0]._fsproxy_wrapped, numpy.ndarray
         ):
             return tuple(numpy.asarray(x) for x in result)
-    elif is_proxy_object(result) and isinstance(
-        result._fsproxy_wrapped, numpy.ndarray
-    ):
+    elif is_proxy_object(result) and isinstance(result._fsproxy_wrapped, numpy.ndarray):
         return numpy.asarray(result)
     return result
 

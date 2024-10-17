@@ -9,9 +9,7 @@ from config import NUM_ROWS, cudf, cupy
 from utils import benchmark_with_object
 
 
-@pytest_cases.parametrize_with_cases(
-    "objs", prefix="concat", cases="cases_functions"
-)
+@pytest_cases.parametrize_with_cases("objs", prefix="concat", cases="cases_functions")
 @pytest.mark.parametrize(
     "axis",
     [
@@ -21,9 +19,7 @@ from utils import benchmark_with_object
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("ignore_index", [True, False])
 def bench_concat_axis_1(benchmark, objs, axis, join, ignore_index):
-    benchmark(
-        cudf.concat, objs=objs, axis=axis, join=join, ignore_index=ignore_index
-    )
+    benchmark(cudf.concat, objs=objs, axis=axis, join=join, ignore_index=ignore_index)
 
 
 @pytest.mark.parametrize("size", [10_000, 100_000])
@@ -51,9 +47,7 @@ def bench_get_dummies_simple(benchmark, prefix):
             "col3": cudf.Series(list(range(100, 110)), dtype="category"),
         }
     )
-    benchmark(
-        cudf.get_dummies, df, columns=["col1", "col2", "col3"], prefix=prefix
-    )
+    benchmark(cudf.get_dummies, df, columns=["col1", "col2", "col3"], prefix=prefix)
 
 
 @benchmark_with_object(cls="dataframe", dtype="int", cols=6)

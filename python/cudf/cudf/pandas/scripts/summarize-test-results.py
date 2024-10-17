@@ -50,9 +50,7 @@ def get_per_module_results(log_file_name):
                         # it's an xpassed test
                         outcome = "failed"
                 module_name = (
-                    line["nodeid"]
-                    .split("::")[0]
-                    .removeprefix(PANDAS_TEST_PREFIX)
+                    line["nodeid"].split("::")[0].removeprefix(PANDAS_TEST_PREFIX)
                 )
                 per_module_results.setdefault(module_name, {})
                 per_module_results[module_name].setdefault("total", 0)
@@ -79,21 +77,21 @@ def get_per_module_results(log_file_name):
                         function_call_counts[key]["_slow_function_call"] = 0
                     if "_fast_function_call" not in function_call_counts[key]:
                         function_call_counts[key]["_fast_function_call"] = 0
-                    function_call_counts[key]["_slow_function_call"] += (
-                        value.get("_slow_function_call", 0)
+                    function_call_counts[key]["_slow_function_call"] += value.get(
+                        "_slow_function_call", 0
                     )
-                    function_call_counts[key]["_fast_function_call"] += (
-                        value.get("_fast_function_call", 0)
+                    function_call_counts[key]["_fast_function_call"] += value.get(
+                        "_fast_function_call", 0
                     )
 
     for key, value in per_module_results.items():
         if key in function_call_counts:
-            per_module_results[key]["_slow_function_call"] = (
-                function_call_counts[key].get("_slow_function_call", 0)
-            )
-            per_module_results[key]["_fast_function_call"] = (
-                function_call_counts[key].get("_fast_function_call", 0)
-            )
+            per_module_results[key]["_slow_function_call"] = function_call_counts[
+                key
+            ].get("_slow_function_call", 0)
+            per_module_results[key]["_fast_function_call"] = function_call_counts[
+                key
+            ].get("_fast_function_call", 0)
         else:
             per_module_results[key]["_slow_function_call"] = 0
             per_module_results[key]["_fast_function_call"] = 0
@@ -101,9 +99,7 @@ def get_per_module_results(log_file_name):
 
 
 def sort_results(results):
-    sorted_keys = sorted(
-        results, key=lambda key: results[key].get("failed", 0)
-    )
+    sorted_keys = sorted(results, key=lambda key: results[key].get("failed", 0))
     return {key: results[key] for key in sorted_keys}
 
 
@@ -139,9 +135,7 @@ def print_results_as_table(results):
 if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "log_file_name", nargs=1, help="The input log file name"
-    )
+    parser.add_argument("log_file_name", nargs=1, help="The input log file name")
     parser.add_argument(
         "--output",
         choices=["json", "table"],

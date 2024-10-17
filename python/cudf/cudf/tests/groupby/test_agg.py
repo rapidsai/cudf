@@ -1,8 +1,7 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
+import cudf
 import numpy as np
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 
 
@@ -51,9 +50,7 @@ def test_dataframe_agg(attr, func):
     assert_eq(agg, pd_agg)
 
     agg = getattr(df.groupby("a"), attr)(foo=("b", func), bar=("a", func))
-    pd_agg = getattr(pdf.groupby(["a"]), attr)(
-        foo=("b", func), bar=("a", func)
-    )
+    pd_agg = getattr(pdf.groupby(["a"]), attr)(foo=("b", func), bar=("a", func))
 
     assert_eq(agg, pd_agg)
 
@@ -61,9 +58,7 @@ def test_dataframe_agg(attr, func):
         foo=cudf.NamedAgg(column="b", aggfunc=func),
         bar=cudf.NamedAgg(column="a", aggfunc=func),
     )
-    pd_agg = getattr(pdf.groupby(["a"]), attr)(
-        foo=("b", func), bar=("a", func)
-    )
+    pd_agg = getattr(pdf.groupby(["a"]), attr)(foo=("b", func), bar=("a", func))
 
     assert_eq(agg, pd_agg)
 

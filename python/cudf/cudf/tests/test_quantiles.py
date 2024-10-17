@@ -2,10 +2,9 @@
 
 import re
 
+import cudf
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 

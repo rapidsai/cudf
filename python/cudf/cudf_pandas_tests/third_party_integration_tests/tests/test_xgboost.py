@@ -58,9 +58,7 @@ def test_with_dmatrix(
     assert Xy.feature_names == list(map(str, X_df.columns))
     csr_0 = Xy.get_data()
 
-    Xc, yc = make_categorical(
-        n_samples, n_features, n_categories=13, onehot=False
-    )
+    Xc, yc = make_categorical(n_samples, n_features, n_categories=13, onehot=False)
     Xy = xgb.DMatrix(Xc, yc, enable_categorical=True)
     csr_1 = Xy.get_data()
     return csr_0, csr_1
@@ -81,9 +79,7 @@ def test_with_quantile_dmatrix(
     assert Xy.feature_names == list(map(str, X_df.columns))
     csr_0 = Xy.get_data()
 
-    Xc, yc = make_categorical(
-        n_samples, n_features, n_categories=13, onehot=False
-    )
+    Xc, yc = make_categorical(n_samples, n_features, n_categories=13, onehot=False)
     Xy = xgb.QuantileDMatrix(Xc, yc, enable_categorical=True)
     csr_1 = Xy.get_data()
     return csr_0, csr_1

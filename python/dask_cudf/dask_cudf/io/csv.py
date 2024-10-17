@@ -1,17 +1,15 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import os
 from glob import glob
 from warnings import warn
 
-from fsspec.utils import infer_compression
-
+import cudf
 from dask import dataframe as dd
 from dask.base import tokenize
 from dask.dataframe.io.csv import make_reader
 from dask.utils import apply, parse_bytes
-
-import cudf
+from fsspec.utils import infer_compression
 
 
 def read_csv(path, blocksize="default", **kwargs):

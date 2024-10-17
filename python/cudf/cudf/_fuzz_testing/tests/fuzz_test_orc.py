@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import io
 import sys
@@ -54,18 +54,14 @@ def orc_reader_test(input_tuple, columns, skiprows, num_rows, use_index):
 )
 def orc_reader_stripes_test(input_tuple, columns, stripes):
     _, file_buffer = input_tuple
-    expected_pdf = orc_to_pandas(
-        file_io_obj=io.BytesIO(file_buffer), stripes=stripes
-    )
+    expected_pdf = orc_to_pandas(file_io_obj=io.BytesIO(file_buffer), stripes=stripes)
 
     if columns is not None and len(columns) > 0:
         # ORC reader picks columns if only
         # there are any elements in `columns`
         expected_pdf = expected_pdf[columns]
 
-    gdf = cudf.read_orc(
-        io.BytesIO(file_buffer), columns=columns, stripes=stripes
-    )
+    gdf = cudf.read_orc(io.BytesIO(file_buffer), columns=columns, stripes=stripes)
 
     compare_dataframe(expected_pdf, gdf)
 

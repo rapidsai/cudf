@@ -7,9 +7,7 @@ from utils import assert_column_eq
 
 @pytest.fixture(scope="module")
 def plc_col():
-    arr = pa.array(
-        ['{"foo": {"bar": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]', None]
-    )
+    arr = pa.array(['{"foo": {"bar": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]', None])
     return plc.interop.from_arrow(arr)
 
 

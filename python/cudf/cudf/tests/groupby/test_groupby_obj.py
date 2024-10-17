@@ -1,8 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-from numpy.testing import assert_array_equal
-
 import cudf
 from cudf.testing import assert_eq
+from numpy.testing import assert_array_equal
 
 
 def test_groupby_14955():

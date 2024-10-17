@@ -18,9 +18,7 @@ try:
     import numba
     import pynvjitlink  # noqa: F401
 
-    HAVE_PYNVJITLINK = version.parse(numba.__version__) >= version.parse(
-        "0.58"
-    )
+    HAVE_PYNVJITLINK = version.parse(numba.__version__) >= version.parse("0.58")
 except ModuleNotFoundError:
     pass
 

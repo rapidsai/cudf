@@ -43,9 +43,7 @@ def install():
     managed_memory_is_supported = (
         pylibcudf.utils._is_concurrent_managed_access_supported()
     )
-    default_rmm_mode = (
-        "managed_pool" if managed_memory_is_supported else "pool"
-    )
+    default_rmm_mode = "managed_pool" if managed_memory_is_supported else "pool"
     rmm_mode = os.getenv("CUDF_PANDAS_RMM_MODE", default_rmm_mode)
 
     if "managed" in rmm_mode and not managed_memory_is_supported:

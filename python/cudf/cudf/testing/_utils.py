@@ -235,9 +235,7 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
         high = kwargs.get("high", 2)
-        return np.random.randint(low=low, high=high, size=size).astype(
-            np.bool_
-        )
+        return np.random.randint(low=low, high=high, size=size).astype(np.bool_)
     elif dtype.kind == "M":
         low = kwargs.get("low", 0)
         time_unit, _ = np.datetime_data(dtype)
@@ -254,9 +252,7 @@ def gen_rand(dtype, size, **kwargs):
         nchars = np.random.randint(low=low, high=high, size=1)[0]
         char_options = np.array(list(string.ascii_letters + string.digits))
         all_chars = "".join(np.random.choice(char_options, nchars * size))
-        return np.array(
-            [all_chars[nchars * i : nchars * (i + 1)] for i in range(size)]
-        )
+        return np.array([all_chars[nchars * i : nchars * (i + 1)] for i in range(size)])
 
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
@@ -383,9 +379,7 @@ class cudf_timeout:
         self.start_time = time.perf_counter()
 
     def __exit__(self, *args):
-        elapsed_time = (
-            time.perf_counter() - self.start_time
-        )  # Calculate elapsed time
+        elapsed_time = time.perf_counter() - self.start_time  # Calculate elapsed time
         if elapsed_time >= self.timeout:
             raise TimeoutError(
                 f"Expected to finish in {self.timeout=} seconds but took {elapsed_time=} seconds"

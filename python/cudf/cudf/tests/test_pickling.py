@@ -5,7 +5,6 @@ import pickle
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf import DataFrame, Index, RangeIndex, Series
 from cudf.core.buffer import as_buffer
 from cudf.testing import assert_eq
@@ -53,9 +52,7 @@ def test_pickle_dataframe_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical(
-        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
-    )
+    df["keys"] = pd.Categorical(["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"])
     df["vals"] = np.random.random(len(df))
 
     check_serialization(df)

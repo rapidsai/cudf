@@ -5,11 +5,10 @@ import datetime
 import inspect
 from itertools import product
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import DataFrame
 from cudf.testing import assert_eq
 from cudf.utils import queryutils
@@ -64,9 +63,7 @@ params_query_env_fn = [
 ]
 
 
-@pytest.mark.parametrize(
-    "data,fn", product(params_query_data, params_query_env_fn)
-)
+@pytest.mark.parametrize("data,fn", product(params_query_data, params_query_env_fn))
 def test_query_ref_env(data, fn):
     # prepare
     nelem, seed = data

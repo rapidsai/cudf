@@ -35,7 +35,7 @@ def null_assert_warnings(*args, **kwargs):
 
 @pytest.fixture(scope="session", autouse=True)  # type: ignore
 def patch_testing_functions():
-    tm.assert_produces_warning = null_assert_warnings
+    tm.assert_produces_warning = null_assert_warnings  # noqa: F821
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 

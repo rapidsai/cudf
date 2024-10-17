@@ -1,8 +1,7 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
-
-from numba import types
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from cudf.utils import cudautils
+from numba import types
 
 
 def setup_function():

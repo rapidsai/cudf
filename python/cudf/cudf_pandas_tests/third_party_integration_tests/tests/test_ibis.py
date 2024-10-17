@@ -114,9 +114,7 @@ def test_notin(ibis_table_num_str):
 
 def test_window(ibis_table_num_str):
     t = ibis_table_num_str
-    return (
-        t.group_by("key").mutate(demeaned=t.col1 - t.col1.mean()).to_pandas()
-    )
+    return t.group_by("key").mutate(demeaned=t.col1 - t.col1.mean()).to_pandas()
 
 
 def test_limit(ibis_table_num_str):
@@ -148,9 +146,7 @@ def test_join_sort_correctness(ibis_table_num_str, ibis_table_num, join_type):
     t2 = ibis_table_num
     res = t1.join(t2, "key", how=join_type).to_pandas()
 
-    res_sorted = res.sort_values(by=res.columns.tolist()).reset_index(
-        drop=True
-    )
+    res_sorted = res.sort_values(by=res.columns.tolist()).reset_index(drop=True)
     return res_sorted
 
 

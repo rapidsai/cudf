@@ -54,9 +54,7 @@ def timeseries(
     if dtypes is None:
         dtypes = {"name": "category", "id": int, "x": float, "y": float}
 
-    index = pd.DatetimeIndex(
-        pd.date_range(start, end, freq=freq, name="timestamp")
-    )
+    index = pd.DatetimeIndex(pd.date_range(start, end, freq=freq, name="timestamp"))
     state = np.random.RandomState(seed)
     columns = {k: make[dt](len(index), state) for k, dt in dtypes.items()}
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
@@ -155,9 +153,7 @@ def make_string(n, rstate):
 
 
 def make_categorical(n, rstate):
-    return pd.Categorical.from_codes(
-        rstate.randint(0, len(names), size=n), names
-    )
+    return pd.Categorical.from_codes(rstate.randint(0, len(names), size=n), names)
 
 
 def make_bool(n, rstate):

@@ -128,9 +128,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         return_scalar: bool,
     ) -> NumericalBaseColumn:
         if np.logical_or(q < 0, q > 1).any():
-            raise ValueError(
-                "percentiles should all be in the interval [0, 1]"
-            )
+            raise ValueError("percentiles should all be in the interval [0, 1]")
         # Beyond this point, q either being scalar or list-like
         # will only have values in range [0, 1]
         if len(self) == 0:
@@ -142,21 +140,17 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         else:
             # get sorted indices and exclude nulls
-            indices = libcudf.sort.order_by(
-                [self], [True], "first", stable=True
-            ).slice(self.null_count, len(self))
-            result = libcudf.quantiles.quantile(
-                self, q, interpolation, indices, exact
+            indices = libcudf.sort.order_by([self], [True], "first", stable=True).slice(
+                self.null_count, len(self)
             )
+            result = libcudf.quantiles.quantile(self, q, interpolation, indices, exact)
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
                 try:
                     new_scalar = self.dtype.type(scalar_result)
                     scalar_result = (
-                        new_scalar
-                        if new_scalar == scalar_result
-                        else scalar_result
+                        new_scalar if new_scalar == scalar_result else scalar_result
                     )
                 except (TypeError, ValueError):
                     pass
@@ -180,9 +174,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         ddof=1,
     ):
-        result = self._reduce(
-            "var", skipna=skipna, min_count=min_count, ddof=ddof
-        )
+        result = self._reduce("var", skipna=skipna, min_count=min_count, ddof=ddof)
         if result is NA:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return result
@@ -193,9 +185,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         ddof=1,
     ):
-        result = self._reduce(
-            "std", skipna=skipna, min_count=min_count, ddof=ddof
-        )
+        result = self._reduce("std", skipna=skipna, min_count=min_count, ddof=ddof)
         if result is NA:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return result
@@ -215,11 +205,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         )
 
     def cov(self, other: NumericalBaseColumn) -> float:
-        if (
-            len(self) == 0
-            or len(other) == 0
-            or (len(self) == 1 and len(other) == 1)
-        ):
+        if len(self) == 0 or len(other) == 0 or (len(self) == 1 and len(other) == 1):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         result = (self - self.mean()) * (other - other.mean())
@@ -237,9 +223,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return cov / lhs_std / rhs_std
 
-    def round(
-        self, decimals: int = 0, how: str = "half_even"
-    ) -> NumericalBaseColumn:
+    def round(self, decimals: int = 0, how: str = "half_even") -> NumericalBaseColumn:
         if not cudf.api.types.is_integer(decimals):
             raise TypeError("Values in decimals must be integers")
         """Round the values in the Column to the given number of decimals."""

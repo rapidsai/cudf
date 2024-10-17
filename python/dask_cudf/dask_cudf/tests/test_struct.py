@@ -1,8 +1,7 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
-
-import pytest
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import cudf
+import pytest
 
 import dask_cudf
 

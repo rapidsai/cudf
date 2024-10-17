@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from pickle import dumps
 
@@ -29,16 +29,12 @@ def window_sizes_from_offset(arr, offset):
     window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
         with _CUDFNumbaConfig():
-            gpu_window_sizes_from_offset.forall(arr.size)(
-                arr, window_sizes, offset
-            )
+            gpu_window_sizes_from_offset.forall(arr.size)(arr, window_sizes, offset)
     return window_sizes
 
 
 @cuda.jit
-def gpu_grouped_window_sizes_from_offset(
-    arr, window_sizes, group_starts, offset
-):
+def gpu_grouped_window_sizes_from_offset(arr, window_sizes, group_starts, offset):
     i = cuda.grid(1)
     j = i
     if i < arr.size:

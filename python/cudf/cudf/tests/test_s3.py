@@ -5,13 +5,12 @@ import socket
 from contextlib import contextmanager
 from io import BytesIO, StringIO
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-from fsspec.core import get_fs_token_paths
-
-import cudf
 from cudf.testing import assert_eq
+from fsspec.core import get_fs_token_paths
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
@@ -123,9 +122,7 @@ def pdf_ext(scope="module"):
     df["Integer"] = np.array([i for i in range(size)])
     df["List"] = [[i] for i in range(size)]
     df["Struct"] = [{"a": i} for i in range(size)]
-    df["String"] = (["Alpha", "Beta", "Gamma", "Delta"] * (-(size // -4)))[
-        :size
-    ]
+    df["String"] = (["Alpha", "Beta", "Gamma", "Delta"] * (-(size // -4)))[:size]
     return df
 
 
@@ -217,9 +214,7 @@ def test_read_parquet(
     # Check fsspec file-object handling
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        fs = get_fs_token_paths(
-            f"s3://{bucket}/{fname}", storage_options=s3so
-        )[0]
+        fs = get_fs_token_paths(f"s3://{bucket}/{fname}", storage_options=s3so)[0]
         with fs.open(f"s3://{bucket}/{fname}", mode="rb") as f:
             got2 = cudf.read_parquet(
                 f,
@@ -307,9 +302,7 @@ def test_read_parquet_ext(
         )
     if index:
         expect = (
-            pdf_ext.set_index(index)[columns]
-            if columns
-            else pdf_ext.set_index(index)
+            pdf_ext.set_index(index)[columns] if columns else pdf_ext.set_index(index)
         )
     else:
         expect = pdf_ext[columns] if columns else pdf_ext
@@ -409,12 +402,8 @@ def test_write_parquet(s3_base, s3so, pdf, partition_cols):
         )
         assert s3fs.exists(f"s3://{bucket}/{fname_pandas}")
 
-        got = pd.read_parquet(
-            f"s3://{bucket}/{fname_pandas}", storage_options=s3so
-        )
-        expect = cudf.read_parquet(
-            f"s3://{bucket}/{fname_cudf}", storage_options=s3so
-        )
+        got = pd.read_parquet(f"s3://{bucket}/{fname_pandas}", storage_options=s3so)
+        expect = cudf.read_parquet(f"s3://{bucket}/{fname_cudf}", storage_options=s3so)
 
     assert_eq(expect, got)
 
@@ -485,9 +474,7 @@ def test_write_chunked_parquet(s3_base, s3so):
     bucket = "parquet"
     from cudf.io.parquet import ParquetDatasetWriter
 
-    with s3_context(
-        s3_base=s3_base, bucket=bucket, files={dirname: BytesIO()}
-    ) as s3fs:
+    with s3_context(s3_base=s3_base, bucket=bucket, files={dirname: BytesIO()}) as s3fs:
         with ParquetDatasetWriter(
             f"s3://{bucket}/{dirname}",
             partition_cols=["a"],

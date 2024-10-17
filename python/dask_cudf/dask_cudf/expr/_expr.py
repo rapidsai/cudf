@@ -1,20 +1,18 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import functools
 
+import cudf
 import dask_expr._shuffle as _shuffle_module
 import pandas as pd
+from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
+from dask.dataframe.dispatch import is_categorical_dtype
+from dask.typing import no_default
 from dask_expr import new_collection
 from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
 from dask_expr._reductions import Reduction, Var
 from dask_expr.io.io import FusedParquetIO
 from dask_expr.io.parquet import ReadParquetPyarrowFS
-
-from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
-from dask.dataframe.dispatch import is_categorical_dtype
-from dask.typing import no_default
-
-import cudf
 
 ##
 ## Custom expressions
@@ -30,7 +28,6 @@ class CudfFusedParquetIO(FusedParquetIO):
         *to_pandas_args,
     ):
         import pyarrow as pa
-
         from dask.base import apply, tokenize
         from dask.threaded import get
 
@@ -115,9 +112,7 @@ class RenameAxisCudf(RenameAxis):
         if index != no_default:
             df.index.name = index
             return df
-        raise NotImplementedError(
-            "Only `index` is supported for the cudf backend"
-        )
+        raise NotImplementedError("Only `index` is supported for the cudf backend")
 
 
 class ToCudfBackend(Elemwise):
@@ -135,9 +130,7 @@ class ToCudfBackend(Elemwise):
         return to_cudf_dispatch(df, **options)
 
     def _simplify_down(self):
-        if isinstance(
-            self.frame._meta, (cudf.DataFrame, cudf.Series, cudf.Index)
-        ):
+        if isinstance(self.frame._meta, (cudf.DataFrame, cudf.Series, cudf.Index)):
             # We already have cudf data
             return self.frame
 

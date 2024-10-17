@@ -44,9 +44,7 @@ def plc_target_pat(pa_target_scalar):
 def test_contains_re(target_col, pa_target_scalar, plc_target_pat):
     pa_target_col, plc_target_col = target_col
     got = plc.strings.contains.contains_re(plc_target_col, plc_target_pat)
-    expected = pc.match_substring_regex(
-        pa_target_col, pa_target_scalar.as_py()
-    )
+    expected = pc.match_substring_regex(pa_target_col, pa_target_scalar.as_py())
     assert_column_eq(got, expected)
 
 

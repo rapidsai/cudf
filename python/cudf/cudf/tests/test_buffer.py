@@ -2,7 +2,6 @@
 
 import cupy as cp
 import pytest
-
 from cudf.core.buffer import Buffer, as_buffer
 
 pytestmark = pytest.mark.spilling

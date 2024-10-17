@@ -2,11 +2,10 @@
 
 import datetime
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf import Series
 from cudf.core.index import Index, RangeIndex
 from cudf.testing import assert_eq
@@ -23,9 +22,7 @@ def cudf_num_series(start, stop, step=1):
 
 def get_categorical_series():
     return Series(
-        pd.Categorical(
-            ["ab", "ac", "cd", "ab", "cd"], categories=["ab", "ac", "cd"]
-        )
+        pd.Categorical(["ab", "ac", "cd", "ab", "cd"], categories=["ab", "ac", "cd"])
     )
 
 

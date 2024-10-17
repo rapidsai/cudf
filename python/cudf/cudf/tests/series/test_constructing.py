@@ -1,7 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
-import numpy as np
-
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 import cudf
+import numpy as np
 
 
 def test_construct_int_series_with_nulls_compat_mode():

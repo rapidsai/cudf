@@ -1,8 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-import pytest
-
 import cudf
+import pytest
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
@@ -64,9 +63,7 @@ def test_interpolate_series(data, method, axis):
     assert_eq(expect, got, check_dtype=psr.dtype != "object")
 
 
-@pytest.mark.parametrize(
-    "data,index", [([2.0, None, 4.0, None, 2.0], [1, 2, 3, 2, 1])]
-)
+@pytest.mark.parametrize("data,index", [([2.0, None, 4.0, None, 2.0], [1, 2, 3, 2, 1])])
 def test_interpolate_series_unsorted_index(data, index):
     gsr = cudf.Series(data, index=index)
     psr = gsr.to_pandas()

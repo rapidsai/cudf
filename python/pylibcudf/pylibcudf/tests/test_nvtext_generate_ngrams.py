@@ -49,6 +49,4 @@ def test_hash_character_ngrams(input_col, ngram):
         len(got) == max(0, len(s.as_py()) - ngram + 1)
         for got, s in zip(pa_result, input_col)
     )
-    assert pa_result.type == pa.list_(
-        pa.field("element", pa.uint32(), nullable=False)
-    )
+    assert pa_result.type == pa.list_(pa.field("element", pa.uint32(), nullable=False))

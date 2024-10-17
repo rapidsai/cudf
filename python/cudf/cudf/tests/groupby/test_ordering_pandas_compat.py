@@ -1,8 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+import cudf
 import numpy as np
 import pytest
-
-import cudf
 from cudf.testing import assert_eq
 
 
@@ -23,7 +22,5 @@ def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
             df.loc[df[key] == 1, key] = None
     with cudf.option_context("mode.pandas_compatible", True):
         got = df.groupby(key_names, sort=False).agg({"value": "sum"})
-    expect = (
-        df.to_pandas().groupby(key_names, sort=False).agg({"value": "sum"})
-    )
+    expect = df.to_pandas().groupby(key_names, sort=False).agg({"value": "sum"})
     assert_eq(expect, got, check_index_type=not with_nulls)

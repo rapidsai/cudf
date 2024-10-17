@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Benchmarks of MultiIndex methods."""
 
@@ -31,9 +31,7 @@ def bench_from_pandas(benchmark, pidx):
 
 
 def bench_constructor(benchmark, midx):
-    benchmark(
-        cudf.MultiIndex, codes=midx.codes, levels=midx.levels, names=midx.names
-    )
+    benchmark(cudf.MultiIndex, codes=midx.codes, levels=midx.levels, names=midx.names)
 
 
 def bench_from_frame(benchmark, midx):

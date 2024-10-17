@@ -132,8 +132,7 @@ def _match_categorical_dtypes_both(
     # ambiguous and not allowed.
     if ltype.ordered != rtype.ordered:
         raise TypeError(
-            "Merging on categorical variables with mismatched"
-            " ordering is ambiguous"
+            "Merging on categorical variables with mismatched" " ordering is ambiguous"
         )
 
     if ltype.ordered and rtype.ordered:
@@ -163,9 +162,7 @@ def _match_categorical_dtypes_both(
             merged_categories = cudf.concat(
                 [ltype.categories, rtype.categories]
             ).unique()
-        common_type = cudf.CategoricalDtype(
-            categories=merged_categories, ordered=False
-        )
+        common_type = cudf.CategoricalDtype(categories=merged_categories, ordered=False)
         return lcol.astype(common_type), rcol.astype(common_type)
 
 
