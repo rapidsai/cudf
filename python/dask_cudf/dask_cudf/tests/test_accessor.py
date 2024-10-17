@@ -25,7 +25,7 @@ def data_dt_1():
 
 
 def data_dt_2():
-    return np.random.randn(100)
+    return np.random.default_rng(seed=0).standard_normal(size=100)
 
 
 dt_fields = ["year", "month", "day", "hour", "minute", "second"]

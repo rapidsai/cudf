@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources char_types.pyx regex_flags.pyx side_type.pyx translate.pyx)
+set(cython_sources char_types.pyx combine.pyx regex_flags.pyx side_type.pyx translate.pyx)
 
 set(linked_libraries cudf::cudf)
 
