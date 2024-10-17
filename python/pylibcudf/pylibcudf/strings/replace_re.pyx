@@ -27,7 +27,9 @@ cpdef Column replace_re(
     """
     For each string, replaces any character sequence matching the given patterns
     with the provided replacement.
+
     For details, see :cpp:func:`cudf::strings::replace_re`
+
     Parameters
     ----------
     input : Column
@@ -47,6 +49,7 @@ cpdef Column replace_re(
     flags : RegexFlags
         Regex flags for interpreting special characters in the patterns.
         ``patterns`` must be a list[str]
+
     Returns
     -------
     Column
@@ -88,7 +91,10 @@ cpdef Column replace_re(
 
         return Column.from_libcudf(move(c_result))
     else:
-        raise ValueError("invalid type combinations of patterns and replacement")
+        raise TypeError(
+            "Must pass either a RegexProgram and a Scalar or a list\
+            and a Column for pattern and replacement, respectively."
+        )
 
 
 cpdef Column replace_with_backrefs(
