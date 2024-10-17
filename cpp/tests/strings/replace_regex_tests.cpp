@@ -200,6 +200,34 @@ TEST_F(StringsReplaceRegexTest, ZeroLengthMatch)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+TEST_F(StringsReplaceRegexTest, ZeroRangeQuantifier)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "", "123", "XYAZ", "abc", "zéyab"});
+  auto sv    = cudf::strings_column_view(input);
+
+  auto pattern  = std::string("A{0,5}");
+  auto prog     = cudf::strings::regex_program::create(pattern);
+  auto repl     = cudf::string_scalar("_");
+  auto expected = cudf::test::strings_column_wrapper(
+    {"_a_", "_", "_1_2_3_", "_X_Y__Z_", "_a_b_c_", "_z_é_y_a_b_"});
+  auto results = cudf::strings::replace_re(sv, *prog, repl);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  pattern = std::string("[a0-9]{0,2}");
+  prog    = cudf::strings::regex_program::create(pattern);
+  expected =
+    cudf::test::strings_column_wrapper({"__", "_", "___", "_X_Y_A_Z_", "__b_c_", "_z_é_y__b_"});
+  results = cudf::strings::replace_re(sv, *prog, repl);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  pattern = std::string("(?:ab){0,3}");
+  prog    = cudf::strings::regex_program::create(pattern);
+  expected =
+    cudf::test::strings_column_wrapper({"_a_", "_", "_1_2_3_", "_X_Y_A_Z_", "__c_", "_z_é_y__"});
+  results = cudf::strings::replace_re(sv, *prog, repl);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, Multiline)
 {
   auto const multiline = cudf::strings::regex_flags::MULTILINE;
