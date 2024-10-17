@@ -53,6 +53,7 @@ rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
 
   populated_keys.resize(std::distance(populated_keys.begin(), keys_end), stream);
   return populated_keys;
+}
 }  // namespace
 
 /**
