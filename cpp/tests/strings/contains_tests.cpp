@@ -474,6 +474,54 @@ TEST_F(StringsContainsTests, FixedQuantifier)
   }
 }
 
+TEST_F(StringsContainsTests, ZeroRangeQuantifier)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "", "abc", "XYAZ", "ABC", "ZYXA"});
+  auto sv    = cudf::strings_column_view(input);
+
+  auto pattern = std::string("A{0,}");  // should match everyting
+  auto prog    = cudf::strings::regex_program::create(pattern);
+
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1});
+    auto results  = cudf::strings::contains_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 1, 4, 5, 4, 5});
+    auto results  = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+
+  pattern = std::string("(?:ab){0,3}");
+  prog    = cudf::strings::regex_program::create(pattern);
+
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1});
+    auto results  = cudf::strings::contains_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 1, 3, 5, 4, 5});
+    auto results  = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsContainsTests, NestedQuantifier)
+{
+  auto input   = cudf::test::strings_column_wrapper({"TEST12 1111 2222 3333 4444 5555",
+                                                     "0000 AAAA 9999 BBBB 8888",
+                                                     "7777 6666 4444 3333",
+                                                     "12345 3333 4444 1111 ABCD"});
+  auto sv      = cudf::strings_column_view(input);
+  auto pattern = std::string(R"((\d{4}\s){4})");
+  cudf::test::fixed_width_column_wrapper<bool> expected({true, false, false, true});
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::contains_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsContainsTests, QuantifierErrors)
 {
   EXPECT_THROW(cudf::strings::regex_program::create("^+"), cudf::logic_error);

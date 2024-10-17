@@ -32,7 +32,7 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
   {
     cudf::test::fixed_width_column_wrapper<bool> input_column(
       input.begin(), input.end(), val.begin());
-    std::transform(val.begin(), val.end(), input.begin(), input.begin(), std::logical_and<bool>());
+    std::transform(val.begin(), val.end(), input.begin(), input.begin(), std::logical_and<>());
 
     auto sample = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 

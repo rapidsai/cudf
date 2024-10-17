@@ -6,15 +6,24 @@ files:
       cuda: ["11.8", "12.5"]
       arch: [x86_64]
     includes:
+      # Note that clang-tidy is not included here because cudf's preferred
+      # version conflicts with the rest of RAPIDS as well as its own
+      # clang-format version. Until we update our clang-format version we will
+      # not be able to install both into the same environment. Moreover, using
+      # this version will break compatibility with other RAPIDS libraries that
+      # are still using 16.0.6, and as such will and that would break any
+      # unified environment like that used in unified devcontainers.
       - build_base
       - build_all
       - build_cpp
       - build_python_common
+      - clang_format
       - cuda
       - cuda_version
       - depends_on_cupy
       - depends_on_libkvikio
       - depends_on_librmm
+      - depends_on_nvcomp
       - depends_on_rmm
       - develop
       - docs
@@ -85,6 +94,16 @@ files:
     includes:
       - develop
       - py_version
+  clang_tidy:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - clang_tidy
+      - cuda
+      - cuda_version
+      - develop
+      - py_version
   docs:
     output: none
     includes:
@@ -152,6 +171,13 @@ files:
       - build_cpp
       - depends_on_libkvikio
       - depends_on_librmm
+  py_run_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: project
+    includes:
+      - depends_on_nvcomp
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -367,9 +393,27 @@ dependencies:
           - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
+          - spdlog>=1.14.1,<1.15
+  depends_on_nvcomp:
+    common:
+      - output_types: conda
+        packages:
           # Align nvcomp version with rapids-cmake
           - nvcomp==4.0.1
-          - spdlog>=1.14.1,<1.15
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - nvidia-nvcomp-cu12==4.0.1
+          - matrix:
+              cuda: "11.*"
+            packages:
+              - nvidia-nvcomp-cu11==4.0.1
+          - matrix:
+            packages:
+              - nvidia-nvcomp==4.0.1
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -395,9 +439,18 @@ dependencies:
           - cython>=3.0.3
   pyarrow_run:
     common:
-      - output_types: [conda, requirements, pyproject]
+      - output_types: [conda]
         packages:
           - pyarrow>=14.0.0,<18.0.0a0
+      - output_types: [requirements, pyproject]
+        packages:
+          # pyarrow 17.0.0 wheels have a subtle issue around threading that
+          # can cause segmentation faults around imports on arm. It appears to
+          # be highly dependent on the exact build configuration, so we'll just
+          # avoid 17.0.0 for now unless we observe similar issues in future
+          # releases as well.
+          - pyarrow>=14.0.0,<18.0.0a0; platform_machine=='x86_64'
+          - pyarrow>=14.0.0,<18.0.0a0,!=17.0.0; platform_machine=='aarch64'
   cuda_version:
     specific:
       - output_types: conda
@@ -520,9 +573,19 @@ dependencies:
           - identify>=2.5.20
       - output_types: conda
         packages:
+          - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
+  clang_format:
+    common:
+      - output_types: conda
+        packages:
           - clang==16.0.6
           - clang-tools=16.0.6
-          - &doxygen doxygen=1.9.1 # pre-commit hook needs a specific version.
+  clang_tidy:
+    common:
+      - output_types: conda
+        packages:
+          - clang==19.1.0
+          - clang-tools==19.1.0
   docs:
     common:
       - output_types: [conda]
@@ -576,7 +639,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - &numpy numpy>=1.23,<3.0a0
-          - pandas>=2.0,<2.2.3dev0
+          - pandas>=2.0,<2.2.4dev0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -722,6 +785,10 @@ dependencies:
             packages:
               - *numba-cuda-dep
               - pandas==2.0.*
+          - matrix: {dependencies: "latest"}
+            packages:
+              - numba-cuda==0.0.15
+              - pandas==2.2.3
           - matrix:
             packages:
       - output_types: conda

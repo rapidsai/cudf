@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -48,6 +49,9 @@
 namespace nvtext {
 namespace detail {
 namespace {
+// long strings threshold found with benchmarking
+constexpr cudf::size_type AVG_CHAR_BYTES_THRESHOLD = 64;
+
 /**
  * @brief Generate ngrams from strings column.
  *
@@ -173,33 +177,39 @@ constexpr cudf::thread_index_type bytes_per_thread = 4;
 /**
  * @brief Counts the number of ngrams in each row of the given strings column
  *
- * Each warp processes a single string.
+ * Each warp/thread processes a single string.
  * Formula is `count = max(0,str.length() - ngrams + 1)`
  * If a string has less than ngrams characters, its count is 0.
  */
 CUDF_KERNEL void count_char_ngrams_kernel(cudf::column_device_view const d_strings,
                                           cudf::size_type ngrams,
+                                          cudf::size_type tile_size,
                                           cudf::size_type* d_counts)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
 
-  auto const str_idx = idx / cudf::detail::warp_size;
+  auto const str_idx = idx / tile_size;
   if (str_idx >= d_strings.size()) { return; }
   if (d_strings.is_null(str_idx)) {
     d_counts[str_idx] = 0;
     return;
   }
 
+  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
+  if (tile_size == 1) {
+    d_counts[str_idx] = cuda::std::max(0, (d_str.length() + 1 - ngrams));
+    return;
+  }
+
   namespace cg    = cooperative_groups;
   auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
 
-  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
-  auto const end   = d_str.data() + d_str.size_bytes();
+  auto const end = d_str.data() + d_str.size_bytes();
 
   auto const lane_idx   = warp.thread_rank();
   cudf::size_type count = 0;
   for (auto itr = d_str.data() + (lane_idx * bytes_per_thread); itr < end;
-       itr += cudf::detail::warp_size * bytes_per_thread) {
+       itr += tile_size * bytes_per_thread) {
     for (auto s = itr; (s < (itr + bytes_per_thread)) && (s < end); ++s) {
       count += static_cast<cudf::size_type>(cudf::strings::detail::is_begin_utf8_char(*s));
     }
@@ -256,19 +266,27 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                "Parameter ngrams should be an integer value of 2 or greater",
                std::invalid_argument);
 
-  auto const strings_count = input.size();
-  if (strings_count == 0) {  // if no strings, return an empty column
-    return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  if (input.is_empty()) {  // if no strings, return an empty column
+    return cudf::lists::detail::make_empty_lists_column(
+      cudf::data_type{cudf::type_id::STRING}, stream, mr);
+  }
+  if (input.size() == input.null_count()) {
+    return cudf::lists::detail::make_all_nulls_lists_column(
+      input.size(), cudf::data_type{cudf::type_id::STRING}, stream, mr);
   }
 
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
   auto [offsets, total_ngrams] = [&] {
-    auto counts           = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    auto const num_blocks = cudf::util::div_rounding_up_safe(
-      static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size);
-    count_char_ngrams_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
-      *d_strings, ngrams, counts.data());
+    auto counts               = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    auto const avg_char_bytes = (input.chars_size(stream) / (input.size() - input.null_count()));
+    auto const tile_size      = (avg_char_bytes < AVG_CHAR_BYTES_THRESHOLD)
+                                  ? 1                         // thread per row
+                                  : cudf::detail::warp_size;  // warp per row
+    auto const grid           = cudf::detail::grid_1d(
+      static_cast<cudf::thread_index_type>(input.size()) * tile_size, block_size);
+    count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      *d_strings, ngrams, tile_size, counts.data());
     return cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr);
   }();
   auto d_offsets = offsets->view().data<cudf::size_type>();
@@ -277,8 +295,8 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                "Insufficient number of characters in each string to generate ngrams");
 
   character_ngram_generator_fn generator{*d_strings, ngrams, d_offsets};
-  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
-    generator, strings_count, total_ngrams, stream, mr);
+  auto [offsets_column, chars] =
+    cudf::strings::detail::make_strings_children(generator, input.size(), total_ngrams, stream, mr);
 
   auto output = cudf::make_strings_column(
     total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
@@ -368,7 +386,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
   auto [offsets, total_ngrams] = [&] {
     auto counts = rmm::device_uvector<cudf::size_type>(input.size(), stream);
     count_char_ngrams_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      *d_strings, ngrams, counts.data());
+      *d_strings, ngrams, cudf::detail::warp_size, counts.data());
     return cudf::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr);
   }();
   auto d_offsets = offsets->view().data<cudf::size_type>();
