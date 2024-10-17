@@ -70,16 +70,22 @@ class datasource {
     virtual ~buffer() {}
 
     /**
+     * @brief Disallow callers to pass an lvalue Container.
+     */
+    template <typename Container>
+    static std::unique_ptr<buffer> create(Container&) = delete;
+
+    /**
      * @brief Factory to construct a datasource buffer object from a container.
      *
      * @tparam Container Type of the container to construct the buffer from
-     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @param moved_data_owner The container to construct the buffer from (ownership is transferred)
      * @return Constructed buffer object
      */
     template <typename Container>
-    static std::unique_ptr<buffer> create(Container&& data_owner)
+    static std::unique_ptr<buffer> create(Container&& moved_data_owner)
     {
-      return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
+      return std::make_unique<owning_buffer<Container>>(std::forward<Container>(moved_data_owner));
     }
   };
 
@@ -336,25 +342,39 @@ class datasource {
   class owning_buffer : public buffer {
    public:
     /**
+     * @brief Disallow callers to pass an lvalue Container.
+     */
+    owning_buffer(Container&) = delete;
+
+    /**
      * @brief Moves the input container into the newly created object.
      *
-     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @param moved_data_owner The container to construct the buffer from. Callers should explicitly
+     * pass std::move(data_owner) to this function to transfer the ownership.
      */
-    owning_buffer(Container&& data_owner)
-      : _data(std::move(data_owner)), _data_ptr(_data.data()), _size(_data.size())
+    owning_buffer(Container&& moved_data_owner)
+      : _data(std::forward<Container>(moved_data_owner)),
+        _data_ptr(_data.data()),
+        _size(_data.size())
     {
     }
+
+    /**
+     * @brief Disallow callers to pass an lvalue Container.
+     */
+    owning_buffer(Container&, uint8_t const*, size_t) = delete;
 
     /**
      * @brief Moves the input container into the newly created object, and exposes a subspan of the
      * buffer.
      *
-     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @param moved_data_owner The container to construct the buffer from. Callers should explicitly
+     * pass std::move(data_owner) to this function to transfer the ownership.
      * @param data_ptr Pointer to the start of the subspan
      * @param size The size of the subspan
      */
-    owning_buffer(Container&& data_owner, uint8_t const* data_ptr, size_t size)
-      : _data(std::move(data_owner)), _data_ptr(data_ptr), _size(size)
+    owning_buffer(Container&& moved_data_owner, uint8_t const* data_ptr, size_t size)
+      : _data(std::forward<Container>(moved_data_owner)), _data_ptr(data_ptr), _size(size)
     {
     }
 
