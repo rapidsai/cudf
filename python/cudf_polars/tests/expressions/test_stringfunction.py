@@ -40,6 +40,34 @@ def ldf(with_nulls):
     )
 
 
+@pytest.fixture(params=[pl.Float32, pl.Float64, pl.Int8, pl.Int16, pl.Int32, pl.Int64])
+def numeric_type(request):
+    return request.param
+
+
+@pytest.fixture
+def str_to_numeric_data(with_nulls):
+    a = ["1", "2", "3", "4", "5", "6"]
+    if with_nulls:
+        a[4] = None
+    return pl.LazyFrame({"a": a})
+
+
+@pytest.fixture
+def str_from_numeric_data(with_nulls, numeric_type):
+    a = [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+    ]
+    if with_nulls:
+        a[4] = None
+    return pl.LazyFrame({"a": pl.Series(a, dtype=numeric_type)})
+
+
 slice_cases = [
     (1, 3),
     (0, 3),
@@ -337,3 +365,23 @@ def test_unsupported_regex_raises(pattern):
 
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_string_to_numeric(str_to_numeric_data, numeric_type):
+    query = str_to_numeric_data.select(pl.col("a").cast(numeric_type))
+    assert_gpu_result_equal(query)
+
+
+def test_string_from_numeric(str_from_numeric_data):
+    query = str_from_numeric_data.select(pl.col("a").cast(pl.String))
+    assert_gpu_result_equal(query)
+
+
+def test_string_to_numeric_invalid(numeric_type):
+    df = pl.LazyFrame({"a": ["a", "b", "c"]})
+    q = df.select(pl.col("a").cast(numeric_type))
+    assert_collect_raises(
+        q,
+        polars_except=pl.exceptions.InvalidOperationError,
+        cudf_except=pl.exceptions.ComputeError,
+    )
