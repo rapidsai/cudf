@@ -42,7 +42,7 @@ def test_replace_re_list_str_columns(flags):
     arr = pa.array(["foo", "fuz", None])
     pats = ["oo", "uz"]
     repls = ["a", "b"]
-    result = plc.strings.replace_re.replace_re_multi(
+    result = plc.strings.replace_re.replace_re(
         plc.interop.from_arrow(arr),
         pats,
         plc.interop.from_arrow(pa.array(repls)),

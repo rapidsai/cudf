@@ -6,19 +6,21 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.regex_flags cimport regex_flags
 from pylibcudf.strings.regex_program cimport RegexProgram
 
+ctypedef fused Replacement:
+    Column
+    Scalar
+
+ctypedef fused Patterns:
+    RegexProgram
+    list
+
 
 cpdef Column replace_re(
     Column input,
-    RegexProgram pattern,
-    Scalar replacement=*,
+    Patterns patterns,
+    Replacement replacement=*,
     size_type max_replace_count=*,
-)
-
-cpdef Column replace_re_multi(
-    Column input,
-    list patterns,
-    Column replacements,
-    regex_flags flags=*,
+    regex_flags flags=*
 )
 
 cpdef Column replace_with_backrefs(

@@ -19,83 +19,34 @@ from pylibcudf.strings.regex_program cimport RegexProgram
 
 cpdef Column replace_re(
     Column input,
-    RegexProgram pattern,
-    Scalar replacement=None,
+    Patterns patterns,
+    Replacement replacement=None,
     size_type max_replace_count=-1,
-):
-    """
-    For each string, replaces any character sequence matching the given regex
-    with the provided replacement string.
-
-    For details, see :cpp:func:`cudf::strings::replace_re`
-
-    Parameters
-    ----------
-    input : Column
-        Strings instance for this operation.
-
-    pattern : RegexProgram
-        The regex to match to each string.
-
-    replacement : Scalar or Column
-        The string used to replace the matched sequence in each string.
-
-    max_replace_count : int
-        The maximum number of times to replace the matched pattern
-        within each string. ``patterns`` must be a RegexProgram.
-        Default replaces every substring that is matched.
-
-    Returns
-    -------
-    Column
-        New strings column
-    """
-    cdef unique_ptr[column] c_result
-
-    if replacement is None:
-        replacement = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode())
-        )
-
-    with nogil:
-        c_result = move(
-            cpp_replace_re.replace_re(
-                input.view(),
-                pattern.c_obj.get()[0],
-                dereference(<string_scalar*>(replacement.get())),
-                max_replace_count,
-            )
-        )
-
-    return Column.from_libcudf(move(c_result))
-
-
-cpdef Column replace_re_multi(
-    Column input,
-    list patterns,
-    Column replacements,
     regex_flags flags=regex_flags.DEFAULT,
 ):
     """
     For each string, replaces any character sequence matching the given patterns
-    with the corresponding string in the `replacements` column.
-
+    with the provided replacement.
     For details, see :cpp:func:`cudf::strings::replace_re`
-
     Parameters
     ----------
     input : Column
         Strings instance for this operation.
-
-    patterns: list[str]
-        The regular expression patterns to search within each string.
-
-    replacements : Column
-        The strings used for replacement.
-
+    patterns: RegexProgram or list[str]
+        If RegexProgram, the regex to match to each string.
+        If list[str], a list of regex strings to search within each string.
+    replacement : Scalar or Column
+        If Scalar, the string used to replace the matched sequence in each string.
+        ``patterns`` must be a RegexProgram.
+        If Column, the strings used for replacement.
+        ``patterns`` must be a list[str].
+    max_replace_count : int
+        The maximum number of times to replace the matched pattern
+        within each string. ``patterns`` must be a RegexProgram.
+        Default replaces every substring that is matched.
     flags : RegexFlags
         Regex flags for interpreting special characters in the patterns.
-
+        ``patterns`` must be a list[str]
     Returns
     -------
     Column
@@ -103,21 +54,41 @@ cpdef Column replace_re_multi(
     """
     cdef unique_ptr[column] c_result
     cdef vector[string] c_patterns
-    c_patterns.reserve(len(patterns))
-    for pattern in patterns:
-        c_patterns.push_back(pattern.encode())
 
-    with nogil:
-        c_result = move(
-            cpp_replace_re.replace_re(
-                input.view(),
-                c_patterns,
-                replacements.view(),
-                flags,
+    if Patterns is RegexProgram and Replacement is Scalar:
+        if replacement is None:
+            replacement = Scalar.from_libcudf(
+                cpp_make_string_scalar("".encode())
             )
-        )
+        with nogil:
+            c_result = move(
+                cpp_replace_re.replace_re(
+                    input.view(),
+                    patterns.c_obj.get()[0],
+                    dereference(<string_scalar*>(replacement.get())),
+                    max_replace_count
+                )
+            )
 
-    return Column.from_libcudf(move(c_result))
+        return Column.from_libcudf(move(c_result))
+    elif Patterns is list and Replacement is Column:
+        c_patterns.reserve(len(patterns))
+        for pattern in patterns:
+            c_patterns.push_back(pattern.encode())
+
+        with nogil:
+            c_result = move(
+                cpp_replace_re.replace_re(
+                    input.view(),
+                    c_patterns,
+                    replacement.view(),
+                    flags,
+                )
+            )
+
+        return Column.from_libcudf(move(c_result))
+    else:
+        raise ValueError("invalid type combinations of patterns and replacement")
 
 
 cpdef Column replace_with_backrefs(
@@ -151,12 +122,10 @@ cpdef Column replace_with_backrefs(
     cdef string c_replacement = replacement.encode()
 
     with nogil:
-        c_result = move(
-            cpp_replace_re.replace_with_backrefs(
-                input.view(),
-                prog.c_obj.get()[0],
-                c_replacement,
-            )
+        c_result = cpp_replace_re.replace_with_backrefs(
+            input.view(),
+            prog.c_obj.get()[0],
+            c_replacement,
         )
 
     return Column.from_libcudf(move(c_result))
