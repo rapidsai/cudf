@@ -26,12 +26,12 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
+template <typename SetRef>
 void sparse_to_dense_results(host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
-                             SetType set,
+                             SetRef set,
                              bitmask_type const* row_bitmask,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)

@@ -25,15 +25,26 @@
 
 namespace cudf::groupby::detail::hash {
 /**
- * @brief Gather sparse results into dense using `gather_map` and add to
- * `dense_cache`
+ * @brief Gather sparse aggregation results into dense using `gather_map` and add to
+ * `dense_results`
+ *
+ * @tparam SetRef Device hash set ref type
+ *
+ * @param[in] requests The set of columns to aggregate and the aggregations to perform
+ * @param[in] sparse_results Sparse aggregation results
+ * @param[out] dense_results Dense aggregation results
+ * @param[in] gather_map Gather map indicating valid elements in `sparse_results`
+ * @param[in] set Device hash set ref
+ * @param[in] row_bitmask Bitmask indicating the validity of input keys
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table
  */
-template <typename SetType>
+template <typename SetRef>
 void sparse_to_dense_results(host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
-                             SetType set,
+                             SetRef set,
                              bitmask_type const* row_bitmask,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);

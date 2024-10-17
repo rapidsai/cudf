@@ -54,6 +54,18 @@ namespace cudf::groupby::detail::hash {
  * requested in `requests`, we gather sparse results into a column of dense
  * results using the aforementioned index vector. Dense results are stored into
  * the in/out parameter `cache`.
+ *
+ * @tparam Equal Device row comparator type
+ *
+ * @param keys Table whose rows act as the groupby keys
+ * @param requests The set of columns to aggregate and the aggregations to perform
+ * @param skip_rows_with_nulls Flag indicating whether to ignore nulls or not
+ * @param d_row_equal Device row comparator
+ * @param d_row_hash Device row hasher
+ * @param cache Dense aggregation results
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table
+ * @return Table of unique keys
  */
 template <typename Equal>
 std::unique_ptr<cudf::table> compute_groupby(table_view const& keys,
@@ -64,5 +76,4 @@ std::unique_ptr<cudf::table> compute_groupby(table_view const& keys,
                                              cudf::detail::result_cache* cache,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
-
 }  // namespace cudf::groupby::detail::hash
