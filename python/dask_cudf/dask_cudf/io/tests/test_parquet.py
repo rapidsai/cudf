@@ -375,12 +375,12 @@ def test_split_row_groups(tmpdir, row_groups, index):
     row_group_size = 5
     file_row_groups = 10  # Known apriori
     npartitions_expected = math.ceil(file_row_groups / row_groups) * 2
-
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
-            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
-            "b": np.random.random(size=df_size),
-            "c": np.random.randint(1, 5, size=df_size),
+            "a": rng.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": rng.random(size=df_size),
+            "c": rng.integers(1, 5, size=df_size),
             "index": np.arange(0, df_size),
         }
     )

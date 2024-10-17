@@ -18,6 +18,7 @@ set(cython_sources
     case.pyx
     char_types.pyx
     contains.pyx
+    combine.pyx
     extract.pyx
     find.pyx
     find_multiple.pyx
