@@ -93,20 +93,37 @@ std::unique_ptr<cudf::column> minhash(
 /**
  * @brief Returns the minhash values for each string
  *
- * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ * This function uses MurmurHash3_x86_32 for the hash algorithm.
+ *
+ * The input strings are first hashed using the given `seed` over substrings
+ * of `width` characters. These hash values are then combined with the `a`
+ * and `b` values using the following formula:
+ * ```
+ *   max_hash = max of uint32
+ *   mp = (1 << 61) - 1
+ *   hv = hash value of a substring
+ *   pv[i] = ((hv * a[i] + b[i]) % mp) & max_hash
+ * ```
+ *
+ * This calculation is performed on each substring and the minimum value is computed
+ * as follows:
+ * ```
+ *   mh[j,i] = min(pv[i]) for all substrings in row j
+ *                        and where i=[0,a.size())
+ * ```
  *
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if parmA is empty
- * @throw std::invalid_argument if `parmB.size() != parmA.size()`
- * @throw std::overflow_error if `parmA.size() * input.size()` exceeds the column size limit
+ * @throw std::invalid_argument if parameter_a is empty
+ * @throw std::invalid_argument if `parameter_b.size() != parameter_a.size()`
+ * @throw std::overflow_error if `parameter_a.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
  * @param seed  Seed value used for the hash algorithm
- * @param parmA Values used for the hash algorithm
- * @param parmB Values used for the hash algorithm
- * @param width The character width used for apply substrings
+ * @param parameter_a Values used for the permuted calculation
+ * @param parameter_b Values used for the permuted calculation
+ * @param width The character width of substrings to hash for each row
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
@@ -114,8 +131,8 @@ std::unique_ptr<cudf::column> minhash(
 std::unique_ptr<cudf::column> minhash_permuted(
   cudf::strings_column_view const& input,
   uint32_t seed,
-  cudf::device_span<uint32_t const> parmA,
-  cudf::device_span<uint32_t const> parmB,
+  cudf::device_span<uint32_t const> parameter_a,
+  cudf::device_span<uint32_t const> parameter_b,
   cudf::size_type width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -186,18 +203,35 @@ std::unique_ptr<cudf::column> minhash64(
  *
  * This function uses MurmurHash3_x64_128 for the hash algorithm.
  *
+ * The input strings are first hashed using the given `seed` over substrings
+ * of `width` characters. These hash values are then combined with the `a`
+ * and `b` values using the following formula:
+ * ```
+ *   max_hash = max of uint64
+ *   mp = (1 << 61) - 1
+ *   hv = hash value of a substring
+ *   pv[i] = ((hv * a[i] + b[i]) % mp) & max_hash
+ * ```
+ *
+ * This calculation is performed on each substring and the minimum value is computed
+ * as follows:
+ * ```
+ *   mh[j,i] = min(pv[i]) for all substrings in row j
+ *                        and where i=[0,a.size())
+ * ```
+ *
  * Any null row entries result in corresponding null output rows.
  *
  * @throw std::invalid_argument if the width < 2
- * @throw std::invalid_argument if parmA is empty
- * @throw std::invalid_argument if `parmB.size() != parmA.size()`
- * @throw std::overflow_error if `parmA.size() * input.size()` exceeds the column size limit
+ * @throw std::invalid_argument if parameter_a is empty
+ * @throw std::invalid_argument if `parameter_b.size() != parameter_a.size()`
+ * @throw std::overflow_error if `parameter_a.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
  * @param seed  Seed value used for the hash algorithm
- * @param parmA Values used for the hash algorithm
- * @param parmB Values used for the hash algorithm
- * @param width The character width used for apply substrings
+ * @param parameter_a Values used for the permuted calculation
+ * @param parameter_b Values used for the permuted calculation
+ * @param width The character width of substrings to hash for each row
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return List column of minhash values for each string per seed
@@ -205,8 +239,8 @@ std::unique_ptr<cudf::column> minhash64(
 std::unique_ptr<cudf::column> minhash64_permuted(
   cudf::strings_column_view const& input,
   uint64_t seed,
-  cudf::device_span<uint64_t const> parmA,
-  cudf::device_span<uint64_t const> parmB,
+  cudf::device_span<uint64_t const> parameter_a,
+  cudf::device_span<uint64_t const> parameter_b,
   cudf::size_type width,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
