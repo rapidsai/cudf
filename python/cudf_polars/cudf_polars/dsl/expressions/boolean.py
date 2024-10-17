@@ -31,9 +31,8 @@ __all__ = ["BooleanFunction"]
 
 
 class BooleanFunction(Expr):
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     def __init__(
         self,
@@ -42,7 +41,7 @@ class BooleanFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children

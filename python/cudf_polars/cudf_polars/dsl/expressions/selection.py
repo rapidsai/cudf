@@ -23,12 +23,11 @@ __all__ = ["Gather", "Filter"]
 
 
 class Gather(Expr):
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("dtype",)
-    children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(
@@ -65,12 +64,11 @@ class Gather(Expr):
 
 
 class Filter(Expr):
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("dtype",)
-    children: tuple[Expr, Expr]
 
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (values, indices)
 
     def do_evaluate(
