@@ -170,13 +170,15 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
       }
     }
   }
-  if constexpr (tile_size == cudf::detail::warp_size) {
+
+  if constexpr (tile_size > 1) {
     __syncwarp();
     // reduce the bools for each target to store in the result
     for (auto target_idx = lane_idx; target_idx < num_targets; target_idx += tile_size) {
       auto const begin = bools + (target_idx * tile_size);
       d_results[target_idx][str_idx] =
         thrust::any_of(thrust::seq, begin, begin + tile_size, thrust::identity<bool>{});
+      // cooperative group implementation was almost 3x slower than this parallel reduce
     }
   }
 }
@@ -247,7 +249,8 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   }();
 
   constexpr cudf::thread_index_type block_size = 256;
-  constexpr size_type targets_threshold        = 32;  // for shared-memory size
+  // calculated (benchmarked) for efficient use of shared-memory
+  constexpr size_type targets_threshold = 32;
 
   auto d_first_bytes = first_bytes.data();
   auto d_indices     = indices.data();
@@ -256,14 +259,6 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
   bool const row_parallel = ((input.null_count() == input.size()) ||
                              ((input.chars_size(stream) / (input.size() - input.null_count())) <=
                               AVG_CHAR_BYTES_THRESHOLD));
-
-  auto const shared_mem_size =
-    !row_parallel && (targets.size() < targets_threshold) ? (block_size * targets.size()) : 0;
-  auto const work_mem_size =
-    row_parallel || (targets.size() < targets_threshold)
-      ? 0
-      : (static_cast<std::size_t>(targets.size()) * input.size() * cudf::detail::warp_size);
-  auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
 
   if (row_parallel) {
     // Smaller strings perform better with a row per string
@@ -275,13 +270,22 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
                                                                            d_indices,
                                                                            d_offsets,
                                                                            unique_count,
-                                                                           working_memory.data(),
+                                                                           nullptr,
                                                                            d_results);
   } else {
-    // Longer strings perform better with a warp per string
-    cudf::detail::grid_1d grid{
-      static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
-    multi_contains_kernel<cudf::detail::warp_size>
+    constexpr cudf::thread_index_type tile_size = cudf::detail::warp_size;
+
+    auto const shared_mem_size =
+      (targets.size() < targets_threshold) ? (block_size * targets.size()) : 0;
+    auto const work_mem_size =
+      (targets.size() < targets_threshold) ? 0 : tile_size * targets.size() * input.size();
+    auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
+
+    // std::cout << shared_mem_size << "," << work_mem_size << std::endl;
+
+    cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * tile_size,
+                               block_size};
+    multi_contains_kernel<tile_size>
       <<<grid.num_blocks, grid.num_threads_per_block, shared_mem_size, stream.value()>>>(
         *d_strings,
         *d_targets,
