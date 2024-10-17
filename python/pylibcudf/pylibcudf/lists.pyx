@@ -69,7 +69,7 @@ cpdef Table explode_outer(Table input, size_type explode_column_idx):
     cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result = move(cpp_explode.explode_outer(input.view(), explode_column_idx))
+        c_result = cpp_explode.explode_outer(input.view(), explode_column_idx)
 
     return Table.from_libcudf(move(c_result))
 
@@ -92,7 +92,7 @@ cpdef Column concatenate_rows(Table input):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_concatenate_rows(input.view()))
+        c_result = cpp_concatenate_rows(input.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -123,10 +123,7 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_concatenate_list_elements(
-            input.view(),
-            null_policy,
-        ))
+        c_result = cpp_concatenate_list_elements(input.view(), null_policy)
 
     return Column.from_libcudf(move(c_result))
 
@@ -161,12 +158,12 @@ cpdef Column contains(Column input, ColumnOrScalar search_key):
         raise TypeError("Must pass a Column or Scalar")
 
     with nogil:
-        c_result = move(cpp_contains.contains(
+        c_result = cpp_contains.contains(
             list_view.view(),
             search_key.view() if ColumnOrScalar is Column else dereference(
                 search_key.get()
             ),
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -190,7 +187,7 @@ cpdef Column contains_nulls(Column input):
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
     with nogil:
-        c_result = move(cpp_contains.contains_nulls(list_view.view()))
+        c_result = cpp_contains.contains_nulls(list_view.view())
     return Column.from_libcudf(move(c_result))
 
 
@@ -229,13 +226,13 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     )
 
     with nogil:
-        c_result = move(cpp_contains.index_of(
+        c_result = cpp_contains.index_of(
             list_view.view(),
             search_key.view() if ColumnOrScalar is Column else dereference(
                 search_key.get()
             ),
             find_option,
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -258,9 +255,7 @@ cpdef Column reverse(Column input):
     cdef ListColumnView list_view = input.list_view()
 
     with nogil:
-        c_result = move(cpp_reverse.reverse(
-            list_view.view(),
-        ))
+        c_result = cpp_reverse.reverse(list_view.view())
     return Column.from_libcudf(move(c_result))
 
 
@@ -288,10 +283,10 @@ cpdef Column segmented_gather(Column input, Column gather_map_list):
     cdef ListColumnView list_view2 = gather_map_list.list_view()
 
     with nogil:
-        c_result = move(cpp_gather.segmented_gather(
+        c_result = cpp_gather.segmented_gather(
             list_view1.view(),
             list_view2.view(),
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -316,10 +311,10 @@ cpdef Column extract_list_element(Column input, ColumnOrSizeType index):
     cdef ListColumnView list_view = input.list_view()
 
     with nogil:
-        c_result = move(cpp_extract_list_element(
+        c_result = cpp_extract_list_element(
             list_view.view(),
             index.view() if ColumnOrSizeType is Column else index,
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -344,7 +339,7 @@ cpdef Column count_elements(Column input):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_count_elements(list_view.view()))
+        c_result = cpp_count_elements(list_view.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -373,17 +368,14 @@ cpdef Column sequences(Column starts, Column sizes, Column steps = None):
 
     if steps is not None:
         with nogil:
-            c_result = move(cpp_filling.sequences(
+            c_result = cpp_filling.sequences(
                 starts.view(),
                 steps.view(),
                 sizes.view(),
-            ))
+            )
     else:
         with nogil:
-            c_result = move(cpp_filling.sequences(
-                starts.view(),
-                sizes.view(),
-            ))
+            c_result = cpp_filling.sequences(starts.view(), sizes.view())
     return Column.from_libcudf(move(c_result))
 
 cpdef Column sort_lists(
@@ -423,17 +415,17 @@ cpdef Column sort_lists(
 
     with nogil:
         if stable:
-            c_result = move(cpp_stable_sort_lists(
+            c_result = cpp_stable_sort_lists(
                     list_view.view(),
                     c_sort_order,
                     na_position,
-            ))
+            )
         else:
-            c_result = move(cpp_sort_lists(
+            c_result = cpp_sort_lists(
                     list_view.view(),
                     c_sort_order,
                     na_position,
-            ))
+            )
     return Column.from_libcudf(move(c_result))
 
 
@@ -477,12 +469,12 @@ cpdef Column difference_distinct(
     )
 
     with nogil:
-        c_result = move(cpp_set_operations.difference_distinct(
+        c_result = cpp_set_operations.difference_distinct(
             lhs_view.view(),
             rhs_view.view(),
             c_nulls_equal,
             c_nans_equal,
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -525,12 +517,12 @@ cpdef Column have_overlap(
     )
 
     with nogil:
-        c_result = move(cpp_set_operations.have_overlap(
+        c_result = cpp_set_operations.have_overlap(
             lhs_view.view(),
             rhs_view.view(),
             c_nulls_equal,
             c_nans_equal,
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -573,12 +565,12 @@ cpdef Column intersect_distinct(
     )
 
     with nogil:
-        c_result = move(cpp_set_operations.intersect_distinct(
+        c_result = cpp_set_operations.intersect_distinct(
             lhs_view.view(),
             rhs_view.view(),
             c_nulls_equal,
             c_nans_equal,
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -622,12 +614,12 @@ cpdef Column union_distinct(
     )
 
     with nogil:
-        c_result = move(cpp_set_operations.union_distinct(
+        c_result = cpp_set_operations.union_distinct(
             lhs_view.view(),
             rhs_view.view(),
             c_nulls_equal,
             c_nans_equal,
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -652,10 +644,10 @@ cpdef Column apply_boolean_mask(Column input, Column boolean_mask):
     cdef ListColumnView list_view = input.list_view()
     cdef ListColumnView mask_view = boolean_mask.list_view()
     with nogil:
-        c_result = move(cpp_apply_boolean_mask(
+        c_result = cpp_apply_boolean_mask(
             list_view.view(),
             mask_view.view(),
-        ))
+        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -690,9 +682,9 @@ cpdef Column distinct(Column input, bool nulls_equal, bool nans_equal):
     )
 
     with nogil:
-        c_result = move(cpp_distinct(
+        c_result = cpp_distinct(
             list_view.view(),
             c_nulls_equal,
             c_nans_equal,
-        ))
+        )
     return Column.from_libcudf(move(c_result))
