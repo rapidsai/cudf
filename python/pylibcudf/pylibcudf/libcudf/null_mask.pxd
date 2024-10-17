@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libc.stdint cimport int32_t
 from libcpp.pair cimport pair
@@ -12,21 +13,21 @@ from rmm.librmm.device_buffer cimport device_buffer
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef device_buffer copy_bitmask "cudf::copy_bitmask" (
         column_view view
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef size_t bitmask_allocation_size_bytes (
         size_type number_of_bits,
         size_t padding_boundary
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef size_t bitmask_allocation_size_bytes (
         size_type number_of_bits
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef device_buffer create_null_mask (
         size_type size,
         mask_state state
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef pair[device_buffer, size_type] bitmask_and(
         table_view view

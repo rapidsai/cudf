@@ -1,4 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 from libcpp cimport int
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -16,4 +17,4 @@ cdef extern from "cudf/labeling/label_bins.hpp" namespace "cudf" nogil:
         inclusive left_inclusive,
         const column_view &right_edges,
         inclusive right_inclusive
-    ) except +
+    ) except +libcudf_exception_handler

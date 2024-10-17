@@ -1,4 +1,5 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
@@ -21,13 +22,13 @@ cdef extern from "cudf/contiguous_split.hpp" namespace "cudf" nogil:
     cdef vector[contiguous_split_result] contiguous_split (
         table_view input_table,
         vector[size_type] splits
-    ) except +
+    ) except +libcudf_exception_handler
 
-    cdef packed_columns pack (const table_view& input) except +
+    cdef packed_columns pack (const table_view& input) except +libcudf_exception_handler
 
-    cdef table_view unpack (const packed_columns& input) except +
+    cdef table_view unpack (const packed_columns& input) except +libcudf_exception_handler
 
     cdef table_view unpack (
         const uint8_t* metadata,
         const uint8_t* gpu_data
-    ) except +
+    ) except +libcudf_exception_handler

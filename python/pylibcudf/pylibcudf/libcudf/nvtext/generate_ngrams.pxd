@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -13,14 +14,14 @@ cdef extern from "nvtext/generate_ngrams.hpp" namespace "nvtext" nogil:
         const column_view &strings,
         size_type ngrams,
         const string_scalar & separator
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] generate_character_ngrams(
         const column_view &strings,
         size_type ngrams
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] hash_character_ngrams(
         const column_view &strings,
         size_type ngrams
-    ) except +
+    ) except +libcudf_exception_handler

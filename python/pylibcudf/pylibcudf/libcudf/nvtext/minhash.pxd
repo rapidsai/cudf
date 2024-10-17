@@ -1,4 +1,5 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
@@ -14,32 +15,32 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const column_view &strings,
         const numeric_scalar[uint32_t] seed,
         const size_type width,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] minhash(
         const column_view &strings,
         const column_view &seeds,
         const size_type width,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] minhash64(
         const column_view &strings,
         const column_view &seeds,
         const size_type width,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] minhash64(
         const column_view &strings,
         const numeric_scalar[uint64_t] seed,
         const size_type width,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] word_minhash(
         const column_view &input,
         const column_view &seeds
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] word_minhash64(
         const column_view &input,
         const column_view &seeds
-    ) except +
+    ) except +libcudf_exception_handler

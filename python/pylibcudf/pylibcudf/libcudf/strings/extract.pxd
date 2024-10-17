@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -11,8 +12,8 @@ cdef extern from "cudf/strings/extract.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[table] extract(
         column_view input,
-        regex_program prog) except +
+        regex_program prog) except +libcudf_exception_handler
 
     cdef unique_ptr[column] extract_all_record(
         column_view input,
-        regex_program prog) except +
+        regex_program prog) except +libcudf_exception_handler

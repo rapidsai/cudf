@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -13,8 +14,8 @@ cdef extern from "cudf/strings/split/partition.hpp" namespace \
 
     cdef unique_ptr[table] partition(
         column_view input,
-        string_scalar delimiter) except +
+        string_scalar delimiter) except +libcudf_exception_handler
 
     cdef unique_ptr[table] rpartition(
         column_view input,
-        string_scalar delimiter) except +
+        string_scalar delimiter) except +libcudf_exception_handler

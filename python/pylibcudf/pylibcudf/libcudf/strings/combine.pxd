@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -20,12 +21,12 @@ cdef extern from "cudf/strings/combine.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] concatenate(
         table_view source_strings,
         string_scalar separator,
-        string_scalar narep) except +
+        string_scalar narep) except +libcudf_exception_handler
 
     cdef unique_ptr[column] join_strings(
         column_view source_strings,
         string_scalar separator,
-        string_scalar narep) except +
+        string_scalar narep) except +libcudf_exception_handler
 
     cdef unique_ptr[column] join_list_elements(
         column_view lists_strings_column,
@@ -33,11 +34,11 @@ cdef extern from "cudf/strings/combine.hpp" namespace "cudf::strings" nogil:
         string_scalar separator_narep,
         string_scalar string_narep,
         separator_on_nulls separate_nulls,
-        output_if_empty_list empty_list_policy) except +
+        output_if_empty_list empty_list_policy) except +libcudf_exception_handler
 
     cdef unique_ptr[column] join_list_elements(
         column_view lists_strings_column,
         string_scalar separator,
         string_scalar narep,
         separator_on_nulls separate_nulls,
-        output_if_empty_list empty_list_policy) except +
+        output_if_empty_list empty_list_policy) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
@@ -12,4 +13,4 @@ cdef extern from "cudf/transpose.hpp" namespace "cudf" nogil:
         table_view
     ] transpose(
         table_view input_table
-    ) except +
+    ) except +libcudf_exception_handler

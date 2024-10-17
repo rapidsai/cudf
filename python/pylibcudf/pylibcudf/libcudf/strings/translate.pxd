@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -14,7 +15,7 @@ cdef extern from "cudf/strings/translate.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] translate(
         column_view input,
-        vector[pair[char_utf8, char_utf8]] chars_table) except +
+        vector[pair[char_utf8, char_utf8]] chars_table) except +libcudf_exception_handler
 
     cpdef enum class filter_type(bool):
         KEEP
@@ -24,4 +25,4 @@ cdef extern from "cudf/strings/translate.hpp" namespace "cudf::strings" nogil:
         column_view input,
         vector[pair[char_utf8, char_utf8]] characters_to_filter,
         filter_type keep_characters,
-        string_scalar replacement) except +
+        string_scalar replacement) except +libcudf_exception_handler

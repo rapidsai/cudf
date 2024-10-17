@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -10,9 +11,9 @@ cdef extern from "nvtext/normalize.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] normalize_spaces(
         const column_view & strings
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] normalize_characters(
         const column_view & strings,
         bool do_lower_case
-    ) except +
+    ) except +libcudf_exception_handler

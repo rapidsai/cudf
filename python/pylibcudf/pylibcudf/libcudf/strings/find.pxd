@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -12,41 +13,41 @@ cdef extern from "cudf/strings/find.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] contains(
         column_view source_strings,
-        string_scalar target) except +
+        string_scalar target) except +libcudf_exception_handler
 
     cdef unique_ptr[column] contains(
         column_view source_strings,
-        column_view target_strings) except +
+        column_view target_strings) except +libcudf_exception_handler
 
     cdef unique_ptr[column] ends_with(
         column_view source_strings,
-        string_scalar target) except +
+        string_scalar target) except +libcudf_exception_handler
 
     cdef unique_ptr[column] ends_with(
         column_view source_strings,
-        column_view target_strings) except +
+        column_view target_strings) except +libcudf_exception_handler
 
     cdef unique_ptr[column] starts_with(
         column_view source_strings,
-        string_scalar target) except +
+        string_scalar target) except +libcudf_exception_handler
 
     cdef unique_ptr[column] starts_with(
         column_view source_strings,
-        column_view target_strings) except +
+        column_view target_strings) except +libcudf_exception_handler
 
     cdef unique_ptr[column] find(
         column_view source_strings,
         string_scalar target,
         size_type start,
-        size_type stop) except +
+        size_type stop) except +libcudf_exception_handler
 
     cdef unique_ptr[column] find(
         column_view source_strings,
         column_view target,
-        size_type start) except +
+        size_type start) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rfind(
         column_view source_strings,
         string_scalar target,
         size_type start,
-        size_type stop) except +
+        size_type stop) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -12,8 +13,8 @@ cdef extern from "cudf/strings/convert/convert_durations.hpp" namespace \
     cdef unique_ptr[column] to_durations(
         const column_view & input,
         data_type duration_type,
-        const string & format) except +
+        const string & format) except +libcudf_exception_handler
 
     cdef unique_ptr[column] from_durations(
         const column_view & durations,
-        const string & format) except +
+        const string & format) except +libcudf_exception_handler

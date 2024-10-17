@@ -1,4 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -9,10 +10,10 @@ cdef extern from "cudf/lists/filling.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] sequences(
         const column_view& starts,
         const column_view& sizes,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] sequences(
         const column_view& starts,
         const column_view& steps,
         const column_view& sizes,
-    ) except +
+    ) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
@@ -31,12 +32,12 @@ cdef extern from "cudf/groupby.hpp" \
         namespace "cudf::groupby" nogil:
 
     cdef cppclass aggregation_request:
-        aggregation_request() except +
+        aggregation_request() except +libcudf_exception_handler
         column_view values
         vector[unique_ptr[groupby_aggregation]] aggregations
 
     cdef cppclass scan_request:
-        scan_request() except +
+        scan_request() except +libcudf_exception_handler
         column_view values
         vector[unique_ptr[groupby_scan_aggregation]] aggregations
 
@@ -50,24 +51,24 @@ cdef extern from "cudf/groupby.hpp" \
         unique_ptr[table] values
 
     cdef cppclass groupby:
-        groupby(const table_view& keys) except +
+        groupby(const table_view& keys) except +libcudf_exception_handler
         groupby(
             const table_view& keys,
             null_policy include_null_keys
-        ) except +
+        ) except +libcudf_exception_handler
 
         groupby(
             const table_view& keys,
             null_policy include_null_keys,
             sorted keys_are_sorted,
-        ) except +
+        ) except +libcudf_exception_handler
 
         groupby(
             const table_view& keys,
             null_policy include_null_keys,
             sorted keys_are_sorted,
             const vector[order]& column_order,
-        ) except +
+        ) except +libcudf_exception_handler
 
         groupby(
             const table_view& keys,
@@ -75,21 +76,21 @@ cdef extern from "cudf/groupby.hpp" \
             sorted keys_are_sorted,
             const vector[order]& column_order,
             const vector[null_order]& null_precedence
-        ) except +
+        ) except +libcudf_exception_handler
 
         pair[
             unique_ptr[table],
             vector[aggregation_result]
         ] aggregate(
             const vector[aggregation_request]& requests,
-        ) except +
+        ) except +libcudf_exception_handler
 
         pair[
             unique_ptr[table],
             vector[aggregation_result]
         ] scan(
             const vector[scan_request]& requests,
-        ) except +
+        ) except +libcudf_exception_handler
 
         pair[
             unique_ptr[table],
@@ -98,12 +99,12 @@ cdef extern from "cudf/groupby.hpp" \
             const table_view values,
             const vector[size_type] offset,
             const vector[reference_wrapper[constscalar]] fill_values
-        ) except +
+        ) except +libcudf_exception_handler
 
-        groups get_groups() except +
-        groups get_groups(table_view values) except +
+        groups get_groups() except +libcudf_exception_handler
+        groups get_groups(table_view values) except +libcudf_exception_handler
 
         pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
             const table_view& values,
             const vector[replace_policy] replace_policy
-        ) except +
+        ) except +libcudf_exception_handler

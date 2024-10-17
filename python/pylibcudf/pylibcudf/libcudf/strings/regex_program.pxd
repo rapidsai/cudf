@@ -1,4 +1,5 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -14,4 +15,4 @@ cdef extern from "cudf/strings/regex/regex_program.hpp" \
         unique_ptr[regex_program] create(
             string pattern,
             regex_flags flags
-        ) except +
+        ) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -12,13 +13,13 @@ cdef extern from "cudf/strings/convert/convert_datetime.hpp" namespace \
     cdef unique_ptr[column] to_timestamps(
         column_view input,
         data_type timestamp_type,
-        string format) except +
+        string format) except +libcudf_exception_handler
 
     cdef unique_ptr[column] from_timestamps(
         column_view timestamps,
         string format,
-        column_view names) except +
+        column_view names) except +libcudf_exception_handler
 
     cdef unique_ptr[column] is_timestamp(
         column_view input_col,
-        string format) except +
+        string format) except +libcudf_exception_handler

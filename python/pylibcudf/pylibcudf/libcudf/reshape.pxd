@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -10,7 +11,7 @@ from pylibcudf.libcudf.types cimport size_type
 cdef extern from "cudf/reshape.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] interleave_columns(
         table_view source_table
-    ) except +
+    ) except +libcudf_exception_handler
     cdef unique_ptr[table] tile(
         table_view source_table, size_type count
-    ) except +
+    ) except +libcudf_exception_handler

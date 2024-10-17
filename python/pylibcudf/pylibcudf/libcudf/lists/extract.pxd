@@ -1,4 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column, column_view
@@ -10,8 +11,8 @@ cdef extern from "cudf/lists/extract.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] extract_list_element(
         const lists_column_view&,
         size_type
-    ) except +
+    ) except +libcudf_exception_handler
     cdef unique_ptr[column] extract_list_element(
         const lists_column_view&,
         const column_view&
-    ) except +
+    ) except +libcudf_exception_handler

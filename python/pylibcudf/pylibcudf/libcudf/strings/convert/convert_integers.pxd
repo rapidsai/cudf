@@ -1,4 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -10,22 +11,22 @@ cdef extern from "cudf/strings/convert/convert_integers.hpp" namespace \
         "cudf::strings" nogil:
     cdef unique_ptr[column] to_integers(
         column_view input_col,
-        data_type output_type) except +
+        data_type output_type) except +libcudf_exception_handler
 
     cdef unique_ptr[column] from_integers(
-        column_view input_col) except +
+        column_view input_col) except +libcudf_exception_handler
 
     cdef unique_ptr[column] is_integer(
         column_view source_strings
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] hex_to_integers(
         column_view input_col,
-        data_type output_type) except +
+        data_type output_type) except +libcudf_exception_handler
 
     cdef unique_ptr[column] is_hex(
         column_view source_strings
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] integers_to_hex(
-        column_view input_col) except +
+        column_view input_col) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libc.stdint cimport int32_t, int64_t, uint32_t, uint64_t
 from libcpp cimport bool
@@ -69,4 +70,4 @@ cdef extern from "cudf/io/orc_metadata.hpp" \
 
     cdef parsed_orc_statistics read_parsed_orc_statistics(
         cudf_io_types.source_info src_info
-    ) except +
+    ) except +libcudf_exception_handler

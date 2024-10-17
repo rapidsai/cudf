@@ -1,4 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -10,12 +11,12 @@ cdef extern from "cudf/strings/convert/convert_fixed_point.hpp" namespace \
         "cudf::strings" nogil:
     cdef unique_ptr[column] to_fixed_point(
         column_view input,
-        data_type output_type) except +
+        data_type output_type) except +libcudf_exception_handler
 
     cdef unique_ptr[column] from_fixed_point(
-        column_view input) except +
+        column_view input) except +libcudf_exception_handler
 
     cdef unique_ptr[column] is_fixed_point(
         column_view input,
         data_type decimal_type
-    ) except +
+    ) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -18,59 +19,59 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
     cdef gather_map_pair_type inner_join(
         const table_view left_keys,
         const table_view right_keys,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type left_join(
         const table_view left_keys,
         const table_view right_keys,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type full_join(
         const table_view left_keys,
         const table_view right_keys,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type left_semi_join(
         const table_view left_keys,
         const table_view right_keys,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type left_anti_join(
         const table_view left_keys,
         const table_view right_keys,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type inner_join(
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type left_join(
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type full_join(
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type left_semi_join(
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type left_anti_join(
         const table_view left_keys,
         const table_view right_keys,
         null_equality nulls_equal,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] cross_join(
         const table_view left,
         const table_view right,
-    ) except +
+    ) except +libcudf_exception_handler

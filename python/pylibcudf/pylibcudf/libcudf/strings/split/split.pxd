@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -16,22 +17,22 @@ cdef extern from "cudf/strings/split/split.hpp" namespace \
     cdef unique_ptr[table] split(
         column_view strings_column,
         string_scalar delimiter,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler
 
     cdef unique_ptr[table] rsplit(
         column_view strings_column,
         string_scalar delimiter,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler
 
     cdef unique_ptr[column] split_record(
         column_view strings,
         string_scalar delimiter,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rsplit_record(
         column_view strings,
         string_scalar delimiter,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler
 
 
 cdef extern from "cudf/strings/split/split_re.hpp" namespace \
@@ -40,19 +41,19 @@ cdef extern from "cudf/strings/split/split_re.hpp" namespace \
     cdef unique_ptr[table] split_re(
         const column_view& input,
         regex_program prog,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler
 
     cdef unique_ptr[table] rsplit_re(
         const column_view& input,
         regex_program prog,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler
 
     cdef unique_ptr[column] split_record_re(
         const column_view& input,
         regex_program prog,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rsplit_record_re(
         const column_view& input,
         regex_program prog,
-        size_type maxsplit) except +
+        size_type maxsplit) except +libcudf_exception_handler

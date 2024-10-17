@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -10,4 +11,4 @@ cdef extern from "cudf/strings/find_multiple.hpp" namespace "cudf::strings" \
 
     cdef unique_ptr[column] find_multiple(
         column_view input,
-        column_view targets) except +
+        column_view targets) except +libcudf_exception_handler

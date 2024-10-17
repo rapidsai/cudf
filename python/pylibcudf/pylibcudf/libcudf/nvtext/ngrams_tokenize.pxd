@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -14,4 +15,4 @@ cdef extern from "nvtext/ngrams_tokenize.hpp" namespace "nvtext" nogil:
         size_type ngrams,
         const string_scalar & delimiter,
         const string_scalar & separator
-    ) except +
+    ) except +libcudf_exception_handler

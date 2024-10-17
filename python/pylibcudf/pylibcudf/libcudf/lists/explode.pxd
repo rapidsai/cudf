@@ -1,4 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
@@ -10,4 +11,4 @@ cdef extern from "cudf/lists/explode.hpp" namespace "cudf" nogil:
     cdef unique_ptr[table] explode_outer(
         const table_view,
         size_type explode_column_idx,
-    ) except +
+    ) except +libcudf_exception_handler

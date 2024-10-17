@@ -1,4 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -11,10 +12,10 @@ cdef extern from "cudf/lists/sorting.hpp" namespace "cudf::lists" nogil:
         const lists_column_view source_column,
         order column_order,
         null_order null_precedence
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] stable_sort_lists(
         const lists_column_view source_column,
         order column_order,
         null_order null_precedence
-    ) except +
+    ) except +libcudf_exception_handler

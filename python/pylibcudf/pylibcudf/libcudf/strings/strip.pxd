@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -12,4 +13,4 @@ cdef extern from "cudf/strings/strip.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] strip(
         column_view input,
         side_type side,
-        string_scalar to_strip) except +
+        string_scalar to_strip) except +libcudf_exception_handler

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -17,26 +18,26 @@ from rmm.librmm.device_buffer cimport device_buffer
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[device_buffer], size_type] bools_to_mask (
         column_view input
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] mask_to_bools (
         bitmask_type* bitmask, size_type begin_bit, size_type end_bit
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[device_buffer], size_type] nans_to_nulls(
         column_view input
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] transform(
         column_view input,
         string unary_udf,
         data_type output_type,
         bool is_ptx
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(
         table_view input
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[column], table_view] one_hot_encode(
         column_view input_column,
@@ -46,4 +47,4 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] compute_column(
         const table_view table,
         const expression& expr
-    ) except +
+    ) except +libcudf_exception_handler

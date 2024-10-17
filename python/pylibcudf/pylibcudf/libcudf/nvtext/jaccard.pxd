@@ -1,4 +1,5 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
@@ -12,4 +13,4 @@ cdef extern from "nvtext/jaccard.hpp" namespace "nvtext" nogil:
         const column_view &input1,
         const column_view &input2,
         size_type width
-    ) except +
+    ) except +libcudf_exception_handler

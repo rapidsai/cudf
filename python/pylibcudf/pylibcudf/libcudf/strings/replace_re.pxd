@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -17,14 +18,14 @@ cdef extern from "cudf/strings/replace_re.hpp" namespace "cudf::strings" nogil:
         column_view source_strings,
         regex_program,
         string_scalar repl,
-        size_type maxrepl) except +
+        size_type maxrepl) except +libcudf_exception_handler
 
     cdef unique_ptr[column] replace_with_backrefs(
         column_view source_strings,
         regex_program,
-        string repl) except +
+        string repl) except +libcudf_exception_handler
 
     cdef unique_ptr[column] replace_re(
         column_view source_strings,
         vector[string] patterns,
-        column_view repls) except +
+        column_view repls) except +libcudf_exception_handler

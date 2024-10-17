@@ -1,4 +1,5 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
@@ -75,15 +76,15 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
     cdef cppclass literal(expression):
         # Due to https://github.com/cython/cython/issues/3198, we need to
         # specify a return type for templated constructors.
-        literal literal[T](numeric_scalar[T] &) except +
-        literal literal[T](timestamp_scalar[T] &) except +
-        literal literal[T](duration_scalar[T] &) except +
+        literal literal[T](numeric_scalar[T] &) except +libcudf_exception_handler
+        literal literal[T](timestamp_scalar[T] &) except +libcudf_exception_handler
+        literal literal[T](duration_scalar[T] &) except +libcudf_exception_handler
 
     cdef cppclass column_reference(expression):
         # Allow for default C++ parameters by declaring multiple constructors
         # with the default parameters optionally omitted.
-        column_reference(size_type) except +
-        column_reference(size_type, table_reference) except +
+        column_reference(size_type) except +libcudf_exception_handler
+        column_reference(size_type, table_reference) except +libcudf_exception_handler
 
     cdef cppclass operation(expression):
         operation(ast_operator, const expression &)
@@ -92,4 +93,4 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
     cdef cppclass column_name_reference(expression):
         # column_name_reference is only meant for use in file I/O such as the
         # Parquet reader.
-        column_name_reference(string) except +
+        column_name_reference(string) except +libcudf_exception_handler

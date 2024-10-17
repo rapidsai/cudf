@@ -1,4 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libc.stdint cimport int64_t

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp.vector cimport vector
 from pylibcudf.libcudf.column.column_view cimport (
@@ -10,16 +11,16 @@ from pylibcudf.libcudf.types cimport size_type
 
 cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
     cdef cppclass table_view:
-        table_view() except +
-        table_view(const vector[column_view]) except +
-        column_view column(size_type column_index) except +
-        size_type num_columns() except +
-        size_type num_rows() except +
-        table_view select(vector[size_type] column_indices) except +
+        table_view() except +libcudf_exception_handler
+        table_view(const vector[column_view]) except +libcudf_exception_handler
+        column_view column(size_type column_index) except +libcudf_exception_handler
+        size_type num_columns() except +libcudf_exception_handler
+        size_type num_rows() except +libcudf_exception_handler
+        table_view select(vector[size_type] column_indices) except +libcudf_exception_handler
 
     cdef cppclass mutable_table_view:
-        mutable_table_view() except +
-        mutable_table_view(const vector[mutable_column_view]) except +
-        mutable_column_view column(size_type column_index) except +
-        size_type num_columns() except +
-        size_type num_rows() except +
+        mutable_table_view() except +libcudf_exception_handler
+        mutable_table_view(const vector[mutable_column_view]) except +libcudf_exception_handler
+        mutable_column_view column(size_type column_index) except +libcudf_exception_handler
+        size_type num_columns() except +libcudf_exception_handler
+        size_type num_rows() except +libcudf_exception_handler

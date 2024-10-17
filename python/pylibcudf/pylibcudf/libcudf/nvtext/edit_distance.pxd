@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from pylibcudf.exception_handler import libcudf_exception_handler
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -11,8 +12,8 @@ cdef extern from "nvtext/edit_distance.hpp" namespace "nvtext" nogil:
     cdef unique_ptr[column] edit_distance(
         const column_view & strings,
         const column_view & targets
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] edit_distance_matrix(
         const column_view & strings
-    ) except +
+    ) except +libcudf_exception_handler
