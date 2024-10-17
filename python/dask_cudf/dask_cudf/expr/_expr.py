@@ -8,7 +8,7 @@ from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
 from dask_expr._reductions import Reduction, Var
 from dask_expr.io.io import FusedParquetIO
-from dask_expr.io.parquet import ReadParquetPyarrowFS
+from dask_expr.io.parquet import FragmentWrapper, ReadParquetPyarrowFS
 
 from dask.dataframe.core import is_dataframe_like, make_meta, meta_nonempty
 from dask.dataframe.dispatch import is_categorical_dtype
@@ -98,6 +98,31 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         if index_name is not None:
             df = df.set_index(index_name)
         return df
+
+    def _filtered_task(self, index: int):
+        columns = self.columns.copy()
+        index_name = self.index.name
+        if self.index is not None:
+            index_name = self.index.name
+        schema = self._dataset_info["schema"].remove_metadata()
+        if index_name:
+            if columns is None:
+                columns = list(schema.names)
+            columns.append(index_name)
+        return (
+            self._table_to_pandas,
+            (
+                self._fragment_to_table,
+                FragmentWrapper(self.fragments[index], filesystem=self.fs),
+                self.filters,
+                columns,
+                schema,
+            ),
+            index_name,
+            None,
+            None,
+            None,
+        )
 
     def _tune_up(self, parent):
         if self._fusion_compression_factor >= 1:
