@@ -781,7 +781,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
-                "Use cudf.DataFrame._from_data for constructing a Series from "
+                "Use cudf.DataFrame._from_data for constructing a DataFrame from "
                 "ColumnAccessor"
             )
         elif isinstance(data, ColumnBase):
