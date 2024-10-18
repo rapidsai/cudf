@@ -425,21 +425,21 @@ class base_2dspan {
    *
    * @return A pointer to the first element of the span
    */
-  constexpr auto data() const noexcept { return _flat.data(); }
+  [[nodiscard]] constexpr auto data() const noexcept { return _flat.data(); }
 
   /**
    * @brief Returns the size in the span as pair.
    *
    * @return pair representing rows and columns size of the span
    */
-  constexpr auto size() const noexcept { return _size; }
+  [[nodiscard]] constexpr auto size() const noexcept { return _size; }
 
   /**
    * @brief Returns the number of elements in the span.
    *
    * @return Number of elements in the span
    */
-  constexpr auto count() const noexcept { return _flat.size(); }
+  [[nodiscard]] constexpr auto count() const noexcept { return _flat.size(); }
 
   /**
    * @brief Checks if the span is empty.
@@ -467,7 +467,7 @@ class base_2dspan {
    *
    * @return A flattened span of the 2D span
    */
-  constexpr RowType<T, dynamic_extent> flat_view() const { return _flat; }
+  [[nodiscard]] constexpr RowType<T, dynamic_extent> flat_view() const { return _flat; }
 
   /**
    * @brief Construct a 2D span from another 2D span of convertible type
