@@ -14,7 +14,11 @@ from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
-from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
+from dask_cudf.tests.utils import (
+    QUERY_PLANNING_ON,
+    require_dask_expr,
+    xfail_dask_expr,
+)
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -556,10 +560,22 @@ def test_groupby_categorical_key():
         ),
     ],
 )
+@pytest.mark.parametrize(
+    "fused",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=require_dask_expr("Not supported by legacy API"),
+        ),
+    ],
+)
 @pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])
-def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
+def test_groupby_agg_params(
+    npartitions, split_every, split_out, fused, as_index
+):
     df = cudf.datasets.randomdata(
         nrows=150,
         dtypes={"name": str, "a": int, "b": int, "c": float},
@@ -574,6 +590,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
         "c": ["mean", "std", "var"],
     }
 
+    fused_kwarg = {"fused": fused} if QUERY_PLANNING_ON else {}
     split_kwargs = {"split_every": split_every, "split_out": split_out}
     if split_out == "use_dask_default":
         split_kwargs.pop("split_out")
@@ -593,6 +610,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
             ddf.groupby(["name", "a"], sort=True, **maybe_as_index)
             .aggregate(
                 agg_dict,
+                **fused_kwarg,
                 **split_kwargs,
             )
             .compute()
@@ -614,6 +632,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     # Full check (`sort=False`)
     gr = ddf.groupby(["name", "a"], sort=False, **maybe_as_index).aggregate(
         agg_dict,
+        **fused_kwarg,
         **split_kwargs,
     )
     pr = pddf.groupby(["name", "a"], sort=False).agg(
