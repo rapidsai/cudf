@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
 from utils import ALL_PA_TYPES, DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
 
+
 def _type_to_str(typ):
     if isinstance(typ, pa.ListType):
         return f"list-{_type_to_str(typ.value_type)}"
@@ -23,6 +24,7 @@ def _type_to_str(typ):
         return f"struct-{'-'.join([_type_to_str(typ.field(i).type) for i in range(typ.num_fields)])}"
     else:
         return str(typ)
+
 
 # This fixture defines [the standard set of types that all tests should default to
 # running on. If there is a need for some tests to run on a different set of types, that
