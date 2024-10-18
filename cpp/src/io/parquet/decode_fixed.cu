@@ -117,14 +117,11 @@ __device__ void gpuDecodeFixedWidthValues(
       // has to take into account the # of values we have to skip in the page to get to the
       // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
       int const src_pos = [&]() {
-        if constexpr (has_lists_t) {
-          return thread_pos + skipped_leaf_values;
-        } else {
-          return thread_pos;
-        }
+        if constexpr (has_lists_t) { return thread_pos + skipped_leaf_values; }
+        return thread_pos;
       }();
 
-      void* const dst = data_out + static_cast<size_t>(dst_pos) * dtype_len;
+      void* const dst = data_out + (static_cast<size_t>(dst_pos) * dtype_len);
 
       if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
         switch (dtype) {
@@ -316,9 +313,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
         return -1;
       } else if (def) {
         return static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
-      } else {
-        return 1;
       }
+      return 1;
     }();
 
     int const thread_value_count = t;
@@ -444,9 +440,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
         int const def_level =
           static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)]);
         return ((def_level > 0) && in_row_bounds) ? 1 : 0;
-      } else {
-        return in_row_bounds;
       }
+      return in_row_bounds;
     }();
 
     // thread and block validity count

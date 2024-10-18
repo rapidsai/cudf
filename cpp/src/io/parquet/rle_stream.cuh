@@ -216,6 +216,26 @@ struct rle_stream {
     decode_index = -1;  // signals the first iteration. Nothing to decode.
   }
 
+  __device__ inline int get_rle_run_info(rle_run<level_t>& run)
+  {
+    run.start     = cur;
+    run.level_run = get_vlq32(run.start, end);
+
+    // run_bytes includes the header size
+    int run_bytes = run.start - cur;
+    if (is_literal_run(run.level_run)) {
+      // from the parquet spec: literal runs always come in multiples of 8 values.
+      run.size = (run.level_run >> 1) * 8;
+      run_bytes += ((run.size * level_bits) + 7) >> 3;
+    } else {
+      // repeated value run
+      run.size = (run.level_run >> 1);
+      run_bytes += ((level_bits) + 7) >> 3;
+    }
+
+    return run_bytes;
+  }
+
   __device__ inline void fill_run_batch()
   {
     // decode_index == -1 means we are on the very first decode iteration for this stream.
@@ -226,31 +246,12 @@ struct rle_stream {
     while (((decode_index == -1 && fill_index < num_rle_stream_decode_warps) ||
             fill_index < decode_index + run_buffer_size) &&
            cur < end) {
-      auto& run = runs[rolling_index<run_buffer_size>(fill_index)];
-
       // Encoding::RLE
+      auto& run           = runs[rolling_index<run_buffer_size>(fill_index)];
+      int const run_bytes = get_rle_run_info(run);
+      run.remaining       = run.size;
+      run.output_pos      = output_pos;
 
-      // bytes for the varint header
-      uint8_t const* _cur = cur;
-      int const level_run = get_vlq32(_cur, end);
-      // run_bytes includes the header size
-      int run_bytes = _cur - cur;
-
-      // literal run
-      if (is_literal_run(level_run)) {
-        // from the parquet spec: literal runs always come in multiples of 8 values.
-        run.size = (level_run >> 1) * 8;
-        run_bytes += ((run.size * level_bits) + 7) >> 3;
-      }
-      // repeated value run
-      else {
-        run.size = (level_run >> 1);
-        run_bytes += ((level_bits) + 7) >> 3;
-      }
-      run.output_pos = output_pos;
-      run.start      = _cur;
-      run.level_run  = level_run;
-      run.remaining  = run.size;
       cur += run_bytes;
       output_pos += run.size;
       fill_index++;
@@ -380,29 +381,15 @@ struct rle_stream {
     // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
     // the first time
     while (cur < end) {
-      // bytes for the varint header
-      uint8_t const* _cur = cur;
-      int const level_run = get_vlq32(_cur, end);
+      rle_run<level_t> run;
+      int run_bytes = get_rle_run_info(run);
 
-      // run_bytes includes the header size
-      int run_bytes = _cur - cur;
-      int run_size;
-      if (is_literal_run(level_run)) {
-        // from the parquet spec: literal runs always come in multiples of 8 values.
-        run_size = (level_run >> 1) * 8;
-        run_bytes += ((run_size * level_bits) + 7) >> 3;
-      } else {
-        // repeated value run
-        run_size = (level_run >> 1);
-        run_bytes += ((level_bits) + 7) >> 3;
-      }
-
-      if ((output_pos + run_size) > target_count) {
+      if ((output_pos + run.size) > target_count) {
         return output_pos;  // bail! we've reached the starting run
       }
 
       // skip this run
-      output_pos += run_size;
+      output_pos += run.size;
       cur += run_bytes;
     }
 
