@@ -6,6 +6,7 @@ strings
 
     capitalize
     char_types
+    combine
     contains
     extract
     find

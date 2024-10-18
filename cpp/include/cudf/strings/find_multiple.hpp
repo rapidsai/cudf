@@ -53,7 +53,7 @@ namespace strings {
  * @param targets UTF-8 encoded strings to search for in each string in `input`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New BOOL8 column
+ * @return Table of BOOL8 columns
  */
 std::unique_ptr<table> contains_multiple(
   strings_column_view const& input,
