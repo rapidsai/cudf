@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 
+#include "cudf/column/column.hpp"
+#include "thrust/iterator/counting_iterator.h"
+
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/binaryop.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <nvbench/nvbench.cuh>
 
 #include <algorithm>
+#include <cstddef>
+#include <memory>
 
 // This set of benchmarks is designed to be a comparison for the AST benchmarks
 
@@ -64,6 +70,67 @@ static void BM_binaryop_transform(nvbench::state& state)
   });
 }
 
+static void BM_string_compare_binaryop_transform(nvbench::state& state)
+{
+  auto const string_width    = static_cast<cudf::size_type>(state.get_int64("string_width"));
+  auto const num_rows        = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_comparisons = static_cast<cudf::size_type>(state.get_int64("num_comparisons"));
+  auto const hit_rate        = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
+
+  // Create table data
+  auto const num_cols = num_comparisons * 2;
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  std::for_each(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(num_cols), [&](size_t) {
+      columns.emplace_back(create_string_column(num_rows, string_width, hit_rate));
+    });
+
+  cudf::table table{std::move(columns)};
+
+  int64_t chars_size = 0;
+  for (auto& column : table.view()) {
+    chars_size += cudf::strings_column_view{column}.chars_size(cudf::get_default_stream());
+  }
+
+  // Create column references
+
+  // Use the number of bytes read from global memory
+  state.add_element_count(chars_size, "chars_size");
+  state.add_global_memory_reads<nvbench::uint8_t>(chars_size);
+  state.add_global_memory_writes<nvbench::int32_t>(num_rows);
+
+  // Construct binary operations (a == b && c == d && e == f && ...)
+  auto const cmp_op        = cudf::binary_operator::EQUAL;
+  auto const accumulate_op = cudf::binary_operator::LOGICAL_AND;
+  auto constexpr bool_type = cudf::data_type{cudf::type_id::BOOL8};
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    std::vector<std::unique_ptr<cudf::column>> intermediates;
+    std::unique_ptr<cudf::column> accumulation =
+      cudf::binary_operation(table.get_column(0),
+                             table.get_column(1),
+                             cmp_op,
+                             bool_type,
+                             launch.get_stream().get_stream());
+    std::for_each(
+      thrust::make_counting_iterator(1),
+      thrust::make_counting_iterator(num_comparisons),
+      [&](size_t idx) {
+        std::unique_ptr<cudf::column> comparison =
+          cudf::binary_operation(table.get_column(idx * 2),
+                                 table.get_column(idx * 2 + 1),
+                                 cmp_op,
+                                 bool_type,
+                                 launch.get_stream().get_stream());
+        std::unique_ptr<cudf::column> acc = cudf::binary_operation(
+          *comparison, *accumulation, accumulate_op, bool_type, launch.get_stream().get_stream());
+        intermediates.emplace_back(std::move(comparison));
+        intermediates.emplace_back(std::move(accumulation));
+        accumulation = std::move(acc);
+      });
+  });
+}
+
 #define BINARYOP_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns) \
                                                                                       \
   static void name(::nvbench::state& st)                                              \
@@ -86,3 +153,10 @@ BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_imbalanced_unique,
                                     double,
                                     TreeType::IMBALANCED_LEFT,
                                     false);
+
+NVBENCH_BENCH(BM_string_compare_binaryop_transform)
+  .set_name("string_compare_binaryop_transform")
+  .add_int64_axis("string_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("num_comparisons", {1, 2, 3, 4})
+  .add_int64_axis("hit_rate", {50, 100});
