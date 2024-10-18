@@ -1,9 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.string cimport string
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type
 from pylibcudf.libcudf.table.table_view cimport table_view
@@ -33,8 +32,10 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         timestamp_scalar(int64_t value, bool is_valid) except +libcudf_exception_handler
         timestamp_scalar(int32_t value) except +libcudf_exception_handler
         timestamp_scalar(int32_t value, bool is_valid) except +libcudf_exception_handler
-        int64_t ticks_since_epoch_64 "ticks_since_epoch"() except +libcudf_exception_handler
-        int32_t ticks_since_epoch_32 "ticks_since_epoch"() except +libcudf_exception_handler
+        int64_t ticks_since_epoch_64 "ticks_since_epoch"()\
+            except +libcudf_exception_handler
+        int32_t ticks_since_epoch_32 "ticks_since_epoch"()\
+            except +libcudf_exception_handler
         T value() except +libcudf_exception_handler
 
     cdef cppclass duration_scalar[T](scalar):

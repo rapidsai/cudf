@@ -1,11 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport (
     data_type,
     interpolation,
@@ -103,20 +103,25 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_max_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_count_aggregation[T](null_policy) except +libcudf_exception_handler
+    cdef unique_ptr[T] make_count_aggregation[T](
+        null_policy
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_any_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_all_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_sum_of_squares_aggregation[T]() except +libcudf_exception_handler
+    cdef unique_ptr[T] make_sum_of_squares_aggregation[T]()\
+        except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_mean_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_variance_aggregation[T](
         size_type ddof) except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_std_aggregation[T](size_type ddof) except +libcudf_exception_handler
+    cdef unique_ptr[T] make_std_aggregation[T](
+        size_type ddof
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_median_aggregation[T]() except +libcudf_exception_handler
 
@@ -127,7 +132,9 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_argmin_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_nunique_aggregation[T](null_policy null_handling) except +libcudf_exception_handler
+    cdef unique_ptr[T] make_nunique_aggregation[T](
+        null_policy null_handling
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_nth_element_aggregation[T](
         size_type n,

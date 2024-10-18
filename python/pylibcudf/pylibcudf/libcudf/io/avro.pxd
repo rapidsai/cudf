@@ -1,9 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport size_type
 
 
@@ -33,9 +32,15 @@ cdef extern from "cudf/io/avro.hpp" \
         avro_reader_options_builder(
             cudf_io_types.source_info src
         ) except +libcudf_exception_handler
-        avro_reader_options_builder& columns(vector[string] col_names) except +libcudf_exception_handler
-        avro_reader_options_builder& skip_rows(size_type val) except +libcudf_exception_handler
-        avro_reader_options_builder& num_rows(size_type val) except +libcudf_exception_handler
+        avro_reader_options_builder& columns(
+            vector[string] col_names
+        ) except +libcudf_exception_handler
+        avro_reader_options_builder& skip_rows(
+            size_type val
+        ) except +libcudf_exception_handler
+        avro_reader_options_builder& num_rows(
+            size_type val
+        ) except +libcudf_exception_handler
 
         avro_reader_options build() except +libcudf_exception_handler
 

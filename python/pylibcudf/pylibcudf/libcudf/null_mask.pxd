@@ -1,8 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libc.stdint cimport int32_t
 from libcpp.pair cimport pair
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, mask_state, size_type

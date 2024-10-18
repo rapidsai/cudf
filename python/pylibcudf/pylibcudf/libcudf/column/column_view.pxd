@@ -1,8 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libcpp cimport bool
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type
 
 
@@ -67,8 +66,12 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
 
     cdef cppclass mutable_column_view:
         mutable_column_view() except +libcudf_exception_handler
-        mutable_column_view(const mutable_column_view&) except +libcudf_exception_handler
-        mutable_column_view& operator=(const mutable_column_view&) except +libcudf_exception_handler
+        mutable_column_view(
+            const mutable_column_view&
+        ) except +libcudf_exception_handler
+        mutable_column_view& operator=(
+            const mutable_column_view&
+        ) except +libcudf_exception_handler
 
         mutable_column_view(
             data_type type,

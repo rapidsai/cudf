@@ -1,6 +1,4 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int32_t, uint8_t
@@ -9,6 +7,7 @@ from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type, size_type
 
 
@@ -27,7 +26,8 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options() except +libcudf_exception_handler
         cudf_io_types.source_info get_source() except +libcudf_exception_handler
         vector[string] get_dtypes() except +libcudf_exception_handler
-        cudf_io_types.compression_type get_compression() except +libcudf_exception_handler
+        cudf_io_types.compression_type get_compression()\
+            except +libcudf_exception_handler
         size_t get_byte_range_offset() except +libcudf_exception_handler
         size_t get_byte_range_size() except +libcudf_exception_handler
         bool is_enabled_lines() except +libcudf_exception_handler
@@ -37,8 +37,12 @@ cdef extern from "cudf/io/json.hpp" \
         bool is_enabled_experimental() except +libcudf_exception_handler
 
         # setter
-        void set_dtypes(vector[data_type] types) except +libcudf_exception_handler
-        void set_dtypes(map[string, schema_element] types) except +libcudf_exception_handler
+        void set_dtypes(
+            vector[data_type] types
+        ) except +libcudf_exception_handler
+        void set_dtypes(
+            map[string, schema_element] types
+        ) except +libcudf_exception_handler
         void set_compression(
             cudf_io_types.compression_type compression
         ) except +libcudf_exception_handler
@@ -116,8 +120,12 @@ cdef extern from "cudf/io/json.hpp" \
         string get_false_value() except +libcudf_exception_handler
 
         # setter
-        void set_table(cudf_table_view.table_view tbl) except +libcudf_exception_handler
-        void set_metadata(cudf_io_types.table_metadata meta) except +libcudf_exception_handler
+        void set_table(
+            cudf_table_view.table_view tbl
+        ) except +libcudf_exception_handler
+        void set_metadata(
+            cudf_io_types.table_metadata meta
+        ) except +libcudf_exception_handler
         void set_na_rep(string val) except +libcudf_exception_handler
         void enable_include_nulls(bool val) except +libcudf_exception_handler
         void enable_lines(bool val) except +libcudf_exception_handler
@@ -143,12 +151,24 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options_builder& metadata(
             cudf_io_types.table_metadata meta
         ) except +libcudf_exception_handler
-        json_writer_options_builder& na_rep(string val) except +libcudf_exception_handler
-        json_writer_options_builder& include_nulls(bool val) except +libcudf_exception_handler
-        json_writer_options_builder& lines(bool val) except +libcudf_exception_handler
-        json_writer_options_builder& rows_per_chunk(size_type val) except +libcudf_exception_handler
-        json_writer_options_builder& true_value(string val) except +libcudf_exception_handler
-        json_writer_options_builder& false_value(string val) except +libcudf_exception_handler
+        json_writer_options_builder& na_rep(
+            string val
+        ) except +libcudf_exception_handler
+        json_writer_options_builder& include_nulls(
+            bool val
+        ) except +libcudf_exception_handler
+        json_writer_options_builder& lines(
+            bool val
+        ) except +libcudf_exception_handler
+        json_writer_options_builder& rows_per_chunk(
+            size_type val
+        ) except +libcudf_exception_handler
+        json_writer_options_builder& true_value(
+            string val
+        ) except +libcudf_exception_handler
+        json_writer_options_builder& false_value(
+            string val
+        ) except +libcudf_exception_handler
 
         json_writer_options build() except +libcudf_exception_handler
 

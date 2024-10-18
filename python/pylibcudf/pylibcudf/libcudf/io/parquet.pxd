@@ -1,6 +1,4 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
@@ -9,6 +7,7 @@ from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
@@ -29,7 +28,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options() except +libcudf_exception_handler
         source_info get_source_info() except +libcudf_exception_handler
         vector[vector[size_type]] get_row_groups() except +libcudf_exception_handler
-        const optional[reference_wrapper[expression]]& get_filter() except +libcudf_exception_handler
+        const optional[reference_wrapper[expression]]& get_filter()\
+            except +libcudf_exception_handler
         data_type get_timestamp_type() except +libcudf_exception_handler
         bool is_enabled_use_pandas_metadata() except +libcudf_exception_handler
         bool is_enabled_arrow_schema() except +libcudf_exception_handler
@@ -39,10 +39,14 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_filter(expression &filter) except +libcudf_exception_handler
         void set_columns(vector[string] col_names) except +libcudf_exception_handler
         void set_num_rows(size_type val) except +libcudf_exception_handler
-        void set_row_groups(vector[vector[size_type]] row_grp) except +libcudf_exception_handler
+        void set_row_groups(
+            vector[vector[size_type]] row_grp
+        ) except +libcudf_exception_handler
         void set_skip_rows(int64_t val) except +libcudf_exception_handler
         void enable_use_arrow_schema(bool val) except +libcudf_exception_handler
-        void enable_allow_mismatched_pq_schemas(bool val) except +libcudf_exception_handler
+        void enable_allow_mismatched_pq_schemas(
+            bool val
+        ) except +libcudf_exception_handler
         void enable_use_pandas_metadata(bool val) except +libcudf_exception_handler
         void set_timestamp_type(data_type type) except +libcudf_exception_handler
 
@@ -124,7 +128,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_dictionary_size(size_t val) except +libcudf_exception_handler
         void enable_write_v2_headers(bool val) except +libcudf_exception_handler
         void enable_write_arrow_schema(bool val) except +libcudf_exception_handler
-        void set_dictionary_policy(dictionary_policy policy) except +libcudf_exception_handler
+        void set_dictionary_policy(
+            dictionary_policy policy
+        ) except +libcudf_exception_handler
 
     cdef cppclass parquet_writer_options(parquet_writer_options_base):
         parquet_writer_options() except +libcudf_exception_handler
@@ -228,7 +234,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
     cdef cppclass parquet_chunked_writer:
         parquet_chunked_writer() except +libcudf_exception_handler
-        parquet_chunked_writer(chunked_parquet_writer_options args) except +libcudf_exception_handler
+        parquet_chunked_writer(
+            chunked_parquet_writer_options args
+        ) except +libcudf_exception_handler
         parquet_chunked_writer& write(
             table_view table_,
         ) except +libcudf_exception_handler

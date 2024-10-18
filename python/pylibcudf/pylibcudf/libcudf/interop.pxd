@@ -1,9 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
@@ -19,13 +18,13 @@ cdef extern from "dlpack/dlpack.h" nogil:
 # The Arrow structs are not namespaced.
 cdef extern from "cudf/interop.hpp" nogil:
     cdef struct ArrowSchema:
-        void (*release)(ArrowSchema*) noexcept +libcudf_exception_handler
+        void (*release)(ArrowSchema*) noexcept
 
     cdef struct ArrowArray:
-        void (*release)(ArrowArray*) noexcept +libcudf_exception_handler
+        void (*release)(ArrowArray*) noexcept
 
     cdef struct ArrowArrayStream:
-        void (*release)(ArrowArrayStream*) noexcept +libcudf_exception_handler
+        void (*release)(ArrowArrayStream*) noexcept
 
     cdef struct ArrowDeviceArray:
         ArrowArray array
@@ -45,7 +44,9 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         string name
         vector[column_metadata] children_meta
 
-    cdef unique_ptr[table] from_arrow_stream(ArrowArrayStream* input) except +libcudf_exception_handler
+    cdef unique_ptr[table] from_arrow_stream(
+        ArrowArrayStream* input
+    ) except +libcudf_exception_handler
     cdef unique_ptr[column] from_arrow_column(
         const ArrowSchema* schema,
         const ArrowArray* input
@@ -84,4 +85,6 @@ cdef extern from *:
         const table_view& tbl,
         const vector[column_metadata]& metadata,
     ) except +libcudf_exception_handler nogil
-    cdef ArrowArray* to_arrow_host_raw(const table_view& tbl) except +libcudf_exception_handler nogil
+    cdef ArrowArray* to_arrow_host_raw(
+        const table_view& tbl
+    ) except +libcudf_exception_handler nogil

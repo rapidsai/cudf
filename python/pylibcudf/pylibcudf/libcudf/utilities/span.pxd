@@ -1,7 +1,6 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 
 cdef extern from "cudf/utilities/span.hpp" namespace "cudf" nogil:

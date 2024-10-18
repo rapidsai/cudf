@@ -1,10 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
 from libcpp.string cimport string
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
 
 

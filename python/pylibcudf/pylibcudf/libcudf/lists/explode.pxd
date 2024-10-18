@@ -1,7 +1,6 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libcpp.memory cimport unique_ptr
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type

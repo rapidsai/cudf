@@ -1,11 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.aggregation cimport (
     groupby_aggregation,
     groupby_scan_aggregation,

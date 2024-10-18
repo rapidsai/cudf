@@ -1,11 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libc.stdint cimport int32_t, int64_t, uint32_t, uint64_t
 from libcpp cimport bool
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.io cimport types as cudf_io_types
 from pylibcudf.variant cimport monostate, variant
 

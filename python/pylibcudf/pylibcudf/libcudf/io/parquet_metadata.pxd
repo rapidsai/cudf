@@ -1,11 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libc.stdint cimport int64_t
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport size_type
 
 

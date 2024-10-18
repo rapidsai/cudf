@@ -1,9 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
@@ -24,13 +23,17 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         KEEP_LAST
         KEEP_NONE
 
-    cdef unique_ptr[table] drop_nulls(table_view source_table,
-                                      vector[size_type] keys,
-                                      size_type keep_threshold) except +libcudf_exception_handler
+    cdef unique_ptr[table] drop_nulls(
+        table_view source_table,
+        vector[size_type] keys,
+        size_type keep_threshold
+    ) except +libcudf_exception_handler
 
-    cdef unique_ptr[table] drop_nans(table_view source_table,
-                                     vector[size_type] keys,
-                                     size_type keep_threshold) except +libcudf_exception_handler
+    cdef unique_ptr[table] drop_nans(
+        table_view source_table,
+        vector[size_type] keys,
+        size_type keep_threshold
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[table] apply_boolean_mask(
         table_view source_table,

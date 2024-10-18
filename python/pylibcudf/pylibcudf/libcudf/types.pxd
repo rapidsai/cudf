@@ -1,8 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler import libcudf_exception_handler
-
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
