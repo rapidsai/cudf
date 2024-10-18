@@ -183,7 +183,7 @@ struct aggregate_writer_metadata {
     std::vector<RowGroup> row_groups;
     std::vector<KeyValue> key_value_metadata;
     std::vector<OffsetIndex> offset_indexes;
-    std::vector<std::vector<uint8_t>> column_indexes;
+    std::vector<cudf::detail::host_vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
   std::optional<std::vector<ColumnOrder>> column_orders = std::nullopt;
@@ -1543,12 +1543,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
       d_chunks.flat_view(), {column_stats, pages.size()}, column_index_truncate_length, stream);
   }
 
-  auto h_chunks = chunks.host_view();
-  CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks.data(),
-                                d_chunks.data(),
-                                d_chunks.flat_view().size_bytes(),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  chunks.device_to_host_async(stream);
 
   if (comp_stats.has_value()) {
     comp_stats.value() += collect_compression_statistics(comp_in, comp_res, stream);
@@ -2559,12 +2554,11 @@ void writer::impl::write_parquet_data_to_sink(
         } else {
           CUDF_EXPECTS(bounce_buffer.size() >= ck.compressed_size,
                        "Bounce buffer was not properly initialized.");
-          CUDF_CUDA_TRY(cudaMemcpyAsync(bounce_buffer.data(),
-                                        dev_bfr + ck.ck_stat_size,
-                                        ck.compressed_size,
-                                        cudaMemcpyDefault,
-                                        _stream.value()));
-          _stream.synchronize();
+          cudf::detail::cuda_memcpy(
+            host_span{bounce_buffer}.subspan(0, ck.compressed_size),
+            device_span<uint8_t const>{dev_bfr + ck.ck_stat_size, ck.compressed_size},
+            _stream);
+
           _out_sink[p]->host_write(bounce_buffer.data(), ck.compressed_size);
         }
 
@@ -2600,13 +2594,8 @@ void writer::impl::write_parquet_data_to_sink(
           auto const& column_chunk_meta = row_group.columns[i].meta_data;
 
           // start transfer of the column index
-          std::vector<uint8_t> column_idx;
-          column_idx.resize(ck.column_index_size);
-          CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.data(),
-                                        ck.column_index_blob,
-                                        ck.column_index_size,
-                                        cudaMemcpyDefault,
-                                        _stream.value()));
+          auto column_idx = cudf::detail::make_host_vector_async(
+            device_span<uint8_t const>{ck.column_index_blob, ck.column_index_size}, _stream);
 
           // calculate offsets while the column index is transferring
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
