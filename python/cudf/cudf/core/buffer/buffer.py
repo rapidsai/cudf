@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import math
 import pickle
 from types import SimpleNamespace
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 import weakref
 
 import numpy
@@ -18,6 +17,9 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def host_memory_allocation(nbytes: int) -> memoryview:

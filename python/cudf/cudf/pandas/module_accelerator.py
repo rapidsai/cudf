@@ -16,7 +16,7 @@ import pathlib
 import sys
 import threading
 from types import ModuleType
-from typing import Any, ContextManager, NamedTuple
+from typing import Any, ContextManager, NamedTuple  # noqa: UP035
 import warnings
 
 from typing_extensions import Self

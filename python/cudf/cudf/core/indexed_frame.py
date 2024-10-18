@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from collections import Counter, abc
-from collections.abc import Callable, MutableMapping
 import operator
 import textwrap
 from typing import (
@@ -62,6 +61,8 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, MutableMapping
+
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -35,6 +34,8 @@ from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
 

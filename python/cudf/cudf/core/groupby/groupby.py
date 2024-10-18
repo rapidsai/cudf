@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from collections import abc
-from collections.abc import Iterable
 import copy
 from functools import cached_property
 import itertools
@@ -37,6 +36,8 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from cudf._typing import (
         AggType,
         DataFrameOrSeries,

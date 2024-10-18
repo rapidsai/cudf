@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, cast
 import warnings
@@ -27,6 +26,7 @@ from cudf.utils.dtypes import (
 
 if TYPE_CHECKING:
     from collections import abc
+    from collections.abc import Mapping, Sequence
 
     import numba.cuda
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
 from functools import cached_property
 import itertools
 import numbers
@@ -37,7 +36,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable
+    from collections.abc import Generator, Hashable, MutableMapping
 
     from typing_extensions import Self
 

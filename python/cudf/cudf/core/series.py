@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import abc
-from collections.abc import MutableMapping
 import functools
 import inspect
 import pickle
@@ -72,6 +71,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     import pyarrow as pa
 
     from cudf._typing import (

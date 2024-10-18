@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import calendar
-from collections.abc import Sequence
 import datetime
 import functools
 import locale
@@ -32,6 +31,8 @@ from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import (
         ColumnBinaryOperand,
         DatetimeLikeScalar,

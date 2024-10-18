@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import abc
-from collections.abc import MutableMapping
 import operator
 import pickle
 from typing import TYPE_CHECKING, Any, Literal
@@ -37,6 +36,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
     from types import ModuleType
 
     from cudf._typing import Dtype, ScalarLike

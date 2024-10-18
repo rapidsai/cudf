@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 import functools
 from typing import TYPE_CHECKING, Any, cast
 
@@ -29,7 +28,7 @@ from cudf.utils.dtypes import (
 from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from cudf._typing import (
         ColumnBinaryOperand,

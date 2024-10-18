@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 from collections import abc
-from collections.abc import Iterable, Mapping, Sequence
 import enum
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 from numba.cuda import as_cuda_array
@@ -20,6 +19,9 @@ from cudf.core.column import (
     as_column,
     build_column,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
 
 # Implementation of interchange protocol classes
 # ----------------------------------------------

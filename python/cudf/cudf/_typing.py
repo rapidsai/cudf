@@ -42,7 +42,7 @@ SeriesOrIndex = Union["cudf.Series", "cudf.core.index.BaseIndex"]
 SeriesOrSingleColumnIndex = Union["cudf.Series", "cudf.core.index.Index"]
 
 # Groupby aggregation
-AggType = Union[str, Callable]
-MultiColumnAggType = Union[
+AggType = Union[str, Callable]  # noqa: UP007
+MultiColumnAggType = Union[  # noqa: UP007
     AggType, Iterable[AggType], dict[Any, Iterable[AggType]]
 ]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from functools import cached_property
 import re
 from typing import TYPE_CHECKING, cast, overload
@@ -36,6 +35,8 @@ def str_to_boolean(column: StringColumn):
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import cupy
     import numba.cuda
 
