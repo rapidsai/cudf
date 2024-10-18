@@ -1,19 +1,19 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import warnings
 from collections.abc import Iterator
 from functools import partial
+import warnings
 
 import cupy as cp
 import numpy as np
-import pandas as pd
-import pyarrow as pa
 from packaging.version import Version
+import pandas as pd
 from pandas.api.types import is_scalar
+import pyarrow as pa
 
-import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
+import dask.dataframe as dd
 from dask.dataframe.backends import (
     DataFrameBackendEntrypoint,
     PandasBackendEntrypoint,
@@ -727,14 +727,14 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             # This code path uses PyArrow for IO, which is only
             # beneficial for remote storage (e.g. S3)
 
+            # CudfReadParquetPyarrowFS requires import of distributed beforehand
+            # (See: https://github.com/dask/dask/issues/11352)
             from fsspec.utils import stringify_path
             from pyarrow import fs as pa_fs
 
-            # CudfReadParquetPyarrowFS requires import of distributed beforehand
-            # (See: https://github.com/dask/dask/issues/11352)
-            import distributed  # noqa: F401
             from dask.core import flatten
             from dask.dataframe.utils import pyarrow_strings_enabled
+            import distributed  # noqa: F401
 
             from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pickle
-import warnings
 from functools import cached_property
+import pickle
 from typing import TYPE_CHECKING, Any, Literal
+import warnings
 
 import pandas as pd
 from typing_extensions import Self

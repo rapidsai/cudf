@@ -6,10 +6,7 @@ from __future__ import annotations
 import importlib.resources
 
 __version__ = (
-    importlib.resources.files(__package__)
-    .joinpath("VERSION")
-    .read_text()
-    .strip()
+    importlib.resources.files(__package__).joinpath("VERSION").read_text().strip()
 )
 try:
     __git_commit__ = (

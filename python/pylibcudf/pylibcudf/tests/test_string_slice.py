@@ -91,9 +91,7 @@ def test_slice_column(
         type=pa.string(),
     )
 
-    got = plc.strings.slice.slice_strings(
-        plc_col, plc_starts_col, plc_stops_col
-    )
+    got = plc.strings.slice.slice_strings(plc_col, plc_starts_col, plc_stops_col)
 
     assert_column_eq(expected, got)
 

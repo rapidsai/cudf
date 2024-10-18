@@ -1,7 +1,7 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-import types
 from contextlib import ExitStack as does_not_raise
+import types
 
 import cupy
 import numba.cuda

@@ -1,8 +1,8 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Literal
+import warnings
 
 import numpy as np
 

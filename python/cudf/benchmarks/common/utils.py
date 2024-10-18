@@ -1,16 +1,16 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Common utilities for fixture creation and benchmarking."""
 
-import inspect
-import re
-import textwrap
 from collections.abc import MutableSet
+import inspect
 from itertools import groupby
 from numbers import Real
+import re
+import textwrap
 
-import pytest_cases
 from config import NUM_COLS, NUM_ROWS, cudf, cupy
+import pytest_cases
 
 
 def make_gather_map(len_gather_map: Real, len_column: Real, how: str):

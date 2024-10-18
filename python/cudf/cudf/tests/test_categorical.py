@@ -1,10 +1,10 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+from contextlib import contextmanager
 import operator
 import string
-import warnings
-from contextlib import contextmanager
 from textwrap import dedent
+import warnings
 
 import numpy as np
 import pandas as pd

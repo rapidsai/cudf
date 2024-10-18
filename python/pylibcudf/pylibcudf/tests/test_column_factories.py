@@ -142,9 +142,7 @@ def validate_empty_column(col, mask_state, dtype):
 def test_make_numeric_column(numeric_pa_type, mask_state):
     plc_type = plc.interop.from_arrow(numeric_pa_type)
 
-    got = plc.column_factories.make_numeric_column(
-        plc_type, EMPTY_COL_SIZE, mask_state
-    )
+    got = plc.column_factories.make_numeric_column(plc_type, EMPTY_COL_SIZE, mask_state)
     validate_empty_column(got, mask_state, numeric_pa_type)
 
 
