@@ -375,7 +375,7 @@ struct rle_stream {
   __device__ inline int skip_runs(int target_count)
   {
     // we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip
-    // amount so threads spin like crazy on fill_run_batch(), skipping writing unnecessary run info
+    // amount so threads spin like crazy on fill_run_batch(), skipping writing unnecessary run info.
     // then when it hits the one that matters, we don't process it at all and bail as if we never
     // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
     // the first time
