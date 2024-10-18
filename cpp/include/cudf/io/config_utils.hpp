@@ -18,7 +18,8 @@
 #include <cudf/utilities/export.hpp>
 
 namespace CUDF_EXPORT cudf {
-namespace io::cufile_integration {
+namespace io {
+namespace cufile_integration {
 
 /**
  * @brief Returns true if cuFile and its compatibility mode are enabled.
@@ -35,9 +36,9 @@ bool is_gds_enabled();
  */
 bool is_kvikio_enabled();
 
-}  // namespace io::cufile_integration
+}  // namespace cufile_integration
 
-namespace io::nvcomp_integration {
+namespace nvcomp_integration {
 
 /**
  * @brief Returns true if all nvCOMP uses are enabled.
@@ -49,5 +50,19 @@ bool is_all_enabled();
  */
 bool is_stable_enabled();
 
-}  // namespace io::nvcomp_integration
+}  // namespace nvcomp_integration
+
+namespace kvikio_setting {
+
+/**
+ * @brief Set kvikIO thread pool size.
+ *
+ * @param nthreads The number of threads used for kvikIO thread pool. If not set, the environment
+ * variable KVIKIO_NTHREADS will be used. If KVIKIO_NTHREADS is unset either, use 8 threads by
+ * default. Priority: nthreads parameter > KVIKIO_NTHREADS > default 8 threads.
+ */
+void set_thread_pool_nthreads(unsigned int nthreads = 0U);
+
+}  // namespace kvikio_setting
+}  // namespace io
 }  // namespace CUDF_EXPORT cudf
