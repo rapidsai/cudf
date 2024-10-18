@@ -726,6 +726,7 @@ ConfigureTest(
   streams/strings/contains_test.cpp
   streams/strings/convert_test.cpp
   streams/strings/extract_test.cpp
+  streams/strings/factory_test.cpp
   streams/strings/filter_test.cpp
   streams/strings/find_test.cpp
   streams/strings/replace_test.cpp
