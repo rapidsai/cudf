@@ -17,24 +17,22 @@ __all__ = ["RollingWindow", "GroupedRollingWindow"]
 
 
 class RollingWindow(Expr):
-    __slots__ = ("options", "children")
+    __slots__ = ("options",)
     _non_child = ("dtype", "options")
-    children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg,)
         raise NotImplementedError("Rolling window not implemented")
 
 
 class GroupedRollingWindow(Expr):
-    __slots__ = ("options", "children")
+    __slots__ = ("options",)
     _non_child = ("dtype", "options")
-    children: tuple[Expr, ...]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg, *by)
         raise NotImplementedError("Grouped rolling window not implemented")
