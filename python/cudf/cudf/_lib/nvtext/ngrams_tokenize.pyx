@@ -14,10 +14,11 @@ def ngrams_tokenize(
     object py_delimiter,
     object py_separator
 ):
-    result = nvtext.ngrams_tokenize.ngrams_tokenize(
-        input.to_pylibcudf(mode="read"),
-        ngrams,
-        py_delimiter.device_value.c_value,
-        py_separator.device_value.c_value
+    return Column.from_pylibcudf(
+        nvtext.ngrams_tokenize.ngrams_tokenize(
+            input.to_pylibcudf(mode="read"),
+            ngrams,
+            py_delimiter.device_value.c_value,
+            py_separator.device_value.c_value
+        )
     )
-    return Column.from_pylibcudf(result)
