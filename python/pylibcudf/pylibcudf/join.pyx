@@ -9,7 +9,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport null_equality
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 from .column cimport Column
 from .table cimport Table
@@ -212,5 +212,5 @@ cpdef Table cross_join(Table left, Table right):
     """
     cdef unique_ptr[table] result
     with nogil:
-        result = move(cpp_join.cross_join(left.view(), right.view()))
+        result = cpp_join.cross_join(left.view(), right.view())
     return Table.from_libcudf(move(result))

@@ -21,6 +21,7 @@ This page provides API documentation for pylibcudf.
     groupby
     interop
     join
+    json
     labeling
     lists
     merge
