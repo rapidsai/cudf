@@ -370,7 +370,7 @@ any type that cudf supports. For example, a `list_scalar` representing a list of
 |Value type|Scalar class|Notes|
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
-|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`|
+|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int64_t`, `float` or `double`|
 |fixed-point|`fixed_point_scalar<T>` | `T` can be `numeric::decimal32` or `numeric::decimal64`|
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
