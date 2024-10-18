@@ -26,9 +26,8 @@ __all__ = ["Ternary"]
 
 
 class Ternary(Expr):
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("dtype",)
-    children: tuple[Expr, Expr, Expr]
 
     def __init__(
         self, dtype: plc.DataType, when: Expr, then: Expr, otherwise: Expr

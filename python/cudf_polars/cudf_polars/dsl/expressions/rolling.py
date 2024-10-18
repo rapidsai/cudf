@@ -17,9 +17,8 @@ __all__ = ["RollingWindow", "GroupedRollingWindow"]
 
 
 class RollingWindow(Expr):
-    __slots__ = ("options", "children")
+    __slots__ = ("options",)
     _non_child = ("dtype", "options")
-    children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr) -> None:
         self.dtype = dtype
@@ -29,9 +28,8 @@ class RollingWindow(Expr):
 
 
 class GroupedRollingWindow(Expr):
-    __slots__ = ("options", "children")
+    __slots__ = ("options",)
     _non_child = ("dtype", "options")
-    children: tuple[Expr, ...]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr) -> None:
         self.dtype = dtype

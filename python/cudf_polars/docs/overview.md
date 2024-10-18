@@ -11,7 +11,9 @@ You will need:
    environment](https://github.com/rapidsai/cudf/blob/branch-24.12/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
-> ![NOTE] These instructions will get simpler as we merge code in.
+:::{note}
+These instructions will get simpler as we merge code in.
+:::
 
 ## Installing polars
 
@@ -37,7 +39,9 @@ pip install --upgrade uv
 uv pip install --upgrade -r py-polars/requirements-dev.txt
 ```
 
-> ![NOTE] plain `pip install` works fine, but `uv` is _much_ faster!
+:::{note}
+plain `pip install` works fine, but `uv` is _much_ faster!
+:::
 
 Now we have the necessary machinery to build polars
 ```sh
@@ -84,7 +88,7 @@ representation (IR). Second, an execution phase which executes using
 our IR.
 
 The translation phase receives the a low-level Rust `NodeTraverser`
-object which delivers Python representations of the plan nodes (and
+object that delivers Python representations of the plan nodes (and
 expressions) one at a time. During translation, we endeavour to raise
 `NotImplementedError` for any unsupported functionality. This way, if
 we can't execute something, we just don't modify the logical plan at
@@ -158,9 +162,11 @@ in `dsl/nodebase.py` defines the interface for implementing new nodes,
 and provides many useful default methods. See also the docstrings of
 the `Node` class.
 
-> ![NOTE] This generic implementation relies on nodes being treated as
-> *immutable*. Do not implement in-place modification of nodes, bad
-> things will happen.
+:::{note}
+This generic implementation relies on nodes being treated as
+*immutable*. Do not implement in-place modification of nodes, bad
+things will happen.
+:::
 
 ## Defining nodes
 
@@ -172,7 +178,7 @@ two types of data:
 2. non-child: arbitrary data attached to the node that is _not_ a
    concrete node.
 
-The base `Node` class requires that one advertise the _names_ of the
+The base `Node` class requires that one advertise the names of the
 non-child attributes in the `_non_child` class variable. The
 constructor of the concrete node should take its arguments in the
 order `*_non_child` (ordered as the class variable does) and then
@@ -208,7 +214,7 @@ Plan node definitions live in `cudf_polars/dsl/ir.py`, these all
 inherit from the base `IR` node. The evaluation of a plan node is done
 by implementing the `evaluate` method.
 
-To translate the plan node, add a case handler in `translate_ir` which
+To translate the plan node, add a case handler in `translate_ir` that
 lives in `cudf_polars/dsl/translate.py`.
 
 As well as child nodes that are plans, most plan nodes contain child
@@ -245,7 +251,7 @@ the logical plan in any case, so is reasonably natural.
 
 ## Traversing and transforming nodes
 
-As well as just representing and evaluating nodes. We also provide
+In addition to representing and evaluating nodes. We also provide
 facilities for traversing a tree of nodes and defining transformation
 rules in `dsl/traversal.py`. The simplest is `traversal`, a
 [pre-order](https://en.wikipedia.org/wiki/Tree_traversal) visit of all
@@ -257,11 +263,6 @@ expression contains a `Literal` node:
 def has_literal(node: Expr) -> bool:
     return any(isinstance(e, Literal) for e in traversal(node))
 ```
-
-For transformations and rewrites, we use the following generic
-pattern. Rather than defining methods on each node in turn for a
-particular rewrite rule, we prefer free functions and use
-`functools.singledispatch` to provide dispatching.
 
 It is often convenient to provide (immutable) state to a visitor, as
 well as some facility to perform DAG-aware rewrites (reusing a
@@ -280,13 +281,16 @@ def rewrite(e: Expr, rec: GenericTransformer[Expr, T]) -> T:
 ```
 
 Note in particular that the function to perform the recursion is
-passed as the second argument. We now, in the usual fashion, register
-handlers for different expression types. To use this function, we need
-to be able to provide both the expression to convert and the recursive
-function itself. To do this we must convert our `rewrite` function
-into something that only takes a single argument (the expression to
-rewrite), but carries around information about how to perform the
-recursion. To this end, we have two utilities in `traversal.py`:
+passed as the second argument. Rather than defining methods on each
+node in turn for a particular rewrite rule, we prefer free functions
+and use `functools.singledispatch` to provide dispatching. We now, in
+the usual fashion, register handlers for different expression types.
+To use this function, we need to be able to provide both the
+expression to convert and the recursive function itself. To do this we
+must convert our `rewrite` function into something that only takes a
+single argument (the expression to rewrite), but carries around
+information about how to perform the recursion. To this end, we have
+two utilities in `traversal.py`:
 
 - `make_recursive` and
 - `CachingVisitor`.
@@ -304,10 +308,10 @@ is seen again.
 
 Finally, for writing transformations that take nodes and deliver new
 nodes (e.g. rewrite rules), we have a final utility
-`reuse_if_unchanged` which can be used as a base case transformation
+`reuse_if_unchanged` that can be used as a base case transformation
 for node to node rewrites. It is a depth-first visit that transforms
 children but only returns a new node with new children if the rewrite
-on children changed things.
+of children returned new nodes.
 
 To see how these pieces fit together, let us consider writing a
 `rename` function that takes an expression (potentially with
@@ -345,9 +349,12 @@ and then for the remaining expressions
 ```python
 _rename.register(Expr)(reuse_if_unchanged)
 ```
-> ![NOTE] In this case, we could have put the generic handler in
-> the `_rename` function, however, then we would not get a nice error
-> message if we accidentally sent in an object of the incorrect type.
+
+:::{note}
+In this case, we could have put the generic handler in the `_rename`
+function, however, then we would not get a nice error message if we
+accidentally sent in an object of the incorrect type.
+:::
 
 Finally we tie everything together with a public function:
 

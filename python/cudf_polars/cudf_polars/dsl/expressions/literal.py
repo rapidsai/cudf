@@ -31,12 +31,12 @@ class Literal(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
     value: pa.Scalar[Any]
-    children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
         self.dtype = dtype
         assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
+        self.children = ()
 
     def do_evaluate(
         self,
@@ -58,12 +58,12 @@ class LiteralColumn(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
     value: pa.Array[Any, Any]
-    children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
         self.dtype = dtype
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
+        self.children = ()
 
     def get_hashable(self) -> Hashable:
         """Compute a hash of the column."""

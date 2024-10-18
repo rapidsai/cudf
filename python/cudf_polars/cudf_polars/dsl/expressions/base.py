@@ -33,14 +33,13 @@ class ExecutionContext(IntEnum):
     ROLLING = enum.auto()
 
 
-class Expr(Node):
+class Expr(Node["Expr"]):
     """An abstract expression object."""
 
     __slots__ = ("dtype",)
     dtype: plc.DataType
     """Data type of the expression."""
-    children: tuple[Expr, ...] = ()
-    """Children of the expression."""
+    # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     """Names of non-child data (not Exprs) for reconstruction."""
 
@@ -229,11 +228,11 @@ class Col(Expr):
     __slots__ = ("name",)
     _non_child = ("dtype", "name")
     name: str
-    children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, name: str) -> None:
         self.dtype = dtype
         self.name = name
+        self.children = ()
 
     def do_evaluate(
         self,

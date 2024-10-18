@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from functools import singledispatch
+
 import pylibcudf as plc
 
 import polars as pl
@@ -16,6 +18,7 @@ from cudf_polars.dsl.traversal import (
     reuse_if_unchanged,
     traversal,
 )
+from cudf_polars.typing import ExprTransformer, IRTransformer
 
 
 def make_expr(dt, n1, n2):
@@ -155,3 +158,72 @@ def test_rewrite_scan_node(tmp_path):
     expect = q.collect()
 
     assert_frame_equal(result, expect, check_row_order=False)
+
+
+def test_rewrite_names_and_ops():
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5], "c": [5, 6, 7], "d": [7, 9, 8]})
+
+    q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
+
+    # We will replace a -> d, c -> d, and addition with multiplication
+    expect = (
+        df.select(
+            (pl.col("d") - (pl.col("b") * pl.col("d") * 2)).alias("a"), pl.col("d")
+        )
+        .sort("d")
+        .collect()
+    )
+
+    qir = translate_ir(q._ldf.visit())
+
+    @singledispatch
+    def _transform(e: expr.Expr, fn: ExprTransformer) -> expr.Expr:
+        raise NotImplementedError("Unhandled")
+
+    @_transform.register
+    def _(e: expr.Col, fn: ExprTransformer):
+        mapping = fn.state["mapping"]
+        if e.name in mapping:
+            return type(e)(e.dtype, mapping[e.name])
+        return e
+
+    @_transform.register
+    def _(e: expr.BinOp, fn: ExprTransformer):
+        if e.op == plc.binaryop.BinaryOperator.ADD:
+            return type(e)(
+                e.dtype, plc.binaryop.BinaryOperator.MUL, *map(fn, e.children)
+            )
+        return reuse_if_unchanged(e, fn)
+
+    _transform.register(expr.Expr)(reuse_if_unchanged)
+
+    @singledispatch
+    def _rewrite(node: ir.IR, fn: IRTransformer) -> ir.IR:
+        raise NotImplementedError("Unhandled")
+
+    @_rewrite.register
+    def _(node: ir.Select, fn: IRTransformer):
+        expr_mapper = fn.state["expr_mapper"]
+        return type(node)(
+            node.schema,
+            [expr.NamedExpr(e.name, expr_mapper(e.value)) for e in node.exprs],
+            node.should_broadcast,
+            fn(node.children[0]),
+        )
+
+    _rewrite.register(ir.IR)(reuse_if_unchanged)
+
+    rewriter = CachingVisitor(
+        _rewrite,
+        state={
+            "expr_mapper": CachingVisitor(
+                _transform, state={"mapping": {"a": "d", "c": "d"}}
+            )
+        },
+    )
+
+    new_ir = rewriter(qir)
+
+    got = new_ir.evaluate(cache={}).to_polars()
+
+    assert_frame_equal(expect, got)

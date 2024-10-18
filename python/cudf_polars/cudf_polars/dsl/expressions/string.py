@@ -28,9 +28,8 @@ __all__ = ["StringFunction"]
 
 
 class StringFunction(Expr):
-    __slots__ = ("name", "options", "children", "_regex_program")
+    __slots__ = ("name", "options", "_regex_program")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     def __init__(
         self,

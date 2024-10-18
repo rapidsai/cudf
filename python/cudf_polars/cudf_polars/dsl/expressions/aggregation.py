@@ -30,9 +30,8 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("name", "options", "op", "request", "children")
+    __slots__ = ("name", "options", "op", "request")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     def __init__(
         self, dtype: plc.DataType, name: str, options: Any, *children: Expr

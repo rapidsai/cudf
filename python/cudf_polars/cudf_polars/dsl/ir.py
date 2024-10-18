@@ -122,15 +122,14 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
     ]
 
 
-class IR(Node):
+class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
     __slots__ = ("schema",)
+    # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     schema: Schema
     """Mapping from column names to their data types."""
-    children: tuple[IR, ...] = ()
-    """Child IR nodes that are inputs to this one."""
 
     def get_hashable(self) -> Hashable:
         """
@@ -222,6 +221,7 @@ class PythonScan(IR):
         self.schema = schema
         self.options = options
         self.predicate = predicate
+        self.children = ()
         raise NotImplementedError("PythonScan not implemented")
 
 
@@ -293,6 +293,7 @@ class Scan(IR):
         self.n_rows = n_rows
         self.row_index = row_index
         self.predicate = predicate
+        self.children = ()
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
@@ -532,13 +533,10 @@ class Cache(IR):
     Used for CSE at the plan level.
     """
 
-    __slots__ = ("key", "children")
+    __slots__ = ("key",)
     _non_child = ("schema", "key")
-    children: tuple[IR]
     key: int
     """The cache key."""
-    value: IR
-    """The unevaluated node to cache."""
 
     def __init__(self, schema: Schema, key: int, value: IR):
         self.schema = schema
@@ -581,6 +579,7 @@ class DataFrameScan(IR):
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
+        self.children = ()
 
     def get_hashable(self) -> Hashable:
         """
@@ -613,11 +612,8 @@ class DataFrameScan(IR):
 class Select(IR):
     """Produce a new dataframe selecting given expressions from an input."""
 
-    __slots__ = ("exprs", "children", "should_broadcast")
+    __slots__ = ("exprs", "should_broadcast")
     _non_child = ("schema", "exprs", "should_broadcast")
-    children: tuple[IR]
-    df: IR
-    """Input dataframe."""
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
     should_broadcast: bool
@@ -658,11 +654,8 @@ class Reduce(IR):
     This is a special case of :class:`Select` where all outputs are a single row.
     """
 
-    __slots__ = ("exprs", "children")
+    __slots__ = ("exprs",)
     _non_child = ("schema", "exprs")
-
-    df: IR
-    """Input dataframe."""
     exprs: tuple[expr.NamedExpr, ...]
     """List of expressions to evaluate to form the new dataframe."""
 
@@ -692,7 +685,6 @@ class GroupBy(IR):
         "maintain_order",
         "options",
         "agg_infos",
-        "children",
     )
     _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
     keys: tuple[expr.NamedExpr, ...]
@@ -703,7 +695,6 @@ class GroupBy(IR):
     """Preserve order in groupby."""
     options: Any
     """Arbitrary options."""
-    children: tuple[IR]
 
     def __init__(
         self,
@@ -864,7 +855,7 @@ class GroupBy(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "right_on", "options", "children")
+    __slots__ = ("left_on", "right_on", "options")
     _non_child = ("schema", "left_on", "right_on", "options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
@@ -1099,11 +1090,10 @@ class Join(IR):
 class HStack(IR):
     """Add new columns to a dataframe."""
 
-    __slots__ = ("columns", "should_broadcast", "children")
+    __slots__ = ("columns", "should_broadcast")
     _non_child = ("schema", "columns", "should_broadcast")
     should_broadcast: bool
     """Should the resulting evaluated columns be broadcast to the same length."""
-    children: tuple[IR]
 
     def __init__(
         self,
@@ -1146,7 +1136,7 @@ class HStack(IR):
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
-    __slots__ = ("keep", "subset", "zlice", "stable", "children")
+    __slots__ = ("keep", "subset", "zlice", "stable")
     _non_child = ("schema", "keep", "subset", "zlice", "stable")
     keep: plc.stream_compaction.DuplicateKeepOption
     """Which distinct value to keep."""
@@ -1157,7 +1147,6 @@ class Distinct(IR):
     """Optional slice to apply to the result."""
     stable: bool
     """Should the result maintain ordering."""
-    children: tuple[IR]
 
     def __init__(
         self,
@@ -1234,7 +1223,7 @@ class Distinct(IR):
 class Sort(IR):
     """Sort a dataframe."""
 
-    __slots__ = ("by", "order", "null_order", "stable", "zlice", "children")
+    __slots__ = ("by", "order", "null_order", "stable", "zlice")
     _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
     by: tuple[expr.NamedExpr, ...]
     """Sort keys."""
@@ -1246,7 +1235,6 @@ class Sort(IR):
     """Should the sort be stable?"""
     zlice: tuple[int, int] | None
     """Optional slice to apply to the result."""
-    children: tuple[IR]
 
     def __init__(
         self,
@@ -1310,13 +1298,12 @@ class Sort(IR):
 class Slice(IR):
     """Slice a dataframe."""
 
-    __slots__ = ("offset", "length", "children")
+    __slots__ = ("offset", "length")
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""
     length: int
     """Length of the slice."""
-    children: tuple[IR]
 
     def __init__(self, schema: Schema, offset: int, length: int, df: IR):
         self.schema = schema
@@ -1335,11 +1322,10 @@ class Slice(IR):
 class Filter(IR):
     """Filter a dataframe with a boolean mask."""
 
-    __slots__ = ("mask", "children")
+    __slots__ = ("mask",)
     _non_child = ("schema", "mask")
     mask: expr.NamedExpr
     """Expression to produce the filter mask."""
-    children: tuple[IR]
 
     def __init__(self, schema: Schema, mask: expr.NamedExpr, df: IR):
         self.schema = schema
@@ -1358,9 +1344,8 @@ class Filter(IR):
 class Projection(IR):
     """Select a subset of columns from a dataframe."""
 
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("schema",)
-    children: tuple[IR]
 
     def __init__(self, schema: Schema, df: IR):
         self.schema = schema
@@ -1379,13 +1364,12 @@ class Projection(IR):
 class MapFunction(IR):
     """Apply some function to a dataframe."""
 
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options")
     _non_child = ("schema", "name", "options")
     name: str
     """Name of the function to apply"""
     options: Any
     """Arbitrary name-specific options"""
-    children: tuple[IR]
 
     _NAMES: ClassVar[frozenset[str]] = frozenset(
         [
@@ -1502,7 +1486,7 @@ class MapFunction(IR):
 class Union(IR):
     """Concatenate dataframes vertically."""
 
-    __slots__ = ("zlice", "children")
+    __slots__ = ("zlice",)
     _non_child = ("schema", "zlice")
     zlice: tuple[int, int] | None
     """Optional slice to apply to the result."""
@@ -1529,7 +1513,7 @@ class Union(IR):
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("schema",)
 
     def __init__(self, schema: Schema, *children: IR):
