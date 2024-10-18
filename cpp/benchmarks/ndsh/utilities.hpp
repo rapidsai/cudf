@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/cuio_common.hpp"
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/parquet.hpp>
@@ -196,24 +198,15 @@ std::tm make_tm(int year, int month, int day);
 int32_t days_since_epoch(int year, int month, int day);
 
 /**
- * @brief Struct representing a parquet device buffer
- */
-struct parquet_device_buffer {
-  parquet_device_buffer() : d_buffer{0, cudf::get_default_stream()} {};
-  cudf::io::source_info make_source_info() { return cudf::io::source_info(d_buffer); }
-  rmm::device_uvector<std::byte> d_buffer;
-};
-
-/**
- * @brief Write a `cudf::table` to a parquet device buffer
+ * @brief Write a `cudf::table` to a parquet cuio sink
  *
  * @param table The `cudf::table` to write
  * @param col_names The column names of the table
- * @param parquet_device_buffer The parquet device buffer to write the table to
+ * @param source The source sink pair to write the table to
  */
 void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
                                     std::vector<std::string> const& col_names,
-                                    parquet_device_buffer& source);
+                                    cuio_source_sink_pair& source);
 
 /**
  * @brief Generate NDS-H tables and write to parquet device buffers
@@ -224,4 +217,4 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
  */
 void generate_parquet_data_sources(double scale_factor,
                                    std::vector<std::string> const& table_names,
-                                   std::unordered_map<std::string, parquet_device_buffer>& sources);
+                                   std::unordered_map<std::string, cuio_source_sink_pair>& sources);
