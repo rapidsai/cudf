@@ -15,6 +15,7 @@
  */
 
 #include "compute_single_pass_aggs.hpp"
+#include "create_sparse_results_table.hpp"
 #include "flatten_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "single_pass_functors.cuh"
@@ -39,42 +40,6 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
-namespace {
-// make table that will hold sparse results
-auto create_sparse_results_table(table_view const& flattened_values,
-                                 std::vector<aggregation::Kind> aggs,
-                                 rmm::cuda_stream_view stream)
-{
-  // TODO single allocation - room for performance improvement
-  std::vector<std::unique_ptr<column>> sparse_columns;
-  sparse_columns.reserve(flattened_values.num_columns());
-  std::transform(
-    flattened_values.begin(),
-    flattened_values.end(),
-    aggs.begin(),
-    std::back_inserter(sparse_columns),
-    [stream](auto const& col, auto const& agg) {
-      bool nullable =
-        (agg == aggregation::COUNT_VALID or agg == aggregation::COUNT_ALL)
-          ? false
-          : (col.has_nulls() or agg == aggregation::VARIANCE or agg == aggregation::STD);
-      auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
-
-      auto col_type = cudf::is_dictionary(col.type())
-                        ? cudf::dictionary_column_view(col).keys().type()
-                        : col.type();
-
-      return make_fixed_width_column(
-        cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
-    });
-
-  table sparse_table(std::move(sparse_columns));
-  mutable_table_view table_view = sparse_table.mutable_view();
-  cudf::detail::initialize_with_identity(table_view, aggs, stream);
-  return sparse_table;
-}
-}  // namespace
-
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
