@@ -5,7 +5,17 @@ from pylibcudf.libcudf.expressions import \
     table_reference as TableReference  # no-cython-lint
 
 from cython.operator cimport dereference
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport (
+    int8_t,
+    int16_t,
+    int32_t,
+    int64_t,
+    uint8_t,
+    uint16_t,
+    uint32_t,
+    uint64_t,
+)
+from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -18,12 +28,14 @@ from pylibcudf.libcudf.scalar.scalar cimport (
 )
 from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.libcudf.wrappers.durations cimport (
+    duration_D,
     duration_ms,
     duration_ns,
     duration_s,
     duration_us,
 )
 from pylibcudf.libcudf.wrappers.timestamps cimport (
+    timestamp_D,
     timestamp_ms,
     timestamp_ns,
     timestamp_s,
@@ -78,6 +90,34 @@ cdef class Literal(Expression):
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
                 <numeric_scalar[int32_t] &>dereference(self.scalar.c_obj)
             ))
+        elif tid == type_id.INT16:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[int16_t] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.INT8:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[int8_t] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.UINT64:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[uint64_t] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.UINT32:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[uint32_t] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.UINT16:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[uint16_t] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.UINT8:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[uint8_t] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.BOOL8:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <numeric_scalar[bool] &>dereference(self.scalar.c_obj)
+            ))
         elif tid == type_id.FLOAT64:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
                 <numeric_scalar[double] &>dereference(self.scalar.c_obj)
@@ -110,6 +150,10 @@ cdef class Literal(Expression):
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
                 <timestamp_scalar[timestamp_s] &>dereference(self.scalar.c_obj)
             ))
+        elif tid == type_id.TIMESTAMP_DAYS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <timestamp_scalar[timestamp_D] &>dereference(self.scalar.c_obj)
+            ))
         elif tid == type_id.DURATION_NANOSECONDS:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
                 <duration_scalar[duration_ns] &>dereference(self.scalar.c_obj)
@@ -129,6 +173,10 @@ cdef class Literal(Expression):
         elif tid == type_id.DURATION_SECONDS:
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
                 <duration_scalar[duration_s] &>dereference(self.scalar.c_obj)
+            ))
+        elif tid == type_id.DURATION_DAYS:
+            self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                <duration_scalar[duration_D] &>dereference(self.scalar.c_obj)
             ))
         else:
             raise NotImplementedError(

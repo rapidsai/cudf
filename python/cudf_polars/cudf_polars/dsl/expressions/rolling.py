@@ -22,7 +22,7 @@ class RollingWindow(Expr):
     children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg,)
         raise NotImplementedError("Rolling window not implemented")
@@ -34,7 +34,7 @@ class GroupedRollingWindow(Expr):
     children: tuple[Expr, ...]
 
     def __init__(self, dtype: plc.DataType, options: Any, agg: Expr, *by: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.children = (agg, *by)
         raise NotImplementedError("Grouped rolling window not implemented")
