@@ -48,6 +48,7 @@ class file_source : public datasource {
   {
     detail::force_init_cuda_context();
     if (cufile_integration::is_kvikio_enabled()) {
+      kvikio_setting::set_thread_pool_nthreads();
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");
