@@ -21,6 +21,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
@@ -476,9 +477,9 @@ void WriteFinalOffsets(host_span<size_type const> offsets,
   auto d_src_data = cudf::detail::make_device_uvector_async(
     offsets, stream, cudf::get_current_device_resource_ref());
   // Iterator for the source (scalar) data
-  auto src_iter = cudf::detail::make_counting_transform_iterator(
-    static_cast<std::size_t>(0),
-    cuda::proclaim_return_type<size_type*>(
+  auto src_iter = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<std::size_t>(0),
+    cuda::proclaim_return_type<cudf::size_type*>(
       [src = d_src_data.begin()] __device__(std::size_t i) { return src + i; }));
 
   // Copy buffer addresses to device and create an iterator

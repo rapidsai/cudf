@@ -65,19 +65,20 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
   auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
 
-  auto const src_ptrs = cudf::detail::make_counting_transform_iterator(
-    0u, cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
+  auto const src_ptrs = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
       // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
       // we have to use `const_cast` to remove `const` qualifier from the source pointer.
       // This should be fine as long as we only read but not write anything to the source.
       return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
     }));
-  auto const src_sizes = cudf::detail::make_counting_transform_iterator(
-    0u, cuda::proclaim_return_type<size_type>([begin] __device__(uint32_t idx) {
-      return begin[idx].second;
-    }));
-  auto const dst_ptrs = cudf::detail::make_counting_transform_iterator(
-    0u,
+  auto const src_sizes = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<size_type>(
+      [begin] __device__(uint32_t idx) { return begin[idx].second; }));
+  auto const dst_ptrs = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
     cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
                                         uint32_t idx) { return output + offsets[idx]; }));
 
