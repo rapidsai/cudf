@@ -63,7 +63,7 @@ namespace detail {
  * iter[n] == n * n
  * @endcode
  *
- * @param start The starting value of the counting iterator (must be int32_t or smaller type).
+ * @param start The starting value of the counting iterator (must be size_type or smaller type).
  * @param f The unary function to apply to the counting iterator.
  * @return A transform iterator that applies `f` to a counting iterator
  */
