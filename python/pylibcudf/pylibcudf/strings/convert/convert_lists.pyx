@@ -61,12 +61,10 @@ cpdef Column format_list_column(
         separators = make_empty_column(type_id.STRING)
 
     with nogil:
-        c_result = move(
-            cpp_convert_lists.format_list_column(
-                input.view(),
-                dereference(c_na_rep),
-                separators.view()
-            )
+        c_result = cpp_convert_lists.format_list_column(
+            input.view(),
+            dereference(c_na_rep),
+            separators.view()
         )
 
     return Column.from_libcudf(move(c_result))
