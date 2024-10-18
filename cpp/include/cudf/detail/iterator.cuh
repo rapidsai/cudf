@@ -38,12 +38,12 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 
 #include <cuda/std/optional>
+#include <cuda/std/type_traits>
+#include <cuda/std/utility>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
-
-#include <utility>
 
 namespace cudf {
 namespace detail {
@@ -70,8 +70,8 @@ namespace detail {
 template <typename CountingIterType,
           typename UnaryFunction,
           typename = cuda::std::enable_if_t<cuda::std::is_integral_v<CountingIterType> and
-                                      cuda::std::numeric_limits<CountingIterType>::max() <=
-                                        cuda::std::numeric_limits<cudf::size_type>::max()>>
+                                            cuda::std::numeric_limits<CountingIterType>::max() <=
+                                              cuda::std::numeric_limits<cudf::size_type>::max()>>
 CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(CountingIterType start,
                                                               UnaryFunction f)
 {
