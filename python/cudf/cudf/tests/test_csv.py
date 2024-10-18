@@ -1764,13 +1764,13 @@ def test_csv_writer_multiindex(tmpdir):
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
 
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 5, 20),
-            "b": np.random.randint(0, 5, 20),
+            "a": rng.integers(0, 5, 20),
+            "b": rng.integers(0, 5, 20),
             "c": range(20),
-            "d": np.random.random(20),
+            "d": rng.random(20),
         }
     )
     gdg = gdf.groupby(["a", "b"]).mean()

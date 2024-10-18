@@ -48,16 +48,22 @@ class ColumnParameters:
         self,
         cardinality=100,
         null_frequency=0.1,
-        generator=lambda: [
-            _generate_string(string.ascii_letters, random.randint(4, 8))
-            for _ in range(100)
-        ],
+        generator=None,
         is_sorted=True,
         dtype=None,
     ):
         self.cardinality = cardinality
         self.null_frequency = null_frequency
-        self.generator = generator
+        if generator is None:
+            rng = np.random.default_rng(seed=0)
+            self.generator = lambda: [
+                _generate_string(
+                    string.ascii_letters, rng, rng.integers(4, 8).item()
+                )
+                for _ in range(100)
+            ]
+        else:
+            self.generator = generator
         self.is_sorted = is_sorted
         self.dtype = dtype
 
@@ -96,7 +102,7 @@ def _write(tbl, path, format):
             tbl.to_parquet(path, row_group_size=format["row_group_size"])
 
 
-def _generate_column(column_params, num_rows):
+def _generate_column(column_params, num_rows, rng):
     # If cardinality is specified, we create a set to sample from.
     # Otherwise, we simply use the given generator to generate each value.
 
@@ -115,10 +121,8 @@ def _generate_column(column_params, num_rows):
             )
             return pa.DictionaryArray.from_arrays(
                 dictionary=vals,
-                indices=np.random.randint(
-                    low=0, high=len(vals), size=num_rows
-                ),
-                mask=np.random.choice(
+                indices=rng.integers(low=0, high=len(vals), size=num_rows),
+                mask=rng.choice(
                     [True, False],
                     size=num_rows,
                     p=[
@@ -142,7 +146,7 @@ def _generate_column(column_params, num_rows):
                 column_params.generator,
                 names=column_params.dtype.fields.keys(),
                 mask=pa.array(
-                    np.random.choice(
+                    rng.choice(
                         [True, False],
                         size=num_rows,
                         p=[
@@ -163,10 +167,10 @@ def _generate_column(column_params, num_rows):
                 type=arrow_type,
             )
         vals = pa.array(
-            np.random.choice(column_params.generator, size=num_rows)
+            rng.choice(column_params.generator, size=num_rows)
             if isinstance(arrow_type, pa.lib.Decimal128Type)
-            else np.random.choice(vals, size=num_rows),
-            mask=np.random.choice(
+            else rng.choice(vals, size=num_rows),
+            mask=rng.choice(
                 [True, False],
                 size=num_rows,
                 p=[
@@ -189,7 +193,7 @@ def _generate_column(column_params, num_rows):
         # Generate data for current column
         return pa.array(
             column_params.generator,
-            mask=np.random.choice(
+            mask=rng.choice(
                 [True, False],
                 size=num_rows,
                 p=[
@@ -233,7 +237,9 @@ def generate(
 def get_dataframe(parameters, use_threads):
     # Initialize seeds
     if parameters.seed is not None:
-        np.random.seed(parameters.seed)
+        rng = np.random.default_rng(seed=parameters.seed)  # noqa: F841
+    else:
+        rng = np.random.default_rng(seed=0)  # noqa: F841
 
     # For each column, invoke the data generator
     for column_params in parameters.column_parameters:
@@ -281,14 +287,16 @@ def get_dataframe(parameters, use_threads):
     if not use_threads:
         for i, column_params in enumerate(parameters.column_parameters):
             column_data[i] = _generate_column(
-                column_params, parameters.num_rows
+                column_params,
+                parameters.num_rows,
+                rng,
             )
     else:
         pool = Pool(pa.cpu_count())
         column_data = pool.starmap(
             _generate_column,
             [
-                (column_params, parameters.num_rows)
+                (column_params, parameters.num_rows, rng)
                 for i, column_params in enumerate(parameters.column_parameters)
             ],
         )
@@ -336,7 +344,7 @@ def rand_dataframe(
     """
     # Apply seed
     random.seed(seed)
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed=seed)
 
     column_params = []
     for meta in dtypes_meta:
@@ -348,7 +356,7 @@ def rand_dataframe(
             lists_max_length = meta["lists_max_length"]
             nesting_max_depth = meta["nesting_max_depth"]
             value_type = meta["value_type"]
-            nesting_depth = np.random.randint(1, nesting_max_depth)
+            nesting_depth = rng.integers(1, nesting_max_depth)
 
             dtype = cudf.core.dtypes.ListDtype(value_type)
 
@@ -368,6 +376,7 @@ def rand_dataframe(
                         size=cardinality,
                         nesting_depth=nesting_depth,
                         lists_max_length=lists_max_length,
+                        rng=rng,
                     ),
                     is_sorted=False,
                     dtype=dtype,
@@ -377,10 +386,11 @@ def rand_dataframe(
             nesting_max_depth = meta["nesting_max_depth"]
             max_types_at_each_level = meta["max_types_at_each_level"]
             max_null_frequency = meta["max_null_frequency"]
-            nesting_depth = np.random.randint(1, nesting_max_depth)
+            nesting_depth = rng.integers(1, nesting_max_depth)
             structDtype = create_nested_struct_type(
                 max_types_at_each_level=max_types_at_each_level,
                 nesting_level=nesting_depth,
+                rng=rng,
             )
 
             column_params.append(
@@ -392,6 +402,7 @@ def rand_dataframe(
                         cardinality=cardinality,
                         size=rows,
                         max_null_frequency=max_null_frequency,
+                        rng=rng,
                     ),
                     is_sorted=False,
                     dtype=structDtype,
@@ -401,14 +412,16 @@ def rand_dataframe(
             max_precision = meta.get(
                 "max_precision", cudf.Decimal64Dtype.MAX_PRECISION
             )
-            precision = np.random.randint(1, max_precision)
-            scale = np.random.randint(0, precision)
+            precision = rng.integers(1, max_precision)
+            scale = rng.integers(0, precision)
             dtype = cudf.Decimal64Dtype(precision=precision, scale=scale)
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
                     null_frequency=null_frequency,
-                    generator=decimal_generator(dtype=dtype, size=cardinality),
+                    generator=decimal_generator(
+                        dtype=dtype, size=cardinality, rng=rng
+                    ),
                     is_sorted=False,
                     dtype=dtype,
                 )
@@ -417,14 +430,16 @@ def rand_dataframe(
             max_precision = meta.get(
                 "max_precision", cudf.Decimal32Dtype.MAX_PRECISION
             )
-            precision = np.random.randint(1, max_precision)
-            scale = np.random.randint(0, precision)
+            precision = rng.integers(1, max_precision)
+            scale = rng.integers(0, precision)
             dtype = cudf.Decimal32Dtype(precision=precision, scale=scale)
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
                     null_frequency=null_frequency,
-                    generator=decimal_generator(dtype=dtype, size=cardinality),
+                    generator=decimal_generator(
+                        dtype=dtype, size=cardinality, rng=rng
+                    ),
                     is_sorted=False,
                     dtype=dtype,
                 )
@@ -433,14 +448,16 @@ def rand_dataframe(
             max_precision = meta.get(
                 "max_precision", cudf.Decimal128Dtype.MAX_PRECISION
             )
-            precision = np.random.randint(1, max_precision)
-            scale = np.random.randint(0, precision)
+            precision = rng.integers(1, max_precision)
+            scale = rng.integers(0, precision)
             dtype = cudf.Decimal128Dtype(precision=precision, scale=scale)
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
                     null_frequency=null_frequency,
-                    generator=decimal_generator(dtype=dtype, size=cardinality),
+                    generator=decimal_generator(
+                        dtype=dtype, size=cardinality, rng=rng
+                    ),
                     is_sorted=False,
                     dtype=dtype,
                 )
@@ -469,6 +486,7 @@ def rand_dataframe(
                             size=cardinality,
                             min_bound=meta.get("min_bound", None),
                             max_bound=meta.get("max_bound", None),
+                            rng=rng,
                         ),
                         is_sorted=False,
                         dtype=dtype,
@@ -484,6 +502,7 @@ def rand_dataframe(
                             size=cardinality,
                             min_bound=meta.get("min_bound", None),
                             max_bound=meta.get("max_bound", None),
+                            rng=rng,
                         ),
                         is_sorted=False,
                         dtype=dtype,
@@ -497,7 +516,8 @@ def rand_dataframe(
                         generator=lambda cardinality=cardinality: [
                             _generate_string(
                                 string.printable,
-                                np.random.randint(
+                                rng,
+                                rng.integers(
                                     low=0,
                                     high=meta.get("max_string_length", 1000),
                                     size=1,
@@ -519,6 +539,7 @@ def rand_dataframe(
                             size=cardinality,
                             min_bound=meta.get("min_bound", None),
                             max_bound=meta.get("max_bound", None),
+                            rng=rng,
                         ),
                         is_sorted=False,
                         dtype=cudf.dtype(dtype),
@@ -534,6 +555,7 @@ def rand_dataframe(
                             size=cardinality,
                             min_bound=meta.get("min_bound", None),
                             max_bound=meta.get("max_bound", None),
+                            rng=rng,
                         ),
                         is_sorted=False,
                         dtype=cudf.dtype(dtype),
@@ -544,7 +566,7 @@ def rand_dataframe(
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=boolean_generator(cardinality),
+                        generator=boolean_generator(cardinality, rng),
                         is_sorted=False,
                         dtype=cudf.dtype(dtype),
                     )
@@ -567,7 +589,7 @@ def rand_dataframe(
     return df
 
 
-def int_generator(dtype, size, min_bound=None, max_bound=None):
+def int_generator(dtype, size, rng, min_bound=None, max_bound=None):
     """
     Generator for int data
     """
@@ -577,7 +599,7 @@ def int_generator(dtype, size, min_bound=None, max_bound=None):
         iinfo = np.iinfo(dtype)
         low, high = iinfo.min, iinfo.max
 
-    return lambda: np.random.randint(
+    return lambda: rng.integers(
         low=low,
         high=high,
         size=size,
@@ -585,13 +607,13 @@ def int_generator(dtype, size, min_bound=None, max_bound=None):
     )
 
 
-def float_generator(dtype, size, min_bound=None, max_bound=None):
+def float_generator(dtype, size, rng, min_bound=None, max_bound=None):
     """
     Generator for float data
     """
     if min_bound is not None and max_bound is not None:
         low, high = min_bound, max_bound
-        return lambda: np.random.uniform(
+        return lambda: rng.uniform(
             low=low,
             high=high,
             size=size,
@@ -599,7 +621,7 @@ def float_generator(dtype, size, min_bound=None, max_bound=None):
     else:
         finfo = np.finfo(dtype)
         return (
-            lambda: np.random.uniform(
+            lambda: rng.uniform(
                 low=finfo.min / 2,
                 high=finfo.max / 2,
                 size=size,
@@ -608,7 +630,7 @@ def float_generator(dtype, size, min_bound=None, max_bound=None):
         )
 
 
-def datetime_generator(dtype, size, min_bound=None, max_bound=None):
+def datetime_generator(dtype, size, rng, min_bound=None, max_bound=None):
     """
     Generator for datetime data
     """
@@ -618,14 +640,14 @@ def datetime_generator(dtype, size, min_bound=None, max_bound=None):
         iinfo = np.iinfo("int64")
         low, high = iinfo.min + 1, iinfo.max
 
-    return lambda: np.random.randint(
+    return lambda: rng.integers(
         low=np.datetime64(low, "ns").astype(dtype).astype("int"),
         high=np.datetime64(high, "ns").astype(dtype).astype("int"),
         size=size,
     )
 
 
-def timedelta_generator(dtype, size, min_bound=None, max_bound=None):
+def timedelta_generator(dtype, size, rng, min_bound=None, max_bound=None):
     """
     Generator for timedelta data
     """
@@ -635,25 +657,25 @@ def timedelta_generator(dtype, size, min_bound=None, max_bound=None):
         iinfo = np.iinfo("int64")
         low, high = iinfo.min + 1, iinfo.max
 
-    return lambda: np.random.randint(
+    return lambda: rng.integers(
         low=np.timedelta64(low, "ns").astype(dtype).astype("int"),
         high=np.timedelta64(high, "ns").astype(dtype).astype("int"),
         size=size,
     )
 
 
-def boolean_generator(size):
+def boolean_generator(size, rng):
     """
     Generator for bool data
     """
-    return lambda: np.random.choice(a=[False, True], size=size)
+    return lambda: rng.choice(a=[False, True], size=size)
 
 
-def decimal_generator(dtype, size):
+def decimal_generator(dtype, size, rng):
     max_integral = 10 ** (dtype.precision - dtype.scale) - 1
     max_float = (10**dtype.scale - 1) if dtype.scale != 0 else 0
     return lambda: (
-        np.random.uniform(
+        rng.uniform(
             low=-max_integral,
             high=max_integral + (max_float / 10**dtype.scale),
             size=size,
@@ -661,32 +683,33 @@ def decimal_generator(dtype, size):
     )
 
 
-def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
+def get_values_for_nested_data(dtype, rng, lists_max_length=None, size=None):
     """
     Returns list of values based on dtype.
     """
     if size is None:
-        cardinality = np.random.randint(0, lists_max_length)
+        cardinality = rng.integers(0, lists_max_length)
     else:
         cardinality = size
 
     dtype = cudf.dtype(dtype)
     if dtype.kind in ("i", "u"):
-        values = int_generator(dtype=dtype, size=cardinality)()
+        values = int_generator(dtype=dtype, size=cardinality, rng=rng)()
     elif dtype.kind == "f":
-        values = float_generator(dtype=dtype, size=cardinality)()
+        values = float_generator(dtype=dtype, size=cardinality, rng=rng)()
     elif dtype.kind in ("U", "O"):
         values = [
             _generate_string(
                 string.printable,
+                rng,
                 100,
             )
             for _ in range(cardinality)
         ]
     elif dtype.kind == "M":
-        values = datetime_generator(dtype=dtype, size=cardinality)().astype(
-            dtype
-        )
+        values = datetime_generator(
+            dtype=dtype, size=cardinality, rng=rng
+        )().astype(dtype)
     elif dtype.kind == "m":
         values = timedelta_generator(dtype=dtype, size=cardinality)().astype(
             dtype
@@ -699,14 +722,14 @@ def get_values_for_nested_data(dtype, lists_max_length=None, size=None):
     return values
 
 
-def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
+def make_lists(dtype, lists_max_length, nesting_depth, top_level_list, rng):
     """
     Helper to create random list of lists with `nesting_depth` and
     specified value type `dtype`.
     """
     nesting_depth -= 1
     if nesting_depth >= 0:
-        L = np.random.randint(1, lists_max_length)
+        L = rng.integers(1, lists_max_length)
         for i in range(L):
             top_level_list.append(
                 make_lists(
@@ -714,11 +737,14 @@ def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
                     lists_max_length=lists_max_length,
                     nesting_depth=nesting_depth,
                     top_level_list=[],
+                    rng=rng,
                 )
             )
     else:
         top_level_list = get_values_for_nested_data(
-            dtype=dtype, lists_max_length=lists_max_length
+            dtype=dtype,
+            lists_max_length=lists_max_length,
+            rng=rng,
         )
         # To ensure numpy arrays are not passed as input to
         # list constructor, returning a python list object here.
@@ -728,22 +754,22 @@ def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
     return top_level_list
 
 
-def make_array_for_struct(dtype, cardinality, size, max_null_frequency):
+def make_array_for_struct(dtype, cardinality, size, max_null_frequency, rng):
     """
     Helper to create a pa.array with `size` and `dtype`
     for a `StructArray`.
     """
 
-    null_frequency = np.random.uniform(low=0, high=max_null_frequency)
-    local_cardinality = max(np.random.randint(low=0, high=cardinality), 1)
+    null_frequency = rng.uniform(low=0, high=max_null_frequency)
+    local_cardinality = max(rng.integers(low=0, high=cardinality), 1)
     data = get_values_for_nested_data(
-        dtype=dtype.type.to_pandas_dtype(), size=local_cardinality
+        dtype=dtype.type.to_pandas_dtype(), size=local_cardinality, rng=rng
     )
-    vals = np.random.choice(data, size=size)
+    vals = rng.choice(data, size=size)
 
     return pa.array(
         vals,
-        mask=np.random.choice(
+        mask=rng.choice(
             [True, False],
             size=size,
             p=[null_frequency, 1 - null_frequency],
@@ -756,7 +782,7 @@ def make_array_for_struct(dtype, cardinality, size, max_null_frequency):
     )
 
 
-def get_nested_lists(dtype, size, nesting_depth, lists_max_length):
+def get_nested_lists(dtype, size, nesting_depth, lists_max_length, rng):
     """
     Returns a list of nested lists with random nesting
     depth and random nested lists length.
@@ -770,13 +796,14 @@ def get_nested_lists(dtype, size, nesting_depth, lists_max_length):
                 lists_max_length=lists_max_length,
                 nesting_depth=nesting_depth,
                 top_level_list=[],
+                rng=rng,
             )
         )
 
     return list_of_lists
 
 
-def get_nested_structs(dtype, cardinality, size, max_null_frequency):
+def get_nested_structs(dtype, cardinality, size, max_null_frequency, rng):
     """
     Returns a list of arrays with random data
     corresponding to the dtype provided.
@@ -787,7 +814,7 @@ def get_nested_structs(dtype, cardinality, size, max_null_frequency):
     for name, col_dtype in dtype.fields.items():
         if isinstance(col_dtype, cudf.StructDtype):
             result_arrays = get_nested_structs(
-                col_dtype, cardinality, size, max_null_frequency
+                col_dtype, cardinality, size, max_null_frequency, rng
             )
             result_arrays = pa.StructArray.from_arrays(
                 result_arrays, names=col_dtype.fields.keys()
@@ -798,13 +825,14 @@ def get_nested_structs(dtype, cardinality, size, max_null_frequency):
                 cardinality=cardinality,
                 size=size,
                 max_null_frequency=max_null_frequency,
+                rng=rng,
             )
         list_of_arrays.append(result_arrays)
 
     return list_of_arrays
 
 
-def list_generator(dtype, size, nesting_depth, lists_max_length):
+def list_generator(dtype, size, nesting_depth, lists_max_length, rng):
     """
     Generator for list data
     """
@@ -813,10 +841,11 @@ def list_generator(dtype, size, nesting_depth, lists_max_length):
         size=size,
         nesting_depth=nesting_depth,
         lists_max_length=lists_max_length,
+        rng=rng,
     )
 
 
-def struct_generator(dtype, cardinality, size, max_null_frequency):
+def struct_generator(dtype, cardinality, size, max_null_frequency, rng):
     """
     Generator for struct data
     """
@@ -825,25 +854,26 @@ def struct_generator(dtype, cardinality, size, max_null_frequency):
         cardinality=cardinality,
         size=size,
         max_null_frequency=max_null_frequency,
+        rng=rng,
     )
 
 
-def create_nested_struct_type(max_types_at_each_level, nesting_level):
+def create_nested_struct_type(max_types_at_each_level, nesting_level, rng):
     dtypes_list = cudf.utils.dtypes.ALL_TYPES
-    picked_types = np.random.choice(list(dtypes_list), max_types_at_each_level)
+    picked_types = rng.choice(list(dtypes_list), max_types_at_each_level)
     type_dict = {}
     for name, type_ in enumerate(picked_types):
         if type_ == "struct":
             type_dict[str(name)] = create_nested_struct_type(
-                max_types_at_each_level, nesting_level - 1
+                max_types_at_each_level, nesting_level - 1, rng
             )
         else:
             type_dict[str(name)] = cudf.dtype(type_)
     return cudf.StructDtype(type_dict)
 
 
-def _generate_string(str_seq: str, length: int = 10) -> str:
-    return "".join(random.choices(str_seq, k=length))
+def _generate_string(str_seq: str, rng, length: int = 10) -> str:
+    return "".join(rng.choice(list(str_seq), size=length))
 
 
 def _unique_string() -> str:

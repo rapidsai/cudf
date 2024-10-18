@@ -681,7 +681,6 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
@@ -704,6 +703,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
+                seed=0,
             )
             for dtype in supported_stat_types
         }
@@ -845,7 +845,6 @@ def test_orc_reader_gmt_timestamps(datadir):
 
 
 def test_orc_bool_encode_fail():
-    np.random.seed(0)
     buffer = BytesIO()
 
     # Generate a boolean column longer than a single row group
@@ -927,7 +926,6 @@ def test_empty_string_columns(data):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 def test_orc_writer_decimal(tmpdir, scale, decimal_type):
-    np.random.seed(0)
     fname = tmpdir / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
@@ -988,7 +986,7 @@ def test_orc_string_stream_offset_issue():
 
 def generate_list_struct_buff(size=100_000):
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 
@@ -999,12 +997,12 @@ def generate_list_struct_buff(size=100_000):
                 [
                     [
                         [
-                            rd.choice([None, np.random.randint(1, 3)])
-                            for _ in range(np.random.randint(1, 3))
+                            rd.choice([None, rng.integers(1, 3)])
+                            for _ in range(rng.integers(1, 3))
                         ]
-                        for _ in range(np.random.randint(0, 3))
+                        for _ in range(rng.integers(0, 3))
                     ]
-                    for _ in range(np.random.randint(0, 3))
+                    for _ in range(rng.integers(0, 3))
                 ],
             ]
         )
@@ -1012,8 +1010,8 @@ def generate_list_struct_buff(size=100_000):
     ]
     lvl1_list = [
         [
-            rd.choice([None, np.random.randint(0, 3)])
-            for _ in range(np.random.randint(1, 4))
+            rd.choice([None, rng.integers(0, 3)])
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1021,7 +1019,7 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": np.random.randint(0, 3), "b": np.random.randint(0, 3)},
+                {"a": rng.integers(0, 3), "b": rng.integers(0, 3)},
             ]
         )
         for _ in range(size)
@@ -1030,11 +1028,11 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": rd.choice([None, np.random.randint(0, 3)])},
+                {"a": rd.choice([None, rng.integers(0, 3)])},
                 {
                     "lvl1_struct": {
-                        "c": rd.choice([None, np.random.randint(0, 3)]),
-                        "d": np.random.randint(0, 3),
+                        "c": rd.choice([None, rng.integers(0, 3)]),
+                        "d": rng.integers(0, 3),
                     },
                 },
             ]
@@ -1044,7 +1042,7 @@ def generate_list_struct_buff(size=100_000):
     list_nests_struct = [
         [
             {"a": rd.choice(lvl1_struct), "b": rd.choice(lvl1_struct)}
-            for _ in range(np.random.randint(1, 4))
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1135,7 +1133,7 @@ def gen_map_buff(size):
     from pyarrow import orc
 
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 
@@ -1146,7 +1144,7 @@ def gen_map_buff(size):
                     None,
                     {
                         rd.choice(al): rd.choice(
-                            [None, np.random.randint(1, 1500)]
+                            [None, rng.integers(1, 1500)]
                         ),
                     },
                 ]
@@ -1167,7 +1165,7 @@ def gen_map_buff(size):
                                     None,
                                     [
                                         rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         )
                                         for _ in range(5)
                                     ],
@@ -1194,10 +1192,10 @@ def gen_map_buff(size):
                                     None,
                                     {
                                         "a": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                         "b": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                     },
                                 ]

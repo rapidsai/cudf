@@ -72,12 +72,13 @@ def bench_pivot_table_simple(benchmark, dataframe):
 
 @pytest_cases.parametrize("nr", NUM_ROWS)
 def bench_crosstab_simple(benchmark, nr):
+    rng = np.random.default_rng(seed=0)
     series_a = np.array(["foo", "bar"] * nr)
     series_b = np.array(["one", "two"] * nr)
     series_c = np.array(["dull", "shiny"] * nr)
-    np.random.shuffle(series_a)
-    np.random.shuffle(series_b)
-    np.random.shuffle(series_c)
+    rng.shuffle(series_a)
+    rng.shuffle(series_b)
+    rng.shuffle(series_c)
     series_a = cudf.Series(series_a)
     series_b = cudf.Series(series_b)
     series_c = cudf.Series(series_c)

@@ -11,16 +11,18 @@ import pytest
 @pytest.fixture
 def pidx():
     num_elements = int(1e3)
-    a = np.random.randint(0, num_elements // 10, num_elements)
-    b = np.random.randint(0, num_elements // 10, num_elements)
+    rng = np.random.default_rng(seed=0)
+    a = rng.integers(0, num_elements // 10, num_elements)
+    b = rng.integers(0, num_elements // 10, num_elements)
     return pd.MultiIndex.from_arrays([a, b], names=("a", "b"))
 
 
 @pytest.fixture
 def midx(pidx):
     num_elements = int(1e3)
-    a = np.random.randint(0, num_elements // 10, num_elements)
-    b = np.random.randint(0, num_elements // 10, num_elements)
+    rng = np.random.default_rng(seed=0)
+    a = rng.integers(0, num_elements // 10, num_elements)
+    b = rng.integers(0, num_elements // 10, num_elements)
     df = cudf.DataFrame({"a": a, "b": b})
     return cudf.MultiIndex.from_frame(df)
 

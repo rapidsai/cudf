@@ -96,7 +96,7 @@ def test_bool_agg(agg, request):
     assert_gpu_result_equal(q, check_exact=False)
 
 
-@pytest.mark.parametrize("cum_agg", expr.UnaryFunction._supported_cum_aggs)
+@pytest.mark.parametrize("cum_agg", sorted(expr.UnaryFunction._supported_cum_aggs))
 def test_cum_agg_reverse_unsupported(cum_agg):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     expr = getattr(pl.col("a"), cum_agg)(reverse=True)
