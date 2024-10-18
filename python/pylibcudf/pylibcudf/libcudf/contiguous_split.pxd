@@ -2,6 +2,7 @@
 
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport unique_ptr
+from libcpp cimport bool
 from libcpp.vector cimport vector
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type

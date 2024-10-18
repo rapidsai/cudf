@@ -38,6 +38,7 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_table_view
+import pylibcudf as plc
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -376,11 +377,13 @@ cdef class _CPackedColumns:
             or input_table.index.stop != len(input_table)
             or input_table.index.step != 1
         ):
-            input_table_view = table_view_from_table(input_table)
+            # input_table_view = table_view_from_table(input_table)
+            columns = input_table._index._columns + input_table._columns
             p.index_names = input_table._index_names
         else:
-            input_table_view = table_view_from_table(
-                input_table, ignore_index=True)
+            # input_table_view = table_view_from_table(
+            #     input_table, ignore_index=True)
+            columns = input_table._columns
 
         p.column_names = input_table._column_names
         p.column_dtypes = {}
@@ -388,17 +391,24 @@ cdef class _CPackedColumns:
             if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 
-        p.c_obj = move(cpp_contiguous_split.pack(input_table_view))
+        # p.c_obj = move(cpp_contiguous_split.pack(input_table_view))
+        p.c_obj = plc.contigous_split.pack(
+            pylibcudf.Table(
+                [
+                    col.to_pylibcudf(mode="read") for col in columns
+                ]
+            )
+        )
 
         return p
 
     @property
     def gpu_data_ptr(self):
-        return int(<uintptr_t>self.c_obj.gpu_data.get()[0].data())
+        return self.c_obj.gpu_data_ptr
 
     @property
     def gpu_data_size(self):
-        return int(<size_t>self.c_obj.gpu_data.get()[0].size())
+        return self.c_obj.gpu_data_size
 
     def serialize(self):
         header = {}
@@ -416,10 +426,10 @@ cdef class _CPackedColumns:
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        if self.c_obj.metadata.get()[0].data() != NULL:
+        if self.c_obj.c_obj.get().metadata.get()[0].data() != NULL:
             header["metadata"] = list(
-                <uint8_t[:self.c_obj.metadata.get()[0].size()]>
-                self.c_obj.metadata.get()[0].data()
+                <uint8_t[:self.c_obj.c_obj.get().metadata.get()[0].size()]>
+                self.c_obj.c_obj.get().metadata.get()[0].data()
             )
 
         column_dtypes = {}
@@ -453,7 +463,10 @@ cdef class _CPackedColumns:
         )
         data.gpu_data = move(dbuf.c_obj)
 
-        p.c_obj = move(data)
+        # p.c_obj = move(data)
+        p.c_obj = plc.contiguous_split.PackedColumns.from_libcudf(
+            move(unique_ptr[cpp_contiguous_split.packed_columns](&data))
+        )
         p.column_names = header["column-names"]
         p.index_names = header["index-names"]
 
@@ -469,7 +482,7 @@ cdef class _CPackedColumns:
 
     def unpack(self):
         output_table = cudf.DataFrame._from_data(*data_from_table_view(
-            cpp_contiguous_split.unpack(self.c_obj),
+            plc.contigous_split.unpack(self.c_obj).view(),
             self,
             self.column_names,
             self.index_names
