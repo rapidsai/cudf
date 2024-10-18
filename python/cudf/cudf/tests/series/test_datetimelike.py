@@ -2,11 +2,12 @@
 
 import datetime
 import os
+import zoneinfo
 
-import cudf
 import pandas as pd
 import pytest
-import zoneinfo
+
+import cudf
 from cudf import date_range
 from cudf.testing import assert_eq
 
@@ -34,7 +35,9 @@ def unit(request):
     return request.param
 
 
-@pytest.fixture(params=["America/New_York", "Asia/Tokyo", "CET", "Etc/GMT+1", "UTC"])
+@pytest.fixture(
+    params=["America/New_York", "Asia/Tokyo", "CET", "Etc/GMT+1", "UTC"]
+)
 def tz(request):
     return request.param
 
@@ -102,9 +105,9 @@ def test_localize_nonexistent(request, unit, zone_name):
 
 
 def test_delocalize(unit, tz):
-    psr = pd.Series(pd.date_range("2001-01-01", "2001-01-02", freq="1s")).astype(
-        f"datetime64[{unit}]"
-    )
+    psr = pd.Series(
+        pd.date_range("2001-01-01", "2001-01-02", freq="1s")
+    ).astype(f"datetime64[{unit}]")
     sr = cudf.from_pandas(psr)
 
     expect = psr.dt.tz_localize(tz).dt.tz_localize(None)
@@ -122,8 +125,12 @@ def test_delocalize_naive():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("from_tz", ["Europe/London", "America/Chicago", "UTC"])
-@pytest.mark.parametrize("to_tz", ["Europe/London", "America/Chicago", "UTC", None])
+@pytest.mark.parametrize(
+    "from_tz", ["Europe/London", "America/Chicago", "UTC"]
+)
+@pytest.mark.parametrize(
+    "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
+)
 def test_convert(from_tz, to_tz):
     from_tz = zoneinfo.ZoneInfo(from_tz)
     if to_tz is not None:
@@ -169,8 +176,12 @@ def test_convert_from_naive():
 def test_convert_edge_cases(data, original_timezone, target_timezone):
     original_timezone = zoneinfo.ZoneInfo(original_timezone)
     target_timezone = zoneinfo.ZoneInfo(target_timezone)
-    ps = pd.Series(data, dtype="datetime64[s]").dt.tz_localize(original_timezone)
-    gs = cudf.Series(data, dtype="datetime64[s]").dt.tz_localize(original_timezone)
+    ps = pd.Series(data, dtype="datetime64[s]").dt.tz_localize(
+        original_timezone
+    )
+    gs = cudf.Series(data, dtype="datetime64[s]").dt.tz_localize(
+        original_timezone
+    )
     expect = ps.dt.tz_convert(target_timezone)
     got = gs.dt.tz_convert(target_timezone)
     assert_eq(expect, got)
@@ -267,7 +278,9 @@ def test_astype_naive_to_aware_raises():
 
 @pytest.mark.parametrize("unit", ["ns", "us"])
 def test_astype_aware_to_aware(unit):
-    ser = cudf.Series([datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)])
+    ser = cudf.Series(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    )
     result = ser.astype(f"datetime64[{unit}, US/Pacific]")
     expected = ser.to_pandas().astype(f"datetime64[{unit}, US/Pacific]")
     zoneinfo_type = pd.DatetimeTZDtype(

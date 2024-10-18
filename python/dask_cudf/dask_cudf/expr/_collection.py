@@ -1,27 +1,23 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import warnings
 from functools import cached_property
+import warnings
 
-import cudf
-from dask import config
-from dask.dataframe.core import is_dataframe_like
-from dask.typing import no_default
 from dask_expr import (
     DataFrame as DXDataFrame,
-)
-from dask_expr import (
     FrameBase,
-    get_collection_type,
-)
-from dask_expr import (
     Index as DXIndex,
-)
-from dask_expr import (
     Series as DXSeries,
+    get_collection_type,
 )
 from dask_expr._collection import new_collection
 from dask_expr._util import _raise_if_object_series
+
+from dask import config
+from dask.dataframe.core import is_dataframe_like
+from dask.typing import no_default
+
+import cudf
 
 _LEGACY_WORKAROUND = (
     "To enable the 'legacy' dask-cudf API, set the "
@@ -90,7 +86,9 @@ class CudfFrameBase(FrameBase):
             index = self._meta.to_pandas().var(numeric_only=True).index
             frame = frame[list(index)]
         return new_collection(
-            frame.expr.var(axis, skipna, ddof, numeric_only, split_every=split_every)
+            frame.expr.var(
+                axis, skipna, ddof, numeric_only, split_every=split_every
+            )
         )
 
     def rename_axis(
@@ -99,7 +97,9 @@ class CudfFrameBase(FrameBase):
         from dask_cudf.expr._expr import RenameAxisCudf
 
         return new_collection(
-            RenameAxisCudf(self, mapper=mapper, index=index, columns=columns, axis=axis)
+            RenameAxisCudf(
+                self, mapper=mapper, index=index, columns=columns, axis=axis
+            )
         )
 
 
@@ -219,8 +219,9 @@ def _create_array_collection_with_meta(expr):
     # `new_dd_object` for DataFrame -> Array conversion.
     # This can be removed if dask#11017 is resolved
     # (See: https://github.com/dask/dask/issues/11017)
-    import dask.array as da
     import numpy as np
+
+    import dask.array as da
     from dask.blockwise import Blockwise
     from dask.highlevelgraph import HighLevelGraph
 
@@ -229,7 +230,9 @@ def _create_array_collection_with_meta(expr):
     name = result._name
     meta = result._meta
     divisions = result.divisions
-    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple((d,) for d in meta.shape[1:])
+    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
+        (d,) for d in meta.shape[1:]
+    )
     if len(chunks) > 1:
         if isinstance(dsk, HighLevelGraph):
             layer = dsk.layers[name]

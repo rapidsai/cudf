@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import warnings
+from collections.abc import Sequence
 from decimal import Decimal
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, cast
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -98,7 +99,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def __pow__(self, other):
         if isinstance(other, int):
             if other == 0:
-                res = cudf.core.column.as_column(1, dtype=self.dtype, length=len(self))
+                res = cudf.core.column.as_column(
+                    1, dtype=self.dtype, length=len(self)
+                )
                 if self.nullable:
                     res = res.set_mask(self.mask)
                 return res
@@ -133,8 +136,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # are computed outside of libcudf
         if op in {"__add__", "__sub__", "__mul__", "__div__"}:
             output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
-            lhs = lhs.astype(type(output_type)(lhs.dtype.precision, lhs.dtype.scale))
-            rhs = rhs.astype(type(output_type)(rhs.dtype.precision, rhs.dtype.scale))
+            lhs = lhs.astype(
+                type(output_type)(lhs.dtype.precision, lhs.dtype.scale)
+            )
+            rhs = rhs.astype(
+                type(output_type)(rhs.dtype.precision, rhs.dtype.scale)
+            )
             result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
             # libcudf doesn't support precision, so result.dtype doesn't
             # maintain output_type.precision
@@ -204,7 +211,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
             metadata = other.as_tuple()
             precision = max(len(metadata.digits), metadata.exponent)
             scale = -metadata.exponent
-            return cudf.Scalar(other, dtype=self.dtype.__class__(precision, scale))
+            return cudf.Scalar(
+                other, dtype=self.dtype.__class__(precision, scale)
+            )
         return NotImplemented
 
     def _decimal_quantile(
@@ -212,13 +221,17 @@ class DecimalBaseColumn(NumericalBaseColumn):
     ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
-        indices = libcudf.sort.order_by([self], [True], "first", stable=True).slice(
-            self.null_count, len(self)
+        indices = libcudf.sort.order_by(
+            [self], [True], "first", stable=True
+        ).slice(self.null_count, len(self))
+        result = libcudf.quantiles.quantile(
+            self, quant, interpolation, indices, exact
         )
-        result = libcudf.quantiles.quantile(self, quant, interpolation, indices, exact)
         return result._with_type_metadata(self.dtype)
 
-    def as_numerical_column(self, dtype: Dtype) -> "cudf.core.column.NumericalColumn":
+    def as_numerical_column(
+        self, dtype: Dtype
+    ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
 
 
@@ -272,9 +285,15 @@ class Decimal32Column(DecimalBaseColumn):
         data_buf_128[::4] = data_buf_32
         # use striding again to set the remaining bits of each 128-bit chunk:
         # 0 for non-negative values, -1 for negative values:
-        data_buf_128[1::4] = np.piecewise(data_buf_32, [data_buf_32 < 0], [-1, 0])
-        data_buf_128[2::4] = np.piecewise(data_buf_32, [data_buf_32 < 0], [-1, 0])
-        data_buf_128[3::4] = np.piecewise(data_buf_32, [data_buf_32 < 0], [-1, 0])
+        data_buf_128[1::4] = np.piecewise(
+            data_buf_32, [data_buf_32 < 0], [-1, 0]
+        )
+        data_buf_128[2::4] = np.piecewise(
+            data_buf_32, [data_buf_32 < 0], [-1, 0]
+        )
+        data_buf_128[3::4] = np.piecewise(
+            data_buf_32, [data_buf_32 < 0], [-1, 0]
+        )
         data_buf = pa.py_buffer(data_buf_128)
         mask_buf = (
             self.base_mask
@@ -393,7 +412,9 @@ class Decimal64Column(DecimalBaseColumn):
         data_buf_128[::2] = data_buf_64
         # use striding again to set the remaining bits of each 128-bit chunk:
         # 0 for non-negative values, -1 for negative values:
-        data_buf_128[1::2] = np.piecewise(data_buf_64, [data_buf_64 < 0], [-1, 0])
+        data_buf_128[1::2] = np.piecewise(
+            data_buf_64, [data_buf_64 < 0], [-1, 0]
+        )
         data_buf = pa.py_buffer(data_buf_128)
         mask_buf = (
             self.base_mask

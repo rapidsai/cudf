@@ -1,19 +1,20 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import codecs
+from collections import OrderedDict
 import gzip
+from io import BytesIO, StringIO
 import os
+from pathlib import Path
 import re
 import shutil
-from collections import OrderedDict
-from io import BytesIO, StringIO
-from pathlib import Path
 
-import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf import read_csv
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -74,7 +75,9 @@ def make_datetime_dataframe(include_non_standard=False):
 def make_numpy_mixed_dataframe():
     df = pd.DataFrame()
     df["Integer"] = np.array([2345, 11987, 9027, 9027])
-    df["Date"] = np.array(["18/04/1995", "14/07/1994", "07/06/2006", "16/09/2005"])
+    df["Date"] = np.array(
+        ["18/04/1995", "14/07/1994", "07/06/2006", "16/09/2005"]
+    )
     df["Float"] = np.array([9.001, 8.343, 6, 2.781])
     df["Integer2"] = np.array([2345, 106, 2088, 789277])
     df["Category"] = np.array(["M", "F", "F", "F"])
@@ -568,7 +571,9 @@ def test_csv_reader_NaN_values():
     custom_na_values = ["NV_NAN", "NotANumber"]
 
     # test default NA values. empty cells should also yield NaNs
-    gdf = read_csv(StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes)
+    gdf = read_csv(
+        StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
+    )
     pdf = pd.read_csv(
         StringIO(default_na_cells + empty_cells), names=names, dtype=np.float32
     )
@@ -646,7 +651,9 @@ def test_csv_reader_thousands(tmpdir):
     uint32_ref = [1234567, 12345]
     uint64_ref = [1234567890, 123456789]
 
-    df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1, thousands="'")
+    df = read_csv(
+        str(fname), names=names, dtype=dtypes, skiprows=1, thousands="'"
+    )
 
     np.testing.assert_allclose(f32_ref, df["float32"].to_numpy())
     np.testing.assert_allclose(f64_ref, df["float64"].to_numpy())
@@ -672,7 +679,9 @@ def test_csv_reader_buffer_strings():
     assert df["text"][2] == "c"
     assert df["text"][3] == "d"
 
-    df2 = read_csv(BytesIO(str.encode(buffer)), names=names, dtype=dtypes, skiprows=1)
+    df2 = read_csv(
+        BytesIO(str.encode(buffer)), names=names, dtype=dtypes, skiprows=1
+    )
     assert len(df2.columns) == 2
     assert df2["text"].dtype == np.dtype("object")
     assert df2["int"].dtype == np.dtype("int64")
@@ -695,14 +704,18 @@ def test_csv_reader_buffer_strings():
         ("", None, None),
     ],
 )
-def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp, pd_mixed_dataframe):
+def test_csv_reader_compression(
+    tmpdir, ext, out_comp, in_comp, pd_mixed_dataframe
+):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_compression" + ext)
 
     df = pd_mixed_dataframe
     df.to_csv(fname, index=False, header=False, compression=out_comp)
 
     gdf = read_csv(fname, names=list(df.columns.values), compression=in_comp)
-    pdf = pd.read_csv(fname, names=list(df.columns.values), compression=in_comp)
+    pdf = pd.read_csv(
+        fname, names=list(df.columns.values), compression=in_comp
+    )
 
     assert_eq(gdf, pdf)
 
@@ -899,7 +912,9 @@ def test_csv_reader_nrows(tmpdir):
     assert df["int2"][read_rows - 1] == 2 * (read_rows - 1 + skip_rows)
 
     # with column name inference
-    df = read_csv(str(fname), dtype=dtypes, skiprows=skip_rows + 1, nrows=read_rows)
+    df = read_csv(
+        str(fname), dtype=dtypes, skiprows=skip_rows + 1, nrows=read_rows
+    )
     assert df.shape == (read_rows, 2)
     assert str(skip_rows) in list(df)[0]
     assert str(2 * skip_rows) in list(df)[1]
@@ -917,7 +932,9 @@ def test_csv_reader_nrows(tmpdir):
     assert df["int2"][rows - 1] == 2 * (rows - 1)
 
     # nrows + skiprows larger than the file
-    df = read_csv(str(fname), dtype=dtypes, nrows=read_rows, skiprows=read_rows)
+    df = read_csv(
+        str(fname), dtype=dtypes, nrows=read_rows, skiprows=read_rows
+    )
     assert df.shape == (rows - read_rows, 2)
 
     # nrows equal to zero
@@ -982,7 +999,9 @@ def test_csv_reader_skiprows_header(skip_rows, header_row):
     cu_df = read_csv(
         StringIO(buffer), dtype=dtypes, skiprows=skip_rows, header=header_row
     )
-    pd_df = pd.read_csv(StringIO(buffer), skiprows=skip_rows, header=header_row)
+    pd_df = pd.read_csv(
+        StringIO(buffer), skiprows=skip_rows, header=header_row
+    )
 
     assert cu_df.shape == pd_df.shape
     assert list(cu_df.columns.values) == list(pd_df.columns.values)
@@ -1054,7 +1073,9 @@ def test_csv_reader_filenotfound(tmpdir):
         read_csv(str(dname))
 
 
-@pytest.mark.parametrize("src", ["filepath", "pathobj", "bytes_io", "string_io", "url"])
+@pytest.mark.parametrize(
+    "src", ["filepath", "pathobj", "bytes_io", "string_io", "url"]
+)
 def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     expect = pd.read_csv(path_or_buf("filepath"))
     got = cudf.read_csv(path_or_buf(src))
@@ -1261,7 +1282,9 @@ def test_csv_reader_delim_whitespace():
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
     with expect_warning_if(PANDAS_GE_220):
-        pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+        pd_df = pd.read_csv(
+            StringIO(buffer), delim_whitespace=True, header=None
+        )
     assert pd_df.shape == cu_df.shape
 
     # should raise an error if used with delimiter or sep
@@ -1324,7 +1347,9 @@ def test_csv_reader_index_col():
 
     # using a column index with names
     cu_df = read_csv(StringIO(buffer), header=None, index_col=0, names=names)
-    pd_df = pd.read_csv(StringIO(buffer), header=None, index_col=0, names=names)
+    pd_df = pd.read_csv(
+        StringIO(buffer), header=None, index_col=0, names=names
+    )
     assert_eq(cu_df.index, pd_df.index)
 
     # passing False to avoid using a column as index (no-op in cuDF)
@@ -1336,7 +1361,9 @@ def test_csv_reader_index_col():
 @pytest.mark.parametrize("index_name", [None, "custom name", 124])
 @pytest.mark.parametrize("index_col", [None, 0, "a"])
 def test_csv_reader_index_names(index_name, index_col):
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [10, 11, 12]}, index=["AB", "CD", "EF"])
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [10, 11, 12]}, index=["AB", "CD", "EF"]
+    )
     pdf.index.name = index_name
 
     buffer = pdf.to_csv()
@@ -1345,7 +1372,9 @@ def test_csv_reader_index_names(index_name, index_col):
     assert_eq(actual, expected)
 
 
-@pytest.mark.parametrize("names", [["a", "b", "c"], [416, 905, 647], range(3), None])
+@pytest.mark.parametrize(
+    "names", [["a", "b", "c"], [416, 905, 647], range(3), None]
+)
 def test_csv_reader_column_names(names):
     buffer = "0,1,2\n3,4,5\n6,7,8"
 
@@ -1383,7 +1412,9 @@ def test_csv_reader_aligned_byte_range(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file19.csv")
     nelem = 1000
 
-    input_df = pd.DataFrame({"key": np.arange(0, nelem), "zeros": np.zeros(nelem)})
+    input_df = pd.DataFrame(
+        {"key": np.arange(0, nelem), "zeros": np.zeros(nelem)}
+    )
     input_df.to_csv(fname)
 
     df = cudf.read_csv(str(fname), byte_range=(0, 4096))
@@ -1405,7 +1436,9 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         # require explicit `hex` dtype to parse hexadecimals
         pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
         gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
-        np.testing.assert_array_equal(pdf["hex_int"], gdf["hex_int"].to_numpy())
+        np.testing.assert_array_equal(
+            pdf["hex_int"], gdf["hex_int"].to_numpy()
+        )
     else:
         # otherwise, dtype inference returns as object (string)
         pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
@@ -1450,7 +1483,9 @@ def test_csv_reader_pd_consistent_quotes(quoting):
 
     buffer = "\n".join(lines)
 
-    gd_df = read_csv(StringIO(buffer), names=names, dtype=dtypes, quoting=quoting)
+    gd_df = read_csv(
+        StringIO(buffer), names=names, dtype=dtypes, quoting=quoting
+    )
     pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=quoting)
 
     assert_eq(pd_df, gd_df)
@@ -1664,7 +1699,9 @@ def test_csv_writer_terminator_sep(lineterminator, sep, cudf_mixed_dataframe):
     assert_eq(df, got)
 
 
-@pytest.mark.parametrize("lineterminator", ["\r\n", "ABC", "\t\t", np.str_("\r\n")])
+@pytest.mark.parametrize(
+    "lineterminator", ["\r\n", "ABC", "\t\t", np.str_("\r\n")]
+)
 def test_csv_writer_multichar_terminator(lineterminator, cudf_mixed_dataframe):
     df = cudf_mixed_dataframe
 
@@ -1690,8 +1727,12 @@ def test_csv_writer_multichar_terminator(lineterminator, cudf_mixed_dataframe):
         None,
     ],
 )
-@pytest.mark.parametrize("header", [True, False, np.bool_(True), np.bool_(False)])
-@pytest.mark.parametrize("index", [True, False, np.bool_(True), np.bool_(False)])
+@pytest.mark.parametrize(
+    "header", [True, False, np.bool_(True), np.bool_(False)]
+)
+@pytest.mark.parametrize(
+    "index", [True, False, np.bool_(True), np.bool_(False)]
+)
 def test_csv_writer_column_and_header_options(
     columns, header, index, pd_mixed_dataframe
 ):
@@ -1761,8 +1802,12 @@ def test_csv_writer_chunksize(chunksize, dtype):
     "df",
     [
         cudf.DataFrame({"vals": [1, 2, 3]}),
-        cudf.DataFrame({"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}),
-        cudf.DataFrame({"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
     ],
 )
 def test_to_csv_empty_filename(df):
@@ -1778,8 +1823,12 @@ def test_to_csv_empty_filename(df):
     "df",
     [
         cudf.DataFrame({"vals": [1, 2, 3]}),
-        cudf.DataFrame({"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}),
-        cudf.DataFrame({"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}),
+        cudf.DataFrame(
+            {"vals1": [1, 2, 3], "vals2": ["hello", "rapids", "cudf"]}
+        ),
+        cudf.DataFrame(
+            {"vals1": [None, 2.0, 3.0], "vals2": ["hello", "rapids", None]}
+        ),
     ],
 )
 def test_to_csv_StringIO(df):
@@ -1893,7 +1942,9 @@ def test_csv_write_empty_dataframe(df, index):
         pd.DataFrame(columns=[""]),
     ],
 )
-@pytest.mark.parametrize("na_rep", ["", "_NA_", "---", "_____CUSTOM_NA_REP______"])
+@pytest.mark.parametrize(
+    "na_rep", ["", "_NA_", "---", "_____CUSTOM_NA_REP______"]
+)
 def test_csv_write_dataframe_na_rep(df, na_rep):
     gdf = cudf.from_pandas(df)
 
@@ -1938,7 +1989,9 @@ def test_csv_reader_nullable_dtypes(dtype):
     assert_eq(expected, actual.to_pandas(nullable=True))
 
 
-@pytest.mark.parametrize("dtype", sorted(list(cudf.utils.dtypes.TIMEDELTA_TYPES)))
+@pytest.mark.parametrize(
+    "dtype", sorted(list(cudf.utils.dtypes.TIMEDELTA_TYPES))
+)
 def test_csv_reader_timedetla_dtypes(dtype):
     buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n43432423,13342,13243214\n"
 
@@ -1948,7 +2001,9 @@ def test_csv_reader_timedetla_dtypes(dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("dtype", sorted(list(cudf.utils.dtypes.DATETIME_TYPES)))
+@pytest.mark.parametrize(
+    "dtype", sorted(list(cudf.utils.dtypes.DATETIME_TYPES))
+)
 def test_csv_reader_datetime_dtypes(dtype):
     buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n43432423,13342,13243214\n"
 
@@ -1970,7 +2025,9 @@ def test_csv_reader_datetime_dtypes(dtype):
         cudf.DataFrame(
             {
                 "a": cudf.Series([1.1, 2, 3, 1.1, 2], dtype="category"),
-                "b": cudf.Series([None, "c", None, "b", "a"], dtype="category"),
+                "b": cudf.Series(
+                    [None, "c", None, "b", "a"], dtype="category"
+                ),
             }
         ),
         cudf.DataFrame(
@@ -1978,7 +2035,9 @@ def test_csv_reader_datetime_dtypes(dtype):
                 "b": cudf.Series(
                     [1.1, 2, 3, 1.1, 2],
                     dtype="category",
-                    index=cudf.CategoricalIndex(["abc", "def", "ghi", "jkl", "xyz"]),
+                    index=cudf.CategoricalIndex(
+                        ["abc", "def", "ghi", "jkl", "xyz"]
+                    ),
                 )
             }
         ),
@@ -2039,8 +2098,12 @@ def test_na_filter_empty_fields():
     gdf = cudf.read_csv(StringIO(buffer), keep_default_na=False)
     assert_eq(pdf, gdf)
 
-    pdf = pd.read_csv(StringIO(buffer), keep_default_na=False, na_values=test_na)
-    gdf = cudf.read_csv(StringIO(buffer), keep_default_na=False, na_values=test_na)
+    pdf = pd.read_csv(
+        StringIO(buffer), keep_default_na=False, na_values=test_na
+    )
+    gdf = cudf.read_csv(
+        StringIO(buffer), keep_default_na=False, na_values=test_na
+    )
     assert_eq(pdf, gdf)
 
 
@@ -2093,7 +2156,9 @@ def test_empty_df_no_index():
     assert_eq(actual, result)
 
 
-def test_default_integer_bitwidth(cudf_mixed_dataframe, default_integer_bitwidth):
+def test_default_integer_bitwidth(
+    cudf_mixed_dataframe, default_integer_bitwidth
+):
     # Test that integer columns in csv are _inferred_ as user specified
     # bitwidth
     buf = BytesIO()
@@ -2101,7 +2166,9 @@ def test_default_integer_bitwidth(cudf_mixed_dataframe, default_integer_bitwidth
     buf.seek(0)
     read = cudf.read_csv(buf)
     assert read["Integer"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
-    assert read["Integer2"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["Integer2"].dtype == np.dtype(
+        f"i{default_integer_bitwidth//8}"
+    )
 
 
 def test_default_integer_bitwidth_partial(
@@ -2114,7 +2181,9 @@ def test_default_integer_bitwidth_partial(
     buf.seek(0)
     read = cudf.read_csv(buf, dtype={"Integer": "int64"})
     assert read["Integer"].dtype == np.dtype("i8")
-    assert read["Integer2"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["Integer2"].dtype == np.dtype(
+        f"i{default_integer_bitwidth//8}"
+    )
 
 
 @pytest.mark.filterwarnings("ignore:invalid value encountered in cast")

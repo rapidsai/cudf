@@ -1,7 +1,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-import operator
 from functools import partial
+import operator
 
 from numba import cuda, types
 from numba.core import cgutils
@@ -9,8 +9,6 @@ from numba.core.datamodel import default_manager
 from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
-)
-from numba.cuda.cudaimpl import (
     registry as cuda_lowering_registry,
 )
 
@@ -127,7 +125,9 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     sv = cgutils.create_struct_proxy(string_view)(context, builder)
 
     # set the empty strview data pointer to point to the literal value
-    sv.data = context.insert_string_const_addrspace(builder, fromty.literal_value)
+    sv.data = context.insert_string_const_addrspace(
+        builder, fromty.literal_value
+    )
     sv.length = context.get_constant(size_type, len(fromty.literal_value))
     sv.bytes = context.get_constant(
         size_type, len(fromty.literal_value.encode("UTF-8"))
@@ -257,7 +257,9 @@ def replace_impl(context, builder, sig, args):
     _ = context.compile_internal(
         builder,
         call_string_view_replace,
-        types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
+        types.void(
+            _UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR
+        ),
         (udf_str_ptr, src_ptr, to_replace_ptr, replacement_ptr),
     )
 
@@ -327,9 +329,9 @@ def create_binary_string_func(binary_func, retty):
                 f"UDFString.{binary_func}", string_view, string_view
             )(binary_func_impl)
         else:
-            binary_func_impl = cuda_lower(binary_func, string_view, string_view)(
-                binary_func_impl
-            )
+            binary_func_impl = cuda_lower(
+                binary_func, string_view, string_view
+            )(binary_func_impl)
 
         return binary_func_impl
 
@@ -428,7 +430,9 @@ def create_unary_identifier_func(id_func):
             # Lookup table required for conversion functions
             # must be resolved at runtime after context initialization,
             # therefore cannot be a global variable
-            tbl_ptr = context.get_constant(types.uintp, get_character_flags_table_ptr())
+            tbl_ptr = context.get_constant(
+                types.uintp, get_character_flags_table_ptr()
+            )
             result = context.compile_internal(
                 builder,
                 cuda_func,
@@ -469,7 +473,9 @@ def create_upper_or_lower(id_func):
             special_tbl_ptr = context.get_constant(
                 types.uintp, get_special_case_mapping_table_ptr()
             )
-            udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())
+            udf_str_ptr = builder.alloca(
+                default_manager[udf_string].get_value_type()
+            )
 
             _ = context.compile_internal(
                 builder,
@@ -563,7 +569,9 @@ def masked_len_impl(context, builder, sig, args):
     masked_sv = cgutils.create_struct_proxy(masked_sv_ty)(
         context, builder, value=args[0]
     )
-    result = len_impl(context, builder, size_type(string_view), (masked_sv.value,))
+    result = len_impl(
+        context, builder, size_type(string_view), (masked_sv.value,)
+    )
     ret.value = result
     ret.valid = masked_sv.valid
 
@@ -692,11 +700,15 @@ create_masked_binary_string_func(
     startswith_impl,
     types.boolean,
 )
-create_masked_binary_string_func("MaskedType.endswith", endswith_impl, types.boolean)
+create_masked_binary_string_func(
+    "MaskedType.endswith", endswith_impl, types.boolean
+)
 create_masked_binary_string_func("MaskedType.find", find_impl, size_type)
 create_masked_binary_string_func("MaskedType.rfind", rfind_impl, size_type)
 create_masked_binary_string_func("MaskedType.count", count_impl, size_type)
-create_masked_binary_string_func(operator.contains, contains_impl, types.boolean)
+create_masked_binary_string_func(
+    operator.contains, contains_impl, types.boolean
+)
 
 
 create_masked_unary_identifier_func("MaskedType.isalnum", isalnum_impl)

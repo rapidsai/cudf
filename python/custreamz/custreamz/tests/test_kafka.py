@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import confluent_kafka as ck
 import pytest
+
 from cudf.testing import assert_eq
 
 

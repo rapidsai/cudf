@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import collections.abc
 import pickle
-import time
-import weakref
 from threading import RLock
+import time
 from typing import TYPE_CHECKING, Any, Literal
+import weakref
 
 import numpy
 import nvtx
-import rmm
 from typing_extensions import Self
+
+import rmm
 
 from cudf.core.buffer.buffer import (
     Buffer,
@@ -112,7 +113,8 @@ class SpillableBufferOwner(BufferOwner):
         manager = get_global_manager()
         if manager is None:
             raise ValueError(
-                f"cannot create {self.__class__} without " "a global spill manager"
+                f"cannot create {self.__class__} without "
+                "a global spill manager"
             )
 
         self._manager = manager
@@ -194,7 +196,9 @@ class SpillableBufferOwner(BufferOwner):
                 return
 
             if not self.spillable:
-                raise ValueError(f"Cannot in-place move an unspillable buffer: {self}")
+                raise ValueError(
+                    f"Cannot in-place move an unspillable buffer: {self}"
+                )
 
             if (ptr_type, target) == ("gpu", "cpu"):
                 with nvtx.annotate(
@@ -203,7 +207,9 @@ class SpillableBufferOwner(BufferOwner):
                     domain="cudf_python-spill",
                 ):
                     host_mem = host_memory_allocation(self.size)
-                    rmm.pylibrmm.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
+                    rmm.pylibrmm.device_buffer.copy_ptr_to_host(
+                        self._ptr, host_mem
+                    )
                 self._ptr_desc["memoryview"] = host_mem
                 self._ptr = 0
                 self._owner = None
@@ -335,7 +341,9 @@ class SpillableBufferOwner(BufferOwner):
             "version": 0,
         }
 
-    def memoryview(self, *, offset: int = 0, size: int | None = None) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: int | None = None
+    ) -> memoryview:
         size = self._size if size is None else size
         with self.lock:
             if self.spillable:
@@ -344,7 +352,9 @@ class SpillableBufferOwner(BufferOwner):
             else:
                 assert self._ptr_desc["type"] == "gpu"
                 ret = host_memory_allocation(size)
-                rmm.pylibrmm.device_buffer.copy_ptr_to_host(self._ptr + offset, ret)
+                rmm.pylibrmm.device_buffer.copy_ptr_to_host(
+                    self._ptr + offset, ret
+                )
                 return ret
 
     def __str__(self) -> str:

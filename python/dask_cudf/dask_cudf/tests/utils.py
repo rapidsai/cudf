@@ -1,12 +1,14 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-import cudf
-import dask
-import dask.dataframe as dd
 import numpy as np
+from packaging.version import Version
 import pandas as pd
 import pytest
-from packaging.version import Version
+
+import dask
+import dask.dataframe as dd
+
+import cudf
 
 from dask_cudf.expr import QUERY_PLANNING_ON
 

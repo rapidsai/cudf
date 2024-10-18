@@ -2,11 +2,12 @@
 import contextlib
 from io import BytesIO
 
-import cudf
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+
+import cudf
 from cudf.testing import assert_eq
 
 

@@ -51,7 +51,9 @@ def test_optimization():
     x = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
 
     def rosen(x):  # banana function from scipy tutorial
-        return sum(100.0 * (x[1:] - x[:-1] ** 2.0) ** 2.0 + (1 - x[:-1]) ** 2.0)
+        return sum(
+            100.0 * (x[1:] - x[:-1] ** 2.0) ** 2.0 + (1 - x[:-1]) ** 2.0
+        )
 
     result = scipy.optimize.fmin(rosen, x)
     return result

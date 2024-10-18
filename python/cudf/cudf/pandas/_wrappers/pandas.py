@@ -11,41 +11,17 @@ import sys
 import pandas as pd
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
-)
-from pandas.tseries.holiday import (
     EasterMonday as pd_EasterMonday,
-)
-from pandas.tseries.holiday import (
     GoodFriday as pd_GoodFriday,
-)
-from pandas.tseries.holiday import (
     Holiday as pd_Holiday,
-)
-from pandas.tseries.holiday import (
     HolidayCalendarFactory as pd_HolidayCalendarFactory,
-)
-from pandas.tseries.holiday import (
     HolidayCalendarMetaClass as pd_HolidayCalendarMetaClass,
-)
-from pandas.tseries.holiday import (
     USColumbusDay as pd_USColumbusDay,
-)
-from pandas.tseries.holiday import (
     USFederalHolidayCalendar as pd_USFederalHolidayCalendar,
-)
-from pandas.tseries.holiday import (
     USLaborDay as pd_USLaborDay,
-)
-from pandas.tseries.holiday import (
     USMartinLutherKingJr as pd_USMartinLutherKingJr,
-)
-from pandas.tseries.holiday import (
     USMemorialDay as pd_USMemorialDay,
-)
-from pandas.tseries.holiday import (
     USPresidentsDay as pd_USPresidentsDay,
-)
-from pandas.tseries.holiday import (
     USThanksgivingDay as pd_USThanksgivingDay,
 )
 
@@ -60,13 +36,9 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _Unusable,
-    register_proxy_func,
-)
-from ..fast_slow_proxy import (
     make_final_proxy_type as _make_final_proxy_type,
-)
-from ..fast_slow_proxy import (
     make_intermediate_proxy_type as _make_intermediate_proxy_type,
+    register_proxy_func,
 )
 from .common import (
     array_function_method,
@@ -243,7 +215,9 @@ def _DataFrame__dir__(self):
 
 
 def ignore_ipython_canary_check(self, **kwargs):
-    raise AttributeError("_ipython_canary_method_should_not_exist_ doesn't exist")
+    raise AttributeError(
+        "_ipython_canary_method_should_not_exist_ doesn't exist"
+    )
 
 
 DataFrame = make_final_proxy_type(
@@ -323,7 +297,9 @@ def Index__setattr__(self, name, value):
         setattr(self._fsproxy_wrapped, "name", value)
     if name == "names":
         setattr(self._fsproxy_wrapped, "names", value)
-    return _FastSlowAttribute("__setattr__").__get__(self, type(self))(name, value)
+    return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
+        name, value
+    )
 
 
 Index = make_final_proxy_type(
@@ -1009,7 +985,9 @@ except ImportError:
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
-register_proxy_func(pd.read_pickle)(_FunctionProxy(_Unusable(), pd.read_pickle))
+register_proxy_func(pd.read_pickle)(
+    _FunctionProxy(_Unusable(), pd.read_pickle)
+)
 
 register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
 
@@ -1117,7 +1095,9 @@ _TextFileReader = make_intermediate_proxy_type(
     "_TextFileReader", _Unusable, pd.io.parsers.readers.TextFileReader
 )
 
-_XportReader = make_intermediate_proxy_type("_XportReader", _Unusable, pd_XportReader)
+_XportReader = make_intermediate_proxy_type(
+    "_XportReader", _Unusable, pd_XportReader
+)
 
 _SAS7BDATReader = make_intermediate_proxy_type(
     "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader
@@ -1145,7 +1125,9 @@ HolidayCalendarMetaClass = make_final_proxy_type(
 @register_proxy_func(pd_HolidayCalendarFactory)
 def holiday_calendar_factory_wrapper(*args, **kwargs):
     # Call the original HolidayCalendarFactory
-    result = _FunctionProxy(_Unusable(), pd_HolidayCalendarFactory)(*args, **kwargs)
+    result = _FunctionProxy(_Unusable(), pd_HolidayCalendarFactory)(
+        *args, **kwargs
+    )
     # Return the slow proxy of the result
     return result._fsproxy_slow
 

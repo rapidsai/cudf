@@ -4,15 +4,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Mapping
+from enum import IntEnum
 import functools
 import inspect
 import operator
 import pickle
 import types
+from typing import Any, Literal
 import warnings
-from collections.abc import Callable, Iterator
-from enum import IntEnum
-from typing import Any, Literal, Mapping
 
 import numpy as np
 
@@ -284,7 +284,9 @@ def make_intermediate_proxy_type(
         # disallow __init__. An intermediate proxy type can only be
         # instantiated from (possibly chained) operations on a final
         # proxy type.
-        raise TypeError(f"Cannot directly instantiate object of type {type(self)}")
+        raise TypeError(
+            f"Cannot directly instantiate object of type {type(self)}"
+        )
 
     @property  # type: ignore
     def _fsproxy_state(self):
@@ -525,7 +527,9 @@ class _FastSlowProxy:
         if name.startswith("_"):
             object.__setattr__(self, name, value)
             return
-        return _FastSlowAttribute("__setattr__").__get__(self, type(self))(name, value)
+        return _FastSlowAttribute("__setattr__").__get__(self, type(self))(
+            name, value
+        )
 
 
 class _FinalProxy(_FastSlowProxy):
@@ -790,7 +794,9 @@ class _FastSlowAttribute:
             if self._private:
                 fast_attr = _Unusable()
             else:
-                fast_attr = getattr(owner._fsproxy_fast, self._name, _Unusable())
+                fast_attr = getattr(
+                    owner._fsproxy_fast, self._name, _Unusable()
+                )
 
             try:
                 slow_attr = getattr(owner._fsproxy_slow, self._name)
@@ -813,7 +819,9 @@ class _FastSlowAttribute:
                     self._name,
                 )
 
-                if isinstance(self._attr, (property, functools.cached_property)):
+                if isinstance(
+                    self._attr, (property, functools.cached_property)
+                ):
                     with disable_module_accelerator():
                         self._attr.__doc__ = inspect.getdoc(slow_attr)
 
@@ -843,7 +851,9 @@ class _MethodProxy(_FunctionProxy):
             fast,
             slow,
             updated=functools.WRAPPER_UPDATES,
-            assigned=(tuple(filter(lambda x: x != "__name__", _WRAPPER_ASSIGNMENTS))),
+            assigned=(
+                tuple(filter(lambda x: x != "__name__", _WRAPPER_ASSIGNMENTS))
+            ),
         )
 
     def __dir__(self):
@@ -949,7 +959,8 @@ def _fast_slow_function_call(
                         )
                     except Exception as e:
                         warnings.warn(
-                            "Pandas debugging mode failed. " f"The exception was {e}."
+                            "Pandas debugging mode failed. "
+                            f"The exception was {e}."
                         )
     except Exception as err:
         if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
@@ -1006,7 +1017,8 @@ def _transform_arg(
             # transformed pieces
             # This handles scipy._lib._bunch._make_tuple_bunch
             args, kwargs = (
-                _transform_arg(a, attribute_name, seen) for a in arg.__getnewargs_ex__()
+                _transform_arg(a, attribute_name, seen)
+                for a in arg.__getnewargs_ex__()
             )
             obj = type(arg).__new__(type(arg), *args, **kwargs)
             if hasattr(obj, "__setstate__"):
@@ -1028,7 +1040,9 @@ def _transform_arg(
             return type(arg).__new__(type(arg), *args)
         else:
             # Hope we can just call the constructor with transformed entries.
-            return type(arg)(_transform_arg(a, attribute_name, seen) for a in args)
+            return type(arg)(
+                _transform_arg(a, attribute_name, seen) for a in args
+            )
     elif isinstance(arg, dict):
         return {
             _transform_arg(k, attribute_name, seen): _transform_arg(
@@ -1037,7 +1051,9 @@ def _transform_arg(
             for k, a in arg.items()
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
-        transformed = [_transform_arg(a, attribute_name, seen) for a in arg.flat]
+        transformed = [
+            _transform_arg(a, attribute_name, seen) for a in arg.flat
+        ]
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
         if arg.flags["F_CONTIGUOUS"] and not arg.flags["C_CONTIGUOUS"]:
             order = "F"

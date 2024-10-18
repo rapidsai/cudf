@@ -3,8 +3,9 @@
 import io
 import sys
 
-import cudf
 import pandas as pd
+
+import cudf
 from cudf._fuzz_testing.json import JSONReader, JSONWriter
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.utils import ALL_POSSIBLE_VALUES, run_test
@@ -43,7 +44,9 @@ def json_writer_test(pdf):
     # https://github.com/rapidsai/cudf/issues/6429
     # compare_content(pdf_buffer, gdf_buffer)
 
-    actual = cudf.read_json(gdf_buffer, engine="cudf", lines=True, orient="records")
+    actual = cudf.read_json(
+        gdf_buffer, engine="cudf", lines=True, orient="records"
+    )
     expected = pd.read_json(pdf_buffer, lines=True, orient="records")
     expected.columns = expected.columns.astype("str")
     assert_eq(actual, expected)
@@ -59,8 +62,12 @@ def json_writer_test(pdf):
 def json_writer_test_params(pdf, compression, dtype):
     gdf = cudf.from_pandas(pdf)
 
-    pdf_buffer = pdf.to_json(lines=True, orient="records", compression=compression)
-    gdf_buffer = gdf.to_json(lines=True, orient="records", compression=compression)
+    pdf_buffer = pdf.to_json(
+        lines=True, orient="records", compression=compression
+    )
+    gdf_buffer = gdf.to_json(
+        lines=True, orient="records", compression=compression
+    )
 
     # TODO: Uncomment once this is fixed:
     # https://github.com/rapidsai/cudf/issues/6429

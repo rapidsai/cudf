@@ -2,10 +2,11 @@
 
 from string import ascii_lowercase
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.testing import assert_eq
 
 pytestmark = pytest.mark.spilling
@@ -39,7 +40,9 @@ def test_get_dummies(data, index, dtype):
 @pytest.mark.parametrize("n_cols", [5, 10, 20])
 def test_onehot_get_dummies_multicol(n_cols):
     n_categories = 5
-    data = dict(zip(ascii_lowercase, (np.arange(n_categories) for _ in range(n_cols))))
+    data = dict(
+        zip(ascii_lowercase, (np.arange(n_categories) for _ in range(n_cols)))
+    )
 
     gdf = cudf.DataFrame(data)
     pdf = pd.DataFrame(data)
@@ -91,16 +94,24 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
     gdf = cudf.DataFrame(data)
     pdf = pd.DataFrame(data)
 
-    encoded_expected = pd.get_dummies(pdf, prefix=prefix, prefix_sep=prefix_sep)
-    encoded_actual = cudf.get_dummies(gdf, prefix=prefix, prefix_sep=prefix_sep)
+    encoded_expected = pd.get_dummies(
+        pdf, prefix=prefix, prefix_sep=prefix_sep
+    )
+    encoded_actual = cudf.get_dummies(
+        gdf, prefix=prefix, prefix_sep=prefix_sep
+    )
 
     assert_eq(encoded_expected, encoded_actual)
 
 
 def test_get_dummies_with_nan():
-    df = cudf.DataFrame({"a": cudf.Series([1, 2, np.nan, None], nan_as_null=False)})
+    df = cudf.DataFrame(
+        {"a": cudf.Series([1, 2, np.nan, None], nan_as_null=False)}
+    )
 
-    expected = pd.get_dummies(df.to_pandas(nullable=True), dummy_na=True, columns=["a"])
+    expected = pd.get_dummies(
+        df.to_pandas(nullable=True), dummy_na=True, columns=["a"]
+    )
 
     actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
 
@@ -127,7 +138,9 @@ def test_get_dummies_array_like(data, prefix_sep, prefix, dtype):
         pd_data, prefix=prefix, prefix_sep=prefix_sep, dtype=dtype
     )
 
-    actual = cudf.get_dummies(data, prefix=prefix, prefix_sep=prefix_sep, dtype=dtype)
+    actual = cudf.get_dummies(
+        data, prefix=prefix, prefix_sep=prefix_sep, dtype=dtype
+    )
 
     assert_eq(expected, actual)
 

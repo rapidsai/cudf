@@ -2,7 +2,6 @@
 
 import operator
 
-import numpy as np
 from numba import types
 from numba.core.extending import (
     make_attribute_wrapper,
@@ -19,6 +18,7 @@ from numba.core.typing.templates import (
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.np.numpy_support import from_dtype
+import numpy as np
 
 from cudf.core.missing import NA
 from cudf.core.udf import api
@@ -47,7 +47,9 @@ from cudf.utils.dtypes import (
     TIMEDELTA_TYPES,
 )
 
-SUPPORTED_NUMPY_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
+SUPPORTED_NUMPY_TYPES = (
+    NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
+)
 supported_type_str = "\n".join(sorted(list(SUPPORTED_NUMPY_TYPES) + ["bool"]))
 
 _units = ["ns", "ms", "us", "s"]
@@ -148,7 +150,9 @@ class MaskedType(types.Type):
         # two MaskedType unify to a new MaskedType whose value_type
         # is the result of unifying `self` and `other` `value_type`
         elif isinstance(other, MaskedType):
-            return MaskedType(context.unify_pairs(self.value_type, other.value_type))
+            return MaskedType(
+                context.unify_pairs(self.value_type, other.value_type)
+            )
 
         # if we have MaskedType and something that results in a
         # scalar, unify between the MaskedType's value_type
@@ -184,7 +188,8 @@ def typeof_masked(val, c):
 class MaskedConstructor(ConcreteTemplate):
     key = api.Masked
     cases = [
-        nb_signature(MaskedType(t), t, types.boolean) for t in _supported_masked_types
+        nb_signature(MaskedType(t), t, types.boolean)
+        for t in _supported_masked_types
     ]
 
 
@@ -200,7 +205,9 @@ class ClassesTemplate(AttributeTemplate):
 # Registration of the global is also needed for Numba to type api.Masked
 cuda_decl_registry.register_global(api, types.Module(api))
 # For typing bare Masked (as in `from .api import Masked`
-cuda_decl_registry.register_global(api.Masked, types.Function(MaskedConstructor))
+cuda_decl_registry.register_global(
+    api.Masked, types.Function(MaskedConstructor)
+)
 
 
 # Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
@@ -606,10 +613,14 @@ class MaskedStringViewAttrs(AttributeTemplate):
     key = MaskedType(string_view)
 
     def resolve_replace(self, mod):
-        return types.BoundFunction(MaskedStringViewReplace, MaskedType(string_view))
+        return types.BoundFunction(
+            MaskedStringViewReplace, MaskedType(string_view)
+        )
 
     def resolve_count(self, mod):
-        return types.BoundFunction(MaskedStringViewCount, MaskedType(string_view))
+        return types.BoundFunction(
+            MaskedStringViewCount, MaskedType(string_view)
+        )
 
     def resolve_value(self, mod):
         return string_view

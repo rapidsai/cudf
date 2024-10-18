@@ -3,10 +3,11 @@
 import itertools
 import random
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf import concat
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
@@ -126,7 +127,9 @@ def test_drop_duplicates():
     expected = pdf.drop_duplicates("E", keep="last")
     assert_eq(result, expected)
 
-    pdf = pd.DataFrame({"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]})
+    pdf = pd.DataFrame(
+        {"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]}
+    )
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_eq(gdf.drop_duplicates(), pdf.drop_duplicates())
 
@@ -155,7 +158,9 @@ def test_drop_duplicates():
 
 @pytest.mark.skip(reason="cudf does not support duplicate column names yet")
 def test_drop_duplicates_with_duplicate_column_names():
-    df = pd.DataFrame([[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"])
+    df = pd.DataFrame(
+        [[1, 2, 5], [3, 4, 6], [3, 4, 7]], columns=["a", "a", "b"]
+    )
     df = cudf.DataFrame.from_pandas(df)
 
     result0 = df.drop_duplicates()
@@ -339,8 +344,12 @@ def test_dataframe_drop_duplicates_method():
     assert_eq(gdf.drop_duplicates("n1"), pdf.drop_duplicates("n1"))
     assert_eq(gdf.drop_duplicates("n2"), pdf.drop_duplicates("n2"))
     assert_eq(gdf.drop_duplicates("s1"), pdf.drop_duplicates("s1"))
-    assert_eq(gdf.drop_duplicates(["n1", "n2"]), pdf.drop_duplicates(["n1", "n2"]))
-    assert_eq(gdf.drop_duplicates(["n1", "s1"]), pdf.drop_duplicates(["n1", "s1"]))
+    assert_eq(
+        gdf.drop_duplicates(["n1", "n2"]), pdf.drop_duplicates(["n1", "n2"])
+    )
+    assert_eq(
+        gdf.drop_duplicates(["n1", "s1"]), pdf.drop_duplicates(["n1", "s1"])
+    )
 
     # Test drop error
     assert_exceptions_equal(

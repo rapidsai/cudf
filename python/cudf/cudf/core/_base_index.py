@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pickle
-import warnings
 from functools import cached_property
+import pickle
 from typing import TYPE_CHECKING, Any, Literal
+import warnings
 
 import pandas as pd
 from typing_extensions import Self
@@ -351,7 +351,9 @@ class BaseIndex(Serializable):
 
         num_values = len(values)
         if num_values > 1:
-            raise ValueError("Length of new names must be 1, got %d" % num_values)
+            raise ValueError(
+                "Length of new names must be 1, got %d" % num_values
+            )
 
         self.name = values[0]
 
@@ -620,13 +622,17 @@ class BaseIndex(Serializable):
                 raise MixedTypeError("Cannot perform union with mixed types")
 
         if not len(other) or self.equals(other):
-            common_dtype = cudf.utils.dtypes.find_common_type([self.dtype, other.dtype])
+            common_dtype = cudf.utils.dtypes.find_common_type(
+                [self.dtype, other.dtype]
+            )
             res = self._get_reconciled_name_object(other).astype(common_dtype)
             if sort:
                 return res.sort_values()
             return res
         elif not len(self):
-            common_dtype = cudf.utils.dtypes.find_common_type([self.dtype, other.dtype])
+            common_dtype = cudf.utils.dtypes.find_common_type(
+                [self.dtype, other.dtype]
+            )
             res = other._get_reconciled_name_object(self).astype(common_dtype)
             if sort:
                 return res.sort_values()
@@ -786,7 +792,9 @@ class BaseIndex(Serializable):
         Index([1, 2, 3, 4], dtype='int64')
         """
         if downcast is not None:
-            raise NotImplementedError("`downcast` parameter is not yet supported")
+            raise NotImplementedError(
+                "`downcast` parameter is not yet supported"
+            )
 
         return super().fillna(value=value)
 
@@ -1445,7 +1453,9 @@ class BaseIndex(Serializable):
         self_df["order"] = self_df.index
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
-        res = res.sort_values(by=res._data.to_pandas_index()[1:], ignore_index=True)
+        res = res.sort_values(
+            by=res._data.to_pandas_index()[1:], ignore_index=True
+        )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
         if sort in {None, True} and len(other):
@@ -1563,7 +1573,9 @@ class BaseIndex(Serializable):
         else:
             return index_sorted
 
-    def join(self, other, how="left", level=None, return_indexers=False, sort=False):
+    def join(
+        self, other, how="left", level=None, return_indexers=False, sort=False
+    ):
         """
         Compute join_index and indexers to conform data structures
         to the new index.
@@ -1738,8 +1750,16 @@ class BaseIndex(Serializable):
             start_side, stop_side = "right", "left"
         else:
             start_side, stop_side = "left", "right"
-        istart = None if start is None else self.get_slice_bound(start, side=start_side)
-        istop = None if stop is None else self.get_slice_bound(stop, side=stop_side)
+        istart = (
+            None
+            if start is None
+            else self.get_slice_bound(start, side=start_side)
+        )
+        istop = (
+            None
+            if stop is None
+            else self.get_slice_bound(stop, side=stop_side)
+        )
         if step < 0:
             # Fencepost
             istart = None if istart is None else max(istart - 1, 0)
@@ -1810,7 +1830,9 @@ class BaseIndex(Serializable):
             except ValueError:
                 raise KeyError(f"{label=} not in index")
             if left != right:
-                raise KeyError(f"Cannot get slice bound for non-unique label {label=}")
+                raise KeyError(
+                    f"Cannot get slice bound for non-unique label {label=}"
+                )
             if side == "left":
                 return left
             else:
@@ -1832,7 +1854,9 @@ class BaseIndex(Serializable):
 
         # check if  we don't handle any of the types (including sub-class)
         for t in types:
-            if not any(issubclass(t, handled_type) for handled_type in handled_types):
+            if not any(
+                issubclass(t, handled_type) for handled_type in handled_types
+            ):
                 return NotImplemented
 
         if hasattr(cudf_index_module, fname):
@@ -1883,7 +1907,9 @@ class BaseIndex(Serializable):
         Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
         if nan_as_null is no_default:
-            nan_as_null = False if cudf.get_option("mode.pandas_compatible") else None
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
 
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
@@ -2032,7 +2058,9 @@ class BaseIndex(Serializable):
         if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(size_type_dtype)
 
-        if not _gather_map_is_valid(gather_map, len(self), check_bounds, nullify):
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
             raise IndexError("Gather map index is out of bounds.")
 
         return self._from_columns_like_self(
@@ -2065,9 +2093,13 @@ class BaseIndex(Serializable):
         """
 
         if axis not in {0, "index"}:
-            raise NotImplementedError("Gather along column axis is not yet supported.")
+            raise NotImplementedError(
+                "Gather along column axis is not yet supported."
+            )
         if not allow_fill or fill_value is not None:
-            raise NotImplementedError("`allow_fill` and `fill_value` are unsupported.")
+            raise NotImplementedError(
+                "`allow_fill` and `fill_value` are unsupported."
+            )
 
         return self._gather(indices)
 

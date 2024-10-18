@@ -2,16 +2,17 @@
 
 import random
 
-import cudf
 import cupy as cp
-import dask
 import numpy as np
 import pandas as pd
 import pytest
+
+import dask
 from dask import dataframe as dd
-from dask.dataframe.core import make_meta as dask_make_meta
-from dask.dataframe.core import meta_nonempty
+from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
 from dask.utils import M
+
+import cudf
 
 import dask_cudf
 from dask_cudf.tests.utils import (
@@ -223,7 +224,9 @@ def test_set_index(nelem):
         # Use unique index range as the sort may not be stable-ordering
         x = np.arange(nelem)
         np.random.shuffle(x)
-        df = pd.DataFrame({"x": x, "y": np.random.randint(0, nelem, size=nelem)})
+        df = pd.DataFrame(
+            {"x": x, "y": np.random.randint(0, nelem, size=nelem)}
+        )
         ddf = dd.from_pandas(df, npartitions=2)
         ddf2 = ddf.to_backend("cudf")
 
@@ -335,7 +338,9 @@ def test_rearrange_by_divisions(nelem, index):
         df["z"] = df["z"].astype("category")
 
         ddf1 = dd.from_pandas(df, npartitions=4)
-        gdf1 = dask_cudf.from_cudf(cudf.DataFrame.from_pandas(df), npartitions=4)
+        gdf1 = dask_cudf.from_cudf(
+            cudf.DataFrame.from_pandas(df), npartitions=4
+        )
         ddf1.index.name = index
         gdf1.index.name = index
         divisions = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
@@ -516,7 +521,10 @@ def test_repartition_hash_staged(npartitions):
     # and that the key values are preserved
     expect_unique = gdf[by].drop_duplicates().sort_values(by)
     got_unique = cudf.concat(
-        [part[by].compute().drop_duplicates() for part in ddf_new[by].partitions],
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
         ignore_index=True,
     ).sort_values(by)
     dd.assert_eq(got_unique, expect_unique, check_index=False)
@@ -553,7 +561,10 @@ def test_repartition_hash(by, npartitions, max_branch):
     # and that the key values are preserved
     expect_unique = gdf[by].drop_duplicates().sort_values(by)
     got_unique = cudf.concat(
-        [part[by].compute().drop_duplicates() for part in ddf_new[by].partitions],
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
         ignore_index=True,
     ).sort_values(by)
     dd.assert_eq(got_unique, expect_unique, check_index=False)
@@ -612,7 +623,11 @@ def test_concat(gdf, gddf, series):
     if series:
         gdf = gdf.x
         gddf = gddf.x
-        a = cudf.concat([gdf, gdf + 1, gdf + 2]).sort_values().reset_index(drop=True)
+        a = (
+            cudf.concat([gdf, gdf + 1, gdf + 2])
+            .sort_values()
+            .reset_index(drop=True)
+        )
         b = (
             dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
             .compute()
@@ -620,7 +635,11 @@ def test_concat(gdf, gddf, series):
             .reset_index(drop=True)
         )
     else:
-        a = cudf.concat([gdf, gdf + 1, gdf + 2]).sort_values("x").reset_index(drop=True)
+        a = (
+            cudf.concat([gdf, gdf + 1, gdf + 2])
+            .sort_values("x")
+            .reset_index(drop=True)
+        )
         b = (
             dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
             .compute()
@@ -699,7 +718,9 @@ def test_hash_object_dispatch(index):
 )
 def test_make_meta_backends(index):
     dtypes = ["int8", "int32", "int64", "float64"]
-    df = cudf.DataFrame({dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes})
+    df = cudf.DataFrame(
+        {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
+    )
     df["strings"] = ["cat", "dog", "fish"]
     df["cats"] = df["strings"].astype("category")
     df["time_s"] = np.array(
@@ -809,7 +830,9 @@ def test_dataframe_describe():
     ddf = dask_cudf.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_exact=False, atol=0.0001)
+    dd.assert_eq(
+        ddf.describe(), pddf.describe(), check_exact=False, atol=0.0001
+    )
 
 
 @xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
@@ -856,13 +879,17 @@ def test_index_map_partitions():
 
 
 def test_merging_categorical_columns():
-    df_1 = cudf.DataFrame({"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]})
+    df_1 = cudf.DataFrame(
+        {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
+    )
 
     ddf_1 = dask_cudf.from_cudf(df_1, npartitions=2)
 
     ddf_1 = dd.categorical.categorize(ddf_1, columns=["cat_col"])
 
-    df_2 = cudf.DataFrame({"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]})
+    df_2 = cudf.DataFrame(
+        {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
+    )
 
     ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
 
@@ -888,6 +915,7 @@ def test_correct_meta():
     # Need these local imports in this specific order.
     # For context: https://github.com/rapidsai/cudf/issues/7946
     import pandas as pd
+
     from dask import dataframe as dd
 
     import dask_cudf  # noqa: F401

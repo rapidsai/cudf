@@ -4,13 +4,13 @@ import itertools
 import operator
 import re
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf import Series
-from cudf.testing import _utils as utils
-from cudf.testing import assert_eq
+from cudf.testing import _utils as utils, assert_eq
 
 _unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
 
@@ -121,7 +121,8 @@ def test_scalar_no_negative_bools():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "Boolean scalars in cuDF do not " "support negation, use logical not"
+            "Boolean scalars in cuDF do not "
+            "support negation, use logical not"
         ),
     ):
         -x

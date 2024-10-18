@@ -1,15 +1,19 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-import cudf
 import pandas as pd
 import pytest
+
 from dask import dataframe as dd
+
+import cudf
 
 import dask_cudf
 from dask_cudf.tests.utils import xfail_dask_expr
 
 # No dask-expr support
-pytestmark = xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
+pytestmark = xfail_dask_expr(
+    "Newer dask version needed", lt_version="2024.5.0"
+)
 
 
 def test_get_dummies_cat():

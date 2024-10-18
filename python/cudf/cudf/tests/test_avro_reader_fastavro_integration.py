@@ -17,11 +17,12 @@ import datetime
 import io
 import pathlib
 
-import cudf
 import fastavro
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
@@ -65,7 +66,9 @@ def test_can_detect_dtype_from_avro_type(
 
     actual = cudf_from_avro_util(schema, [])
 
-    expected = cudf.DataFrame({"prop": cudf.Series(None, None, expected_dtype)})
+    expected = cudf.DataFrame(
+        {"prop": cudf.Series(None, None, expected_dtype)}
+    )
 
     assert_eq(expected, actual)
 
@@ -103,7 +106,9 @@ def test_can_detect_dtype_from_avro_type_nested(
         ns="" if namespace is None else namespace + "."
     )
 
-    expected = cudf.DataFrame({col_name: cudf.Series(None, None, expected_dtype)})
+    expected = cudf.DataFrame(
+        {col_name: cudf.Series(None, None, expected_dtype)}
+    )
 
     assert_eq(expected, actual)
 
@@ -134,7 +139,9 @@ def test_can_parse_single_value(avro_type, cudf_type, avro_val, cudf_val):
 
     actual = cudf_from_avro_util(schema_root, records)
 
-    expected = cudf.DataFrame({"prop": cudf.Series(data=[cudf_val], dtype=cudf_type)})
+    expected = cudf.DataFrame(
+        {"prop": cudf.Series(data=[cudf_val], dtype=cudf_type)}
+    )
 
     assert_eq(expected, actual)
 
@@ -151,7 +158,9 @@ def test_can_parse_single_null(avro_type, cudf_type):
 
     actual = cudf_from_avro_util(schema_root, records)
 
-    expected = cudf.DataFrame({"prop": cudf.Series(data=[None], dtype=cudf_type)})
+    expected = cudf.DataFrame(
+        {"prop": cudf.Series(data=[None], dtype=cudf_type)}
+    )
 
     assert_eq(expected, actual)
 
@@ -173,7 +182,9 @@ def test_can_parse_no_data(avro_type, cudf_type):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="cudf avro reader is unable to parse zero-field metadata.")
+@pytest.mark.xfail(
+    reason="cudf avro reader is unable to parse zero-field metadata."
+)
 @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
 def test_can_parse_no_fields(avro_type, cudf_type):
     schema_root = {
@@ -277,7 +288,9 @@ def test_can_detect_dtypes_from_avro_logical_type(
 
     actual = cudf_from_avro_util(schema, [])
 
-    expected = cudf.DataFrame({"prop": cudf.Series(None, None, expected_dtype)})
+    expected = cudf.DataFrame(
+        {"prop": cudf.Series(None, None, expected_dtype)}
+    )
 
     assert_eq(expected, actual)
 
@@ -343,7 +356,9 @@ def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
 
     actual = cudf_from_avro_util(schema, records)
 
-    expected = cudf.DataFrame({"o_date": cudf.Series(dates, dtype="datetime64[s]")})
+    expected = cudf.DataFrame(
+        {"o_date": cudf.Series(dates, dtype="datetime64[s]")}
+    )
 
     assert_eq(expected, actual)
 
@@ -603,7 +618,9 @@ def test_avro_reader_multiblock(
     source_df = cudf.DataFrame({"0": pd.Series(values)})
 
     if limit_rows:
-        expected_df = source_df[skip_rows : skip_rows + num_rows].reset_index(drop=True)
+        expected_df = source_df[skip_rows : skip_rows + num_rows].reset_index(
+            drop=True
+        )
     else:
         expected_df = source_df[skip_rows:].reset_index(drop=True)
 

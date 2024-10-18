@@ -1,25 +1,29 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import pytest
 from matplotlib.axes import Axes
 from matplotlib.collections import PathCollection
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from pandas._testing import assert_equal
+import pytest
 
 
 def assert_plots_equal(expect, got):
     if isinstance(expect, Axes) and isinstance(got, Axes):
-        for expect_ch, got_ch in zip(expect.get_children(), got.get_children()):
+        for expect_ch, got_ch in zip(
+            expect.get_children(), got.get_children()
+        ):
             assert type(expect_ch) == type(got_ch)
             if isinstance(expect_ch, Line2D):
                 assert_equal(expect_ch.get_xdata(), got_ch.get_xdata())
                 assert_equal(expect_ch.get_ydata(), got_ch.get_ydata())
             elif isinstance(expect_ch, Rectangle):
                 assert expect_ch.get_height() == got_ch.get_height()
-    elif isinstance(expect, PathCollection) and isinstance(got, PathCollection):
+    elif isinstance(expect, PathCollection) and isinstance(
+        got, PathCollection
+    ):
         assert_equal(expect.get_offsets()[:, 0], got.get_offsets()[:, 0])
         assert_equal(expect.get_offsets()[:, 1], got.get_offsets()[:, 1])
     else:

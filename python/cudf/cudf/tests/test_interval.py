@@ -1,10 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.testing import assert_eq
 
@@ -57,7 +58,9 @@ def test_create_interval_series(data1, data2, data3, data4, closed):
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
 def test_create_interval_df(data1, data2, data3, data4, closed):
     # df for both pandas and cudf only works when interval is in a list
-    expect = pd.DataFrame([pd.Interval(data1, data2, closed)], dtype="interval")
+    expect = pd.DataFrame(
+        [pd.Interval(data1, data2, closed)], dtype="interval"
+    )
     got = cudf.DataFrame([pd.Interval(data1, data2, closed)], dtype="interval")
     assert_eq(expect, got)
 

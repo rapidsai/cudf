@@ -1,14 +1,15 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-import types
 from contextlib import ExitStack as does_not_raise
+import types
 
-import cudf
 import cupy
 import numba.cuda
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import assert_eq
 from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
@@ -75,13 +76,16 @@ def test_cuda_array_interface_interop_out(dtype, module):
         assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES)
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES
+)
 @pytest.mark.parametrize("module", ["cupy", "numba"])
 def test_cuda_array_interface_interop_out_masked(dtype, module):
     expectation = does_not_raise()
     if module == "cupy":
         pytest.skip(
-            "cupy doesn't support version 1 of " "`__cuda_array_interface__` yet"
+            "cupy doesn't support version 1 of "
+            "`__cuda_array_interface__` yet"
         )
         module_constructor = cupy.asarray
 
@@ -105,7 +109,9 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
         module_data = module_constructor(cudf_data)  # noqa: F841
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES)
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES
+)
 @pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
 @pytest.mark.parametrize("mask_type", ["bits", "bools"])
 def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
@@ -130,13 +136,17 @@ def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
 
     sr = sr.astype(dtype)
 
-    obj = types.SimpleNamespace(__cuda_array_interface__=sr.__cuda_array_interface__)
+    obj = types.SimpleNamespace(
+        __cuda_array_interface__=sr.__cuda_array_interface__
+    )
 
     if mask_type == "bools":
         if nulls == "some":
             obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(mask)
         elif nulls == "all":
-            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device([False] * 10)
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(
+                [False] * 10
+            )
 
     expect = sr
     got = cudf.Series(obj)

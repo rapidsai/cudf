@@ -1,9 +1,9 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from functools import lru_cache
 import glob
 import os
 import sys
-from functools import lru_cache
 
 from numba import config as numba_config
 
@@ -85,8 +85,8 @@ def patch_numba_linker_cuda_11():
         # between cudf and numba.cuda so we patch numba to ensure it has these
         # names available.
         # See https://github.com/numba/numba/issues/8977 for details.
-        import numba.cuda
         from cubinlinker import CubinLinker, CubinLinkerError
+        import numba.cuda
         from ptxcompiler import compile_ptx
 
         numba.cuda.cudadrv.driver.compile_ptx = compile_ptx
@@ -137,12 +137,16 @@ def _setup_numba():
 
 class _CUDFNumbaConfig:
     def __enter__(self):
-        self.CUDA_LOW_OCCUPANCY_WARNINGS = numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
+        self.CUDA_LOW_OCCUPANCY_WARNINGS = (
+            numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
+        )
         numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
         self.CAPTURED_ERRORS = numba_config.CAPTURED_ERRORS
         numba_config.CAPTURED_ERRORS = "new_style"
 
     def __exit__(self, exc_type, exc_value, traceback):
-        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = self.CUDA_LOW_OCCUPANCY_WARNINGS
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = (
+            self.CUDA_LOW_OCCUPANCY_WARNINGS
+        )
         numba_config.CAPTURED_ERRORS = self.CAPTURED_ERRORS

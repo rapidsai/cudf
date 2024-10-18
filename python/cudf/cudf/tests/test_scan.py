@@ -2,10 +2,11 @@
 
 from itertools import product
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
 from cudf.testing._utils import INTEGER_TYPES, NUMERIC_TYPES, gen_rand

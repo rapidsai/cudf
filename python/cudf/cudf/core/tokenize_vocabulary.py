@@ -5,8 +5,6 @@ from __future__ import annotations
 import cudf
 from cudf._lib.nvtext.tokenize import (
     TokenizeVocabulary as cpp_tokenize_vocabulary,
-)
-from cudf._lib.nvtext.tokenize import (
     tokenize_with_vocabulary as cpp_tokenize_with_vocabulary,
 )
 
@@ -24,7 +22,9 @@ class TokenizeVocabulary:
     def __init__(self, vocabulary: "cudf.Series"):
         self.vocabulary = cpp_tokenize_vocabulary(vocabulary._column)
 
-    def tokenize(self, text, delimiter: str = "", default_id: int = -1) -> cudf.Series:
+    def tokenize(
+        self, text, delimiter: str = "", default_id: int = -1
+    ) -> cudf.Series:
         """
         Parameters
         ----------

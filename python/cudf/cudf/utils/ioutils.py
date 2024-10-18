@@ -1,20 +1,20 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
+from collections.abc import Callable
 import datetime
 import functools
+from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 import operator
 import os
+from threading import Thread
 import urllib
 import warnings
-from collections.abc import Callable
-from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
-from threading import Thread
 
 import fsspec
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 import fsspec.implementations.local
 import numpy as np
 import pandas as pd
-from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
@@ -121,7 +121,9 @@ See Also
 --------
 cudf.read_parquet
 """
-doc_read_parquet_metadata = docfmt_partial(docstring=_docstring_read_parquet_metadata)
+doc_read_parquet_metadata = docfmt_partial(
+    docstring=_docstring_read_parquet_metadata
+)
 
 _docstring_read_parquet = """
 Load a Parquet dataset into a DataFrame
@@ -427,7 +429,9 @@ See Also
 --------
 cudf.read_orc
 """
-doc_read_orc_statistics = docfmt_partial(docstring=_docstring_read_orc_statistics)
+doc_read_orc_statistics = docfmt_partial(
+    docstring=_docstring_read_orc_statistics
+)
 
 _docstring_read_orc = """
 Load an ORC dataset into a DataFrame
@@ -1518,7 +1522,9 @@ def _select_single_source(sources: list, caller: str):
     Raise an error if sources contains multiple elements
     """
     if len(sources) > 1:
-        raise ValueError(f"{caller} does not support multiple sources, got: {sources}")
+        raise ValueError(
+            f"{caller} does not support multiple sources, got: {sources}"
+        )
     return sources[0]
 
 
@@ -1596,7 +1602,9 @@ def _get_filesystem_and_paths(
             fs = filesystem
             return_paths = [
                 fs._strip_protocol(u)
-                for u in expand_paths_if_needed(path_or_data, "rb", 1, fs, None)
+                for u in expand_paths_if_needed(
+                    path_or_data, "rb", 1, fs, None
+                )
             ]
 
     return fs, return_paths
@@ -1636,7 +1644,9 @@ def get_reader_filepath_or_buffer(
     # Convert path_or_data to a list of input data sources
     input_sources = [
         stringify_pathlike(source)
-        for source in (path_or_data if is_list_like(path_or_data) else [path_or_data])
+        for source in (
+            path_or_data if is_list_like(path_or_data) else [path_or_data]
+        )
     ]
     if not input_sources:
         raise ValueError("Empty input source list: {input_sources}.")
@@ -1714,7 +1724,9 @@ def get_reader_filepath_or_buffer(
             filepaths_or_buffers = input_sources
             if warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
-                assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
+                assert (
+                    PANDAS_LT_300
+                ), "Need to drop after pandas-3.0 support is added."
                 warnings.warn(
                     f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                     "deprecated and will be removed in a future version. "
@@ -1950,7 +1962,10 @@ def _apply_predicate(op, val, col_stats):
 
 def _apply_filters(filters, stats):
     for conjunction in filters:
-        if all(_apply_predicate(op, val, stats[col]) for col, op, val in conjunction):
+        if all(
+            _apply_predicate(op, val, stats[col])
+            for col, op, val in conjunction
+        ):
             return True
     return False
 
@@ -1991,7 +2006,9 @@ def _fsspec_data_transfer(
     # Require `fs` if `path_or_fob` is not file-like
     file_like = is_file_like(path_or_fob)
     if fs is None and not file_like:
-        raise ValueError("fs must be defined if `path_or_fob` is not file-like")
+        raise ValueError(
+            "fs must be defined if `path_or_fob` is not file-like"
+        )
 
     # Calculate total file size
     if file_like:
@@ -2091,7 +2108,9 @@ def _read_byte_ranges(
         worker.join()
 
 
-def _get_remote_bytes_all(remote_paths, fs, *, blocksize=_BYTES_PER_THREAD_DEFAULT):
+def _get_remote_bytes_all(
+    remote_paths, fs, *, blocksize=_BYTES_PER_THREAD_DEFAULT
+):
     # TODO: Experiment with a heuristic to avoid the fs.sizes
     # call when we are reading many files at once (the latency
     # of collecting the file sizes is unnecessary in this case)
@@ -2151,7 +2170,9 @@ def _get_remote_bytes_parquet(
         buf = np.empty(size, dtype="b")
         for range_offset in path_data.keys():
             chunk = path_data[range_offset]
-            buf[range_offset[0] : range_offset[1]] = np.frombuffer(chunk, dtype="b")
+            buf[range_offset[0] : range_offset[1]] = np.frombuffer(
+                chunk, dtype="b"
+            )
         buffers.append(buf.tobytes())
     return buffers
 

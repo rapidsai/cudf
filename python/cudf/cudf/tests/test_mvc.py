@@ -2,8 +2,8 @@
 import subprocess
 import sys
 
-import pytest
 from packaging import version
+import pytest
 
 IS_CUDA_11 = False
 IS_CUDA_12 = False
@@ -18,7 +18,9 @@ try:
     import numba
     import pynvjitlink  # noqa: F401
 
-    HAVE_PYNVJITLINK = version.parse(numba.__version__) >= version.parse("0.58")
+    HAVE_PYNVJITLINK = version.parse(numba.__version__) >= version.parse(
+        "0.58"
+    )
 except ModuleNotFoundError:
     pass
 

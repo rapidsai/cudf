@@ -1,13 +1,14 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import os
-import socket
 from contextlib import contextmanager
 from io import BytesIO
+import os
+import socket
 
 import fsspec
 import pandas as pd
 import pytest
+
 from dask.dataframe import assert_eq
 
 import dask_cudf
@@ -177,7 +178,9 @@ def test_read_parquet_filesystem_explicit(s3_base, s3so, pdf):
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
         path = f"s3://{bucket}/{fname}"
-        fs = fsspec.core.get_fs_token_paths(path, mode="rb", storage_options=s3so)[0]
+        fs = fsspec.core.get_fs_token_paths(
+            path, mode="rb", storage_options=s3so
+        )[0]
         df = dask_cudf.read_parquet(path, filesystem=fs)
         assert df.b.sum().compute() == 9
 

@@ -5,6 +5,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
+
 from cudf.core.dataframe import DataFrame
 from cudf.testing import assert_eq, assert_neq
 from cudf.testing._utils import ALL_TYPES
@@ -31,14 +32,18 @@ DataFrame copy expectations
     ],
 )
 def test_dataframe_deep_copy(copy_parameters):
-    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"])
+    pdf = pd.DataFrame(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
+    )
     gdf = DataFrame.from_pandas(pdf)
     copy_pdf = copy_parameters["fn"](pdf)
     copy_gdf = copy_parameters["fn"](gdf)
     copy_pdf["b"] = [0, 0, 0]
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
-    gdf_is_equal = np.array_equal(gdf["b"].to_numpy(), copy_gdf["b"].to_numpy())
+    gdf_is_equal = np.array_equal(
+        gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
+    )
     assert pdf_is_equal == copy_parameters["expected_equality"]
     assert gdf_is_equal == copy_parameters["expected_equality"]
 
@@ -53,14 +58,18 @@ def test_dataframe_deep_copy(copy_parameters):
     ],
 )
 def test_dataframe_deep_copy_and_insert(copy_parameters):
-    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"])
+    pdf = pd.DataFrame(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
+    )
     gdf = DataFrame.from_pandas(pdf)
     copy_pdf = copy_parameters["fn"](pdf)
     copy_gdf = copy_parameters["fn"](gdf)
     copy_pdf["b"] = [0, 0, 0]
     copy_gdf["b"] = [0, 0, 0]
     pdf_is_equal = np.array_equal(pdf["b"].values, copy_pdf["b"].values)
-    gdf_is_equal = np.array_equal(gdf["b"].to_numpy(), copy_gdf["b"].to_numpy())
+    gdf_is_equal = np.array_equal(
+        gdf["b"].to_numpy(), copy_gdf["b"].to_numpy()
+    )
     assert pdf_is_equal == copy_parameters["expected_equality"]
     assert gdf_is_equal == copy_parameters["expected_equality"]
 
@@ -86,9 +95,9 @@ expected_equality
 def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
     for i in range(ncols):
-        pdf[chr(i + ord("a"))] = pd.Series(np.random.randint(0, 1000, 20)).astype(
-            data_type
-        )
+        pdf[chr(i + ord("a"))] = pd.Series(
+            np.random.randint(0, 1000, 20)
+        ).astype(data_type)
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     assert_eq(df, copy_df)
@@ -109,20 +118,24 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
 def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
     for i in range(ncols):
-        pdf[chr(i + ord("a"))] = pd.Series(np.random.randint(0, 1000, 20)).astype(
-            data_type
-        )
+        pdf[chr(i + ord("a"))] = pd.Series(
+            np.random.randint(0, 1000, 20)
+        ).astype(data_type)
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     copy_pdf = copy_fn(pdf)
     copy_df["aa"] = pd.Series(np.random.randint(0, 1000, 20)).astype(data_type)
-    copy_pdf["aa"] = pd.Series(np.random.randint(0, 1000, 20)).astype(data_type)
+    copy_pdf["aa"] = pd.Series(np.random.randint(0, 1000, 20)).astype(
+        data_type
+    )
     assert not copy_pdf.to_string().split() == pdf.to_string().split()
     assert not copy_df.to_string().split() == df.to_string().split()
 
 
 def test_deep_copy_write_in_place():
-    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"])
+    pdf = pd.DataFrame(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
+    )
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=True)
     sr = gdf["b"]
@@ -135,7 +148,9 @@ def test_deep_copy_write_in_place():
 
 
 def test_shallow_copy_write_in_place():
-    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"])
+    pdf = pd.DataFrame(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
+    )
     gdf = DataFrame.from_pandas(pdf)
     cdf = gdf.copy(deep=False)
     sr = gdf["a"]
@@ -149,7 +164,9 @@ def test_shallow_copy_write_in_place():
 
 @pytest.mark.xfail(reason="cudf column-wise shallow copy is immutable")
 def test_dataframe_copy_shallow():
-    pdf = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"])
+    pdf = pd.DataFrame(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
+    )
     gdf = DataFrame.from_pandas(pdf)
     copy_pdf = pdf.copy(deep=False)
     copy_gdf = gdf.copy(deep=False)

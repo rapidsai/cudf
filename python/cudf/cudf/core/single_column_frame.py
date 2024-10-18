@@ -115,7 +115,9 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def _from_column(cls, column: ColumnBase, *, name: Hashable = None) -> Self:
+    def _from_column(
+        cls, column: ColumnBase, *, name: Hashable = None
+    ) -> Self:
         """Constructor for a single Column."""
         ca = ColumnAccessor({name: column}, verify=False)
         return cls._from_data(ca)
@@ -156,7 +158,9 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
-    def _to_frame(self, name: Hashable, index: cudf.Index | None) -> cudf.DataFrame:
+    def _to_frame(
+        self, name: Hashable, index: cudf.Index | None
+    ) -> cudf.DataFrame:
         """Helper function for Series.to_frame, Index.to_frame"""
         if name is no_default:
             col_name = 0 if self.name is None else self.name
@@ -258,7 +262,10 @@ class SingleColumnFrame(Frame, NotIterable):
         other: Any,
         fill_value: Any = None,
         reflect: bool = False,
-    ) -> dict[str | None, tuple[ColumnBase, Any, bool, Any]] | NotImplementedType:
+    ) -> (
+        dict[str | None, tuple[ColumnBase, Any, bool, Any]]
+        | NotImplementedType
+    ):
         """Generate the dictionary of operands used for a binary operation.
 
         Parameters
@@ -281,9 +288,9 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if isinstance(other, SingleColumnFrame) and not cudf.utils.utils._is_same_name(
-            self.name, other.name
-        ):
+        if isinstance(
+            other, SingleColumnFrame
+        ) and not cudf.utils.utils._is_same_name(self.name, other.name):
             result_name = None
         else:
             result_name = self.name
@@ -291,9 +298,9 @@ class SingleColumnFrame(Frame, NotIterable):
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
-            if not hasattr(other, "__cuda_array_interface__") and not isinstance(
-                other, cudf.RangeIndex
-            ):
+            if not hasattr(
+                other, "__cuda_array_interface__"
+            ) and not isinstance(other, cudf.RangeIndex):
                 return NotImplemented
 
             # Non-scalar right operands are valid iff they convert to columns.
@@ -344,7 +351,9 @@ class SingleColumnFrame(Frame, NotIterable):
                 return self._column.take(arg)
             if arg.dtype.kind == "b":
                 if (bn := len(arg)) != (n := len(self)):
-                    raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
+                    raise IndexError(
+                        f"Boolean mask has wrong length: {bn} not {n}"
+                    )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 
@@ -355,10 +364,14 @@ class SingleColumnFrame(Frame, NotIterable):
         )
 
         if isinstance(other, cudf.DataFrame):
-            raise NotImplementedError("cannot align with a higher dimensional Frame")
+            raise NotImplementedError(
+                "cannot align with a higher dimensional Frame"
+            )
         cond = as_column(cond)
         if len(cond) != len(self):
-            raise ValueError("""Array conditional must be same shape as self""")
+            raise ValueError(
+                """Array conditional must be same shape as self"""
+            )
 
         if not cudf.api.types.is_scalar(other):
             other = cudf.core.column.as_column(other)

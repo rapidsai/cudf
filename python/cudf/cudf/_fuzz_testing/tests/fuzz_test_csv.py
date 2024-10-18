@@ -1,10 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import sys
 from io import StringIO
+import sys
+
+import pandas as pd
 
 import cudf
-import pandas as pd
 from cudf._fuzz_testing.csv import CSVReader, CSVWriter
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.utils import (

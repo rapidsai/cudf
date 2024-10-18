@@ -1,15 +1,15 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
-import itertools
-import warnings
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
+import itertools
+import warnings
 
 import numpy as np
 import pandas as pd
+from pyarrow import dataset as pa_ds, parquet as pq
+
 from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
-from pyarrow import dataset as pa_ds
-from pyarrow import parquet as pq
 
 try:
     from dask.dataframe.io.parquet import (
@@ -269,7 +269,8 @@ class CudfEngine(ArrowDatasetEngine):
                 paths.append(path)
                 rgs.append(
                     [row_group]
-                    if not isinstance(row_group, list) and row_group is not None
+                    if not isinstance(row_group, list)
+                    and row_group is not None
                     else row_group
                 )
                 last_partition_keys = partition_keys
@@ -354,12 +355,18 @@ class CudfEngine(ArrowDatasetEngine):
                     engine=kwargs.get("engine", "cudf"),
                     index=kwargs.get("index", None),
                     partition_cols=kwargs.get("partition_cols", None),
-                    partition_file_name=kwargs.get("partition_file_name", None),
+                    partition_file_name=kwargs.get(
+                        "partition_file_name", None
+                    ),
                     partition_offsets=kwargs.get("partition_offsets", None),
                     statistics=kwargs.get("statistics", "ROWGROUP"),
                     int96_timestamps=kwargs.get("int96_timestamps", False),
-                    row_group_size_bytes=kwargs.get("row_group_size_bytes", None),
-                    row_group_size_rows=kwargs.get("row_group_size_rows", None),
+                    row_group_size_bytes=kwargs.get(
+                        "row_group_size_bytes", None
+                    ),
+                    row_group_size_rows=kwargs.get(
+                        "row_group_size_rows", None
+                    ),
                     storage_options=kwargs.get("storage_options", None),
                     metadata_file_path=filename if return_metadata else None,
                 )

@@ -76,7 +76,9 @@ def test_cugraph_from_numpy_array(df, algo):
 
 @pytest.mark.parametrize("algo", nx_algos)
 def test_networkx_from_pandas_edgelist(df, algo):
-    G = nx.from_pandas_edgelist(df, "source", "destination", ["source", "destination"])
+    G = nx.from_pandas_edgelist(
+        df, "source", "destination", ["source", "destination"]
+    )
     return getattr(nx, algo)(G)
 
 

@@ -7,7 +7,9 @@ from __future__ import annotations
 import json
 import logging
 
-logging.basicConfig(filename="cudf_pandas_unit_tests_debug.log", level=logging.INFO)
+logging.basicConfig(
+    filename="cudf_pandas_unit_tests_debug.log", level=logging.INFO
+)
 logger = logging.getLogger()
 
 
@@ -30,7 +32,9 @@ def reprify(arg) -> str:
         return "<REPR FAILED>"
 
 
-def log_fallback(slow_args: tuple, slow_kwargs: dict, exception: Exception) -> None:
+def log_fallback(
+    slow_args: tuple, slow_kwargs: dict, exception: Exception
+) -> None:
     """Log when a fast call falls back to the slow path."""
     caller = slow_args[0]
     module = getattr(caller, "__module__", "")
@@ -51,7 +55,8 @@ def log_fallback(slow_args: tuple, slow_kwargs: dict, exception: Exception) -> N
         caller_kwargs = slow_args[2]
         if caller_kwargs:
             fmt_kwargs = ", ".join(
-                f"{kwarg}={reprify(value)}" for kwarg, value in caller_kwargs.items()
+                f"{kwarg}={reprify(value)}"
+                for kwarg, value in caller_kwargs.items()
             )
             kwargs_types_passed = ", ".join(
                 f"{kwarg}={type(value).__name__}"

@@ -1,10 +1,11 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
+from collections.abc import Sequence
 import math
 import re
+from typing import Literal
 import warnings
-from typing import Literal, Sequence
 
 import numpy as np
 import pandas as pd
@@ -252,7 +253,9 @@ def to_datetime(
                     factor = cudf.Scalar(
                         column.datetime._unit_to_nanoseconds_conversion[u]
                         / (
-                            column.datetime._unit_to_nanoseconds_conversion["s"]
+                            column.datetime._unit_to_nanoseconds_conversion[
+                                "s"
+                            ]
                             if np.datetime_data(col.dtype)[0] == "s"
                             else 1
                         )
@@ -263,7 +266,9 @@ def to_datetime(
                     else:
                         times_column = times_column + (current_col * factor)
             if times_column is not None:
-                col = (col.astype(dtype="int64") + times_column).astype(dtype=col.dtype)
+                col = (col.astype(dtype="int64") + times_column).astype(
+                    dtype=col.dtype
+                )
             col = _process_col(
                 col=col,
                 unit=unit,
@@ -317,7 +322,9 @@ def _process_col(
 ):
     if col.dtype.kind == "f":
         if unit not in (None, "ns"):
-            factor = cudf.Scalar(column.datetime._unit_to_nanoseconds_conversion[unit])
+            factor = cudf.Scalar(
+                column.datetime._unit_to_nanoseconds_conversion[unit]
+            )
             col = col * factor
 
         if format is not None:
@@ -514,7 +521,9 @@ class DateOffset:
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
-            raise NotImplementedError("normalize not yet supported for DateOffset")
+            raise NotImplementedError(
+                "normalize not yet supported for DateOffset"
+            )
 
         all_possible_units = {
             "years",
@@ -595,7 +604,9 @@ class DateOffset:
 
     def _combine_months_and_years(self, **kwargs):
         # TODO: if months is zero, don't do a binop
-        kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop("months", 0)
+        kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop(
+            "months", 0
+        )
         return kwargs
 
     def _combine_kwargs_to_seconds(self, **kwargs):
@@ -620,7 +631,9 @@ class DateOffset:
             kwargs["seconds"] = seconds
         return kwargs
 
-    def _datetime_binop(self, datetime_col, op, reflect=False) -> column.DatetimeColumn:
+    def _datetime_binop(
+        self, datetime_col, op, reflect=False
+    ) -> column.DatetimeColumn:
         if reflect and op == "__sub__":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
@@ -886,7 +899,9 @@ def date_range(
         end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
         arr = np.linspace(start=start, stop=end, num=periods)
         result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
-        return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(tz)
+        return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(
+            tz
+        )
 
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.
@@ -895,7 +910,9 @@ def date_range(
         offset = freq
     elif isinstance(freq, str):
         offset = pd.tseries.frequencies.to_offset(freq)
-        if not isinstance(offset, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)):
+        if not isinstance(
+            offset, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)
+        ):
             raise ValueError(
                 f"Unrecognized frequency string {freq}. cuDF does "
                 "not yet support month, quarter, year-anchored frequency."
@@ -960,7 +977,8 @@ def date_range(
         # are dropped in conversion during the binops
         warnings.simplefilter("ignore", UserWarning)
         end_estim = (
-            pd.Timestamp(start.value) + periods * offset._maybe_as_fast_pandas_offset()
+            pd.Timestamp(start.value)
+            + periods * offset._maybe_as_fast_pandas_offset()
         ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
@@ -980,9 +998,13 @@ def date_range(
         start = start.value.astype("int64")
         step = _offset_to_nanoseconds_lower_bound(offset)
         arr = range(int(start), int(stop), step)
-        res = cudf.core.column.as_column(arr, dtype="int64").astype("datetime64[ns]")
+        res = cudf.core.column.as_column(arr, dtype="int64").astype(
+            "datetime64[ns]"
+        )
 
-    return cudf.DatetimeIndex._from_column(res, name=name, freq=freq).tz_localize(tz)
+    return cudf.DatetimeIndex._from_column(
+        res, name=name, freq=freq
+    ).tz_localize(tz)
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:

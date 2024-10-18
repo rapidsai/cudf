@@ -91,7 +91,9 @@ class IntervalColumn(StructColumn):
         return cls(
             data=None,
             size=struct_column.size,
-            dtype=IntervalDtype(struct_column.dtype.fields[first_field_name], closed),
+            dtype=IntervalDtype(
+                struct_column.dtype.fields[first_field_name], closed
+            ),
             mask=struct_column.base_mask,
             offset=struct_column.offset,
             null_count=struct_column.null_count,
@@ -103,7 +105,9 @@ class IntervalColumn(StructColumn):
         return IntervalColumn(  # type: ignore[return-value]
             data=None,
             size=struct_copy.size,
-            dtype=IntervalDtype(struct_copy.dtype.fields["left"], self.dtype.closed),
+            dtype=IntervalDtype(
+                struct_copy.dtype.fields["left"], self.dtype.closed
+            ),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
@@ -113,16 +117,22 @@ class IntervalColumn(StructColumn):
     @property
     def is_empty(self) -> ColumnBase:
         left_equals_right = (self.right == self.left).fillna(False)
-        not_closed_both = as_column(self.dtype.closed != "both", length=len(self))
+        not_closed_both = as_column(
+            self.dtype.closed != "both", length=len(self)
+        )
         return left_equals_right & not_closed_both
 
     @property
     def is_non_overlapping_monotonic(self) -> bool:
-        raise NotImplementedError("is_overlapping is currently not implemented.")
+        raise NotImplementedError(
+            "is_overlapping is currently not implemented."
+        )
 
     @property
     def is_overlapping(self) -> bool:
-        raise NotImplementedError("is_overlapping is currently not implemented.")
+        raise NotImplementedError(
+            "is_overlapping is currently not implemented."
+        )
 
     @property
     def length(self) -> ColumnBase:
@@ -147,7 +157,9 @@ class IntervalColumn(StructColumn):
     def overlaps(other) -> ColumnBase:
         raise NotImplementedError("overlaps is not currently implemented.")
 
-    def set_closed(self, closed: Literal["left", "right", "both", "neither"]) -> Self:
+    def set_closed(
+        self, closed: Literal["left", "right", "both", "neither"]
+    ) -> Self:
         return IntervalColumn(  # type: ignore[return-value]
             data=None,
             size=self.size,

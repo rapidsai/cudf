@@ -3,6 +3,7 @@
 
 import numpy as np
 import pytest
+
 from cudf import Series
 from cudf.testing._utils import NUMERIC_TYPES
 

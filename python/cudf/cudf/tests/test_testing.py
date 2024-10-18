@@ -1,10 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+
+import cudf
 from cudf.core.column.column import as_column
 from cudf.testing import (
     assert_frame_equal,
@@ -37,7 +38,9 @@ def arrow_arrays(request):
 @pytest.mark.parametrize("check_names", [True, False])
 @pytest.mark.parametrize("rname", ["a", "b"])
 @pytest.mark.parametrize("check_categorical", [True, False])
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
+)
 def test_basic_assert_index_equal(
     rdata,
     exact,
@@ -68,7 +71,10 @@ def test_basic_assert_index_equal(
     if kind is not None:
         if (kind == TypeError) and (
             msg
-            == ("Categoricals can only be compared " "if 'categories' are the same.")
+            == (
+                "Categoricals can only be compared "
+                "if 'categories' are the same."
+            )
         ):
             kind = AssertionError
         with pytest.raises(kind):
@@ -94,7 +100,9 @@ def test_basic_assert_index_equal(
 @pytest.mark.parametrize("rname", ["a", "b"])
 @pytest.mark.parametrize("check_category_order", [True, False])
 @pytest.mark.parametrize("check_categorical", [True, False])
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"])
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
+)
 def test_basic_assert_series_equal(
     rdata,
     rname,
@@ -154,7 +162,9 @@ def test_assert_column_equal_dtype_edge_cases(other):
     base = as_column([1, 2, 3])
 
     # for these dtypes, the diff should always be 100% regardless of the values
-    with pytest.raises(AssertionError, match=r".*values are different \(100.0 %\).*"):
+    with pytest.raises(
+        AssertionError, match=r".*values are different \(100.0 %\).*"
+    ):
         assert_column_equal(base, other, check_dtype=False)
 
     # the exceptions are the empty and all null cases
@@ -321,7 +331,9 @@ def test_series_different_type_cases(dtype, check_exact, check_dtype):
                 sr1, sr2, check_exact=check_exact, check_dtype=check_dtype
             )
     else:
-        assert_series_equal(sr1, sr2, check_exact=check_exact, check_dtype=check_dtype)
+        assert_series_equal(
+            sr1, sr2, check_exact=check_exact, check_dtype=check_dtype
+        )
 
 
 @pytest.mark.parametrize(

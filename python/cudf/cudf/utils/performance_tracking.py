@@ -8,6 +8,7 @@ import hashlib
 import sys
 
 import nvtx
+
 import rmm.statistics
 
 from cudf.options import get_option
@@ -34,7 +35,9 @@ def _performance_tracking(func, domain="cudf_python"):
                 #     to enable memory profiling.
                 stack.enter_context(
                     rmm.statistics.profiler(
-                        name=rmm.statistics._get_descriptive_name_of_object(func)
+                        name=rmm.statistics._get_descriptive_name_of_object(
+                            func
+                        )
                     )
                 )
             if nvtx.enabled():
@@ -55,7 +58,9 @@ _dask_cudf_performance_tracking = functools.partial(
 )
 
 
-def get_memory_records() -> dict[str, rmm.statistics.ProfilerRecords.MemoryRecord]:
+def get_memory_records() -> (
+    dict[str, rmm.statistics.ProfilerRecords.MemoryRecord]
+):
     """Get the memory records from the memory profiling
 
     Returns

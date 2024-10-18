@@ -1,8 +1,4 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
-import cupy as cp
-import numpy as np
-import pandas as pd
-import pytest
 from cuml.cluster import KMeans
 from cuml.decomposition import PCA
 from cuml.ensemble import RandomForestClassifier
@@ -11,6 +7,10 @@ from cuml.metrics import accuracy_score
 from cuml.model_selection import train_test_split
 from cuml.pipeline import Pipeline
 from cuml.preprocessing import StandardScaler
+import cupy as cp
+import numpy as np
+import pandas as pd
+import pytest
 
 
 def assert_cuml_equal(expect, got):
@@ -23,7 +23,9 @@ def assert_cuml_equal(expect, got):
     # Handle equality
     if isinstance(expect, KMeans) and isinstance(got, KMeans):
         # same clusters
-        np.testing.assert_allclose(expect.cluster_centers_, got.cluster_centers_)
+        np.testing.assert_allclose(
+            expect.cluster_centers_, got.cluster_centers_
+        )
     elif isinstance(expect, np.ndarray) and isinstance(got, np.ndarray):
         np.testing.assert_allclose(expect, got)
     elif isinstance(expect, tuple) and isinstance(got, tuple):

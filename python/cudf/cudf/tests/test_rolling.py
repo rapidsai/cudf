@@ -2,10 +2,11 @@
 
 import math
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.testing import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -19,7 +20,9 @@ from cudf.testing.dataset_generator import rand_dataframe
         ([1, 2, 4, 9, 9, 4], ["a", "b", "c", "d", "e", "f"]),
     ],
 )
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count", "std", "var"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "std", "var"]
+)
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_series_basic(data, index, agg, nulls, center):
@@ -43,9 +46,9 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
             expect = getattr(
                 psr.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            got = getattr(gsr.rolling(window_size, min_periods, center), agg)().fillna(
-                -1
-            )
+            got = getattr(
+                gsr.rolling(window_size, min_periods, center), agg
+            )().fillna(-1)
             assert_eq(expect, got, check_dtype=False, check_freq=False)
 
 
@@ -61,7 +64,9 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         },
     ],
 )
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count", "std", "var"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "std", "var"]
+)
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_basic(data, agg, nulls, center):
@@ -87,9 +92,9 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
             expect = getattr(
                 pdf.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            got = getattr(gdf.rolling(window_size, min_periods, center), agg)().fillna(
-                -1
-            )
+            got = getattr(
+                gdf.rolling(window_size, min_periods, center), agg
+            )().fillna(-1)
             assert_eq(expect, got, check_dtype=False)
 
 
@@ -273,7 +278,9 @@ def test_rolling_getitem():
 
 
 def test_rolling_getitem_window():
-    index = pd.DatetimeIndex(pd.date_range("2000-01-01", "2000-01-02", freq="1h"))
+    index = pd.DatetimeIndex(
+        pd.date_range("2000-01-01", "2000-01-02", freq="1h")
+    )
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
 
@@ -374,7 +381,9 @@ def test_rolling_numba_udf_with_offset():
     )
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count", "var", "std"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 def test_rolling_groupby_simple(agg):
     pdf = pd.DataFrame(
         {
@@ -385,7 +394,9 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(-1)
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
@@ -395,12 +406,16 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(-1)
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count", "var", "std"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 def test_rolling_groupby_multi(agg):
     pdf = pd.DataFrame(
         {
@@ -421,8 +436,12 @@ def test_rolling_groupby_multi(agg):
         assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count", "var", "std"])
-@pytest.mark.parametrize("window_size", ["1d", "2d", "3d", "4d", "5d", "6d", "7d"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
+@pytest.mark.parametrize(
+    "window_size", ["1d", "2d", "3d", "4d", "5d", "6d", "7d"]
+)
 def test_rolling_groupby_offset(agg, window_size):
     pdf = pd.DataFrame(
         {
@@ -432,7 +451,9 @@ def test_rolling_groupby_offset(agg, window_size):
         }
     ).set_index("date")
     gdf = cudf.from_pandas(pdf)
-    expect = getattr(pdf.groupby("group").rolling(window_size), agg)().fillna(-1)
+    expect = getattr(pdf.groupby("group").rolling(window_size), agg)().fillna(
+        -1
+    )
     got = getattr(gdf.groupby("group").rolling(window_size), agg)().fillna(-1)
     assert_eq(expect, got, check_dtype=False)
 
@@ -441,7 +462,9 @@ def test_rolling_custom_index_support():
     from pandas.api.indexers import BaseIndexer
 
     class CustomIndexer(BaseIndexer):
-        def get_window_bounds(self, num_values, min_periods, center, closed, step=None):
+        def get_window_bounds(
+            self, num_values, min_periods, center, closed, step=None
+        ):
             start = np.empty(num_values, dtype=np.int64)
             end = np.empty(num_values, dtype=np.int64)
 

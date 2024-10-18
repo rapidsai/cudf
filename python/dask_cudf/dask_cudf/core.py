@@ -4,25 +4,25 @@ import math
 import textwrap
 import warnings
 
-import cudf
 import numpy as np
 import pandas as pd
-from cudf import _lib as libcudf
-from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
+from tlz import partition_all
+
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
     Scalar,
     handle_out,
-    map_partitions,
-)
-from dask.dataframe.core import (
     make_meta as dask_make_meta,
+    map_partitions,
 )
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
-from tlz import partition_all
+
+import cudf
+from cudf import _lib as libcudf
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
@@ -113,7 +113,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
             cache_key = uuid.uuid4()
 
         def do_apply_rows(df, func, incols, outcols, kwargs):
-            return df.apply_rows(func, incols, outcols, kwargs, cache_key=cache_key)
+            return df.apply_rows(
+                func, incols, outcols, kwargs, cache_key=cache_key
+            )
 
         meta = do_apply_rows(self._meta, func, incols, outcols, kwargs)
         return self.map_partitions(
@@ -443,7 +445,9 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
     x2 = 1.0 * (num**2).sum(skipna=skipna, split_every=split_every)
     n = num.count(split_every=split_every)
     name = ddf._token_prefix + "var"
-    result = map_partitions(var_aggregate, x2, x, n, token=name, meta=meta, ddof=ddof)
+    result = map_partitions(
+        var_aggregate, x2, x, n, token=name, meta=meta, ddof=ddof
+    )
     if isinstance(ddf, DataFrame):
         result.divisions = (min(ddf.columns), max(ddf.columns))
     return handle_out(out, result)
@@ -486,7 +490,8 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
     local_name = "local-" + name
     num = ddf._get_numeric_data()
     dsk = {
-        (local_name, n, 0): (_local_var, (num._name, n), skipna) for n in range(nparts)
+        (local_name, n, 0): (_local_var, (num._name, n), skipna)
+        for n in range(nparts)
     }
 
     # Use reduction tree
@@ -500,7 +505,9 @@ def _parallel_var(ddf, meta, skipna, split_every, out):
             p_max = widths[depth - 1]
             lstart = split_every * group
             lstop = min(lstart + split_every, p_max)
-            node_list = [(local_name, p, depth - 1) for p in range(lstart, lstop)]
+            node_list = [
+                (local_name, p, depth - 1) for p in range(lstart, lstop)
+            ]
             dsk[(local_name, group, depth)] = (_aggregate_var, node_list)
     if height == 1:
         group = depth = 0
@@ -647,7 +654,10 @@ def reduction(
     # Chunk
     a = f"{token or funcname(chunk)}-chunk-{token_key}"
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = {(a, 0, i): (chunk, key) for i, key in enumerate(args[0].__dask_keys__())}
+        dsk = {
+            (a, 0, i): (chunk, key)
+            for i, key in enumerate(args[0].__dask_keys__())
+        }
     else:
         dsk = {
             (a, 0, i): (
@@ -697,13 +707,16 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
     from dask_cudf import QUERY_PLANNING_ON
 
     if isinstance(getattr(data, "index", None), cudf.MultiIndex):
-        raise NotImplementedError("dask_cudf does not support MultiIndex Dataframes.")
+        raise NotImplementedError(
+            "dask_cudf does not support MultiIndex Dataframes."
+        )
 
     # Dask-expr doesn't support the `name` argument
     name = {}
     if not QUERY_PLANNING_ON:
         name = {
-            "name": name or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+            "name": name
+            or ("from_cudf-" + tokenize(data, npartitions or chunksize))
         }
 
     return dd.from_pandas(

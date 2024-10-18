@@ -1,11 +1,13 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-import cudf
 import cupy as cp
-import dask
 import numpy as np
 import pytest
+
+import dask
 from dask import dataframe as dd
+
+import cudf
 
 import dask_cudf
 from dask_cudf.tests.utils import xfail_dask_expr
@@ -86,8 +88,12 @@ def test_sort_values_with_nulls(data, by, ascending, na_position):
     ddf = dd.from_pandas(df, npartitions=5)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
-        expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
+        got = ddf.sort_values(
+            by=by, ascending=ascending, na_position=na_position
+        )
+        expect = df.sort_values(
+            by=by, ascending=ascending, na_position=na_position
+        )
 
     # cudf ordering for nulls is non-deterministic
     dd.assert_eq(got[by], expect[by], check_index=False)

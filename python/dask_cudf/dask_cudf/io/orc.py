@@ -2,13 +2,15 @@
 
 from io import BufferedWriter, IOBase
 
-import cudf
-from dask import dataframe as dd
-from dask.base import tokenize
-from dask.dataframe.io.utils import _get_pyarrow_dtypes
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from pyarrow import orc as orc
+
+from dask import dataframe as dd
+from dask.base import tokenize
+from dask.dataframe.io.utils import _get_pyarrow_dtypes
+
+import cudf
 
 
 def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
@@ -16,7 +18,9 @@ def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
     if kwargs is None:
         kwargs = {}
     with fs.open(path, "rb") as f:
-        df_stripe = cudf.read_orc(f, stripes=[stripe], columns=columns, **kwargs)
+        df_stripe = cudf.read_orc(
+            f, stripes=[stripe], columns=columns, **kwargs
+        )
     return df_stripe
 
 
@@ -74,13 +78,17 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
             if schema is None:
                 schema = o.schema
             elif schema != o.schema:
-                raise ValueError("Incompatible schemas while parsing ORC files")
+                raise ValueError(
+                    "Incompatible schemas while parsing ORC files"
+                )
             nstripes_per_file.append(o.nstripes)
     schema = _get_pyarrow_dtypes(schema, categories=None)
     if columns is not None:
         ex = set(columns) - set(schema)
         if ex:
-            raise ValueError(f"Requested columns ({ex}) not in schema ({set(schema)})")
+            raise ValueError(
+                f"Requested columns ({ex}) not in schema ({set(schema)})"
+            )
     else:
         columns = list(schema)
 
@@ -97,7 +105,9 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
     N = 0
     for path, n in zip(paths, nstripes_per_file):
         for stripe in (
-            range(n) if filters is None else cudf.io.orc._filter_stripes(filters, path)
+            range(n)
+            if filters is None
+            else cudf.io.orc._filter_stripes(filters, path)
         ):
             dsk[(name, N)] = (
                 _read_orc_stripe,
@@ -152,15 +162,16 @@ def to_orc(
 
     """
 
-    from dask import compute as dask_compute
-    from dask import delayed
+    from dask import compute as dask_compute, delayed
 
     # TODO: Use upstream dask implementation once available
     #       (see: Dask Issue#5596)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
+    fs, _, _ = get_fs_token_paths(
+        path, mode="wb", storage_options=storage_options
+    )
     # Trim any protocol information from the path before forwarding
     path = fs._strip_protocol(path)
 

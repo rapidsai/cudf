@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+
 from cudf.pandas import LOADED
 
 if not LOADED:

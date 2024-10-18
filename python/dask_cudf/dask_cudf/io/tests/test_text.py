@@ -2,9 +2,11 @@
 
 import os
 
-import cudf
-import dask.dataframe as dd
 import pytest
+
+import dask.dataframe as dd
+
+import cudf
 
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr

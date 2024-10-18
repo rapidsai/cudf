@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import math
 import pickle
-import weakref
 from types import SimpleNamespace
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
+import weakref
 
 import numpy
+from typing_extensions import Self
+
 import pylibcudf
 import rmm
-from typing_extensions import Self
 
 import cudf
 from cudf.core.abc import Serializable
@@ -277,7 +279,9 @@ class BufferOwner(Serializable):
         """
         return self._ptr
 
-    def memoryview(self, *, offset: int = 0, size: int | None = None) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: int | None = None
+    ) -> memoryview:
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
@@ -325,7 +329,9 @@ class Buffer(Serializable):
         if offset < 0:
             raise ValueError("offset cannot be negative")
         if offset + size > owner.size:
-            raise ValueError("offset+size cannot be greater than the size of owner")
+            raise ValueError(
+                "offset+size cannot be greater than the size of owner"
+            )
         self._owner = owner
         self._offset = offset
         self._size = size
@@ -497,7 +503,9 @@ def get_ptr_and_size(array_interface: Mapping) -> tuple[int, int]:
     shape = array_interface["shape"] or (1,)
     strides = array_interface["strides"]
     itemsize = cudf.dtype(array_interface["typestr"]).itemsize
-    if strides is None or pylibcudf.column.is_c_contiguous(shape, strides, itemsize):
+    if strides is None or pylibcudf.column.is_c_contiguous(
+        shape, strides, itemsize
+    ):
         nelem = math.prod(shape)
         ptr = array_interface["data"][0] or 0
         return ptr, nelem * itemsize

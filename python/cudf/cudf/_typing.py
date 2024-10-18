@@ -1,8 +1,8 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+from collections.abc import Callable, Iterable
 import sys
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Dict, Iterable, TypeVar, Union
+from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 import numpy as np
 from pandas import Period, Timedelta, Timestamp
@@ -26,7 +26,9 @@ Dtype = Union["ExtensionDtype", str, np.dtype]
 DtypeObj = Union["ExtensionDtype", np.dtype]
 
 # scalars
-DatetimeLikeScalar = TypeVar("DatetimeLikeScalar", Period, Timestamp, Timedelta)
+DatetimeLikeScalar = TypeVar(
+    "DatetimeLikeScalar", Period, Timestamp, Timedelta
+)
 ScalarLike = Any
 
 # columns
@@ -41,4 +43,6 @@ SeriesOrSingleColumnIndex = Union["cudf.Series", "cudf.core.index.Index"]
 
 # Groupby aggregation
 AggType = Union[str, Callable]
-MultiColumnAggType = Union[AggType, Iterable[AggType], Dict[Any, Iterable[AggType]]]
+MultiColumnAggType = Union[
+    AggType, Iterable[AggType], dict[Any, Iterable[AggType]]
+]

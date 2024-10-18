@@ -2,16 +2,17 @@
 
 import datetime
 import decimal
+from io import BytesIO
 import os
 import random
-from io import BytesIO
 from string import ascii_lowercase
 
-import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.orc import ORCWriter
 from cudf.testing import assert_eq, assert_frame_equal
@@ -92,7 +93,9 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     path = datadir / inputfile
 
     expect = pd.read_orc(path, columns=columns)
-    got = cudf.read_orc(path, engine=engine, columns=columns, use_index=use_index)
+    got = cudf.read_orc(
+        path, engine=engine, columns=columns, use_index=use_index
+    )
 
     assert_frame_equal(cudf.from_pandas(expect), got, check_categorical=False)
 
@@ -113,7 +116,9 @@ def test_orc_reader_local_filepath():
     cudf.read_orc(path)
 
 
-@pytest.mark.parametrize("src", ["filepath", "pathobj", "bytes_io", "bytes", "url"])
+@pytest.mark.parametrize(
+    "src", ["filepath", "pathobj", "bytes_io", "bytes", "url"]
+)
 def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     cols = ["int1", "long1", "float1", "double1"]
 
@@ -246,12 +251,17 @@ def test_orc_read_stripes(datadir, engine):
     num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
 
     # Read stripes one at a time
-    gdf = [cudf.read_orc(path, engine=engine, stripes=[[i]]) for i in range(stripes)]
+    gdf = [
+        cudf.read_orc(path, engine=engine, stripes=[[i]])
+        for i in range(stripes)
+    ]
     gdf = cudf.concat(gdf).reset_index(drop=True)
     assert_eq(pdf, gdf, check_categorical=False, check_index_type=True)
 
     # Read stripes all at once
-    gdf = cudf.read_orc(path, engine=engine, stripes=[[int(x) for x in range(stripes)]])
+    gdf = cudf.read_orc(
+        path, engine=engine, stripes=[[int(x) for x in range(stripes)]]
+    )
     assert_eq(pdf, gdf, check_categorical=False)
 
     # Read only some stripes
@@ -310,7 +320,9 @@ def test_orc_read_skiprows():
     # repro for other sizes of data
     skiprows = 10
 
-    expected = pd.read_orc(buff)[skiprows:].reset_index(drop=True).astype("bool")
+    expected = (
+        pd.read_orc(buff)[skiprows:].reset_index(drop=True).astype("bool")
+    )
     got = cudf.read_orc(buff, skiprows=skiprows)
     assert_eq(expected, got)
 
@@ -424,7 +436,9 @@ def test_chunked_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
         ("TestOrcFile.demo-12-zlib.orc", ["_col1", "_col3", "_col5"]),
     ],
 )
-def test_chunked_orc_writer(datadir, tmpdir, reference_file, columns, compression):
+def test_chunked_orc_writer(
+    datadir, tmpdir, reference_file, columns, compression
+):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("chunked_gdf.orc")
 
@@ -654,7 +668,9 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
                     assert normalized_equals(actual_max, stats_max)
 
             if "number_of_values" in stripes_stats[stripe_idx][col]:
-                stats_num_vals = stripes_stats[stripe_idx][col]["number_of_values"]
+                stats_num_vals = stripes_stats[stripe_idx][col][
+                    "number_of_values"
+                ]
                 if stats_num_vals is not None:
                     actual_num_vals = stripe_df[col].count()
                     assert stats_num_vals == actual_num_vals
@@ -673,7 +689,9 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
         supported_stat_types.remove("bool")
 
     gdf_fname = tmpdir.join("chunked_stats.orc")
-    writer = ORCWriter(gdf_fname, statistics=stats_freq, stripe_size_rows=30000)
+    writer = ORCWriter(
+        gdf_fname, statistics=stats_freq, stripe_size_rows=30000
+    )
 
     max_char_length = 100 if nrows < 10000 else 10
 
@@ -759,7 +777,9 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
                     assert normalized_equals(actual_max, stats_max)
 
             if "number_of_values" in stripes_stats[stripe_idx][col]:
-                stats_num_vals = stripes_stats[stripe_idx][col]["number_of_values"]
+                stats_num_vals = stripes_stats[stripe_idx][col][
+                    "number_of_values"
+                ]
                 if stats_num_vals is not None:
                     actual_num_vals = stripe_df[col].count()
                     assert stats_num_vals == actual_num_vals
@@ -807,8 +827,12 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
             assert normalized_equals(actual_true_count, stats_true_count)
 
         if "number_of_values" in stripes_stats[stripe_idx][col]:
-            actual_valid_count = len(stripe_df[col]) - stripe_df[col].null_count
-            stats_valid_count = stripes_stats[stripe_idx][col]["number_of_values"]
+            actual_valid_count = (
+                len(stripe_df[col]) - stripe_df[col].null_count
+            )
+            stats_valid_count = stripes_stats[stripe_idx][col][
+                "number_of_values"
+            ]
             assert normalized_equals(actual_valid_count, stats_valid_count)
 
 
@@ -876,7 +900,9 @@ def test_empty_dataframe():
     assert_eq(expected_pdf, got_df)
 
 
-@pytest.mark.parametrize("data", [[None, ""], ["", None], [None, None], ["", ""]])
+@pytest.mark.parametrize(
+    "data", [[None, ""], ["", None], [None, None], ["", ""]]
+)
 def test_empty_string_columns(data):
     buffer = BytesIO()
 
@@ -1119,7 +1145,9 @@ def gen_map_buff(size):
                 [
                     None,
                     {
-                        rd.choice(al): rd.choice([None, np.random.randint(1, 1500)]),
+                        rd.choice(al): rd.choice(
+                            [None, np.random.randint(1, 1500)]
+                        ),
                     },
                 ]
             )
@@ -1138,7 +1166,9 @@ def gen_map_buff(size):
                                 [
                                     None,
                                     [
-                                        rd.choice([None, np.random.randint(1, 1500)])
+                                        rd.choice(
+                                            [None, np.random.randint(1, 1500)]
+                                        )
                                         for _ in range(5)
                                     ],
                                 ]
@@ -1179,7 +1209,9 @@ def gen_map_buff(size):
             )
             for _ in range(size)
         ],
-        type=pa.map_(pa.string(), pa.struct({"a": pa.int64(), "b": pa.int64()})),
+        type=pa.map_(
+            pa.string(), pa.struct({"a": pa.int64(), "b": pa.int64()})
+        ),
     )
 
     pa_table = pa.Table.from_arrays(
@@ -1187,7 +1219,9 @@ def gen_map_buff(size):
         ["lvl1_map", "lvl2_map", "lvl2_struct_map"],
     )
 
-    orc.write_table(pa_table, buff, stripe_size=1024, compression="UNCOMPRESSED")
+    orc.write_table(
+        pa_table, buff, stripe_size=1024, compression="UNCOMPRESSED"
+    )
 
     return buff
 
@@ -1214,7 +1248,11 @@ def test_map_type_read(columns, num_rows, use_index):
     lvl2_map = (
         tbl["lvl2_map"]
         .combine_chunks()
-        .view(pa.list_(pa.struct({"key": pa.string(), "value": pa.list_(pa.int64())})))
+        .view(
+            pa.list_(
+                pa.struct({"key": pa.string(), "value": pa.list_(pa.int64())})
+            )
+        )
     )
     lvl2_struct_map = (
         tbl["lvl2_struct_map"]
@@ -1305,13 +1343,21 @@ def dec(num):
         },
         # with empty elements
         {
-            "ls": [[str(i), str(2 * i)] if i % 2 else [] for i in range(12345)],
+            "ls": [
+                [str(i), str(2 * i)] if i % 2 else [] for i in range(12345)
+            ],
             "lls": [
-                [[str(i), str(2 * i)]] if i % 2 else [[], []] for i in range(12345)
+                [[str(i), str(2 * i)]] if i % 2 else [[], []]
+                for i in range(12345)
             ],
             "li": [[i, i * i, i % 2] if i % 3 else [] for i in range(12345)],
-            "lli": [[[i], [i * i], [i % 2]] if i % 3 else [[]] for i in range(12345)],
-            "ld": [[dec(i), dec(i / 2)] if i % 5 else [] for i in range(12345)],
+            "lli": [
+                [[i], [i * i], [i % 2]] if i % 3 else [[]]
+                for i in range(12345)
+            ],
+            "ld": [
+                [dec(i), dec(i / 2)] if i % 5 else [] for i in range(12345)
+            ],
         },
         # variable list lengths
         {
@@ -1327,7 +1373,9 @@ def test_orc_writer_lists(data):
     pdf_in = pd.DataFrame(data)
 
     buffer = BytesIO()
-    cudf.from_pandas(pdf_in).to_orc(buffer, stripe_size_rows=2048, row_index_stride=512)
+    cudf.from_pandas(pdf_in).to_orc(
+        buffer, stripe_size_rows=2048, row_index_stride=512
+    )
 
     pdf_out = pd.read_orc(buffer)
     assert_eq(pdf_out, pdf_in)
@@ -1449,7 +1497,9 @@ def test_statistics_sum_overflow():
     minint64 = np.iinfo(np.int64).min
 
     buff = BytesIO()
-    df = pd.DataFrame({"a": [maxint64, 1], "b": [minint64, -1], "c": [minint64, 1]})
+    df = pd.DataFrame(
+        {"a": [maxint64, 1], "b": [minint64, -1], "c": [minint64, 1]}
+    )
     df.to_orc(buff)
 
     file_stats, stripe_stats = cudf.io.orc.read_orc_statistics([buff])
@@ -1612,7 +1662,9 @@ def test_orc_writer_nvcomp(compression):
 
 def run_orc_columns_and_index_param(index_obj, index, columns):
     buffer = BytesIO()
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]}, index=index_obj)
+    df = cudf.DataFrame(
+        {"a": [1, 2, 3], "b": ["a", "b", "c"]}, index=index_obj
+    )
     df.to_orc(buffer, index=index)
 
     expected = pd.read_orc(buffer, columns=columns)
@@ -1737,7 +1789,9 @@ def test_orc_writer_cols_as_map_type(df_data, cols_as_map_type, expected_data):
 
 
 def test_orc_writer_cols_as_map_type_error():
-    df = cudf.DataFrame({"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])})
+    df = cudf.DataFrame(
+        {"a": cudf.Series([[{"a": 10, "b": 20}], [{"a": 1, "b": 21}]])}
+    )
     buffer = BytesIO()
     with pytest.raises(
         TypeError, match="cols_as_map_type must be a list of column names."
@@ -1779,7 +1833,9 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     negative_timestamp_df.to_orc(buffer)
 
     assert_eq(negative_timestamp_df, pd.read_orc(buffer), check_dtype=False)
-    assert_eq(negative_timestamp_df, orc.ORCFile(buffer).read(), check_dtype=False)
+    assert_eq(
+        negative_timestamp_df, orc.ORCFile(buffer).read(), check_dtype=False
+    )
 
 
 @pytest.mark.skip(

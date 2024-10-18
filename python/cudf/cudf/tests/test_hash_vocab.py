@@ -4,12 +4,15 @@ import os
 import warnings
 
 import pytest
+
 from cudf.utils.hash_vocab_utils import hash_vocab
 
 
 @pytest.fixture(scope="module")
 def datadir(datadir):
-    return os.path.join(datadir, "subword_tokenizer_data", "bert_base_cased_sampled")
+    return os.path.join(
+        datadir, "subword_tokenizer_data", "bert_base_cased_sampled"
+    )
 
 
 def test_correct_bert_base_vocab_hash(datadir, tmpdir):

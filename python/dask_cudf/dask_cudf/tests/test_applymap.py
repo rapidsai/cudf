@@ -1,9 +1,11 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-import pytest
-from cudf.core._compat import PANDAS_GE_210
-from dask import dataframe as dd
 from pandas import NA
+import pytest
+
+from dask import dataframe as dd
+
+from cudf.core._compat import PANDAS_GE_210
 
 from dask_cudf.tests.utils import _make_random_frame
 

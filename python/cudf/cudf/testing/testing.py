@@ -34,9 +34,13 @@ def dtype_can_compare_equal_to_other(dtype):
 
 def _check_isinstance(left, right, obj):
     if not isinstance(left, obj):
-        raise AssertionError(f"{obj} Expected type {obj}, found {type(left)} instead")
+        raise AssertionError(
+            f"{obj} Expected type {obj}, found {type(left)} instead"
+        )
     elif not isinstance(right, obj):
-        raise AssertionError(f"{obj} Expected type {obj}, found {type(right)} instead")
+        raise AssertionError(
+            f"{obj} Expected type {obj}, found {type(right)} instead"
+        )
 
 
 def raise_assert_detail(obj, message, left, right, diff=None):
@@ -52,7 +56,9 @@ def raise_assert_detail(obj, message, left, right, diff=None):
     raise AssertionError(msg)
 
 
-def _check_types(left, right, check_categorical=True, exact="equiv", obj="Index"):
+def _check_types(
+    left, right, check_categorical=True, exact="equiv", obj="Index"
+):
     if not exact or exact == "equiv":
         if (
             isinstance(left, cudf.RangeIndex)
@@ -82,7 +88,9 @@ def _check_types(left, right, check_categorical=True, exact="equiv", obj="Index"
         and isinstance(left.dtype, cudf.CategoricalDtype)
     ):
         if left.dtype != right.dtype:
-            raise_assert_detail(obj, "Categorical difference", f"{left}", f"{right}")
+            raise_assert_detail(
+                obj, "Categorical difference", f"{left}", f"{right}"
+            )
 
 
 def assert_column_equal(
@@ -220,18 +228,30 @@ def assert_column_equal(
     ):
         try:
             # nulls must be in the same places for all dtypes
-            columns_equal = cp.all(left.isnull().values == right.isnull().values)
+            columns_equal = cp.all(
+                left.isnull().values == right.isnull().values
+            )
 
-            if columns_equal and not check_exact and is_numeric_dtype(left.dtype):
+            if (
+                columns_equal
+                and not check_exact
+                and is_numeric_dtype(left.dtype)
+            ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
-                    left.apply_boolean_mask(left.isnull().unary_operator("not")).values,
+                    left.apply_boolean_mask(
+                        left.isnull().unary_operator("not")
+                    ).values,
                     right.apply_boolean_mask(
                         right.isnull().unary_operator("not")
                     ).values,
                 )
-                if columns_equal and (left.dtype.kind == right.dtype.kind == "f"):
-                    columns_equal = cp.all(is_nan(left).values == is_nan(right).values)
+                if columns_equal and (
+                    left.dtype.kind == right.dtype.kind == "f"
+                ):
+                    columns_equal = cp.all(
+                        is_nan(left).values == is_nan(right).values
+                    )
             else:
                 columns_equal = left.equals(right)
         except TypeError as e:
@@ -356,7 +376,9 @@ def assert_index_equal(
     # instance validation
     _check_isinstance(left, right, cudf.BaseIndex)
 
-    _check_types(left, right, exact=exact, check_categorical=check_categorical, obj=obj)
+    _check_types(
+        left, right, exact=exact, check_categorical=check_categorical, obj=obj
+    )
 
     if len(left) != len(right):
         raise_assert_detail(
@@ -406,7 +428,9 @@ def assert_index_equal(
 
     # metadata comparison
     if check_names and (left.name != right.name):
-        raise_assert_detail(obj, "name mismatch", f"{left.name}", f"{right.name}")
+        raise_assert_detail(
+            obj, "name mismatch", f"{left.name}", f"{right.name}"
+        )
 
 
 def assert_series_equal(
@@ -531,7 +555,9 @@ def assert_series_equal(
 
     # metadata comparison
     if check_names and (left.name != right.name):
-        raise_assert_detail(obj, "name mismatch", f"{left.name}", f"{right.name}")
+        raise_assert_detail(
+            obj, "name mismatch", f"{left.name}", f"{right.name}"
+        )
 
 
 def assert_frame_equal(
@@ -721,7 +747,9 @@ def assert_eq(left, right, **kwargs):
     # `object`. Check equality before that happens:
     if kwargs.get("check_dtype", True):
         if hasattr(left, "dtype") and hasattr(right, "dtype"):
-            if isinstance(left.dtype, cudf.core.dtypes._BaseDtype) and not isinstance(
+            if isinstance(
+                left.dtype, cudf.core.dtypes._BaseDtype
+            ) and not isinstance(
                 left.dtype, cudf.CategoricalDtype
             ):  # leave categorical comparison to Pandas
                 assert_eq(left.dtype, right.dtype)
@@ -744,7 +772,9 @@ def assert_eq(left, right, **kwargs):
         # This warning comes from a call from pandas to numpy. It is ignored
         # here because it cannot be fixed within cudf.
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (DeprecationWarning, FutureWarning))
+            warnings.simplefilter(
+                "ignore", (DeprecationWarning, FutureWarning)
+            )
             if isinstance(left, pd.DataFrame):
                 tm.assert_frame_equal(left, right, **kwargs)
             elif isinstance(left, pd.Series):

@@ -2,16 +2,17 @@
 
 import copy
 import gzip
+from io import BytesIO, StringIO
 import itertools
 import os
-from io import BytesIO, StringIO
 from pathlib import Path
 
-import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -36,7 +37,10 @@ def pdf(request):
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        {f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ) for typ in types}
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        }
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
@@ -87,7 +91,8 @@ def json_files(request, tmp_path_factory, pdf):
     index, compression, orient = request.param
     if index is False and orient not in ("split", "table"):
         pytest.skip(
-            "'index=False' is only valid when 'orient' is 'split' or " "'table'"
+            "'index=False' is only valid when 'orient' is 'split' or "
+            "'table'"
         )
     if index is False and orient == "table":
         pytest.skip("'index=False' isn't valid when 'orient' is 'table'")
@@ -170,7 +175,9 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert_eq(pdf_string, gdf_string)
 
 
-@pytest.mark.parametrize("lines", [True, False], ids=["lines=True", "lines=False"])
+@pytest.mark.parametrize(
+    "lines", [True, False], ids=["lines=True", "lines=False"]
+)
 def test_cudf_json_writer(pdf, lines):
     # removing datetime column because pandas doesn't support it
     for col_name in pdf.columns:
@@ -191,9 +198,12 @@ def test_cudf_json_writer(pdf, lines):
 
 def test_cudf_json_writer_read(gdf_writer_types):
     dtypes = {
-        col_name: col_name[len("col_") :] for col_name in gdf_writer_types.columns
+        col_name: col_name[len("col_") :]
+        for col_name in gdf_writer_types.columns
     }
-    gdf_string = gdf_writer_types.to_json(orient="records", lines=True, engine="cudf")
+    gdf_string = gdf_writer_types.to_json(
+        orient="records", lines=True, engine="cudf"
+    )
     gdf2 = cudf.read_json(
         StringIO(gdf_string),
         lines=True,
@@ -292,7 +302,9 @@ def test_cudf_json_writer_sinks(sink, tmp_path_factory):
         target = tmp_path_factory.mktemp("json") / "test_df.json"
     df.to_json(target, engine="cudf")
     if sink == "string":
-        assert target.getvalue() == '[{"a":1,"b":4},{"a":2,"b":5},{"a":3,"b":6}]'
+        assert (
+            target.getvalue() == '[{"a":1,"b":4},{"a":2,"b":5},{"a":3,"b":6}]'
+        )
     elif sink == "file":
         assert os.path.exists(target)
         with open(target, "r") as f:
@@ -418,27 +430,37 @@ def test_json_read_directory(tmpdir, json_input, engine):
 def test_json_lines_byte_range(json_input):
     # include the first row and half of the second row
     # should parse the first two rows
-    will_warn = isinstance(json_input, str) and not json_input.endswith(".json")
+    will_warn = isinstance(json_input, str) and not json_input.endswith(
+        ".json"
+    )
     with expect_warning_if(will_warn):
-        df = cudf.read_json(copy.deepcopy(json_input), lines=True, byte_range=(0, 15))
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(0, 15)
+        )
     assert df.shape == (2, 3)
 
     # include half of the second row and half of the third row
     # should parse only the third row
     with expect_warning_if(will_warn):
-        df = cudf.read_json(copy.deepcopy(json_input), lines=True, byte_range=(15, 10))
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(15, 10)
+        )
     assert df.shape == (1, 3)
 
     # include half of the second row and entire third row
     # should parse only the third row
     with expect_warning_if(will_warn):
-        df = cudf.read_json(copy.deepcopy(json_input), lines=True, byte_range=(15, 0))
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(15, 0)
+        )
     assert df.shape == (1, 3)
 
     # include half of the second row till past the end of the file
     # should parse only the third row
     with expect_warning_if(will_warn):
-        df = cudf.read_json(copy.deepcopy(json_input), lines=True, byte_range=(10, 50))
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(10, 50)
+        )
     assert df.shape == (1, 3)
 
 
@@ -543,8 +565,12 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_pandas(
     )
     pdf.to_json(fname, compression="infer", lines=True, orient="records")
 
-    df = cudf.read_json(fname, compression="infer", lines=True, orient="records")
-    pdf = pd.read_json(fname, compression="infer", lines=True, orient="records")
+    df = cudf.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
+    pdf = pd.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
 
     assert_eq(cudf.DataFrame(pdf), df)
 
@@ -557,7 +583,9 @@ def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
            {"a":"\'","b":"\\t","c":"cudf"}"""
     )
 
-    df = cudf.read_json(str_buffer, compression="infer", lines=True, orient="records")
+    df = cudf.read_json(
+        str_buffer, compression="infer", lines=True, orient="records"
+    )
 
     expected = {
         "a": ['ab"cd', "\\\b", "\r\\", "'"],
@@ -609,7 +637,9 @@ def test_json_to_json_special_characters():
         (
             cudf.DataFrame(
                 {
-                    "int64 col": cudf.Series([1, 2, None, 2323, None], dtype="int64"),
+                    "int64 col": cudf.Series(
+                        [1, 2, None, 2323, None], dtype="int64"
+                    ),
                     "string col": cudf.Series(
                         ["abc", "a", None, "", None], dtype="str"
                     ),
@@ -647,7 +677,9 @@ def test_json_to_json_special_characters():
                         [None, True, False, None, True],
                         dtype=pd.BooleanDtype(),
                     ),
-                    "categorical col": pd.Series([1, 2, 1, None, 2], dtype="category"),
+                    "categorical col": pd.Series(
+                        [1, 2, 1, None, 2], dtype="category"
+                    ),
                     "datetime col": pd.Series(
                         [1231233, None, 2323234, None, 1],
                         dtype="datetime64[ns]",
@@ -774,7 +806,9 @@ def test_json_nested_lines(data, lines):
     # such that pandas would have the f1 member with null
     # Also, pyarrow chooses to select different ordering of a nested column
     # children though key-value pairs are correct.
-    pa_table_pdf = pa.Table.from_pandas(pdf, schema=df.to_arrow().schema, safe=False)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
     assert df.to_arrow().equals(pa_table_pdf)
 
 
@@ -786,7 +820,9 @@ def test_json_nested_data():
     df = cudf.read_json(StringIO(json_str), engine="cudf", orient="records")
     pdf = pd.read_json(StringIO(json_str), orient="records")
     pdf.columns = pdf.columns.astype("str")
-    pa_table_pdf = pa.Table.from_pandas(pdf, schema=df.to_arrow().schema, safe=False)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
     assert df.to_arrow().equals(pa_table_pdf)
 
 
@@ -815,7 +851,9 @@ def test_json_types_data():
     df = cudf.read_json(StringIO(json_str), engine="cudf", orient="records")
     pdf = pd.read_json(StringIO(json_str), orient="records")
     pdf.columns = pdf.columns.astype("str")
-    pa_table_pdf = pa.Table.from_pandas(pdf, schema=df.to_arrow().schema, safe=False)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
     assert df.to_arrow().equals(pa_table_pdf)
 
 
@@ -1047,7 +1085,9 @@ def test_json_dtypes_nested_data():
     assert_eq(df, pdf)
 
     pdf.columns = pdf.columns.astype("str")
-    pa_table_pdf = pa.Table.from_pandas(pdf, schema=df.to_arrow().schema, safe=False)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
     assert df.to_arrow().equals(pa_table_pdf)
 
 
@@ -1223,7 +1263,9 @@ def test_json_array_of_arrays(data, lines):
     # for values orient in cudf json reader
     pdf.rename(columns={name: str(name) for name in pdf.columns}, inplace=True)
     # assert_eq(pdf, df)
-    pa_table_pdf = pa.Table.from_pandas(pdf, schema=df.to_arrow().schema, safe=False)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=df.to_arrow().schema, safe=False
+    )
     assert df.to_arrow().equals(pa_table_pdf)
 
 
@@ -1319,7 +1361,9 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
         # {} in pandas is represented as {"0": None} in cudf
         assert_eq(gdf, pdf)
         assert_eq(gdf2, pdf)
-    pa_table_pdf = pa.Table.from_pandas(pdf, schema=gdf.to_arrow().schema, safe=False)
+    pa_table_pdf = pa.Table.from_pandas(
+        pdf, schema=gdf.to_arrow().schema, safe=False
+    )
     assert gdf.to_arrow().equals(pa_table_pdf)
     assert gdf2.to_arrow().equals(pa_table_pdf)
 
@@ -1357,7 +1401,9 @@ def test_json_nested_mixed_types_error(jsonl_string):
 
 @pytest.mark.parametrize("on_bad_lines", ["error", "recover", "abc"])
 def test_json_reader_on_bad_lines(on_bad_lines):
-    json_input = StringIO('{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n')
+    json_input = StringIO(
+        '{"a":1,"b":10}\n{"a":2,"b":11}\nabc\n{"a":3,"b":12}\n'
+    )
     if on_bad_lines == "error":
         with pytest.raises(RuntimeError):
             cudf.read_json(
@@ -1370,7 +1416,9 @@ def test_json_reader_on_bad_lines(on_bad_lines):
         actual = cudf.read_json(
             json_input, lines=True, orient="records", on_bad_lines=on_bad_lines
         )
-        expected = cudf.DataFrame({"a": [1, 2, None, 3], "b": [10, 11, None, 12]})
+        expected = cudf.DataFrame(
+            {"a": [1, 2, None, 3], "b": [10, 11, None, 12]}
+        )
         assert_eq(actual, expected)
     else:
         with pytest.raises(TypeError):

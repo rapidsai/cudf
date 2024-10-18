@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union, overload
-
-from typing_extensions import Literal
+from typing import Literal, Union, overload
 
 import cudf
 import cudf.core.column
@@ -65,7 +63,9 @@ class ColumnMethods(NotIterable):
         """
         if inplace:
             self._parent._mimic_inplace(
-                type(self._parent)._from_column(new_col, name=self._parent.name),
+                type(self._parent)._from_column(
+                    new_col, name=self._parent.name
+                ),
                 inplace=True,
             )
             return None

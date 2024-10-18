@@ -19,8 +19,12 @@ def read_avro(
         path_or_data=filepath_or_buffer,
         storage_options=storage_options,
     )
-    filepath_or_buffer = ioutils._select_single_source(filepath_or_buffer, "read_avro")
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_avro"
+    )
 
     return cudf.DataFrame._from_data(
-        *libcudf.avro.read_avro(filepath_or_buffer, columns, skiprows, num_rows)
+        *libcudf.avro.read_avro(
+            filepath_or_buffer, columns, skiprows, num_rows
+        )
     )

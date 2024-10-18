@@ -3,10 +3,11 @@
 from itertools import product
 from math import floor
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf import Series
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
@@ -54,7 +55,9 @@ def test_series_map_callable_numeric_random(nelem):
 
     # Call map
     got = sr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
-    expect = pdsr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
+    expect = pdsr.map(
+        lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
+    )
 
     # Check
     assert_eq(expect, got, check_dtype=False)

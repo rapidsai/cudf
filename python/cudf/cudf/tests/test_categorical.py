@@ -1,15 +1,16 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+from contextlib import contextmanager
 import operator
 import string
-import warnings
-from contextlib import contextmanager
 from textwrap import dedent
+import warnings
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, assert_exceptions_equal
@@ -45,7 +46,9 @@ def test_categorical_basic():
     assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
-    np.testing.assert_array_equal(pdsr.cat.codes.values, sr.cat.codes.to_numpy())
+    np.testing.assert_array_equal(
+        pdsr.cat.codes.values, sr.cat.codes.to_numpy()
+    )
 
     string = str(sr)
     expect_str = """
@@ -186,7 +189,9 @@ def test_categorical_masking():
     expect_matches = pdsr == "a"
     got_matches = sr == "a"
 
-    np.testing.assert_array_equal(expect_matches.values, got_matches.to_numpy())
+    np.testing.assert_array_equal(
+        expect_matches.values, got_matches.to_numpy()
+    )
 
     # mask series
     expect_masked = pdsr[expect_matches]
@@ -250,7 +255,9 @@ def test_categorical_unique(num_elements):
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(list(string.ascii_letters + string.digits), num_elements),
+            np.random.choice(
+                list(string.ascii_letters + string.digits), num_elements
+            ),
             dtype="category",
         )
     )
@@ -275,7 +282,9 @@ def test_categorical_unique_count(nelem):
     np.random.seed(12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(list(string.ascii_letters + string.digits), nelem),
+            np.random.choice(
+                list(string.ascii_letters + string.digits), nelem
+            ),
             dtype="category",
         )
     )
@@ -304,7 +313,9 @@ def test_categorical_empty():
     assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
-    np.testing.assert_array_equal(pdsr.cat.codes.values, sr.cat.codes.to_numpy())
+    np.testing.assert_array_equal(
+        pdsr.cat.codes.values, sr.cat.codes.to_numpy()
+    )
 
 
 def test_categorical_set_categories():
@@ -635,7 +646,9 @@ def test_add_categories(data, add):
     with _hide_cudf_safe_casting_warning():
         actual = gds.cat.add_categories(add)
 
-    assert_eq(expected.cat.codes, actual.cat.codes.astype(expected.cat.codes.dtype))
+    assert_eq(
+        expected.cat.codes, actual.cat.codes.astype(expected.cat.codes.dtype)
+    )
 
     # Need to type-cast pandas object to str due to mixed-type
     # support in "object"
@@ -739,14 +752,16 @@ def test_categorical_allow_nan():
     assert_eq(expected_categories, gs.cat.categories)
 
     actual_ps = gs.to_pandas()
-    expected_ps = pd.Series([1.0, 2.0, np.nan, 10.0, np.nan, np.nan], dtype="category")
+    expected_ps = pd.Series(
+        [1.0, 2.0, np.nan, 10.0, np.nan, np.nan], dtype="category"
+    )
     assert_eq(actual_ps, expected_ps)
 
 
 def test_categorical_setitem_with_nan():
-    gs = cudf.Series([1, 2, np.nan, 10, np.nan, None], nan_as_null=False).astype(
-        "category"
-    )
+    gs = cudf.Series(
+        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+    ).astype("category")
     gs[[1, 3]] = np.nan
 
     expected_series = cudf.Series(
@@ -759,7 +774,9 @@ def test_categorical_setitem_with_nan():
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(input_obj, dtype):
     dtype = cudf.dtype(dtype)
-    input_obj = [dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj]
+    input_obj = [
+        dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
+    ]
 
     expect = pd.Series(input_obj, dtype="category")
     got = cudf.Series(input_obj, dtype="category").to_pandas()

@@ -4,14 +4,14 @@ import datetime
 import operator
 import warnings
 
-import cudf
-import cudf.testing.dataset_generator as dataset_generator
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas._testing as tm
 import pyarrow as pa
 import pytest
+
+import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -26,6 +26,7 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+import cudf.testing.dataset_generator as dataset_generator
 
 _cmpops = [
     operator.lt,
@@ -324,7 +325,9 @@ def test_typecast_to_different_datetime_resolutions(data, dtype):
     "dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
 )
-def test_string_timstamp_typecast_to_different_datetime_resolutions(data, dtype):
+def test_string_timstamp_typecast_to_different_datetime_resolutions(
+    data, dtype
+):
     pd_sr = data
     gdf_sr = cudf.Series.from_pandas(pd_sr)
 
@@ -492,7 +495,11 @@ testdata = [
         False,
     ),
     (
-        Series(np.array(["2018-01-01", None, "2019-12-30"], dtype="datetime64[ms]")),
+        Series(
+            np.array(
+                ["2018-01-01", None, "2019-12-30"], dtype="datetime64[ms]"
+            )
+        ),
         True,
     ),
 ]
@@ -526,7 +533,9 @@ def test_datetime_has_null_test_pyarrow():
 
 def test_datetime_dataframe():
     data = {
-        "timearray": np.array([0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]")
+        "timearray": np.array(
+            [0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]"
+        )
     }
     gdf = cudf.DataFrame(data)
     pdf = pd.DataFrame(data)
@@ -561,7 +570,9 @@ def test_datetime_dataframe():
         pd.Series(["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"]),
         [1, 2, 3, 100, -123, -1, 0, 1000000000000679367],
         pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]}),
-        pd.DataFrame({"year": ["2015", "2016"], "month": ["2", "3"], "day": [4, 5]}),
+        pd.DataFrame(
+            {"year": ["2015", "2016"], "month": ["2", "3"], "day": [4, 5]}
+        ),
         pd.DataFrame(
             {
                 "year": [2015, 2016],
@@ -799,10 +810,14 @@ def test_to_datetime_different_formats_notimplemented():
     reason="Fails in older versions of pandas.",
 )
 def test_datetime_can_cast_safely():
-    sr = cudf.Series(["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]")
+    sr = cudf.Series(
+        ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
+    )
     assert sr._column.can_cast_safely(np.dtype("datetime64[ns]"))
 
-    sr = cudf.Series(["1677-01-01", "2000-01-31", "2263-01-01"], dtype="datetime64[ms]")
+    sr = cudf.Series(
+        ["1677-01-01", "2000-01-31", "2263-01-01"], dtype="datetime64[ms]"
+    )
 
     assert sr._column.can_cast_safely(np.dtype("datetime64[ns]")) is False
 
@@ -1430,7 +1445,9 @@ def test_days_in_months(dtype):
     nrows = 1000
 
     data = dataset_generator.rand_dataframe(
-        dtypes_meta=[{"dtype": dtype, "null_frequency": 0.4, "cardinality": nrows}],
+        dtypes_meta=[
+            {"dtype": dtype, "null_frequency": 0.4, "cardinality": nrows}
+        ],
         rows=nrows,
         use_threads=False,
         seed=23,
@@ -1862,7 +1879,9 @@ def test_error_values():
     ],
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
-@pytest.mark.parametrize("resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"])
+@pytest.mark.parametrize(
+    "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
+)
 def test_ceil(data, time_type, resolution):
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
@@ -1894,7 +1913,9 @@ def test_ceil(data, time_type, resolution):
     ],
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
-@pytest.mark.parametrize("resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"])
+@pytest.mark.parametrize(
+    "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
+)
 def test_floor(data, time_type, resolution):
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
@@ -1922,7 +1943,9 @@ def test_floor(data, time_type, resolution):
     ],
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
-@pytest.mark.parametrize("resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"])
+@pytest.mark.parametrize(
+    "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
+)
 def test_round(data, time_type, resolution):
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
@@ -2094,8 +2117,12 @@ def test_datetime_binop_tz_timestamp(op):
         op(s, date_scalar)
 
 
-@pytest.mark.parametrize("data1", [["20110101", "20120101", None, "20140101", None]])
-@pytest.mark.parametrize("data2", [["20110101", "20120101", "20130101", None, None]])
+@pytest.mark.parametrize(
+    "data1", [["20110101", "20120101", None, "20140101", None]]
+)
+@pytest.mark.parametrize(
+    "data2", [["20110101", "20120101", "20130101", None, None]]
+)
 @pytest.mark.parametrize("op", _cmpops)
 def test_datetime_series_cmpops_pandas_compatibility(data1, data2, op):
     gsr1 = cudf.Series(data=data1, dtype="datetime64[ns]")
@@ -2118,8 +2145,12 @@ def test_datetime_getitem_na():
 
 def test_daterange_pandas_compatibility():
     with cudf.option_context("mode.pandas_compatible", True):
-        expected = pd.date_range("2010-01-01", "2010-02-01", periods=10, name="times")
-        actual = cudf.date_range("2010-01-01", "2010-02-01", periods=10, name="times")
+        expected = pd.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
+        actual = cudf.date_range(
+            "2010-01-01", "2010-02-01", periods=10, name="times"
+        )
     assert_eq(expected, actual)
 
 
@@ -2471,8 +2502,12 @@ def test_dti_datetime_attributes(attr):
 
 @pytest.mark.parametrize("attr", ["freq", "unit"])
 def test_dti_properties(attr):
-    pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-01-02"], dtype="datetime64[ns]")
-    cudf_dti = cudf.DatetimeIndex(["2020-01-01", "2020-01-02"], dtype="datetime64[ns]")
+    pd_dti = pd.DatetimeIndex(
+        ["2020-01-01", "2020-01-02"], dtype="datetime64[ns]"
+    )
+    cudf_dti = cudf.DatetimeIndex(
+        ["2020-01-01", "2020-01-02"], dtype="datetime64[ns]"
+    )
 
     result = getattr(cudf_dti, attr)
     expected = getattr(pd_dti, attr)

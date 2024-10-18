@@ -2,15 +2,15 @@
 
 """Common utilities for fixture creation and benchmarking."""
 
-import inspect
-import re
-import textwrap
 from collections.abc import MutableSet
+import inspect
 from itertools import groupby
 from numbers import Real
+import re
+import textwrap
 
-import pytest_cases
 from config import NUM_COLS, NUM_ROWS, cudf, cupy
+import pytest_cases
 
 
 def make_gather_map(len_gather_map: Real, len_column: Real, how: str):
@@ -42,7 +42,9 @@ def make_boolean_mask_column(size):
     return cudf.core.column.as_column(rstate.randint(0, 2, size).astype(bool))
 
 
-def benchmark_with_object(cls, *, dtype="int", nulls=None, cols=None, rows=None):
+def benchmark_with_object(
+    cls, *, dtype="int", nulls=None, cols=None, rows=None
+):
     """Pass "standard" cudf fixtures to functions without renaming parameters.
 
     The fixture generation logic in conftest.py provides a plethora of useful

@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from contextlib import contextmanager
+from dataclasses import dataclass
+from functools import partial
 import gc
 import io
 import textwrap
 import threading
 import traceback
+from typing import TYPE_CHECKING
 import warnings
 import weakref
-from collections import defaultdict
-from contextlib import contextmanager
-from dataclasses import dataclass
-from functools import partial
-from typing import TYPE_CHECKING
 
 import rmm.mr
 
@@ -24,7 +24,9 @@ from cudf.utils.string import format_bytes
 if TYPE_CHECKING:
     from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 
-_spill_cudf_nvtx_annotate = partial(_performance_tracking, domain="cudf_python-spill")
+_spill_cudf_nvtx_annotate = partial(
+    _performance_tracking, domain="cudf_python-spill"
+)
 
 
 def get_traceback() -> str:
@@ -362,15 +364,21 @@ class SpillManager:
         int
             The number of bytes spilled.
         """
-        limit = self._device_memory_limit if device_limit is None else device_limit
+        limit = (
+            self._device_memory_limit if device_limit is None else device_limit
+        )
         if limit is None:
             return 0
-        unspilled = sum(buf.size for buf in self.buffers() if not buf.is_spilled)
+        unspilled = sum(
+            buf.size for buf in self.buffers() if not buf.is_spilled
+        )
         return self.spill_device_memory(nbytes=unspilled - limit)
 
     def __repr__(self) -> str:
         spilled = sum(buf.size for buf in self.buffers() if buf.is_spilled)
-        unspilled = sum(buf.size for buf in self.buffers() if not buf.is_spilled)
+        unspilled = sum(
+            buf.size for buf in self.buffers() if not buf.is_spilled
+        )
         unspillable = 0
         for buf in self.buffers():
             if not (buf.is_spilled or buf.spillable):
@@ -444,7 +452,9 @@ def set_spill_on_demand_globally() -> None:
 
     manager = get_global_manager()
     if manager is None:
-        raise ValueError("Cannot enable spill on demand with no global spill manager")
+        raise ValueError(
+            "Cannot enable spill on demand with no global spill manager"
+        )
     mr = rmm.mr.get_current_device_resource()
     if any(
         isinstance(m, rmm.mr.FailureCallbackResourceAdaptor)
@@ -455,7 +465,9 @@ def set_spill_on_demand_globally() -> None:
             "is already registered"
         )
     rmm.mr.set_current_device_resource(
-        rmm.mr.FailureCallbackResourceAdaptor(mr, manager._out_of_memory_handle)
+        rmm.mr.FailureCallbackResourceAdaptor(
+            mr, manager._out_of_memory_handle
+        )
     )
 
 
@@ -478,11 +490,15 @@ def spill_on_demand_globally():
     """
     set_spill_on_demand_globally()
     # Save the new memory resource stack for later cleanup
-    mr_stack = get_rmm_memory_resource_stack(rmm.mr.get_current_device_resource())
+    mr_stack = get_rmm_memory_resource_stack(
+        rmm.mr.get_current_device_resource()
+    )
     try:
         yield
     finally:
         mr = rmm.mr.get_current_device_resource()
         if mr_stack != get_rmm_memory_resource_stack(mr):
-            raise ValueError("RMM memory source stack was changed while in the context")
+            raise ValueError(
+                "RMM memory source stack was changed while in the context"
+            )
         rmm.mr.set_current_device_resource(mr_stack[1])

@@ -1,9 +1,10 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if
@@ -143,7 +144,9 @@ def test_can_cast_safely_has_nulls():
         ),
         # Categories with nulls
         pd.Series([1, 2, 3], dtype=pd.CategoricalDtype(categories=[1, 2])),
-        pd.Series([5.0, 6.0], dtype=pd.CategoricalDtype(categories=[5.0, 6.0])),
+        pd.Series(
+            [5.0, 6.0], dtype=pd.CategoricalDtype(categories=[5.0, 6.0])
+        ),
         pd.Series(
             ["2020-08-01 08:00:00", "1960-08-01 08:00:00"],
             dtype=np.dtype("<M8[ns]"),
@@ -179,7 +182,9 @@ def test_to_numeric_basic_1d(data):
         [np.iinfo(np.int64).max, np.iinfo(np.int64).min],
     ],
 )
-@pytest.mark.parametrize("downcast", ["integer", "signed", "unsigned", "float"])
+@pytest.mark.parametrize(
+    "downcast", ["integer", "signed", "unsigned", "float"]
+)
 def test_to_numeric_downcast_int(data, downcast):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
@@ -207,7 +212,9 @@ def test_to_numeric_downcast_int(data, downcast):
         [1.0, 1.5, 2.6, 3.4],
     ],
 )
-@pytest.mark.parametrize("downcast", ["signed", "integer", "unsigned", "float"])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
 def test_to_numeric_downcast_float(data, downcast):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
@@ -271,7 +278,9 @@ def test_to_numeric_downcast_large_float_pd_bug(data, downcast):
         [str(np.iinfo(np.int64).max), str(np.iinfo(np.int64).min)],
     ],
 )
-@pytest.mark.parametrize("downcast", ["signed", "integer", "unsigned", "float"])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
 def test_to_numeric_downcast_string_int(data, downcast):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
@@ -293,7 +302,9 @@ def test_to_numeric_downcast_string_int(data, downcast):
         ["1", "10", "1.0", "2e3", "", ""],  # mixed empty strings
     ],
 )
-@pytest.mark.parametrize("downcast", ["signed", "integer", "unsigned", "float"])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
 def test_to_numeric_downcast_string_float(data, downcast):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
@@ -324,7 +335,9 @@ def test_to_numeric_downcast_string_float(data, downcast):
         ],  # 2 digits relaxed from np.finfo(np.float64).min/max
     ],
 )
-@pytest.mark.parametrize("downcast", ["signed", "integer", "unsigned", "float"])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
 def test_to_numeric_downcast_string_large_float(data, downcast):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
@@ -381,7 +394,9 @@ def test_series_construction_with_nulls(dtype, input_obj):
     assert_eq(expect, got)
 
     # Test numpy array of objects case
-    np_data = [dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj]
+    np_data = [
+        dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
+    ]
 
     expect = pd.Series(np_data, dtype=np_dtypes_to_pandas_dtypes[dtype])
     got = cudf.Series(np_data, dtype=dtype).to_pandas(nullable=True)
@@ -392,7 +407,9 @@ def test_series_construction_with_nulls(dtype, input_obj):
     "data",
     [[True, False, True]],
 )
-@pytest.mark.parametrize("downcast", ["signed", "integer", "unsigned", "float"])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
 def test_series_to_numeric_bool(data, downcast):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)

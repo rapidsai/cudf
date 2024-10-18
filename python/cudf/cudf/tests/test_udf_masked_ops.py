@@ -2,9 +2,11 @@
 import math
 import operator
 
-import cudf
+from numba import cuda
 import numpy as np
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.missing import NA
 from cudf.core.udf._ops import (
@@ -21,7 +23,6 @@ from cudf.testing._utils import (
     parametrize_numeric_dtypes_pairwise,
     sv_to_udf_str,
 )
-from numba import cuda
 
 
 @pytest.fixture(scope="module")
@@ -209,7 +210,9 @@ def test_compare_masked_vs_masked(op):
 
     # we should get:
     # [?, ?, <NA>, <NA>, <NA>]
-    gdf = cudf.DataFrame({"a": [1, 0, None, 1, None], "b": [0, 1, 0, None, None]})
+    gdf = cudf.DataFrame(
+        {"a": [1, 0, None, 1, None], "b": [0, 1, 0, None, None]}
+    )
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
@@ -277,7 +280,8 @@ def test_arith_masked_vs_null(request, op, data):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                (gdf["data"] == 1).any() and op in {operator.pow, operator.ipow}
+                (gdf["data"] == 1).any()
+                and op in {operator.pow, operator.ipow}
             ),
             reason="https://github.com/rapidsai/cudf/issues/7478",
         )
@@ -536,7 +540,9 @@ def test_series_arith_masked_vs_constant(request, op, constant):
     # in pandas, 1**NA == 1. In cudf, 1**NA == NA.
     request.applymarker(
         pytest.mark.xfail(
-            condition=(constant is cudf.NA and op in {operator.pow, operator.ipow}),
+            condition=(
+                constant is cudf.NA and op in {operator.pow, operator.ipow}
+            ),
             reason="https://github.com/rapidsai/cudf/issues/7478",
         )
     )
@@ -556,7 +562,9 @@ def test_series_arith_masked_vs_constant_reflected(request, op, constant):
     # in pandas, 1**NA == 1. In cudf, 1**NA == NA.
     request.applymarker(
         pytest.mark.xfail(
-            condition=(constant in {1} and op in {operator.pow, operator.ipow}),
+            condition=(
+                constant in {1} and op in {operator.pow, operator.ipow}
+            ),
             reason="https://github.com/rapidsai/cudf/issues/7478",
         )
     )
@@ -607,7 +615,9 @@ def test_masked_udf_nested_function_support(op):
         y = row["b"]
         return inner(x, y)
 
-    gdf = cudf.DataFrame({"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]})
+    gdf = cudf.DataFrame(
+        {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
+    )
 
     with pytest.raises(ValueError):
         gdf.apply(outer, axis=1)
@@ -644,7 +654,9 @@ def test_masked_udf_subset_selection(data):
 @pytest.mark.parametrize(
     "unsupported_col",
     [
-        _decimal_series(["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)),
+        _decimal_series(
+            ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
+        ),
         cudf.Series([1, 2, 3], dtype="category"),
         cudf.interval_range(start=0, end=3),
         [[1, 2], [3, 4], [5, 6]],
@@ -807,7 +819,9 @@ def test_masked_udf_caching():
     assert precompiled.currsize == 2
 
 
-@pytest.mark.parametrize("data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]])
+@pytest.mark.parametrize(
+    "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
+)
 @pytest.mark.parametrize("operator", [float, int, bool])
 def test_masked_udf_casting(operator, data):
     data = cudf.Series(data)
@@ -992,7 +1006,9 @@ class TestStringUDFs:
 
         run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
-    @pytest.mark.parametrize("concat_char", ["1", "a", "12", " ", "", ".", "@"])
+    @pytest.mark.parametrize(
+        "concat_char", ["1", "a", "12", " ", "", ".", "@"]
+    )
     def test_string_udf_concat(self, str_udf_data, concat_char):
         def func(row):
             return row["str_col"] + concat_char

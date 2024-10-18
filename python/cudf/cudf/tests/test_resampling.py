@@ -1,9 +1,10 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 
@@ -52,7 +53,9 @@ def test_series_resample_ffill(rule):
     rng = pd.date_range("1/1/2012", periods=10, freq="5s")
     ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
-    assert_resample_results_equal(ts.resample(rule).ffill(), gts.resample(rule).ffill())
+    assert_resample_results_equal(
+        ts.resample(rule).ffill(), gts.resample(rule).ffill()
+    )
 
 
 @pytest.mark.parametrize("rule", ["2s", "10s"])
@@ -60,7 +63,9 @@ def test_series_resample_bfill(rule):
     rng = pd.date_range("1/1/2012", periods=10, freq="5s")
     ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
-    assert_resample_results_equal(ts.resample(rule).bfill(), gts.resample(rule).bfill())
+    assert_resample_results_equal(
+        ts.resample(rule).bfill(), gts.resample(rule).bfill()
+    )
 
 
 @pytest.mark.parametrize("rule", ["2s", "10s"])

@@ -1,6 +1,7 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
-import dask.dataframe as dd
 import pandas as pd
+
+import dask.dataframe as dd
 
 
 def test_sum():

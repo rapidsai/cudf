@@ -1,6 +1,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
-import cudf
 import pytest
+
+import cudf
 from cudf.testing import assert_eq
 
 

@@ -1,12 +1,13 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-import os
 from glob import glob
+import os
+
+from dask.base import tokenize
+import dask.dataframe as dd
+from dask.utils import apply, parse_bytes
 
 import cudf
-import dask.dataframe as dd
-from dask.base import tokenize
-from dask.utils import apply, parse_bytes
 
 
 def read_text(path, chunksize="256 MiB", **kwargs):

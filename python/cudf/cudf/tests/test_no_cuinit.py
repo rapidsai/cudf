@@ -1,9 +1,9 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import os
+from shutil import which
 import subprocess
 import sys
-from shutil import which
 
 import pytest
 

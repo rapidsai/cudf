@@ -6,6 +6,7 @@ import os
 import subprocess
 
 import pytest
+
 from cudf.pandas import LOADED, Profiler
 
 if not LOADED:
@@ -13,6 +14,7 @@ if not LOADED:
 
 import numpy as np
 import pandas as pd
+
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 
@@ -46,7 +48,11 @@ def test_profiler():
         "_Timestamp.__add__",
     }
     for name, func in per_function_stats.items():
-        assert len(func["cpu"]) == 0 if "Time" not in name else len(func["gpu"]) == 0
+        assert (
+            len(func["cpu"]) == 0
+            if "Time" not in name
+            else len(func["gpu"]) == 0
+        )
 
     per_line_stats = profiler.per_line_stats
     calls = [

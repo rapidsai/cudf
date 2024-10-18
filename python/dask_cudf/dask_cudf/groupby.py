@@ -3,20 +3,20 @@ from __future__ import annotations
 
 from functools import wraps
 
-import cudf
 import numpy as np
 import pandas as pd
-from cudf.core.groupby.groupby import _deprecate_collect
-from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
+
 from dask.dataframe.core import (
     DataFrame as DaskDataFrame,
-)
-from dask.dataframe.core import (
     aca,
     split_out_on_cols,
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.utils import funcname
+
+import cudf
+from cudf.core.groupby.groupby import _deprecate_collect
+from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 from dask_cudf.sorting import _deprecate_shuffle_kwarg
 
@@ -195,7 +195,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
 
     @_deprecate_shuffle_kwarg
     @_dask_cudf_performance_tracking
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle_method=None):
+    def aggregate(
+        self, arg, split_every=None, split_out=1, shuffle_method=None
+    ):
         if arg == "size":
             return self.size()
 
@@ -338,7 +340,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
 
     @_deprecate_shuffle_kwarg
     @_dask_cudf_performance_tracking
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle_method=None):
+    def aggregate(
+        self, arg, split_every=None, split_out=1, shuffle_method=None
+    ):
         if arg == "size":
             return self.size()
 
@@ -600,7 +604,9 @@ def groupby_agg(
             split_out,
             token="cudf-aggregate",
             sort=sort,
-            shuffle_method=shuffle_method if isinstance(shuffle_method, str) else None,
+            shuffle_method=shuffle_method
+            if isinstance(shuffle_method, str)
+            else None,
         )
 
     # Deal with sort/shuffle defaults
@@ -613,7 +619,9 @@ def groupby_agg(
         )
 
     # Determine required columns to enable column projection
-    required_columns = list(set(gb_cols).union(aggs.keys()).intersection(ddf.columns))
+    required_columns = list(
+        set(gb_cols).union(aggs.keys()).intersection(ddf.columns)
+    )
 
     return aca(
         [ddf[required_columns]],
@@ -634,7 +642,9 @@ def groupby_agg(
 
 
 @_dask_cudf_performance_tracking
-def _make_groupby_agg_call(gb, aggs, split_every, split_out, shuffle_method=None):
+def _make_groupby_agg_call(
+    gb, aggs, split_every, split_out, shuffle_method=None
+):
     """Helper method to consolidate the common `groupby_agg` call for all
     aggregations in one place
     """
@@ -669,7 +679,9 @@ def _redirect_aggs(arg):
             if isinstance(arg[col], list):
                 new_arg[col] = [redirects.get(agg, agg) for agg in arg[col]]
             elif isinstance(arg[col], dict):
-                new_arg[col] = {k: redirects.get(v, v) for k, v in arg[col].items()}
+                new_arg[col] = {
+                    k: redirects.get(v, v) for k, v in arg[col].items()
+                }
             else:
                 new_arg[col] = redirects.get(arg[col], arg[col])
         return new_arg
@@ -747,7 +759,9 @@ def _groupby_partition_agg(df, gb_cols, aggs, columns, dropna, sort, sep):
             df[pow2_name] = df[col].astype("float64").pow(2)
             _agg_dict[pow2_name] = ["sum"]
 
-    gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(_agg_dict)
+    gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
+        _agg_dict
+    )
     output_columns = [_make_name(name, sep=sep) for name in gb.columns]
     gb.columns = output_columns
     # Return with deterministic column ordering
@@ -779,7 +793,9 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
 
-    gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(agg_dict)
+    gb = df.groupby(gb_cols, dropna=dropna, as_index=False, sort=sort).agg(
+        agg_dict
+    )
 
     # Don't include the last aggregation in the column names
     output_columns = [

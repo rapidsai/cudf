@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import threading
 from contextlib import ContextDecorator
+import threading
 from typing import Any
 
 from cudf.core.buffer.buffer import (
@@ -106,7 +106,9 @@ def as_buffer(
     # the Buffer (and its sub-classes) do not have to.
     if isinstance(data, int):
         if size is None:
-            raise ValueError("size must be specified when `data` is an integer")
+            raise ValueError(
+                "size must be specified when `data` is an integer"
+            )
         data = cuda_array_interface_wrapper(ptr=data, size=size, owner=owner)
     elif size is not None or owner is not None:
         raise ValueError(
@@ -136,7 +138,9 @@ def as_buffer(
     # Check if `data` is owned by a known class
     owner = get_buffer_owner(data)
     if owner is None:  # `data` is new device memory
-        return buffer_class(owner=owner_class.from_device_memory(data, exposed=exposed))
+        return buffer_class(
+            owner=owner_class.from_device_memory(data, exposed=exposed)
+        )
 
     # At this point, we know that `data` is owned by a known class, which
     # should be the same class as specified by the current config (see above)
@@ -147,7 +151,8 @@ def as_buffer(
         and get_spill_lock() is None
     ):
         raise ValueError(
-            "An owning spillable buffer must " "either be exposed or spill locked."
+            "An owning spillable buffer must "
+            "either be exposed or spill locked."
         )
     ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
     base_ptr = owner.get_ptr(mode="read")

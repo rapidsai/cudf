@@ -3,11 +3,12 @@
 import functools
 import operator
 
-import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+
+import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
 from cudf.api.types import is_scalar
@@ -199,11 +200,15 @@ def test_take(data, idx):
         ([1, 2, 3, 4], pytest.raises(ValueError, match="should be list type")),
         (
             [["a", "b"], ["c"]],
-            pytest.raises(TypeError, match="should be column of values of index types"),
+            pytest.raises(
+                TypeError, match="should be column of values of index types"
+            ),
         ),
         (
             [[[1], [0]], [[0]]],
-            pytest.raises(TypeError, match="should be column of values of index types"),
+            pytest.raises(
+                TypeError, match="should be column of values of index types"
+            ),
         ),
         ([[0, 1], None], pytest.raises(ValueError, match="contains null")),
     ],
@@ -270,7 +275,9 @@ def key_func_builder(x, na_position):
     [
         None,
         pd.Index(["a", "b", "c"]),
-        pd.MultiIndex.from_tuples([(0, "a"), (0, "b"), (1, "a")], names=["l0", "l1"]),
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (1, "a")], names=["l0", "l1"]
+        ),
     ],
 )
 @pytest.mark.parametrize("ascending", [True, False])
@@ -353,7 +360,9 @@ def test_get_default():
     assert_eq(cudf.Series([0, 3, 7]), sr.list.get(-3, default=0))
     assert_eq(cudf.Series([2, 5, 9]), sr.list.get(-1))
 
-    string_sr = cudf.Series([["apple", "banana"], ["carrot", "daffodil", "elephant"]])
+    string_sr = cudf.Series(
+        [["apple", "banana"], ["carrot", "daffodil", "elephant"]]
+    )
     assert_eq(
         cudf.Series(["default", "elephant"]),
         string_sr.list.get(2, default="default"),
@@ -365,7 +374,9 @@ def test_get_default():
     sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
     assert_eq(cudf.Series([[3, 4], [7, 8]]), sr_nested.list.get(1))
     assert_eq(cudf.Series([[5, 6], cudf.NA]), sr_nested.list.get(2))
-    assert_eq(cudf.Series([[5, 6], [0, 0]]), sr_nested.list.get(2, default=[0, 0]))
+    assert_eq(
+        cudf.Series([[5, 6], [0, 0]]), sr_nested.list.get(2, default=[0, 0])
+    )
 
 
 def test_get_ind_sequence():
@@ -466,7 +477,8 @@ def test_contains_invalid(data, scalar):
     sr = cudf.Series(data)
     with pytest.raises(
         TypeError,
-        match="Type/Scale of search key does not " "match list column element type.",
+        match="Type/Scale of search key does not "
+        "match list column element type.",
     ):
         sr.list.contains(scalar)
 
@@ -523,7 +535,9 @@ def test_index(data, search_key, expect):
     if is_scalar(search_key):
         got = sr.list.index(cudf.Scalar(search_key, sr.dtype.element_type))
     else:
-        got = sr.list.index(cudf.Series(search_key, dtype=sr.dtype.element_type))
+        got = sr.list.index(
+            cudf.Series(search_key, dtype=sr.dtype.element_type)
+        )
 
     assert_eq(expect, got)
 
@@ -549,7 +563,8 @@ def test_index_invalid_type(data, search_key):
     sr = cudf.Series(data)
     with pytest.raises(
         TypeError,
-        match="Type/Scale of search key does not " "match list column element type.",
+        match="Type/Scale of search key does not "
+        "match list column element type.",
     ):
         sr.list.index(search_key)
 

@@ -1,16 +1,17 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import decimal
+from itertools import combinations_with_replacement, product
 import operator
 import random
 import warnings
-from itertools import combinations_with_replacement, product
 
-import cudf
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf import Index, Series
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -18,8 +19,7 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.testing import _utils as utils
-from cudf.testing import assert_eq
+from cudf.testing import _utils as utils, assert_eq
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -243,7 +243,9 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _bitwise_binops)
-@pytest.mark.parametrize("lhs_dtype,rhs_dtype", list(product(_int_types, _int_types)))
+@pytest.mark.parametrize(
+    "lhs_dtype,rhs_dtype", list(product(_int_types, _int_types))
+)
 def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     arr1 = (np.random.random(100) * 100).astype(lhs_dtype)
     sr1 = Series(arr1)
@@ -384,9 +386,13 @@ def cmp_scalar(request):
     return request.param
 
 
-def test_str_series_compare_str(str_series_cmp_data, str_series_compare_str_cmpop):
+def test_str_series_compare_str(
+    str_series_cmp_data, str_series_compare_str_cmpop
+):
     expect = str_series_compare_str_cmpop(str_series_cmp_data, "a")
-    got = str_series_compare_str_cmpop(Series.from_pandas(str_series_cmp_data), "a")
+    got = str_series_compare_str_cmpop(
+        Series.from_pandas(str_series_cmp_data), "a"
+    )
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -395,7 +401,9 @@ def test_str_series_compare_str_reflected(
     str_series_cmp_data, str_series_compare_str_cmpop
 ):
     expect = str_series_compare_str_cmpop("a", str_series_cmp_data)
-    got = str_series_compare_str_cmpop("a", Series.from_pandas(str_series_cmp_data))
+    got = str_series_compare_str_cmpop(
+        "a", Series.from_pandas(str_series_cmp_data)
+    )
 
     assert_eq(expect, got.to_pandas(nullable=True))
 
@@ -427,7 +435,9 @@ def test_str_series_compare_num_reflected(
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES + ["datetime64[ms]"])
 @pytest.mark.parametrize("use_cudf_scalar", [True, False])
-def test_series_compare_scalar(nelem, cmpop, obj_class, dtype, use_cudf_scalar):
+def test_series_compare_scalar(
+    nelem, cmpop, obj_class, dtype, use_cudf_scalar
+):
     arr1 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
     rhs = random.choice(arr1).item()
@@ -485,13 +495,13 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
             utils.expand_bits_to_bytes(lhs_mask & rhs_mask), dtype=np.bool_
         )[:nelem]
     if lhs_nulls == "some" and rhs_nulls == "none":
-        res_mask = np.asarray(utils.expand_bits_to_bytes(lhs_mask), dtype=np.bool_)[
-            :nelem
-        ]
+        res_mask = np.asarray(
+            utils.expand_bits_to_bytes(lhs_mask), dtype=np.bool_
+        )[:nelem]
     if lhs_nulls == "none" and rhs_nulls == "some":
-        res_mask = np.asarray(utils.expand_bits_to_bytes(rhs_mask), dtype=np.bool_)[
-            :nelem
-        ]
+        res_mask = np.asarray(
+            utils.expand_bits_to_bytes(rhs_mask), dtype=np.bool_
+        )[:nelem]
     # Fill NA values
     na_value = -10000
     got = res.fillna(na_value).to_numpy()
@@ -691,8 +701,12 @@ def test_different_shapes_and_same_columns(binop):
     if binop is operator.pow:
         return
 
-    pd_frame = binop(pd.DataFrame({"x": [1, 2]}), pd.DataFrame({"x": [1, 2, 3]}))
-    cd_frame = binop(cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({"x": [1, 2, 3]}))
+    pd_frame = binop(
+        pd.DataFrame({"x": [1, 2]}), pd.DataFrame({"x": [1, 2, 3]})
+    )
+    cd_frame = binop(
+        cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({"x": [1, 2, 3]})
+    )
     # cast x as float64 so it matches pandas dtype
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     assert_eq(cd_frame, pd_frame)
@@ -708,7 +722,9 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     # Test with a RangeIndex
     pdf1 = pd.DataFrame({"x": [4, 3, 2, 1], "y": [7, 3, 8, 6]})
     # Test with an Index
-    pdf2 = pd.DataFrame({"x": [1, 2, 3, 7], "y": [4, 5, 6, 7]}, index=[0, 1, 3, 4])
+    pdf2 = pd.DataFrame(
+        {"x": [1, 2, 3, 7], "y": [4, 5, 6, 7]}, index=[0, 1, 3, 4]
+    )
     # Test with an Index in a different order
     pdf3 = pd.DataFrame(
         {"x": [4, 5, 6, 7], "y": [1, 2, 3, 7], "z": [0, 5, 3, 7]},
@@ -777,12 +793,18 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
     gdf_series_a = utils.gen_rand_series(
         dtype, count, has_nulls=has_nulls, stride=10000
     )
-    gdf_series_b = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=100)
+    gdf_series_b = utils.gen_rand_series(
+        dtype, count, has_nulls=has_nulls, stride=100
+    )
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_result = getattr(gdf_series_a, func)(gdf_series_b, fill_value=fill_value)
-    pdf_result = getattr(pdf_series_a, func)(pdf_series_b, fill_value=fill_value)
+    gdf_result = getattr(gdf_series_a, func)(
+        gdf_series_b, fill_value=fill_value
+    )
+    pdf_result = getattr(pdf_series_a, func)(
+        pdf_series_b, fill_value=fill_value
+    )
 
     assert_eq(pdf_result, gdf_result)
 
@@ -797,7 +819,9 @@ def test_operator_func_series_and_scalar(
 ):
     count = 1000
     scalar = 59
-    gdf_series = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=10000)
+    gdf_series = utils.gen_rand_series(
+        dtype, count, has_nulls=has_nulls, stride=10000
+    )
     pdf_series = gdf_series.to_pandas()
 
     gdf_series_result = getattr(gdf_series, func)(
@@ -829,8 +853,12 @@ def test_operator_func_between_series_logical(
     pdf_series_a = gdf_series_a.to_pandas(nullable=True)
     pdf_series_b = gdf_series_b.to_pandas(nullable=True)
 
-    gdf_series_result = getattr(gdf_series_a, func)(gdf_series_b, fill_value=fill_value)
-    pdf_series_result = getattr(pdf_series_a, func)(pdf_series_b, fill_value=fill_value)
+    gdf_series_result = getattr(gdf_series_a, func)(
+        gdf_series_b, fill_value=fill_value
+    )
+    pdf_series_result = getattr(pdf_series_a, func)(
+        pdf_series_b, fill_value=fill_value
+    )
     expect = pdf_series_result
     got = gdf_series_result.to_pandas(nullable=True)
 
@@ -876,7 +904,9 @@ def test_operator_func_series_and_scalar_logical(
         cudf.Scalar(scalar) if use_cudf_scalar else scalar,
         fill_value=fill_value,
     )
-    pdf_series_result = getattr(pdf_series, func)(scalar, fill_value=fill_value)
+    pdf_series_result = getattr(pdf_series, func)(
+        scalar, fill_value=fill_value
+    )
 
     expect = pdf_series_result
     got = gdf_series_result.to_pandas(nullable=True)
@@ -902,7 +932,9 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
             colname = ascii_lowercase[cols[i]]
             data = utils.gen_rand("float64", num_rows) * 10000
             if nulls == "some":
-                idx = np.random.choice(num_rows, size=int(num_rows / 2), replace=False)
+                idx = np.random.choice(
+                    num_rows, size=int(num_rows / 2), replace=False
+                )
                 data[idx] = np.nan
             pdf[colname] = data
         return pdf
@@ -936,7 +968,9 @@ def test_logical_operator_func_dataframe(func, nulls, other):
             colname = ascii_lowercase[cols[i]]
             data = utils.gen_rand("float64", num_rows) * 10000
             if nulls == "some":
-                idx = np.random.choice(num_rows, size=int(num_rows / 2), replace=False)
+                idx = np.random.choice(
+                    num_rows, size=int(num_rows / 2), replace=False
+                )
                 data[idx] = np.nan
             pdf[colname] = data
         return pdf
@@ -975,10 +1009,14 @@ def test_logical_operator_func_dataframe(func, nulls, other):
 def test_binop_bool_uint(func, rhs):
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
-    assert_eq(getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False)
+    assert_eq(
+        getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False
+    )
 
 
-@pytest.mark.parametrize("series_dtype", (np.int8, np.uint8, np.int64, np.uint64))
+@pytest.mark.parametrize(
+    "series_dtype", (np.int8, np.uint8, np.int64, np.uint64)
+)
 @pytest.mark.parametrize(
     "divisor_dtype",
     (
@@ -1029,7 +1067,9 @@ def test_floordiv_zero_bool(scalar_divisor):
         pytest.param(
             np.bool_,
             marks=pytest_xfail(
-                reason=("Pandas handling of division by zero-bool is too strange")
+                reason=(
+                    "Pandas handling of division by zero-bool is too strange"
+                )
             ),
         ),
         np.int8,
@@ -1108,19 +1148,29 @@ def make_scalar_add_data():
     )
 
     # to any float, we may add any int, float, or bool
-    valid |= set(product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES))
+    valid |= set(
+        product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES)
+    )
 
     # to any datetime, we may add any int, timedelta, or bool
-    valid |= set(product(DATETIME_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES | BOOL_TYPES))
+    valid |= set(
+        product(DATETIME_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES | BOOL_TYPES)
+    )
 
     # to any timedelta, we may add any int, datetime, other timedelta, or bool
-    valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | DATETIME_TYPES | BOOL_TYPES))
+    valid |= set(
+        product(TIMEDELTA_TYPES, INTEGER_TYPES | DATETIME_TYPES | BOOL_TYPES)
+    )
 
     # to any bool, we may add any int, float, datetime, timedelta, or bool
     valid |= set(
         product(
             BOOL_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
+            INTEGER_TYPES
+            | FLOAT_TYPES
+            | DATETIME_TYPES
+            | TIMEDELTA_TYPES
+            | BOOL_TYPES,
         )
     )
 
@@ -1194,7 +1244,9 @@ def make_scalar_difference_data():
     )
 
     # from any float, we may subtract any int, float, or bool
-    valid |= set(product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES))
+    valid |= set(
+        product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES)
+    )
 
     # from any datetime we may subtract any int, datetime, timedelta, or bool
     valid |= set(
@@ -1205,10 +1257,14 @@ def make_scalar_difference_data():
     )
 
     # from any timedelta we may subtract any int, timedelta, or bool
-    valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES | BOOL_TYPES))
+    valid |= set(
+        product(TIMEDELTA_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES | BOOL_TYPES)
+    )
 
     # from any bool we may subtract any int, float or timedelta
-    valid |= set(product(BOOL_TYPES, INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES))
+    valid |= set(
+        product(BOOL_TYPES, INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES)
+    )
 
     return sorted(list(valid))
 
@@ -1251,7 +1307,9 @@ def test_scalar_difference(dtype_l, dtype_r):
     assert expect.dtype == got.dtype
 
 
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_difference_data_invalid())
+@pytest.mark.parametrize(
+    "dtype_l,dtype_r", make_scalar_difference_data_invalid()
+)
 def test_scalar_difference_invalid(dtype_l, dtype_r):
     test_value = 1
 
@@ -1277,7 +1335,9 @@ def make_scalar_product_data():
     valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | BOOL_TYPES))
 
     # we can multiply a float by any int, float, or bool
-    valid |= set(product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES))
+    valid |= set(
+        product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES)
+    )
 
     return sorted(list(valid))
 
@@ -1289,7 +1349,11 @@ def make_scalar_product_data_invalid():
     # or bools by datetimes
     invalid |= set(
         product(
-            INTEGER_TYPES | FLOAT_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
+            INTEGER_TYPES
+            | FLOAT_TYPES
+            | DATETIME_TYPES
+            | TIMEDELTA_TYPES
+            | BOOL_TYPES,
             DATETIME_TYPES,
         )
     )
@@ -1298,7 +1362,11 @@ def make_scalar_product_data_invalid():
     invalid |= set(
         product(
             DATETIME_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
+            INTEGER_TYPES
+            | FLOAT_TYPES
+            | DATETIME_TYPES
+            | TIMEDELTA_TYPES
+            | BOOL_TYPES,
         )
     )
 
@@ -1373,7 +1441,11 @@ def make_scalar_floordiv_data_invalid():
     invalid |= set(
         product(
             DATETIME_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
+            INTEGER_TYPES
+            | FLOAT_TYPES
+            | DATETIME_TYPES
+            | TIMEDELTA_TYPES
+            | BOOL_TYPES,
         )
     )
 
@@ -1400,7 +1472,9 @@ def test_scalar_floordiv(dtype_l, dtype_r):
     assert expect.dtype == got.dtype
 
 
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_floordiv_data_invalid())
+@pytest.mark.parametrize(
+    "dtype_l,dtype_r", make_scalar_floordiv_data_invalid()
+)
 def test_scalar_floordiv_invalid(dtype_l, dtype_r):
     test_value = 1
 
@@ -1445,12 +1519,18 @@ def make_scalar_truediv_data_invalid():
     invalid |= set(
         product(
             DATETIME_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
+            INTEGER_TYPES
+            | FLOAT_TYPES
+            | DATETIME_TYPES
+            | TIMEDELTA_TYPES
+            | BOOL_TYPES,
         )
     )
 
     # we cant true divide timedeltas by datetimes or bools or floats
-    invalid |= set(product(TIMEDELTA_TYPES, DATETIME_TYPES | BOOL_TYPES | FLOAT_TYPES))
+    invalid |= set(
+        product(TIMEDELTA_TYPES, DATETIME_TYPES | BOOL_TYPES | FLOAT_TYPES)
+    )
 
     return sorted(list(invalid))
 
@@ -1552,7 +1632,9 @@ def test_scalar_remainder(dtype_l, dtype_r):
     assert expect.dtype == got.dtype
 
 
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_remainder_data_invalid())
+@pytest.mark.parametrize(
+    "dtype_l,dtype_r", make_scalar_remainder_data_invalid()
+)
 def test_scalar_remainder_invalid(dtype_l, dtype_r):
     test_value = 1
 
@@ -1579,7 +1661,11 @@ def make_scalar_power_data_invalid():
     # datetimes and timedeltas cant go in exponents
     invalid |= set(
         product(
-            INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES | DATETIME_TYPES | BOOL_TYPES,
+            INTEGER_TYPES
+            | FLOAT_TYPES
+            | TIMEDELTA_TYPES
+            | DATETIME_TYPES
+            | BOOL_TYPES,
             DATETIME_TYPES | TIMEDELTA_TYPES,
         )
     )
@@ -1589,7 +1675,11 @@ def make_scalar_power_data_invalid():
     invalid |= set(
         product(
             DATETIME_TYPES | TIMEDELTA_TYPES,
-            DATETIME_TYPES | TIMEDELTA_TYPES | INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
+            DATETIME_TYPES
+            | TIMEDELTA_TYPES
+            | INTEGER_TYPES
+            | FLOAT_TYPES
+            | BOOL_TYPES,
         )
     )
 
@@ -1630,8 +1720,14 @@ def make_scalar_null_binops_data():
         + [(operator.sub, *dtypes) for dtypes in make_scalar_difference_data()]
         + [(operator.mul, *dtypes) for dtypes in make_scalar_product_data()]
         + [(operator.add, *dtypes) for dtypes in make_scalar_add_data()]
-        + [(operator.floordiv, *dtypes) for dtypes in make_scalar_floordiv_data()]
-        + [(operator.truediv, *dtypes) for dtypes in make_scalar_truediv_data()]
+        + [
+            (operator.floordiv, *dtypes)
+            for dtypes in make_scalar_floordiv_data()
+        ]
+        + [
+            (operator.truediv, *dtypes)
+            for dtypes in make_scalar_truediv_data()
+        ]
         + [(operator.mod, *dtypes) for dtypes in make_scalar_remainder_data()]
         + [(operator.pow, *dtypes) for dtypes in make_scalar_power_data()]
     )
@@ -1752,7 +1848,9 @@ def test_datetime_dateoffset_binaryop(
 @pytest.mark.filterwarnings(
     "ignore:Non-vectorized DateOffset:pandas.errors.PerformanceWarning"
 )
-@pytest.mark.filterwarnings("ignore:Discarding nonzero nanoseconds:UserWarning")
+@pytest.mark.filterwarnings(
+    "ignore:Discarding nonzero nanoseconds:UserWarning"
+)
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -2336,7 +2434,9 @@ def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
         ),
     ],
 )
-def test_binops_reflect_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
+def test_binops_reflect_decimal(
+    op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype
+):
     a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
     expect = utils._decimal_series(expect, expect_dtype)
@@ -3017,7 +3117,9 @@ def test_column_null_scalar_comparison(dtype, null_scalar, cmpop):
 
 @pytest.mark.parametrize("fn", ["eq", "ne", "lt", "gt", "le", "ge"])
 def test_equality_ops_index_mismatch(fn):
-    a = cudf.Series([1, 2, 3, None, None, 4], index=["a", "b", "c", "d", "e", "f"])
+    a = cudf.Series(
+        [1, 2, 3, None, None, 4], index=["a", "b", "c", "d", "e", "f"]
+    )
     b = cudf.Series(
         [-5, 4, 3, 2, 1, 0, 19, 11],
         index=["aa", "b", "c", "d", "e", "f", "y", "z"],
@@ -3149,7 +3251,9 @@ def test_empty_column(binop, data, scalar):
     "other",
     [
         cudf.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
-        cudf.DataFrame([[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]),
+        cudf.DataFrame(
+            [[9.4, 10.5], [11.6, 12.7], [13.8, 14.9], [15.1, 16.2]]
+        ),
         cudf.Series([5, 6, 7, 8]),
         cudf.Series([5.6, 6.7, 7.8, 8.9]),
         np.array([5, 6, 7, 8]),

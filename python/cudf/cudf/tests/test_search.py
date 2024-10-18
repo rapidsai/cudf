@@ -1,9 +1,10 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
-import cudf
 import cupy
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import gen_rand, random_bitmask
 
@@ -105,7 +106,9 @@ def test_searchsorted_categorical(side):
 
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_searchsorted_datetime(side):
-    psr1 = pd.Series(pd.date_range("20190101", "20200101", freq="400h", name="times"))
+    psr1 = pd.Series(
+        pd.date_range("20190101", "20200101", freq="400h", name="times")
+    )
     sr1 = cudf.from_pandas(psr1)
 
     psr2 = pd.Series(

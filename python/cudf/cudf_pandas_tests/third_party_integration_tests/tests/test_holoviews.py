@@ -9,12 +9,16 @@ hv.extension("bokeh")  # load holoviews extension
 
 
 def assert_holoviews_equal(expect, got):
-    expect_data, expect_ndims, expect_kdims, expect_vdims, expect_shape = expect
+    expect_data, expect_ndims, expect_kdims, expect_vdims, expect_shape = (
+        expect
+    )
     got_data, got_ndims, got_kdims, got_vdims, got_shape = got
 
     if isinstance(expect_data, dict):
         np.testing.assert_allclose(expect_data["x"], got_data["x"])
-        np.testing.assert_allclose(expect_data["Frequency"], got_data["Frequency"])
+        np.testing.assert_allclose(
+            expect_data["Frequency"], got_data["Frequency"]
+        )
     else:
         pd._testing.assert_frame_equal(expect_data, got_data)
     assert expect_ndims == got_ndims
@@ -62,7 +66,9 @@ def test_holoviews_curve(df):
 
 
 def test_holoviews_heatmap(df):
-    return get_plot_info(hv.HeatMap(df, kdims=["category", "category2"], vdims="y"))
+    return get_plot_info(
+        hv.HeatMap(df, kdims=["category", "category2"], vdims="y")
+    )
 
 
 def test_holoviews_histogram(df):

@@ -58,7 +58,9 @@ def test_feature_selection():
     X = rng.random((n_samples, n_features))
     y = rng.integers(0, 2, size=n_samples)
 
-    data = pd.DataFrame(X, columns=[f"feature{i}" for i in range(1, n_features + 1)])
+    data = pd.DataFrame(
+        X, columns=[f"feature{i}" for i in range(1, n_features + 1)]
+    )
     data["target"] = y
 
     # Select the top k features

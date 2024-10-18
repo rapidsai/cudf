@@ -2,13 +2,14 @@
 
 import operator
 
-import numpy as np
-import rmm
 from numba import types
 from numba.core.extending import models, register_model
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
+import numpy as np
+
+import rmm
 
 # libcudf size_type
 size_type = types.int32
@@ -189,7 +190,9 @@ class StringViewReplace(AbstractTemplate):
     key = "StringView.replace"
 
     def generic(self, args, kws):
-        return nb_signature(udf_string, string_view, string_view, recvr=self.this)
+        return nb_signature(
+            udf_string, string_view, string_view, recvr=self.this
+        )
 
 
 class StringViewAttrs(AttributeTemplate):
@@ -234,7 +237,9 @@ for func in string_return_attrs:
 
 
 for func in int_binary_funcs:
-    setattr(StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type))
+    setattr(
+        StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type)
+    )
 
 for func in id_unary_funcs:
     setattr(

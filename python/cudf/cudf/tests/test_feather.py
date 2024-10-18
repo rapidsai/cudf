@@ -3,11 +3,12 @@
 import os
 from string import ascii_letters
 
-import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+
+import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES
 
@@ -19,7 +20,10 @@ def pdf(request):
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        {f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ) for typ in types}
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        }
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None

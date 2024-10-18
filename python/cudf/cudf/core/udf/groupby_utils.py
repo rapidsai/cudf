@@ -2,13 +2,12 @@
 
 
 import cupy as cp
-import numpy as np
 from numba import cuda, types
 from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
+import numpy as np
 
-import cudf.core.udf.utils
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -19,6 +18,7 @@ from cudf.core.udf.templates import (
     group_initializer_template,
     groupby_apply_kernel_template,
 )
+import cudf.core.udf.utils
 from cudf.core.udf.utils import (
     UDFError,
     _all_dtypes_from_frame,
@@ -94,7 +94,9 @@ def _groupby_apply_kernel_string_from_template(frame, args):
     # Generate the initializers for each device function argument
     initializers = []
     for i, colname in enumerate(frame.keys()):
-        initializers.append(group_initializer_template.format(idx=i, name=colname))
+        initializers.append(
+            group_initializer_template.format(idx=i, name=colname)
+        )
 
     return groupby_apply_kernel_template.format(
         input_columns=input_columns,
@@ -105,7 +107,9 @@ def _groupby_apply_kernel_string_from_template(frame, args):
 
 def _get_groupby_apply_kernel(frame, func, args):
     np_field_types = np.dtype(list(_all_dtypes_from_frame(frame).items()))
-    dataframe_group_type = _get_frame_groupby_type(np_field_types, frame.index.dtype)
+    dataframe_group_type = _get_frame_groupby_type(
+        np_field_types, frame.index.dtype
+    )
 
     return_type = _get_udf_return_type(dataframe_group_type, func, args)
 
@@ -215,7 +219,9 @@ def _can_be_jitted(frame, func, args):
             ).items()
         )
     )
-    dataframe_group_type = _get_frame_groupby_type(np_field_types, frame.index.dtype)
+    dataframe_group_type = _get_frame_groupby_type(
+        np_field_types, frame.index.dtype
+    )
     try:
         _get_udf_return_type(dataframe_group_type, func, args)
         return True

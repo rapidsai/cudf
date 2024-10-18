@@ -41,10 +41,14 @@ def _parse_column_statistics(cs, column_statistics_blob):
 
     if cs.HasField("intStatistics"):
         column_statistics["minimum"] = (
-            cs.intStatistics.minimum if cs.intStatistics.HasField("minimum") else None
+            cs.intStatistics.minimum
+            if cs.intStatistics.HasField("minimum")
+            else None
         )
         column_statistics["maximum"] = (
-            cs.intStatistics.maximum if cs.intStatistics.HasField("maximum") else None
+            cs.intStatistics.maximum
+            if cs.intStatistics.HasField("maximum")
+            else None
         )
         column_statistics["sum"] = (
             cs.intStatistics.sum if cs.intStatistics.HasField("sum") else None
@@ -62,7 +66,9 @@ def _parse_column_statistics(cs, column_statistics_blob):
             else None
         )
         column_statistics["sum"] = (
-            cs.doubleStatistics.sum if cs.doubleStatistics.HasField("sum") else None
+            cs.doubleStatistics.sum
+            if cs.doubleStatistics.HasField("sum")
+            else None
         )
 
     elif cs.HasField("stringStatistics"):
@@ -81,7 +87,8 @@ def _parse_column_statistics(cs, column_statistics_blob):
     elif cs.HasField("bucketStatistics"):
         column_statistics["true_count"] = cs.bucketStatistics.count[0]
         column_statistics["false_count"] = (
-            column_statistics["number_of_values"] - column_statistics["true_count"]
+            column_statistics["number_of_values"]
+            - column_statistics["true_count"]
         )
 
     elif cs.HasField("decimalStatistics"):
@@ -165,7 +172,9 @@ def read_orc_statistics(
         path_or_buf = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, **kwargs
         )
-        path_or_buf = ioutils._select_single_source(path_or_buf, "read_orc_statistics")
+        path_or_buf = ioutils._select_single_source(
+            path_or_buf, "read_orc_statistics"
+        )
         (
             column_names,
             parsed_file_statistics,
@@ -175,7 +184,9 @@ def read_orc_statistics(
         # Parse file statistics
         file_statistics = {
             column_name: column_stats
-            for column_name, column_stats in zip(column_names, parsed_file_statistics)
+            for column_name, column_stats in zip(
+                column_names, parsed_file_statistics
+            )
             if columns is None or column_name in columns
         }
         files_statistics.append(file_statistics)
@@ -232,7 +243,9 @@ def _filter_stripes(
         num_rows_scanned = 0
         for i, stripe_statistics in enumerate(stripes_statistics):
             num_rows_before_stripe = num_rows_scanned
-            num_rows_scanned += next(iter(stripe_statistics.values())).number_of_values
+            num_rows_scanned += next(
+                iter(stripe_statistics.values())
+            ).number_of_values
             if stripes is not None and i not in stripes:
                 continue
             if skip_rows is not None and num_rows_scanned <= skip_rows:
@@ -298,7 +311,9 @@ def read_orc(
 
         # Must ensure a stripe for each source is specified, unless None
         if not len(stripes) == len(filepath_or_buffer):
-            raise ValueError("A list of stripes must be provided for each input source")
+            raise ValueError(
+                "A list of stripes must be provided for each input source"
+            )
 
     filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
@@ -342,14 +357,16 @@ def read_orc(
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
         if len(filepath_or_buffer) > 1:
             raise NotImplementedError(
-                "Using CPU via PyArrow only supports a single a " "single input source"
+                "Using CPU via PyArrow only supports a single a "
+                "single input source"
             )
 
         orc_file = orc.ORCFile(filepath_or_buffer[0])
         if stripes is not None and len(stripes) > 0:
             for stripe_source_file in stripes:
                 pa_tables = [
-                    read_orc_stripe(orc_file, i, columns) for i in stripe_source_file
+                    read_orc_stripe(orc_file, i, columns)
+                    for i in stripe_source_file
                 ]
                 pa_table = pa.concat_tables(pa_tables)
         else:
@@ -383,7 +400,8 @@ def to_orc(
 
     if isinstance(df.index, cudf.CategoricalIndex):
         raise NotImplementedError(
-            "Writing to ORC format is not yet supported with " "Categorical columns."
+            "Writing to ORC format is not yet supported with "
+            "Categorical columns."
         )
 
     if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):

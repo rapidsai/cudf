@@ -4,11 +4,11 @@
 
 from __future__ import annotations
 
-import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
 from typing import cast
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -108,7 +108,10 @@ def is_string_dtype(obj):
         Whether or not the array or dtype is of the string dtype.
     """
     return (
-        (isinstance(obj, (cudf.Index, cudf.Series)) and obj.dtype == cudf.dtype("O"))
+        (
+            isinstance(obj, (cudf.Index, cudf.Series))
+            and obj.dtype == cudf.dtype("O")
+        )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
             pd.api.types.is_string_dtype(obj)
@@ -171,9 +174,9 @@ def _is_scalar_or_zero_d_array(val):
     bool
         Return True if given object is scalar.
     """
-    return (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0) or is_scalar(
-        val
-    )
+    return (
+        isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0
+    ) or is_scalar(val)
 
 
 # TODO: We should be able to reuse the pandas function for this, need to figure
@@ -235,11 +238,16 @@ def _union_categoricals(
         raise TypeError("ignore_order is not yet implemented")
 
     result_col = cudf.core.column.CategoricalColumn._concat(
-        [cast(cudf.core.column.CategoricalColumn, obj._column) for obj in to_union]
+        [
+            cast(cudf.core.column.CategoricalColumn, obj._column)
+            for obj in to_union
+        ]
     )
     if sort_categories:
         sorted_categories = result_col.categories.sort_values(ascending=True)
-        result_col = result_col.reorder_categories(new_categories=sorted_categories)
+        result_col = result_col.reorder_categories(
+            new_categories=sorted_categories
+        )
 
     return cudf.CategoricalIndex._from_column(result_col)
 
@@ -288,7 +296,9 @@ def is_bool_dtype(arr_or_dtype):
         else:
             return pd_types.is_bool_dtype(arr_or_dtype=arr_or_dtype.dtype)
     elif isinstance(arr_or_dtype, cudf.CategoricalDtype):
-        return pd_types.is_bool_dtype(arr_or_dtype=arr_or_dtype.categories.dtype)
+        return pd_types.is_bool_dtype(
+            arr_or_dtype=arr_or_dtype.categories.dtype
+        )
     else:
         return pd_types.is_bool_dtype(arr_or_dtype=arr_or_dtype)
 
@@ -499,7 +509,9 @@ def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
     elif isinstance(dtype_to_check, pd.CategoricalDtype):
         if dtype_to_check.categories is None:
             return False
-        return _is_pandas_nullable_extension_dtype(dtype_to_check.categories.dtype)
+        return _is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
     elif isinstance(dtype_to_check, pd.IntervalDtype):
         return _is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
     return False
@@ -516,14 +528,18 @@ is_complex_dtype = pd_types.is_complex_dtype
 is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
 is_datetime64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
-is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_ns_dtype)
+is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64_ns_dtype
+)
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_int64_dtype = pd_types.is_int64_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
 is_timedelta64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
-is_timedelta64_ns_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_ns_dtype)
+is_timedelta64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_timedelta64_ns_dtype
+)
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
 is_sparse = pd_types.is_sparse
 # is_list_like = pd_types.is_list_like

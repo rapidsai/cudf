@@ -1,11 +1,13 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-import cudf
-import dask
 import numpy as np
 import pandas as pd
 import pytest
+
+import dask
 from dask import dataframe as dd
+
+import cudf
 
 import dask_cudf
 
@@ -61,7 +63,9 @@ def test_series_reduce(reducer):
         ),
     ],
 )
-@pytest.mark.parametrize("op", ["max", "min", "sum", "prod", "mean", "var", "std"])
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "prod", "mean", "var", "std"]
+)
 def test_rowwise_reductions(data, op):
     gddf = dask_cudf.from_cudf(data, npartitions=10)
     pddf = gddf.to_backend("pandas")

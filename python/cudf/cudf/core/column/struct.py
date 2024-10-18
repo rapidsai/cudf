@@ -55,7 +55,9 @@ class StructColumn(ColumnBase):
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
         # IntervalDtype is a subclass of StructDtype, so compare types exactly
         if type(dtype) is not StructDtype:
-            raise ValueError(f"{type(dtype).__name__} must be a StructDtype exactly.")
+            raise ValueError(
+                f"{type(dtype).__name__} must be a StructDtype exactly."
+            )
         return dtype
 
     @property
@@ -67,12 +69,17 @@ class StructColumn(ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         children = [
-            pa.nulls(len(child)) if len(child) == child.null_count else child.to_arrow()
+            pa.nulls(len(child))
+            if len(child) == child.null_count
+            else child.to_arrow()
             for child in self.children
         ]
 
         pa_type = pa.struct(
-            {field: child.type for field, child in zip(self.dtype.fields, children)}
+            {
+                field: child.type
+                for field, child in zip(self.dtype.fields, children)
+            }
         )
 
         if self.mask is not None:
@@ -111,7 +118,8 @@ class StructColumn(ColumnBase):
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
         return {
-            field: value for field, value in zip(self.dtype.fields, result.values())
+            field: value
+            for field, value in zip(self.dtype.fields, result.values())
         }
 
     def __setitem__(self, key, value):
@@ -188,7 +196,9 @@ class StructMethods(ColumnMethods):
 
     def __init__(self, parent=None):
         if not isinstance(parent.dtype, StructDtype):
-            raise AttributeError("Can only use .struct accessor with a 'struct' dtype")
+            raise AttributeError(
+                "Can only use .struct accessor with a 'struct' dtype"
+            )
         super().__init__(parent=parent)
 
     def field(self, key):

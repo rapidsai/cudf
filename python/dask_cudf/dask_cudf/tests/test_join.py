@@ -2,11 +2,13 @@
 
 from functools import partial
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
 from dask import dataframe as dd
+
+import cudf
 
 import dask_cudf
 
@@ -146,7 +148,9 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
 @pytest.mark.parametrize("right_nrows", param_nrows)
 @pytest.mark.parametrize("left_nkeys", [4, 5])
 @pytest.mark.parametrize("right_nkeys", [4, 5])
-def test_merge_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"):
+def test_merge_left(
+    left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"
+):
     chunksize = 3
 
     np.random.seed(0)
@@ -171,7 +175,9 @@ def test_merge_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"
 
     def normalize(df):
         return (
-            df.to_pandas().sort_values(["x", "y", "a_x", "a_y"]).reset_index(drop=True)
+            df.to_pandas()
+            .sort_values(["x", "y", "a_x", "a_y"])
+            .reset_index(drop=True)
         )
 
     # dask_cudf
@@ -189,7 +195,9 @@ def test_merge_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"
 @pytest.mark.parametrize("right_nrows", [5, 10])
 @pytest.mark.parametrize("left_nkeys", [4])
 @pytest.mark.parametrize("right_nkeys", [4])
-def test_merge_1col_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"):
+def test_merge_1col_left(
+    left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"
+):
     chunksize = 3
 
     np.random.seed(0)
@@ -209,7 +217,11 @@ def test_merge_1col_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how="
     )
 
     expect = left.merge(right, on=["x"], how=how)
-    expect = expect.to_pandas().sort_values(["x", "a_x", "a_y"]).reset_index(drop=True)
+    expect = (
+        expect.to_pandas()
+        .sort_values(["x", "a_x", "a_y"])
+        .reset_index(drop=True)
+    )
 
     # dask_cudf
     left = dask_cudf.from_cudf(left, chunksize=chunksize)
@@ -268,14 +280,18 @@ def test_indexed_join(how):
 
     # occasionally order is not correct (possibly do to hashing in the merge)
     d = d.sort_values("x")  # index is preserved
-    dg = dg.sort_values("x")  # index is reset -- sort_values will slow test down
+    dg = dg.sort_values(
+        "x"
+    )  # index is reset -- sort_values will slow test down
 
     dd.assert_eq(d, dg, check_index=False)
 
 
 @pytest.mark.parametrize("how", ["left", "inner"])
 def test_how(how):
-    left = cudf.DataFrame({"x": [1, 2, 3, 4, None], "y": [1.0, 2.0, 3.0, 4.0, 0.0]})
+    left = cudf.DataFrame(
+        {"x": [1, 2, 3, 4, None], "y": [1.0, 2.0, 3.0, 4.0, 0.0]}
+    )
     right = cudf.DataFrame({"x": [2, 3, None, 2], "y": [20, 30, 0, 20]})
 
     dleft = dd.from_pandas(left, npartitions=2)
@@ -317,8 +333,12 @@ def test_single_dataframe_merge(daskify):
 @pytest.mark.parametrize("how", ["inner", "left"])
 @pytest.mark.parametrize("on", ["id_1", ["id_1"], ["id_1", "id_2"]])
 def test_on(how, on):
-    left = cudf.DataFrame({"id_1": [1, 2, 3, 4, 5], "id_2": [1.0, 2.0, 3.0, 4.0, 0.0]})
-    right = cudf.DataFrame({"id_1": [2, 3, None, 2], "id_2": [2.0, 3.0, 4.0, 20]})
+    left = cudf.DataFrame(
+        {"id_1": [1, 2, 3, 4, 5], "id_2": [1.0, 2.0, 3.0, 4.0, 0.0]}
+    )
+    right = cudf.DataFrame(
+        {"id_1": [2, 3, None, 2], "id_2": [2.0, 3.0, 4.0, 20]}
+    )
 
     dleft = dd.from_pandas(left, npartitions=2)
     dright = dd.from_pandas(right, npartitions=3)

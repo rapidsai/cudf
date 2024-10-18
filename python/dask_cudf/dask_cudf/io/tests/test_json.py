@@ -3,10 +3,11 @@
 import math
 import os
 
-import dask
-import dask.dataframe as dd
 import pandas as pd
 import pytest
+
+import dask
+import dask.dataframe as dd
 from dask.utils import tmpfile
 
 import dask_cudf
@@ -110,7 +111,9 @@ def test_read_json_aggregate_files(tmp_path):
     assert df2.npartitions == math.ceil(df1.npartitions / 2)
     dd.assert_eq(df1, df2, check_index=False)
 
-    df2 = dask_cudf.read_json(json_path, aggregate_files=True, blocksize="1GiB")
+    df2 = dask_cudf.read_json(
+        json_path, aggregate_files=True, blocksize="1GiB"
+    )
     assert df2.npartitions == 1
     dd.assert_eq(df1, df2, check_index=False)
 

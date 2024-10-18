@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import cached_property
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -95,7 +96,9 @@ class ListColumn(ColumnBase):
                 # See https://github.com/rapidsai/cudf/issues/16164 why
                 # offset column can be uninitialized
                 break
-            current_offset = current_offset_col.element_indexing(current_offset)
+            current_offset = current_offset_col.element_indexing(
+                current_offset
+            )
             current_base_child = current_base_child.base_children[1]
 
         n += (
@@ -138,7 +141,8 @@ class ListColumn(ColumnBase):
                 return concatenate_rows([self, other])
             else:
                 raise NotImplementedError(
-                    "Lists concatenation for this operation is not yet" "supported"
+                    "Lists concatenation for this operation is not yet"
+                    "supported"
                 )
         else:
             raise TypeError("can only concatenate list to list")
@@ -204,7 +208,9 @@ class ListColumn(ColumnBase):
         self: "cudf.core.column.ListColumn", dtype: Dtype
     ) -> "cudf.core.column.ListColumn":
         if isinstance(dtype, ListDtype):
-            elements = self.base_children[1]._with_type_metadata(dtype.element_type)
+            elements = self.base_children[1]._with_type_metadata(
+                dtype.element_type
+            )
             return ListColumn(
                 data=None,
                 dtype=dtype,
@@ -329,7 +335,9 @@ class ListMethods(ColumnMethods):
 
     def __init__(self, parent: ParentType):
         if not isinstance(parent.dtype, ListDtype):
-            raise AttributeError("Can only use .list accessor with a 'list' dtype")
+            raise AttributeError(
+                "Can only use .list accessor with a 'list' dtype"
+            )
         super().__init__(parent=parent)
 
     def get(
@@ -397,11 +405,15 @@ class ListMethods(ColumnMethods):
         if not (default is None or default is NA):
             # determine rows for which `index` is out-of-bounds
             lengths = count_elements(self._column)
-            out_of_bounds_mask = (np.negative(index) > lengths) | (index >= lengths)
+            out_of_bounds_mask = (np.negative(index) > lengths) | (
+                index >= lengths
+            )
 
             # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_mask.any():
-                out = out._scatter_by_column(out_of_bounds_mask, cudf.Scalar(default))
+                out = out._scatter_by_column(
+                    out_of_bounds_mask, cudf.Scalar(default)
+                )
         if out.dtype != self._column.dtype.element_type:
             # libcudf doesn't maintain struct labels so we must transfer over
             # manually from the input column if we lost some information
@@ -511,7 +523,9 @@ class ListMethods(ColumnMethods):
         5       6
         dtype: int64
         """
-        return self._return_or_inplace(self._column.leaves(), retain_index=False)
+        return self._return_or_inplace(
+            self._column.leaves(), retain_index=False
+        )
 
     def len(self) -> ParentType:
         """
@@ -569,12 +583,18 @@ class ListMethods(ColumnMethods):
         if not isinstance(lists_indices_col, ListColumn):
             raise ValueError("lists_indices should be list type array.")
         if not lists_indices_col.size == self._column.size:
-            raise ValueError("lists_indices and list column is of different " "size.")
+            raise ValueError(
+                "lists_indices and list column is of different " "size."
+            )
         if (
-            not _is_non_decimal_numeric_dtype(lists_indices_col.children[1].dtype)
+            not _is_non_decimal_numeric_dtype(
+                lists_indices_col.children[1].dtype
+            )
             or lists_indices_col.children[1].dtype.kind not in "iu"
         ):
-            raise TypeError("lists_indices should be column of values of index types.")
+            raise TypeError(
+                "lists_indices should be column of values of index types."
+            )
 
         return self._return_or_inplace(
             segmented_gather(self._column, lists_indices_col)
@@ -747,5 +767,7 @@ class ListMethods(ColumnMethods):
         ListDtype(float64)
         """
         return self._return_or_inplace(
-            self._column._transform_leaves(lambda col, dtype: col.astype(dtype), dtype)
+            self._column._transform_leaves(
+                lambda col, dtype: col.astype(dtype), dtype
+            )
         )

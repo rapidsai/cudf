@@ -1,11 +1,11 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from numba import cuda
 import numpy as np
 import pandas as pd
+from pandas._testing import assert_equal
 import pytest
 import stumpy
-from numba import cuda
-from pandas._testing import assert_equal
 
 
 def stumpy_assert_equal(expected, got):
@@ -32,12 +32,16 @@ def test_1d_time_series():
 def test_1d_gpu():
     rng = np.random.default_rng(42)
     your_time_series = rng.random(10000)
-    window_size = 50  # Approximately, how many data points might be found in a pattern
+    window_size = (
+        50  # Approximately, how many data points might be found in a pattern
+    )
     all_gpu_devices = [
         device.id for device in cuda.list_devices()
     ]  # Get a list of all available GPU devices
 
-    return stumpy.gpu_stump(your_time_series, m=window_size, device_id=all_gpu_devices)
+    return stumpy.gpu_stump(
+        your_time_series, m=window_size, device_id=all_gpu_devices
+    )
 
 
 def test_multidimensional_timeseries():
@@ -54,15 +58,15 @@ def test_multidimensional_timeseries():
 def test_anchored_time_series_chains():
     rng = np.random.default_rng(42)
     your_time_series = rng.random(10000)
-    window_size = 50  # Approximately, how many data points might be found in a pattern
+    window_size = (
+        50  # Approximately, how many data points might be found in a pattern
+    )
 
     matrix_profile = stumpy.stump(your_time_series, m=window_size)
 
     left_matrix_profile_index = matrix_profile[:, 2]
     right_matrix_profile_index = matrix_profile[:, 3]
-    idx = (
-        10  # Subsequence index for which to retrieve the anchored time series chain for
-    )
+    idx = 10  # Subsequence index for which to retrieve the anchored time series chain for
 
     anchored_chain = stumpy.atsc(
         left_matrix_profile_index, right_matrix_profile_index, idx
@@ -78,9 +82,13 @@ def test_anchored_time_series_chains():
 def test_semantic_segmentation():
     rng = np.random.default_rng(42)
     your_time_series = rng.random(10000)
-    window_size = 50  # Approximately, how many data points might be found in a pattern
+    window_size = (
+        50  # Approximately, how many data points might be found in a pattern
+    )
 
     matrix_profile = stumpy.stump(your_time_series, m=window_size)
 
     subseq_len = 50
-    return stumpy.fluss(matrix_profile[:, 1], L=subseq_len, n_regimes=2, excl_factor=1)
+    return stumpy.fluss(
+        matrix_profile[:, 1], L=subseq_len, n_regimes=2, excl_factor=1
+    )

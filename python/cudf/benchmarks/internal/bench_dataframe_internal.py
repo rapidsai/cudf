@@ -1,9 +1,10 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 """Benchmarks of internal DataFrame methods."""
 
-from cudf.core.copy_types import BooleanMask
 from utils import benchmark_with_object, make_boolean_mask_column
+
+from cudf.core.copy_types import BooleanMask
 
 
 @benchmark_with_object(cls="dataframe", dtype="int")

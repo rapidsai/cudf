@@ -9,13 +9,14 @@ Usage:
     python analyze-test-failures.py <path-to-test-log> <file-or-pattern>
 
 Example:
+-------
     python analyze-test-failures.py log.json frame/*
 """
 
-import json
-import sys
 from collections import Counter
 from fnmatch import fnmatch
+import json
+import sys
 
 from rich.console import Console
 from rich.table import Table
@@ -36,7 +37,9 @@ def count_failures(log_file_name, pattern):
                 and line["when"] == "call"
                 and line["outcome"] == "failed"
             ):
-                line_module_name = line["location"][0].removeprefix(PANDAS_TEST_PREFIX)
+                line_module_name = line["location"][0].removeprefix(
+                    PANDAS_TEST_PREFIX
+                )
                 if fnmatch(line_module_name, pattern):
                     if "longrepr" in line and line["longrepr"]:
                         if isinstance(line["longrepr"], (tuple, list)):

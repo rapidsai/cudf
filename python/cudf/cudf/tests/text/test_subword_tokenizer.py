@@ -1,10 +1,11 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import os
 
-import cudf
 import cupy
 import numpy as np
 import pytest
+
+import cudf
 from cudf.core.subword_tokenizer import SubwordTokenizer
 from cudf.testing import assert_eq
 
@@ -15,9 +16,14 @@ def datadir(datadir):
 
 
 def assert_equal_tokenization_outputs(hf_output, cudf_output):
-    assert np.sum(hf_output["input_ids"] != cudf_output["input_ids"].get()) == 0
     assert (
-        np.sum(hf_output["attention_mask"] != cudf_output["attention_mask"].get()) == 0
+        np.sum(hf_output["input_ids"] != cudf_output["input_ids"].get()) == 0
+    )
+    assert (
+        np.sum(
+            hf_output["attention_mask"] != cudf_output["attention_mask"].get()
+        )
+        == 0
     )
 
 
@@ -26,8 +32,12 @@ def assert_equal_tokenization_outputs(hf_output, cudf_output):
 @pytest.mark.parametrize("stride", [0, 15, 30])
 @pytest.mark.parametrize("add_special_tokens", [True, False])
 @pytest.mark.parametrize("do_lower_case", [True, False])
-def test_subword_tokenize(seq_len, stride, add_special_tokens, do_lower_case, datadir):
-    with open(os.path.join(datadir, "test_sentences.txt"), encoding="utf-8") as file:
+def test_subword_tokenize(
+    seq_len, stride, add_special_tokens, do_lower_case, datadir
+):
+    with open(
+        os.path.join(datadir, "test_sentences.txt"), encoding="utf-8"
+    ) as file:
         input_sentence_ls = [line.strip() for line in file]
 
     vocab_dir = os.path.join(datadir, "bert_base_cased_sampled")
@@ -118,7 +128,9 @@ def test_text_subword_tokenize(tmpdir):
 
     cudf_tokenizer = SubwordTokenizer(hash_file)
 
-    token_d = cudf_tokenizer(sr, 8, 8, add_special_tokens=False, truncation=True)
+    token_d = cudf_tokenizer(
+        sr, 8, 8, add_special_tokens=False, truncation=True
+    )
     tokens, masks, metadata = (
         token_d["input_ids"],
         token_d["attention_mask"],

@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pytest
+
 from cudf.pandas import LOADED
 from cudf.pandas._wrappers.common import array_function_method
 
@@ -11,6 +12,7 @@ if not LOADED:
     raise ImportError("These tests must be run with cudf.pandas loaded")
 
 import pandas._testing as tm
+
 from cudf.pandas.fast_slow_proxy import make_final_proxy_type
 
 

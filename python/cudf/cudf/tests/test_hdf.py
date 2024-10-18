@@ -3,10 +3,11 @@
 import os
 from string import ascii_letters
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.testing import assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, UNSIGNED_TYPES
 
@@ -15,7 +16,9 @@ pytest.importorskip("tables")
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = set(NUMERIC_TYPES + ["datetime64[ns]"] + ["bool"]) - set(UNSIGNED_TYPES)
+    types = set(NUMERIC_TYPES + ["datetime64[ns]"] + ["bool"]) - set(
+        UNSIGNED_TYPES
+    )
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
     nrows = request.param
@@ -57,7 +60,9 @@ def hdf_files(request, tmp_path_factory, pdf):
 
     fname_series = {}
     for column in pdf.columns:
-        fname_series[column] = tmp_path_factory.mktemp("hdf") / "test_series.hdf"
+        fname_series[column] = (
+            tmp_path_factory.mktemp("hdf") / "test_series.hdf"
+        )
         pdf[column].to_hdf(
             fname_series[column], key="hdf_series_tests", format=request.param
         )
@@ -79,7 +84,9 @@ def test_hdf_reader(hdf_files, columns):
     expect_df = pd.read_hdf(hdf_df_file, columns=columns)
     got_df = cudf.read_hdf(hdf_df_file, columns=columns)
 
-    assert_eq(expect_df, got_df, check_categorical=False, check_index_type=False)
+    assert_eq(
+        expect_df, got_df, check_categorical=False, check_index_type=False
+    )
 
     for column in hdf_series.keys():
         expect_series = pd.read_hdf(hdf_series[column])

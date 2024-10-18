@@ -71,7 +71,9 @@ class Fuzzer:
             crash_log_path = error_file_name + "_crash.log"
 
         with open(crash_path, "w") as f:
-            json.dump(self._data_handler.current_params, f, sort_keys=True, indent=4)
+            json.dump(
+                self._data_handler.current_params, f, sort_keys=True, indent=4
+            )
 
         logging.info(f"Crash params was written to {crash_path}")
 

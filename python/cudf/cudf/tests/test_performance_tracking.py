@@ -2,10 +2,12 @@
 
 from io import StringIO
 
-import cudf
 import pytest
+
 import rmm.mr
 import rmm.statistics
+
+import cudf
 from cudf.utils.performance_tracking import (
     get_memory_records,
     print_memory_report,
