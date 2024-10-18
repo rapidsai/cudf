@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
 from libcpp cimport bool
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type
 
 

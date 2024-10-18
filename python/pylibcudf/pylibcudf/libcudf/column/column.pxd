@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column_view cimport (
     column_view,
     mutable_column_view,
@@ -19,15 +19,15 @@ cdef extern from "cudf/column/column.hpp" namespace "cudf" nogil:
         vector[unique_ptr[column]] children
 
     cdef cppclass column:
-        column() except +
-        column(const column& other) except +
+        column() except +libcudf_exception_handler
+        column(const column& other) except +libcudf_exception_handler
 
-        column(column_view view) except +
+        column(column_view view) except +libcudf_exception_handler
 
-        size_type size() except +
-        size_type null_count() except +
-        bool has_nulls() except +
-        data_type type() except +
-        column_view view() except +
-        mutable_column_view mutable_view() except +
-        column_contents release() except +
+        size_type size() except +libcudf_exception_handler
+        size_type null_count() except +libcudf_exception_handler
+        bool has_nulls() except +libcudf_exception_handler
+        data_type type() except +libcudf_exception_handler
+        column_view view() except +libcudf_exception_handler
+        mutable_column_view mutable_view() except +libcudf_exception_handler
+        column_contents release() except +libcudf_exception_handler

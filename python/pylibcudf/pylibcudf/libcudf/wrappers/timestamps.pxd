@@ -1,6 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from libc.stdint cimport int64_t
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 
 cdef extern from "cudf/wrappers/timestamps.hpp" namespace "cudf" nogil:

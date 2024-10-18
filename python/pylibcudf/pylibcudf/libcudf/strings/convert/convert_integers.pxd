@@ -1,5 +1,4 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
-
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
