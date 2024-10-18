@@ -42,7 +42,7 @@ class BooleanFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children
