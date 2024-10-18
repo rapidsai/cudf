@@ -198,7 +198,7 @@ std::tm make_tm(int year, int month, int day);
 int32_t days_since_epoch(int year, int month, int day);
 
 /**
- * @brief Write a `cudf::table` to a parquet device buffer
+ * @brief Write a `cudf::table` to a parquet cuio sink
  *
  * @param table The `cudf::table` to write
  * @param col_names The column names of the table
