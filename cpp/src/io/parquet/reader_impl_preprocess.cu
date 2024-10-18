@@ -1629,8 +1629,10 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         get_page_nesting_size{
           d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
 
-      auto const reduction_keys = cudf::detail::make_counting_transform_iterator(
-        key_start, get_reduction_key{subpass.pages.size()});
+      // Manually create a size_t `key_start` compatible counting_transform_iterator.
+      auto const reduction_keys =
+        thrust::make_transform_iterator(thrust::make_counting_iterator<std::size_t>(key_start),
+                                        get_reduction_key{subpass.pages.size()});
 
       // Find the size of each column
       thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),

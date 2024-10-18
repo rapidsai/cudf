@@ -49,7 +49,8 @@ namespace cudf {
 namespace detail {
 /**
  * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
- * `thrust::counting_iterator`.
+ * `thrust::counting_iterator` of type smaller than or equal to int32_t in size.
+ *
  *
  * Example:
  * @code{.cpp}
@@ -62,11 +63,15 @@ namespace detail {
  * iter[n] == n * n
  * @endcode
  *
- * @param start The starting value of the counting iterator
+ * @param start The starting value of the counting iterator (must be int32_t or smaller type).
  * @param f The unary function to apply to the counting iterator.
  * @return A transform iterator that applies `f` to a counting iterator
  */
-template <typename CountingIterType, typename UnaryFunction>
+template <typename CountingIterType,
+          typename UnaryFunction,
+          typename = std::enable_if_t<std::is_integral_v<CountingIterType> and
+                                      std::numeric_limits<CountingIterType>::max() <=
+                                        std::numeric_limits<cudf::size_type>::max()>>
 CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(CountingIterType start,
                                                               UnaryFunction f)
 {
