@@ -49,7 +49,7 @@ namespace cudf {
 namespace detail {
 /**
  * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
- * `thrust::counting_iterator` of type smaller than or equal to int32_t in size.
+ * `thrust::counting_iterator` within the range [0, INT_MAX].
  *
  *
  * Example:
@@ -69,9 +69,9 @@ namespace detail {
  */
 template <typename CountingIterType,
           typename UnaryFunction,
-          typename = std::enable_if_t<std::is_integral_v<CountingIterType> and
-                                      std::numeric_limits<CountingIterType>::max() <=
-                                        std::numeric_limits<cudf::size_type>::max()>>
+          typename = cuda::std::enable_if_t<cuda::std::is_integral_v<CountingIterType> and
+                                      cuda::std::numeric_limits<CountingIterType>::max() <=
+                                        cuda::std::numeric_limits<cudf::size_type>::max()>>
 CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(CountingIterType start,
                                                               UnaryFunction f)
 {
