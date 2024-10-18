@@ -95,6 +95,16 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
+      - id: no-unseeded-default-rng
+        name: no-unseeded-default-rng
+        description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
+        entry: |
+          # Check for usage of default_rng without seeding
+          default_rng\(\)|
+          # Check for usage of np.random.seed
+          np.random.seed\(
+        language: pygrep
+        types: [python]
       - id: cmake-format
         name: cmake-format
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format

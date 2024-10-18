@@ -164,7 +164,8 @@ def test_series(testlist):
 
 
 def test_multiindex():
-    pdf = pd.DataFrame(np.random.rand(7, 5))
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(7, 5)))
     pdf.index = pd.MultiIndex(
         [
             ["a", "b", "c"],

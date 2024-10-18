@@ -710,9 +710,7 @@ class regex_parser {
     std::stack<int> lbra_stack;
     auto repeat_start_index = -1;
 
-    for (std::size_t index = 0; index < in.size(); index++) {
-      auto const item = in[index];
-
+    for (auto const item : in) {
       if (item.type != COUNTED && item.type != COUNTED_LAZY) {
         out.push_back(item);
         if (item.type == LBRA || item.type == LBRA_NC) {
@@ -739,7 +737,7 @@ class regex_parser {
         auto const m = item.d.count.m;  // maximum count
         assert(n >= 0 && "invalid repeat count value n");
         // zero-repeat edge-case: need to erase the previous items
-        if (n == 0 && m == 0) { out.erase(begin, end); }
+        if (n == 0) { out.erase(begin, end); }
 
         std::vector<regex_parser::Item> repeat_copy(begin, end);
         // special handling for quantified capture groups

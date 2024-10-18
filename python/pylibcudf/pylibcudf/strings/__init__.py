@@ -5,6 +5,7 @@ from . import (
     capitalize,
     case,
     char_types,
+    combine,
     contains,
     convert,
     extract,
