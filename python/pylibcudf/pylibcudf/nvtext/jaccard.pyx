@@ -36,12 +36,10 @@ cpdef Column jaccard_index(Column input1, Column input2, size_type width):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_jaccard_index(
-                c_input1,
-                c_input2,
-                width
-            )
+        c_result = cpp_jaccard_index(
+            c_input1,
+            c_input2,
+            width
         )
 
     return Column.from_libcudf(move(c_result))

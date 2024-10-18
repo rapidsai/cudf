@@ -39,12 +39,10 @@ cpdef Scalar reduce(Column col, Aggregation agg, DataType data_type):
     cdef unique_ptr[scalar] result
     cdef const reduce_aggregation *c_agg = agg.view_underlying_as_reduce()
     with nogil:
-        result = move(
-            cpp_reduce.cpp_reduce(
-                col.view(),
-                dereference(c_agg),
-                data_type.c_obj
-            )
+        result = cpp_reduce.cpp_reduce(
+            col.view(),
+            dereference(c_agg),
+            data_type.c_obj
         )
     return Scalar.from_libcudf(move(result))
 
@@ -71,12 +69,10 @@ cpdef Column scan(Column col, Aggregation agg, scan_type inclusive):
     cdef unique_ptr[column] result
     cdef const scan_aggregation *c_agg = agg.view_underlying_as_scan()
     with nogil:
-        result = move(
-            cpp_reduce.cpp_scan(
-                col.view(),
-                dereference(c_agg),
-                inclusive,
-            )
+        result = cpp_reduce.cpp_scan(
+            col.view(),
+            dereference(c_agg),
+            inclusive,
         )
     return Column.from_libcudf(move(result))
 
@@ -99,7 +95,7 @@ cpdef tuple minmax(Column col):
     """
     cdef pair[unique_ptr[scalar], unique_ptr[scalar]] result
     with nogil:
-        result = move(cpp_reduce.cpp_minmax(col.view()))
+        result = cpp_reduce.cpp_minmax(col.view())
 
     return (
         Scalar.from_libcudf(move(result.first)),

@@ -39,11 +39,9 @@ cpdef Column to_booleans(Column input, Scalar true_string):
     )
 
     with nogil:
-        c_result = move(
-            cpp_convert_booleans.to_booleans(
-                input.view(),
-                dereference(c_true_string)
-            )
+        c_result = cpp_convert_booleans.to_booleans(
+            input.view(),
+            dereference(c_true_string)
         )
 
     return Column.from_libcudf(move(c_result))
@@ -80,12 +78,10 @@ cpdef Column from_booleans(Column booleans, Scalar true_string, Scalar false_str
     )
 
     with nogil:
-        c_result = move(
-            cpp_convert_booleans.from_booleans(
-                booleans.view(),
-                dereference(c_true_string),
-                dereference(c_false_string),
-            )
+        c_result = cpp_convert_booleans.from_booleans(
+            booleans.view(),
+            dereference(c_true_string),
+            dereference(c_false_string),
         )
 
     return Column.from_libcudf(move(c_result))
