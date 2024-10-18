@@ -44,7 +44,7 @@ jobs:
       needs: ${{ toJSON(needs) }}
   changed-files:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@fix-changed-files-too-long
     with:
       files_yaml: |
         test_cpp:
