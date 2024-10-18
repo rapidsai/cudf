@@ -1169,6 +1169,8 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
 
 void reader::impl::handle_chunking(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
     // setup the next pass
@@ -1210,6 +1212,8 @@ void reader::impl::handle_chunking(read_mode mode)
 
 void reader::impl::setup_next_pass(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   auto const num_passes = _file_itm_data.num_passes();
 
   // always create the pass struct, even if we end up with no work.
@@ -1329,6 +1333,8 @@ void reader::impl::setup_next_pass(read_mode mode)
 
 void reader::impl::setup_next_subpass(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass    = *_pass_itm_data;
   pass.subpass  = std::make_unique<subpass_intermediate_data>();
   auto& subpass = *pass.subpass;
@@ -1492,6 +1498,8 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
 void reader::impl::create_global_chunk_info()
 {
+  CUDF_FUNC_RANGE();
+
   auto const num_rows         = _file_itm_data.global_num_rows;
   auto const& row_groups_info = _file_itm_data.row_groups;
   auto& chunks                = _file_itm_data.chunks;
@@ -1592,6 +1600,8 @@ void reader::impl::create_global_chunk_info()
 
 void reader::impl::compute_input_passes()
 {
+  CUDF_FUNC_RANGE();
+
   // at this point, row_groups has already been filtered down to just the row groups we need to
   // handle optional skip_rows/num_rows parameters.
   auto const& row_groups_info = _file_itm_data.row_groups;
