@@ -53,6 +53,33 @@ struct schema_element {
    * @brief Allows specifying this column's child columns target type
    */
   std::map<std::string, schema_element> child_types;
+  // // Add constructors for schema_element to keep order too with intializer list.
+  // // templated constructor with schema_element<bool keep_order=false>
+  // // store the order as
+  std::optional<std::vector<std::string>> column_order;
+
+  schema_element(data_type type,
+                 std::map<std::string, schema_element> child_types = {},
+                 std::optional<std::vector<std::string>> column_order = std::nullopt)
+    : type{type}, child_types{std::move(child_types)}, column_order{std::move(column_order)}
+  {}
+  schema_element(data_type type,
+                 std::initializer_list<std::pair<const std::string, schema_element>> child_types)
+    : type{type}
+  {
+    this->column_order->reserve(child_types.size());
+    for(auto const& [key, value] : child_types) {
+      this->column_order->push_back(key);
+    }
+    this->child_types = {std::move(child_types)};
+  }
+
+  schema_element(schema_element const& other) = default;
+  schema_element(schema_element&& other) noexcept = default;
+  schema_element& operator=(schema_element const& other) = default;
+  schema_element& operator=(schema_element&& other) noexcept = default;
+  ~schema_element() = default;
+
 };
 
 /**
