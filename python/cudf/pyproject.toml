@@ -131,11 +131,13 @@ provider = "scikit_build_core.metadata.regex"
 input = "cudf/VERSION"
 regex = "(?P<value>.*)"
 
+[tool.ruff]
+extend = "../../pyproject.toml"
+
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["cudf"]
-known-third-party = ["dask", "distributed", "dask_cuda", "rmm", "pylibcudf"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
 [tool.ruff.lint.isort.sections]

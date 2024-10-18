@@ -32,11 +32,13 @@ test = [
 Homepage = "https://github.com/rapidsai/cudf"
 Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 
+[tool.ruff]
+extend = "../../pyproject.toml"
+
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["cudf_kafka"]
-known-third-party = ["dask", "distributed", "dask_cuda", "streamz", "rmm", "cudf", "dask_cudf"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
 [tool.ruff.lint.isort.sections]

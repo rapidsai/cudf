@@ -57,7 +57,6 @@ Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["cudf"]
-known-third-party = ["dask", "distributed", "dask_cuda", "rmm"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
 [tool.ruff.lint.isort.sections]

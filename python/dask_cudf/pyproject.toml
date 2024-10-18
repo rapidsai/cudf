@@ -69,11 +69,13 @@ version = {file = "dask_cudf/VERSION"}
 [tool.setuptools.packages.find]
 exclude = ["*tests*"]
 
+[tool.ruff]
+extend = "../../pyproject.toml"
+
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
 known-first-party = ["dask_cudf"]
-known-third-party = ["dask", "distributed", "dask_cuda", "rmm", "cudf"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
 [tool.ruff.lint.isort.sections]
