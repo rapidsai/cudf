@@ -474,6 +474,40 @@ TEST_F(StringsContainsTests, FixedQuantifier)
   }
 }
 
+TEST_F(StringsContainsTests, ZeroRangeQuantifier)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "", "abc", "XYAZ", "ABC", "ZYXA"});
+  auto sv    = cudf::strings_column_view(input);
+
+  auto pattern = std::string("A{0,}");  // should match everyting
+  auto prog    = cudf::strings::regex_program::create(pattern);
+
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1});
+    auto results  = cudf::strings::contains_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 1, 4, 5, 4, 5});
+    auto results  = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+
+  pattern = std::string("(?:ab){0,3}");
+  prog    = cudf::strings::regex_program::create(pattern);
+
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1});
+    auto results  = cudf::strings::contains_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 1, 3, 5, 4, 5});
+    auto results  = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
 TEST_F(StringsContainsTests, NestedQuantifier)
 {
   auto input   = cudf::test::strings_column_wrapper({"TEST12 1111 2222 3333 4444 5555",

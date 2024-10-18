@@ -56,8 +56,15 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_link_libraries(
     ${CMAKE_TEST_NAME}
-    PRIVATE cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
-            nvtx3::nvtx3-cpp $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
+    PRIVATE cudf::cudftestutil
+            cudf::cudftestutil_impl
+            GTest::gmock
+            GTest::gmock_main
+            GTest::gtest
+            GTest::gtest_main
+            nvtx3::nvtx3-cpp
+            $<TARGET_NAME_IF_EXISTS:conda_env>
+            "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -76,6 +83,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
         "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
     )
   endif()
+  enable_clang_tidy(${CMAKE_TEST_NAME})
 endfunction()
 
 # ##################################################################################################
@@ -718,6 +726,7 @@ ConfigureTest(
   streams/strings/contains_test.cpp
   streams/strings/convert_test.cpp
   streams/strings/extract_test.cpp
+  streams/strings/factory_test.cpp
   streams/strings/filter_test.cpp
   streams/strings/find_test.cpp
   streams/strings/replace_test.cpp
