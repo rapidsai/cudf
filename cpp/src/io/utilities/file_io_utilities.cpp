@@ -110,7 +110,11 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    if (driver_close != nullptr) driver_close();
+    // TODO: This destructor is called after the main function returns. The cuFileDriverClose()
+    // internally calls CUDA API, resulting in UB (usually manifested as segfault), and therefore
+    // should not be called here. However, even in the absence of cuFileDriverClose(), cuFile will
+    // implicitly close the driver, during which process some CUDA calls are still made, likely
+    // causing segfault. The best way to clean up the resources needs to be revisited in the future.
     if (cf_lib != nullptr) dlclose(cf_lib);
   }
 

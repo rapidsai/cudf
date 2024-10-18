@@ -104,7 +104,7 @@ class cufile_shim;
 /**
  * @brief Class that provides RAII for cuFile file registration.
  */
-struct cufile_registered_file {
+class cufile_registered_file {
   void register_handle();
 
  public:
