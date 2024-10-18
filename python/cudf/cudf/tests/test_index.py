@@ -2645,21 +2645,20 @@ def test_isin_multiindex(data, values, level, err):
         )
 
 
-range_data = [
-    range(np.random.randint(0, 100)),
-    range(9, 12, 2),
-    range(20, 30),
-    range(100, 1000, 10),
-    range(0, 10, -2),
-    range(0, -10, 2),
-    range(0, -10, -2),
-]
-
-
-@pytest.fixture(params=range_data)
+@pytest.fixture(
+    params=[
+        range(np.random.default_rng(seed=0).integers(0, 100)),
+        range(9, 12, 2),
+        range(20, 30),
+        range(100, 1000, 10),
+        range(0, 10, -2),
+        range(0, -10, 2),
+        range(0, -10, -2),
+    ]
+)
 def rangeindex(request):
     """Create a cudf RangeIndex of different `nrows`"""
-    return RangeIndex(request.param)
+    return cudf.RangeIndex(request.param)
 
 
 @pytest.mark.parametrize(
@@ -2830,21 +2829,20 @@ def test_rangeindex_append_return_rangeindex():
     assert_eq(result, expected)
 
 
-index_data = [
-    range(np.random.randint(0, 100)),
-    range(0, 10, -2),
-    range(0, -10, 2),
-    range(0, -10, -2),
-    range(0, 1),
-    [1, 2, 3, 1, None, None],
-    [None, None, 3.2, 1, None, None],
-    [None, "a", "3.2", "z", None, None],
-    pd.Series(["a", "b", None], dtype="category"),
-    np.array([1, 2, 3, None], dtype="datetime64[s]"),
-]
-
-
-@pytest.fixture(params=index_data)
+@pytest.fixture(
+    params=[
+        range(np.random.default_rng(seed=0).integers(0, 100)),
+        range(0, 10, -2),
+        range(0, -10, 2),
+        range(0, -10, -2),
+        range(0, 1),
+        [1, 2, 3, 1, None, None],
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ]
+)
 def index(request):
     """Create a cudf Index of different dtypes"""
     return cudf.Index(request.param)
