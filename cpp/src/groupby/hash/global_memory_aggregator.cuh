@@ -13,28 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.cuh>
 
 #include <cuda/std/cstddef>
 #include <cuda/std/type_traits>
 
 namespace cudf::groupby::detail::hash {
-
 template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_gmem {
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index,
-                             cudf::column_device_view source_column,
-                             cuda::std::byte* source,
-                             cudf::size_type source_index) const noexcept
+  __device__ void operator()(cudf::mutable_column_device_view,
+                             cudf::size_type,
+                             cudf::column_device_view,
+                             cuda::std::byte*,
+                             cudf::size_type) const noexcept
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
@@ -169,7 +166,6 @@ struct update_target_element_gmem<
   }
 };
 
-// TODO: VALID and ALL have same code
 template <typename Source>
 struct update_target_element_gmem<
   Source,
@@ -249,6 +245,18 @@ struct update_target_element_gmem<
   }
 };
 
+/**
+ * @brief A functor that updates a single element in the target column stored in global memory by
+ * applying an aggregation operation to a corresponding element from a source column in shared
+ * memory.
+ *
+ * This functor can NOT be used for dictionary columns.
+ *
+ * This is a redundant copy replicating the behavior of `elementwise_aggregator` from
+ * `cudf/detail/aggregation/device_aggregators.cuh`. The key difference is that this functor accepts
+ * a pointer to raw bytes as the source, as `column_device_view` cannot yet be constructed from
+ * shared memory.
+ */
 struct gmem_element_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
   __device__ void operator()(cudf::mutable_column_device_view target,
@@ -258,11 +266,12 @@ struct gmem_element_aggregator {
                              bool* source_mask,
                              cudf::size_type source_index) const noexcept
   {
+    // Early exit for all aggregation kinds since shared memory aggregation of
+    // `COUNT_ALL` is always valid
     if (!source_mask[source_index]) { return; }
 
     update_target_element_gmem<Source, k>{}(
       target, target_index, source_column, source, source_index);
   }
 };
-
 }  // namespace cudf::groupby::detail::hash

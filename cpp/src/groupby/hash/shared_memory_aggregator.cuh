@@ -13,28 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/traits.cuh>
 
 #include <cuda/std/cstddef>
 #include <cuda/std/type_traits>
 
 namespace cudf::groupby::detail::hash {
-
 template <typename Source, cudf::aggregation::Kind k, typename Enable = void>
 struct update_target_element_shmem {
-  __device__ void operator()(cuda::std::byte* target,
-                             bool* target_mask,
-                             cudf::size_type target_index,
-                             cudf::column_device_view source,
-                             cudf::size_type source_index) const
+  __device__ void operator()(
+    cuda::std::byte*, bool*, cudf::size_type, cudf::column_device_view, cudf::size_type) const
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
@@ -238,6 +232,18 @@ struct update_target_element_shmem<
   }
 };
 
+/**
+ * @brief A functor that updates a single element in the target column stored in shared memory by
+ * applying an aggregation operation to a corresponding element from a source column in global
+ * memory.
+ *
+ * This functor can NOT be used for dictionary columns.
+ *
+ * This is a redundant copy replicating the behavior of `elementwise_aggregator` from
+ * `cudf/detail/aggregation/device_aggregators.cuh`. The key difference is that this functor accepts
+ * a pointer to raw bytes as the source, as `column_device_view` cannot yet be constructed from
+ * shared memory.
+ */
 struct shmem_element_aggregator {
   template <typename Source, cudf::aggregation::Kind k>
   __device__ void operator()(cuda::std::byte* target,
@@ -246,6 +252,7 @@ struct shmem_element_aggregator {
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
+    // Check nullability for all aggregation kinds but `COUNT_ALL`
     if constexpr (k != cudf::aggregation::COUNT_ALL) {
       if (source.is_null(source_index)) { return; }
     }
