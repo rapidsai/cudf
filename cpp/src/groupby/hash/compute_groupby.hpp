@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 #pragma once
-
-#include "helpers.cuh"
 
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/groupby.hpp>
@@ -54,15 +52,27 @@ namespace cudf::groupby::detail::hash {
  * requested in `requests`, we gather sparse results into a column of dense
  * results using the aforementioned index vector. Dense results are stored into
  * the in/out parameter `cache`.
+ *
+ * @tparam Equal Device row comparator type
+ * @tparam Hash Device row hasher type
+ *
+ * @param keys Table whose rows act as the groupby keys
+ * @param requests The set of columns to aggregate and the aggregations to perform
+ * @param skip_rows_with_nulls Flag indicating whether to ignore nulls or not
+ * @param d_row_equal Device row comparator
+ * @param d_row_hash Device row hasher
+ * @param cache Dense aggregation results
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table
+ * @return Table of unique keys
  */
-template <typename Equal>
+template <typename Equal, typename Hash>
 std::unique_ptr<cudf::table> compute_groupby(table_view const& keys,
                                              host_span<aggregation_request const> requests,
-                                             cudf::detail::result_cache* cache,
                                              bool skip_rows_with_nulls,
                                              Equal const& d_row_equal,
-                                             row_hash_t const& d_row_hash,
+                                             Hash const& d_row_hash,
+                                             cudf::detail::result_cache* cache,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
-
 }  // namespace cudf::groupby::detail::hash

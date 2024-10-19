@@ -25,6 +25,17 @@
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
+/**
+ * @brief Computes and returns a device vector containing all populated keys in
+ * `key_set`.
+ *
+ * @tparam SetType Type of the key hash set
+ *
+ * @param key_set Key hash set
+ * TODO
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return An array of unique keys contained in `key_set`
+ */
 template <typename SetType>
 void extract_populated_keys(SetType const& key_set,
                             rmm::device_uvector<cudf::size_type>& populated_keys,
