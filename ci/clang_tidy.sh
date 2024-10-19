@@ -42,7 +42,7 @@ cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinj
 cmake --build cpp/build > build_output.txt 2>&1
 
 # Parse the build output to extract only IWYU's proposed changes.
-python cpp/scrips/parse_iwyu_output.py build_output.txt iwyu_output.txt
+python cpp/scripts/parse_iwyu_output.py build_output.txt iwyu_output.txt
 
 # Save the IWYU output as an artifact.
 mkdir -p ${RAPIDS_ARTIFACTS_DIR}
