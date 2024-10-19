@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,7 +173,7 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation c
   cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
 
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     col.size(),
     var_hash_functor{
@@ -196,5 +196,4 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::std_aggregation c
 
 template class hash_compound_agg_finalizer<hash_set_ref_t<cuco::find_tag>>;
 template class hash_compound_agg_finalizer<nullable_hash_set_ref_t<cuco::find_tag>>;
-
 }  // namespace cudf::groupby::detail::hash
