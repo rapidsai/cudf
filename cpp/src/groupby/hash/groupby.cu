@@ -32,7 +32,6 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -80,7 +79,7 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
  * @return true `t` is valid for a hash based groupby
  * @return false `t` is invalid for a hash based groupby
  */
-constexpr bool is_hash_aggregation(aggregation::Kind t)
+bool constexpr is_hash_aggregation(aggregation::Kind t)
 {
   return array_contains(hash_aggregations, t);
 }
@@ -88,8 +87,8 @@ constexpr bool is_hash_aggregation(aggregation::Kind t)
 std::unique_ptr<table> dispatch_groupby(table_view const& keys,
                                         host_span<aggregation_request const> requests,
                                         cudf::detail::result_cache* cache,
-                                        bool keys_have_nulls,
-                                        null_policy include_null_keys,
+                                        bool const keys_have_nulls,
+                                        null_policy const include_null_keys,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
@@ -105,11 +104,11 @@ std::unique_ptr<table> dispatch_groupby(table_view const& keys,
   if (cudf::detail::has_nested_columns(keys)) {
     auto const d_row_equal = comparator.equal_to<true>(has_null, null_keys_are_equal);
     return compute_groupby<nullable_row_comparator_t>(
-      keys, requests, cache, skip_rows_with_nulls, d_row_equal, d_row_hash, stream, mr);
+      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
   } else {
     auto const d_row_equal = comparator.equal_to<false>(has_null, null_keys_are_equal);
     return compute_groupby<row_comparator_t>(
-      keys, requests, cache, skip_rows_with_nulls, d_row_equal, d_row_hash, stream, mr);
+      keys, requests, skip_rows_with_nulls, d_row_equal, d_row_hash, cache, stream, mr);
   }
 }
 }  // namespace
