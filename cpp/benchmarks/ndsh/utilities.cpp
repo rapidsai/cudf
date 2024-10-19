@@ -17,6 +17,8 @@
 #include "utilities.hpp"
 
 #include "common/ndsh_data_generator/ndsh_data_generator.hpp"
+#include "common/table_utilities.hpp"
+#include "cudf/detail/utilities/integer_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -30,8 +32,15 @@
 #include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/mr/device/managed_memory_resource.hpp>
+#include <rmm/mr/device/owning_wrapper.hpp>
+#include <rmm/mr/device/pool_memory_resource.hpp>
+
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <iterator>
+#include <unordered_set>
 
 namespace {
 
@@ -85,6 +94,15 @@ std::vector<std::string> const NATION_SCHEMA   = {
   "n_nationkey", "n_name", "n_regionkey", "n_comment"};
 std::vector<std::string> const REGION_SCHEMA = {"r_regionkey", "r_name", "r_comment"};
 
+std::unordered_map<std::string, std::vector<std::string> const> const SCHEMAS = {
+  {"orders", ORDERS_SCHEMA},
+  {"lineitem", LINEITEM_SCHEMA},
+  {"part", PART_SCHEMA},
+  {"partsupp", PARTSUPP_SCHEMA},
+  {"supplier", SUPPLIER_SCHEMA},
+  {"customer", CUSTOMER_SCHEMA},
+  {"nation", NATION_SCHEMA},
+  {"region", REGION_SCHEMA}};
 }  // namespace
 
 cudf::table_view table_with_names::table() const { return tbl->view(); }
@@ -337,7 +355,7 @@ int32_t days_since_epoch(int year, int month, int day)
 
 void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
                                     std::vector<std::string> const& col_names,
-                                    parquet_device_buffer& source)
+                                    cuio_source_sink_pair& source)
 {
   CUDF_FUNC_RANGE();
   auto const stream = cudf::get_default_stream();
@@ -351,55 +369,124 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
   metadata.schema_info            = col_name_infos;
   auto const table_input_metadata = cudf::io::table_input_metadata{metadata};
 
-  // Declare a host and device buffer
-  std::vector<char> h_buffer;
-
+  auto est_size                     = static_cast<std::size_t>(estimate_size(table->view()));
+  constexpr auto PQ_MAX_TABLE_BYTES = 8ul << 30;  // 8GB
+  // TODO: best to get this limit from percent_of_free_device_memory(50) of device memory resource.
+  if (est_size > PQ_MAX_TABLE_BYTES) {
+    auto builder = cudf::io::chunked_parquet_writer_options::builder(source.make_sink_info());
+    builder.metadata(table_input_metadata);
+    auto const options = builder.build();
+    auto num_splits    = static_cast<cudf::size_type>(
+      std::ceil(static_cast<long double>(est_size) / (PQ_MAX_TABLE_BYTES)));
+    std::vector<cudf::size_type> splits(num_splits - 1);
+    auto num_rows          = table->num_rows();
+    auto num_row_per_chunk = cudf::util::div_rounding_up_safe(num_rows, num_splits);
+    std::generate_n(splits.begin(), splits.size(), [num_row_per_chunk, i = 0]() mutable {
+      return (i += num_row_per_chunk);
+    });
+    std::vector<cudf::table_view> split_tables = cudf::split(table->view(), splits, stream);
+    auto writer                                = cudf::io::parquet_chunked_writer(options, stream);
+    for (auto const& chunk_table : split_tables) {
+      writer.write(chunk_table);
+    }
+    writer.close();
+    return;
+  }
   // Write parquet data to host buffer
-  auto builder =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info(&h_buffer), table->view());
+  auto builder = cudf::io::parquet_writer_options::builder(source.make_sink_info(), table->view());
   builder.metadata(table_input_metadata);
   auto const options = builder.build();
-  cudf::io::write_parquet(options);
+  cudf::io::write_parquet(options, stream);
+}
 
-  // Copy host buffer to device buffer
-  source.d_buffer.resize(h_buffer.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    source.d_buffer.data(), h_buffer.data(), h_buffer.size(), cudaMemcpyDefault, stream.value()));
+inline auto make_managed_pool()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    std::make_shared<rmm::mr::managed_memory_resource>(), rmm::percent_of_free_device_memory(50));
 }
 
 void generate_parquet_data_sources(double scale_factor,
                                    std::vector<std::string> const& table_names,
-                                   std::unordered_map<std::string, parquet_device_buffer>& sources)
+                                   std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   CUDF_FUNC_RANGE();
-  std::for_each(table_names.begin(), table_names.end(), [&](auto const& table_name) {
-    sources[table_name] = parquet_device_buffer();
-  });
 
-  auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
-    scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  // Set the memory resource to the managed pool
+  auto old_mr = cudf::get_current_device_resource();
+  // if already managed pool or managed, don't create new one.
+  using managed_pool_mr_t = decltype(make_managed_pool());
+  managed_pool_mr_t managed_pool_mr;
+  bool const is_managed =
+    dynamic_cast<rmm::mr::pool_memory_resource<rmm::mr::managed_memory_resource>*>(old_mr) or
+    dynamic_cast<rmm::mr::managed_memory_resource*>(old_mr);
+  if (!is_managed) {
+    std::cout << "Creating managed pool just for data generation\n";
+    managed_pool_mr = make_managed_pool();
+    cudf::set_current_device_resource(managed_pool_mr.get());
+    // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free
+    // memory.
+  }
 
-  auto partsupp = cudf::datagen::generate_partsupp(
-    scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  std::unordered_set<std::string> const requested_table_names = [&table_names]() {
+    if (table_names.empty()) {
+      return std::unordered_set<std::string>{
+        "orders", "lineitem", "part", "partsupp", "supplier", "customer", "nation", "region"};
+    }
+    return std::unordered_set(table_names.begin(), table_names.end());
+  }();
+  std::for_each(
+    requested_table_names.begin(), requested_table_names.end(), [&](auto const& table_name) {
+      sources.emplace(table_name, cuio_source_sink_pair(io_type::HOST_BUFFER));
+    });
+  std::unordered_map<std::string, std::unique_ptr<cudf::table>> tables;
 
-  auto supplier = cudf::datagen::generate_supplier(
-    scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  if (sources.count("orders") or sources.count("lineitem") or sources.count("part")) {
+    auto [orders, lineitem, part] = cudf::datagen::generate_orders_lineitem_part(
+      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    if (sources.count("orders")) {
+      write_to_parquet_device_buffer(orders, SCHEMAS.at("orders"), sources.at("orders"));
+      orders = {};
+    }
+    if (sources.count("part")) {
+      write_to_parquet_device_buffer(part, SCHEMAS.at("part"), sources.at("part"));
+      part = {};
+    }
+    if (sources.count("lineitem")) {
+      write_to_parquet_device_buffer(lineitem, SCHEMAS.at("lineitem"), sources.at("lineitem"));
+      lineitem = {};
+    }
+  }
 
-  auto customer = cudf::datagen::generate_customer(
-    scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  if (sources.count("partsupp")) {
+    auto partsupp = cudf::datagen::generate_partsupp(
+      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    write_to_parquet_device_buffer(partsupp, SCHEMAS.at("partsupp"), sources.at("partsupp"));
+  }
 
-  auto nation = cudf::datagen::generate_nation(cudf::get_default_stream(),
-                                               cudf::get_current_device_resource_ref());
+  if (sources.count("supplier")) {
+    auto supplier = cudf::datagen::generate_supplier(
+      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    write_to_parquet_device_buffer(supplier, SCHEMAS.at("supplier"), sources.at("supplier"));
+  }
 
-  auto region = cudf::datagen::generate_region(cudf::get_default_stream(),
-                                               cudf::get_current_device_resource_ref());
+  if (sources.count("customer")) {
+    auto customer = cudf::datagen::generate_customer(
+      scale_factor, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    write_to_parquet_device_buffer(customer, SCHEMAS.at("customer"), sources.at("customer"));
+  }
 
-  write_to_parquet_device_buffer(std::move(orders), ORDERS_SCHEMA, sources["orders"]);
-  write_to_parquet_device_buffer(std::move(lineitem), LINEITEM_SCHEMA, sources["lineitem"]);
-  write_to_parquet_device_buffer(std::move(part), PART_SCHEMA, sources["part"]);
-  write_to_parquet_device_buffer(std::move(partsupp), PARTSUPP_SCHEMA, sources["partsupp"]);
-  write_to_parquet_device_buffer(std::move(customer), CUSTOMER_SCHEMA, sources["customer"]);
-  write_to_parquet_device_buffer(std::move(supplier), SUPPLIER_SCHEMA, sources["supplier"]);
-  write_to_parquet_device_buffer(std::move(nation), NATION_SCHEMA, sources["nation"]);
-  write_to_parquet_device_buffer(std::move(region), REGION_SCHEMA, sources["region"]);
+  if (sources.count("nation")) {
+    auto nation = cudf::datagen::generate_nation(cudf::get_default_stream(),
+                                                 cudf::get_current_device_resource_ref());
+    write_to_parquet_device_buffer(nation, SCHEMAS.at("nation"), sources.at("nation"));
+  }
+
+  if (sources.count("region")) {
+    auto region = cudf::datagen::generate_region(cudf::get_default_stream(),
+                                                 cudf::get_current_device_resource_ref());
+    write_to_parquet_device_buffer(region, SCHEMAS.at("region"), sources.at("region"));
+  }
+
+  // Restore the original memory resource
+  if (!is_managed) { cudf::set_current_device_resource(old_mr); }
 }
