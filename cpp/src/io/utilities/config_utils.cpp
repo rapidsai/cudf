@@ -85,9 +85,9 @@ bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_
 }  // namespace nvcomp_integration
 
 namespace kvikio_setting {
-void set_thread_pool_nthreads(unsigned int nthreads)
+void set_thread_pool_nthreads_from_env()
 {
-  if (nthreads == 0U) { nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 8U); }
+  auto nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 8U);
   kvikio::defaults::thread_pool_nthreads_reset(nthreads);
 }
 }  // namespace kvikio_setting

@@ -55,13 +55,10 @@ bool is_stable_enabled();
 namespace kvikio_setting {
 
 /**
- * @brief Set kvikIO thread pool size.
- *
- * @param nthreads The number of threads used for kvikIO thread pool. If not set, the environment
- * variable KVIKIO_NTHREADS will be used. If KVIKIO_NTHREADS is unset either, use 8 threads by
- * default. Priority: nthreads parameter > KVIKIO_NTHREADS > default 8 threads.
+ * @brief Set kvikIO thread pool size according to the environment variable KVIKIO_NTHREADS. If
+ * KVIKIO_NTHREADS is not set, use 8 threads by default.
  */
-void set_thread_pool_nthreads(unsigned int nthreads = 0U);
+void set_thread_pool_nthreads_from_env();
 
 }  // namespace kvikio_setting
 }  // namespace io
