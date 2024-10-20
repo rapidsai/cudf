@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include <cudf/detail/cuco_helpers.hpp>
@@ -114,5 +113,4 @@ using nullable_hash_set_ref_t = cuco::static_set_ref<
   probing_scheme_t,
   cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::window_extent<int64_t>>,
   Op>;
-
 }  // namespace cudf::groupby::detail::hash

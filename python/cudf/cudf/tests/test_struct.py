@@ -50,10 +50,14 @@ def test_struct_for_field(key, expect):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("input_obj", [[{"a": 1, "b": cudf.NA, "c": 3}]])
-def test_series_construction_with_nulls(input_obj):
-    expect = pa.array(input_obj, from_pandas=True)
-    got = cudf.Series(input_obj).to_arrow()
+def test_series_construction_with_nulls():
+    fields = [
+        pa.array([1], type=pa.int64()),
+        pa.array([None], type=pa.int64()),
+        pa.array([3], type=pa.int64()),
+    ]
+    expect = pa.StructArray.from_arrays(fields, ["a", "b", "c"])
+    got = cudf.Series(expect).to_arrow()
 
     assert expect == got
 

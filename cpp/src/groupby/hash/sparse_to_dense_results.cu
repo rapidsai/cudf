@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,14 +26,13 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::groupby::detail::hash {
-template <typename SetType>
-void sparse_to_dense_results(bitmask_type const* row_bitmask,
-                             host_span<aggregation_request const> requests,
+template <typename SetRef>
+void sparse_to_dense_results(host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
-                             SetType set,
-                             bool skip_rows_with_nulls,
+                             SetRef set,
+                             bitmask_type const* row_bitmask,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
@@ -52,24 +51,22 @@ void sparse_to_dense_results(bitmask_type const* row_bitmask,
 }
 
 template void sparse_to_dense_results<hash_set_ref_t<cuco::find_tag>>(
-  bitmask_type const* row_bitmask,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   cudf::detail::result_cache* dense_results,
   device_span<size_type const> gather_map,
   hash_set_ref_t<cuco::find_tag> set,
-  bool skip_rows_with_nulls,
+  bitmask_type const* row_bitmask,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
 template void sparse_to_dense_results<nullable_hash_set_ref_t<cuco::find_tag>>(
-  bitmask_type const* row_bitmask,
   host_span<aggregation_request const> requests,
   cudf::detail::result_cache* sparse_results,
   cudf::detail::result_cache* dense_results,
   device_span<size_type const> gather_map,
   nullable_hash_set_ref_t<cuco::find_tag> set,
-  bool skip_rows_with_nulls,
+  bitmask_type const* row_bitmask,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 }  // namespace cudf::groupby::detail::hash

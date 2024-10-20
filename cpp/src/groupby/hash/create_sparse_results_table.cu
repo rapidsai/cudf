@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,5 +121,4 @@ template cudf::table create_sparse_results_table<nullable_global_set_t>(
   nullable_global_set_t const& global_set,
   rmm::device_uvector<cudf::size_type>& populated_keys,
   rmm::cuda_stream_view stream);
-
 }  // namespace cudf::groupby::detail::hash

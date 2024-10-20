@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
 #include "helpers.cuh"
@@ -298,5 +297,4 @@ struct compute_single_pass_aggs_fn {
     }
   }
 };
-
 }  // namespace cudf::groupby::detail::hash
