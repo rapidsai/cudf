@@ -9,6 +9,8 @@ from cudf._lib.nvtext.jaccard import jaccard_index
 from cudf._lib.nvtext.minhash import (
     minhash,
     minhash64,
+    minhash64_permuted,
+    minhash_permuted,
     word_minhash,
     word_minhash64,
 )
