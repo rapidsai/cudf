@@ -91,30 +91,32 @@ class Node(Generic[T]):
             self._hash_value = hash(self.get_hashable())
             return self._hash_value
 
-    def is_equal(self, other: Any) -> bool:
+    def is_equal(self, other: Self) -> bool:
         """
-        Equality of two expressions.
+        Equality of two nodes of equal type.
 
         Override this in subclasses, rather than :meth:`__eq__`.
 
         Parameter
         ---------
         other
-            object to compare to.
+            object of same type to compare to.
 
         Notes
         -----
         Since nodes are immutable, this does common subexpression
         elimination when two nodes are determined to be equal.
 
+        :meth:`__eq__` handles the case where the objects being
+        compared are not of the same type, so in this method, we only
+        need to implement equality of equal types.
+
         Returns
         -------
-        True if the two expressions are equal, false otherwise.
+        True if the two nodes are equal, false otherwise.
         """
         if self is other:
             return True
-        if type(self) is not type(other):
-            return False  # pragma: no cover; __eq__ trips first
         result = self._ctor_arguments(self.children) == other._ctor_arguments(
             other.children
         )
