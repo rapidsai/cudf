@@ -22,14 +22,13 @@
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
 #include "io/utilities/column_buffer.hpp"
-#include "io/utilities/hostdevice_vector.hpp"
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
