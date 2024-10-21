@@ -26,6 +26,7 @@ set(cython_sources
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
+    hashing.pyx
     interop.pyx
     join.pyx
     json.pyx

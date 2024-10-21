@@ -1,27 +1,12 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import pylibcudf as plc
+
 from cudf.core.buffer import acquire_spill_lock
 
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.hash cimport (
-    md5,
-    murmurhash3_x86_32,
-    sha1,
-    sha224,
-    sha256,
-    sha384,
-    sha512,
-    xxhash_64,
-)
-from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.table cimport Table
 
 from cudf._lib.column cimport Column
-from cudf._lib.utils cimport table_view_from_columns
-
-import pylibcudf as plc
 
 
 @acquire_spill_lock()
@@ -37,32 +22,26 @@ def hash_partition(list source_columns, list columns_to_hash,
 
 @acquire_spill_lock()
 def hash(list source_columns, str method, int seed=0):
-    cdef table_view c_source_view = table_view_from_columns(source_columns)
-    cdef unique_ptr[column] c_result
+    cdef Table ctbl = Table(
+        [c.to_pylibcudf(mode="read") for c in source_columns]
+    )
     if method == "murmur3":
-        with nogil:
-            c_result = move(murmurhash3_x86_32(c_source_view, seed))
-    elif method == "md5":
-        with nogil:
-            c_result = move(md5(c_source_view))
-    elif method == "sha1":
-        with nogil:
-            c_result = move(sha1(c_source_view))
-    elif method == "sha224":
-        with nogil:
-            c_result = move(sha224(c_source_view))
-    elif method == "sha256":
-        with nogil:
-            c_result = move(sha256(c_source_view))
-    elif method == "sha384":
-        with nogil:
-            c_result = move(sha384(c_source_view))
-    elif method == "sha512":
-        with nogil:
-            c_result = move(sha512(c_source_view))
+        return Column.from_pylibcudf(plc.hashing.murmurhash3_x86_32(ctbl, seed))
     elif method == "xxhash64":
-        with nogil:
-            c_result = move(xxhash_64(c_source_view, seed))
+        return Column.from_pylibcudf(plc.hashing.xxhash_64(ctbl, seed))
+    elif method == "md5":
+        return Column.from_pylibcudf(plc.hashing.md5(ctbl))
+    elif method == "sha1":
+        return Column.from_pylibcudf(plc.hashing.sha1(ctbl))
+    elif method == "sha224":
+        return Column.from_pylibcudf(plc.hashing.sha224(ctbl))
+    elif method == "sha256":
+        return Column.from_pylibcudf(plc.hashing.sha256(ctbl))
+    elif method == "sha384":
+        return Column.from_pylibcudf(plc.hashing.sha384(ctbl))
+    elif method == "sha512":
+        return Column.from_pylibcudf(plc.hashing.sha512(ctbl))
     else:
-        raise ValueError(f"Unsupported hash function: {method}")
-    return Column.from_unique_ptr(move(c_result))
+        raise ValueError(
+            f"Unsupported hashing algorithm {method}."
+        )
