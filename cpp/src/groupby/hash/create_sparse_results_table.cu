@@ -66,7 +66,7 @@ cudf::table create_sparse_results_table(cudf::table_view const& flattened_values
                        ? false
                        : (col.has_nulls() or agg == cudf::aggregation::VARIANCE or
                           agg == cudf::aggregation::STD);
-                   auto mask_flag =
+                   auto const mask_flag =
                      (nullable) ? cudf::mask_state::ALL_NULL : cudf::mask_state::UNALLOCATED;
                    auto const col_type = cudf::is_dictionary(col.type())
                                            ? cudf::dictionary_column_view(col).keys().type()
