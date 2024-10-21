@@ -20,9 +20,7 @@ avro_dtype_pairs = [
 ]
 
 
-@pytest.fixture(
-    scope="module", params=itertools.combinations(avro_dtype_pairs, 2)
-)
+@pytest.fixture(scope="module", params=itertools.combinations(avro_dtype_pairs, 2))
 def avro_dtypes(request):
     return request.param
 
@@ -88,9 +86,7 @@ def test_read_avro(avro_dtypes, avro_dtype_data, row_opts, columns, nullable):
             avro_dtype_data[1] + [None],
         )
 
-    records = [
-        {"prop1": val1, "prop2": val2} for val1, val2 in zip(*avro_dtype_data)
-    ]
+    records = [{"prop1": val1, "prop2": val2} for val1, val2 in zip(*avro_dtype_data)]
 
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records)

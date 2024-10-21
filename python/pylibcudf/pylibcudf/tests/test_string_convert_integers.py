@@ -52,9 +52,7 @@ def test_hex_to_integers():
 
 def test_is_hex():
     arr = pa.array(["0xff", "123", "!", None])
-    result = plc.strings.convert.convert_integers.is_hex(
-        plc.interop.from_arrow(arr)
-    )
+    result = plc.strings.convert.convert_integers.is_hex(plc.interop.from_arrow(arr))
     expected = pa.array([True, True, False, None])
     assert_column_eq(result, expected)
 

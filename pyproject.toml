@@ -34,6 +34,8 @@ select = [
     "F",
     # pycodestyle Warning
     "W",
+    # isort
+    "I",
     # no-blank-line-before-function
     "D201",
     # one-blank-line-after-class

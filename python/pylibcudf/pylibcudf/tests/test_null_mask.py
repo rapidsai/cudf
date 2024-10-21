@@ -3,9 +3,8 @@
 import pyarrow as pa
 import pylibcudf as plc
 import pytest
-from pylibcudf.null_mask import MaskState
-
 import rmm
+from pylibcudf.null_mask import MaskState
 
 
 @pytest.fixture(params=[False, True])

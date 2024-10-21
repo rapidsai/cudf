@@ -71,9 +71,7 @@ def test_read_csv_basic(
     column_names = pa_table.column_names
 
     # Adapt to nrows/skiprows
-    pa_table = pa_table.slice(
-        offset=skiprows, length=nrows if nrows != -1 else None
-    )
+    pa_table = pa_table.slice(offset=skiprows, length=nrows if nrows != -1 else None)
 
     res = plc.io.csv.read_csv(
         plc.io.SourceInfo([source]),
@@ -102,9 +100,7 @@ def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
         # and header=None
         pytest.skip("Don't test empty table case")
     source = f"{tmp_path}/a.csv"
-    source = make_source(
-        source, pa_table, header=False, **_COMMON_CSV_SOURCE_KWARGS
-    )
+    source = make_source(source, pa_table, header=False, **_COMMON_CSV_SOURCE_KWARGS)
     file_size = os.stat(source).st_size
     tbls_w_meta = []
     for segment in range((file_size + chunk_size - 1) // chunk_size):
@@ -206,9 +202,7 @@ def test_read_csv_parse_options(
 @pytest.mark.parametrize("na_filter", [True, False])
 @pytest.mark.parametrize("na_values", [["n/a"], ["NV_NAN"]])
 @pytest.mark.parametrize("keep_default_na", [True, False])
-def test_read_csv_na_values(
-    source_or_sink, na_filter, na_values, keep_default_na
-):
+def test_read_csv_na_values(source_or_sink, na_filter, na_values, keep_default_na):
     lines = ["a,b,c", "n/a,NaN,NV_NAN", "1.0,2.0,3.0"]
     buffer = "\n".join(lines)
 
@@ -239,9 +233,7 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
         **_COMMON_CSV_SOURCE_KWARGS,
     )
 
-    plc_table_w_meta = plc.io.csv.read_csv(
-        plc.io.SourceInfo([source]), header=header
-    )
+    plc_table_w_meta = plc.io.csv.read_csv(plc.io.SourceInfo([source]), header=header)
     if header > 0:
         if header < len(pa_table):
             names_row = pa_table.take([header - 1]).to_pylist()[0].values()

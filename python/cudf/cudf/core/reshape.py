@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import itertools
-import warnings
 from typing import TYPE_CHECKING, Literal
+import warnings
 
 import numpy as np
 import pandas as pd
