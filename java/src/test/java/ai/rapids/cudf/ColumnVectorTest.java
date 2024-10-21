@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -3884,8 +3885,8 @@ public class ColumnVectorTest extends CudfTestBase {
              .column("boo:", "boo::", "boo::::", null)  // Full match as per the pattern
              .build()) {
       // Keep the original regex pattern
-      try (Table found = input.extractRe(new RegexProgram("(boo:+)$", RegexFlag.EXT_NEWLINE))) {
-        assertColumnsAreEqual(expected->view().column(0), found->view().column(0));
+      try (Table found = input.extractRe(new RegexProgram("(boo:+)$", EnumSet.of(RegexFlag.EXT_NEWLINE)))) {
+        assertColumnsAreEqual(expected.getColumns()[0],found.getColumns()[0]);
       }
     }
   }
