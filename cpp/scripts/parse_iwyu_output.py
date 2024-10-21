@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -96,26 +96,23 @@ def write_output(file_path, add_includes, remove_includes, full_include_lists):
     """Write the output back in the desired format."""
     with open(file_path, 'w') as f:
         for file in sorted(set(add_includes.keys()).union(remove_includes.keys()).union(full_include_lists.keys())):
-            # Write "should add these lines"
-            if file in add_includes and add_includes[file]:
-                f.write(f"{file} should add these lines:\n")
-                for line in add_includes[file]:
-                    f.write(f"{line}\n")
-                f.write("\n")
+            # Write "should add these lines", but don't actually include any of the
+            # items in the output.
+            f.write(f"{file} should add these lines:\n\n")
 
             # Write "should remove these lines"
-            if file in remove_includes and remove_includes[file]:
-                f.write(f"{file} should remove these lines:\n")
+            f.write(f"{file} should remove these lines:\n")
+            if remove_includes.get(file):
                 for line in remove_includes[file]:
                     f.write(f"{line}\n")  # No extra minus sign
-                f.write("\n")
+            f.write("\n")
 
             # Write "The full include-list"
-            if file in full_include_lists and full_include_lists[file]:
-                f.write(f"The full include-list for {file}:\n")
+            f.write(f"The full include-list for {file}:\n")
+            if full_include_lists.get(file):
                 for line in full_include_lists[file]:
                     f.write(f"{line}\n")
-                f.write("---\n")
+            f.write("---\n")
 
 
 def modify_log(log_content, output_file="output.txt"):

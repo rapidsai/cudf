@@ -39,7 +39,7 @@ popd
 
 # Run the build via CMake, which will run clang-tidy when CUDF_CLANG_TIDY is enabled.
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinja
-cmake --build cpp/build > build_output.txt 2>&1
+cmake --build cpp/build 2>&1 | tee build_output.txt
 
 # Parse the build output to extract only IWYU's proposed changes.
 # TODO: Faking that this is a JSON file to leverage the existing automated upload
