@@ -3878,6 +3878,19 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testExtractReWithNewline() {
+    try (ColumnVector input = ColumnVector.fromStrings("boo:", "boo::", "boo::::", null);
+         Table expected = new Table.TestBuilder()
+             .column("boo:", "boo::", "boo::::", null)  // Full match as per the pattern
+             .build()) {
+      // Keep the original regex pattern
+      try (Table found = input.extractRe(new RegexProgram("(boo:+)$", RegexFlag.EXT_NEWLINE))) {
+        assertColumnsAreEqual(expected, found->view().column(0));
+      }
+    }
+  }
+
+  @Test
   void testExtractAllRecord() {
     String pattern = "([ab])(\\d)";
     RegexProgram regexProg = new RegexProgram(pattern);
