@@ -3884,11 +3884,11 @@ void testExtractReWithNewline() {
     String LINE_SEPARATOR = "\u2028";
     String PARAGRAPH_SEPARATOR = "\u2029";
     String CARRIAGE_RETURN = "\r";
-    String NEW_LINE = "\r";
+    String NEW_LINE = "\n";
 
     try (ColumnVector input = ColumnVector.fromStrings(
             "boo:" + NEXT_LINE + "boo::" + LINE_SEPARATOR + "boo:::",
-            "boo:::" + LINE_SEPARATOR + "zzé\rlll",
+            "boo:::" + LINE_SEPARATOR + "zzé" + CARRIAGE_RETURN + "lll",
             "boo::",
             "",
             "boo::" + NEW_LINE,
