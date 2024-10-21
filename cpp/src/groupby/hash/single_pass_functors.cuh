@@ -188,7 +188,7 @@ struct compute_direct_aggregates {
   cudf::mutable_table_device_view output_values;
   cudf::aggregation::Kind const* __restrict__ aggs;
   cudf::size_type* block_cardinality;
-  int stride;
+  cudf::size_type stride;
   bitmask_type const* __restrict__ row_bitmask;
   bool skip_rows_with_nulls;
 
@@ -197,7 +197,7 @@ struct compute_direct_aggregates {
                             cudf::mutable_table_device_view output_values,
                             cudf::aggregation::Kind const* aggs,
                             cudf::size_type* block_cardinality,
-                            int stride,
+                            cudf::size_type stride,
                             bitmask_type const* row_bitmask,
                             bool skip_rows_with_nulls)
     : set(set),
@@ -213,7 +213,7 @@ struct compute_direct_aggregates {
 
   __device__ void operator()(cudf::size_type i)
   {
-    int block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
+    auto const block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
     if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
         (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i))) {
       auto const result = set.insert_and_find(i);

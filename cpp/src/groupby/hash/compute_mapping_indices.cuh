@@ -152,9 +152,9 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
 }
 
 template <class SetRef>
-int max_occupancy_grid_size(cudf::size_type n)
+cudf::size_type max_occupancy_grid_size(cudf::size_type n)
 {
-  int max_active_blocks{-1};
+  cudf::size_type max_active_blocks{-1};
   CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
     &max_active_blocks, mapping_indices_kernel<SetRef>, GROUPBY_BLOCK_SIZE, 0));
   auto const grid_size  = max_active_blocks * cudf::detail::num_multiprocessors();
