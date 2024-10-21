@@ -44,6 +44,7 @@
 #include <thrust/unique.h>
 
 #include <bitset>
+#include <limits>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -1592,36 +1593,68 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     auto const d_cols_info = cudf::detail::make_device_uvector_async(
       h_cols_info, _stream, cudf::get_current_device_resource_ref());
 
-    auto const num_keys = _input_columns.size() * max_depth * subpass.pages.size();
-    // size iterator. indexes pages by sorted order
-    rmm::device_uvector<size_type> size_input{num_keys, _stream};
-    thrust::transform(
-      rmm::exec_policy(_stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_keys),
-      size_input.begin(),
-      get_page_nesting_size{
-        d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
-    auto const reduction_keys =
-      cudf::detail::make_counting_transform_iterator(0, get_reduction_key{subpass.pages.size()});
+    // Vector to store page sizes for each column at each depth
     cudf::detail::hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
 
-    // find the size of each column
-    thrust::reduce_by_key(rmm::exec_policy(_stream),
-                          reduction_keys,
-                          reduction_keys + num_keys,
-                          size_input.cbegin(),
-                          thrust::make_discard_iterator(),
-                          sizes.d_begin());
+    // Total number of keys to process
+    auto const num_keys = _input_columns.size() * max_depth * subpass.pages.size();
 
-    // for nested hierarchies, compute per-page start offset
-    thrust::exclusive_scan_by_key(
-      rmm::exec_policy(_stream),
-      reduction_keys,
-      reduction_keys + num_keys,
-      size_input.cbegin(),
-      start_offset_output_iterator{
-        subpass.pages.device_begin(), 0, d_cols_info.data(), max_depth, subpass.pages.size()});
+    // Maximum 1 billion keys processed per iteration
+    auto constexpr max_keys_per_iter =
+      static_cast<size_t>(std::numeric_limits<size_type>::max() / 2);
+
+    // Number of keys for per each column
+    auto const num_keys_per_col = max_depth * subpass.pages.size();
+
+    // The largest multiple of `num_keys_per_col` that is <= `num_keys`
+    auto const num_keys_per_iter =
+      num_keys <= max_keys_per_iter
+        ? num_keys
+        : num_keys_per_col * std::max<size_t>(1, max_keys_per_iter / num_keys_per_col);
+
+    // Size iterator. Indexes pages by sorted order
+    rmm::device_uvector<size_type> size_input{num_keys_per_iter, _stream};
+
+    // To keep track of the starting key of an iteration
+    size_t key_start = 0;
+    // Loop until all keys are processed
+    while (key_start < num_keys) {
+      // Number of keys processed in this iteration
+      auto const num_keys_this_iter = std::min<size_t>(num_keys_per_iter, num_keys - key_start);
+      thrust::transform(
+        rmm::exec_policy_nosync(_stream),
+        thrust::make_counting_iterator<size_t>(key_start),
+        thrust::make_counting_iterator<size_t>(key_start + num_keys_this_iter),
+        size_input.begin(),
+        get_page_nesting_size{
+          d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
+
+      // Manually create a int64_t `key_start` compatible counting_transform_iterator to avoid
+      // implicit casting to size_type.
+      auto const reduction_keys = thrust::make_transform_iterator(
+        thrust::make_counting_iterator<size_t>(key_start), get_reduction_key{subpass.pages.size()});
+
+      // Find the size of each column
+      thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
+                            reduction_keys,
+                            reduction_keys + num_keys_this_iter,
+                            size_input.cbegin(),
+                            thrust::make_discard_iterator(),
+                            sizes.d_begin() + (key_start / subpass.pages.size()));
+
+      // For nested hierarchies, compute per-page start offset
+      thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
+                                    reduction_keys,
+                                    reduction_keys + num_keys_this_iter,
+                                    size_input.cbegin(),
+                                    start_offset_output_iterator{subpass.pages.device_begin(),
+                                                                 key_start,
+                                                                 d_cols_info.data(),
+                                                                 max_depth,
+                                                                 subpass.pages.size()});
+      // Increment the key_start
+      key_start += num_keys_this_iter;
+    }
 
     sizes.device_to_host_sync(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
