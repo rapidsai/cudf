@@ -67,14 +67,17 @@ namespace detail {
  * @param f The unary function to apply to the counting iterator.
  * @return A transform iterator that applies `f` to a counting iterator
  */
-template <typename CountingIterType,
-          typename UnaryFunction,
-          typename = cuda::std::enable_if_t<cuda::std::is_integral_v<CountingIterType> and
-                                            cuda::std::numeric_limits<CountingIterType>::max() <=
-                                              cuda::std::numeric_limits<cudf::size_type>::max()>>
+template <typename CountingIterType, typename UnaryFunction>
 CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(CountingIterType start,
                                                               UnaryFunction f)
 {
+  // Check if the `start` for counting_iterator is of size_type or a smaller integral type
+  static_assert(
+    cuda::std::is_integral_v<CountingIterType> and
+      cuda::std::numeric_limits<CountingIterType>::digits <=
+        cuda::std::numeric_limits<cudf::size_type>::digits,
+    "The `start` for the counting_transform_iterator must be size_type or smaller type");
+
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
