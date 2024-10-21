@@ -922,7 +922,7 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
   return std::make_unique<cudf::table>(std::move(columns));
 }
 
-std::unique_ptr<cudf::column> create_string_column(cudf::size_type n_rows,
+std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
                                                    cudf::size_type row_width,
                                                    int32_t hit_rate)
 {
@@ -952,23 +952,24 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type n_rows,
   auto data_view = raw_data->view();
 
   // compute number of rows in n_rows that should match
-  auto matches = static_cast<int32_t>(n_rows * hit_rate) / 100;
+  auto const num_matches = static_cast<int32_t>(num_rows * hit_rate) / 100;
 
   // Create a randomized gather-map to build a column out of the strings in data.
   data_profile gather_profile =
     data_profile_builder().cardinality(0).null_probability(0.0).distribution(
       cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
   auto gather_table =
-    create_random_table({cudf::type_id::INT32}, row_count{n_rows}, gather_profile);
+    create_random_table({cudf::type_id::INT32}, row_count{num_rows}, gather_profile);
   gather_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
 
   // Create scatter map by placing 0-index values throughout the gather-map
-  auto scatter_data = cudf::sequence(
-    matches, cudf::numeric_scalar<int32_t>(0), cudf::numeric_scalar<int32_t>(n_rows / matches));
-  auto zero_scalar = cudf::numeric_scalar<int32_t>(0);
-  auto table       = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
-  auto gather_map  = table->view().column(0);
-  table            = cudf::gather(cudf::table_view({data_view}), gather_map);
+  auto scatter_data = cudf::sequence(num_matches,
+                                     cudf::numeric_scalar<int32_t>(0),
+                                     cudf::numeric_scalar<int32_t>(num_rows / num_matches));
+  auto zero_scalar  = cudf::numeric_scalar<int32_t>(0);
+  auto table        = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
+  auto gather_map   = table->view().column(0);
+  table             = cudf::gather(cudf::table_view({data_view}), gather_map);
 
   return std::move(table->release().front());
 }
