@@ -26,7 +26,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <iomanip>
 #include <sstream>
 
 namespace cudf::io::detail {
