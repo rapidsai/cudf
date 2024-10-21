@@ -671,6 +671,18 @@ std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
                                                    unsigned seed                   = 1);
 
 /**
+ * @brief Deterministically generates a large string column filled with data with the given
+ * parameters.
+ *
+ * @param num_rows Number of rows in the output column
+ * @param row_width Width of each string in the column
+ * @param hit_rate The hit rate percentage, ranging from 0 to 100
+ */
+std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
+                                                   cudf::size_type row_width,
+                                                   int32_t hit_rate);
+
+/**
  * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
  * subsequent rows.
  *
