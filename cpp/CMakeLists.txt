@@ -253,6 +253,7 @@ include(cmake/Modules/JitifyPreprocessKernels.cmake)
 include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
+unset(BUILD_TESTING CACHE)
 # find fmt
 include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
