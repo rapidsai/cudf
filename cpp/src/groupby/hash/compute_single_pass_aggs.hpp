@@ -21,6 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf::groupby::detail::hash {
 /**
@@ -28,11 +29,12 @@ namespace cudf::groupby::detail::hash {
  * over the data and stores the results in `sparse_results`
  */
 template <typename SetType>
-void compute_single_pass_aggs(int64_t num_keys,
-                              bool skip_rows_with_nulls,
-                              bitmask_type const* row_bitmask,
-                              SetType set,
-                              cudf::host_span<cudf::groupby::aggregation_request const> requests,
-                              cudf::detail::result_cache* sparse_results,
-                              rmm::cuda_stream_view stream);
+rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
+  int64_t num_rows,
+  bool skip_rows_with_nulls,
+  bitmask_type const* row_bitmask,
+  SetType& global_set,
+  cudf::host_span<cudf::groupby::aggregation_request const> requests,
+  cudf::detail::result_cache* sparse_results,
+  rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

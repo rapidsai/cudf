@@ -14,16 +14,22 @@
  * limitations under the License.
  */
 
-#include "compute_single_pass_aggs.cuh"
-#include "compute_single_pass_aggs.hpp"
+#include "compute_mapping_indices.cuh"
+#include "compute_mapping_indices.hpp"
 
 namespace cudf::groupby::detail::hash {
-template rmm::device_uvector<cudf::size_type> compute_single_pass_aggs<global_set_t>(
-  int64_t num_rows,
-  bool skip_rows_with_nulls,
+template cudf::size_type max_occupancy_grid_size<hash_set_ref_t<cuco::insert_and_find_tag>>(
+  cudf::size_type n);
+
+template void compute_mapping_indices<hash_set_ref_t<cuco::insert_and_find_tag>>(
+  cudf::size_type grid_size,
+  cudf::size_type num,
+  hash_set_ref_t<cuco::insert_and_find_tag> global_set,
   bitmask_type const* row_bitmask,
-  global_set_t& global_set,
-  cudf::host_span<cudf::groupby::aggregation_request const> requests,
-  cudf::detail::result_cache* sparse_results,
+  bool skip_rows_with_nulls,
+  cudf::size_type* local_mapping_index,
+  cudf::size_type* global_mapping_index,
+  cudf::size_type* block_cardinality,
+  bool* direct_aggregations,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash
