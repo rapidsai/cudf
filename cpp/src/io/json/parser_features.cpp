@@ -38,7 +38,7 @@ std::optional<schema_element> child_schema_element(std::string const& col_name,
       [col_name](
         std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
         return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                 ? std::optional<schema_element>{user_dtypes.find(col_name)->second}
+                 ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
                  : std::optional<schema_element>{};
       },
       [col_name](

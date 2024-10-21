@@ -68,12 +68,21 @@ struct schema_element {
    * @param column_order Allows specifying the order of the columns
    */
   schema_element(data_type type,
-                 std::map<std::string, schema_element> child_types    = {},
+                 std::map<std::string, schema_element> child_types,
                  std::optional<std::vector<std::string>> column_order = std::nullopt)
-    : type{type}, child_types{std::move(child_types)}, column_order{std::move(column_order)}
+    : type{std::move(type)},
+      child_types{std::move(child_types)},
+      column_order{std::move(column_order)}
   {
   }
 
+  /**
+   * @brief Constructor to create a schema_element from a data_type
+   *
+   * @param type The type that this column should be converted to
+   */
+  schema_element(data_type type) : schema_element{type, {}, std::nullopt} {}
+  schema_element() = default;
   /**
    * @brief Constructor to create a schema_element with a specific order of columns
    *
