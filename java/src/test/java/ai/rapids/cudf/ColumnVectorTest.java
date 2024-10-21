@@ -3885,7 +3885,7 @@ public class ColumnVectorTest extends CudfTestBase {
              .build()) {
       // Keep the original regex pattern
       try (Table found = input.extractRe(new RegexProgram("(boo:+)$", RegexFlag.EXT_NEWLINE))) {
-        assertColumnsAreEqual(expected, found->view().column(0));
+        assertColumnsAreEqual(expected->view().column(0), found->view().column(0));
       }
     }
   }
