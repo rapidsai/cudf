@@ -3879,7 +3879,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-void testExtractReWithNewline() {
+void testExtractReWithMultiLineDelimiters() {
     String NEXT_LINE = "\u0085";
     String LINE_SEPARATOR = "\u2028";
     String PARAGRAPH_SEPARATOR = "\u2029";
