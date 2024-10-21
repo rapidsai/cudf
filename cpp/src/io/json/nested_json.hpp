@@ -405,21 +405,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
 
-namespace experimental {
-/**
- * @copydoc cudf::io::json::detail::make_device_json_column
- */
-void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t const& tree,
-                             device_span<NodeIndexT const> col_ids,
-                             device_span<size_type const> row_offsets,
-                             device_json_column& root,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
-}  // namespace experimental
-
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
  *
