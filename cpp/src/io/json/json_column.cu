@@ -485,16 +485,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   }
 }
 
-template <typename... Args>
-auto make_device_json_column_dispatch(bool experimental, Args&&... args)
-{
-  if (experimental) {
-    return experimental::make_device_json_column(std::forward<Args>(args)...);
-  } else {
-    return make_device_json_column(std::forward<Args>(args)...);
-  }
-}
-
 table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
@@ -549,16 +539,15 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                0);
 
   // Get internal JSON column
-  make_device_json_column_dispatch(options.is_enabled_experimental(),
-                                   d_input,
-                                   gpu_tree,
-                                   gpu_col_id,
-                                   gpu_row_offsets,
-                                   root_column,
-                                   is_array_of_arrays,
-                                   options,
-                                   stream,
-                                   mr);
+  make_device_json_column(d_input,
+                          gpu_tree,
+                          gpu_col_id,
+                          gpu_row_offsets,
+                          root_column,
+                          is_array_of_arrays,
+                          options,
+                          stream,
+                          mr);
 
   // data_root refers to the root column of the data represented by the given JSON string
   auto& data_root =
