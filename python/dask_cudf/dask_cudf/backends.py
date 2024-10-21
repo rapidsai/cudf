@@ -727,13 +727,13 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             # This code path uses PyArrow for IO, which is only
             # beneficial for remote storage (e.g. S3)
 
-            # CudfReadParquetPyarrowFS requires import of distributed beforehand
-            # (See: https://github.com/dask/dask/issues/11352)
             from fsspec.utils import stringify_path
             from pyarrow import fs as pa_fs
 
             from dask.core import flatten
             from dask.dataframe.utils import pyarrow_strings_enabled
+            # CudfReadParquetPyarrowFS requires import of distributed beforehand
+            # (See: https://github.com/dask/dask/issues/11352)
             import distributed  # noqa: F401
 
             from dask_cudf.expr._expr import CudfReadParquetPyarrowFS

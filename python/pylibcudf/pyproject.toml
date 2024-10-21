@@ -53,6 +53,9 @@ test = [
 Homepage = "https://github.com/rapidsai/cudf"
 Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 
+[tool.ruff]
+extend = "../../pyproject.toml"
+
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
