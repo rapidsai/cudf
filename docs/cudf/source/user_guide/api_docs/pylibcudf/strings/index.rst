@@ -6,6 +6,7 @@ strings
 
     capitalize
     char_types
+    combine
     contains
     extract
     find
@@ -21,3 +22,9 @@ strings
     split
     strip
     wrap
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Subpackages
+
+    convert/index.rst

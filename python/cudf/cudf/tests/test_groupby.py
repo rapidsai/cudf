@@ -77,21 +77,21 @@ def make_frame(
     extra_vals=(),
     with_datetime=False,
 ):
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed=seed)
 
     df = dataframe_class()
 
-    df["x"] = np.random.randint(0, 5, nelem)
-    df["y"] = np.random.randint(0, 3, nelem)
+    df["x"] = rng.integers(0, 5, nelem)
+    df["y"] = rng.integers(0, 3, nelem)
     for lvl in extra_levels:
-        df[lvl] = np.random.randint(0, 2, nelem)
+        df[lvl] = rng.integers(0, 2, nelem)
 
-    df["val"] = np.random.random(nelem)
+    df["val"] = rng.random(nelem)
     for val in extra_vals:
-        df[val] = np.random.random(nelem)
+        df[val] = rng.random(nelem)
 
     if with_datetime:
-        df["datetime"] = np.random.randint(
+        df["datetime"] = rng.integers(
             _now, _tomorrow, nelem, dtype=np.int64
         ).astype("datetime64[ns]")
 
@@ -266,9 +266,10 @@ def test_groupby_getitem_getattr(as_index):
 
 
 def test_groupby_cats():
-    df = DataFrame()
-    df["cats"] = pd.Categorical(list("aabaacaab"))
-    df["vals"] = np.random.random(len(df))
+    rng = np.random.default_rng(seed=0)
+    df = DataFrame(
+        {"cats": pd.Categorical(list("aabaacaab")), "vals": rng.random(9)}
+    )
 
     cats = df["cats"].values_host
     vals = df["vals"].to_numpy()
@@ -285,13 +286,16 @@ def test_groupby_cats():
 
 
 def test_groupby_iterate_groups():
-    np.random.seed(0)
-    df = DataFrame()
+    rng = np.random.default_rng(seed=0)
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df = DataFrame(
+        {
+            "key1": rng.integers(0, 3, nelem),
+            "key2": rng.integers(0, 2, nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
+        }
+    )
 
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
@@ -307,13 +311,16 @@ def test_groupby_iterate_groups():
     reason="Fails in older versions of pandas",
 )
 def test_groupby_apply():
-    np.random.seed(0)
-    df = DataFrame()
+    rng = np.random.default_rng(seed=0)
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df = DataFrame(
+        {
+            "key1": rng.integers(0, 3, nelem),
+            "key2": rng.integers(0, 2, nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
+        }
+    )
 
     expect_grpby = df.to_pandas().groupby(
         ["key1", "key2"], as_index=False, group_keys=False
@@ -351,13 +358,16 @@ def create_test_groupby_apply_args_params():
     reason="Fails in older versions of pandas",
 )
 def test_groupby_apply_args(func, args):
-    np.random.seed(0)
-    df = DataFrame()
+    rng = np.random.default_rng(seed=0)
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df = DataFrame(
+        {
+            "key1": rng.integers(0, 3, nelem),
+            "key2": rng.integers(0, 2, nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
+        }
+    )
 
     expect_grpby = df.to_pandas().groupby(
         ["key1", "key2"], as_index=False, group_keys=False
@@ -369,7 +379,6 @@ def test_groupby_apply_args(func, args):
 
 
 def test_groupby_apply_grouped():
-    np.random.seed(0)
     df = DataFrame()
     nelem = 20
     df["key1"] = range(nelem)
@@ -1010,6 +1019,7 @@ def test_groupby_2keys_agg(nelem, func):
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
+    rng = np.random.default_rng(seed=0)
     # The number of digits after the decimal to use.
     decimal_digits = 2
     # The number of digits before the decimal to use.
@@ -1026,8 +1036,8 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # https://github.com/pandas-dev/pandas/issues/40685). However, if that is
     # ever enabled, then this issue will crop up again so we may as well have
     # it fixed now.
-    x = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
-    y = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+    x = np.unique((rng.random(nelem) * scale).round(decimal_digits))
+    y = np.unique((rng.random(nelem) * scale).round(decimal_digits))
 
     if x.size < y.size:
         total_elements = x.size
@@ -1313,9 +1323,9 @@ def test_empty_groupby(func):
 
 
 def test_groupby_unsupported_columns():
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=12)
     pd_cat = pd.Categorical(
-        pd.Series(np.random.choice(["a", "b", 1], 3), dtype="category")
+        pd.Series(rng.choice(["a", "b", 1], 3), dtype="category")
     )
     pdf = pd.DataFrame(
         {
@@ -1421,10 +1431,11 @@ def test_groupby_apply_basic_agg_single_column():
 
 
 def test_groupby_multi_agg_single_groupby_series():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -1435,12 +1446,13 @@ def test_groupby_multi_agg_single_groupby_series():
 
 
 def test_groupby_multi_agg_multi_groupby():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "a": np.random.randint(0, 5, 10),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "d": np.random.randint(0, 5, 10),
+            "a": rng.integers(0, 5, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "d": rng.integers(0, 5, 10),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -1450,6 +1462,7 @@ def test_groupby_multi_agg_multi_groupby():
 
 
 def test_groupby_datetime_multi_agg_multi_groupby():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
             "a": pd.date_range(
@@ -1457,9 +1470,9 @@ def test_groupby_datetime_multi_agg_multi_groupby():
                 datetime.datetime.now() + datetime.timedelta(9),
                 freq="D",
             ),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "d": np.random.randint(0, 5, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "d": rng.integers(0, 5, 10),
         }
     )
     gdf = cudf.from_pandas(pdf)

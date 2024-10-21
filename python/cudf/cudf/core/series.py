@@ -637,10 +637,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
-        elif isinstance(data, (ColumnAccessor, ColumnBase)):
+        elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
-                "ColumnAccessor or a ColumnBase"
+                "ColumnAccessor"
+            )
+        elif isinstance(data, ColumnBase):
+            raise TypeError(
+                "Use cudf.Series._from_column for constructing a Series from "
+                "a ColumnBase"
             )
         elif isinstance(data, dict):
             if not data:
