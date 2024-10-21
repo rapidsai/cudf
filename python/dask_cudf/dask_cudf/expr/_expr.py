@@ -302,11 +302,7 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         return dataset_info
 
     @staticmethod
-    def _table_to_pandas(
-        table,
-        index_name,
-        *args,
-    ):
+    def _table_to_pandas(table, index_name):
         df = cudf.DataFrame.from_arrow(table)
         if index_name is not None:
             df = df.set_index(index_name)
@@ -332,9 +328,6 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
                 schema,
             ),
             index_name,
-            None,
-            None,
-            None,
         )
 
     def _tune_up(self, parent):
