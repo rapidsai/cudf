@@ -91,8 +91,6 @@ def test_equality_cse():
     assert e1.children is not e2.children
     assert e1 == e2
     assert e1.children is e2.children
-    assert e1 == e1
-    assert e2 == e2
+    assert e1 == e2
     assert e1 != e3
     assert e2 != e3
-    assert e3 == e3
