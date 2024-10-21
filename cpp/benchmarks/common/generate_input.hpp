@@ -675,8 +675,8 @@ std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
  * parameters.
  *
  * @param num_rows Number of rows in the output column
- * @param row_width width of each string in the column
- * @param hit_rate similarity between the row elements
+ * @param row_width Width of each string in the column
+ * @param hit_rate The hit rate percentage, ranging from 0 to 100
  */
 std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
                                                    cudf::size_type row_width,
