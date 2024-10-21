@@ -304,4 +304,12 @@ public final class ReductionAggregation {
   public static ReductionAggregation mergeHistogram() {
     return new ReductionAggregation(Aggregation.mergeHistogram());
   }
+
+  public static ReductionAggregation HLL(int numRegistersPerSketch) {
+    return new ReductionAggregation(Aggregation.HLL(numRegistersPerSketch));
+  }
+
+  public static ReductionAggregation mergeHLL(int numRegistersPerSketch) {
+    return new ReductionAggregation(Aggregation.mergeHLL(numRegistersPerSketch));
+  }
 }
