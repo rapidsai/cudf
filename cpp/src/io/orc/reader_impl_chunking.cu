@@ -516,10 +516,10 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         _stream.synchronize();
         stream_synchronized = true;
       }
-      device_read_tasks.push_back(
-        std::pair(source_ptr->device_read_async(
-                    read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
-                  read_info.length));
+      device_read_tasks.emplace_back(
+        source_ptr->device_read_async(
+          read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
+        read_info.length);
 
     } else {
       auto buffer = source_ptr->host_read(read_info.offset, read_info.length);

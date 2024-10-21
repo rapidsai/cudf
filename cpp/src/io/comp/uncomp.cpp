@@ -538,8 +538,10 @@ size_t decompress_zstd(host_span<uint8_t const> src,
   CUDF_EXPECTS(hd_stats[0].status == compression_status::SUCCESS, "ZSTD decompression failed");
 
   // Copy temporary output to `dst`
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    dst.data(), d_dst.data(), hd_stats[0].bytes_written, cudaMemcpyDefault, stream.value()));
+  cudf::detail::cuda_memcpy_async(
+    dst.subspan(0, hd_stats[0].bytes_written),
+    device_span<uint8_t const>{d_dst.data(), hd_stats[0].bytes_written},
+    stream);
 
   return hd_stats[0].bytes_written;
 }

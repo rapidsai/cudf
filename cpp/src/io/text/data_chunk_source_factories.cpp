@@ -87,8 +87,10 @@ class datasource_chunk_reader : public data_chunk_reader {
       _source->host_read(_offset, read_size, reinterpret_cast<uint8_t*>(h_ticket.buffer.data()));
 
       // copy the host-pinned data on to device
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
+      cudf::detail::cuda_memcpy_async<char>(
+        device_span<char>{chunk}.subspan(0, read_size),
+        host_span<char const>{h_ticket.buffer}.subspan(0, read_size),
+        stream);
 
       // record the host-to-device copy.
       CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
@@ -153,8 +155,10 @@ class istream_data_chunk_reader : public data_chunk_reader {
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host-pinned data on to device
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
+    cudf::detail::cuda_memcpy_async<char>(
+      device_span<char>{chunk}.subspan(0, read_size),
+      host_span<char const>{h_ticket.buffer}.subspan(0, read_size),
+      stream);
 
     // record the host-to-device copy.
     CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
@@ -193,12 +197,10 @@ class host_span_data_chunk_reader : public data_chunk_reader {
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host data to device
-    CUDF_CUDA_TRY(cudaMemcpyAsync(  //
-      chunk.data(),
-      _data.data() + _position,
-      read_size,
-      cudaMemcpyDefault,
-      stream.value()));
+    cudf::detail::cuda_memcpy_async<char>(
+      cudf::device_span<char>{chunk}.subspan(0, read_size),
+      cudf::host_span<char const>{_data}.subspan(_position, read_size),
+      stream);
 
     _position += read_size;
 
