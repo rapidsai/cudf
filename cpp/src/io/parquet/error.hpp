@@ -26,7 +26,7 @@
 namespace cudf::io::parquet {
 
 /**
- * @brief Wrapper around a `rmm::device_scalar` for use in reporting errors that occur in
+ * @brief Specialized device scalar for use in reporting errors that occur in
  * kernel calls.
  *
  * The `kernel_error` object is created with a `rmm::cuda_stream_view` which is used throughout
