@@ -350,7 +350,8 @@ TEST_P(JsonReaderParamTest, JsonLinesStrings)
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
-      .dtypes({{"2", dtype<cudf::string_view>()}, {"0", dtype<int32_t>()}, {"1", dtype<double>()}})
+      .dtypes(std::map<std::string, data_type>{
+        {"2", dtype<cudf::string_view>()}, {"0", dtype<int32_t>()}, {"1", dtype<double>()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);

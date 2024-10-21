@@ -32,7 +32,7 @@ std::optional<schema_element> child_schema_element(std::string const& col_name,
       [col_name](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
         auto column_index = atol(col_name.data());
         return (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                 ? std::optional<schema_element>{{user_dtypes[column_index]}}
+                 ? std::optional<schema_element>{user_dtypes[column_index]}
                  : std::optional<schema_element>{};
       },
       [col_name](
