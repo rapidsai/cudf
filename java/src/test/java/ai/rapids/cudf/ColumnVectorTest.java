@@ -3884,23 +3884,32 @@ void testExtractReWithNewline() {
     String LINE_SEPARATOR = "\u2028";
     String PARAGRAPH_SEPARATOR = "\u2029";
     String CARRIAGE_RETURN = "\r";
+    String NEW_LINE = "\r";
 
     try (ColumnVector input = ColumnVector.fromStrings(
             "boo:" + NEXT_LINE + "boo::" + LINE_SEPARATOR + "boo:::",
             "boo:::" + LINE_SEPARATOR + "zzé\rlll",
             "boo::",
             "",
-            "boo::\n",
+            "boo::" + NEW_LINE,
+            "boo::" + CARRIAGE_RETURN,
             "boo:" + NEXT_LINE + "boo::" + PARAGRAPH_SEPARATOR,
-            "boo:\nboo::" + LINE_SEPARATOR,
+            "boo:" + NEW_LINE + "boo::" + LINE_SEPARATOR,
             "boo:" + NEXT_LINE + "boo::" + NEXT_LINE);
-         Table expected = new Table.TestBuilder()
-             .column("boo:::", null, "boo::", null, "boo::", "boo::", "boo::", "boo:::")  // Expected full matches
+         Table expected_ext_newline = new Table.TestBuilder()
+             .column("boo:::", null, "boo::", null, "boo::", "boo::", "boo::", "boo::", "boo::")
+             .build();
+         Table expected_default = new Table.TestBuilder()
+             .column("boo:::", null, "boo::", null, "boo::", null, null, null, null)
              .build()) {
 
         // Regex pattern to match 'boo:' followed by one or more colons at the end of the string
         try (Table found = input.extractRe(new RegexProgram("(boo:+)$", EnumSet.of(RegexFlag.EXT_NEWLINE)))) {
-            assertColumnsAreEqual(expected.getColumns()[0], found.getColumns()[0]);
+          assertColumnsAreEqual(expected_ext_newline.getColumns()[0], found.getColumns()[0]);
+        }
+
+        try (Table found = input.extractRe(new RegexProgram("(boo:+)$", EnumSet.of(RegexFlag.DEFAULT)))) {
+          assertColumnsAreEqual(expected_default.getColumns()[0], found.getColumns()[0]);
         }
     }
   }
