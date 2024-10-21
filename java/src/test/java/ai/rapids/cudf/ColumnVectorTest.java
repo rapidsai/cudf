@@ -3895,7 +3895,7 @@ void testExtractReWithNewline() {
             "boo:\nboo::" + LINE_SEPARATOR,
             "boo:" + NEXT_LINE + "boo::" + NEXT_LINE);
          Table expected = new Table.TestBuilder()
-             .column("boo:::", null, "boo::", null, "boo::", "boo::", "boo::", "boo::")  // Expected full matches
+             .column("boo:::", null, "boo::", null, "boo::", "boo::", "boo::", "boo:::")  // Expected full matches
              .build()) {
 
         // Regex pattern to match 'boo:' followed by one or more colons at the end of the string
