@@ -53,8 +53,8 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
     cudf::detail::make_device_uvector_async(bufs, stream, cudf::get_current_device_resource_ref());
 
   // get a vector with the sizes of all buffers
-  auto sizes = cudf::detail::make_counting_transform_iterator(
-    static_cast<std::size_t>(0),
+  auto sizes = thrust::make_transform_iterator(
+    thrust::counting_iterator<std::size_t>(0),
     cuda::proclaim_return_type<std::size_t>(
       [gpu_bufs = gpu_bufs.data()] __device__(std::size_t i) { return gpu_bufs[i].size(); }));
 

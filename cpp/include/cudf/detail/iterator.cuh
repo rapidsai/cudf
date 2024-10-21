@@ -38,18 +38,19 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 
 #include <cuda/std/optional>
+#include <cuda/std/type_traits>
+#include <cuda/std/utility>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
-#include <utility>
-
 namespace cudf {
 namespace detail {
 /**
  * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
- * `thrust::counting_iterator`.
+ * `thrust::counting_iterator` within the range [0, INT_MAX].
+ *
  *
  * Example:
  * @code{.cpp}
@@ -62,14 +63,21 @@ namespace detail {
  * iter[n] == n * n
  * @endcode
  *
- * @param start The starting value of the counting iterator
+ * @param start The starting value of the counting iterator (must be size_type or smaller type).
  * @param f The unary function to apply to the counting iterator.
  * @return A transform iterator that applies `f` to a counting iterator
  */
-template <typename UnaryFunction>
-CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(cudf::size_type start,
+template <typename CountingIterType, typename UnaryFunction>
+CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(CountingIterType start,
                                                               UnaryFunction f)
 {
+  // Check if the `start` for counting_iterator is of size_type or a smaller integral type
+  static_assert(
+    cuda::std::is_integral_v<CountingIterType> and
+      cuda::std::numeric_limits<CountingIterType>::digits <=
+        cuda::std::numeric_limits<cudf::size_type>::digits,
+    "The `start` for the counting_transform_iterator must be size_type or smaller type");
+
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
