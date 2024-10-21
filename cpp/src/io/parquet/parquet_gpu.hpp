@@ -220,6 +220,10 @@ enum class decode_kernel_mask {
     (1 << 9),                              // Same as above but for nested, fixed-width data
   FIXED_WIDTH_NO_DICT_NESTED = (1 << 10),  // Run decode kernel for fixed width non-dictionary pages
   FIXED_WIDTH_DICT_NESTED    = (1 << 11),  // Run decode kernel for fixed width dictionary pages
+  FIXED_WIDTH_DICT_LIST      = (1 << 12),  // Run decode kernel for fixed width dictionary pages
+  FIXED_WIDTH_NO_DICT_LIST   = (1 << 13),  // Run decode kernel for fixed width non-dictionary pages
+  BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST =
+    (1 << 14),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data for fixed width lists
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -908,6 +912,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
+ * @param[in] is_list Whether or not the data contains list data.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -917,6 +922,7 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
                          size_t min_row,
                          int level_type_size,
                          bool has_nesting,
+                         bool is_list,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
 
@@ -932,6 +938,7 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
+ * @param[in] is_list Whether or not the data contains list data.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -941,6 +948,7 @@ void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t min_row,
                              int level_type_size,
                              bool has_nesting,
+                             bool is_list,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream);
 
@@ -956,6 +964,7 @@ void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
+ * @param[in] is_list Whether or not the data contains list data.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -965,6 +974,7 @@ void DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages
                                    size_t min_row,
                                    int level_type_size,
                                    bool has_nesting,
+                                   bool is_list,
                                    kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream);
 
