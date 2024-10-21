@@ -9,7 +9,7 @@ git clone \
     https://github.com/jameslamb/gha-tools.git \
     /tmp/gha-tools-fork
 
-export PATH="/tmp/gha-tools/fork/tools:${PATH}"
+export PATH="/tmp/gha-tools-fork/tools:${PATH}"
 
 # We will only fail these tests if the PR touches code in pylibcudf
 # or cudf_polars itself.

@@ -9,7 +9,7 @@ git clone \
     https://github.com/jameslamb/gha-tools.git \
     /tmp/gha-tools-fork
 
-export PATH="/tmp/gha-tools/fork/tools:${PATH}"
+export PATH="/tmp/gha-tools-fork/tools:${PATH}"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 

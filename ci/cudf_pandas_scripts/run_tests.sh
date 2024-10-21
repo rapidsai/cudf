@@ -11,7 +11,7 @@ git clone \
     https://github.com/jameslamb/gha-tools.git \
     /tmp/gha-tools-fork
 
-export PATH="/tmp/gha-tools/fork/tools:${PATH}"
+export PATH="/tmp/gha-tools-fork/tools:${PATH}"
 
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
