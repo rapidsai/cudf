@@ -35,7 +35,6 @@
 
 #include <cub/device/device_copy.cuh>
 #include <cub/device/device_histogram.cuh>
-
 #include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -468,7 +467,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                              {partial_tables[0].metadata.schema_info}};
 }
 
-std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const& input,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
+{
   auto constexpr num_levels  = 256;
   auto constexpr lower_level = std::numeric_limits<char>::min();
   auto constexpr upper_level = std::numeric_limits<char>::max();
@@ -476,7 +478,8 @@ std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const&
 
   char delimiter;
   {
-    auto histogram = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(num_levels, stream, mr);
+    auto histogram =
+      cudf::detail::make_zeroed_device_uvector_async<uint32_t>(num_levels, stream, mr);
     size_t temp_storage_bytes = 0;
     cub::DeviceHistogram::HistogramEven(nullptr,
                                         temp_storage_bytes,
@@ -498,48 +501,49 @@ std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const&
                                         num_chars,
                                         stream.value());
 
-    auto const zero_level_idx = -lower_level;  // the bin storing count for character `\0`
-    auto const first_zero_count_pos =
-      thrust::find_if(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(0) + zero_level_idx,  // ignore the negative characters
-                      thrust::make_counting_iterator(0) + num_levels,
-                      [zero_level_idx, counts = histogram.begin()] __device__(auto idx) -> bool {
-                        auto const count = counts[idx];
-                        if (count > 0) { return false; }
-                        auto const first_non_existing_char = static_cast<char>(idx - zero_level_idx);
-                        return can_be_delimiter(first_non_existing_char);
-                      });
+    auto const zero_level_idx       = -lower_level;  // the bin storing count for character `\0`
+    auto const first_zero_count_pos = thrust::find_if(
+      rmm::exec_policy_nosync(stream),
+      thrust::make_counting_iterator(0) + zero_level_idx,  // ignore the negative characters
+      thrust::make_counting_iterator(0) + num_levels,
+      [zero_level_idx, counts = histogram.begin()] __device__(auto idx) -> bool {
+        auto const count = counts[idx];
+        if (count > 0) { return false; }
+        auto const first_non_existing_char = static_cast<char>(idx - zero_level_idx);
+        return can_be_delimiter(first_non_existing_char);
+      });
 
     // This should never happen since the input should never cover the entire char range.
     if (first_zero_count_pos == thrust::make_counting_iterator(0) + num_levels) {
       throw std::logic_error(
         "Cannot find any character suitable as delimiter during joining json strings.");
     }
-    delimiter = static_cast<char>(thrust::distance(thrust::make_counting_iterator(0) + zero_level_idx, first_zero_count_pos));
+    delimiter = static_cast<char>(
+      thrust::distance(thrust::make_counting_iterator(0) + zero_level_idx, first_zero_count_pos));
   }
-  
+
   auto d_offsets_colview = input.offsets();
   CUDF_EXPECTS(d_offsets_colview.null_count() == 0, "how can offsets have null count");
-  auto d_offsets_data = d_offsets_colview.data<size_type>();
+  auto d_offsets_data       = d_offsets_colview.data<size_type>();
   auto const d_offsets_size = d_offsets_colview.size();
 
   rmm::device_buffer concatenated_buffer(num_chars + d_offsets_size - 1, stream);
-  auto offsets_map = thrust::make_transform_output_iterator(thrust::make_counting_iterator(0), 
-      [d_offsets_data_ = d_offsets_data + 1] __device__ (auto idx) {
-        return d_offsets_data_[idx] + idx + 1;
-      });
-  thrust::scatter(rmm::exec_policy_nosync(stream), 
-      thrust::make_constant_iterator(delimiter), 
-      thrust::make_constant_iterator(delimiter) + d_offsets_size,
-      offsets_map, 
-      concatenated_buffer.data());
+  auto offsets_map = thrust::make_transform_output_iterator(
+    thrust::make_counting_iterator(0), [d_offsets_data_ = d_offsets_data + 1] __device__(auto idx) {
+      return d_offsets_data_[idx] + idx + 1;
+    });
+  thrust::scatter(rmm::exec_policy_nosync(stream),
+                  thrust::make_constant_iterator(delimiter),
+                  thrust::make_constant_iterator(delimiter) + d_offsets_size,
+                  offsets_map,
+                  concatenated_buffer.data());
 
   {
     // cub device batched copy
-    auto offsets_map = thrust::make_transform_output_iterator(thrust::make_counting_iterator(0), 
-        [d_offsets_data_ = d_offsets_data] __device__ (auto idx) {
-          return d_offsets_data_[idx] + idx;
-        });
+    auto offsets_map = thrust::make_transform_output_iterator(
+      thrust::make_counting_iterator(0), [d_offsets_data_ = d_offsets_data] __device__(auto idx) {
+        return d_offsets_data_[idx] + idx;
+      });
     size_t temp_storage_bytes = 0;
     cub::DeviceCopy::Batched(nullptr,
                              temp_storage_bytes,
