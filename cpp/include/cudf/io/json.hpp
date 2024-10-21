@@ -53,33 +53,60 @@ struct schema_element {
    * @brief Allows specifying this column's child columns target type
    */
   std::map<std::string, schema_element> child_types;
-  // // Add constructors for schema_element to keep order too with intializer list.
+  // // Add constructors for schema_element to keep order too with initializer list.
   // // templated constructor with schema_element<bool keep_order=false>
   // // store the order as
+  /** @brief Allows specifying the order of the columns
+   */
   std::optional<std::vector<std::string>> column_order;
 
+  /**
+   * @brief Default constructor
+   *
+   * @param type The type that this column should be converted to
+   * @param child_types Allows specifying this column's child columns target type
+   * @param column_order Allows specifying the order of the columns
+   */
   schema_element(data_type type,
-                 std::map<std::string, schema_element> child_types = {},
+                 std::map<std::string, schema_element> child_types    = {},
                  std::optional<std::vector<std::string>> column_order = std::nullopt)
     : type{type}, child_types{std::move(child_types)}, column_order{std::move(column_order)}
-  {}
+  {
+  }
+
+  /**
+   * @brief Constructor to create a schema_element with a specific order of columns
+   *
+   * @param type The type that this column should be converted to
+   * @param child_types Allows specifying this column's child columns target type and
+   * the order of the columns
+   */
   schema_element(data_type type,
                  std::initializer_list<std::pair<const std::string, schema_element>> child_types)
     : type{type}
   {
     this->column_order->reserve(child_types.size());
-    for(auto const& [key, value] : child_types) {
+    for (auto const& [key, value] : child_types) {
       this->column_order->push_back(key);
     }
     this->child_types = {std::move(child_types)};
   }
 
-  schema_element(schema_element const& other) = default;
-  schema_element(schema_element&& other) noexcept = default;
-  schema_element& operator=(schema_element const& other) = default;
-  schema_element& operator=(schema_element&& other) noexcept = default;
-  ~schema_element() = default;
-
+  schema_element(schema_element const&)     = default;  ///< Copy constructor
+  schema_element(schema_element&&) noexcept = default;  ///< Copy assignment operator
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
+  schema_element& operator=(schema_element const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object (after transferring ownership)
+   */
+  schema_element& operator=(schema_element&&) noexcept = default;
+  ~schema_element()                                    = default;
 };
 
 /**
