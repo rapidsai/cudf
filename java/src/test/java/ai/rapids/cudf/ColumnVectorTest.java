@@ -3879,17 +3879,32 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testExtractReWithNewline() {
-    try (ColumnVector input = ColumnVector.fromStrings("boo:", "boo::", "boo::::", null);
+void testExtractReWithNewline() {
+    String NEXT_LINE = "\u0085";
+    String LINE_SEPARATOR = "\u2028";
+    String PARAGRAPH_SEPARATOR = "\u2029";
+    String CARRIAGE_RETURN = "\r";
+
+    try (ColumnVector input = ColumnVector.fromStrings(
+            "boo:" + NEXT_LINE + "boo::" + LINE_SEPARATOR + "boo:::",
+            "boo:::" + LINE_SEPARATOR + "zzé\rlll",
+            "boo::",
+            "",
+            "boo::\n",
+            "boo:" + NEXT_LINE + "boo::" + PARAGRAPH_SEPARATOR,
+            "boo:\nboo::" + LINE_SEPARATOR,
+            "boo:" + NEXT_LINE + "boo::" + NEXT_LINE);
          Table expected = new Table.TestBuilder()
-             .column("boo:", "boo::", "boo::::", null)  // Full match as per the pattern
+             .column("boo:::", null, "boo::", null, "boo::", "boo::", "boo::", "boo::")  // Expected full matches
              .build()) {
-      // Keep the original regex pattern
-      try (Table found = input.extractRe(new RegexProgram("(boo:+)$", EnumSet.of(RegexFlag.EXT_NEWLINE)))) {
-        assertColumnsAreEqual(expected.getColumns()[0],found.getColumns()[0]);
-      }
+
+        // Regex pattern to match 'boo:' followed by one or more colons at the end of the string
+        try (Table found = input.extractRe(new RegexProgram("(boo:+)$", EnumSet.of(RegexFlag.EXT_NEWLINE)))) {
+            assertColumnsAreEqual(expected.getColumns()[0], found.getColumns()[0]);
+        }
     }
   }
+
 
   @Test
   void testExtractAllRecord() {
