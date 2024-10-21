@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include "cudf/column/column.hpp"
-#include "thrust/iterator/counting_iterator.h"
-
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/binaryop.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <nvbench/nvbench.cuh>
 
