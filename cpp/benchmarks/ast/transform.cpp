@@ -105,6 +105,7 @@ static void BM_ast_transform(nvbench::state& state)
              [&](nvbench::launch&) { cudf::compute_column(table, expression_tree_root); });
 }
 
+template <cudf::ast::ast_operator cmp_op, cudf::ast::ast_operator reduce_op>
 static void BM_string_compare_ast_transform(nvbench::state& state)
 {
   auto const string_width    = static_cast<cudf::size_type>(state.get_int64("string_width"));
@@ -144,8 +145,6 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   std::list<cudf::ast::operation> expressions;
 
   // Construct AST tree (a == b && c == d && e == f && ...)
-  auto const cmp_op        = cudf::ast::ast_operator::EQUAL;
-  auto const accumulate_op = cudf::ast::ast_operator::LOGICAL_AND;
 
   expressions.emplace_back(cudf::ast::operation(cmp_op, column_refs[0], column_refs[1]));
 
@@ -155,7 +154,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
                   auto const& lhs = expressions.back();
                   auto const& rhs = expressions.emplace_back(
                     cudf::ast::operation(cmp_op, column_refs[idx * 2], column_refs[idx * 2 + 1]));
-                  expressions.emplace_back(cudf::ast::operation(accumulate_op, lhs, rhs));
+                  expressions.emplace_back(cudf::ast::operation(reduce_op, lhs, rhs));
                 });
 
   auto const& expression_tree_root = expressions.back();
@@ -193,9 +192,18 @@ AST_TRANSFORM_BENCHMARK_DEFINE(
 AST_TRANSFORM_BENCHMARK_DEFINE(
   ast_double_imbalanced_unique_nulls, double, TreeType::IMBALANCED_LEFT, false, true);
 
-NVBENCH_BENCH(BM_string_compare_ast_transform)
-  .set_name("string_compare_ast_transform")
-  .add_int64_axis("string_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152})
-  .add_int64_axis("num_comparisons", {1, 2, 3, 4})
-  .add_int64_axis("hit_rate", {50, 100});
+#define AST_STRING_COMPARE_TRANSFORM_BENCHMARK_DEFINE(name, cmp_op, reduce_op) \
+  static void name(::nvbench::state& st)                                       \
+  {                                                                            \
+    ::BM_string_compare_ast_transform<cmp_op, reduce_op>(st);                  \
+  }                                                                            \
+  NVBENCH_BENCH(name)                                                          \
+    .set_name(#name)                                                           \
+    .add_int64_axis("string_width", {32, 64, 128, 256})                        \
+    .add_int64_axis("num_rows", {32768, 262144, 2097152})                      \
+    .add_int64_axis("num_comparisons", {1, 2, 3, 4})                           \
+    .add_int64_axis("hit_rate", {50, 100})
+
+AST_STRING_COMPARE_TRANSFORM_BENCHMARK_DEFINE(ast_string_equal_logical_and,
+                                              cudf::ast::ast_operator::EQUAL,
+                                              cudf::ast::ast_operator::LOGICAL_AND);

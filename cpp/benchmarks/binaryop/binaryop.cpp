@@ -70,6 +70,7 @@ static void BM_binaryop_transform(nvbench::state& state)
   });
 }
 
+template <cudf::binary_operator cmp_op, cudf::binary_operator reduce_op>
 static void BM_string_compare_binaryop_transform(nvbench::state& state)
 {
   auto const string_width    = static_cast<cudf::size_type>(state.get_int64("string_width"));
@@ -103,8 +104,6 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
   // Construct binary operations (a == b && c == d && e == f && ...)
-  auto const cmp_op        = cudf::binary_operator::EQUAL;
-  auto const accumulate_op = cudf::binary_operator::LOGICAL_AND;
   auto constexpr bool_type = cudf::data_type{cudf::type_id::BOOL8};
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
