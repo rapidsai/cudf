@@ -423,7 +423,8 @@ class json_reader_options {
   /**
    * @brief Function to decide if passed argument is a valid delimiter
    *
-   * @param delimiter Delimiter separating records in JSON lines
+   * @param c Character to test as valid delimiter
+   * @return Boolean value indicating if passed character can be used as delimiter
    */
   static constexpr bool can_be_delimiter(char c)
   {
