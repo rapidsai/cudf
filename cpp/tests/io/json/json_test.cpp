@@ -2981,10 +2981,10 @@ TEST_F(JsonReaderTest, PreprocessAndNullifyEmptyRows)
 {
   // Test input
   std::string const row_string = R"({"A":"TEST"})";
-  auto string_col =
-    cudf::test::strings_column_wrapper({row_string, row_string, "", row_string, row_string, row_string, ""},
-                                       {true, true, true, true, true, true, true})
-      .release();
+  auto string_col              = cudf::test::strings_column_wrapper(
+                      {row_string, row_string, "", row_string, row_string, row_string, ""},
+                      {true, true, true, true, true, true, true})
+                      .release();
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
   auto [processed_buffer, delim] = cudf::io::json::detail::preprocess(
@@ -3021,10 +3021,9 @@ TEST_F(JsonReaderTest, PreprocessAndNullifyEmptyRows)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
-    cudf::test::strings_column_wrapper({"TEST", "TEST", "", "TEST", "TEST", "TEST", ""}, {true, true, false, true, true, true, false}),
+    cudf::test::strings_column_wrapper({"TEST", "TEST", "", "TEST", "TEST", "TEST", ""},
+                                       {true, true, false, true, true, true, false}),
     cudf::test::debug_output_level::ALL_ERRORS);
-
 }
-
 
 CUDF_TEST_PROGRAM_MAIN()
