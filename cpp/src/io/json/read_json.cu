@@ -40,6 +40,8 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
 
+#include <cuda/std/span>
+
 #include <numeric>
 
 namespace cudf::io::json::detail {
@@ -524,41 +526,56 @@ std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const&
 
   auto d_offsets_colview = input.offsets();
   CUDF_EXPECTS(d_offsets_colview.null_count() == 0, "how can offsets have null count");
-  auto d_offsets_data       = d_offsets_colview.data<size_type>();
-  auto const d_offsets_size = d_offsets_colview.size();
+  device_span<cudf::size_type const> d_offsets(d_offsets_colview.data<cudf::size_type>(), d_offsets_colview.size());
 
-  rmm::device_buffer concatenated_buffer(num_chars + d_offsets_size - 1, stream);
-  auto offsets_map = thrust::make_transform_output_iterator(
-    thrust::make_counting_iterator(0), [d_offsets_data_ = d_offsets_data + 1] __device__(auto idx) {
-      return d_offsets_data_[idx] + idx + 1;
-    });
+  rmm::device_buffer concatenated_buffer(num_chars + d_offsets.size() - 2, stream);
+
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   thrust::make_constant_iterator(delimiter),
-                  thrust::make_constant_iterator(delimiter) + d_offsets_size,
-                  offsets_map,
-                  concatenated_buffer.data());
+                  thrust::make_constant_iterator(delimiter) + d_offsets.size() - 2,
+                  thrust::make_transform_iterator(
+                    thrust::make_counting_iterator(1), 
+                    cuda::proclaim_return_type<cudf::size_type>(
+                      [d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> cudf::size_type {
+                        return d_offsets[idx] + idx - 1;
+                      })),
+                  reinterpret_cast<char*>(concatenated_buffer.data()));
 
   {
     // cub device batched copy
-    auto offsets_map = thrust::make_transform_output_iterator(
-      thrust::make_counting_iterator(0), [d_offsets_data_ = d_offsets_data] __device__(auto idx) {
-        return d_offsets_data_[idx] + idx;
-      });
+    auto input_it = thrust::make_transform_iterator(
+        thrust::make_counting_iterator(0),
+        cuda::proclaim_return_type<char const*>(
+          [input = input.chars_begin(stream), d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> char const* {
+            return input + d_offsets[idx];
+        }));
+    auto output_it = thrust::make_transform_iterator(
+        thrust::make_counting_iterator(0),
+        cuda::proclaim_return_type<char*>(
+          [output = reinterpret_cast<char*>(concatenated_buffer.data()), d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> char* {
+            return output + d_offsets[idx] + idx;
+        }));
+    auto sizes_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0), 
+      cuda::proclaim_return_type<cudf::size_type>(
+        [d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> cudf::size_type {
+          return d_offsets[idx + 1] - d_offsets[idx];
+        }));
     size_t temp_storage_bytes = 0;
     cub::DeviceCopy::Batched(nullptr,
                              temp_storage_bytes,
-                             input.chars_begin(stream),
-                             concatenated_buffer.data(),
-                             offsets_map,
-                             d_offsets_size,
+                             input_it,
+                             output_it,
+                             sizes_it,
+                             static_cast<uint32_t>(d_offsets.size() - 1),
                              stream.value());
     rmm::device_buffer temp_storage(temp_storage_bytes, stream);
     cub::DeviceCopy::Batched(temp_storage.data(),
                              temp_storage_bytes,
-                             input.chars_begin(stream),
-                             concatenated_buffer.data(),
-                             offsets_map,
-                             d_offsets_size,
+                             input_it,
+                             output_it,
+                             sizes_it,
+                             static_cast<uint32_t>(d_offsets.size() - 1),
                              stream.value());
   }
 
