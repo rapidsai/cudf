@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/json/read_json.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -2974,5 +2976,26 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
                                  cudf::test::strings_column_wrapper({"true", "false", "true"}),
                                  cudf::test::debug_output_level::ALL_ERRORS);
 }
+
+TEST_F(JsonReaderTest, PreprocessAndNullifyEmptyRows)
+{
+  // Test input
+  std::string const row_string = R"({"A":'TEST"'})";
+  auto string_col = cudf::test::strings_column_wrapper({row_string, row_string, row_string, row_string, row_string},
+                                                            {true, true, true, true, true}).release();
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+  auto [processed_buffer, delim] = cudf::io::json::detail::preprocess(cudf::strings_column_view(*string_col), 
+      stream_view, cudf::get_current_device_resource_ref());
+  cudf::io::json_reader_options input_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{reinterpret_cast<char const*>(processed_buffer.data()), processed_buffer.size()})
+      .lines(true)
+      .delimiter(delim)
+      .nullify_empty_lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+}
+
 
 CUDF_TEST_PROGRAM_MAIN()
