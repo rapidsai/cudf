@@ -187,7 +187,7 @@ def test_serialize(arrow_tbl):
 @pytest.mark.parametrize(
     "arrow_tbl",
     [
-        # pa.table([]),
+        pa.table([]),
         pa.table({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}),
         pa.table({"a": [1, 2, 3]}),
         pa.table({"a": [1], "b": [2], "c": [3]}),
