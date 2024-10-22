@@ -77,6 +77,8 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
   auto const num_comparisons = static_cast<cudf::size_type>(state.get_int64("num_comparisons"));
   auto const hit_rate        = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
 
+  CUDF_EXPECTS(num_comparisons > 0, "benchmarks require 1 or more comparisons");
+
   // Create table data
   auto const num_cols = num_comparisons * 2;
   std::vector<std::unique_ptr<cudf::column>> columns;
