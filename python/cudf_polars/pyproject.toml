@@ -50,12 +50,17 @@ license-files = ["LICENSE"]
 version = {file = "cudf_polars/VERSION"}
 
 [tool.pytest.ini_options]
+addopts = "--tb=native --strict-config --strict-markers"
+empty_parameter_set_mark = "fail_at_collect"
+filterwarnings = [
+  "error"
+]
 xfail_strict = true
 
 [tool.coverage.report]
 exclude_also = [
   "if TYPE_CHECKING:",
-  "class .*\\bProtocol\\):",
+  "class .*\\bProtocol(?:\\[[^]]+\\])?\\):",
   "assert_never\\("
 ]
 # The cudf_polars test suite doesn't exercise the plugin, so we omit

@@ -38,12 +38,10 @@ cpdef Column all_characters_of_type(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_char_types.all_characters_of_type(
-                source_strings.view(),
-                types,
-                verify_types,
-            )
+        c_result = cpp_char_types.all_characters_of_type(
+            source_strings.view(),
+            types,
+            verify_types,
         )
 
     return Column.from_libcudf(move(c_result))
@@ -81,13 +79,11 @@ cpdef Column filter_characters_of_type(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_char_types.filter_characters_of_type(
-                source_strings.view(),
-                types_to_remove,
-                dereference(c_replacement),
-                types_to_keep,
-            )
+        c_result = cpp_char_types.filter_characters_of_type(
+            source_strings.view(),
+            types_to_remove,
+            dereference(c_replacement),
+            types_to_keep,
         )
 
     return Column.from_libcudf(move(c_result))

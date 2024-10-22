@@ -1189,15 +1189,12 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
   cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);
 
   // ~256k values with num_nesting_levels = 16
-  int total_values_produced = num_values;
-  auto prev_col             = values.release();
+  auto prev_col = values.release();
   for (int idx = 0; idx < num_nesting_levels; idx++) {
-    auto const depth    = num_nesting_levels - idx;
     auto const num_rows = (1 << (num_nesting_levels - idx));
 
     auto offsets_iter = cudf::detail::make_counting_transform_iterator(
-      0, [depth, rows_per_level](cudf::size_type i) { return i * rows_per_level; });
-    total_values_produced += (num_rows + 1);
+      0, [](cudf::size_type i) { return i * rows_per_level; });
 
     cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offsets_iter,
                                                                     offsets_iter + num_rows + 1);
@@ -2726,4 +2723,41 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   EXPECT_EQ(result_table.num_rows(), expected->num_rows());
   EXPECT_EQ(result_table.num_columns(), expected->num_columns());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
+}
+
+// The test below requires several minutes to complete with memcheck, thus it is disabled by
+// default.
+TEST_F(ParquetReaderTest, DISABLED_ListsWideTable)
+{
+  auto constexpr num_rows = 2;
+  auto constexpr num_cols = 26'755;  // for slightly over 2B keys
+  auto constexpr seed     = 0xceed;
+
+  std::mt19937 engine{seed};
+
+  auto list_list       = make_parquet_list_list_col<int32_t>(0, num_rows, 1, 1, false);
+  auto list_list_nulls = make_parquet_list_list_col<int32_t>(0, num_rows, 1, 1, true);
+
+  // switch between nullable and non-nullable
+  std::vector<cudf::column_view> cols(num_cols);
+  bool with_nulls = false;
+  std::generate_n(cols.begin(), num_cols, [&]() {
+    auto const view = with_nulls ? list_list_nulls->view() : list_list->view();
+    with_nulls      = not with_nulls;
+    return view;
+  });
+
+  cudf::table_view expected(cols);
+
+  // Use a host buffer for faster I/O
+  std::vector<char> buffer;
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build();
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
+  auto const [result, _] = cudf::io::read_parquet(default_in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
