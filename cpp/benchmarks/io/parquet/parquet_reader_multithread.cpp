@@ -90,6 +90,7 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
                                           std::string const& label)
 {
   size_t const data_size = state.get_int64("total_data_size");
+  int const num_iters    = 8;
   auto const num_threads = state.get_int64("num_threads");
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
 
@@ -107,27 +108,29 @@ void BM_parquet_multithreaded_read_common(nvbench::state& state,
   auto mem_stats_logger = cudf::memory_stats_logger();
 
   nvtxRangePushA(("(read) " + label).c_str());
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               auto read_func = [&](int index) {
-                 auto const stream = streams[index % num_threads];
-                 cudf::io::parquet_reader_options read_opts =
-                   cudf::io::parquet_reader_options::builder(source_info_vector[index]);
-                 cudf::io::read_parquet(read_opts, stream, cudf::get_current_device_resource_ref());
-               };
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      auto read_func = [&](int index) {
+        auto const stream = streams[index % num_threads];
+        cudf::io::parquet_reader_options read_opts =
+          cudf::io::parquet_reader_options::builder(source_info_vector[index]);
+        for (int i = 0; i < num_iters; i++) {
+          cudf::io::read_parquet(read_opts, stream, cudf::get_current_device_resource_ref());
+        }
+      };
 
-               threads.pause();
-               threads.detach_sequence(decltype(num_files){0}, num_files, read_func);
-               timer.start();
-               threads.unpause();
-               threads.wait();
-               cudf::detail::join_streams(streams, cudf::get_default_stream());
-               timer.stop();
-             });
+      threads.pause();
+      threads.detach_sequence(decltype(num_files){0}, num_files, read_func);
+      timer.start();
+      threads.unpause();
+      threads.wait();
+      cudf::detail::join_streams(streams, cudf::get_default_stream());
+      timer.stop();
+    });
   nvtxRangePop();
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
+  state.add_element_count(static_cast<double>(num_iters * data_size) / time, "bytes_per_second");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(total_file_size, "encoded_file_size", "encoded_file_size");
