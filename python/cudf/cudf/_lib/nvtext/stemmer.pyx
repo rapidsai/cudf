@@ -36,7 +36,7 @@ def is_letter(Column strings,
     return Column.from_pylibcudf(
         nvtext.stemmer.is_letter(
             strings.to_pylibcudf(mode="read"),
-            True if ltype==LetterType.VOWEL else False,
+            ltype==LetterType.VOWEL,
             index,
         )
     )
@@ -49,7 +49,7 @@ def is_letter_multi(Column strings,
     return Column.from_pylibcudf(
         nvtext.stemmer.is_letter(
             strings.to_pylibcudf(mode="read"),
-            True if ltype==LetterType.VOWEL else False,
+            ltype==LetterType.VOWEL,
             indices.to_pylibcudf(mode="read"),
         )
     )

@@ -17,5 +17,5 @@ __all__ = [
     "minhash",
     "ngrams_tokenize",
     "normalize",
-    "stemmer"
+    "stemmer",
 ]

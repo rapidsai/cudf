@@ -37,7 +37,7 @@ cpdef Column is_letter(
     Returns
     -------
     Column
-        New strings columns of normalized strings.
+        New boolean column.
     """
     cdef unique_ptr[column] c_result
 

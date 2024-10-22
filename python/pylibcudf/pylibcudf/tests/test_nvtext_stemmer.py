@@ -16,14 +16,8 @@ def input_col():
 @pytest.mark.parametrize("indices", [[3, 1, 4], 1])
 def test_is_letter(input_col, check_vowels, indices):
     def is_letter(s, i, check):
-        vowels = ["a", "e", "i", "o", "u", "y"]
-        if check:
-            if s[i] in vowels:
-                return True
-            return False
-        if s[i] not in vowels:
-            return True
-        return False
+        vowels = "aeiouy"
+        return (s[i] in vowels) == check
 
     result = plc.nvtext.stemmer.is_letter(
         plc.interop.from_arrow(input_col),
