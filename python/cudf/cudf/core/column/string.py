@@ -998,7 +998,7 @@ class StringMethods(ColumnMethods):
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
                     self._column,
-                    pat,
+                    list(pat),
                     column.as_column(repl, dtype="str"),
                 )
                 if regex
