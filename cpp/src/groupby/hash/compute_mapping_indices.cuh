@@ -95,7 +95,7 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
                                         cudf::size_type* local_mapping_index,
                                         cudf::size_type* global_mapping_index,
                                         cudf::size_type* block_cardinality,
-                                        bool* direct_aggregations)
+                                        bool* needs_global_memory_fallback)
 {
   // TODO: indices inserted in each shared memory set
   __shared__ cudf::size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
@@ -137,7 +137,7 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
     block.sync();
 
     if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) {
-      if (block.thread_rank() == 0) { *direct_aggregations = true; }
+      if (block.thread_rank() == 0) { *needs_global_memory_fallback = true; }
       break;
     }
   }
@@ -171,17 +171,18 @@ void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type* local_mapping_index,
                              cudf::size_type* global_mapping_index,
                              cudf::size_type* block_cardinality,
-                             bool* direct_aggregations,
+                             bool* needs_global_memory_fallback,
                              rmm::cuda_stream_view stream)
 {
-  mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(num,
-                                                                       global_set,
-                                                                       row_bitmask,
-                                                                       skip_rows_with_nulls,
-                                                                       local_mapping_index,
-                                                                       global_mapping_index,
-                                                                       block_cardinality,
-                                                                       direct_aggregations);
+  mapping_indices_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, 0, stream>>>(
+    num,
+    global_set,
+    row_bitmask,
+    skip_rows_with_nulls,
+    local_mapping_index,
+    global_mapping_index,
+    block_cardinality,
+    needs_global_memory_fallback);
   stream.synchronize();
 }
 }  // namespace cudf::groupby::detail::hash
