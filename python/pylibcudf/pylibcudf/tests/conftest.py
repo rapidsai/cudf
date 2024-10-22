@@ -19,9 +19,9 @@ from utils import ALL_PA_TYPES, DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
 
 def _type_to_str(typ):
     if isinstance(typ, pa.ListType):
-        return f"list-{_type_to_str(typ.value_type)}"
+        return f"list[{_type_to_str(typ.value_type)}]"
     elif isinstance(typ, pa.StructType):
-        return f"struct-{'-'.join([_type_to_str(typ.field(i).type) for i in range(typ.num_fields)])}"
+        return f"struct[{', '.join([_type_to_str(typ.field(i).type) for i in range(typ.num_fields)])}]"
     else:
         return str(typ)
 

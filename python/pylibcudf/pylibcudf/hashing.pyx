@@ -64,7 +64,7 @@ cpdef Table murmurhash3_x64_128(
     ----------
     input : Table
         The table of columns to hash
-    seed : uint32_t
+    seed : uint64_t
         Optional seed value to use for the hash function
 
     Returns
@@ -94,7 +94,7 @@ cpdef Column xxhash_64(
     ----------
     input : Table
         The table of columns to hash
-    seed : uint32_t
+    seed : uint64_t
         Optional seed value to use for the hash function
 
     Returns
