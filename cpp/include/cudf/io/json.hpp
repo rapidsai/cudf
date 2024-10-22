@@ -421,13 +421,13 @@ class json_reader_options {
   void set_byte_range_size(size_t size) { _byte_range_size = size; }
 
   /**
-   * @brief Set delimiter separating records in JSON lines
+   * @brief Function to decide if passed argument is a valid delimiter
    *
    * @param delimiter Delimiter separating records in JSON lines
    */
-  void set_delimiter(char delimiter)
-  {
-    switch (delimiter) {
+  static constexpr bool can_be_delimiter(char c) {
+    // The character list below is from `json_reader_options.set_delimiter`.
+    switch (c) {
       case '{':
       case '[':
       case '}':
@@ -439,9 +439,22 @@ class json_reader_options {
       case '\\':
       case ' ':
       case '\t':
-      case '\r': CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument); break;
+      case '\r': return false;
+      default: return true;
     }
-    _delimiter = delimiter;
+  }
+
+  /**
+   * @brief Set delimiter separating records in JSON lines
+   *
+   * @param delimiter Delimiter separating records in JSON lines
+   */
+  void set_delimiter(char delimiter)
+  {
+    if(!can_be_delimiter(delimiter))
+      CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument); 
+    else
+      _delimiter = delimiter;
   }
 
   /**
@@ -582,6 +595,7 @@ class json_reader_options {
    * @param vals Vector of values to be considered to be null
    */
   void set_na_values(std::vector<std::string> vals) { _na_values = std::move(vals); }
+
 };
 
 /**
@@ -685,7 +699,10 @@ class json_reader_options_builder {
    */
   json_reader_options_builder& delimiter(char delimiter)
   {
-    options.set_delimiter(delimiter);
+    if(json_reader_options::can_be_delimiter(delimiter))
+      options.set_delimiter(delimiter);
+    else 
+      CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument); 
     return *this;
   }
 

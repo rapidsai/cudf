@@ -243,26 +243,6 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
-constexpr bool can_be_delimiter(char c)
-{
-  // The character list below is from `json_reader_options.set_delimiter`.
-  switch (c) {
-    case '{':
-    case '[':
-    case '}':
-    case ']':
-    case ',':
-    case ':':
-    case '"':
-    case '\'':
-    case '\\':
-    case ' ':
-    case '\t':
-    case '\r': return false;
-    default: return true;
-  }
-}
-
 }  // anonymous namespace
 
 device_span<char> ingest_raw_input(device_span<char> buffer,
@@ -510,7 +490,7 @@ std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const&
         auto const count = counts[idx];
         if (count > 0) { return false; }
         auto const first_non_existing_char = static_cast<char>(idx - zero_level_idx);
-        return can_be_delimiter(first_non_existing_char);
+        return json_reader_options::can_be_delimiter(first_non_existing_char);
       });
 
     // This should never happen since the input should never cover the entire char range.
