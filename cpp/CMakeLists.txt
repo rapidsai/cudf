@@ -371,9 +371,10 @@ add_library(
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
-  src/groupby/hash/compute_single_pass_aggs.cu
-  src/groupby/hash/compute_single_pass_aggs_null.cu
-  src/groupby/hash/compute_single_pass_shmem_aggs.cu
+  src/groupby/hash/compute_aggregations.cu
+  src/groupby/hash/compute_aggregations_null.cu
+  src/groupby/hash/compute_global_memory_aggs.cu
+  src/groupby/hash/compute_shared_memory_aggs.cu
   src/groupby/hash/create_sparse_results_table.cu
   src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu

@@ -27,16 +27,16 @@ size_t available_shared_memory_size(cudf::size_type grid_size);
 
 size_t shmem_offsets_size(cudf::size_type num_cols);
 
-void compute_single_pass_shmem_aggs(cudf::size_type grid_size,
-                                    cudf::size_type num_input_rows,
-                                    bitmask_type const* row_bitmask,
-                                    bool skip_rows_with_nulls,
-                                    cudf::size_type* local_mapping_index,
-                                    cudf::size_type* global_mapping_index,
-                                    cudf::size_type* block_cardinality,
-                                    cudf::table_device_view input_values,
-                                    cudf::mutable_table_device_view output_values,
-                                    cudf::aggregation::Kind const* d_agg_kinds,
-                                    rmm::cuda_stream_view stream);
+void compute_shared_memory_aggs(cudf::size_type grid_size,
+                                cudf::size_type num_input_rows,
+                                bitmask_type const* row_bitmask,
+                                bool skip_rows_with_nulls,
+                                cudf::size_type* local_mapping_index,
+                                cudf::size_type* global_mapping_index,
+                                cudf::size_type* block_cardinality,
+                                cudf::table_device_view input_values,
+                                cudf::mutable_table_device_view output_values,
+                                cudf::aggregation::Kind const* d_agg_kinds,
+                                rmm::cuda_stream_view stream);
 
 }  // namespace cudf::groupby::detail::hash

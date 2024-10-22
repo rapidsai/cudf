@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include "compute_aggregations.hpp"
 #include "compute_groupby.hpp"
-#include "compute_single_pass_aggs.hpp"
 #include "helpers.cuh"
 #include "sparse_to_dense_results.hpp"
 
@@ -71,13 +71,13 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       : rmm::device_buffer{};
 
   // Compute all single pass aggs first
-  auto gather_map = compute_single_pass_aggs(num_keys,
-                                             skip_rows_with_nulls,
-                                             static_cast<bitmask_type*>(row_bitmask.data()),
-                                             set,
-                                             requests,
-                                             &sparse_results,
-                                             stream);
+  auto gather_map = compute_aggregations(num_keys,
+                                         skip_rows_with_nulls,
+                                         static_cast<bitmask_type*>(row_bitmask.data()),
+                                         set,
+                                         requests,
+                                         &sparse_results,
+                                         stream);
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests,

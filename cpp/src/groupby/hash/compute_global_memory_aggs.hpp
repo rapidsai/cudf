@@ -13,17 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
-#include "compute_single_pass_aggs.cuh"
-#include "compute_single_pass_aggs.hpp"
+#include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <memory>
+#include <vector>
 
 namespace cudf::groupby::detail::hash {
-template rmm::device_uvector<cudf::size_type> compute_single_pass_aggs<global_set_t>(
-  int64_t num_rows,
+template <typename SetType>
+rmm::device_uvector<cudf::size_type> compute_global_memory_aggs(
+  cudf::size_type num_rows,
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
-  global_set_t& global_set,
-  cudf::host_span<cudf::groupby::aggregation_request const> requests,
+  cudf::table_view const& flattened_values,
+  cudf::aggregation::Kind const* d_agg_kinds,
+  std::vector<cudf::aggregation::Kind> const& agg_kinds,
+  SetType& global_set,
+  std::vector<std::unique_ptr<aggregation>>& aggregations,
   cudf::detail::result_cache* sparse_results,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "compute_single_pass_aggs.cuh"
-#include "compute_single_pass_aggs.hpp"
+#include "compute_aggregations.cuh"
+#include "compute_aggregations.hpp"
 
 namespace cudf::groupby::detail::hash {
-template rmm::device_uvector<cudf::size_type> compute_single_pass_aggs<nullable_global_set_t>(
+template rmm::device_uvector<cudf::size_type> compute_aggregations<nullable_global_set_t>(
   int64_t num_rows,
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,

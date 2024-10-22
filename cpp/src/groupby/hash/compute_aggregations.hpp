@@ -29,7 +29,7 @@ namespace cudf::groupby::detail::hash {
  * over the data and stores the results in `sparse_results`
  */
 template <typename SetType>
-rmm::device_uvector<cudf::size_type> compute_single_pass_aggs(
+rmm::device_uvector<cudf::size_type> compute_aggregations(
   int64_t num_rows,
   bool skip_rows_with_nulls,
   bitmask_type const* row_bitmask,
