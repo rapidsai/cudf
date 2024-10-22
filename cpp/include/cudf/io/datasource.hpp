@@ -335,10 +335,10 @@ class datasource {
   template <typename Container>
   class owning_buffer : public buffer {
    public:
-    /**
-     * @brief Disallow callers to pass an lvalue Container.
-     */
-    owning_buffer(Container&) = delete;
+    // Disallow the container argument to be an lvalue (in which case Container = T& is a
+    // reference).
+    static_assert(!std::is_reference_v<Container>,
+                  "The container argument passed to the constructor must be an rvalue.");
 
     /**
      * @brief Moves the input container into the newly created object.
@@ -352,11 +352,6 @@ class datasource {
         _size(_data.size())
     {
     }
-
-    /**
-     * @brief Disallow callers to pass an lvalue Container.
-     */
-    owning_buffer(Container&, uint8_t const*, size_t) = delete;
 
     /**
      * @brief Moves the input container into the newly created object, and exposes a subspan of the
