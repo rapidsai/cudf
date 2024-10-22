@@ -38,8 +38,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
+#include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
 
 #include <limits>
 
@@ -229,6 +232,7 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
       } else {
         hv = thrust::get<0>(hasher(hash_str));
       }
+      hv = cuda::std::max(hv, hash_value_type{1});
 
       for (std::size_t param_idx = i; param_idx < (i + param_count); ++param_idx) {
         // permutation formula used by datatrove
@@ -251,43 +255,53 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   }
 }
 
+// values determined using redpajama and books_sample datasets
+constexpr cudf::size_type wide_string_threshold = 1 << 18;  // 256K
+constexpr cudf::size_type blocks_per_string     = 64;
+
 template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
 CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
                                      hash_value_type seed,
                                      cudf::size_type width,
-                                     hash_value_type* working_memory)
+                                     hash_value_type* working_memory,
+                                     cudf::size_type* count,
+                                     cudf::size_type param_count,
+                                     hash_value_type* d_results)
 {
-  auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = idx / tile_size;
+  auto const tid     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = tid / tile_size;
   if (str_idx >= d_strings.size()) { return; }
   if (d_strings.is_null(str_idx)) { return; }
 
   auto const offsets = d_strings.child(cudf::strings_column_view::offsets_column_index);
   auto const offsets_itr =
     cudf::detail::input_offsetalator(offsets.head(), offsets.type(), d_strings.offset());
-  auto const offset0    = offsets_itr[0];
   auto const offset     = offsets_itr[str_idx];
   auto const size_bytes = static_cast<cudf::size_type>(offsets_itr[str_idx + 1] - offset);
   if (size_bytes == 0) { return; }
-  auto const seed_hashes = working_memory + offset - offset0;
+
+  auto const seed_hashes = working_memory + offset - offsets_itr[0];
 
   auto const d_str    = cudf::string_view(d_strings.head<char>() + offset, size_bytes);
-  auto const lane_idx = idx % tile_size;
+  auto const lane_idx = tid % tile_size;
 
   auto const begin  = d_str.data() + lane_idx;
   auto const end    = d_str.data() + d_str.size_bytes();
   auto const hasher = HashFunction(seed);
 
-  auto d_output = seed_hashes + lane_idx;
-  for (auto itr = begin; itr < end; itr += tile_size, d_output += tile_size) {
+  auto d_hashes = seed_hashes + lane_idx;
+  for (auto itr = begin; itr < end; itr += tile_size, d_hashes += tile_size) {
     if (cudf::strings::detail::is_utf8_continuation_char(*itr)) {
-      *d_output = 0;
+      *d_hashes = 0;
       continue;
     }
     auto const check_str =  // used for counting 'width' characters
       cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
     auto const [bytes, left] = cudf::strings::detail::bytes_to_character_position(check_str, width);
-    if ((itr != d_str.data()) && (left > 0)) { continue; }  // true if past the end of the string
+    if ((itr != d_str.data()) && (left > 0)) {  // true if past the end of the string
+      *d_hashes = 0;
+      continue;
+    }
 
     auto const hash_str = cudf::string_view(itr, bytes);
     hash_value_type hv;
@@ -296,35 +310,59 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
     } else {
       hv = thrust::get<0>(hasher(hash_str));
     }
-    *d_output = hv;
+    *d_hashes = cuda::std::max(hv, hash_value_type{1});
+  }
+
+  // logic appended here so an extra kernel is not required
+  if (size_bytes >= wide_string_threshold) {
+    if (lane_idx == 0) {
+      // count the number of wider strings
+      cuda::atomic_ref<cudf::size_type, cuda::thread_scope_block> ref{*count};
+      ref.fetch_add(1, cuda::std::memory_order_relaxed);
+    }
+    // initialize the output for wider strings
+    auto d_output = d_results + (str_idx * param_count);
+    for (auto i = lane_idx; i < param_count; i += tile_size) {
+      d_output[i] = std::numeric_limits<hash_value_type>::max();
+    }
   }
 }
 
-template <typename hash_value_type>
+template <typename hash_value_type, int blocks_per_string>
 CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_strings,
+                                         cudf::device_span<cudf::size_type const> indices,
                                          cudf::device_span<hash_value_type const> parameter_a,
                                          cudf::device_span<hash_value_type const> parameter_b,
                                          cudf::size_type width,
                                          hash_value_type* working_memory,
                                          hash_value_type* d_hashes)
 {
-  auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = idx / block_size;
-  if (str_idx >= d_strings.size()) { return; }
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
+  auto const idx = (tid / blocks_per_string) / block_size;
+  if (idx >= indices.size()) { return; }
+  auto const str_idx = indices[idx];
   if (d_strings.is_null(str_idx)) { return; }
+  int const section_idx = blockIdx.x % blocks_per_string;
 
   auto const offsets = d_strings.child(cudf::strings_column_view::offsets_column_index);
   auto const offsets_itr =
     cudf::detail::input_offsetalator(offsets.head(), offsets.type(), d_strings.offset());
-  auto const offset0     = offsets_itr[0];
-  auto const offset      = offsets_itr[str_idx];
-  auto const size_bytes  = static_cast<cudf::size_type>(offsets_itr[str_idx + 1] - offset);
-  auto const seed_hashes = working_memory + offset - offset0;
+  auto const offset     = offsets_itr[str_idx];
+  auto const size_bytes = static_cast<cudf::size_type>(offsets_itr[str_idx + 1] - offset);
+
+  auto const section_size =
+    (size_bytes / blocks_per_string) +
+    (section_idx < (blocks_per_string - 1) ? 0 : size_bytes % blocks_per_string);
+  auto const section_offset = section_idx * (size_bytes / blocks_per_string);
+
+  auto const seed_hashes = working_memory + offset - offsets_itr[0] + section_offset;
   auto const hashes_size =
-    cuda::std::max(static_cast<cudf::size_type>(size_bytes > 0), size_bytes - width + 1);
+    section_idx < (blocks_per_string - 1)
+      ? section_size
+      : cuda::std::max(static_cast<cudf::size_type>(size_bytes > 0), section_size - width + 1);
 
   auto const init     = size_bytes == 0 ? 0 : std::numeric_limits<hash_value_type>::max();
-  auto const lane_idx = idx % block_size;
+  auto const lane_idx = tid % block_size;
   auto const d_output = d_hashes + (str_idx * parameter_a.size());
 
   auto const begin = seed_hashes + lane_idx;
@@ -367,7 +405,12 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
       auto const values = block_hashes + (lane_idx * block_size);
       auto const minv =
         thrust::reduce(thrust::seq, values, values + block_size, init, thrust::minimum{});
-      d_output[lane_idx + i] = minv;
+      if constexpr (blocks_per_string > 1) {
+        cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{d_output[lane_idx + i]};
+        ref.fetch_min(minv, cuda::std::memory_order_relaxed);
+      } else {
+        d_output[lane_idx + i] = minv;
+      }
     }
     __syncthreads();
   }
@@ -409,23 +452,61 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
 
   cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * block_size,
                              block_size};
-#if 0
-  minhash_permuted_kernel<HashFunction>
-    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      *d_strings, seed, parameter_a, parameter_b, width, d_hashes);
-
-#else
-  auto const wm_size  = input.chars_size(stream);
-  auto working_memory = rmm::device_uvector<hash_value_type>(wm_size, stream);
+  auto const wm_size     = input.chars_size(stream);
+  auto working_memory    = rmm::device_uvector<hash_value_type>(wm_size, stream);
+  auto d_threshold_count = rmm::device_scalar<cudf::size_type>(0, stream);
 
   minhash_seed_kernel<HashFunction>
-    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      *d_strings, seed, width, working_memory.data());
+    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(*d_strings,
+                                                                         seed,
+                                                                         width,
+                                                                         working_memory.data(),
+                                                                         d_threshold_count.data(),
+                                                                         parameter_a.size(),
+                                                                         d_hashes);
+  auto const threshold_count = d_threshold_count.value(stream);
 
-  minhash_permuted_kernel<hash_value_type>
-    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      *d_strings, parameter_a, parameter_b, width, working_memory.data(), d_hashes);
-#endif
+  auto indices = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
+  cudf::size_type threshold_index = input.size();
+  if (threshold_count < input.size()) {
+    auto sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      thrust::counting_iterator<cudf::size_type>(0),
+                      thrust::counting_iterator<cudf::size_type>(input.size()),
+                      sizes.data(),
+                      cuda::proclaim_return_type<cudf::size_type>(
+                        [d_strings = *d_strings] __device__(auto idx) -> cudf::size_type {
+                          if (d_strings.is_null(idx)) { return 0; }
+                          return d_strings.element<cudf::string_view>(idx).size_bytes();
+                        }));
+    thrust::sort_by_key(
+      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), indices.begin());
+    auto bp = thrust::lower_bound(
+      rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), wide_string_threshold);
+    threshold_index = static_cast<cudf::size_type>(thrust::distance(sizes.begin(), bp));
+  }
+
+  // handle the strings below the threshold width
+  if (threshold_index > 0) {
+    auto d_indices = cudf::device_span<cudf::size_type const>(indices.data(), threshold_index);
+    cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(d_indices.size()) * block_size,
+                               block_size};
+    minhash_permuted_kernel<hash_value_type, 1>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        *d_strings, d_indices, parameter_a, parameter_b, width, working_memory.data(), d_hashes);
+  }
+
+  // handle the strings above the threshold width
+  if (threshold_index < input.size()) {
+    auto count = static_cast<cudf::thread_index_type>(input.size() - threshold_index);
+    auto d_indices =
+      cudf::device_span<cudf::size_type const>(indices.data() + threshold_index, count);
+    cudf::detail::grid_1d grid{count * block_size * blocks_per_string, block_size};
+    minhash_permuted_kernel<hash_value_type, blocks_per_string>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+        *d_strings, d_indices, parameter_a, parameter_b, width, working_memory.data(), d_hashes);
+  }
 
   return hashes;
 }
