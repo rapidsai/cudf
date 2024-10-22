@@ -58,3 +58,30 @@ def test_extract_datetime_component(datetime_column, component):
     ).cast(pa.int16())
 
     assert_column_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "datetime_func",
+    [
+        "extract_year",
+        "extract_month",
+        "extract_day",
+        "extract_weekday",
+        "extract_hour",
+        "extract_minute",
+        "extract_second",
+        "extract_millisecond_fraction",
+        "extract_microsecond_fraction",
+        "extract_nanosecond_fraction",
+    ],
+)
+def test_datetime_extracting_functions(datetime_column, datetime_func):
+    pa_col = plc.interop.to_arrow(datetime_column)
+    got = getattr(plc.datetime, datetime_func)(datetime_column)
+    kwargs = {}
+    attr = datetime_func.split("_")[1]
+    if attr == "weekday":
+        kwargs = {"count_from_zero": False}
+        attr = "day_of_week"
+    expect = getattr(pc, attr)(pa_col, **kwargs).cast(pa.int16())
+    assert_column_eq(expect, got)
