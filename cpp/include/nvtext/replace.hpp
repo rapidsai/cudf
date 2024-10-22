@@ -82,7 +82,7 @@ namespace CUDF_EXPORT nvtext {
  *                  The default of empty string will identify tokens using whitespace.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New strings column of replaced strings
+ * @return New strings column with replaced strings
  */
 std::unique_ptr<cudf::column> replace_tokens(
   cudf::strings_column_view const& input,

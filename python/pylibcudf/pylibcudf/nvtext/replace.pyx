@@ -43,7 +43,7 @@ cpdef Column replace_tokens(
     Returns
     -------
     Column
-        New strings column of replaced strings
+        New strings column with replaced strings
     """
     cdef unique_ptr[column] c_result
     if delimiter is None:
