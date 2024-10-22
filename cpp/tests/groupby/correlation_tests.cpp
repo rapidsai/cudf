@@ -25,7 +25,6 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 
 #include <limits>
-#include <vector>
 
 using namespace cudf::test::iterators;
 

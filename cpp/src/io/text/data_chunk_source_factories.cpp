@@ -22,10 +22,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
-#include <rmm/device_buffer.hpp>
-
-#include <thrust/host_vector.h>
-
 #include <fstream>
 
 namespace cudf::io::text {

@@ -28,7 +28,6 @@
 #include <cudf/types.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/sort.h>
 
 #include <type_traits>
 #include <vector>

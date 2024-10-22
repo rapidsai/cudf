@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
 
 // NOTE: this file exists to define the parquet test's `main()` function.

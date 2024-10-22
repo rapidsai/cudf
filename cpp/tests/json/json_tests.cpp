@@ -19,7 +19,6 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/json/json.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 

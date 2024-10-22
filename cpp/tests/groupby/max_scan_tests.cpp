@@ -22,7 +22,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/dictionary/update_keys.hpp>
 
 using namespace cudf::test::iterators;
 

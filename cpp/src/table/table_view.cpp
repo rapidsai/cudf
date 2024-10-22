@@ -20,10 +20,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <algorithm>
-#include <cassert>
 #include <vector>
 
 namespace cudf {

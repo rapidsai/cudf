@@ -17,7 +17,6 @@
 #include "avro.hpp"
 
 #include <array>
-#include <cstring>
 #include <unordered_map>
 
 namespace cudf {

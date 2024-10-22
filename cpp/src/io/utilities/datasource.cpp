@@ -32,7 +32,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <unordered_map>
 #include <vector>
 
 namespace cudf {

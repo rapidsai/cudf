@@ -15,12 +15,8 @@
  */
 
 #include "io/json/nested_json.hpp"
-#include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/random.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -29,9 +25,9 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
+#include <numeric>
 #include <stack>
 #include <string>
 #include <unordered_map>

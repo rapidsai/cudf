@@ -20,7 +20,6 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/search.hpp>
 
 #include <thrust/iterator/transform_iterator.h>

@@ -20,8 +20,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
-
 template <typename V>
 struct groupby_collect_list_test : public cudf::test::BaseFixture {};
 

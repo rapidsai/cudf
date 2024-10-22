@@ -16,11 +16,8 @@
 
 #include "getenv_or.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cstdlib>
-#include <sstream>
 #include <string>
 
 namespace cudf::io {
