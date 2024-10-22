@@ -199,10 +199,13 @@ def test_serialize(arrow_tbl):
 def test_dask_serialize(arrow_tbl, protocol):
     from distributed.protocol import deserialize, serialize
 
+    # To register dask serializers, we need to import dask_serialize
+    import cudf_polars.experimental.dask_serialize  # noqa: F401
+
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 
-    header, frames = serialize(df, on_error="raises", serializers=[protocol])
+    header, frames = serialize(df, on_error="raise", serializers=[protocol])
     res = deserialize(header, frames, deserializers=[protocol])
 
     pl.testing.asserts.assert_frame_equal(df.to_polars(), res.to_polars())
