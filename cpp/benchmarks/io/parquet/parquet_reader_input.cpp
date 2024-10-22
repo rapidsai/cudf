@@ -235,7 +235,7 @@ void BM_parquet_read_wide_tables(nvbench::state& state,
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size_mb") << 20);
   auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const source_type     = io_type::DEVICE_BUFFER;
+  auto const source_type     = retrieve_io_type_enum(state.get_string("io_type"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -268,7 +268,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size_mb") << 20);
   auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const source_type     = io_type::DEVICE_BUFFER;
+  auto const source_type     = retrieve_io_type_enum(state.get_string("io_type"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -299,21 +299,21 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
 NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_decode")
   .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
 NVBENCH_BENCH(BM_parquet_read_io_compression)
   .set_name("parquet_read_io_compression")
-  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
 NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_chunks")
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
@@ -321,7 +321,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
 
 NVBENCH_BENCH(BM_parquet_read_io_small_mixed)
   .set_name("parquet_read_io_small_mixed")
-  .add_string_axis("io_type", {"FILEPATH"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
@@ -332,6 +332,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
   .set_name("parquet_read_wide_tables")
   .set_min_samples(4)
   .set_type_axes_names({"data_type"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .add_int64_axis("data_size_mb", {1024, 2048, 4096})
   .add_int64_axis("num_cols", {256, 512, 1024})
   .add_int64_axis("cardinality", {0, 1000})
@@ -339,6 +340,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
 
 NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
   .set_name("parquet_read_wide_tables_mixed")
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("data_size_mb", {1024, 2048, 4096})
   .add_int64_axis("num_cols", {256, 512, 1024})
@@ -350,7 +352,7 @@ using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
 NVBENCH_BENCH_TYPES(BM_parquet_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_list_struct_only))
   .set_name("parquet_read_fixed_width_struct")
   .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});

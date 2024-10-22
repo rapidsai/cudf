@@ -268,7 +268,7 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_mixed)
   .add_int64_axis("num_threads", {1, 2, 4, 8})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_fixed_width)
   .set_name("parquet_multithreaded_read_decode_fixed_width")
@@ -278,7 +278,7 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_fixed_width)
   .add_int64_axis("num_threads", {1, 2, 4, 8})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_string)
   .set_name("parquet_multithreaded_read_decode_string")
@@ -288,7 +288,7 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_string)
   .add_int64_axis("num_threads", {1, 2, 4, 8})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_list)
   .set_name("parquet_multithreaded_read_decode_list")
@@ -298,7 +298,7 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_list)
   .add_int64_axis("num_threads", {1, 2, 4, 8})
   .add_int64_axis("num_cols", {4})
   .add_int64_axis("run_length", {8})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});
 
 // mixed data types: fixed width, strings
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_mixed)
@@ -311,7 +311,7 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_mixed)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_fixed_width)
   .set_name("parquet_multithreaded_read_decode_chunked_fixed_width")
@@ -323,7 +323,7 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_fixed_width)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_string)
   .set_name("parquet_multithreaded_read_decode_chunked_string")
@@ -335,7 +335,7 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_string)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});
 
 NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_list)
   .set_name("parquet_multithreaded_read_decode_chunked_list")
@@ -347,4 +347,4 @@ NVBENCH_BENCH(BM_parquet_multithreaded_read_chunked_list)
   .add_int64_axis("run_length", {8})
   .add_int64_axis("input_limit", {640 * 1024 * 1024})
   .add_int64_axis("output_limit", {640 * 1024 * 1024})
-  .add_string_axis("io_type", {"PINNED_BUFFER"});
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"});

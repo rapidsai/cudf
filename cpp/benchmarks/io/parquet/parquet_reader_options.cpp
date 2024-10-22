@@ -76,7 +76,8 @@ void BM_parquet_read_options(nvbench::state& state,
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
+  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
+  cuio_source_sink_pair source_sink(source_type);
   cudf::io::parquet_writer_options options =
     cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
   cudf::io::write_parquet(options);
@@ -147,6 +148,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4);
 
 using col_selections = nvbench::enum_type_list<column_selection::ALL,
@@ -165,6 +167,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4);
 
 NVBENCH_BENCH_TYPES(
@@ -180,4 +183,5 @@ NVBENCH_BENCH_TYPES(
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
+  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
   .set_min_samples(4);
