@@ -53,69 +53,16 @@ struct schema_element {
    * @brief Allows specifying this column's child columns target type
    */
   std::map<std::string, schema_element> child_types;
-  // // Add constructors for schema_element to keep order too with initializer list.
-  // // templated constructor with schema_element<bool keep_order=false>
-  // // store the order as
+
   /** @brief Allows specifying the order of the columns
    */
   std::optional<std::vector<std::string>> column_order;
 
-  /**
-   * @brief Default constructor
+  /** @brief Returns the size of the child_types map
    *
-   * @param type The type that this column should be converted to
-   * @param child_types Allows specifying this column's child columns target type
-   * @param column_order Allows specifying the order of the columns
+   * @return size_t The size of the child_types map
    */
-  schema_element(data_type type,
-                 std::map<std::string, schema_element> child_types,
-                 std::optional<std::vector<std::string>> column_order = std::nullopt)
-    : type{std::move(type)},
-      child_types{std::move(child_types)},
-      column_order{std::move(column_order)}
-  {
-  }
-
-  /**
-   * @brief Constructor to create a schema_element from a data_type
-   *
-   * @param type The type that this column should be converted to
-   */
-  schema_element(data_type type) : schema_element{type, {}, std::nullopt} {}
-  schema_element() = default;
-  /**
-   * @brief Constructor to create a schema_element with a specific order of columns
-   *
-   * @param type The type that this column should be converted to
-   * @param child_types Allows specifying this column's child columns target type and
-   * the order of the columns
-   */
-  schema_element(data_type type,
-                 std::initializer_list<std::pair<const std::string, schema_element>> child_types)
-    : type{type}
-  {
-    this->column_order->reserve(child_types.size());
-    for (auto const& [key, value] : child_types) {
-      this->column_order->push_back(key);
-    }
-    this->child_types = {std::move(child_types)};
-  }
-
-  schema_element(schema_element const&)     = default;  ///< Copy constructor
-  schema_element(schema_element&&) noexcept = default;  ///< Copy assignment operator
-  /**
-   * @brief Copy assignment operator
-   *
-   * @return Reference to this object
-   */
-  schema_element& operator=(schema_element const&) = default;
-  /**
-   * @brief Move assignment operator
-   *
-   * @return Reference to this object (after transferring ownership)
-   */
-  schema_element& operator=(schema_element&&) noexcept = default;
-  ~schema_element()                                    = default;
+  size_t size() const { return child_types.size(); }
 };
 
 /**
@@ -155,7 +102,8 @@ class json_reader_options {
   // Data types of the column; empty to infer dtypes
   std::variant<std::vector<data_type>,
                std::map<std::string, data_type>,
-               std::map<std::string, schema_element>>
+               std::map<std::string, schema_element>,
+               schema_element>
     _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
@@ -243,7 +191,8 @@ class json_reader_options {
    */
   [[nodiscard]] std::variant<std::vector<data_type>,
                              std::map<std::string, data_type>,
-                             std::map<std::string, schema_element>> const&
+                             std::map<std::string, schema_element>,
+                             schema_element> const&
   get_dtypes() const
   {
     return _dtypes;
@@ -452,6 +401,13 @@ class json_reader_options {
    * @param types Map of column names to schema_element to support arbitrary nesting of data types
    */
   void set_dtypes(std::map<std::string, schema_element> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set data types for a potentially nested column hierarchy.
+   *
+   * @param types Map of column names to schema_element to support arbitrary nesting of data types
+   */
+  void set_dtypes(schema_element types) { _dtypes = std::move(types); }
 
   /**
    * @brief Set the compression type.
@@ -682,6 +638,18 @@ class json_reader_options_builder {
    * @return this for chaining
    */
   json_reader_options_builder& dtypes(std::map<std::string, schema_element> types)
+  {
+    options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Column name -> schema_element with map and order
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(schema_element types)
   {
     options._dtypes = std::move(types);
     return *this;

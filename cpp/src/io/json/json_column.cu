@@ -580,6 +580,11 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 
   // Iterate over the struct's child columns and convert to cudf column
   size_type column_index = 0;
+  auto col_order         = options.is_enabled_prune_columns() and
+                       std::holds_alternative<schema_element>(options.get_dtypes()) and
+                       not std::get<schema_element>(options.get_dtypes()).column_order->empty()
+                             ? std::get<schema_element>(options.get_dtypes()).column_order
+                             : root_struct_col.column_order;
   for (auto const& col_name : root_struct_col.column_order) {
     auto& json_col = root_struct_col.child_columns.find(col_name)->second;
 
@@ -600,6 +605,11 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
           -> std::optional<schema_element> {
           return (user_dtypes.find(col_name) != std::end(user_dtypes))
                    ? user_dtypes.find(col_name)->second
+                   : std::optional<schema_element>{};
+        },
+        [col_name](schema_element const& user_dtypes) -> std::optional<schema_element> {
+          return (user_dtypes.child_types.find(col_name) != std::end(user_dtypes.child_types))
+                   ? user_dtypes.child_types.find(col_name)->second
                    : std::optional<schema_element>{};
         }},
       options.get_dtypes());

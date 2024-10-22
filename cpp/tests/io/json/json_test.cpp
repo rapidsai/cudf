@@ -241,7 +241,7 @@ struct JsonValidFixedPointReaderTest : public JsonFixedPointReaderTest<DecimalTy
                       });
     cudf::io::json_reader_options const in_opts =
       cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
-        .dtypes({data_type{type_to_id<DecimalType>(), scale}})
+        .dtypes(std::vector{data_type{type_to_id<DecimalType>(), scale}})
         .lines(true);
 
     auto const result      = cudf::io::read_json(in_opts);
@@ -326,7 +326,7 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
-      .dtypes({dtype<float>()})
+      .dtypes(std::vector{dtype<float>()})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -469,7 +469,7 @@ TEST_P(JsonReaderParamTest, Booleans)
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
-      .dtypes({dtype<bool>()})
+      .dtypes(std::vector{dtype<bool>()})
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
@@ -511,7 +511,7 @@ TEST_P(JsonReaderParamTest, Dates)
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
-      .dtypes({data_type{type_id::TIMESTAMP_MILLISECONDS}})
+      .dtypes(std::vector{data_type{type_id::TIMESTAMP_MILLISECONDS}})
       .lines(true)
       .dayfirst(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -567,7 +567,7 @@ TEST_P(JsonReaderParamTest, Durations)
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
-      .dtypes({data_type{type_id::DURATION_NANOSECONDS}})
+      .dtypes(std::vector{data_type{type_id::DURATION_NANOSECONDS}})
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
@@ -1025,7 +1025,7 @@ TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
-      .dtypes({dtype<float>()})
+      .dtypes(std::vector{dtype<float>()})
       .lines(true);
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
@@ -1464,7 +1464,7 @@ TEST_F(JsonReaderTest, ErrorStrings)
 
   cudf::io::json_reader_options const in_opts =
     cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
-      .dtypes({data_type{cudf::type_id::STRING}})
+      .dtypes(std::vector{data_type{cudf::type_id::STRING}})
       .lines(true);
 
   auto const result      = cudf::io::read_json(in_opts);
@@ -1852,7 +1852,7 @@ TYPED_TEST(JsonFixedPointReaderTest, EmptyValues)
 
   cudf::io::json_reader_options const in_opts =
     cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
-      .dtypes({data_type{type_to_id<TypeParam>(), 0}})
+      .dtypes(std::vector{data_type{type_to_id<TypeParam>(), 0}})
       .lines(true);
 
   auto const result      = cudf::io::read_json(in_opts);

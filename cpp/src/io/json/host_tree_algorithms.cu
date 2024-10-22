@@ -272,7 +272,8 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
                        });
         return dnew;
       },
-      [](std::map<std::string, schema_element> const& user_dtypes) { return user_dtypes; }},
+      [](std::map<std::string, schema_element> const& user_dtypes) { return user_dtypes; },
+      [](schema_element const& user_dtypes) { return user_dtypes.child_types; }},
     options.get_dtypes());
 }
 
@@ -596,6 +597,15 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, user_dtypes.at(name));
                    }
+                 },
+                 [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
+                   schema_element const& user_dtypes) -> void {
+                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
+                     auto const first_child_id = adj[root_list_col_id][i];
+                     auto name                 = column_names[first_child_id];
+                     if (user_dtypes.child_types.count(name))
+                       mark_is_pruned(first_child_id, user_dtypes.child_types.at(name));
+                   }
                  }},
                options.get_dtypes());
   } else {
@@ -629,7 +639,9 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
         [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
           std::map<std::string, schema_element> const& user_dtypes) -> void {
           mark_is_pruned(root_struct_col_id, u_schema);
-        }},
+        },
+        [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](schema_element const& user_dtypes)
+          -> void { mark_is_pruned(root_struct_col_id, u_schema); }},
       options.get_dtypes());
   }
   // Useful for array of arrays
