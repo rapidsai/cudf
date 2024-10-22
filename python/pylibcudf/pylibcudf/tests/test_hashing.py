@@ -84,9 +84,11 @@ def python_hash_value(x, method):
 
 
 @pytest.mark.parametrize(
-    "method", ["sha1", "sha224", "sha256", "sha384", "sha512"]
+    "method", ["sha1", "sha224", "sha256", "sha384", "sha512", "md5"]
 )
-def test_hash_column_sha(pa_scalar_input_column, plc_scalar_input_tbl, method):
+def test_hash_column_sha_md5(
+    pa_scalar_input_column, plc_scalar_input_tbl, method
+):
     plc_hasher = getattr(plc.hashing, method)
 
     def py_hasher(val):
@@ -97,18 +99,6 @@ def test_hash_column_sha(pa_scalar_input_column, plc_scalar_input_tbl, method):
         type=pa.string(),
     )
     got = plc_hasher(plc_scalar_input_tbl)
-    assert_column_eq(got, expect)
-
-
-def test_hash_column_md5(pa_scalar_input_column, plc_scalar_input_tbl):
-    def py_hasher(val):
-        return hashlib.md5(scalar_to_binary(val)).hexdigest()
-
-    expect = pa.array(
-        [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
-        type=pa.string(),
-    )
-    got = plc.hashing.md5(plc_scalar_input_tbl)
     assert_column_eq(got, expect)
 
 
