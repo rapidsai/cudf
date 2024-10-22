@@ -92,10 +92,11 @@ def update_full_include_list(add_includes, full_include_lists):
             ]
 
 
-def write_output(file_path, add_includes, remove_includes, full_include_lists):
+def write_output(file_path, remove_includes, full_include_lists):
     """Write the output back in the desired format."""
     with open(file_path, 'w') as f:
-        for file in sorted(set(add_includes.keys()).union(remove_includes.keys()).union(full_include_lists.keys())):
+        # Only write output for files that have removals
+        for file in remove_includes.keys():
             # Write "should add these lines", but don't actually include any of the
             # items in the output.
             f.write(f"{file} should add these lines:\n\n")
@@ -127,7 +128,7 @@ def modify_log(log_content, output_file="output.txt"):
     update_full_include_list(add_includes, full_include_lists)
 
     # Step 4: Write the output back in the desired format
-    write_output(output_file, add_includes, remove_includes, full_include_lists)
+    write_output(output_file, remove_includes, full_include_lists)
 
 
 
