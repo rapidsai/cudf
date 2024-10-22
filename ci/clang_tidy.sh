@@ -46,4 +46,4 @@ cmake --build cpp/build 2>&1 | tee build_output.txt
 python cpp/scripts/parse_iwyu_output.py build_output.txt gh-status.json
 
 # Remove invalid components of the path for local usage.
-sed -i 's/\/__w\/cudf\/cudf\///' gh-status.txt
+sed -i 's/\/__w\/cudf\/cudf\///' gh-status.json
