@@ -88,10 +88,12 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
     });
 
   cudf::table table{std::move(columns)};
+  cudf::table_view const table_view = table.view();
 
-  int64_t const chars_size = std::accumulate(table.begin(), table.end(), [](auto& column) {
-    return cudf::strings_column_view{column}.chars_size(cudf::get_default_stream());
-  });
+  int64_t const chars_size = std::accumulate(
+    table_view.begin(), table_view.end(), static_cast<int64_t>(0), [](int64_t size, auto& column) {
+      return size + cudf::strings_column_view{column}.chars_size(cudf::get_default_stream());
+    });
 
   // Create column references
 
