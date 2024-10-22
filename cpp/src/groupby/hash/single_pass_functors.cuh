@@ -182,7 +182,7 @@ struct initialize_sparse_table {
 };
 
 template <typename SetType>
-struct compute_direct_aggregates {
+struct global_memory_fallback_fn {
   SetType set;
   cudf::table_device_view input_values;
   cudf::mutable_table_device_view output_values;
@@ -192,7 +192,7 @@ struct compute_direct_aggregates {
   bitmask_type const* __restrict__ row_bitmask;
   bool skip_rows_with_nulls;
 
-  compute_direct_aggregates(SetType set,
+  global_memory_fallback_fn(SetType set,
                             cudf::table_device_view input_values,
                             cudf::mutable_table_device_view output_values,
                             cudf::aggregation::Kind const* aggs,

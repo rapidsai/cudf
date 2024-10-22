@@ -97,7 +97,9 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   rmm::device_uvector<cudf::size_type> global_mapping_index(grid_size * GROUPBY_SHM_MAX_ELEMENTS,
                                                             stream);
   rmm::device_uvector<cudf::size_type> block_cardinality(grid_size, stream);
-  rmm::device_scalar<bool> direct_aggregations(false, stream);
+
+  // Flag indicating whether a global memory aggregation fallback is required or not
+  rmm::device_scalar<bool> needs_global_memory_fallback(false, stream);
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
@@ -109,14 +111,16 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                           local_mapping_index.data(),
                           global_mapping_index.data(),
                           block_cardinality.data(),
-                          direct_aggregations.data(),
+                          needs_global_memory_fallback.data(),
                           stream);
+
+  auto const needs_fallback = needs_global_memory_fallback.value(stream);
 
   // make table that will hold sparse results
   cudf::table sparse_table = create_sparse_results_table(flattened_values,
                                                          d_agg_kinds.data(),
                                                          agg_kinds,
-                                                         direct_aggregations.value(stream),
+                                                         needs_fallback,
                                                          global_set,
                                                          populated_keys,
                                                          stream);
@@ -135,12 +139,12 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                              *d_sparse_table,
                              d_agg_kinds.data(),
                              stream);
-  if (direct_aggregations.value(stream)) {
+  if (needs_fallback) {
     auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::counting_iterator{0},
                        num_rows,
-                       compute_direct_aggregates{global_set_ref,
+                       global_memory_fallback_fn{global_set_ref,
                                                  *d_values,
                                                  *d_sparse_table,
                                                  d_agg_kinds.data(),
