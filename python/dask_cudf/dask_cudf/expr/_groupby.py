@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from dask_expr._collection import new_collection
 from dask_expr._groupby import (
     GroupBy as DXGroupBy,
     SeriesGroupBy as DXSeriesGroupBy,
@@ -10,6 +11,8 @@ from dask_expr._util import is_scalar
 from dask.dataframe.groupby import Aggregation
 
 from cudf.core.groupby.groupby import _deprecate_collect
+
+from dask_cudf.expr._expr import _maybe_get_custom_expr
 
 ##
 ## Custom groupby classes
@@ -54,9 +57,16 @@ def _translate_arg(arg):
         return arg
 
 
-# TODO: These classes are mostly a work-around for missing
-# `observed=False` support.
-# See: https://github.com/rapidsai/cudf/issues/15173
+# We define our own GroupBy classes in Dask cuDF for
+# the following reasons:
+#  (1) We want to use a custom `aggregate` algorithm
+#      that performs multiple aggregations on the
+#      same dataframe partition at once. The upstream
+#      algorithm breaks distinct aggregations into
+#      separate tasks.
+#  (2) We need to work around missing `observed=False`
+#      support:
+#      https://github.com/rapidsai/cudf/issues/15173
 
 
 class GroupBy(DXGroupBy):
@@ -89,8 +99,15 @@ class GroupBy(DXGroupBy):
         _deprecate_collect()
         return self._single_agg(ListAgg, **kwargs)
 
-    def aggregate(self, arg, **kwargs):
-        return super().aggregate(_translate_arg(arg), **kwargs)
+    def aggregate(self, arg, fused=True, **kwargs):
+        if (
+            fused
+            and (expr := _maybe_get_custom_expr(self, arg, **kwargs))
+            is not None
+        ):
+            return new_collection(expr)
+        else:
+            return super().aggregate(_translate_arg(arg), **kwargs)
 
 
 class SeriesGroupBy(DXSeriesGroupBy):

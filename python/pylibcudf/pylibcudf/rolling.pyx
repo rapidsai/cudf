@@ -49,24 +49,21 @@ cpdef Column rolling_window(
     cdef const rolling_aggregation *c_agg = agg.view_underlying_as_rolling()
     if WindowType is Column:
         with nogil:
-            result = move(
-                cpp_rolling.rolling_window(
-                    source.view(),
-                    preceding_window.view(),
-                    following_window.view(),
-                    min_periods,
-                    dereference(c_agg),
-                )
+            result = cpp_rolling.rolling_window(
+                source.view(),
+                preceding_window.view(),
+                following_window.view(),
+                min_periods,
+                dereference(c_agg),
             )
     else:
         with nogil:
-            result = move(
-                cpp_rolling.rolling_window(
-                    source.view(),
-                    preceding_window,
-                    following_window,
-                    min_periods,
-                    dereference(c_agg),
-                )
+            result = cpp_rolling.rolling_window(
+                source.view(),
+                preceding_window,
+                following_window,
+                min_periods,
+                dereference(c_agg),
             )
+
     return Column.from_libcudf(move(result))
