@@ -142,7 +142,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   auto const cmp_op        = cudf::ast::ast_operator::EQUAL;
   auto const accumulate_op = cudf::ast::ast_operator::LOGICAL_AND;
 
-  expressions.emplace_back(cudf::ast::operation(cmp_op, column_refs.at(0), column_refs.at(1)));
+  expressions.emplace_back(cudf::ast::operation(cmp_op, column_refs[0], column_refs[1]));
 
   std::for_each(thrust::make_counting_iterator(1),
                 thrust::make_counting_iterator(num_comparisons),
