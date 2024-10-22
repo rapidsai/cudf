@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import cupy as cp
+import numpy as np
 import pyarrow as pa
 import pylibcudf as plc
 import pytest
@@ -69,8 +71,29 @@ def test_decimal_other(data_type):
     assert arrow_type == pa.decimal128(precision, 0)
 
 
-def test_dlpack():
+def test_dlpack_plc_able():
     expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
     plc_table = plc.interop.from_arrow(expected)
     result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
     assert_table_eq(expected, result)
+
+
+def test_dlpack_cupy_array():
+    arr = cp.arange(3)
+    result = plc.interop.from_dlpack(arr.toDlpack())
+    expected = pa.table({"a": [0, 1, 2]})
+    assert_table_eq(expected, result)
+
+
+def test_dlpack_numpy_array():
+    arr = np.arange(3)
+    result = plc.interop.from_dlpack(arr.__dlpack__())
+    expected = pa.table({"a": [0, 1, 2]})
+    assert_table_eq(expected, result)
+
+
+def test_to_dlpack_error():
+    expected = pa.table({"a": [1, None, 3], "b": [5, 6, 7]})
+    plc_table = plc.interop.from_arrow(expected)
+    with pytest.raises(ValueError):
+        plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))

@@ -8,7 +8,7 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.dtypes import ListDtype, StructDtype
 
 
-def from_dlpack(dlpack_capsule):
+def from_dlpack(object dlpack_capsule):
     """
     Converts a DLPack Tensor PyCapsule into a list of columns.
 
@@ -25,15 +25,11 @@ def to_dlpack(list source_columns):
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
-    if any(column.null_count for column in source_columns):
-        raise ValueError(
-            "Cannot create a DLPack tensor with null values. "
-            "Input is required to have null count as zero."
+    return pylibcudf.interop.to_dlpack(
+        pylibcudf.Table(
+            [col.to_pylibcudf(mode="read") for col in source_columns]
         )
-    plc_table = pylibcudf.Table(
-        [col.to_pylibcudf(mode="read") for col in source_columns]
     )
-    return pylibcudf.interop.to_dlpack(plc_table)
 
 
 def gather_metadata(object cols_dtypes):

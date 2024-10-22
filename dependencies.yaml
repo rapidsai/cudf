@@ -818,6 +818,7 @@ dependencies:
           - hypothesis
           - *numpy
           - pandas
+          - cupy
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]

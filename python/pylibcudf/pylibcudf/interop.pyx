@@ -2,6 +2,7 @@
 
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
+    PyCapsule_IsValid,
     PyCapsule_New,
     PyCapsule_SetName,
 )
@@ -324,7 +325,7 @@ def _to_arrow_scalar(cudf_object, metadata=None):
     return to_arrow(Column.from_scalar(cudf_object, 1), metadata=metadata)[0]
 
 
-cpdef Table from_dlpack(managed_tensor):
+cpdef Table from_dlpack(object managed_tensor):
     """
     Convert a DLPack DLTensor into a cudf table.
 
@@ -340,23 +341,28 @@ cpdef Table from_dlpack(managed_tensor):
     Table
         Table with a copy of the tensor data.
     """
+    if not PyCapsule_IsValid(managed_tensor, "dltensor"):
+        raise ValueError("Invalid capsule object")
     cdef unique_ptr[table] c_result
     cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(
         managed_tensor, "dltensor"
     )
     PyCapsule_SetName(managed_tensor, "used_dltensor")
 
+    # Note: A copy is always performed when converting the dlpack
+    # data to a libcudf table. We also delete the dlpack_tensor pointer
+    # as the poionter is not deleted by libcudf's from_dlpack function.
+    # TODO: https://github.com/rapidsai/cudf/issues/10874
+    # TODO: https://github.com/rapidsai/cudf/issues/10849
     with nogil:
-        c_result = move(
-            cpp_from_dlpack(dlpack_tensor)
-        )
+        c_result = cpp_from_dlpack(dlpack_tensor)
 
-    result = Table.from_libcudf(move(c_result))
+    cdef Table result = Table.from_libcudf(move(c_result))
     dlpack_tensor.deleter(dlpack_tensor)
     return result
 
 
-cpdef to_dlpack(Table input):
+cpdef object to_dlpack(Table input):
     """
     Convert a cudf table into a DLPack DLTensor.
 
@@ -372,12 +378,16 @@ cpdef to_dlpack(Table input):
     PyCapsule
         1D or 2D DLPack tensor with a copy of the table data, or nullptr.
     """
+    for col in input._columns:
+        if col.null_count():
+            raise ValueError(
+                "Cannot create a DLPack tensor with null values. "
+                "Input is required to have null count as zero."
+            )
     cdef DLManagedTensor *dlpack_tensor
 
     with nogil:
-        dlpack_tensor = cpp_to_dlpack(
-            input.view()
-        )
+        dlpack_tensor = cpp_to_dlpack(input.view())
 
     return PyCapsule_New(
         dlpack_tensor,
@@ -387,12 +397,9 @@ cpdef to_dlpack(Table input):
 
 
 cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj) noexcept:
-    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>0
-    try:
-        dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(
-            pycap_obj, "used_dltensor"
-        )
+    if PyCapsule_IsValid(pycap_obj, "used_dltensor"):
         # we do not call a used capsule's deleter
-    except Exception:
-        dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(pycap_obj, "dltensor")
-        dlpack_tensor.deleter(dlpack_tensor)
+        return
+    cdef DLManagedTensor* dlpack_tensor
+    dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(pycap_obj, "dltensor")
+    dlpack_tensor.deleter(dlpack_tensor)

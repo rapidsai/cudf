@@ -3,6 +3,6 @@
 from pylibcudf.table cimport Table
 
 
-cpdef Table from_dlpack(managed_tensor)
+cpdef Table from_dlpack(object managed_tensor)
 
-cpdef to_dlpack(Table input)
+cpdef object to_dlpack(Table input)
