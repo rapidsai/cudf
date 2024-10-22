@@ -28,6 +28,7 @@
 #include <cooperative_groups.h>
 #include <cuco/static_set_ref.cuh>
 #include <cuda/std/atomic>
+#include <cuda/std/utility>
 
 #include <algorithm>
 
@@ -43,23 +44,27 @@ __device__ void find_local_mapping(cooperative_groups::thread_block const& block
                                    cudf::size_type* local_mapping_index,
                                    cudf::size_type* shared_set_indices)
 {
-  cudf::size_type result_idx{};
-  bool inserted{};
-  if (idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx))) {
-    auto const result = shared_set.insert_and_find(idx);
-    result_idx        = *result.first;
-    inserted          = result.second;
-    // inserted a new element
-    if (result.second) {
-      auto const shared_set_index          = atomicAdd(cardinality, 1);
-      shared_set_indices[shared_set_index] = idx;
-      local_mapping_index[idx]             = shared_set_index;
+  auto const is_valid_input =
+    idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx));
+  auto const [result_idx, inserted] = [&]() {
+    if (is_valid_input) {
+      auto const result      = shared_set.insert_and_find(idx);
+      auto const matched_idx = *result.first;
+      auto const inserted    = result.second;
+      // inserted a new element
+      if (result.second) {
+        auto const shared_set_index          = atomicAdd(cardinality, 1);
+        shared_set_indices[shared_set_index] = idx;
+        local_mapping_index[idx]             = shared_set_index;
+      }
+      return cuda::std::pair{matched_idx, inserted};
     }
-  }
+    return cuda::std::pair{0, false};  // dummy values
+  }();
   // Syncing the thread block is needed so that updates in `local_mapping_index` are visible to all
   // threads in the thread block.
   block.sync();
-  if (idx < num_input_rows and (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, idx))) {
+  if (is_valid_input) {
     // element was already in set
     if (!inserted) { local_mapping_index[idx] = local_mapping_index[result_idx]; }
   }
@@ -98,7 +103,6 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
                                         cudf::size_type* block_cardinality,
                                         cuda::std::atomic_flag* needs_global_memory_fallback)
 {
-  // TODO: indices inserted in each shared memory set
   __shared__ cudf::size_type shared_set_indices[GROUPBY_SHM_MAX_ELEMENTS];
 
   // Shared set initialization
