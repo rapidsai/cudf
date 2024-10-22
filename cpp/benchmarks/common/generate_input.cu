@@ -952,7 +952,7 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
   auto data_view = raw_data->view();
 
   // compute number of rows in n_rows that should match
-auto const num_matches = (static_cast<int64_t>(num_rows) * hit_rate) / 100;
+  auto const num_matches = (static_cast<int64_t>(num_rows) * hit_rate) / 100;
 
   // Create a randomized gather-map to build a column out of the strings in data.
   data_profile gather_profile =
