@@ -73,7 +73,6 @@ std::tuple<std::vector<cuio_source_sink_pair>, size_t, size_t> write_file_data(
 
     cudf::io::parquet_writer_options write_opts =
       cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(cudf::io::compression_type::SNAPPY)
         .max_page_size_rows(50000)
         .max_page_size_bytes(1024 * 1024);
 
