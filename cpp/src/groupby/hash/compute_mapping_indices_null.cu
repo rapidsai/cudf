@@ -30,6 +30,6 @@ template void compute_mapping_indices<nullable_hash_set_ref_t<cuco::insert_and_f
   cudf::size_type* local_mapping_index,
   cudf::size_type* global_mapping_index,
   cudf::size_type* block_cardinality,
-  bool* needs_global_memory_fallback,
+  cuda::std::atomic_flag* needs_global_memory_fallback,
   rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

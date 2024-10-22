@@ -19,6 +19,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/atomic>
+
 namespace cudf::groupby::detail::hash {
 /*
  * @brief Computes the maximum number of active blocks of the given kernel that can be executed on
@@ -36,6 +38,6 @@ void compute_mapping_indices(cudf::size_type grid_size,
                              cudf::size_type* local_mapping_index,
                              cudf::size_type* global_mapping_index,
                              cudf::size_type* block_cardinality,
-                             bool* needs_global_memory_fallback,
+                             cuda::std::atomic_flag* needs_global_memory_fallback,
                              rmm::cuda_stream_view stream);
 }  // namespace cudf::groupby::detail::hash

@@ -37,6 +37,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/std/atomic>
 #include <thrust/for_each.h>
 
 #include <algorithm>
@@ -99,7 +100,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   rmm::device_uvector<cudf::size_type> block_cardinality(grid_size, stream);
 
   // Flag indicating whether a global memory aggregation fallback is required or not
-  rmm::device_scalar<bool> needs_global_memory_fallback(false, stream);
+  rmm::device_scalar<cuda::std::atomic_flag> needs_global_memory_fallback(stream);
 
   auto global_set_ref = global_set.ref(cuco::op::insert_and_find);
 
@@ -114,7 +115,13 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                           needs_global_memory_fallback.data(),
                           stream);
 
-  auto const needs_fallback = needs_global_memory_fallback.value(stream);
+  cuda::std::atomic_flag h_needs_fallback;
+  CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
+                                needs_global_memory_fallback.data(),
+                                sizeof(cuda::std::atomic_flag),
+                                cudaMemcpyDefault,
+                                stream.value()));
+  auto const needs_fallback = h_needs_fallback.test();
 
   // make table that will hold sparse results
   cudf::table sparse_table = create_sparse_results_table(flattened_values,
