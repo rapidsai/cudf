@@ -276,9 +276,9 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
     constexpr cudf::thread_index_type tile_size = cudf::detail::warp_size;
 
     auto const shared_mem_size =
-      (targets.size() < targets_threshold) ? (block_size * targets.size()) : 0;
+      (targets.size() <= targets_threshold) ? (block_size * targets.size()) : 0;
     auto const work_mem_size =
-      (targets.size() < targets_threshold) ? 0 : tile_size * targets.size() * input.size();
+      (targets.size() <= targets_threshold) ? 0 : tile_size * targets.size() * input.size();
     auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
 
     // std::cout << shared_mem_size << "," << work_mem_size << std::endl;
