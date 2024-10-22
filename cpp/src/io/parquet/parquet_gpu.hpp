@@ -221,6 +221,8 @@ enum class decode_kernel_mask {
     (1 << 9),                              // Same as above but for nested, fixed-width data
   FIXED_WIDTH_NO_DICT_NESTED = (1 << 10),  // Run decode kernel for fixed width non-dictionary pages
   FIXED_WIDTH_DICT_NESTED    = (1 << 11),  // Run decode kernel for fixed width dictionary pages
+  BOOLEAN                    = (1 << 15),  // Run decode kernel for boolean data
+  BOOLEAN_NESTED             = (1 << 16),  // Run decode kernel for nested boolean data
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -537,6 +539,7 @@ enum class encode_kernel_mask {
   DELTA_LENGTH_BA   = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
   DELTA_BYTE_ARRAY  = (1 << 4),  // Run DELTA_BYtE_ARRAY encoding kernel
   BYTE_STREAM_SPLIT = (1 << 5),  // Run plain encoding kernel, but split streams
+  RLE               = (1 << 6),  // Run RLE encoding kernel
 };
 
 /**
@@ -920,6 +923,30 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
                          bool has_nesting,
                          kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading boolean column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> pages,
+                           cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                           std::size_t num_rows,
+                           size_t min_row,
+                           int level_type_size,
+                           bool has_nesting,
+                           kernel_error::pointer error_code,
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading dictionary fixed width column data stored in the pages

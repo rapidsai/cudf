@@ -181,9 +181,12 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   } else if (is_string_col(chunk)) {
     // check for string before byte_stream_split so FLBA will go to the right kernel
     return decode_kernel_mask::STRING;
+  } else if (is_boolean(chunk) && !is_list(chunk)) {
+    return is_nested(chunk) ? decode_kernel_mask::BOOLEAN_NESTED 
+                            : decode_kernel_mask::BOOLEAN;
   }
 
-  if (!is_list(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
+  if (!is_list(chunk) && !is_byte_array(chunk)) {
     if (page.encoding == Encoding::PLAIN) {
       return is_nested(chunk) ? decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED
                               : decode_kernel_mask::FIXED_WIDTH_NO_DICT;

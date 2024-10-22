@@ -121,6 +121,8 @@ __device__ inline void gpuDecodeFixedWidthValues(
             }
             break;
         }
+      } else if (dtype == BOOLEAN) {
+        gpuOutputBoolean(sb, src_pos, static_cast<uint8_t*>(dst));
       } else if (dtype == INT96) {
         gpuOutputInt96Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
       } else if (dtype_len == 8) {
@@ -560,6 +562,35 @@ __device__ inline bool maybe_has_nulls(page_state_s* s)
   return run_val != s->col.max_level[lvl];
 }
 
+template <int decode_block_size_t, typename state_buf>
+inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, int to_decode)
+{
+  int pos              = s->dict_pos;
+  int const target_pos = pos + to_decode;
+
+  while (pos < target_pos) {
+    int const batch_len = min(target_pos - pos, decode_block_size_t);
+
+    if (t < batch_len) {
+      int const bit_pos = pos + t;
+      int const byte_offset = bit_pos >> 3;
+      int const bit_in_byte_index = bit_pos & 7;
+
+      uint8_t const * const read_from = s->data_start + byte_offset;
+      bool const read_bit = *read_from & (1 << bit_in_byte_index);
+
+      int const write_to_index = rolling_index<state_buf::dict_buf_size>(bit_pos);
+      sb->dict_idx[write_to_index] = read_bit;
+    }
+
+    pos += batch_len;
+  }
+
+  if(t == 0) {
+    s->dict_pos = pos;
+  }
+}
+
 /**
  * @brief Kernel for computing fixed width non dictionary column data stored in the pages
  *
@@ -577,8 +608,6 @@ __device__ inline bool maybe_has_nulls(page_state_s* s)
 template <typename level_t,
           int decode_block_size_t,
           decode_kernel_mask kernel_mask_t,
-          bool has_dict_t,
-          bool has_nesting_t,
           template <int block_size, typename state_buf>
           typename DecodeValuesFunc>
 CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
@@ -588,12 +617,21 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
                            size_t num_rows,
                            kernel_error::pointer error_code)
 {
+  constexpr bool has_dict_t = (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) || 
+                              (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED);
+  constexpr bool has_bools_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN) || 
+                               (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED);
+  constexpr bool has_nesting_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) || 
+                                 (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) || 
+                                 (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) ||
+                                 (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED);
+
   constexpr int rolling_buf_size    = decode_block_size_t * 2;
   constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size_t>();
 
   __shared__ __align__(16) page_state_s state_g;
   using state_buf_t = page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
-                                           has_dict_t ? rolling_buf_size : 1,
+                                           has_dict_t || has_bools_t ? rolling_buf_size : 1,
                                            1>;
   __shared__ __align__(16) state_buf_t state_buffers;
 
@@ -607,7 +645,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
 
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
-
+  
   if (!setupLocalPageInfo(s,
                           pp,
                           chunks,
@@ -628,27 +666,24 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
 
   // shared buffer. all shared memory is suballocated out of here
   // constexpr int shared_rep_size = has_lists_t ? cudf::util::round_up_unsafe(rle_run_buffer_size *
-  // sizeof(rle_run<level_t>), size_t{16}) : 0;
-  constexpr int shared_dict_size =
-    has_dict_t
-      ? cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<uint32_t>), size_t{16})
-      : 0;
-  constexpr int shared_def_size =
-    cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run<level_t>), size_t{16});
-  constexpr int shared_buf_size = /*shared_rep_size +*/ shared_dict_size + shared_def_size;
+  // sizeof(rle_run), size_t{16}) : 0;
+  constexpr int rle_run_buffer_bytes = cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run), size_t{16});
+  constexpr int shared_buf_size = rle_run_buffer_bytes*(int(has_dict_t) + int(has_bools_t) + 1);
   __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
   int shared_offset = 0;
   /*
-  rle_run<level_t> *rep_runs = reinterpret_cast<rle_run<level_t>*>(shared_buf + shared_offset);
+  rle_run *rep_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
   if constexpr (has_lists_t){
     shared_offset += shared_rep_size;
   }
   */
-  rle_run<uint32_t>* dict_runs = reinterpret_cast<rle_run<uint32_t>*>(shared_buf + shared_offset);
-  if constexpr (has_dict_t) { shared_offset += shared_dict_size; }
-  rle_run<level_t>* def_runs = reinterpret_cast<rle_run<level_t>*>(shared_buf + shared_offset);
+  auto dict_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
+  if constexpr (has_dict_t) { shared_offset += rle_run_buffer_bytes; }
+  auto bool_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
+  if constexpr (has_bools_t) { shared_offset += rle_run_buffer_bytes; }
+  auto def_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   rle_stream<level_t, decode_block_size_t, rolling_buf_size> def_decoder{def_runs};
@@ -676,6 +711,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   if constexpr (has_dict_t) {
     dict_stream.init(
       s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+  }
+
+  //Use dictionary stream memory for bools
+  rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> bool_stream{bool_runs};
+  bool bools_are_rle_stream = (s->dict_run == 0);
+  if constexpr (has_bools_t) {
+    if(bools_are_rle_stream) {
+      bool_stream.init(
+        1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+    }
   }
   __syncthreads();
 
@@ -719,12 +764,19 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
     }
     __syncthreads();
 
-    // if we have dictionary data
+    // if we have dictionary or bool data
+    // We want to limit the number of dictionary/bool items we decode, that correspond to
+    // the rows we have processed in this iteration that are valid.
+    // We know the number of valid rows to process with: next_valid_count - valid_count.
     if constexpr (has_dict_t) {
-      // We want to limit the number of dictionary items we decode, that correspond to
-      // the rows we have processed in this iteration that are valid.
-      // We know the number of valid rows to process with: next_valid_count - valid_count.
       dict_stream.decode_next(t, next_valid_count - valid_count);
+      __syncthreads();
+    } else if constexpr (has_bools_t) {
+      if(bools_are_rle_stream) {
+        bool_stream.decode_next(t, next_valid_count - valid_count);
+      } else {
+        bool_plain_decode<decode_block_size_t>(s, sb, t, next_valid_count - valid_count);
+      }
       __syncthreads();
     }
 
@@ -758,8 +810,6 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED,
-                               false,
-                               true,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -767,8 +817,6 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT,
-                               false,
-                               false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -778,8 +826,6 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED,
-                               false,
-                               true,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -787,8 +833,56 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_NO_DICT,
-                               false,
-                               false,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    }
+  }
+}
+
+
+void __host__ DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> pages,
+                                    cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                    size_t num_rows,
+                                    size_t min_row,
+                                    int level_type_size,
+                                    bool has_nesting,
+                                    kernel_error::pointer error_code,
+                                    rmm::cuda_stream_view stream)
+{
+  constexpr int decode_block_size = 128;
+
+  dim3 dim_block(decode_block_size, 1);
+  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+
+  if (level_type_size == 1) {
+    if (has_nesting) {
+      gpuDecodePageDataGeneric<uint8_t,
+                               decode_block_size,
+                               decode_kernel_mask::BOOLEAN_NESTED,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else {
+      gpuDecodePageDataGeneric<uint8_t,
+                               decode_block_size,
+                               decode_kernel_mask::BOOLEAN,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    }
+  } else {
+    if (has_nesting) {
+      gpuDecodePageDataGeneric<uint16_t,
+                               decode_block_size,
+                               decode_kernel_mask::BOOLEAN_NESTED,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else {
+      gpuDecodePageDataGeneric<uint16_t,
+                               decode_block_size,
+                               decode_kernel_mask::BOOLEAN,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -815,8 +909,6 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_DICT_NESTED,
-                               true,
-                               true,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -824,8 +916,6 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_DICT,
-                               true,
-                               false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -835,8 +925,6 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_DICT_NESTED,
-                               true,
-                               true,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -844,8 +932,6 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::FIXED_WIDTH_DICT,
-                               true,
-                               false,
                                decode_fixed_width_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -873,8 +959,6 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
-                               false,
-                               true,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -882,8 +966,6 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
-                               false,
-                               false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -893,8 +975,6 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
-                               false,
-                               true,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
@@ -902,8 +982,6 @@ DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
-                               false,
-                               false,
                                decode_fixed_width_split_values_func>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);

@@ -325,6 +325,30 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         streams[s_idx++]);
   }
 
+  // launch boolean type decoder
+  if (BitAnd(kernel_mask, decode_kernel_mask::BOOLEAN) != 0) {
+    DecodePageDataBoolean(subpass.pages,
+                          pass.chunks,
+                          num_rows,
+                          skip_rows,
+                          level_type_size,
+                          false,
+                          error_code.data(),
+                          streams[s_idx++]);
+  }
+
+  // launch boolean type decoder, for nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::BOOLEAN_NESTED) != 0) {
+    DecodePageDataBoolean(subpass.pages,
+                          pass.chunks,
+                          num_rows,
+                          skip_rows,
+                          level_type_size,
+                          true,
+                          error_code.data(),
+                          streams[s_idx++]);
+  }
+
   // launch fixed width type decoder with dictionaries
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT) != 0) {
     DecodePageDataFixedDict(subpass.pages,

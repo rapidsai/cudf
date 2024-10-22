@@ -151,7 +151,6 @@ __device__ inline void decode(level_t* const output,
 }
 
 // a single rle run. may be broken up into multiple rle_batches
-template <typename level_t>
 struct rle_run {
   int size;        // total size of the run
   int output_pos;  // absolute position of this run w.r.t output
@@ -182,14 +181,14 @@ struct rle_stream {
 
   level_t* output;
 
-  rle_run<level_t>* runs;
+  rle_run* runs;
 
   int output_pos;
 
   int fill_index;
   int decode_index;
 
-  __device__ rle_stream(rle_run<level_t>* _runs) : runs(_runs) {}
+  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
@@ -239,10 +238,11 @@ struct rle_stream {
       // literal run
       if (is_literal_run(level_run)) {
         // from the parquet spec: literal runs always come in multiples of 8 values.
+        // bit shift level_run down because low bit indicates whether literal/repeated
         run.size = (level_run >> 1) * 8;
         run_bytes += ((run.size * level_bits) + 7) >> 3;
       }
-      // repeated value run
+        // repeated value run
       else {
         run.size = (level_run >> 1);
         run_bytes += ((level_bits) + 7) >> 3;
