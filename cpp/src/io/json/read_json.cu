@@ -35,12 +35,11 @@
 
 #include <cub/device/device_copy.cuh>
 #include <cub/device/device_histogram.cuh>
+#include <cuda/std/span>
 #include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
-
-#include <cuda/std/span>
 
 #include <numeric>
 
@@ -526,37 +525,39 @@ std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const&
 
   auto d_offsets_colview = input.offsets();
   CUDF_EXPECTS(d_offsets_colview.null_count() == 0, "how can offsets have null count");
-  device_span<cudf::size_type const> d_offsets(d_offsets_colview.data<cudf::size_type>(), d_offsets_colview.size());
+  device_span<cudf::size_type const> d_offsets(d_offsets_colview.data<cudf::size_type>(),
+                                               d_offsets_colview.size());
 
   rmm::device_buffer concatenated_buffer(num_chars + d_offsets.size() - 2, stream);
 
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_constant_iterator(delimiter),
-                  thrust::make_constant_iterator(delimiter) + d_offsets.size() - 2,
-                  thrust::make_transform_iterator(
-                    thrust::make_counting_iterator(1), 
-                    cuda::proclaim_return_type<cudf::size_type>(
-                      [d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> cudf::size_type {
-                        return d_offsets[idx] + idx - 1;
-                      })),
-                  reinterpret_cast<char*>(concatenated_buffer.data()));
+  thrust::scatter(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_constant_iterator(delimiter),
+    thrust::make_constant_iterator(delimiter) + d_offsets.size() - 2,
+    thrust::make_transform_iterator(
+      thrust::make_counting_iterator(1),
+      cuda::proclaim_return_type<cudf::size_type>(
+        [d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> cudf::size_type {
+          return d_offsets[idx] + idx - 1;
+        })),
+    reinterpret_cast<char*>(concatenated_buffer.data()));
 
   {
     // cub device batched copy
     auto input_it = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0),
-        cuda::proclaim_return_type<char const*>(
-          [input = input.chars_begin(stream), d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> char const* {
-            return input + d_offsets[idx];
-        }));
+      thrust::make_counting_iterator(0),
+      cuda::proclaim_return_type<char const*>(
+        [input = input.chars_begin(stream), d_offsets = d_offsets.begin()] __device__(
+          cudf::size_type idx) -> char const* { return input + d_offsets[idx]; }));
     auto output_it = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0),
-        cuda::proclaim_return_type<char*>(
-          [output = reinterpret_cast<char*>(concatenated_buffer.data()), d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> char* {
-            return output + d_offsets[idx] + idx;
+      thrust::make_counting_iterator(0),
+      cuda::proclaim_return_type<char*>(
+        [output    = reinterpret_cast<char*>(concatenated_buffer.data()),
+         d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> char* {
+          return output + d_offsets[idx] + idx;
         }));
     auto sizes_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0), 
+      thrust::make_counting_iterator(0),
       cuda::proclaim_return_type<cudf::size_type>(
         [d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> cudf::size_type {
           return d_offsets[idx + 1] - d_offsets[idx];
