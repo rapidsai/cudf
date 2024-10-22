@@ -22,6 +22,7 @@
 #include <kvikio/defaults.hpp>
 
 #include <cstdlib>
+#include <mutex>
 #include <sstream>
 #include <string>
 
@@ -55,6 +56,14 @@ bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_
 
 bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
 
+void set_thread_pool_nthreads_from_env()
+{
+  static std::once_flag flag{};
+  std::call_once(flag, [] {
+    auto nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 8U);
+    kvikio::defaults::thread_pool_nthreads_reset(nthreads);
+  });
+}
 }  // namespace cufile_integration
 
 namespace nvcomp_integration {
@@ -83,13 +92,4 @@ bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
 
 }  // namespace nvcomp_integration
-
-namespace kvikio_setting {
-void set_thread_pool_nthreads_from_env()
-{
-  auto nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 8U);
-  kvikio::defaults::thread_pool_nthreads_reset(nthreads);
-}
-}  // namespace kvikio_setting
-
 }  // namespace cudf::io

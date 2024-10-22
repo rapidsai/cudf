@@ -36,6 +36,12 @@ bool is_gds_enabled();
  */
 bool is_kvikio_enabled();
 
+/**
+ * @brief Set kvikIO thread pool size according to the environment variable KVIKIO_NTHREADS. If
+ * KVIKIO_NTHREADS is not set, use 8 threads by default.
+ */
+void set_thread_pool_nthreads_from_env();
+
 }  // namespace cufile_integration
 
 namespace nvcomp_integration {
@@ -51,15 +57,5 @@ bool is_all_enabled();
 bool is_stable_enabled();
 
 }  // namespace nvcomp_integration
-
-namespace kvikio_setting {
-
-/**
- * @brief Set kvikIO thread pool size according to the environment variable KVIKIO_NTHREADS. If
- * KVIKIO_NTHREADS is not set, use 8 threads by default.
- */
-void set_thread_pool_nthreads_from_env();
-
-}  // namespace kvikio_setting
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf
