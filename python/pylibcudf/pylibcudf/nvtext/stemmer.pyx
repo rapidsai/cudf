@@ -9,7 +9,6 @@ from pylibcudf.libcudf.nvtext.stemmer cimport (
     is_letter as cpp_is_letter,
     letter_type,
     porter_stemmer_measure as cpp_porter_stemmer_measure,
-    underlying_type_t_letter_type,
 )
 from pylibcudf.libcudf.types cimport size_type
 
@@ -40,15 +39,12 @@ cpdef Column is_letter(
     Column
         New strings columns of normalized strings.
     """
-    cdef letter_type c_ltype = <letter_type>(
-        <underlying_type_t_letter_type> check_vowels
-    )
     cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = cpp_is_letter(
             input.view(),
-            c_ltype,
+            letter_type.VOWEL if check_vowels else letter_type.CONSONANT,
             indices if ColumnOrSize is size_type else indices.view()
         )
 
