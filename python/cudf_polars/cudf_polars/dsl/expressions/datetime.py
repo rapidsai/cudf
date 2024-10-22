@@ -25,7 +25,7 @@ __all__ = ["TemporalFunction"]
 
 
 class TemporalFunction(Expr):
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options")
     _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
         pl_expr.TemporalFunction.Year: plc.datetime.DatetimeComponent.YEAR,
         pl_expr.TemporalFunction.Month: plc.datetime.DatetimeComponent.MONTH,
@@ -39,7 +39,6 @@ class TemporalFunction(Expr):
         pl_expr.TemporalFunction.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
     }
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     def __init__(
         self,
@@ -48,7 +47,7 @@ class TemporalFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children
