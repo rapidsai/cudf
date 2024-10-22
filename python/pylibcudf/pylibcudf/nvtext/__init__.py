@@ -7,6 +7,7 @@ from . import (
     minhash,
     ngrams_tokenize,
     normalize,
+    replace,
     stemmer,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "minhash",
     "ngrams_tokenize",
     "normalize",
+    "replace",
     "stemmer",
 ]
