@@ -35,12 +35,11 @@ __all__ = ["Cast", "UnaryFunction", "Len"]
 class Cast(Expr):
     """Class representing a cast of an expression."""
 
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("dtype",)
-    children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (value,)
         if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
@@ -107,7 +106,9 @@ class Cast(Expr):
 class Len(Expr):
     """Class representing the length of an expression."""
 
-    children: tuple[()]
+    def __init__(self, dtype: plc.DataType) -> None:
+        self.dtype = dtype
+        self.children = ()
 
     def do_evaluate(
         self,
@@ -137,9 +138,8 @@ class Len(Expr):
 class UnaryFunction(Expr):
     """Class representing unary functions of an expression."""
 
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     # Note: log, and pow are handled via translation to binops
     _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
@@ -189,7 +189,7 @@ class UnaryFunction(Expr):
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.name = name
         self.options = options
         self.children = children

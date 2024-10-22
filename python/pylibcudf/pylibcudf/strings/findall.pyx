@@ -30,11 +30,9 @@ cpdef Column findall(Column input, RegexProgram pattern):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_findall.findall(
-                input.view(),
-                pattern.c_obj.get()[0]
-            )
+        c_result = cpp_findall.findall(
+            input.view(),
+            pattern.c_obj.get()[0]
         )
 
     return Column.from_libcudf(move(c_result))
@@ -62,11 +60,9 @@ cpdef Column find_re(Column input, RegexProgram pattern):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_findall.find_re(
-                input.view(),
-                pattern.c_obj.get()[0]
-            )
+        c_result = cpp_findall.find_re(
+            input.view(),
+            pattern.c_obj.get()[0]
         )
 
     return Column.from_libcudf(move(c_result))

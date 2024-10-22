@@ -35,7 +35,7 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input):
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     with nogil:
-        c_result = move(cpp_transform.nans_to_nulls(input.view()))
+        c_result = cpp_transform.nans_to_nulls(input.view())
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first))),
@@ -59,7 +59,7 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(Column input):
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     with nogil:
-        c_result = move(cpp_transform.bools_to_mask(input.view()))
+        c_result = cpp_transform.bools_to_mask(input.view())
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first))),
@@ -88,7 +88,7 @@ cpdef Column mask_to_bools(Py_ssize_t bitmask, int begin_bit, int end_bit):
     cdef bitmask_type * bitmask_ptr = int_to_bitmask_ptr(bitmask)
 
     with nogil:
-        c_result = move(cpp_transform.mask_to_bools(bitmask_ptr, begin_bit, end_bit))
+        c_result = cpp_transform.mask_to_bools(bitmask_ptr, begin_bit, end_bit)
 
     return Column.from_libcudf(move(c_result))
 
@@ -119,10 +119,8 @@ cpdef Column transform(Column input, str unary_udf, DataType output_type, bool i
     cdef bool c_is_ptx = is_ptx
 
     with nogil:
-        c_result = move(
-            cpp_transform.transform(
-                input.view(), c_unary_udf, output_type.c_obj, c_is_ptx
-            )
+        c_result = cpp_transform.transform(
+            input.view(), c_unary_udf, output_type.c_obj, c_is_ptx
         )
 
     return Column.from_libcudf(move(c_result))
@@ -144,7 +142,7 @@ cpdef tuple[Table, Column] encode(Table input):
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
     with nogil:
-        c_result = move(cpp_transform.encode(input.view()))
+        c_result = cpp_transform.encode(input.view())
 
     return (
         Table.from_libcudf(move(c_result.first)),
@@ -172,7 +170,7 @@ cpdef Table one_hot_encode(Column input, Column categories):
     cdef Table owner_table
 
     with nogil:
-        c_result = move(cpp_transform.one_hot_encode(input.view(), categories.view()))
+        c_result = cpp_transform.one_hot_encode(input.view(), categories.view())
 
     owner_table = Table(
         [Column.from_libcudf(move(c_result.first))] * c_result.second.num_columns()
