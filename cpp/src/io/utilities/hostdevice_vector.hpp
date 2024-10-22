@@ -117,8 +117,11 @@ class hostdevice_vector {
     return d_data.element(element_index, stream);
   }
 
-  operator cudf::host_span<T>() { return {host_ptr(), size()}; }
-  operator cudf::host_span<T const>() const { return {host_ptr(), size()}; }
+  operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }
+  operator cudf::host_span<T const>() const
+  {
+    return host_span<T const>{h_data}.subspan(0, size());
+  }
 
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
@@ -142,24 +145,11 @@ class hostdevice_vector {
    *
    * @return A typed hostdevice_span of the hostdevice_vector's data
    */
-  [[nodiscard]] operator hostdevice_span<T>()
-  {
-    return hostdevice_span<T>{h_data.data(), d_data.data(), size()};
-  }
+  [[nodiscard]] operator hostdevice_span<T>() { return {host_span<T>{h_data}, device_ptr()}; }
 
-  /**
-   * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
-   *
-   * @param offset The offset of the first element in the subspan
-   * @param count The number of elements in the subspan
-   * @return A typed hostdevice_span of the hostdevice_vector's data
-   */
-  [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
+  [[nodiscard]] operator hostdevice_span<T const>() const
   {
-    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
-    CUDF_EXPECTS(count <= d_data.size() - offset,
-                 "The span with given offset and count is out of bounds.");
-    return hostdevice_span<T>{h_data.data() + offset, d_data.data() + offset, count};
+    return {host_span<T const>{h_data}, device_ptr()};
   }
 
  private:
@@ -182,38 +172,47 @@ class hostdevice_2dvector {
   {
   }
 
-  operator device_2dspan<T>() { return {_data.device_ptr(), _size}; }
-  operator device_2dspan<T const>() const { return {_data.device_ptr(), _size}; }
+  operator device_2dspan<T>() { return {device_span<T>{_data}, _size.second}; }
+  operator device_2dspan<T const>() const { return {device_span<T const>{_data}, _size.second}; }
 
   device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
-  device_2dspan<T> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
+  [[nodiscard]] device_2dspan<T const> device_view() const
+  {
+    return static_cast<device_2dspan<T const>>(*this);
+  }
 
-  operator host_2dspan<T>() { return {_data.host_ptr(), _size}; }
-  operator host_2dspan<T const>() const { return {_data.host_ptr(), _size}; }
+  operator host_2dspan<T>() { return {host_span<T>{_data}, _size.second}; }
+  operator host_2dspan<T const>() const { return {host_span<T const>{_data}, _size.second}; }
 
   host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
-  host_2dspan<T> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
+  [[nodiscard]] host_2dspan<T const> host_view() const
+  {
+    return static_cast<host_2dspan<T const>>(*this);
+  }
 
   host_span<T> operator[](size_t row)
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T>{_data}.subspan(row * _size.second, _size.second);
   }
 
   host_span<T const> operator[](size_t row) const
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T const>{_data}.subspan(row * _size.second, _size.second);
   }
 
-  auto size() const noexcept { return _size; }
-  auto count() const noexcept { return _size.first * _size.second; }
-  auto is_empty() const noexcept { return count() == 0; }
+  [[nodiscard]] auto size() const noexcept { return _size; }
+  [[nodiscard]] auto count() const noexcept { return _size.first * _size.second; }
+  [[nodiscard]] auto is_empty() const noexcept { return count() == 0; }
 
   T* base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
   T* base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }
 
-  T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
+  [[nodiscard]] T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
 
-  T const* base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
+  [[nodiscard]] T const* base_device_ptr(size_t offset = 0) const
+  {
+    return _data.device_ptr(offset);
+  }
 
   [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 

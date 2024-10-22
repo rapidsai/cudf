@@ -40,12 +40,10 @@ cpdef Column generate_ngrams(Column input, size_type ngrams, Scalar separator):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_generate_ngrams(
-                c_strings,
-                ngrams,
-                c_separator[0]
-            )
+        c_result = cpp_generate_ngrams(
+            c_strings,
+            ngrams,
+            c_separator[0]
         )
     return Column.from_libcudf(move(c_result))
 
@@ -72,11 +70,9 @@ cpdef Column generate_character_ngrams(Column input, size_type ngrams = 2):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_generate_character_ngrams(
-                c_strings,
-                ngrams,
-            )
+        c_result = cpp_generate_character_ngrams(
+            c_strings,
+            ngrams,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -102,10 +98,8 @@ cpdef Column hash_character_ngrams(Column input, size_type ngrams = 2):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_hash_character_ngrams(
-                c_strings,
-                ngrams,
-            )
+        c_result = cpp_hash_character_ngrams(
+            c_strings,
+            ngrams,
         )
     return Column.from_libcudf(move(c_result))
