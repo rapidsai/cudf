@@ -108,7 +108,7 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     std::vector<std::unique_ptr<cudf::column>> intermediates;
-    std::unique_ptr<cudf::column> accumulation =
+    std::unique_ptr<cudf::column> reduction =
       cudf::binary_operation(table.get_column(0),
                              table.get_column(1),
                              cmp_op,
@@ -124,11 +124,11 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
                                  cmp_op,
                                  bool_type,
                                  launch.get_stream().get_stream());
-        std::unique_ptr<cudf::column> acc = cudf::binary_operation(
-          *comparison, *accumulation, accumulate_op, bool_type, launch.get_stream().get_stream());
+        std::unique_ptr<cudf::column> reduced = cudf::binary_operation(
+          *comparison, *reduction, reduce_op, bool_type, launch.get_stream().get_stream());
         intermediates.emplace_back(std::move(comparison));
-        intermediates.emplace_back(std::move(accumulation));
-        accumulation = std::move(acc);
+        intermediates.emplace_back(std::move(reduction));
+        reduction = std::move(reduced);
       });
   });
 }
@@ -137,7 +137,7 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
                                                                                       \
   static void name(::nvbench::state& st)                                              \
   {                                                                                   \
-    BM_binaryop_transform<key_type, tree_type, reuse_columns>(st);                    \
+    ::BM_binaryop_transform<key_type, tree_type, reuse_columns>(st);                  \
   }                                                                                   \
   NVBENCH_BENCH(name)                                                                 \
     .add_int64_axis("tree_levels", {1, 2, 5, 10})                                     \
@@ -156,9 +156,19 @@ BINARYOP_TRANSFORM_BENCHMARK_DEFINE(binaryop_double_imbalanced_unique,
                                     TreeType::IMBALANCED_LEFT,
                                     false);
 
-NVBENCH_BENCH(BM_string_compare_binaryop_transform)
-  .set_name("string_compare_binaryop_transform")
-  .add_int64_axis("string_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152})
-  .add_int64_axis("num_comparisons", {1, 2, 3, 4})
-  .add_int64_axis("hit_rate", {50, 100});
+#define STRING_COMPARE_BINARYOP_TRANSFORM_BENCHMARK_DEFINE(name, cmp_op, reduce_op) \
+                                                                                    \
+  static void name(::nvbench::state& st)                                            \
+  {                                                                                 \
+    ::BM_string_compare_binaryop_transform<cmp_op, reduce_op>(st);                  \
+  }                                                                                 \
+  NVBENCH_BENCH(name)                                                               \
+    .set_name(#name)                                                                \
+    .add_int64_axis("string_width", {32, 64, 128, 256})                             \
+    .add_int64_axis("num_rows", {32768, 262144, 2097152})                           \
+    .add_int64_axis("num_comparisons", {1, 2, 3, 4})                                \
+    .add_int64_axis("hit_rate", {50, 100})
+
+STRING_COMPARE_BINARYOP_TRANSFORM_BENCHMARK_DEFINE(string_compare_binaryop_transform,
+                                                   cudf::binary_operator::EQUAL,
+                                                   cudf::binary_operator::LOGICAL_AND);
