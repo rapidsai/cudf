@@ -2,5 +2,5 @@
 hashing
 =======
 
-.. automodule:: cudf._lib.pylibcudf.hashing
+.. automodule:: pylibcudf.hashing
     :members:
