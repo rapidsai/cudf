@@ -2980,15 +2980,29 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
 TEST_F(JsonReaderTest, PreprocessAndNullifyEmptyRows)
 {
   // Test input
-  std::string const row_string = R"({"A":'TEST"'})";
+  std::string const row_string = R"({"A":"TEST"})";
   auto string_col =
-    cudf::test::strings_column_wrapper({row_string, row_string, row_string, row_string, row_string},
-                                       {true, true, true, true, true})
+    cudf::test::strings_column_wrapper({row_string, row_string, "", row_string, row_string, row_string, ""},
+                                       {true, true, true, true, true, true, true})
       .release();
   rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
   auto [processed_buffer, delim] = cudf::io::json::detail::preprocess(
     cudf::strings_column_view(*string_col), stream_view, cudf::get_current_device_resource_ref());
+
+  /*
+  std::printf("delimiter = %d\n", delim);
+  std::string h_processed_buffer;
+  h_processed_buffer.resize(processed_buffer.size());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_processed_buffer.data(),
+                                reinterpret_cast<char*>(processed_buffer.data()),
+                                processed_buffer.size() * sizeof(char),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
+  std::cout << "processed_buffer = \n" << h_processed_buffer;
+  std::cout << std::endl;
+  */
+
   cudf::io::json_reader_options input_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{reinterpret_cast<char const*>(processed_buffer.data()),
@@ -2997,6 +3011,20 @@ TEST_F(JsonReaderTest, PreprocessAndNullifyEmptyRows)
       .delimiter(delim)
       .nullify_empty_lines(true)
       .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(input_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 7);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "A");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    cudf::test::strings_column_wrapper({"TEST", "TEST", "", "TEST", "TEST", "TEST", ""}, {true, true, false, true, true, true, false}),
+    cudf::test::debug_output_level::ALL_ERRORS);
+
 }
+
 
 CUDF_TEST_PROGRAM_MAIN()

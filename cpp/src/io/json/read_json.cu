@@ -35,7 +35,6 @@
 
 #include <cub/device/device_copy.cuh>
 #include <cub/device/device_histogram.cuh>
-#include <cuda/std/span>
 #include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -524,7 +523,6 @@ std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const&
   }
 
   auto d_offsets_colview = input.offsets();
-  CUDF_EXPECTS(d_offsets_colview.null_count() == 0, "how can offsets have null count");
   device_span<cudf::size_type const> d_offsets(d_offsets_colview.data<cudf::size_type>(),
                                                d_offsets_colview.size());
 
