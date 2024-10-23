@@ -197,6 +197,7 @@ class DataFrame:
             {
                 "is_sorted": col.is_sorted,
                 "order": col.order,
+                "null_order": col.null_order,
                 "name": col.name,
             }
             for col in self.columns
