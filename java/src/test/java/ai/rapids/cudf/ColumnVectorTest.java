@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -3876,6 +3877,43 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+void testExtractReWithMultiLineDelimiters() {
+    String NEXT_LINE = "\u0085";
+    String LINE_SEPARATOR = "\u2028";
+    String PARAGRAPH_SEPARATOR = "\u2029";
+    String CARRIAGE_RETURN = "\r";
+    String NEW_LINE = "\n";
+
+    try (ColumnVector input = ColumnVector.fromStrings(
+            "boo:" + NEXT_LINE + "boo::" + LINE_SEPARATOR + "boo:::",
+            "boo:::" + LINE_SEPARATOR + "zzé" + CARRIAGE_RETURN + "lll",
+            "boo::",
+            "",
+            "boo::" + NEW_LINE,
+            "boo::" + CARRIAGE_RETURN,
+            "boo:" + NEXT_LINE + "boo::" + PARAGRAPH_SEPARATOR,
+            "boo:" + NEW_LINE + "boo::" + LINE_SEPARATOR,
+            "boo:" + NEXT_LINE + "boo::" + NEXT_LINE);
+         Table expected_ext_newline = new Table.TestBuilder()
+             .column("boo:::", null, "boo::", null, "boo::", "boo::", "boo::", "boo::", "boo::")
+             .build();
+         Table expected_default = new Table.TestBuilder()
+             .column("boo:::", null, "boo::", null, "boo::", null, null, null, null)
+             .build()) {
+
+        // Regex pattern to match 'boo:' followed by one or more colons at the end of the string
+        try (Table found = input.extractRe(new RegexProgram("(boo:+)$", EnumSet.of(RegexFlag.EXT_NEWLINE)))) {
+          assertColumnsAreEqual(expected_ext_newline.getColumns()[0], found.getColumns()[0]);
+        }
+
+        try (Table found = input.extractRe(new RegexProgram("(boo:+)$", EnumSet.of(RegexFlag.DEFAULT)))) {
+          assertColumnsAreEqual(expected_default.getColumns()[0], found.getColumns()[0]);
+        }
+    }
+  }
+
 
   @Test
   void testExtractAllRecord() {
