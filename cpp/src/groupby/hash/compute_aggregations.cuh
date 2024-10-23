@@ -116,6 +116,8 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                           stream);
 
   cuda::std::atomic_flag h_needs_fallback;
+  // Cannot use `device_scalar::value` as it requires a copy constructor, which
+  // `atomic_flag` doesn't have.
   CUDF_CUDA_TRY(cudaMemcpyAsync(&h_needs_fallback,
                                 needs_global_memory_fallback.data(),
                                 sizeof(cuda::std::atomic_flag),
