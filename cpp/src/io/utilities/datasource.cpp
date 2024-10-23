@@ -909,7 +909,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
           // Copy the user-provided parameters into our local variable.
           new_params = *kvikio_params;
         } else {
-          throw cudf::logic_error("Invalid parameters for KVIKIO-based datasource.");
+          CUDF_FAIL("Invalid parameters for KVIKIO-based datasource.");
         }
       }
       if (kind == datasource_kind::KVIKIO_COMPAT) {
@@ -919,7 +919,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
         // parameter in the `kvikio_datasource_params`.
         new_params.use_compat_mode = true;
       } else if (kind == datasource_kind::KVIKIO_GDS) {
-        // GDS is unique in that we are expected to throw a cudf::runtime_error
+        // GDS is unique in that we are expected to throw a cudf::logic_error
         // if GDS is not available.  The first chance we have to do this is
         // here, by way of fencing against CUFILE_FOUND.
 #ifndef CUFILE_FOUND
@@ -948,7 +948,7 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
           // Copy the user-provided parameters into our local variable.
           new_params = *odirect_params;
         } else {
-          throw cudf::logic_error("Invalid parameters for O_DIRECT-based datasource.");
+          CUDF_FAIL("Invalid parameters for O_DIRECT-based datasource.");
         }
       }
       return std::make_unique<odirect_source>(filepath.c_str(), new_params);

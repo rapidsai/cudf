@@ -161,9 +161,9 @@ enum class datasource_kind {
  */
 struct kvikio_datasource_params {
   /**
-   * @brief When set, explicitly disables any attempts at using GPUDirect
-   * Storage, resulting in kvikio falling back to its "compat" mode using
-   * multi-threaded host-based reads.
+   * @brief When set, explicitly disables any attempts at using GDS, resulting
+   * resulting in kvikio falling back to its "compat" mode using multi-threaded
+   * host-based reads.
    *
    * Defaults to false.
    *
@@ -174,8 +174,7 @@ struct kvikio_datasource_params {
 
   /**
    * @brief The threshold at which the data source will switch from using
-   * host-based reads to device-based (i.e. GPUDirect) reads, if GPUDirect is
-   * available.
+   * host-based reads to device-based (GDS) reads, if GDS is available.
    *
    * This parameter should represent the read size where GDS is faster than
    * a posix read() plus the overhead of a host-to-device memcpy.
@@ -300,9 +299,11 @@ class datasource {
    * this case, `max_size_estimate` can include padding after the byte range, to include additional
    * data that may be needed for processing.
    *
-   * @throws cudf::logic_error if the minimum size estimate is greater than the maximum size estimate
    * @throws cudf::logic_error if `KVIKIO_GDS` is specified as the desired kind of data source,
    * and GDS is not available for the file.
+   *
+   * @throws cudf::logic_error if `params` are supplied but do not match the
+   * kind of data source being created as indicated by the `kind` parameter.
    *
    * @param[in] filepath Path to the file to use
    * @param[in] offset Starting byte offset from which data will be read (the default is zero)
