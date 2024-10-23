@@ -572,23 +572,21 @@ inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, 
     int const batch_len = min(target_pos - pos, decode_block_size_t);
 
     if (t < batch_len) {
-      int const bit_pos = pos + t;
-      int const byte_offset = bit_pos >> 3;
+      int const bit_pos           = pos + t;
+      int const byte_offset       = bit_pos >> 3;
       int const bit_in_byte_index = bit_pos & 7;
 
-      uint8_t const * const read_from = s->data_start + byte_offset;
-      bool const read_bit = *read_from & (1 << bit_in_byte_index);
+      uint8_t const* const read_from = s->data_start + byte_offset;
+      bool const read_bit            = *read_from & (1 << bit_in_byte_index);
 
-      int const write_to_index = rolling_index<state_buf::dict_buf_size>(bit_pos);
+      int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
       sb->dict_idx[write_to_index] = read_bit;
     }
 
     pos += batch_len;
   }
 
-  if(t == 0) {
-    s->dict_pos = pos;
-  }
+  if (t == 0) { s->dict_pos = pos; }
 }
 
 /**
@@ -617,14 +615,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
                            size_t num_rows,
                            kernel_error::pointer error_code)
 {
-  constexpr bool has_dict_t = (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) || 
+  constexpr bool has_dict_t = (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) ||
                               (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED);
-  constexpr bool has_bools_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN) || 
+  constexpr bool has_bools_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN) ||
                                (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED);
-  constexpr bool has_nesting_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) || 
-                                 (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) || 
-                                 (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) ||
-                                 (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED);
+  constexpr bool has_nesting_t =
+    (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
+    (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
+    (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) ||
+    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED);
 
   constexpr int rolling_buf_size    = decode_block_size_t * 2;
   constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size_t>();
@@ -645,7 +644,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
 
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
-  
+
   if (!setupLocalPageInfo(s,
                           pp,
                           chunks,
@@ -667,8 +666,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
   // shared buffer. all shared memory is suballocated out of here
   // constexpr int shared_rep_size = has_lists_t ? cudf::util::round_up_unsafe(rle_run_buffer_size *
   // sizeof(rle_run), size_t{16}) : 0;
-  constexpr int rle_run_buffer_bytes = cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run), size_t{16});
-  constexpr int shared_buf_size = rle_run_buffer_bytes*(int(has_dict_t) + int(has_bools_t) + 1);
+  constexpr int rle_run_buffer_bytes =
+    cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run), size_t{16});
+  constexpr int shared_buf_size = rle_run_buffer_bytes * (int(has_dict_t) + int(has_bools_t) + 1);
   __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
@@ -713,13 +713,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
       s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
   }
 
-  //Use dictionary stream memory for bools
+  // Use dictionary stream memory for bools
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> bool_stream{bool_runs};
   bool bools_are_rle_stream = (s->dict_run == 0);
   if constexpr (has_bools_t) {
-    if(bools_are_rle_stream) {
-      bool_stream.init(
-        1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
+    if (bools_are_rle_stream) {
+      bool_stream.init(1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
     }
   }
   __syncthreads();
@@ -772,7 +771,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t)
       dict_stream.decode_next(t, next_valid_count - valid_count);
       __syncthreads();
     } else if constexpr (has_bools_t) {
-      if(bools_are_rle_stream) {
+      if (bools_are_rle_stream) {
         bool_stream.decode_next(t, next_valid_count - valid_count);
       } else {
         bool_plain_decode<decode_block_size_t>(s, sb, t, next_valid_count - valid_count);
@@ -839,7 +838,6 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
     }
   }
 }
-
 
 void __host__ DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> pages,
                                     cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,

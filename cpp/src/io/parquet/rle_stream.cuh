@@ -242,7 +242,7 @@ struct rle_stream {
         run.size = (level_run >> 1) * 8;
         run_bytes += ((run.size * level_bits) + 7) >> 3;
       }
-        // repeated value run
+      // repeated value run
       else {
         run.size = (level_run >> 1);
         run_bytes += ((level_bits) + 7) >> 3;
