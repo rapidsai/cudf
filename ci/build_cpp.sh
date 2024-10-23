@@ -15,6 +15,8 @@ rapids-print-env
 
 rapids-logger "Begin cpp build"
 
+sccache --show-zero-stats
+
 # With boa installed conda build forward to boa
 RAPIDS_PACKAGE_VERSION=$(rapids-generate-version) rapids-conda-retry mambabuild \
     conda/recipes/libcudf
