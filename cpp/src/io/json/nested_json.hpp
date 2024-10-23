@@ -432,6 +432,18 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
 
+/** @brief Functor to create all null column of a given nested schema
+ *
+ * @param schema The schema of the column to create
+ * @param num_rows The number of rows in the column
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr Optional, resource with which to allocate
+ * @return The all null column
+ */
+std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
+                                              size_type num_rows,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr);
 /**
  * @brief Get the path data type of a column by path if present in input schema
  *

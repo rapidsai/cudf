@@ -16,13 +16,131 @@
 
 #include "nested_json.hpp"
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace cudf::io::json::detail {
+
+/// Created an empty column of the specified schema
+struct empty_column_functor {
+  rmm::cuda_stream_view stream;
+  rmm::device_async_resource_ref mr;
+
+  template <typename T, std::enable_if_t<!cudf::is_nested<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema) const
+  {
+    return make_empty_column(schema.type);
+  }
+
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema) const
+  {
+    CUDF_EXPECTS(schema.child_types.size() == 1, "List column should have only one child");
+    auto const& child_name        = schema.child_types.begin()->first;
+    std::unique_ptr<column> child = cudf::type_dispatcher(
+      schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name));
+    auto offsets = make_empty_column(data_type(type_to_id<size_type>()));
+    return make_lists_column(0, std::move(offsets), std::move(child), 0, {}, stream, mr);
+  }
+
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema) const
+  {
+    std::vector<std::unique_ptr<column>> child_columns;
+    for (auto child_name : schema.column_order.value_or(std::vector<std::string>{})) {
+      child_columns.push_back(cudf::type_dispatcher(
+        schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name)));
+    }
+    return make_structs_column(0, std::move(child_columns), 0, {}, stream, mr);
+  }
+};
+
+/// Created all null column of the specified schema
+struct allnull_column_functor {
+  rmm::cuda_stream_view stream;
+  rmm::device_async_resource_ref mr;
+
+  auto make_zeroed_offsets(size_type size) const
+  {
+    auto offsets_buff =
+      cudf::detail::make_zeroed_device_uvector_async<size_type>(size + 1, stream, mr);
+    return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
+  }
+
+  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
+  {
+    return make_fixed_width_column(schema.type, size, mask_state::ALL_NULL, stream, mr);
+  }
+
+  template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
+  {
+    CUDF_EXPECTS(schema.child_types.size() == 1, "Dictionary column should have only one child");
+    auto const& child_name        = schema.child_types.begin()->first;
+    std::unique_ptr<column> child = cudf::type_dispatcher(schema.child_types.at(child_name).type,
+                                                          empty_column_functor{stream, mr},
+                                                          schema.child_types.at(child_name));
+    return make_fixed_width_column(schema.type, size, mask_state::ALL_NULL, stream, mr);
+    auto indices   = make_zeroed_offsets(size - 1);
+    auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    return make_dictionary_column(
+      std::move(child), std::move(indices), std::move(null_mask), size, stream, mr);
+  }
+
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
+  {
+    auto offsets   = make_zeroed_offsets(size);
+    auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    return make_strings_column(
+      size, std::move(offsets), rmm::device_buffer{}, size, std::move(null_mask));
+  }
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
+  {
+    CUDF_EXPECTS(schema.child_types.size() == 1, "List column should have only one child");
+    auto const& child_name        = schema.child_types.begin()->first;
+    std::unique_ptr<column> child = cudf::type_dispatcher(schema.child_types.at(child_name).type,
+                                                          empty_column_functor{stream, mr},
+                                                          schema.child_types.at(child_name));
+    auto offsets                  = make_zeroed_offsets(size);
+    auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    return make_lists_column(
+      size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
+  }
+
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
+  {
+    std::vector<std::unique_ptr<column>> child_columns;
+    for (auto child_name : schema.column_order.value_or(std::vector<std::string>{})) {
+      child_columns.push_back(cudf::type_dispatcher(
+        schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name), size));
+    }
+    auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    return make_structs_column(
+      size, std::move(child_columns), size, std::move(null_mask), stream, mr);
+  }
+};
+
+std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
+                                              size_type num_rows,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  return cudf::type_dispatcher(schema.type, allnull_column_functor{stream, mr}, schema, num_rows);
+}
 
 std::optional<schema_element> child_schema_element(std::string const& col_name,
                                                    cudf::io::json_reader_options const& options)

@@ -2976,4 +2976,200 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
                                  cudf::test::debug_output_level::ALL_ERRORS);
 }
 
+// Test case for dtype pruning with column order
+TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
+{
+  std::string json_stringl = R"(
+    {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true}
+    {"a": 1, "b": {"0": "abc"          }, "c": false}
+    {"a": 1, "b": {}}
+    {"a": 1,                              "c": null}
+    )";
+  std::string json_string  = R"([
+    {"a": 1, "b": {"0": "abc", "1": [-1.]}, "c": true},
+    {"a": 1, "b": {"0": "abc"          }, "c": false},
+    {"a": 1, "b": {}},
+    {"a": 1,                              "c": null}
+    ])";
+  for (auto& [json_string, lines] : {std::pair{json_stringl, true}, {json_string, false}}) {
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .prune_columns(true)
+        .lines(lines);
+
+    // include all columns
+    //// schema with partial ordering
+    {
+      cudf::io::schema_element dtype_schema{
+        data_type{cudf::type_id::STRUCT},
+        {
+          {"b",
+           {data_type{cudf::type_id::STRUCT},
+            {{"0", {data_type{cudf::type_id::STRING}}},
+             {"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
+          {"a", {dtype<int32_t>()}},
+          {"c", {dtype<bool>()}},
+        },
+        {{"b", "a", "c"}}};
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", "b" and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+      // "b" children checks
+      ASSERT_EQ(result.metadata.schema_info[0].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "0");
+      EXPECT_EQ(result.metadata.schema_info[0].children[1].name, "1");
+      ASSERT_EQ(result.metadata.schema_info[0].children[1].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].children[1].children[0].name, "offsets");
+      EXPECT_EQ(result.metadata.schema_info[0].children[1].children[1].name, "element");
+      // types
+      EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
+      EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::BOOL8);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::STRING);
+      EXPECT_EQ(result.tbl->get_column(0).child(1).type().id(), cudf::type_id::LIST);
+      EXPECT_EQ(result.tbl->get_column(0).child(1).child(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(0).child(1).child(1).type().id(), cudf::type_id::FLOAT32);
+    }
+    //// schema with pruned columns and different order.
+    {
+      cudf::io::schema_element dtype_schema{data_type{cudf::type_id::STRUCT},
+                                            {
+                                              {"c", {dtype<bool>()}},
+                                              {"b",
+                                               {
+                                                 data_type{cudf::type_id::STRUCT},
+                                               }},
+                                              {"a", {dtype<int32_t>()}},
+                                            },
+                                            {{"c", "b", "a"}}};
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // "c", "b" and "a" order
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "c");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "a");
+      // pruned
+      EXPECT_EQ(result.metadata.schema_info[1].children.size(), 0);
+    }
+    //// schema with pruned columns and different sub-order.
+    {
+      cudf::io::schema_element dtype_schema{
+        data_type{cudf::type_id::STRUCT},
+        {
+          {"c", {dtype<bool>()}},
+          {"b",
+           {data_type{cudf::type_id::STRUCT},
+            //  {},
+            {{"0", {data_type{cudf::type_id::STRING}}},
+             {"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}},
+            {{"1", "0"}}}},
+          {"a", {dtype<int32_t>()}},
+        }};
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Order of occurance in json
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+      EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+      // Sub-order of "b"
+      EXPECT_EQ(result.metadata.schema_info[1].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[1].children[0].name, "1");
+      EXPECT_EQ(result.metadata.schema_info[1].children[1].name, "0");
+    }
+    //// schema with 1 dtype, but 2 column order
+    {
+      cudf::io::schema_element dtype_schema{data_type{cudf::type_id::STRUCT},
+                                            {
+                                              {"a", {dtype<int32_t>()}},
+                                            },
+                                            {{"a", "b"}}};
+      in_options.set_dtypes(dtype_schema);
+      EXPECT_THROW(cudf::io::read_json(in_options), cudf::logic_error);
+      // Input schema column order size mismatch with input schema child types
+    }
+    //// repetition, Error
+    {
+      cudf::io::schema_element dtype_schema{data_type{cudf::type_id::STRUCT},
+                                            {
+                                              {"a", {dtype<int32_t>()}},
+                                            },
+                                            {{"a", "a"}}};
+      in_options.set_dtypes(dtype_schema);
+      EXPECT_THROW(cudf::io::read_json(in_options), cudf::logic_error);
+      // Input schema column order size mismatch with input schema child types
+    }
+
+    // include only one column (nested)
+    {
+      cudf::io::schema_element dtype_schema{
+        data_type{cudf::type_id::STRUCT},
+        {
+          {"b",
+           {data_type{cudf::type_id::STRUCT},
+            {{"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}},
+            {{"1"}}}},
+        }};
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "b":"1":[float]
+      ASSERT_EQ(result.tbl->num_columns(), 1);
+      ASSERT_EQ(result.metadata.schema_info.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "b");
+      ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "1");
+      ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
+      EXPECT_EQ(result.metadata.schema_info[0].children[0].children[1].name, "element");
+      EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::LIST);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).child(0).type().id(), cudf::type_id::INT32);
+      EXPECT_EQ(result.tbl->get_column(0).child(0).child(1).type().id(), cudf::type_id::FLOAT32);
+    }
+    // multiple - all present
+    {
+      cudf::io::schema_element dtype_schema{data_type{cudf::type_id::STRUCT},
+                                            {
+                                              {"a", {dtype<int32_t>()}},
+                                              {"c", {dtype<bool>()}},
+                                            },
+                                            {{"a", "c"}}};
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "a", and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 2);
+      ASSERT_EQ(result.metadata.schema_info.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "c");
+    }
+    // multiple - not all present
+    {
+      cudf::io::schema_element dtype_schema{data_type{cudf::type_id::STRUCT},
+                                            {
+                                              {"a", {dtype<int32_t>()}},
+                                              {"d", {dtype<bool>()}},
+                                            },
+                                            {{"a", "d"}}};
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have column "a"
+      ASSERT_EQ(result.tbl->num_columns(), 2);
+      ASSERT_EQ(result.metadata.schema_info.size(), 2);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "d");
+      auto all_null_bools =
+        cudf::test::fixed_width_column_wrapper<bool>{{true, true, true, true}, {0, 0, 0, 0}};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), all_null_bools);
+    }
+  }
+}
 CUDF_TEST_PROGRAM_MAIN()
