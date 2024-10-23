@@ -34,6 +34,7 @@ cpdef Column is_letter(
         for consonants.
     indices : Union[Column, size_type]
         The character position(s) to check in each string
+
     Returns
     -------
     Column

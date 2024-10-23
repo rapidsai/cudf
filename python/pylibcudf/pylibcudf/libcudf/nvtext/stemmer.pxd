@@ -9,7 +9,7 @@ from pylibcudf.libcudf.types cimport size_type
 
 
 cdef extern from "nvtext/stemmer.hpp" namespace "nvtext" nogil:
-    cpdef enum class letter_type(bool):
+    cpdef enum class letter_type:
         CONSONANT
         VOWEL
 

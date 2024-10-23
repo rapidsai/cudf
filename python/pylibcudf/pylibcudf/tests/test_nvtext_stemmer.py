@@ -8,7 +8,7 @@ from utils import assert_column_eq
 
 @pytest.fixture(scope="module")
 def input_col():
-    arr = ["trouble", "toy", "sygyzy"]
+    arr = ["trouble", "toy", "syzygy"]
     return pa.array(arr)
 
 
