@@ -81,8 +81,8 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
  * The logic now only needs to check for either of these 2 targets.
  *
  * This kernel works in either row-per-string or warp-per-string depending
- * on the template parameter. If tile_size==1, then it executes as a
- * row-per-string. If tile_size=32, the it executes as a warp-per-string.
+ * on the template parameter. If tile_size==1, then this kernel executes as
+ * a row-per-string. If tile_size=32, the it executes as a warp-per-string.
  * No other options are supported for now.
  *
  * @tparam tile_size Number of threads per string
@@ -276,9 +276,9 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
     constexpr cudf::thread_index_type tile_size = cudf::detail::warp_size;
 
     auto const shared_mem_size =
-      (targets.size() < targets_threshold) ? (block_size * targets.size()) : 0;
+      (targets.size() <= targets_threshold) ? (block_size * targets.size()) : 0;
     auto const work_mem_size =
-      (targets.size() < targets_threshold) ? 0 : tile_size * targets.size() * input.size();
+      (targets.size() <= targets_threshold) ? 0 : tile_size * targets.size() * input.size();
     auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
 
     // std::cout << shared_mem_size << "," << work_mem_size << std::endl;
