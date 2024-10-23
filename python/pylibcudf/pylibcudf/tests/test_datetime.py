@@ -61,17 +61,6 @@ def rounding_frequency(request):
     return request.param
 
 
-# @pytest.fixture(
-#     params=[
-#         pa.scalar(-3, pa.int32()),
-#         pa.scalar(1, pa.int16()),
-#         pa.array([1, -3, 2, 4, -1, 5], pa.int32()),
-#     ]
-# )
-# def months_offset(request):
-#     return request.param
-
-
 def test_extract_datetime_component(datetime_column, component):
     attr, component = component
     kwargs = {}
