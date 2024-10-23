@@ -6,6 +6,7 @@ from __future__ import annotations
 import pyarrow as pa
 import pylibcudf as plc
 import pytest
+from distributed.protocol import deserialize, serialize
 
 import polars as pl
 
@@ -197,8 +198,6 @@ def test_serialize(arrow_tbl):
 )
 @pytest.mark.parametrize("protocol", ["cuda", "dask"])
 def test_dask_serialize(arrow_tbl, protocol):
-    from distributed.protocol import deserialize, serialize
-
     # To register dask serializers, we need to import dask_serialize
     import cudf_polars.experimental.dask_serialize  # noqa: F401
 
