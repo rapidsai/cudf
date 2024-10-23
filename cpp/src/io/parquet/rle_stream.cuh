@@ -19,6 +19,7 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace cudf::io::parquet::detail {
 
@@ -226,11 +227,11 @@ struct rle_stream {
     if (is_literal_run(run.level_run)) {
       // from the parquet spec: literal runs always come in multiples of 8 values.
       run.size = (run.level_run >> 1) * 8;
-      run_bytes += ((run.size * level_bits) + 7) >> 3;
+      run_bytes += util::div_rounding_up_unsafe(run.size * level_bits, 8);
     } else {
       // repeated value run
       run.size = (run.level_run >> 1);
-      run_bytes += ((level_bits) + 7) >> 3;
+      run_bytes += util::div_rounding_up_unsafe(level_bits, 8);
     }
 
     return run_bytes;
