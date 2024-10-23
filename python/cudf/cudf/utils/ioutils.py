@@ -1456,11 +1456,11 @@ prefetch_options : dict, default None
     paths. If 'method' is set to 'all' (the default), the only supported
     option is 'blocksize' (default 256 MB). If method is set to 'parquet',
     'columns' and 'row_groups' are also supported (default None).
-libcudf_s3_io : bool, default False
+kvikio_remote_io : bool, default False
     WARNING: This is an experimental feature and may be removed at any
     time without warning or deprecation period.
-    Use libcudf's native S3 backend, if applicable, by preserving S3 file
-    paths such as "s3://my-bucket/my-object".
+    Use KvikIO's remote IO backend, if applicable, by pass-through remote
+    file paths such as "s3://my-bucket/my-object" to libcudf as-it.
 
 Returns
 -------
@@ -1643,7 +1643,7 @@ def get_reader_filepath_or_buffer(
     warn_meta=None,
     expand_dir_pattern=None,
     prefetch_options=None,
-    libcudf_s3_io=False,
+    kvikio_remote_io=False,
 ):
     """{docstring}"""
 
@@ -1720,7 +1720,7 @@ def get_reader_filepath_or_buffer(
                 )
             from s3fs.core import S3FileSystem
 
-            if libcudf_s3_io and isinstance(fs, S3FileSystem):
+            if kvikio_remote_io and isinstance(fs, S3FileSystem):
                 filepaths_or_buffers = [f"s3://{fpath}" for fpath in paths]
             else:
                 filepaths_or_buffers = _prefetch_remote_buffers(

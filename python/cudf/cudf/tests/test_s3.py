@@ -108,10 +108,10 @@ def s3_context(s3_base, bucket, files=None):
 
 @pytest.fixture(
     params=[True, False],
-    ids=["libcudfS3=ON", "libcudfS3=OFF"],
+    ids=["kvikio=ON", "kvikio=OFF"],
 )
-def libcudf_s3_io(request):
-    with cudf.option_context("libcudf_s3_io", request.param):
+def kvikio_remote_io(request):
+    with cudf.option_context("kvikio_remote_io", request.param):
         yield request.param
 
 
@@ -203,7 +203,7 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 def test_read_parquet(
     s3_base,
     s3so,
-    libcudf_s3_io,
+    kvikio_remote_io,
     pdf,
     bytes_per_thread,
     columns,

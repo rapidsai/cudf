@@ -352,12 +352,12 @@ _register_option(
 )
 
 _register_option(
-    "libcudf_s3_io",
-    _env_get_bool("CUDF_LIBCUDF_S3_IO", False),
+    "kvikio_remote_io",
+    _env_get_bool("CUDF_KVIKIO_REMOTE_IO", False),
     textwrap.dedent(
         """
-        Whether to use libcudf's native S3 backend or not.
-        \tWARN: this is experimental and only works for parquet_read().
+        Whether to use KvikIO's remote IO backend or not.
+        \tWARN: this is experimental and is implemented for parquet_read().
         \tValid values are True or False. Default is False.
     """
     ),
