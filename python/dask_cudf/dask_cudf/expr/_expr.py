@@ -12,7 +12,7 @@ from dask_expr._groupby import (
 )
 from dask_expr._reductions import Reduction, Var
 from dask_expr.io.io import FusedParquetIO
-from dask_expr.io.parquet import ReadParquetPyarrowFS
+from dask_expr.io.parquet import FragmentWrapper, ReadParquetPyarrowFS
 
 from dask.dataframe.core import (
     _concat,
@@ -302,15 +302,33 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         return dataset_info
 
     @staticmethod
-    def _table_to_pandas(
-        table,
-        index_name,
-        *args,
-    ):
+    def _table_to_pandas(table, index_name):
         df = cudf.DataFrame.from_arrow(table)
         if index_name is not None:
             df = df.set_index(index_name)
         return df
+
+    def _filtered_task(self, index: int):
+        columns = self.columns.copy()
+        index_name = self.index.name
+        if self.index is not None:
+            index_name = self.index.name
+        schema = self._dataset_info["schema"].remove_metadata()
+        if index_name:
+            if columns is None:
+                columns = list(schema.names)
+            columns.append(index_name)
+        return (
+            self._table_to_pandas,
+            (
+                self._fragment_to_table,
+                FragmentWrapper(self.fragments[index], filesystem=self.fs),
+                self.filters,
+                columns,
+                schema,
+            ),
+            index_name,
+        )
 
     def _tune_up(self, parent):
         if self._fusion_compression_factor >= 1:

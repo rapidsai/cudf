@@ -10,3 +10,4 @@ nvtext
     minhash
     ngrams_tokenize
     normalize
+    replace
