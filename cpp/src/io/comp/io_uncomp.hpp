@@ -43,6 +43,7 @@ size_t decompress(compression_type compression,
                   host_span<uint8_t> dst,
                   rmm::cuda_stream_view stream);
 
+size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
 /**
  * @brief GZIP header flags
  * See https://tools.ietf.org/html/rfc1952

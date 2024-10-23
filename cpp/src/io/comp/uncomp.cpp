@@ -560,10 +560,9 @@ size_t decompress(compression_type compression,
 
 size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src) {
   auto raw                 = src.data();
-  uint8_t const* comp_data = nullptr;
-  size_t comp_len          = 0;
-  size_t uncomp_len        = 0;
   switch (compression) {
+    case compression_type::NONE:
+      return src.size();
     case compression_type::GZIP: {
       gz_archive_s gz;
       if (ParseGZArchive(&gz, src.data(), src.size())) 
