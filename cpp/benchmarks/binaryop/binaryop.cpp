@@ -107,27 +107,18 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
   auto constexpr bool_type = cudf::data_type{cudf::type_id::BOOL8};
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    std::vector<std::unique_ptr<cudf::column>> intermediates;
+    rmm::cuda_stream_view stream{launch.get_stream().get_stream()};
     std::unique_ptr<cudf::column> reduction =
-      cudf::binary_operation(table.get_column(0),
-                             table.get_column(1),
-                             cmp_op,
-                             bool_type,
-                             launch.get_stream().get_stream());
+      cudf::binary_operation(table.get_column(0), table.get_column(1), cmp_op, bool_type, stream);
     std::for_each(
       thrust::make_counting_iterator(1),
       thrust::make_counting_iterator(num_comparisons),
       [&](size_t idx) {
-        std::unique_ptr<cudf::column> comparison =
-          cudf::binary_operation(table.get_column(idx * 2),
-                                 table.get_column(idx * 2 + 1),
-                                 cmp_op,
-                                 bool_type,
-                                 launch.get_stream().get_stream());
-        std::unique_ptr<cudf::column> reduced = cudf::binary_operation(
-          *comparison, *reduction, reduce_op, bool_type, launch.get_stream().get_stream());
-        intermediates.emplace_back(std::move(comparison));
-        intermediates.emplace_back(std::move(reduction));
+        std::unique_ptr<cudf::column> comparison = cudf::binary_operation(
+          table.get_column(idx * 2), table.get_column(idx * 2 + 1), cmp_op, bool_type, stream);
+        std::unique_ptr<cudf::column> reduced =
+          cudf::binary_operation(*comparison, *reduction, reduce_op, bool_type, stream);
+        stream.synchronize();
         reduction = std::move(reduced);
       });
   });
