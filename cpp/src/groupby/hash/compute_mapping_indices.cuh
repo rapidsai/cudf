@@ -188,6 +188,5 @@ void compute_mapping_indices(cudf::size_type grid_size,
     global_mapping_index,
     block_cardinality,
     needs_global_memory_fallback);
-  stream.synchronize();
 }
 }  // namespace cudf::groupby::detail::hash
