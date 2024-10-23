@@ -34,7 +34,7 @@ namespace cudf::groupby::detail::hash {
  * @tparam SetType Type of the key hash set
  *
  * @param key_set Key hash set
- * TODO
+ * @param populated_keys Array of unique keys
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return An array of unique keys contained in `key_set`
  */
