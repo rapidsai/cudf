@@ -56,7 +56,7 @@ try:
     def _(header, frames):
         with log_errors():
             assert len(frames) == 2
-            # Copy the second frame (the gpudata in host memory), back to the gpu
+            # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return DataFrame.deserialize(header, frames)
 
