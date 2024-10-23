@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources edit_distance.pyx generate_ngrams.pyx jaccard.pyx minhash.pyx
-                   ngrams_tokenize.pyx
+                   ngrams_tokenize.pyx normalize.pyx replace.pyx
 )
 
 set(linked_libraries cudf::cudf)

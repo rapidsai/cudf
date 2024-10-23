@@ -19,6 +19,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -35,7 +36,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
@@ -60,7 +60,7 @@ template <typename>
 struct is_device_scalar : public std::false_type {};
 
 template <typename T>
-struct is_device_scalar<rmm::device_scalar<T>> : public std::true_type {};
+struct is_device_scalar<cudf::detail::device_scalar<T>> : public std::true_type {};
 
 template <typename>
 struct is_device_uvector : public std::false_type {};
@@ -232,10 +232,10 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
     // in the offsets buffer. While some arrow implementations may accept a zero-sized
     // offsets buffer, best practices would be to allocate the buffer with the single value.
     if (nanoarrow_type == NANOARROW_TYPE_STRING) {
-      auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int32_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     } else {
-      auto zero = std::make_unique<rmm::device_scalar<int64_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int64_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     }
 
@@ -466,10 +466,10 @@ int dispatch_to_arrow_device_view::operator()<cudf::string_view>(ArrowArray* out
   if (column.size() == 0) {
     // https://github.com/rapidsai/cudf/pull/15047#discussion_r1546528552
     if (nanoarrow_type == NANOARROW_TYPE_LARGE_STRING) {
-      auto zero = std::make_unique<rmm::device_scalar<int64_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int64_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     } else {
-      auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int32_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     }
 
