@@ -47,12 +47,10 @@ cpdef Table merge (
 
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(
-            cpp_merge.merge(
-                c_tables_to_merge,
-                c_key_cols,
-                c_column_order,
-                c_null_precedence,
-            )
+        c_result = cpp_merge.merge(
+            c_tables_to_merge,
+            c_key_cols,
+            c_column_order,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))

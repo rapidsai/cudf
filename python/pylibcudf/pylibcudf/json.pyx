@@ -143,12 +143,10 @@ cpdef Column get_json_object(
     cdef cpp_json.get_json_object_options c_options = options.options
 
     with nogil:
-        c_result = move(
-            cpp_json.get_json_object(
-                col.view(),
-                dereference(c_json_path),
-                c_options
-            )
+        c_result = cpp_json.get_json_object(
+            col.view(),
+            dereference(c_json_path),
+            c_options
         )
 
     return Column.from_libcudf(move(c_result))

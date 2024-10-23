@@ -13,11 +13,11 @@ import dask_cudf
 
 
 def _make_random_frame(nelem, npartitions=2):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=nelem),
-            "y": np.random.normal(size=nelem) + 1,
+            "x": rng.integers(0, 5, size=nelem),
+            "y": rng.normal(loc=1.0, scale=1.0, size=nelem),
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)
