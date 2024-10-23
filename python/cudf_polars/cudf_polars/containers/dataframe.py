@@ -148,7 +148,7 @@ class DataFrame:
         )
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list[memoryview | plc.gpumemoryview]):
+    def deserialize(cls, header: dict, frames: tuple[memoryview, plc.gpumemoryview]):
         """
         Create an DataFrame from a serialized representation returned by `.serialize()`.
 
@@ -173,7 +173,7 @@ class DataFrame:
             for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
         )
 
-    def serialize(self):
+    def serialize(self) -> tuple[Mapping[str, Any], tuple[memoryview, plc.gpumemoryview]]:
         """
         Serialize the table into header and frames.
 
@@ -188,7 +188,7 @@ class DataFrame:
         header
             A dict containing any picklabe metadata required to reconstruct the object.
         frames
-            List of frames, which is a mixture of memoryview and gpumemoryviews.
+            Two-tuple of frames suitable for passing to `unpack_from_memoryviews`
         """
         packed = plc.contiguous_split.pack(self.table)
 
@@ -208,7 +208,7 @@ class DataFrame:
             "type-serialized": pickle.dumps(type(self)),
             "frame_count": 2,
         }
-        return header, list(packed.release())
+        return header, tuple(packed.release())
 
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None
