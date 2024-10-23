@@ -22,6 +22,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace ast {
@@ -478,9 +480,9 @@ class operation : public expression {
    *
    * @return Vector of operands
    */
-  [[nodiscard]] std::vector<std::reference_wrapper<expression const>> get_operands() const
+  [[nodiscard]] cudf::host_span<std::reference_wrapper<expression const> const> get_operands() const
   {
-    return operands;
+    return cudf::host_span<std::reference_wrapper<expression const> const>{operands, arity};
   }
 
   /**
@@ -498,16 +500,19 @@ class operation : public expression {
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
   {
-    return std::any_of(operands.cbegin(),
-                       operands.cend(),
+    auto operands = get_operands();
+    return std::any_of(operands.begin(),
+                       operands.end(),
                        [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
                          return subexpr.get().may_evaluate_null(left, right, stream);
                        });
   };
 
  private:
-  ast_operator const op;
-  std::vector<std::reference_wrapper<expression const>> const operands;
+  ast_operator op;
+  // TODO: replace with cuda::std::inplace_vector<std::reference_wrapper<expression const>, 2>
+  std::reference_wrapper<expression const> operands[2];
+  size_t arity;
 };
 
 /**
@@ -550,6 +555,61 @@ class column_name_reference : public expression {
 
  private:
   std::string column_name;
+};
+
+/**
+ * @brief An AST expression tree. it owns and contains multiple dependent expressions. All the
+ * expressions are destroyed once the tree is destructed.
+ */
+class tree {
+ public:
+  tree()                       = default;
+  tree(tree const&)            = delete;
+  tree(tree&&)                 = default;
+  tree& operator=(tree const&) = delete;
+  tree& operator=(tree&&)      = default;
+  ~tree()                      = default;
+
+  /**
+  @brief Add an expression to the AST tree
+  @param expr AST expression to be added
+  @param args Arguments to use to construct the ast expression
+  @returns a reference to the added expression
+ */
+  template <typename Expr, typename... Args>
+  expression const& emplace(Args&&... args)
+  {
+    static_assert(std::is_base_of_v<expression, Expr>);
+    return *expressions.emplace_back(std::make_unique<Expr>(std::forward<Args>(args)...));
+  }
+
+  /**
+   @brief Add an expression to the AST tree
+   @param expr AST expression to be added
+   @returns a reference to the added expression
+    */
+  template <typename Expr>
+  expression const& push(Expr expr)
+  {
+    return emplace<Expr>(std::move(expr));
+  }
+
+  expression const& front() const { return *expressions.front(); }
+
+  expression const& back() const { return *expressions.back(); }
+
+  size_t size() const { return expressions.size(); }
+
+  expression const& at(size_t index) { return *expressions.at(index); }
+
+  expression const& operator[](size_t index) const { return *expressions[index]; }
+
+  cudf::host_span<std::unique_ptr<expression> const> get_expressions() const { return expressions; }
+
+ private:
+  // TODO: ideally we'd use a custom bump allocator for constructing the expression objects and
+  // release all the objects at once.
+  std::vector<std::unique_ptr<expression>> expressions;
 };
 
 /** @} */  // end of group
