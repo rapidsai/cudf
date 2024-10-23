@@ -104,7 +104,7 @@
 }
 
 void run_ndsh_q1(nvbench::state& state,
-                 std::unordered_map<std::string, parquet_device_buffer>& sources)
+                 std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   // Define the column projections and filter predicate for `lineitem` table
   std::vector<std::string> const lineitem_cols = {"l_returnflag",
@@ -124,8 +124,8 @@ void run_ndsh_q1(nvbench::state& state,
     cudf::ast::ast_operator::LESS_EQUAL, shipdate_ref, shipdate_upper_literal);
 
   // Read out the `lineitem` table from parquet file
-  auto lineitem =
-    read_parquet(sources["lineitem"].make_source_info(), lineitem_cols, std::move(lineitem_pred));
+  auto lineitem = read_parquet(
+    sources.at("lineitem").make_source_info(), lineitem_cols, std::move(lineitem_pred));
 
   // Calculate the discount price and charge columns and append to lineitem table
   auto disc_price =
@@ -170,7 +170,7 @@ void ndsh_q1(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
-  std::unordered_map<std::string, parquet_device_buffer> sources;
+  std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
 
   auto stream = cudf::get_default_stream();
