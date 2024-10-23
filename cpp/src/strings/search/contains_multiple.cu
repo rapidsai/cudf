@@ -281,8 +281,6 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       (targets.size() <= targets_threshold) ? 0 : tile_size * targets.size() * input.size();
     auto working_memory = rmm::device_uvector<bool>(work_mem_size, stream);
 
-    // std::cout << shared_mem_size << "," << work_mem_size << std::endl;
-
     cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * tile_size,
                                block_size};
     multi_contains_kernel<tile_size>

@@ -79,7 +79,7 @@ std::unique_ptr<table> contains_multiple(
  *           [-1,-1, 1 ]}  // for "def": "a" and "b" not found, "e" at  pos 1
  * @endcode
  *
- * @throw , std::invalid_argument if `targets` is empty or contains nulls
+ * @throw std::invalid_argument if `targets` is empty or contains nulls
  *
  * @param input Strings instance for this operation
  * @param targets Strings to search for in each string
