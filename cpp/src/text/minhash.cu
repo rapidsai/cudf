@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sequence.hpp>
@@ -519,7 +520,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                              block_size};
   auto const hashes_size = input.chars_size(stream);
   auto d_hashes          = rmm::device_uvector<hash_value_type>(hashes_size, stream);
-  auto d_threshold_count = rmm::device_scalar<cudf::size_type>(0, stream);
+  auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(0, stream);
 
   minhash_seed_kernel<HashFunction>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(*d_strings,
