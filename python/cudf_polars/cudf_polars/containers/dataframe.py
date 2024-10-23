@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pickle
 from functools import cached_property
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pylibcudf as plc
@@ -157,7 +157,7 @@ class DataFrame:
         header
             The (unpickled) metadata required to reconstruct the object.
         frames
-            List of contiguous buffers, which is a mixture of memoryview and gpumemoryviews.
+            Two-tuple of frames (a memoryview and a gpumemoryviews).
 
         Returns
         -------
@@ -173,12 +173,14 @@ class DataFrame:
             for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
         )
 
-    def serialize(self) -> tuple[Mapping[str, Any], tuple[memoryview, plc.gpumemoryview]]:
+    def serialize(
+        self,
+    ) -> tuple[Mapping[str, Any], tuple[memoryview, plc.gpumemoryview]]:
         """
         Serialize the table into header and frames.
 
         Follows the Dask serialization scheme with a picklable header (dict) and
-        a list of frames (contiguous buffers).
+        a tuple of frames (in this case a contiguous host and device buffer).
 
         To enable dask support, register the dask serializers by importing:
         >>> import cudf_polars.experimental.dask_serialize

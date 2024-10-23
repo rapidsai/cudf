@@ -22,36 +22,29 @@ try:
     from distributed.utils import log_errors
 
     @cuda_serialize.register(DataFrame)
-    def _(x):
+    def _(x: DataFrame):
         with log_errors():
-            return x.serialize()
+            header, frames = x.serialize()
+            return header, list(frames)  # Dask expect a list of frames
 
     @cuda_deserialize.register(DataFrame)
     def _(header, frames):
         with log_errors():
-            return DataFrame.deserialize(header, frames)
+            assert len(frames) == 2
+            return DataFrame.deserialize(header, tuple(frames))
 
     @dask_serialize.register(DataFrame)
-    def _(x):
+    def _(x: DataFrame):
         with log_errors():
-            header, frames = x.serialize()
-            # Copy GPU buffers to host and record it in the header
-            gpu_frames = [
-                i
-                for i in range(len(frames))
-                if isinstance(frames[i], plc.gpumemoryview)
-            ]
-            for i in gpu_frames:
-                frames[i] = memoryview(cupy.asnumpy(frames[i]))
-            header["gpu_frames"] = gpu_frames
-            return header, frames
+            header, (metadata, gpudata_on_host) = x.serialize()
+            return header, (metadata, memoryview(cupy.asnumpy(gpudata_on_host)))
 
     @dask_deserialize.register(DataFrame)
     def _(header, frames):
         with log_errors():
-            # Copy GPU buffers back to device memory
-            for i in header.pop("gpu_frames"):
-                frames[i] = plc.gpumemoryview(cupy.asarray(frames[i]))
+            assert len(frames) == 2
+            # Copy the second frame (the gpudata in host memory), back to the gpu
+            frames = frames[0], plc.gpumemoryview(cupy.asarray(frames[1]))
             return DataFrame.deserialize(header, frames)
 
 except ImportError:
