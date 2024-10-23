@@ -516,10 +516,10 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         _stream.synchronize();
         stream_synchronized = true;
       }
-      device_read_tasks.push_back(
-        std::pair(source_ptr->device_read_async(
-                    read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
-                  read_info.length));
+      device_read_tasks.emplace_back(
+        source_ptr->device_read_async(
+          read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
+        read_info.length);
 
     } else {
       auto buffer = source_ptr->host_read(read_info.offset, read_info.length);
@@ -668,8 +668,8 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
-        hd_compinfo.begin(), hd_compinfo.d_begin(), stream_range.size());
+      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>{hd_compinfo}.subspan(
+        0, stream_range.size());
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =

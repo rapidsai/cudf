@@ -284,7 +284,7 @@ class reader::impl {
    *
    * @return Vector of total string data sizes for each column
    */
-  std::vector<size_t> calculate_page_string_offsets();
+  cudf::detail::host_vector<size_t> calculate_page_string_offsets();
 
   /**
    * @brief Converts the page data and outputs to columns.

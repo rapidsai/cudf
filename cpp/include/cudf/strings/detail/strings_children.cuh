@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -29,6 +30,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_memcpy.cuh>
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -37,6 +40,62 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
+/**
+ * @brief Gather characters to create a strings column using the given string-index pair iterator
+ *
+ * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
+ *
+ * @param offsets The offsets for the output strings column
+ * @param chars_size The size (in bytes) of the chars data
+ * @param begin Iterator to the first string-index pair
+ * @param strings_count The number of strings
+ * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return An array of chars gathered from the input string-index pair iterator
+ */
+template <typename IndexPairIterator>
+rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
+                                            int64_t chars_size,
+                                            IndexPairIterator begin,
+                                            size_type strings_count,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
+
+  auto const src_ptrs = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
+      // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
+      // we have to use `const_cast` to remove `const` qualifier from the source pointer.
+      // This should be fine as long as we only read but not write anything to the source.
+      return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
+    }));
+  auto const src_sizes = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<size_type>(
+      [begin] __device__(uint32_t idx) { return begin[idx].second; }));
+  auto const dst_ptrs = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
+                                        uint32_t idx) { return output + offsets[idx]; }));
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count, stream.value()));
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                                           temp_storage_bytes,
+                                           src_ptrs,
+                                           dst_ptrs,
+                                           src_sizes,
+                                           strings_count,
+                                           stream.value()));
+
+  return chars_data;
+}
 
 /**
  * @brief Create an offsets column to be a child of a compound column

@@ -33,11 +33,9 @@ cpdef Table extract(Column input, RegexProgram prog):
     cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result = move(
-            cpp_extract.extract(
-                input.view(),
-                prog.c_obj.get()[0]
-            )
+        c_result = cpp_extract.extract(
+            input.view(),
+            prog.c_obj.get()[0]
         )
 
     return Table.from_libcudf(move(c_result))
@@ -66,11 +64,9 @@ cpdef Column extract_all_record(Column input, RegexProgram prog):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_extract.extract_all_record(
-                input.view(),
-                prog.c_obj.get()[0]
-            )
+        c_result = cpp_extract.extract_all_record(
+            input.view(),
+            prog.c_obj.get()[0]
         )
 
     return Column.from_libcudf(move(c_result))
