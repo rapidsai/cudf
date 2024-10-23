@@ -173,7 +173,6 @@ struct initialize_sparse_table {
     for (auto col_idx = 0; col_idx < sparse_table.num_columns(); col_idx++) {
       cudf::detail::dispatch_type_and_aggregation(sparse_table.column(col_idx).type(),
                                                   aggs[col_idx],
-                                                  // cudf::detail::identity_initializer{},
                                                   initialize_gmem{},
                                                   sparse_table.column(col_idx),
                                                   key_idx);
