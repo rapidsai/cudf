@@ -103,7 +103,6 @@ struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target
 
 struct initialize_shmem {
   template <typename Target, cudf::aggregation::Kind k>
-  // TODO naming
   __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
