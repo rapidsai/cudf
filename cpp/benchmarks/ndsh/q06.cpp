@@ -64,7 +64,7 @@
 }
 
 void run_ndsh_q6(nvbench::state& state,
-                 std::unordered_map<std::string, parquet_device_buffer>& sources)
+                 std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   // Read out the `lineitem` table from parquet file
   std::vector<std::string> const lineitem_cols = {
@@ -83,8 +83,8 @@ void run_ndsh_q6(nvbench::state& state,
     cudf::ast::operation(cudf::ast::ast_operator::LESS, shipdate_ref, shipdate_upper_literal);
   auto const lineitem_pred = std::make_unique<cudf::ast::operation>(
     cudf::ast::ast_operator::LOGICAL_AND, shipdate_pred_a, shipdate_pred_b);
-  auto lineitem =
-    read_parquet(sources["lineitem"].make_source_info(), lineitem_cols, std::move(lineitem_pred));
+  auto lineitem = read_parquet(
+    sources.at("lineitem").make_source_info(), lineitem_cols, std::move(lineitem_pred));
 
   // Cast the discount and quantity columns to float32 and append to lineitem table
   auto discout_float =
@@ -134,7 +134,7 @@ void ndsh_q6(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
-  std::unordered_map<std::string, parquet_device_buffer> sources;
+  std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(scale_factor, {"lineitem"}, sources);
 
   auto stream = cudf::get_default_stream();

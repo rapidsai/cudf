@@ -27,6 +27,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/null_mask.hpp>
@@ -405,13 +406,8 @@ void write_chunked(data_sink* out_sink,
     out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
-    thrust::host_vector<char> h_bytes(total_num_bytes);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
-                                  ptr_all_bytes,
-                                  total_num_bytes * sizeof(char),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    stream.synchronize();
+    auto const h_bytes = cudf::detail::make_host_vector_sync(
+      device_span<char const>{ptr_all_bytes, total_num_bytes}, stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);
   }
