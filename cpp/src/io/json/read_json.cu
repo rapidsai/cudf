@@ -144,7 +144,7 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
   // The allocation for single source compressed input is estimated by assuming a ~4:1
   // compression ratio. For uncompressed inputs, we can getter a better estimate using the idea
   // of subchunks.
-  //auto constexpr header_size = 4096;
+  // auto constexpr header_size = 4096;
   /*
   std::size_t buffer_size =
     reader_compression != compression_type::NONE
@@ -152,8 +152,9 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
           num_extra_delimiters;
   */
-  std::size_t buffer_size = std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
-          num_extra_delimiters;
+  std::size_t buffer_size =
+    std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
+    num_extra_delimiters;
   rmm::device_buffer buffer(buffer_size, stream);
   device_span<char> bufspan(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
@@ -204,7 +205,9 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
                                      buffer_size + num_subchunks_prealloced * size_per_subchunk) +
                               num_extra_delimiters;
           */
-          buffer_size = std::min(total_source_size, buffer_size + num_subchunks_prealloced * size_per_subchunk) + num_extra_delimiters;
+          buffer_size = std::min(total_source_size,
+                                 buffer_size + num_subchunks_prealloced * size_per_subchunk) +
+                        num_extra_delimiters;
           buffer.resize(buffer_size, stream);
           bufspan = device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size());
         }
@@ -246,9 +249,9 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
 }
 
 table_with_metadata create_batched_cudf_table(host_span<std::unique_ptr<datasource>> sources,
-                              json_reader_options const& reader_opts,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+                                              json_reader_options const& reader_opts,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
 {
   /*
    * The batched JSON reader enforces that the size of each batch is at most INT_MAX
@@ -377,14 +380,11 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
   std::size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
 
-  auto const total_bytes_to_read =
-    std::min(range_size, prefsum_source_sizes.back() - range_offset);
+  auto const total_bytes_to_read = std::min(range_size, prefsum_source_sizes.back() - range_offset);
   range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
-  for (std::size_t i = start_source; i < sources.size() && bytes_read < total_bytes_to_read;
-       i++) {
+  for (std::size_t i = start_source; i < sources.size() && bytes_read < total_bytes_to_read; i++) {
     if (sources[i]->is_empty()) continue;
-    auto data_size =
-      std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
+    auto data_size = std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
     auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
                        (num_delimiter_chars * delimiter_map.size());
     if (compression == compression_type::NONE) {
@@ -397,8 +397,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
           destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
         bytes_read += h_buffer->size();
       }
-    }
-    else {
+    } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
       CUDF_CUDA_TRY(cudaMemcpyAsync(
@@ -458,28 +457,34 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Specifying a byte range is supported only for JSON Lines");
   }
 
-  if(sources.size() > 1) {
+  if (sources.size() > 1) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  if(reader_opts.get_compression() == compression_type::NONE)
+  if (reader_opts.get_compression() == compression_type::NONE)
     return create_batched_cudf_table(sources, reader_opts, stream, mr);
 
   /*
   CUDF_EXPECTS(reader_opts.get_byte_range_offset() == 0 && reader_opts.get_byte_range_size() == 0,
       "Byte range reading from compressed inputs is not supported");
   */
-  CUDF_EXPECTS(reader_opts.get_compression() == compression_type::GZIP || reader_opts.get_compression() == compression_type::ZIP || reader_opts.get_compression() == compression_type::SNAPPY, "Unsupported compression type");
+  CUDF_EXPECTS(reader_opts.get_compression() == compression_type::GZIP ||
+                 reader_opts.get_compression() == compression_type::ZIP ||
+                 reader_opts.get_compression() == compression_type::SNAPPY,
+               "Unsupported compression type");
   std::vector<std::unique_ptr<datasource::buffer>> compressed_buffers;
   std::vector<std::unique_ptr<datasource>> compressed_sources;
-  for(size_t i = 0; i < sources.size(); i++) {
+  for (size_t i = 0; i < sources.size(); i++) {
     compressed_buffers.emplace_back(sources[i]->host_read(0, sources[i]->size()));
     compressed_sources.emplace_back(std::make_unique<compressed_host_buffer_source>(
-          cudf::host_span<std::uint8_t const>(reinterpret_cast<std::uint8_t const*>(compressed_buffers.back()->data()), compressed_buffers.back()->size()), 
-          reader_opts.get_compression()));
+      cudf::host_span<std::uint8_t const>(
+        reinterpret_cast<std::uint8_t const*>(compressed_buffers.back()->data()),
+        compressed_buffers.back()->size()),
+      reader_opts.get_compression()));
   }
-  // in create_batched_cudf_table, we need the compressed source size to actually be the uncompressed source size for correct batching
+  // in create_batched_cudf_table, we need the compressed source size to actually be the
+  // uncompressed source size for correct batching
   return create_batched_cudf_table(compressed_sources, reader_opts, stream, mr);
 }
 

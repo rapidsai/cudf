@@ -558,15 +558,14 @@ size_t decompress(compression_type compression,
   }
 }
 
-size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src) {
-  auto raw                 = src.data();
+size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src)
+{
+  auto raw = src.data();
   switch (compression) {
-    case compression_type::NONE:
-      return src.size();
+    case compression_type::NONE: return src.size();
     case compression_type::GZIP: {
       gz_archive_s gz;
-      if (ParseGZArchive(&gz, src.data(), src.size())) 
-        return gz.isize;
+      if (ParseGZArchive(&gz, src.data(), src.size())) return gz.isize;
     }
     case compression_type::ZIP: {
       zip_archive_s za;
@@ -615,8 +614,7 @@ size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_
           uncompressed_size |= lo7 << l;
           l += 7;
         } while (c > 0x7f && cur < end);
-        CUDF_EXPECTS(uncompressed_size != 0 and cur < end,
-                     "Destination buffer too small");
+        CUDF_EXPECTS(uncompressed_size != 0 and cur < end, "Destination buffer too small");
       }
       return uncompressed_size;
     }
