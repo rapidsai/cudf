@@ -148,6 +148,26 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
                              d_agg_kinds.data(),
                              stream);
 
+  // The shared memory groupby is designed so that each thread block can handle up to 128 unique
+  // keys. When a block reaches this cardinality limit, shared memory becomes insufficient to store
+  // the temporary aggregation results. In these situations, we must fall back to a global memory
+  // aggregator to process the remaining aggregation requests.
+  if (needs_fallback) {
+    auto const stride = GROUPBY_BLOCK_SIZE * grid_size;
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator{0},
+                       num_rows,
+                       global_memory_fallback_fn{global_set_ref,
+                                                 *d_values,
+                                                 *d_sparse_table,
+                                                 d_agg_kinds.data(),
+                                                 block_cardinality.data(),
+                                                 stride,
+                                                 row_bitmask,
+                                                 skip_rows_with_nulls});
+    extract_populated_keys(global_set, populated_keys, stream);
+  }
+
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
