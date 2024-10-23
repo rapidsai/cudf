@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import pylibcudf as plc
 
+import rmm
+
 from cudf_polars.containers import DataFrame
 
 try:
-    import cupy
     from distributed.protocol import (
         dask_deserialize,
         dask_serialize,
@@ -36,15 +37,27 @@ try:
     @dask_serialize.register(DataFrame)
     def _(x: DataFrame):
         with log_errors():
-            header, (metadata, gpudata_on_host) = x.serialize()
-            return header, (metadata, memoryview(cupy.asnumpy(gpudata_on_host)))
+            header, (metadata, gpudata) = x.serialize()
+
+            # For robustness, we check that the gpu data is contiguous
+            cai = gpudata.__cuda_array_interface__
+            assert len(cai["shape"]) == 1
+            assert cai["strides"] is None or cai["strides"] == (1,)
+            assert cai["typestr"] == "|u1"
+            nbytes = cai["shape"][0]
+
+            # Copy the gpudata to host memory
+            gpudata_on_host = memoryview(
+                rmm.DeviceBuffer(ptr=gpudata.ptr, size=nbytes).copy_to_host()
+            )
+            return header, (metadata, gpudata_on_host)
 
     @dask_deserialize.register(DataFrame)
     def _(header, frames):
         with log_errors():
             assert len(frames) == 2
             # Copy the second frame (the gpudata in host memory), back to the gpu
-            frames = frames[0], plc.gpumemoryview(cupy.asarray(frames[1]))
+            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return DataFrame.deserialize(header, frames)
 
 except ImportError:
