@@ -9,11 +9,65 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # TODO: put this in a shared org-wide secret?
+  OTEL_SERVICE_NAME: 'pr-cudf'
+  # TODO: this should be set as an org-wide variable
+  OTEL_EXPORTER_OTLP_ENDPOINT: https://136.49.91.190:4318
+  # These are where the secrets in github env vars are written to files. These files don't
+  # exist unless you explicitly write them in a step.
+  # The purpose of setting the environment variable is to tell OpenTelemetry tools where to find them.
+  #     We abuse it a bit by also using it as the write destination for the certificate files.
+  OTEL_EXPORTER_OTLP_CERTIFICATE: "/tmp/certs/ca.crt"
+  OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE: "/tmp/certs/client.crt"
+  OTEL_EXPORTER_OTLP_CLIENT_KEY: "/tmp/certs/client.key"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+
 jobs:
+  telemetry-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      start_time: ${{ steps.timestamp.outputs.START_TIME }}
+      traceparent: ${{ steps.telemetry-setup.outputs.traceparent }}
+      endpoint: ${{ steps.var-reexports.outputs.endpoint }}
+      top_level_service_name: ${{ steps.var-reexports.outputs.service_name }}
+    steps:
+      - name: Get starting timestamp
+        id: timestamp
+        run:
+            echo "START_TIME=$(date +%s.%N)" >> ${GITHUB_OUTPUT}
+      - name: Echo endpoint to make it available to shared workflows
+        id: var-reexports
+        run: |
+          echo endpoint="${OTEL_EXPORTER_OTLP_ENDPOINT}" >> ${GITHUB_OUTPUT}
+          echo service_name="${OTEL_SERVICE_NAME}" >> ${GITHUB_OUTPUT}
+      - name: Write certificate files for mTLS
+        run: |
+          mkdir -p /tmp/certs
+          cat << EOF > "${OTEL_EXPORTER_OTLP_CERTIFICATE}"
+          ${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }}
+          EOF
+          cat << EOF > "${OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE}"
+          ${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }}
+          EOF
+          cat << EOF > "${OTEL_EXPORTER_OTLP_CLIENT_KEY}"
+          ${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}
+          EOF
+      - name: Telemetry setup
+        id: telemetry-setup
+        uses: rapidsai/shared-actions/telemetry-traceparent@add-telemetry
+      - name: Start root span
+        uses: rapidsai/shared-actions/telemetry-create-span@add-telemetry
+        with:
+            name: "root span"
+            traceparent: ${{steps.telemetry-setup.outputs.traceparent}}
+            start_time: ${{steps.timestamp.outputs.start_time}}
   pr-builder:
     needs:
       - changed-files
       - checks
+      - telemetry-setup
       - conda-cpp-build
       - conda-cpp-checks
       - conda-cpp-tests
@@ -38,14 +92,17 @@ jobs:
       - pandas-tests
       - pandas-tests-diff
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@add-telemetry
     if: always()
     with:
       needs: ${{ toJSON(needs) }}
   changed-files:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-24.12
+    needs: telemetry-setup
+    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@add-telemetry
     with:
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
       files_yaml: |
         test_cpp:
           - '**'
@@ -91,56 +148,72 @@ jobs:
           - '!notebooks/**'
   checks:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
+    needs: telemetry-setup
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@add-telemetry
     with:
       enable_check_generated_files: false
+      ignored_pr_jobs: "final_span_update"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   conda-cpp-build:
-    needs: checks
+    needs:
+        - checks
+        - telemetry-setup
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@add-telemetry
     with:
       build_type: pull-request
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@add-telemetry
     with:
       build_type: pull-request
       enable_check_symbols: true
   conda-cpp-tests:
-    needs: [conda-cpp-build, changed-files]
+    needs: [conda-cpp-build, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
     with:
       build_type: pull-request
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   conda-python-build:
-    needs: conda-cpp-build
+    needs: [conda-cpp-build, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@add-telemetry
     with:
       build_type: pull-request
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   conda-python-cudf-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
-    needs: [conda-python-build, changed-files]
+    needs: [conda-python-build, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   conda-java-tests:
-    needs: [conda-cpp-build, changed-files]
+    needs: [conda-cpp-build, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
     with:
       build_type: pull-request
@@ -148,20 +221,24 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_java.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   static-configure:
-    needs: checks
+    needs: [checks, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@add-telemetry
     with:
       build_type: pull-request
       # Use the wheel container so we can skip conda solves and since our
       # primary static consumers (Spark) are not in conda anyway.
       container_image: "rapidsai/ci-wheel:latest"
       run_script: "ci/configure_cpp_static.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   conda-notebook-tests:
-    needs: [conda-python-build, changed-files]
+    needs: [conda-python-build, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_notebooks
     with:
       build_type: pull-request
@@ -169,60 +246,74 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_notebooks.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   docs-build:
-    needs: conda-python-build
+    needs: [conda-python-build, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@add-telemetry
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/build_docs.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-build-libcudf:
-    needs: checks
+    needs: [checks, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@add-telemetry
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
       build_type: pull-request
       script: "ci/build_wheel_libcudf.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-build-pylibcudf:
-    needs: [checks, wheel-build-libcudf]
+    needs: [checks, wheel-build-libcudf, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@add-telemetry
     with:
       build_type: pull-request
       script: "ci/build_wheel_pylibcudf.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-build-cudf:
-    needs: wheel-build-pylibcudf
+    needs: [wheel-build-pylibcudf, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@add-telemetry
     with:
       build_type: pull-request
       script: "ci/build_wheel_cudf.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-tests-cudf:
-    needs: [wheel-build-cudf, changed-files]
+    needs: [wheel-build-cudf, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-build-cudf-polars:
-    needs: wheel-build-pylibcudf
+    needs: [wheel-build-pylibcudf, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@add-telemetry
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/build_wheel_cudf_polars.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-tests-cudf-polars:
-    needs: [wheel-build-cudf-polars, changed-files]
+    needs: [wheel-build-cudf-polars, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
@@ -231,10 +322,12 @@ jobs:
       # This always runs, but only fails if this PR touches code in
       # pylibcudf or cudf_polars
       script: "ci/test_wheel_cudf_polars.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   cudf-polars-polars-tests:
-    needs: wheel-build-cudf-polars
+    needs: [wheel-build-cudf-polars, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@add-telemetry
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -242,28 +335,35 @@ jobs:
       # This always runs, but only fails if this PR touches code in
       # pylibcudf or cudf_polars
       script: "ci/test_cudf_polars_polars_tests.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-build-dask-cudf:
-    needs: wheel-build-cudf
+    needs: [wheel-build-cudf, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@add-telemetry
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/build_wheel_dask_cudf.sh"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   wheel-tests-dask-cudf:
-    needs: [wheel-build-dask-cudf, changed-files]
+    needs: [wheel-build-dask-cudf, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   devcontainer:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@add-telemetry
+    needs: telemetry-setup
     with:
       arch: '["amd64"]'
       cuda: '["12.5"]'
@@ -271,21 +371,25 @@ jobs:
         sccache -z;
         build-all -DBUILD_BENCHMARKS=ON --verbose;
         sccache -s;
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   unit-tests-cudf-pandas:
-    needs: [wheel-build-cudf, changed-files]
+    needs: [wheel-build-cudf, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   pandas-tests:
     # run the Pandas unit tests using PR branch
-    needs: [wheel-build-cudf, changed-files]
+    needs: [wheel-build-cudf, changed-files, telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@add-telemetry
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python || fromJSON(needs.changed-files.outputs.changed_file_groups).test_cudf_pandas
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
@@ -294,11 +398,42 @@ jobs:
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
       # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
       test_summary_show: "none"
+      default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+      traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
   pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
-    needs: pandas-tests
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
+    needs: [pandas-tests, telemetry-setup]
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@add-telemetry
     with:
         node_type: cpu4
         build_type: pull-request
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+        default_endpoint: "${{needs.telemetry-setup.outputs.endpoint}}"
+        traceparent: ${{ needs.telemetry-setup.outputs.traceparent }}
+  final_span_update:
+    runs-on: ubuntu-latest
+    needs: [pr-builder, telemetry-setup]
+    steps:
+      - name: Get final timestamp
+        id: timestamp
+        run:
+            echo "FINAL_TIME=$(date +%s.%N)" >> ${GITHUB_OUTPUT}
+      - name: Write certificate files for mTLS
+        run: |
+          mkdir -p /tmp/certs
+          cat << EOF > ${OTEL_EXPORTER_OTLP_CERTIFICATE}
+          ${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }}
+          EOF
+          cat << EOF > ${OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE}
+          ${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }}
+          EOF
+          cat << EOF > ${OTEL_EXPORTER_OTLP_CLIENT_KEY}
+          ${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}
+          EOF
+      - name: Update root span with final completion time
+        if: always()
+        uses: rapidsai/shared-actions/telemetry-create-span@add-telemetry
+        with:
+            traceparent: ${{needs.telemetry-setup.outputs.traceparent}}
+            start_time: ${{needs.telemetry-setup.outputs.start_time}}
+            end_time: ${{steps.timestamp.outputs.FINAL_TIME}}
