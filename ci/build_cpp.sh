@@ -19,4 +19,6 @@ rapids-logger "Begin cpp build"
 RAPIDS_PACKAGE_VERSION=$(rapids-generate-version) rapids-conda-retry mambabuild \
     conda/recipes/libcudf
 
+sccache --show-adv-stats
+
 rapids-upload-conda-to-s3 cpp
