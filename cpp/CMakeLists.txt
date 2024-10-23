@@ -368,6 +368,8 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/compute_global_memory_aggs.cu
+  src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/create_sparse_results_table.cu
