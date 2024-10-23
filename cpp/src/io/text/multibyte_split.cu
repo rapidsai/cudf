@@ -32,6 +32,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/utilities/cuda_event.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -383,8 +384,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
     auto streams = cudf::detail::fork_streams(stream, concurrency);
 
-    cudaEvent_t last_launch_event;
-    CUDF_CUDA_TRY(cudaEventCreate(&last_launch_event));
+    cudf::detail::cuda_event last_launch_event;
 
     auto& read_stream      = streams[0];
     auto& scan_stream      = streams[1];
@@ -498,8 +498,6 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       chunk_offset += chunk->size();
       chunk = std::move(next_chunk);
     }
-
-    CUDF_CUDA_TRY(cudaEventDestroy(last_launch_event));
 
     cudf::detail::join_streams(streams, stream);
 
