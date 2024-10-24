@@ -44,6 +44,7 @@
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
+#include <sys/mman.h>
 
 #include <iostream>
 
@@ -51,6 +52,30 @@ namespace cudf {
 namespace detail {
 
 namespace {
+
+/*
+  Enable Transparent Huge Pages (THP) for large (>4MB) allocations.
+  `buf` is returned untouched.
+  Enabling THP can improve performance of device-host memory transfers
+  significantly, see <https://github.com/rapidsai/cudf/pull/13914>.
+*/
+void enable_hugepage(ArrowBuffer* buffer)
+{
+  if (buffer->size_bytes < (1u << 22u)) {  // Smaller than 4 MB
+    return;
+  }
+
+#ifdef MADV_HUGEPAGE
+  auto const pagesize = sysconf(_SC_PAGESIZE);
+  void* addr          = const_cast<uint8_t*>(buffer->data);
+  auto length{static_cast<std::size_t>(buffer->size_bytes)};
+  if (std::align(pagesize, pagesize, addr, length)) {
+    // Intentionally not checking for errors that may be returned by older kernel versions;
+    // optimistically tries enabling huge pages.
+    madvise(addr, length, MADV_HUGEPAGE);
+  }
+#endif
+}
 
 struct dispatch_to_arrow_host {
   cudf::column_view column;
@@ -62,6 +87,7 @@ struct dispatch_to_arrow_host {
     if (!column.has_nulls()) { return NANOARROW_OK; }
 
     NANOARROW_RETURN_NOT_OK(ArrowBitmapResize(bitmap, static_cast<int64_t>(column.size()), 0));
+    enable_hugepage(&bitmap->buffer);
     CUDF_CUDA_TRY(cudaMemcpyAsync(bitmap->buffer.data,
                                   (column.offset() > 0)
                                     ? cudf::detail::copy_bitmask(column, stream, mr).data()
@@ -76,6 +102,7 @@ struct dispatch_to_arrow_host {
   int populate_data_buffer(device_span<T const> input, ArrowBuffer* buffer) const
   {
     NANOARROW_RETURN_NOT_OK(ArrowBufferResize(buffer, input.size_bytes(), 1));
+    enable_hugepage(buffer);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       buffer->data, input.data(), input.size_bytes(), cudaMemcpyDefault, stream.value()));
     return NANOARROW_OK;

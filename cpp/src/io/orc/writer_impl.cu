@@ -19,6 +19,7 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "cudf/detail/utilities/cuda_memcpy.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
@@ -718,8 +719,8 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
   auto d_pd_set_counts_data = rmm::device_uvector<cudf::size_type>(
     orc_table.num_columns() * segmentation.num_rowgroups(), stream);
-  auto const d_pd_set_counts = device_2dspan<cudf::size_type>{
-    d_pd_set_counts_data.data(), segmentation.num_rowgroups(), orc_table.num_columns()};
+  auto const d_pd_set_counts =
+    device_2dspan<cudf::size_type>{d_pd_set_counts_data, orc_table.num_columns()};
   gpu::reduce_pushdown_masks(orc_table.d_columns, segmentation.rowgroups, d_pd_set_counts, stream);
 
   auto aligned_rgs = hostdevice_2dvector<rowgroup_rows>(
@@ -740,7 +741,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
     [columns = device_span<orc_column_device_view const>{orc_table.d_columns},
      stripes = device_span<stripe_rowgroups const>{d_stripes},
      d_pd_set_counts,
-     out_rowgroups = device_2dspan<rowgroup_rows>{aligned_rgs}] __device__(auto& idx) {
+     out_rowgroups = aligned_rgs.device_view()] __device__(auto& idx) {
       uint32_t const col_idx = idx / stripes.size();
       // No alignment needed for root columns
       if (not columns[col_idx].parent_index.has_value()) return;
@@ -912,7 +913,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0ul),
     chunks.count(),
-    [chunks = device_2dspan<gpu::EncChunk>{chunks},
+    [chunks = chunks.device_view(),
      cols = device_span<orc_column_device_view const>{orc_table.d_columns}] __device__(auto& idx) {
       auto const col_idx             = idx / chunks.size().second;
       auto const rg_idx              = idx % chunks.size().second;
@@ -1408,7 +1409,8 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     num_entries_seen += stripes_per_col;
   }
 
-  std::vector<statistics_merge_group> file_stats_merge(num_file_blobs);
+  auto file_stats_merge =
+    cudf::detail::make_host_vector<statistics_merge_group>(num_file_blobs, stream);
   for (auto i = 0u; i < num_file_blobs; ++i) {
     auto col_stats         = &file_stats_merge[i];
     col_stats->col_dtype   = per_chunk_stats.col_types[i];
@@ -1418,11 +1420,10 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   }
 
   auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_file_stats_merge,
-                                file_stats_merge.data(),
-                                num_file_blobs * sizeof(statistics_merge_group),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<statistics_merge_group>(
+    device_span<statistics_merge_group>{stats_merge.device_ptr(num_stripe_blobs), num_file_blobs},
+    file_stats_merge,
+    stream);
 
   auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
   detail::merge_group_statistics<detail::io_file_format::ORC>(
@@ -1573,7 +1574,7 @@ void write_index_stream(int32_t stripe_id,
  * @param[in] strm_desc Stream's descriptor
  * @param[in] enc_stream Chunk's streams
  * @param[in] compressed_data Compressed stream data
- * @param[in,out] stream_out Temporary host output buffer
+ * @param[in,out] bounce_buffer Pinned memory bounce buffer for D2H data transfer
  * @param[in,out] stripe Stream's parent stripe
  * @param[in,out] streams List of all streams
  * @param[in] compression_kind The compression kind
@@ -1584,7 +1585,7 @@ void write_index_stream(int32_t stripe_id,
 std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
                                     gpu::encoder_chunk_streams const& enc_stream,
                                     uint8_t const* compressed_data,
-                                    uint8_t* stream_out,
+                                    host_span<uint8_t> bounce_buffer,
                                     StripeInformation* stripe,
                                     orc_streams* streams,
                                     CompressionKind compression_kind,
@@ -1604,11 +1605,10 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
     if (out_sink->is_device_write_preferred(length)) {
       return out_sink->device_write_async(stream_in, length, stream);
     } else {
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDefault, stream.value()));
-      stream.synchronize();
+      cudf::detail::cuda_memcpy(
+        bounce_buffer.subspan(0, length), device_span<uint8_t const>{stream_in, length}, stream);
 
-      out_sink->host_write(stream_out, length);
+      out_sink->host_write(bounce_buffer.data(), length);
       return std::async(std::launch::deferred, [] {});
     }
   }();
@@ -1898,7 +1898,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
     thrust::make_counting_iterator(0ul),
     num_rowgroups,
     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
-     rg_bounds = device_2dspan<rowgroup_rows>{rowgroup_bounds},
+     rg_bounds = rowgroup_bounds.device_view(),
      rowgroup_size] __device__(auto rg_idx) mutable {
       thrust::transform(
         thrust::seq, cols.begin(), cols.end(), rg_bounds[rg_idx].begin(), [&](auto const& col) {
@@ -1988,8 +1988,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                      d_tmp_rowgroup_sizes.end(),
                      [src       = esizes.data(),
                       col_idx   = col_idx,
-                      rg_bounds = device_2dspan<rowgroup_rows const>{
-                        segmentation.rowgroups}] __device__(auto idx) {
+                      rg_bounds = segmentation.rowgroups.device_view()] __device__(auto idx) {
                        return src[rg_bounds[idx][col_idx].end - 1];
                      });
 
@@ -2051,7 +2050,7 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
   auto const num_str_cols  = orc_table.num_string_columns();
 
   auto counts         = rmm::device_uvector<size_type>(num_str_cols * num_rowgroups, stream);
-  auto counts_2d_view = device_2dspan<size_type>(counts.data(), num_str_cols, num_rowgroups);
+  auto counts_2d_view = device_2dspan<size_type>(counts, num_rowgroups);
   gpu::rowgroup_char_counts(counts_2d_view,
                             orc_table.d_columns,
                             rowgroup_bounds,
@@ -2617,7 +2616,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
         strm_desc,
         enc_data.streams[strm_desc.column_id][segmentation.stripes[stripe_id].first],
         compressed_data.data(),
-        bounce_buffer.data(),
+        bounce_buffer,
         &stripe,
         &streams,
         _compression_kind,

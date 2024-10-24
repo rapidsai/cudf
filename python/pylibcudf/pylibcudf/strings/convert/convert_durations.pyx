@@ -43,12 +43,10 @@ cpdef Column to_durations(
     cdef string c_format = format.encode()
 
     with nogil:
-        c_result = move(
-            cpp_convert_durations.to_durations(
-                input.view(),
-                duration_type.c_obj,
-                c_format
-            )
+        c_result = cpp_convert_durations.to_durations(
+            input.view(),
+            duration_type.c_obj,
+            c_format
         )
 
     return Column.from_libcudf(move(c_result))
@@ -84,11 +82,9 @@ cpdef Column from_durations(
     cdef string c_format = format.encode()
 
     with nogil:
-        c_result = move(
-            cpp_convert_durations.from_durations(
-                durations.view(),
-                c_format
-            )
+        c_result = cpp_convert_durations.from_durations(
+            durations.view(),
+            c_format
         )
 
     return Column.from_libcudf(move(c_result))
