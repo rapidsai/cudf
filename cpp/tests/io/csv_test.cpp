@@ -17,14 +17,12 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -32,18 +30,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/unary.hpp>
 
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <arrow/io/api.h>
 
 #include <algorithm>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <limits>
 #include <numeric>

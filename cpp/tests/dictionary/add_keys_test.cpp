@@ -24,8 +24,6 @@
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <vector>
-
 struct DictionaryAddKeysTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryAddKeysTest, StringsColumn)

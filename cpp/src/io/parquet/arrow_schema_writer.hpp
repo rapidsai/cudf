@@ -22,10 +22,9 @@
 #pragma once
 
 #include <cudf/detail/utilities/linked_column.hpp>
-#include <cudf/io/data_sink.hpp>
-#include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/detail/utils.hpp>
+#include <cudf/io/types.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/types.hpp>
 
 namespace cudf::io::parquet::detail {
 

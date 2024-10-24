@@ -17,8 +17,8 @@
 #include "groupby_test_util.hpp"
 
 #include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -27,9 +27,6 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
-
-#include <random>
 
 void test_single_agg(cudf::column_view const& keys,
                      cudf::column_view const& values,

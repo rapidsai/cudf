@@ -17,19 +17,11 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/io/detail/orc.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
-#include <cudf/io/orc_types.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
 
-#include <iostream>
-#include <random>
-#include <sstream>
 #include <string>
 #include <vector>
 

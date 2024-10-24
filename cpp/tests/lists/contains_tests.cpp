@@ -22,7 +22,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 

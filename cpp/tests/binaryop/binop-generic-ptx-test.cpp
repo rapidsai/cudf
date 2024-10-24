@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,7 +19,6 @@
 
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
-#include <tests/binaryop/util/operation.h>
 #include <tests/binaryop/util/runtime_support.h>
 
 #include <cudf/binaryop.hpp>

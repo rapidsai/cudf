@@ -20,13 +20,11 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 
 #include <algorithm>

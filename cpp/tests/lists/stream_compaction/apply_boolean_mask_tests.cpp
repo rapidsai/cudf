@@ -20,8 +20,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/lists/extract.hpp>
 #include <cudf/lists/stream_compaction.hpp>
 
 namespace cudf::test {

@@ -18,11 +18,9 @@
 
 #include "avro_common.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <map>
 #include <string>

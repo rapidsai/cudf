@@ -27,7 +27,6 @@
 #include "ipc/Schema_generated.h"
 #include "writer_impl_helpers.hpp"
 
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 

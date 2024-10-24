@@ -32,10 +32,8 @@
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <algorithm>
 #include <utility>

@@ -23,8 +23,6 @@
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <limits>
-
 struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 template <typename T>

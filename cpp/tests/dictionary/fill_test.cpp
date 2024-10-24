@@ -18,12 +18,9 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
-
-#include <vector>
 
 struct DictionaryFillTest : public cudf::test::BaseFixture {};
 

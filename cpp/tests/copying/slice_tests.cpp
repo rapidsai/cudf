@@ -22,12 +22,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/wrappers/timestamps.hpp>
 
 #include <array>
 #include <stdexcept>

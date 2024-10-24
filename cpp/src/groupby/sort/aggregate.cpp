@@ -26,7 +26,6 @@
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>

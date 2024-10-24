@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/span.hpp>

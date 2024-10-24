@@ -18,8 +18,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cuda_runtime.h>
-
 namespace cudf::detail {
 
 cudf::size_type num_multiprocessors()

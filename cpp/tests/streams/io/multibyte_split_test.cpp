@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
 
-#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 

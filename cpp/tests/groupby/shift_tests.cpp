@@ -21,7 +21,6 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
 template <typename T>

@@ -26,9 +26,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 

@@ -17,14 +17,10 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/lists/explode.hpp>
 #include <cudf/rolling.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 template <typename T>
 using fwcw = cudf::test::fixed_width_column_wrapper<T>;
