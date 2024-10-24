@@ -18,6 +18,7 @@
 
 #include "types.hpp"
 
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -57,12 +58,6 @@ struct schema_element {
   /** @brief Allows specifying the order of the columns
    */
   std::optional<std::vector<std::string>> column_order;
-
-  /** @brief Returns the size of the child_types map
-   *
-   * @return size_t The size of the child_types map
-   */
-  size_t size() const { return child_types.size(); }
 };
 
 /**
@@ -100,11 +95,11 @@ class json_reader_options {
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::variant<std::vector<data_type>,
-               std::map<std::string, data_type>,
-               std::map<std::string, schema_element>,
-               schema_element>
-    _dtypes;
+  using dtype_variant = std::variant<std::vector<data_type>,
+                                     std::map<std::string, data_type>,
+                                     std::map<std::string, schema_element>,
+                                     schema_element>;
+  dtype_variant _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -189,14 +184,7 @@ class json_reader_options {
    *
    * @returns Data types of the columns
    */
-  [[nodiscard]] std::variant<std::vector<data_type>,
-                             std::map<std::string, data_type>,
-                             std::map<std::string, schema_element>,
-                             schema_element> const&
-  get_dtypes() const
-  {
-    return _dtypes;
-  }
+  [[nodiscard]] dtype_variant const& get_dtypes() const { return _dtypes; }
 
   /**
    * @brief Returns compression format of the source.
@@ -240,7 +228,11 @@ class json_reader_options {
    */
   [[nodiscard]] size_t get_byte_range_padding() const
   {
-    auto const num_columns = std::visit([](auto const& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_columns =
+      std::visit(cudf::detail::visitor_overload{
+                   [](auto const& dtypes) { return dtypes.size(); },
+                   [](schema_element const& dtypes) { return dtypes.child_types.size(); }},
+                 _dtypes);
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
     auto const column_bytes  = 64;

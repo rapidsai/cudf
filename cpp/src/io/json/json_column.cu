@@ -415,14 +415,18 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                      "Input schema column order size mismatch with input schema child types");
       }
       // Create children columns
-      auto const& col_order = schema.has_value() and schema.value().column_order.has_value() and
+      auto const& col_order = prune_columns and schema.has_value() and
+                                  schema.value().column_order.has_value() and
                                   not schema.value().column_order->empty()
                                 ? schema.value().column_order.value()
                                 : json_col.column_order;
       for (auto const& col_name : col_order) {
         auto child_schema_element = get_child_schema(col_name);
-        auto const& found_col     = json_col.child_columns.find(col_name);
-        if (prune_columns and found_col == std::end(json_col.child_columns)) {
+        auto const found_it       = json_col.child_columns.find(col_name);
+        if (prune_columns and found_it == std::end(json_col.child_columns)) {
+          CUDF_EXPECTS(child_schema_element.has_value(),
+                       "Column name not found in input schema map, but present in column order and "
+                       "prune_columns is enabled");
           column_names.emplace_back(make_column_name_info(
             child_schema_element.value_or(schema_element{data_type{type_id::EMPTY}}), col_name));
           auto all_null_column = make_all_nulls_column(
@@ -433,8 +437,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
           child_columns.emplace_back(std::move(all_null_column));
           continue;
         }
-        column_names.emplace_back(found_col->first);
-        auto& child_col = found_col->second;
+        column_names.emplace_back(found_it->first);
+        auto& child_col = found_it->second;
         if (!prune_columns or child_schema_element.has_value()) {
           auto [child_column, names] = device_json_column_to_cudf_column(
             child_col, d_input, options, prune_columns, child_schema_element, stream, mr);
@@ -626,20 +630,20 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
         },
         [col_name](
           std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
-          return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                   ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
-                   : std::optional<schema_element>{};
+          if (auto it = user_dtypes.find(col_name); it != std::end(user_dtypes))
+            return std::optional<schema_element>{{it->second}};
+          return std::nullopt;
         },
         [col_name](std::map<std::string, schema_element> const& user_dtypes)
           -> std::optional<schema_element> {
-          return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                   ? user_dtypes.find(col_name)->second
-                   : std::optional<schema_element>{};
+          if (auto it = user_dtypes.find(col_name); it != std::end(user_dtypes)) return it->second;
+          return std::nullopt;
         },
         [col_name](schema_element const& user_dtypes) -> std::optional<schema_element> {
-          return (user_dtypes.child_types.find(col_name) != std::end(user_dtypes.child_types))
-                   ? user_dtypes.child_types.find(col_name)->second
-                   : std::optional<schema_element>{};
+          if (auto it = user_dtypes.child_types.find(col_name);
+              it != std::end(user_dtypes.child_types))
+            return it->second;
+          return std::nullopt;
         }},
       options.get_dtypes());
 #ifdef NJP_DEBUG_PRINT
@@ -663,22 +667,21 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     debug_schema_print(child_schema_element);
 #endif
 
-    auto found_col = root_struct_col.child_columns.find(col_name);
+    auto const found_it = root_struct_col.child_columns.find(col_name);
     if (options.is_enabled_prune_columns() and
-        found_col == std::end(root_struct_col.child_columns)) {
+        found_it == std::end(root_struct_col.child_columns)) {
+      CUDF_EXPECTS(child_schema_element.has_value(),
+                   "Column name not found in input schema map, but present in column order and "
+                   "prune_columns is enabled");
       // inserts empty null column
-      out_column_names.emplace_back(make_column_name_info(
-        child_schema_element.value_or(schema_element{data_type{type_id::EMPTY}}), col_name));
-      auto all_null_column = make_all_nulls_column(
-        child_schema_element.value_or(schema_element{data_type{type_id::EMPTY}}),
-        root_col_size,
-        stream,
-        mr);
+      out_column_names.emplace_back(make_column_name_info(child_schema_element.value(), col_name));
+      auto all_null_column =
+        make_all_nulls_column(child_schema_element.value(), root_col_size, stream, mr);
       out_columns.emplace_back(std::move(all_null_column));
       column_index++;
       continue;
     }
-    auto& json_col = found_col->second;
+    auto& json_col = found_it->second;
 
     if (!options.is_enabled_prune_columns() or child_schema_element.has_value()) {
       // Get this JSON column's cudf column and schema info, (modifies json_col)

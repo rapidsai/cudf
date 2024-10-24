@@ -3108,6 +3108,18 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
       EXPECT_THROW(cudf::io::read_json(in_options), cudf::logic_error);
       // Input schema column order size mismatch with input schema child types
     }
+    //// different column name in order, Error
+    {
+      cudf::io::schema_element dtype_schema{data_type{cudf::type_id::STRUCT},
+                                            {
+                                              {"a", {dtype<int32_t>()}},
+                                            },
+                                            {{"b"}}};
+      in_options.set_dtypes(dtype_schema);
+      EXPECT_THROW(cudf::io::read_json(in_options), cudf::logic_error);
+      // Column name not found in input schema map, but present in column order and
+      // prune_columns is enabled
+    }
 
     // include only one column (nested)
     {
