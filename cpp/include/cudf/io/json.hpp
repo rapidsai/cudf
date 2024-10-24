@@ -453,10 +453,9 @@ class json_reader_options {
    */
   void set_delimiter(char delimiter)
   {
-    if (!can_be_delimiter(delimiter))
-      CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument);
-    else
-      _delimiter = delimiter;
+    CUDF_EXPECTS(
+      can_be_delimiter(delimiter), "Unsupported delimiter character", std::invalid_argument);
+    _delimiter = delimiter;
   }
 
   /**
@@ -700,10 +699,7 @@ class json_reader_options_builder {
    */
   json_reader_options_builder& delimiter(char delimiter)
   {
-    if (json_reader_options::can_be_delimiter(delimiter))
-      options.set_delimiter(delimiter);
-    else
-      CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument);
+    options.set_delimiter(delimiter);
     return *this;
   }
 
