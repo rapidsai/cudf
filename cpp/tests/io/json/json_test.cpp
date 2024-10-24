@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
@@ -2973,6 +2974,24 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"true", "false", "true"}),
                                  cudf::test::debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(JsonReaderTest, LastRecordInvalid)
+{
+  std::string data = R"({"key": "1"}
+    {"key": "})";
+  std::map<std::string, cudf::io::schema_element> schema{{"key", {dtype<cudf::string_view>()}}};
+  auto opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .dtypes(schema)
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .build();
+  auto const result = cudf::io::read_json(opts);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "key");
+  cudf::test::strings_column_wrapper expected{{"1", ""}, cudf::test::iterators::nulls_at({1})};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), cudf::table_view{{expected}});
 }
 
 CUDF_TEST_PROGRAM_MAIN()
