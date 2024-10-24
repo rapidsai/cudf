@@ -1,7 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import pyarrow as pa
-import pylibcudf as plc
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 def test_ipv4_to_integers():
@@ -24,6 +25,8 @@ def test_integers_to_ipv4():
 
 def test_is_ipv4():
     arr = pa.array(["0.0.0.1", "1.2.34", "A", None])
-    result = plc.strings.convert.convert_ipv4.is_ipv4(plc.interop.from_arrow(arr))
+    result = plc.strings.convert.convert_ipv4.is_ipv4(
+        plc.interop.from_arrow(arr)
+    )
     expected = pa.array([True, False, False, None])
     assert_column_eq(result, expected)

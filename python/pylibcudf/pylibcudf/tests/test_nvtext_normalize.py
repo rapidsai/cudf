@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
@@ -32,7 +33,9 @@ def test_normalize_characters(norm_chars_input_data, do_lower):
         plc.interop.from_arrow(norm_chars_input_data),
         do_lower,
     )
-    expected = pa.array(["eaio eaio", "acenu", "acenu", " $ 24 . 08", " [ a , bb ] "])
+    expected = pa.array(
+        ["eaio eaio", "acenu", "acenu", " $ 24 . 08", " [ a , bb ] "]
+    )
     if not do_lower:
         expected = pa.array(
             ["éâîô eaio", "ĂĆĖÑÜ", "ACENU", " $ 24 . 08", " [ a , bb ] "]

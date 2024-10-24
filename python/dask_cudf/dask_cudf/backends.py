@@ -732,6 +732,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
             from dask.core import flatten
             from dask.dataframe.utils import pyarrow_strings_enabled
+
             # CudfReadParquetPyarrowFS requires import of distributed beforehand
             # (See: https://github.com/dask/dask/issues/11352)
             import distributed  # noqa: F401

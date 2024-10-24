@@ -2,7 +2,6 @@
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import (
     DEFAULT_STRUCT_TESTING_TYPE,
@@ -15,6 +14,8 @@ from utils import (
     is_string,
     metadata_from_arrow_type,
 )
+
+import pylibcudf as plc
 
 
 # TODO: consider moving this to conftest and "pairing"
@@ -69,10 +70,14 @@ def target_column(pa_type):
     elif pa.types.is_string(pa_type):
         pa_array = pa.array(["d", "e", "f", "g", "h", "i"], type=pa_type)
     elif pa.types.is_boolean(pa_type):
-        pa_array = pa.array([False, True, True, False, True, False], type=pa_type)
+        pa_array = pa.array(
+            [False, True, True, False, True, False], type=pa_type
+        )
     elif pa.types.is_list(pa_type):
         if pa_type.value_type == pa.int64():
-            pa_array = pa.array([[4], [5, 6], [7], [8], [9], [10]], type=pa_type)
+            pa_array = pa.array(
+                [[4], [5, 6], [7], [8], [9], [10]], type=pa_type
+            )
         elif (
             isinstance(pa_type.value_type, pa.ListType)
             and pa_type.value_type.value_type == pa.int64()
@@ -147,7 +152,9 @@ def source_scalar(pa_type):
         if not is_nested_struct(pa_type):
             pa_scalar = pa.scalar({"v": 1}, type=pa_type)
         else:
-            pa_scalar = pa.scalar({"a": 1, "b_struct": {"b": 1.0}}, type=pa_type)
+            pa_scalar = pa.scalar(
+                {"a": 1, "b_struct": {"b": 1.0}}, type=pa_type
+            )
     else:
         raise ValueError("Unsupported type")
     return pa_scalar, plc.interop.from_arrow(pa_scalar)
@@ -229,20 +236,25 @@ def test_scatter_table(
         plc_target_table,
     )
 
-    if pa.types.is_list(dtype := pa_target_table[0].type) or pa.types.is_struct(dtype):
+    if pa.types.is_list(
+        dtype := pa_target_table[0].type
+    ) or pa.types.is_struct(dtype):
         # pyarrow does not support scattering with list data. If and when they do,
         # replace this hardcoding with their implementation.
         with pytest.raises(pa.ArrowNotImplementedError):
             _pyarrow_boolean_mask_scatter_table(
                 pa_source_table,
-                _pyarrow_index_to_mask(pa_index_column, pa_target_table.num_rows),
+                _pyarrow_index_to_mask(
+                    pa_index_column, pa_target_table.num_rows
+                ),
                 pa_target_table,
             )
 
         if pa.types.is_list(dtype := pa_target_table[0].type):
             if is_nested_list(dtype):
                 expected = pa.table(
-                    [pa.array([[[4]], [[1]], [[2, 3]], [[3]], [[9]], [[10]]])] * 3,
+                    [pa.array([[[4]], [[1]], [[2, 3]], [[3]], [[9]], [[10]]])]
+                    * 3,
                     [""] * 3,
                 )
             else:
@@ -297,7 +309,9 @@ def test_scatter_table(
     assert_table_eq(expected, result)
 
 
-def test_scatter_table_num_col_mismatch(source_table, index_column, target_table):
+def test_scatter_table_num_col_mismatch(
+    source_table, index_column, target_table
+):
     # Number of columns in source and target must match.
     _, plc_source_table = source_table
     _, plc_index_column = index_column
@@ -317,7 +331,9 @@ def test_scatter_table_num_row_mismatch(source_table, target_table):
     with cudf_raises(ValueError):
         plc.copying.scatter(
             plc_source_table,
-            plc.interop.from_arrow(pa.array(range(plc_source_table.num_rows() * 2))),
+            plc.interop.from_arrow(
+                pa.array(range(plc_source_table.num_rows() * 2))
+            ),
             plc_target_table,
         )
 
@@ -328,7 +344,9 @@ def test_scatter_table_map_has_nulls(source_table, target_table):
     with cudf_raises(ValueError):
         plc.copying.scatter(
             plc_source_table,
-            plc.interop.from_arrow(pa.array([None] * plc_source_table.num_rows())),
+            plc.interop.from_arrow(
+                pa.array([None] * plc_source_table.num_rows())
+            ),
             plc_target_table,
         )
 
@@ -369,7 +387,9 @@ def test_scatter_scalars(
 
     expected = _pyarrow_boolean_mask_scatter_table(
         [pa_source_scalar] * plc_target_table.num_columns(),
-        pc.invert(_pyarrow_index_to_mask(pa_index_column, pa_target_table.num_rows)),
+        pc.invert(
+            _pyarrow_index_to_mask(pa_index_column, pa_target_table.num_rows)
+        ),
         pa_target_table,
     )
 
@@ -442,7 +462,9 @@ def test_allocate_like(input_column, size):
             size=size,
         )
         assert result.type() == plc_input_column.type()
-        assert result.size() == (plc_input_column.size() if size is None else size)
+        assert result.size() == (
+            plc_input_column.size() if size is None else size
+        )
     else:
         with pytest.raises(TypeError):
             plc.copying.allocate_like(
@@ -452,7 +474,9 @@ def test_allocate_like(input_column, size):
             )
 
 
-def test_copy_range_in_place(input_column, mutable_target_column, target_column):
+def test_copy_range_in_place(
+    input_column, mutable_target_column, target_column
+):
     pa_input_column, plc_input_column = input_column
 
     pa_target_column, _ = target_column
@@ -476,13 +500,17 @@ def test_copy_range_in_place(input_column, mutable_target_column, target_column)
         )
         expected = _pyarrow_boolean_mask_scatter_column(
             pa_input_column,
-            _pyarrow_index_to_mask(range(len(pa_input_column)), len(pa_target_column)),
+            _pyarrow_index_to_mask(
+                range(len(pa_input_column)), len(pa_target_column)
+            ),
             pa_target_column,
         )
         assert_column_eq(expected, mutable_target_column)
 
 
-def test_copy_range_in_place_out_of_bounds(input_column, mutable_target_column):
+def test_copy_range_in_place_out_of_bounds(
+    input_column, mutable_target_column
+):
     _, plc_input_column = input_column
 
     if plc.traits.is_fixed_width(mutable_target_column.type()):
@@ -514,7 +542,9 @@ def test_copy_range_in_place_different_types(mutable_target_column):
         )
 
 
-def test_copy_range_in_place_null_mismatch(input_column, mutable_target_column):
+def test_copy_range_in_place_null_mismatch(
+    input_column, mutable_target_column
+):
     pa_input_column, _ = input_column
 
     if plc.traits.is_fixed_width(mutable_target_column.type()):
@@ -537,7 +567,9 @@ def test_copy_range_in_place_null_mismatch(input_column, mutable_target_column):
 def test_copy_range(input_column, target_column):
     pa_input_column, plc_input_column = input_column
     pa_target_column, plc_target_column = target_column
-    if plc.traits.is_fixed_width(dtype := plc_target_column.type()) or is_string(dtype):
+    if plc.traits.is_fixed_width(
+        dtype := plc_target_column.type()
+    ) or is_string(dtype):
         result = plc.copying.copy_range(
             plc_input_column,
             plc_target_column,
@@ -547,7 +579,9 @@ def test_copy_range(input_column, target_column):
         )
         expected = _pyarrow_boolean_mask_scatter_column(
             pa_input_column,
-            _pyarrow_index_to_mask(range(len(pa_input_column)), len(pa_target_column)),
+            _pyarrow_index_to_mask(
+                range(len(pa_input_column)), len(pa_target_column)
+            ),
             pa_target_column,
         )
         assert_column_eq(expected, result)
@@ -598,7 +632,9 @@ def test_shift(target_column, source_scalar):
     pa_source_scalar, plc_source_scalar = source_scalar
     pa_target_column, plc_target_column = target_column
     shift = 2
-    if plc.traits.is_fixed_width(dtype := plc_target_column.type()) or is_string(dtype):
+    if plc.traits.is_fixed_width(
+        dtype := plc_target_column.type()
+    ) or is_string(dtype):
         result = plc.copying.shift(plc_target_column, shift, plc_source_scalar)
         expected = pa.concat_arrays(
             [pa.array([pa_source_scalar] * shift), pa_target_column[:-shift]]
@@ -815,7 +851,9 @@ def test_boolean_mask_scatter_from_table(
         plc_mask,
     )
 
-    if pa.types.is_list(dtype := pa_target_table[0].type) or pa.types.is_struct(dtype):
+    if pa.types.is_list(
+        dtype := pa_target_table[0].type
+    ) or pa.types.is_struct(dtype):
         # pyarrow does not support scattering with list data. If and when they do,
         # replace this hardcoding with their implementation.
         with pytest.raises(pa.ArrowNotImplementedError):
@@ -826,7 +864,12 @@ def test_boolean_mask_scatter_from_table(
         if pa.types.is_list(dtype := pa_target_table[0].type):
             if is_nested_list(dtype):
                 expected = pa.table(
-                    [pa.array([[[1]], [[5, 6]], [[2, 3]], [[8]], [[3]], [[10]]])] * 3,
+                    [
+                        pa.array(
+                            [[[1]], [[5, 6]], [[2, 3]], [[8]], [[3]], [[10]]]
+                        )
+                    ]
+                    * 3,
                     [""] * 3,
                 )
             else:
@@ -908,7 +951,9 @@ def test_boolean_mask_scatter_from_wrong_num_true(source_table, target_table):
         plc.copying.boolean_mask_scatter(
             plc.Table(plc_source_table.columns()[:2]),
             plc_target_table,
-            plc.interop.from_arrow(pa.array([True, False] * 2 + [False, False])),
+            plc.interop.from_arrow(
+                pa.array([True, False] * 2 + [False, False])
+            ),
         )
 
 

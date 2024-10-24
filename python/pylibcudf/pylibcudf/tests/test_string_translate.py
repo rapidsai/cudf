@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture
@@ -52,7 +53,10 @@ def test_filter_characters(data_col, trans_table, keep):
         else:
             new_val = ""
             for ch in val:
-                if ch in flat_trans and keep == plc.strings.translate.FilterType.KEEP:
+                if (
+                    ch in flat_trans
+                    and keep == plc.strings.translate.FilterType.KEEP
+                ):
                     new_val += ch
                 elif (
                     ch not in flat_trans

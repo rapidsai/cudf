@@ -1,13 +1,16 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
 def plc_col():
-    arr = pa.array(['{"foo": {"bar": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]', None])
+    arr = pa.array(
+        ['{"foo": {"bar": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]', None]
+    )
     return plc.interop.from_arrow(arr)
 
 

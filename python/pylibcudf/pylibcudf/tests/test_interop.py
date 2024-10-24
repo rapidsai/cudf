@@ -1,8 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 
 def test_list_dtype_roundtrip():
@@ -14,7 +15,9 @@ def test_list_dtype_roundtrip():
     with pytest.raises(ValueError):
         plc.interop.to_arrow(plc_type)
 
-    arrow_type = plc.interop.to_arrow(plc_type, value_type=list_type.value_type)
+    arrow_type = plc.interop.to_arrow(
+        plc_type, value_type=list_type.value_type
+    )
     assert arrow_type == list_type
 
 
@@ -43,7 +46,9 @@ def test_decimal128_roundtrip():
     with pytest.raises(ValueError):
         plc.interop.to_arrow(plc_type)
 
-    arrow_type = plc.interop.to_arrow(plc_type, precision=decimal_type.precision)
+    arrow_type = plc.interop.to_arrow(
+        plc_type, precision=decimal_type.precision
+    )
     assert arrow_type == decimal_type
 
 

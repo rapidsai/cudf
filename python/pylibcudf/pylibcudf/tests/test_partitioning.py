@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_table_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
@@ -31,7 +32,9 @@ def test_partition(partitioning_data):
 
 def test_hash_partition(partitioning_data):
     raw_data, plc_table, pa_table = partitioning_data
-    result, result_offsets = plc.partitioning.hash_partition(plc_table, [0, 1], 1)
+    result, result_offsets = plc.partitioning.hash_partition(
+        plc_table, [0, 1], 1
+    )
     expected = pa.table(
         list(raw_data.values()),
         schema=pa.schema([pa.field("", pa.int64(), nullable=False)] * 3),
@@ -42,7 +45,9 @@ def test_hash_partition(partitioning_data):
 
 def test_round_robin_partition(partitioning_data):
     raw_data, plc_table, pa_table = partitioning_data
-    result, result_offsets = plc.partitioning.round_robin_partition(plc_table, 1, 0)
+    result, result_offsets = plc.partitioning.round_robin_partition(
+        plc_table, 1, 0
+    )
     expected = pa.table(
         list(raw_data.values()),
         schema=pa.schema([pa.field("", pa.int64(), nullable=False)] * 3),

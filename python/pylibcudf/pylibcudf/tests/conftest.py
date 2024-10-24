@@ -8,8 +8,9 @@ import sys
 
 import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
@@ -99,7 +100,9 @@ def table_data(request):
             # recurse to get vals for children
             rand_arrs = []
             for i in range(typ.num_fields):
-                rand_arr, grandchild_colnames = _generate_nested_data(typ.field(i).type)
+                rand_arr, grandchild_colnames = _generate_nested_data(
+                    typ.field(i).type
+                )
                 rand_arrs.append(rand_arr)
                 child_colnames.append((typ.field(i).name, grandchild_colnames))
 
@@ -116,13 +119,17 @@ def table_data(request):
                 child_colnames.append(("", grandchild_colnames))
             else:
                 # typ is scalar type
-                pa_array = pa.array(_get_vals_of_type(typ, nrows, seed=seed), type=typ)
+                pa_array = pa.array(
+                    _get_vals_of_type(typ, nrows, seed=seed), type=typ
+                )
             return pa_array, child_colnames
 
         if isinstance(typ, (pa.ListType, pa.StructType)):
             rand_arr, child_colnames = _generate_nested_data(typ)
         else:
-            rand_arr = pa.array(_get_vals_of_type(typ, nrows, seed=seed), type=typ)
+            rand_arr = pa.array(
+                _get_vals_of_type(typ, nrows, seed=seed), type=typ
+            )
 
         table_dict[f"col_{typ}"] = rand_arr
         colnames.append((f"col_{typ}", child_colnames))
@@ -210,7 +217,9 @@ def compression_type(request):
     return request.param
 
 
-@pytest.fixture(scope="session", params=[opt for opt in plc.types.Interpolation])
+@pytest.fixture(
+    scope="session", params=[opt for opt in plc.types.Interpolation]
+)
 def interp_opt(request):
     return request.param
 

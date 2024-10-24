@@ -4,9 +4,10 @@ import math
 
 import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 def idfn(param):
@@ -85,7 +86,9 @@ def tests(request, nulls):
         plc.interop.from_arrow(pa_lhs),
         plc.interop.from_arrow(pa_rhs),
     )
-    plc_dtype = plc.interop.from_arrow(pa.from_numpy_dtype(np.dtype(py_outtype)))
+    plc_dtype = plc.interop.from_arrow(
+        pa.from_numpy_dtype(np.dtype(py_outtype))
+    )
     return (
         pa_lhs,
         pa_rhs,

@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
@@ -28,5 +29,7 @@ def test_edit_distance_matrix(edit_distance_data):
     result = plc.nvtext.edit_distance.edit_distance_matrix(
         plc.interop.from_arrow(input_col)
     )
-    expected = pa.array([[0, 7, 4], [7, 0, 6], [4, 6, 0]], type=pa.list_(pa.int32()))
+    expected = pa.array(
+        [[0, 7, 4], [7, 0, 6], [4, 6, 0]], type=pa.list_(pa.int32())
+    )
     assert_column_eq(expected, result)

@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 data_strings = [
     "AbC",
@@ -98,7 +99,9 @@ def test_strip_right(pa_col, plc_col, pa_char, plc_char):
         type=pa.string(),
     )
 
-    got = plc.strings.strip.strip(plc_col, plc.strings.SideType.RIGHT, plc_char)
+    got = plc.strings.strip.strip(
+        plc_col, plc.strings.SideType.RIGHT, plc_char
+    )
     assert_column_eq(expected, got)
 
 

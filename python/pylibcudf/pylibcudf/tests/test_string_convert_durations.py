@@ -3,9 +3,10 @@
 from datetime import datetime, timedelta
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(
@@ -51,7 +52,9 @@ def test_to_duration(pa_duration_col, plc_duration_col, duration_type):
 
 @pytest.mark.parametrize("format", [None, "%D days %H:%M:%S"])
 def test_from_durations(format):
-    pa_array = pa.array([timedelta(days=1, hours=1, minutes=1, seconds=1), None])
+    pa_array = pa.array(
+        [timedelta(days=1, hours=1, minutes=1, seconds=1), None]
+    )
     result = plc.strings.convert.convert_durations.from_durations(
         plc.interop.from_arrow(pa_array), format
     )

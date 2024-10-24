@@ -3,15 +3,16 @@ import io
 
 import pandas as pd
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
-from pylibcudf.io.types import CompressionType
 from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
     write_source_str,
 )
+
+import pylibcudf as plc
+from pylibcudf.io.types import CompressionType
 
 # Shared kwargs to pass to make_source
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
@@ -126,7 +127,9 @@ def test_write_json_bool_opts(true_value, false_value):
 
 
 @pytest.mark.parametrize("lines", [True, False])
-def test_read_json_basic(table_data, source_or_sink, lines, text_compression_type):
+def test_read_json_basic(
+    table_data, source_or_sink, lines, text_compression_type
+):
     compression_type = text_compression_type
 
     # can't compress non-binary data with pandas
@@ -211,7 +214,9 @@ def test_read_json_dtypes(table_data, source_or_sink):
             return typ_child_types
 
         plc_type = plc.interop.from_arrow(field.type)
-        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(field.type):
+        if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
+            field.type
+        ):
             plc_type = plc.interop.from_arrow(pa.float64())
             field = field.with_type(pa.float64())
 
@@ -221,7 +226,9 @@ def test_read_json_dtypes(table_data, source_or_sink):
 
     new_schema = pa.schema(new_fields)
 
-    res = plc.io.json.read_json(plc.io.SourceInfo([source]), dtypes=dtypes, lines=True)
+    res = plc.io.json.read_json(
+        plc.io.SourceInfo([source]), dtypes=dtypes, lines=True
+    )
     new_table = pa_table.cast(new_schema)
 
     # orient=records is lossy

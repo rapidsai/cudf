@@ -5,7 +5,9 @@ import pylibcudf as plc
 
 def test_is_relationally_comparable():
     assert plc.traits.is_relationally_comparable(plc.DataType(plc.TypeId.INT8))
-    assert not plc.traits.is_relationally_comparable(plc.DataType(plc.TypeId.LIST))
+    assert not plc.traits.is_relationally_comparable(
+        plc.DataType(plc.TypeId.LIST)
+    )
 
 
 def test_is_equality_comparable():
@@ -49,8 +51,12 @@ def test_is_boolean():
 
 
 def test_is_timestamp():
-    assert plc.traits.is_timestamp(plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS))
-    assert not plc.traits.is_timestamp(plc.DataType(plc.TypeId.DURATION_MICROSECONDS))
+    assert plc.traits.is_timestamp(
+        plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+    )
+    assert not plc.traits.is_timestamp(
+        plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+    )
 
 
 def test_is_fixed_point():
@@ -59,13 +65,19 @@ def test_is_fixed_point():
 
 
 def test_is_duration():
-    assert plc.traits.is_duration(plc.DataType(plc.TypeId.DURATION_MICROSECONDS))
-    assert not plc.traits.is_duration(plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS))
+    assert plc.traits.is_duration(
+        plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+    )
+    assert not plc.traits.is_duration(
+        plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+    )
 
 
 def test_is_chrono():
     assert plc.traits.is_chrono(plc.DataType(plc.TypeId.DURATION_MICROSECONDS))
-    assert plc.traits.is_chrono(plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS))
+    assert plc.traits.is_chrono(
+        plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+    )
     assert not plc.traits.is_chrono(plc.DataType(plc.TypeId.UINT8))
 
 

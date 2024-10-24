@@ -1,9 +1,11 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
 import rmm
+
+import pylibcudf as plc
 from pylibcudf.null_mask import MaskState
 
 

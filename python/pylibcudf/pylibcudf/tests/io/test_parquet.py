@@ -1,9 +1,11 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
-import pytest
 from pyarrow.parquet import read_table
+import pytest
+from utils import assert_table_and_meta_eq, make_source
+
+import pylibcudf as plc
 from pylibcudf.expressions import (
     ASTOperator,
     ColumnNameReference,
@@ -11,14 +13,15 @@ from pylibcudf.expressions import (
     Literal,
     Operation,
 )
-from utils import assert_table_and_meta_eq, make_source
 
 # Shared kwargs to pass to make_source
 _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 
 @pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
-def test_read_parquet_basic(table_data, binary_source_or_sink, nrows_skiprows, columns):
+def test_read_parquet_basic(
+    table_data, binary_source_or_sink, nrows_skiprows, columns
+):
     _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
 
@@ -37,7 +40,9 @@ def test_read_parquet_basic(table_data, binary_source_or_sink, nrows_skiprows, c
         pa_table = pa_table.select(columns)
 
     # Adapt to nrows/skiprows
-    pa_table = pa_table.slice(offset=skiprows, length=nrows if nrows != -1 else None)
+    pa_table = pa_table.slice(
+        offset=skiprows, length=nrows if nrows != -1 else None
+    )
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
 
@@ -92,7 +97,9 @@ def test_read_parquet_filters(
         plc.io.SourceInfo([source]), filters=plc_filters
     )
     exp = read_table(source, filters=pa_filters)
-    assert_table_and_meta_eq(exp, plc_table_w_meta, check_field_nullability=False)
+    assert_table_and_meta_eq(
+        exp, plc_table_w_meta, check_field_nullability=False
+    )
 
 
 # TODO: Test these options

@@ -1,8 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module", params=[pa.uint32(), pa.uint64()])
@@ -32,7 +33,9 @@ def test_minhash(minhash_input_data, width):
     )
     pa_result = plc.interop.to_arrow(result)
     assert all(len(got) == len(seeds) for got, s in zip(pa_result, input_arr))
-    assert pa_result.type == pa.list_(pa.field("element", seed_type, nullable=False))
+    assert pa_result.type == pa.list_(
+        pa.field("element", seed_type, nullable=False)
+    )
 
 
 def test_word_minhash(word_minhash_input_data):
@@ -47,4 +50,6 @@ def test_word_minhash(word_minhash_input_data):
     )
     pa_result = plc.interop.to_arrow(result)
     assert all(len(got) == len(seeds) for got, s in zip(pa_result, input_arr))
-    assert pa_result.type == pa.list_(pa.field("element", seed_type, nullable=False))
+    assert pa_result.type == pa.list_(
+        pa.field("element", seed_type, nullable=False)
+    )

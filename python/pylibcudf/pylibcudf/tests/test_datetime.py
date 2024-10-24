@@ -4,9 +4,10 @@ import datetime
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module", params=["s", "ms", "us", "ns"])
@@ -21,7 +22,9 @@ def datetime_column(has_nulls, request):
     ]
     if has_nulls:
         values[2] = None
-    return plc.interop.from_arrow(pa.array(values, type=pa.timestamp(request.param)))
+    return plc.interop.from_arrow(
+        pa.array(values, type=pa.timestamp(request.param))
+    )
 
 
 @pytest.fixture(
@@ -51,8 +54,8 @@ def test_extract_datetime_component(datetime_column, component):
     got = plc.datetime.extract_datetime_component(datetime_column, component)
     # libcudf produces an int16, arrow produces an int64
 
-    expect = getattr(pc, attr)(plc.interop.to_arrow(datetime_column), **kwargs).cast(
-        pa.int16()
-    )
+    expect = getattr(pc, attr)(
+        plc.interop.to_arrow(datetime_column), **kwargs
+    ).cast(pa.int16())
 
     assert_column_eq(expect, got)

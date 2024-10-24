@@ -12,6 +12,7 @@ from dask_expr._reductions import Reduction, Var
 import dask_expr._shuffle as _shuffle_module
 from dask_expr.io.io import FusedParquetIO
 from dask_expr.io.parquet import FragmentWrapper, ReadParquetPyarrowFS
+import pandas as pd
 
 from dask.dataframe.core import (
     _concat,
