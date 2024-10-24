@@ -902,6 +902,14 @@ def test_itertuples():
     assert result._fields == expected._fields
 
 
+def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
+    _, xdf = dataframe
+    xdf["b"] = xpd.IntervalIndex.from_arrays(xdf["a"], xdf["b"])
+    xdf["a"] = xdf["a"].astype("category")
+    for x in xdf.dtypes:
+        assert is_proxy_object(x)
+
+
 def test_namedagg_namedtuple():
     df = xpd.DataFrame(
         {
