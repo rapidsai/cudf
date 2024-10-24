@@ -1448,10 +1448,6 @@ void get_stack_context(device_span<SymbolT const> json_in,
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
   cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
 
-  // Sequence of stack symbols and their position in the original input (sparse representation)
-  rmm::device_uvector<StackSymbolT> stack_ops{json_in.size(), stream};
-  rmm::device_uvector<SymbolOffsetT> stack_op_indices{json_in.size(), stream};
-
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   constexpr auto max_translation_table_size =
     to_stack_op::NUM_SYMBOL_GROUPS * to_stack_op::TT_NUM_STATES;
@@ -1468,11 +1464,26 @@ void get_stack_context(device_span<SymbolT const> json_in,
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
   // of structs/lists
+  // Run FST to estimate the sizes of translated buffers
+  json_to_stack_ops_fst.Transduce(json_in.begin(),
+                                  static_cast<SymbolOffsetT>(json_in.size()),
+                                  thrust::make_discard_iterator(),
+                                  thrust::make_discard_iterator(),
+                                  d_num_stack_ops.data(),
+                                  to_stack_op::start_state,
+                                  stream);
+
+  auto stack_ops_bufsize = d_num_stack_ops.value(stream);
+  // Sequence of stack symbols and their position in the original input (sparse representation)
+  rmm::device_uvector<StackSymbolT> stack_ops{stack_ops_bufsize, stream};
+  rmm::device_uvector<SymbolOffsetT> stack_op_indices{stack_ops_bufsize, stream};
+
+  // Run bracket-brace FST to retrieve starting positions of structs and lists
   json_to_stack_ops_fst.Transduce(json_in.begin(),
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
                                   stack_op_indices.data(),
-                                  d_num_stack_ops.data(),
+                                  thrust::make_discard_iterator(),
                                   to_stack_op::start_state,
                                   stream);
 
@@ -1508,6 +1519,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   device_span<SymbolOffsetT const> token_indices,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
@@ -1643,21 +1655,28 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   // see a JSON-line delimiter as the very first item
   SymbolOffsetT const delimiter_offset =
     (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
-  rmm::device_uvector<PdaTokenT> tokens{max_token_out_count + delimiter_offset, stream, mr};
-  rmm::device_uvector<SymbolOffsetT> tokens_indices{
-    max_token_out_count + delimiter_offset, stream, mr};
 
+  // Run FST to estimate the size of output buffers
   json_to_tokens_fst.Transduce(zip_in,
                                static_cast<SymbolOffsetT>(json_in.size()),
-                               tokens.data() + delimiter_offset,
-                               tokens_indices.data() + delimiter_offset,
+                               thrust::make_discard_iterator(),
+                               thrust::make_discard_iterator(),
                                num_written_tokens.data(),
                                tokenizer_pda::start_state,
                                stream);
 
   auto const num_total_tokens = num_written_tokens.value(stream) + delimiter_offset;
-  tokens.resize(num_total_tokens, stream);
-  tokens_indices.resize(num_total_tokens, stream);
+  rmm::device_uvector<PdaTokenT> tokens{num_total_tokens, stream, mr};
+  rmm::device_uvector<SymbolOffsetT> tokens_indices{num_total_tokens, stream, mr};
+
+  // Run FST to translate the input JSON string into tokens and indices at which they occur
+  json_to_tokens_fst.Transduce(zip_in,
+                               static_cast<SymbolOffsetT>(json_in.size()),
+                               tokens.data() + delimiter_offset,
+                               tokens_indices.data() + delimiter_offset,
+                               thrust::make_discard_iterator(),
+                               tokenizer_pda::start_state,
+                               stream);
 
   if (delimiter_offset == 1) {
     tokens.set_element(0, token_t::LineEnd, stream);
