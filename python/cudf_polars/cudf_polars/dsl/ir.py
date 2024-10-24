@@ -751,7 +751,10 @@ class GroupBy(IR):
 
     def _eval_arguments(self, children: Sequence[DataFrame]) -> Sequence:
         return (
-            *(getattr(self, attr) for attr in self._non_child),
+            self.keys,
+            self.agg_requests,
+            self.maintain_order,
+            self.options,
             self.agg_infos,  # Need agg_infos
             *children,
         )
@@ -759,7 +762,6 @@ class GroupBy(IR):
     @classmethod
     def evaluate_node(
         cls,
-        schema: Schema,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
