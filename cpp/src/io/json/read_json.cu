@@ -421,10 +421,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   if (reader_opts.get_compression() == compression_type::NONE)
     return create_batched_cudf_table(sources, reader_opts, stream, mr);
 
-  CUDF_EXPECTS(reader_opts.get_compression() == compression_type::GZIP ||
-                 reader_opts.get_compression() == compression_type::ZIP ||
-                 reader_opts.get_compression() == compression_type::SNAPPY,
-               "Unsupported compression type");
   std::vector<std::unique_ptr<datasource::buffer>> compressed_buffers;
   std::vector<std::unique_ptr<datasource>> compressed_sources;
   for (size_t i = 0; i < sources.size(); i++) {

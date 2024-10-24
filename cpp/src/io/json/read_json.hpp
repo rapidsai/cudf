@@ -81,8 +81,14 @@ class compressed_host_buffer_source final : public datasource {
                                          compression_type comptype)
     : _ch_buffer{ch_buffer}, _comptype{comptype}
   {
-    _decompressed_ch_buffer_size = estimate_uncompressed_size(_comptype, _ch_buffer);
-    _decompressed_buffer.resize(0);
+    if (comptype == compression_type::GZIP || comptype == compression_type::ZIP ||
+        comptype == compression_type::SNAPPY) {
+      _decompressed_ch_buffer_size = estimate_uncompressed_size(_comptype, _ch_buffer);
+      _decompressed_buffer.resize(0);
+    } else {
+      _decompressed_buffer         = decompress(_comptype, _ch_buffer);
+      _decompressed_ch_buffer_size = _decompressed_buffer.size();
+    }
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
