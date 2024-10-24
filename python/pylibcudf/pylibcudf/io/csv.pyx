@@ -1,15 +1,21 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from cpython.buffer cimport PyBUF_READ
+from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp cimport bool
 from libcpp.map cimport map
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
 from pylibcudf.libcudf.io.csv cimport (
     csv_reader_options,
+    csv_writer_options,
     read_csv as cpp_read_csv,
+    write_csv as cpp_write_csv,
 )
+from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
     quote_style,
@@ -17,14 +23,14 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
-from pylibcudf.libcudf.io.csv cimport (
-    csv_writer_options,
-    write_csv as cpp_write_csv,
-)
-from pylibcudf.libcudf.io.data_sink cimport data_sink
-from libcpp.memory cimport unique_ptr
+
 import io
-from pylibcudf.table cimport Table
+
+from pylibcudf.libcudf.io.types cimport sink_info
+
+import codecs
+import os
+
 
 cdef tuple _process_parse_dates_hex(list cols):
     cdef vector[string] str_cols
@@ -86,6 +92,8 @@ def read_csv(
     # DataType timestamp_type = DataType(type_id.EMPTY),
 ):
     """Reads a CSV file into a :py:class:`~.types.TableWithMetadata`.
+
+    For details, see :cpp:func:`read_csv`.
 
     Parameters
     ----------
@@ -270,6 +278,28 @@ def read_csv(
     return TableWithMetadata.from_libcudf(c_result)
 
 
+# Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
+# write from cudf to any python file-like object (File/BytesIO/SocketIO etc)
+cdef cppclass iobase_data_sink(data_sink):
+    object buf
+
+    iobase_data_sink(object buf_):
+        this.buf = buf_
+
+    void host_write(const void * data, size_t size) with gil:
+        if isinstance(buf, io.StringIO):
+            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ)
+                      .tobytes().decode())
+        else:
+            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
+
+    void flush() with gil:
+        buf.flush()
+
+    size_t bytes_written() with gil:
+        return buf.tell()
+
+
 # Converts the Python sink input to libcudf IO sink_info.
 cdef sink_info make_sinks_info(
     list src, vector[unique_ptr[data_sink]] & sink
@@ -319,8 +349,17 @@ cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
     return info
 
 
+def columns_apply_na_rep(column_names, na_rep):
+    return tuple(
+        na_rep if str(col_name)=="<NA>"
+        else col_name
+        for col_name in column_names
+    )
+
+
 def write_csv(
     TableWithMetadata table,
+    *,
     object path_or_buf=None,
     str sep=",",
     str na_rep="",
@@ -330,16 +369,30 @@ def write_csv(
     bool index=True,
 ):
     """
-    Writes a :py:class:`~pylibcudf.table.Table` to JSON format.
+    Writes a :py:class:`~pylibcudf.io.types.TableWithMetadata` to CSV format.
+
+    For details, see :cpp:func:`write_csv`.
 
     Parameters
     ----------
     table : TableWithMetadata
-
+        The TableWithMetadata object containing the Table to write.
+    path_or_buf : object, default None
+        The source file-like object (eg. io.StringIO).
+    sep : str
+        Character to delimit column values.
+    na_rep : str
+        The string representation for null values.
+    header : bool, default True
+        Whether to write headers to csv. Includes the column names
+        and optionally, the index names (see ``index`` argument).
+    lineterminator : str, default '\\n'
+        The character used to determine the end of a line.
+    rows_per_chunk: int, default 8
+        The maximum number of rows to write at a time.
+    index : bool, default True
+        Whether to include index names in headers.
     """
-    cdef table_view input_table_view = table_view_from_table(
-        table, not index
-    )
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = lineterminator.encode()
@@ -375,7 +428,7 @@ def write_csv(
                         )
 
     cdef csv_writer_options options = move(
-        csv_writer_options.builder(sink_info_c, input_table_view)
+        csv_writer_options.builder(sink_info_c, table.tbl.view())
         .names(col_names)
         .na_rep(na_c)
         .include_header(include_header_c)
@@ -387,11 +440,5 @@ def write_csv(
         .build()
     )
 
-    try:
-        with nogil:
-            cpp_write_csv(options)
-    except OverflowError:
-        raise OverflowError(
-            f"Writing CSV file with chunksize={rows_per_chunk} failed. "
-            "Consider providing a smaller chunksize argument."
-        )
+    with nogil:
+        cpp_write_csv(options)
