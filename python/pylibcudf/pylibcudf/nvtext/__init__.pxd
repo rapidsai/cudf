@@ -8,6 +8,7 @@ from . cimport (
     ngrams_tokenize,
     normalize,
     replace,
+    stemmer,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "ngrams_tokenize",
     "normalize",
     "replace",
+    "stemmer",
 ]
