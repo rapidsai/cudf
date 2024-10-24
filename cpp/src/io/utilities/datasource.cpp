@@ -816,6 +816,60 @@ class host_buffer_source final : public datasource {
 };
 
 /**
+ * @brief Implementation class that wraps a GDS-enabled cuFile input object.
+ *
+ * N.B. Named `cufile_source` instead of `gds_source` as cuFile is more
+ * descriptive of the underlying implementation.
+ */
+class cufile_source : public host_source {
+ public:
+  cufile_source(std::string const& filepath, gds_datasource_params const& params)
+    : host_source(filepath), _params(params)
+  {
+    set_datasource_kind(datasource_kind::GDS);
+    _cufile_in = detail::make_cufile_input(filepath);
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
+
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return size >= _params.device_read_threshold;
+  }
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    auto const read_size = get_read_size(size, offset);
+    return _cufile_in->read_async(offset, read_size, dst, stream);
+  }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    return device_read_async(offset, size, dst, stream).get();
+  }
+
+  std::unique_ptr<datasource::buffer> device_read(size_t offset,
+                                                  size_t size,
+                                                  rmm::cuda_stream_view stream) override
+  {
+    rmm::device_buffer out_data(size, stream);
+    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    out_data.resize(read, stream);
+    return datasource::buffer::create(std::move(out_data));
+  }
+
+ private:
+  gds_datasource_params _params;                          ///< GDS parameters
+  std::unique_ptr<detail::cufile_input_impl> _cufile_in;  ///< cuFile input obj
+};
+
+/**
  * @brief Wrapper class for user implemented data sources
  *
  * Holds the user-implemented object with a non-owning pointer; The user object is not deleted
@@ -939,6 +993,18 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
         // We don't need to do any special handling for `KVIKIO` here.
       }
       return std::make_unique<kvikio_source>(filepath.c_str(), new_params);
+    }
+    case datasource_kind::GDS: {
+      gds_datasource_params new_params;
+      if (params) {
+        if (auto gds_params = std::get_if<gds_datasource_params>(&params.value())) {
+          // Copy the user-provided parameters into our local variable.
+          new_params = *gds_params;
+        } else {
+          CUDF_FAIL("Invalid parameters for GDS-based datasource.");
+        }
+      }
+      return std::make_unique<cufile_source>(filepath.c_str(), new_params);
     }
     case datasource_kind::HOST: return std::make_unique<host_source>(filepath);
     case datasource_kind::ODIRECT: {

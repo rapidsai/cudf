@@ -56,6 +56,8 @@ enum class datasource_kind {
    *
    * It supports asynchronous reads, and will use the provided CUDA stream for
    * all I/O operations when possible.
+   *
+   * @see cudf::io::kvikio_datasource_params
    */
   KVIKIO  = 0,
   DEFAULT = KVIKIO,
@@ -66,6 +68,8 @@ enum class datasource_kind {
    *
    * It supports asynchronous reads, but does not do any stream synchronization,
    * as the reads are all performed on the host.
+   *
+   * @see cudf::io::kvikio_datasource_params
    */
   KVIKIO_COMPAT,
 
@@ -73,8 +77,17 @@ enum class datasource_kind {
    * @brief Kvikio-based data source that will fail if GDS is not available.
    * Specifically, `cudf::io::datasource::create()` when called with this kind
    * of data source will throw a `cudf::logic_error` if GDS is not available.
+   *
+   * @see cudf::io::kvikio_datasource_params
    */
   KVIKIO_GDS,
+
+  /**
+   * @brief GDS-based data source that does not use Kvikio.
+   *
+   * @see cudf::io::gds_datasource_params
+   */
+  GDS,
 
   /**
    * @brief Host-based data source that does not support any device or async
@@ -239,9 +252,26 @@ struct odirect_datasource_params {
 };
 
 /**
+ * @brief Parameters for the GDS data source.
+ */
+struct gds_datasource_params {
+  /**
+   * @brief The threshold at which the data source will switch from using
+   * host-based reads to device-based (i.e. GDS) reads, if GDS is available.
+   *
+   * This parameter should represent the read size where GDS is faster than
+   * a posix read() plus the overhead of a host-to-device memcpy.
+   *
+   * Defaults to 128KB.
+   */
+  size_t device_read_threshold{128 << 10};
+};
+
+/**
  * @brief Union of parameters for different data sources.
  */
-using datasource_params = std::variant<kvikio_datasource_params, odirect_datasource_params>;
+using datasource_params =
+  std::variant<kvikio_datasource_params, odirect_datasource_params, gds_datasource_params>;
 
 /**
  * @brief Interface class for providing input data to the readers.
