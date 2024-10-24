@@ -1126,12 +1126,8 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
  * `max` of 0.
  *
  * @param tdv input tdigests. The tdigests within this column are grouped by key.
- * @param h_group_offsets a host iterator of the offsets to the start of each group. A group is
- * counted as one even when the cluster is empty in it. The offsets should have the same values as
- * the ones in `group_offsets`.
  * @param group_offsets a device iterator of the offsets to the start of each group. A group is
- * counted as one even when the cluster is empty in it. The offsets should have the same values as
- * the ones in `h_group_offsets`.
+ * counted as one even when the cluster is empty in it.
  * @param group_labels a device iterator of the the group label for each tdigest cluster including
  * empty clusters.
  * @param num_group_labels the number of unique group labels.
@@ -1142,9 +1138,8 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
  *
  * @return A column containing the merged tdigests.
  */
-template <typename HGroupOffsetIter, typename GroupOffsetIter, typename GroupLabelIter>
+template <typename GroupOffsetIter, typename GroupLabelIter>
 std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
-                                       HGroupOffsetIter h_group_offsets,
                                        GroupOffsetIter group_offsets,
                                        GroupLabelIter group_labels,
                                        size_t num_group_labels,
@@ -1313,21 +1308,13 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 
   if (input.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, mr); }
 
-  auto group_offsets_  = group_offsets_fn{input.size()};
-  auto h_group_offsets = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_offsets   = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_labels    = thrust::make_constant_iterator(0);
-  return to_tdigest_scalar(merge_tdigests(tdv,
-                                          h_group_offsets,
-                                          group_offsets,
-                                          group_labels,
-                                          input.size(),
-                                          1,
-                                          max_centroids,
-                                          stream,
-                                          mr),
-                           stream,
-                           mr);
+  auto group_offsets_ = group_offsets_fn{input.size()};
+  auto group_offsets  = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
+  auto group_labels   = thrust::make_constant_iterator(0);
+  return to_tdigest_scalar(
+    merge_tdigests(tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream, mr),
+    stream,
+    mr);
 }
 
 std::unique_ptr<column> group_tdigest(column_view const& col,
@@ -1376,16 +1363,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
     return cudf::tdigest::detail::make_empty_tdigests_column(num_groups, stream, mr);
   }
 
-  // bring group offsets back to the host
-  std::vector<size_type> h_group_offsets(group_offsets.size());
-  cudaMemcpyAsync(h_group_offsets.data(),
-                  group_offsets.begin(),
-                  sizeof(size_type) * group_offsets.size(),
-                  cudaMemcpyDefault,
-                  stream);
-
   return merge_tdigests(tdv,
-                        h_group_offsets.begin(),
                         group_offsets.data(),
                         group_labels.data(),
                         group_labels.size(),

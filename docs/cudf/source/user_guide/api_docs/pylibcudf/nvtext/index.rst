@@ -11,3 +11,4 @@ nvtext
     ngrams_tokenize
     normalize
     replace
+    stemmer

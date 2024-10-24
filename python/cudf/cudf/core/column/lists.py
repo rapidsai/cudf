@@ -11,7 +11,6 @@ import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
-from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import (
     concatenate_list_elements,
     concatenate_rows,
@@ -22,6 +21,7 @@ from cudf._lib.lists import (
     extract_element_scalar,
     index_of_column,
     index_of_scalar,
+    segmented_gather,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
