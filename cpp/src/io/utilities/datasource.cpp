@@ -457,7 +457,7 @@ class remote_file_source : public datasource {
   }
 
   /**
-   * @brief Is `url` referring to a remote file using a protocol KvikIO support?
+   * @brief Is `url` referring to a remote file supported by KvikIO?
    */
   static bool is_supported_remote_url(std::string const& url)
   {
