@@ -71,29 +71,29 @@ def test_decimal_other(data_type):
     assert arrow_type == pa.decimal128(precision, 0)
 
 
-def test_dlpack_plc_able():
+def test_round_trip_dlpack_plc_table():
     expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
     plc_table = plc.interop.from_arrow(expected)
     result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
     assert_table_eq(expected, result)
 
 
-def test_dlpack_cupy_array():
-    arr = cp.arange(3)
-    result = plc.interop.from_dlpack(arr.toDlpack())
-    expected = pa.table({"a": [0, 1, 2]})
-    assert_table_eq(expected, result)
-
-
-def test_dlpack_numpy_array():
-    arr = np.arange(3)
+@pytest.mark.parametrize("array", [np.array, cp.array])
+def test_round_trip_dlpack_array(array):
+    arr = array([1, 2, 3])
     result = plc.interop.from_dlpack(arr.__dlpack__())
-    expected = pa.table({"a": [0, 1, 2]})
+    expected = pa.table({"a": [1, 2, 3]})
     assert_table_eq(expected, result)
 
 
 def test_to_dlpack_error():
-    expected = pa.table({"a": [1, None, 3], "b": [5, 6, 7]})
-    plc_table = plc.interop.from_arrow(expected)
-    with pytest.raises(ValueError):
+    plc_table = plc.interop.from_arrow(
+        pa.table({"a": [1, None, 3], "b": [5, 6, 7]})
+    )
+    with pytest.raises(ValueError, match="Cannot create a DLPack tensor"):
         plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
+
+
+def test_from_dlpack_error():
+    with pytest.raises(ValueError, match="Invalid capsule object"):
+        plc.interop.from_dlpack(1)
