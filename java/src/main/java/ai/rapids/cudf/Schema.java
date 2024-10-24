@@ -227,6 +227,23 @@ public class Schema {
   }
 
   /**
+   * Get decimal precisions of the columns' types flattened from all levels in schema by depth-first
+   * traversal.
+   * @return An array containing decimal precision of all columns in schema.
+   */
+  public int[] getFlattenedDecimalPrecisions() {
+    flattenIfNeeded();
+    if (flattenedTypes == null) {
+      return null;
+    }
+    int[] ret = new int[flattenedTypes.length];
+    for (int i = 0; i < flattenedTypes.length; i++) {
+      ret[i] = flattenedTypes[i].getDecimalPrecision();
+    }
+    return ret;
+  }
+
+  /**
    * Get the types of the columns in schema flattened from all levels by depth-first traversal.
    * @return An array containing types of all columns in schema.
    */
