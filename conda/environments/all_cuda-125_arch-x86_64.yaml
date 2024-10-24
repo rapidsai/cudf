@@ -63,7 +63,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.8,<1.9
+- polars>=1.11,<1.12
 - pre-commit
 - pyarrow>=14.0.0,<18.0.0a0
 - pydata-sphinx-theme!=0.14.2
