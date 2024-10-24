@@ -563,16 +563,20 @@ class column_name_reference : public expression {
  */
 class tree {
  public:
-  tree()                       = default;
+  /**
+   * @brief construct an empty ast tree
+   */
+  tree()                  = default;
+  tree(tree&&)            = default;
+  tree& operator=(tree&&) = default;
+  ~tree()                 = default;
+
+  // the tree is not copyable
   tree(tree const&)            = delete;
-  tree(tree&&)                 = default;
   tree& operator=(tree const&) = delete;
-  tree& operator=(tree&&)      = default;
-  ~tree()                      = default;
 
   /**
   @brief Add an expression to the AST tree
-  @param expr AST expression to be added
   @param args Arguments to use to construct the ast expression
   @returns a reference to the added expression
  */
@@ -594,16 +598,37 @@ class tree {
     return emplace<Expr>(std::move(expr));
   }
 
+  /**
+  @brief get the first expression in the tree
+   */
   expression const& front() const { return *expressions.front(); }
 
+  /**
+  @brief get the last expression in the tree
+   */
   expression const& back() const { return *expressions.back(); }
 
+  /**
+  @brief get the number of expressions added to the tree
+   */
   size_t size() const { return expressions.size(); }
 
+  /**
+  @brief get the expression at a checked index in the tree
+  @returns the expression at the specified index
+   */
   expression const& at(size_t index) { return *expressions.at(index); }
 
+  /**
+  @brief get the expression at an unchecked index in the tree
+  @returns the expression at the specified index
+   */
   expression const& operator[](size_t index) const { return *expressions[index]; }
 
+  /**
+  @brief get an immutable span to the expressions in the tree
+  @returns all expressions added to the tree
+   */
   cudf::host_span<std::unique_ptr<expression> const> get_expressions() const { return expressions; }
 
  private:
