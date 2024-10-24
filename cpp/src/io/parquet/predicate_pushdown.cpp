@@ -454,15 +454,18 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");
 
-  auto num_bitmasks = num_bitmask_words(predicate.size());
-  std::vector<bitmask_type> host_bitmask(num_bitmasks, ~bitmask_type{0});
-  if (predicate.nullable()) {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(host_bitmask.data(),
-                                  predicate.null_mask(),
-                                  num_bitmasks * sizeof(bitmask_type),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-  }
+  auto const host_bitmask = [&] {
+    auto const num_bitmasks = num_bitmask_words(predicate.size());
+    if (predicate.nullable()) {
+      return cudf::detail::make_host_vector_sync(
+        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
+    } else {
+      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
+      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
+      return bitmask;
+    }
+  }();
+
   auto validity_it = cudf::detail::make_counting_transform_iterator(
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 

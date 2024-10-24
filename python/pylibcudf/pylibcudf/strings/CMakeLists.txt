@@ -18,6 +18,7 @@ set(cython_sources
     case.pyx
     char_types.pyx
     contains.pyx
+    combine.pyx
     extract.pyx
     find.pyx
     find_multiple.pyx
@@ -27,6 +28,7 @@ set(cython_sources
     regex_program.pyx
     repeat.pyx
     replace.pyx
+    replace_re.pyx
     side_type.pyx
     slice.pyx
     strip.pyx
