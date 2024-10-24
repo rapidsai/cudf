@@ -618,8 +618,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
   constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preprocess_block_size>();
 
   // the level stream decoders
-  __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
-  __shared__ rle_run<level_t> rep_runs[rle_run_buffer_size];
+  __shared__ rle_run def_runs[rle_run_buffer_size];
+  __shared__ rle_run rep_runs[rle_run_buffer_size];
   rle_stream<level_t, preprocess_block_size, preproc_buf_size>
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 

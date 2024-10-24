@@ -89,6 +89,7 @@ void BM_parq_write_io_compression(
 {
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                              static_cast<int32_t>(data_type::FLOAT),
+                                             static_cast<int32_t>(data_type::BOOL8),
                                              static_cast<int32_t>(data_type::DECIMAL),
                                              static_cast<int32_t>(data_type::TIMESTAMP),
                                              static_cast<int32_t>(data_type::DURATION),
@@ -143,6 +144,7 @@ void BM_parq_write_varying_options(
 
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                              static_cast<int32_t>(data_type::FLOAT),
+                                             static_cast<int32_t>(data_type::BOOL8),
                                              static_cast<int32_t>(data_type::DECIMAL),
                                              static_cast<int32_t>(data_type::TIMESTAMP),
                                              static_cast<int32_t>(data_type::DURATION),
@@ -181,6 +183,7 @@ void BM_parq_write_varying_options(
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::FLOAT,
+                                            data_type::BOOL8,
                                             data_type::DECIMAL,
                                             data_type::TIMESTAMP,
                                             data_type::DURATION,
