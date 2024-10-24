@@ -42,15 +42,27 @@ TEST_F(MinHashTest, Basic)
                                         "",
                                         "doc 3",
                                         "d",
-                                        "The quick brown fox jumpéd over the lazy brown dog."},
+                                        "The quick brown fox jumpéd over the lazy brown dog.",
+                                        "line eight",
+                                        "line nine",
+                                        "line ten"},
                                        validity);
 
   auto view = cudf::strings_column_view(input);
 
   auto results = nvtext::minhash(view);
 
-  auto expected = cudf::test::fixed_width_column_wrapper<uint32_t>(
-    {1207251914u, 0u, 21141582u, 0u, 1207251914u, 655955059u, 86520422u}, validity);
+  auto expected = cudf::test::fixed_width_column_wrapper<uint32_t>({1207251914u,
+                                                                    0u,
+                                                                    21141582u,
+                                                                    0u,
+                                                                    1207251914u,
+                                                                    655955059u,
+                                                                    86520422u,
+                                                                    304329233u,
+                                                                    640477688u,
+                                                                    640477688u},
+                                                                   validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   auto results64  = nvtext::minhash64(view);
@@ -60,7 +72,10 @@ TEST_F(MinHashTest, Basic)
                                                                       0ul,
                                                                       13145552576991307582ul,
                                                                       14660046701545912182ul,
-                                                                      398062025280761388ul},
+                                                                      398062025280761388ul,
+                                                                      1273320923074904938ul,
+                                                                      3456065052701055601ul,
+                                                                      10664519708968191209ul},
                                                                      validity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
@@ -82,7 +97,12 @@ TEST_F(MinHashTest, MultiSeed)
                                         "this is doc 2",
                                         "doc 3",
                                         "d",
-                                        "The quick brown fox jumpéd over the lazy brown dog."});
+                                        "The quick brown fox jumpéd over the lazy brown dog.",
+                                        "line six",
+                                        "line seven",
+                                        "line eight",
+                                        "line nine",
+                                        "line ten"});
 
   auto view = cudf::strings_column_view(input);
 
@@ -95,7 +115,12 @@ TEST_F(MinHashTest, MultiSeed)
                 LCW{  21141582u,  580916568u, 1258052021u},
                 LCW{1207251914u,  943567174u, 1109272887u},
                 LCW{ 655955059u,  488346356u, 2394664816u},
-                LCW{  86520422u,  236622901u,  102546228u}});
+                LCW{  86520422u,  236622901u,  102546228u},
+                LCW{ 640477688u,  198451716u,  136303992u},
+                LCW{ 640477688u,  198451716u,  577802054u},
+                LCW{ 304329233u,  198451716u,  714941560u},
+                LCW{ 640477688u,  198451716u,  261342259u},
+                LCW{ 640477688u,  198451716u,  139988887u}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
@@ -104,11 +129,16 @@ TEST_F(MinHashTest, MultiSeed)
 
   using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
   // clang-format off
-  LCW64 expected64({LCW64{  774489391575805754ul, 10435654231793485448ul, 1188598072697676120ul},
-                    LCW64{ 3232308021562742685ul,  4445611509348165860ul, 1188598072697676120ul},
-                    LCW64{13145552576991307582ul,  6846192680998069919ul, 1188598072697676120ul},
+  LCW64 expected64({LCW64{  774489391575805754ul, 10435654231793485448ul,  1188598072697676120ul},
+                    LCW64{ 3232308021562742685ul,  4445611509348165860ul,  1188598072697676120ul},
+                    LCW64{13145552576991307582ul,  6846192680998069919ul,  1188598072697676120ul},
                     LCW64{14660046701545912182ul, 17106501326045553694ul, 17713478494106035784ul},
-                    LCW64{  398062025280761388ul,   377720198157450084ul,  984941365662009329ul}});
+                    LCW64{  398062025280761388ul,   377720198157450084ul,   984941365662009329ul},
+                    LCW64{ 2837259098848821044ul,   650799815433771163ul,  2428991957842356245ul},
+                    LCW64{ 2105419906076957667ul,   650799815433771163ul,  2428991957842356245ul},
+                    LCW64{ 1273320923074904938ul,   650799815433771163ul,  2428991957842356245ul},
+                    LCW64{ 3456065052701055601ul,   650799815433771163ul,  2428991957842356245ul},
+                    LCW64{10664519708968191209ul,   650799815433771163ul,  2428991957842356245ul}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
@@ -136,6 +166,101 @@ TEST_F(MinHashTest, MultiSeedWithNullInputRow)
                     LCW64{0ul, 0ul},
                     LCW64{2717781266371273264ul, 6977325820868387259ul}},
                    validity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
+}
+
+TEST_F(MinHashTest, Permuted)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"doc 1",
+                                        "this is doc 2",
+                                        "doc 3",
+                                        "d",
+                                        "The quick brown fox jumpéd over the lazy brown dog.",
+                                        "line six",
+                                        "line seven",
+                                        "line eight",
+                                        "line nine",
+                                        "line ten"});
+
+  auto view = cudf::strings_column_view(input);
+
+  auto first  = thrust::counting_iterator<uint32_t>(10);
+  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto results =
+    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
+
+  using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
+  // clang-format off
+  LCW32 expected({
+    LCW32{1392101586u,  394869177u,  811528444u},
+    LCW32{ 211415830u,  187088503u,  130291444u},
+    LCW32{2098117052u,  394869177u,  799753544u},
+    LCW32{2264583304u, 2920538364u, 3576493424u},
+    LCW32{ 253327882u,   41747273u,  302030804u},
+    LCW32{2109809594u, 1017470651u,  326988172u},
+    LCW32{1303819864u,  850676747u,  147107852u},
+    LCW32{ 736021564u,  720812292u, 1405158760u},
+    LCW32{ 902780242u,  134064807u, 1613944636u},
+    LCW32{ 547084870u, 1748895564u,  656501844u}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto params64  = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 = nvtext::minhash64_permuted(
+    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
+
+  using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
+  // clang-format off
+  LCW64 expected64({
+    LCW64{ 827364888116975697ul, 1601854279692781452ul,  70500662054893256ul},
+    LCW64{  18312093741021833ul,  133793446674258329ul,  21974512489226198ul},
+    LCW64{  22474244732520567ul, 1638811775655358395ul, 949306297364502264ul},
+    LCW64{1332357434996402861ul, 2157346081260151330ul, 676491718310205848ul},
+    LCW64{  65816830624808020ul,   43323600380520789ul,  63511816333816345ul},
+    LCW64{ 629657184954525200ul,   49741036507643002ul,  97466271004074331ul},
+    LCW64{ 301611977846331113ul,  101188874709594830ul,  97466271004074331ul},
+    LCW64{ 121498891461700668ul,  171065800427907402ul,  97466271004074331ul},
+    LCW64{  54617739511834072ul,  231454301607238929ul,  97466271004074331ul},
+    LCW64{ 576418665851990314ul,  231454301607238929ul,  97466271004074331ul}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
+}
+
+TEST_F(MinHashTest, PermutedWide)
+{
+  std::string const small(2 << 10, 'x');  // below wide_string_threshold
+  std::string const wide(2 << 19, 'y');   // above wide_string_threshold
+  auto input = cudf::test::strings_column_wrapper({small, wide});
+  auto view  = cudf::strings_column_view(input);
+
+  auto first  = thrust::counting_iterator<uint32_t>(20);
+  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto results =
+    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
+
+  using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
+  // clang-format off
+  LCW32 expected({
+    LCW32{1731998032u,  315359380u, 3193688024u},
+    LCW32{1293098788u, 2860992281u,  133918478u}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto params64  = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 = nvtext::minhash64_permuted(
+    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
+
+  using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
+  // clang-format off
+   LCW64 expected64({
+     LCW64{1818322427062143853ul, 641024893347719371ul, 1769570368846988848ul},
+     LCW64{1389920339306667795ul, 421787002125838902ul, 1759496674158703968ul}
+   });
+  // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
 

@@ -5348,6 +5348,25 @@ class StringMethods(ColumnMethods):
             libstrings.minhash(self._column, seeds_column, width)
         )
 
+    def minhash_permuted(
+        self, seed: np.uint32, a: ColumnLike, b: ColumnLike, width: int = 4
+    ) -> SeriesOrIndex:
+        a_column = column.as_column(a)
+        if a_column.dtype != np.uint32:
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(a)}"
+            )
+        b_column = column.as_column(b)
+        if b_column.dtype != np.uint32:
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(b)}"
+            )
+        return self._return_or_inplace(
+            libstrings.minhash_permuted(
+                self._column, seed, a_column, b_column, width
+            )
+        )
+
     def minhash64(
         self, seeds: ColumnLike | None = None, width: int = 4
     ) -> SeriesOrIndex:
@@ -5386,6 +5405,25 @@ class StringMethods(ColumnMethods):
                 )
         return self._return_or_inplace(
             libstrings.minhash64(self._column, seeds_column, width)
+        )
+
+    def minhash64_permuted(
+        self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int = 4
+    ) -> SeriesOrIndex:
+        a_column = column.as_column(a)
+        if a_column.dtype != np.uint64:
+            raise ValueError(
+                f"Expecting a Series with dtype uint64, got {type(a)}"
+            )
+        b_column = column.as_column(b)
+        if b_column.dtype != np.uint64:
+            raise ValueError(
+                f"Expecting a Series with dtype uint64, got {type(b)}"
+            )
+        return self._return_or_inplace(
+            libstrings.minhash64_permuted(
+                self._column, seed, a_column, b_column, width
+            )
         )
 
     def word_minhash(self, seeds: ColumnLike | None = None) -> SeriesOrIndex:
