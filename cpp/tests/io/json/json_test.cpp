@@ -2991,14 +2991,9 @@ TEST_F(JsonReaderTest, LastRecordInvalid)
       .build();
   auto const result = cudf::io::read_json(opts);
 
-  EXPECT_EQ(result.tbl->num_columns(), 1);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
   EXPECT_EQ(result.metadata.schema_info[0].name, "key");
-  auto const result_view = result.tbl->view().column(0);
-
-  EXPECT_EQ(result.tbl->num_rows(), 2);
   cudf::test::strings_column_wrapper expected{{"1", ""}, cudf::test::iterators::nulls_at({1})};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view, expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), cudf::table_view{{expected}});
 }
 
 TEST_F(JsonReaderTest, PreprocessAndNullifyEmptyRows)
