@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include "../comp/io_uncomp.hpp"
-
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
