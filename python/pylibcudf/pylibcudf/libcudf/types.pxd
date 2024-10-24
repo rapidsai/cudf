@@ -70,18 +70,19 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         TIMESTAMP_MILLISECONDS
         TIMESTAMP_MICROSECONDS
         TIMESTAMP_NANOSECONDS
-        DICTIONARY32
-        STRING
-        LIST
-        STRUCT
-        NUM_TYPE_IDS
+        DURATION_DAYS
         DURATION_SECONDS
         DURATION_MILLISECONDS
         DURATION_MICROSECONDS
         DURATION_NANOSECONDS
+        DICTIONARY32
+        STRING
+        LIST
         DECIMAL32
         DECIMAL64
         DECIMAL128
+        STRUCT
+        NUM_TYPE_IDS
 
     cdef cppclass data_type:
         data_type() except +
