@@ -47,6 +47,42 @@
 #include <limits>
 #include <numeric>
 
+namespace biubiu {
+class nvtx_event_attr {
+ public:
+  nvtx_event_attr(const nvtxStringHandle_t string_handle, uint32_t color)
+  {
+    std::memset(&_attr, 0, NVTX_EVENT_ATTRIB_STRUCT_SIZE);
+    _attr.version            = NVTX_VERSION;
+    _attr.size               = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+    _attr.colorType          = nvtxColorType_t::NVTX_COLOR_ARGB;
+    _attr.color              = color;
+    _attr.messageType        = nvtxMessageType_t::NVTX_MESSAGE_TYPE_REGISTERED;
+    _attr.message.registered = string_handle;
+  }
+
+  nvtxEventAttributes_t& get() { return _attr; }
+
+ private:
+  nvtxEventAttributes_t _attr;
+};
+
+}  // namespace biubiu
+
+#define GET_EVENT_ATTR(range_name, color)                                                     \
+  [](const char* range_name_var, uint32_t color_var) -> biubiu::nvtx_event_attr& {            \
+    static auto* string_handle =                                                              \
+      nvtxDomainRegisterString(::nvtx3::domain::get<cudf::libcudf_domain>(), range_name_var); \
+    static biubiu::nvtx_event_attr event_attr(string_handle, color_var);                      \
+    return event_attr;                                                                        \
+  }(range_name, color)
+
+#define BIU_RANGE_PUSH(range_name)                                    \
+  nvtxDomainRangePushEx(::nvtx3::domain::get<cudf::libcudf_domain>(), \
+                        &GET_EVENT_ATTR(range_name, 0xffbf00).get());
+
+#define BIU_RANGE_POP() nvtxDomainRangePop(::nvtx3::domain::get<cudf::libcudf_domain>());
+
 namespace cudf::io::parquet::detail {
 namespace {
 
@@ -296,6 +332,8 @@ void generate_depth_remappings(
 [[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
                                         rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   size_t total_pages = 0;
 
   kernel_error error_code(stream);
@@ -326,6 +364,8 @@ void generate_depth_remappings(
 [[nodiscard]] size_t count_page_headers_with_pgidx(
   cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   size_t total_pages = 0;
   for (auto& chunk : chunks) {
     CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
@@ -968,6 +1008,8 @@ void reader::impl::allocate_level_decode_space()
 
 std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
 {
+  CUDF_FUNC_RANGE();
+
   auto const& row_groups_info = _pass_itm_data->row_groups;
 
   auto& raw_page_data = _pass_itm_data->raw_page_data;
@@ -1032,6 +1074,8 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
 
 void reader::impl::read_compressed_data()
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass = *_pass_itm_data;
 
   // This function should never be called if `num_rows == 0`.
@@ -1265,6 +1309,8 @@ struct update_pass_num_rows {
 
 void reader::impl::preprocess_file(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   CUDF_EXPECTS(!_file_preprocessed, "Attempted to preprocess file more than once");
 
   // if filter is not empty, then create output types as vector and pass for filtering.
