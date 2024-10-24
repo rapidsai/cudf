@@ -224,9 +224,9 @@ enum class decode_kernel_mask {
   FIXED_WIDTH_NO_DICT_LIST   = (1 << 13),  // Run decode kernel for fixed width non-dictionary pages
   BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST =
     (1 << 14),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data for fixed width lists
-  BOOLEAN                    = (1 << 15),  // Run decode kernel for boolean data
-  BOOLEAN_NESTED             = (1 << 16),  // Run decode kernel for nested boolean data
-  BOOLEAN_LIST               = (1 << 17),  // Run decode kernel for list boolean data
+  BOOLEAN        = (1 << 15),  // Run decode kernel for boolean data
+  BOOLEAN_NESTED = (1 << 16),  // Run decode kernel for nested boolean data
+  BOOLEAN_LIST   = (1 << 17),  // Run decode kernel for list boolean data
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -942,6 +942,7 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
+ * @param[in] is_list Whether or not the data contains list data.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -951,6 +952,7 @@ void DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> pages,
                            size_t min_row,
                            int level_type_size,
                            bool has_nesting,
+                           bool is_list,
                            kernel_error::pointer error_code,
                            rmm::cuda_stream_view stream);
 

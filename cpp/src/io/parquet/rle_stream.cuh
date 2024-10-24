@@ -216,7 +216,7 @@ struct rle_stream {
     decode_index = -1;  // signals the first iteration. Nothing to decode.
   }
 
-  __device__ inline int get_rle_run_info(rle_run<level_t>& run)
+  __device__ inline int get_rle_run_info(rle_run& run)
   {
     run.start     = cur;
     run.level_run = get_vlq32(run.start, end);
@@ -382,7 +382,7 @@ struct rle_stream {
     // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
     // the first time
     while (cur < end) {
-      rle_run<level_t> run;
+      rle_run run;
       int run_bytes = get_rle_run_info(run);
 
       if ((output_pos + run.size) > target_count) {

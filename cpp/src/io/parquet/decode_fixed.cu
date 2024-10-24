@@ -892,10 +892,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            kernel_error::pointer error_code)
 {
   constexpr bool has_dict_t = (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) ||
-                              (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) || 
+                              (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
                               (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST);
   constexpr bool has_bools_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN) ||
-                               (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) || 
+                               (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
                                (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST);
   constexpr bool has_nesting_t =
     (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
@@ -948,12 +948,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // shared buffer. all shared memory is suballocated out of here
   constexpr int rle_run_buffer_bytes =
     cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run), size_t{16});
-  constexpr int shared_buf_size = rle_run_buffer_bytes * (int(has_dict_t) + int(has_bools_t) + int(has_lists_t) + 1);
+  constexpr int shared_buf_size =
+    rle_run_buffer_bytes * (int(has_dict_t) + int(has_bools_t) + int(has_lists_t) + 1);
   __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
   int shared_offset = 0;
-  auto rep_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
+  auto rep_runs     = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
   if constexpr (has_lists_t) { shared_offset += rle_run_buffer_bytes; }
   auto dict_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
   if constexpr (has_dict_t) { shared_offset += rle_run_buffer_bytes; }
@@ -1162,6 +1163,7 @@ void __host__ DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> page
                                     size_t min_row,
                                     int level_type_size,
                                     bool has_nesting,
+                                    bool is_list,
                                     kernel_error::pointer error_code,
                                     rmm::cuda_stream_view stream)
 {
@@ -1171,7 +1173,14 @@ void __host__ DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> page
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint8_t,
+                               decode_block_size,
+                               decode_kernel_mask::BOOLEAN_LIST,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint8_t,
                                decode_block_size,
                                decode_kernel_mask::BOOLEAN_NESTED,
@@ -1187,7 +1196,14 @@ void __host__ DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> page
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
     }
   } else {
-    if (has_nesting) {
+    if (is_list) {
+      gpuDecodePageDataGeneric<uint16_t,
+                               decode_block_size,
+                               decode_kernel_mask::BOOLEAN_LIST,
+                               decode_fixed_width_values_func>
+        <<<dim_grid, dim_block, 0, stream.value()>>>(
+          pages.device_ptr(), chunks, min_row, num_rows, error_code);
+    } else if (has_nesting) {
       gpuDecodePageDataGeneric<uint16_t,
                                decode_block_size,
                                decode_kernel_mask::BOOLEAN_NESTED,

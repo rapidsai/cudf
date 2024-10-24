@@ -363,6 +363,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                           skip_rows,
                           level_type_size,
                           false,
+                          false,
                           error_code.data(),
                           streams[s_idx++]);
   }
@@ -374,6 +375,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                           num_rows,
                           skip_rows,
                           level_type_size,
+                          true,
+                          false,
+                          error_code.data(),
+                          streams[s_idx++]);
+  }
+
+  // launch boolean type decoder, for nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::BOOLEAN_LIST) != 0) {
+    DecodePageDataBoolean(subpass.pages,
+                          pass.chunks,
+                          num_rows,
+                          skip_rows,
+                          level_type_size,
+                          true,
                           true,
                           error_code.data(),
                           streams[s_idx++]);
