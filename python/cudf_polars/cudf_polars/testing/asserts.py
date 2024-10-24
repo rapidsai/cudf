@@ -151,7 +151,7 @@ def assert_collect_raises(
     collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
-):
+) -> None:
     """
     Assert that collecting the result of a query raises the expected exceptions.
 
