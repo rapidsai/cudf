@@ -126,5 +126,8 @@ filterwarnings = [
     # https://github.com/dask/partd/blob/main/partd/pandas.py#L198
     "ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead.:DeprecationWarning",
     "ignore:String support for `aggregate_files` is experimental. Behavior may change in the future.:FutureWarning:dask",
+    # Dask now loudly throws warnings: https://github.com/dask/dask/pull/11437
+    # When the legacy implementation is removed we can remove this warning and stop running pytests with `DASK_DATAFRAME__QUERY_PLANNING=False`
+    "ignore:The legacy Dask DataFrame implementation is deprecated and will be removed in a future version.*:FutureWarning",
 ]
 xfail_strict = true
