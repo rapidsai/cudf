@@ -12,7 +12,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -27,6 +26,7 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+import cudf.testing.dataset_generator as dataset_generator
 
 _cmpops = [
     operator.lt,

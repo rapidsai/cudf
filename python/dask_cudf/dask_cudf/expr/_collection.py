@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import warnings
 from functools import cached_property
+import warnings
 
 from dask_expr import (
     DataFrame as DXDataFrame,

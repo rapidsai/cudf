@@ -2,7 +2,6 @@
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import (
     DEFAULT_STRUCT_TESTING_TYPE,
@@ -15,6 +14,8 @@ from utils import (
     is_string,
     metadata_from_arrow_type,
 )
+
+import pylibcudf as plc
 
 
 # TODO: consider moving this to conftest and "pairing"

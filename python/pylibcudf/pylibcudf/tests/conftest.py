@@ -8,8 +8,9 @@ import sys
 
 import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))

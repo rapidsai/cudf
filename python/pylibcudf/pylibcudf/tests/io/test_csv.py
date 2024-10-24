@@ -1,19 +1,20 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import io
-import os
 from io import StringIO
+import os
 
 import pandas as pd
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
-from pylibcudf.io.types import CompressionType
 from utils import (
     _convert_types,
     assert_table_and_meta_eq,
     make_source,
     write_source_str,
 )
+
+import pylibcudf as plc
+from pylibcudf.io.types import CompressionType
 
 # Shared kwargs to pass to make_source
 _COMMON_CSV_SOURCE_KWARGS = {

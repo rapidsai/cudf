@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections import abc
+from collections.abc import Mapping
+from functools import cached_property, reduce
 import itertools
 import sys
-from collections import abc
-from functools import cached_property, reduce
-from typing import TYPE_CHECKING, Any, Mapping, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd

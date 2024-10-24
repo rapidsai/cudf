@@ -1,8 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module", params=[pa.uint32(), pa.uint64()])

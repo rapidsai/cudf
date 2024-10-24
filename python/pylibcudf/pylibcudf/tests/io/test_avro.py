@@ -5,9 +5,10 @@ import itertools
 
 import fastavro
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_table_and_meta_eq
+
+import pylibcudf as plc
 
 avro_dtype_pairs = [
     ("boolean", pa.bool_()),

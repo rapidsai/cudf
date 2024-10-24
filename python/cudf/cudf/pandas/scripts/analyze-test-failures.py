@@ -9,13 +9,14 @@ Usage:
     python analyze-test-failures.py <path-to-test-log> <file-or-pattern>
 
 Example:
+-------
     python analyze-test-failures.py log.json frame/*
 """
 
-import json
-import sys
 from collections import Counter
 from fnmatch import fnmatch
+import json
+import sys
 
 from rich.console import Console
 from rich.table import Table

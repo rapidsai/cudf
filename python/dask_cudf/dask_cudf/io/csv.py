@@ -1,7 +1,7 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import os
 from glob import glob
+import os
 from warnings import warn
 
 from fsspec.utils import infer_compression

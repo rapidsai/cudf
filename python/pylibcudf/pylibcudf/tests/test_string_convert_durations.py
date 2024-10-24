@@ -3,9 +3,10 @@
 from datetime import datetime, timedelta
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(

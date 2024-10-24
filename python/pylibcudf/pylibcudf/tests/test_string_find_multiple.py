@@ -1,8 +1,9 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 def test_find_multiple():

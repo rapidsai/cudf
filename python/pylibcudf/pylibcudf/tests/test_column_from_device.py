@@ -1,11 +1,12 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
 
 import rmm
+
+import pylibcudf as plc
 
 VALID_TYPES = [
     pa.int8(),

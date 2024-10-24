@@ -1,7 +1,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-import operator
 from functools import partial
+import operator
 
 from numba import cuda, types
 from numba.core import cgutils

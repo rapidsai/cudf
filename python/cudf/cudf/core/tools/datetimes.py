@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import math
 import re
+from typing import TYPE_CHECKING, Literal
 import warnings
-from typing import Literal, Sequence
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,9 @@ from cudf._lib.strings.convert.convert_integers import (
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.index import ensure_index
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {

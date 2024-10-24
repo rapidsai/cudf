@@ -1,9 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import os
-import socket
 from contextlib import contextmanager
 from io import BytesIO
+import os
+import socket
 
 import fsspec
 import pandas as pd

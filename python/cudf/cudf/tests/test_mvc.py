@@ -2,8 +2,8 @@
 import subprocess
 import sys
 
-import pytest
 from packaging import version
+import pytest
 
 IS_CUDA_11 = False
 IS_CUDA_12 = False

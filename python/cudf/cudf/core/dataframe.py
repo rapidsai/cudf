@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import abc, defaultdict
+from collections.abc import Callable, Iterator, MutableMapping
 import functools
 import inspect
 import itertools
@@ -11,23 +13,20 @@ import pickle
 import re
 import sys
 import textwrap
+from typing import TYPE_CHECKING, Any, Literal, cast
 import warnings
-from collections import abc, defaultdict
-from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
 
 import cupy
 import numba
 import numpy as np
-import pandas as pd
-import pyarrow as pa
 from nvtx import annotate
+import pandas as pd
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
+import pyarrow as pa
 from typing_extensions import Self, assert_never
 
 import cudf
-import cudf.core.common
 from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -53,6 +52,7 @@ from cudf.core.column import (
 )
 from cudf.core.column.categorical import as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
+import cudf.core.common
 from cudf.core.copy_types import BooleanMask
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
