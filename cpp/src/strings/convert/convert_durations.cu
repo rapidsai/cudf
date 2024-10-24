@@ -16,6 +16,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -152,12 +153,8 @@ struct format_compiler {
     }
 
     // create program in device memory
-    d_items.resize(items.size(), stream);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
-                                  items.data(),
-                                  items.size() * sizeof(items[0]),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    d_items = cudf::detail::make_device_uvector_sync(
+      items, stream, cudf::get_current_device_resource_ref());
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }
