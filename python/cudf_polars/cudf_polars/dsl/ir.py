@@ -715,11 +715,11 @@ class GroupBy(IR):
             raise NotImplementedError(
                 "rolling window/groupby"
             )  # pragma: no cover; rollingwindow constructor has already raised
+        if self.options.dynamic:
+            raise NotImplementedError("dynamic group by")
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
-        if len(self.keys) == 0:
-            raise NotImplementedError("dynamic groupby")
 
     @staticmethod
     def check_agg(agg: expr.Expr) -> int:
@@ -1001,7 +1001,6 @@ class Join(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         how, join_nulls, zlice, suffix, coalesce = options
-        suffix = "_right" if suffix is None else suffix
         if how == "cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
