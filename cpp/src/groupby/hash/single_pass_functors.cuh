@@ -23,7 +23,7 @@
 #include <cuco/static_set_ref.cuh>
 
 namespace cudf::groupby::detail::hash {
-// TODO: TO BE REMOVED
+// TODO: TO BE REMOVED issue tracked via #17171
 template <typename T, cudf::aggregation::Kind k>
 __device__ constexpr bool is_supported()
 {
