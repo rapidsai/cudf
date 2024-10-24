@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import (
 _supported_dtypes = [(pl.Int8(), pl.Int64())]
 
 _unsupported_dtypes = [
-    (pl.String(), pl.Int64()),
+    (pl.Datetime("ns"), pl.Int64()),
 ]
 
 
