@@ -351,6 +351,20 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+_register_option(
+    "kvikio_remote_io",
+    _env_get_bool("CUDF_KVIKIO_REMOTE_IO", False),
+    textwrap.dedent(
+        """
+        Whether to use KvikIO's remote IO backend or not.
+        \tWARN: this is experimental and may be removed at any time
+        \twithout warning or deprecation period.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
 
 class option_context(ContextDecorator):
     """
