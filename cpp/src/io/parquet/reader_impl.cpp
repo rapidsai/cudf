@@ -274,6 +274,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                   skip_rows,
                                   level_type_size,
                                   false,
+                                  false,
                                   error_code.data(),
                                   streams[s_idx++]);
   }
@@ -285,6 +286,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                   num_rows,
                                   skip_rows,
                                   level_type_size,
+                                  true,
+                                  false,
+                                  error_code.data(),
+                                  streams[s_idx++]);
+  }
+
+  // launch byte stream split decoder, for list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) != 0) {
+    DecodeSplitPageFixedWidthData(subpass.pages,
+                                  pass.chunks,
+                                  num_rows,
+                                  skip_rows,
+                                  level_type_size,
+                                  true,
                                   true,
                                   error_code.data(),
                                   streams[s_idx++]);
@@ -309,6 +324,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         skip_rows,
                         level_type_size,
                         false,
+                        false,
+                        error_code.data(),
+                        streams[s_idx++]);
+  }
+
+  // launch fixed width type decoder for lists
+  if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) != 0) {
+    DecodePageDataFixed(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        true,
+                        true,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -321,6 +350,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         skip_rows,
                         level_type_size,
                         true,
+                        false,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -357,6 +387,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                             skip_rows,
                             level_type_size,
                             false,
+                            false,
+                            error_code.data(),
+                            streams[s_idx++]);
+  }
+
+  // launch fixed width type decoder with dictionaries for lists
+  if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT_LIST) != 0) {
+    DecodePageDataFixedDict(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            true,
+                            true,
                             error_code.data(),
                             streams[s_idx++]);
   }
@@ -369,6 +413,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                             skip_rows,
                             level_type_size,
                             true,
+                            false,
                             error_code.data(),
                             streams[s_idx++]);
   }
