@@ -17,7 +17,14 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
-
+from pylibcudf.libcudf.io.csv cimport (
+    csv_writer_options,
+    write_csv as cpp_write_csv,
+)
+from pylibcudf.libcudf.io.data_sink cimport data_sink
+from libcpp.memory cimport unique_ptr
+import io
+from pylibcudf.table cimport Table
 
 cdef tuple _process_parse_dates_hex(list cols):
     cdef vector[string] str_cols
@@ -261,3 +268,130 @@ def read_csv(
         c_result = move(cpp_read_csv(options))
 
     return TableWithMetadata.from_libcudf(c_result)
+
+
+# Converts the Python sink input to libcudf IO sink_info.
+cdef sink_info make_sinks_info(
+    list src, vector[unique_ptr[data_sink]] & sink
+) except*:
+    cdef vector[data_sink *] data_sinks
+    cdef vector[string] paths
+    if isinstance(src[0], io.StringIO):
+        data_sinks.reserve(len(src))
+        for s in src:
+            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], io.TextIOBase):
+        data_sinks.reserve(len(src))
+        for s in src:
+            # Files opened in text mode expect writes to be str rather than
+            # bytes, which requires conversion from utf-8. If the underlying
+            # buffer is utf-8, we can bypass this conversion by writing
+            # directly to it.
+            if codecs.lookup(s.encoding).name not in {"utf-8", "ascii"}:
+                raise NotImplementedError(f"Unsupported encoding {s.encoding}")
+            sink.push_back(
+                unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+            )
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], io.IOBase):
+        data_sinks.reserve(len(src))
+        for s in src:
+            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], (basestring, os.PathLike)):
+        paths.reserve(len(src))
+        for s in src:
+            paths.push_back(<string> os.path.expanduser(s).encode())
+        return sink_info(move(paths))
+    else:
+        raise TypeError("Unrecognized input type: {}".format(type(src)))
+
+
+cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
+    cdef vector[unique_ptr[data_sink]] datasinks
+    cdef sink_info info = make_sinks_info([src], datasinks)
+    if not datasinks.empty():
+        sink.swap(datasinks[0])
+    return info
+
+
+def write_csv(
+    TableWithMetadata table,
+    object path_or_buf=None,
+    str sep=",",
+    str na_rep="",
+    bool header=True,
+    str lineterminator="\n",
+    int rows_per_chunk=8,
+    bool index=True,
+):
+    """
+    Writes a :py:class:`~pylibcudf.table.Table` to JSON format.
+
+    Parameters
+    ----------
+    table : TableWithMetadata
+
+    """
+    cdef table_view input_table_view = table_view_from_table(
+        table, not index
+    )
+    cdef bool include_header_c = header
+    cdef char delim_c = ord(sep)
+    cdef string line_term_c = lineterminator.encode()
+    cdef string na_c = na_rep.encode()
+    cdef int rows_per_chunk_c = rows_per_chunk
+    cdef vector[string] col_names
+    cdef string true_value_c = 'True'.encode()
+    cdef string false_value_c = 'False'.encode()
+    cdef unique_ptr[data_sink] data_sink_c
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
+
+    if header is True:
+        all_names = columns_apply_na_rep(table._column_names, na_rep)
+        if index is True:
+            all_names = table._index.names + all_names
+
+        if len(all_names) > 0:
+            col_names.reserve(len(all_names))
+            if len(all_names) == 1:
+                if all_names[0] in (None, ''):
+                    col_names.push_back('""'.encode())
+                else:
+                    col_names.push_back(
+                        str(all_names[0]).encode()
+                    )
+            else:
+                for idx, col_name in enumerate(all_names):
+                    if col_name is None:
+                        col_names.push_back(''.encode())
+                    else:
+                        col_names.push_back(
+                            str(col_name).encode()
+                        )
+
+    cdef csv_writer_options options = move(
+        csv_writer_options.builder(sink_info_c, input_table_view)
+        .names(col_names)
+        .na_rep(na_c)
+        .include_header(include_header_c)
+        .rows_per_chunk(rows_per_chunk_c)
+        .line_terminator(line_term_c)
+        .inter_column_delimiter(delim_c)
+        .true_value(true_value_c)
+        .false_value(false_value_c)
+        .build()
+    )
+
+    try:
+        with nogil:
+            cpp_write_csv(options)
+    except OverflowError:
+        raise OverflowError(
+            f"Writing CSV file with chunksize={rows_per_chunk} failed. "
+            "Consider providing a smaller chunksize argument."
+        )
