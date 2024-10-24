@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
+import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
@@ -1456,11 +1457,6 @@ prefetch_options : dict, default None
     paths. If 'method' is set to 'all' (the default), the only supported
     option is 'blocksize' (default 256 MB). If method is set to 'parquet',
     'columns' and 'row_groups' are also supported (default None).
-kvikio_remote_io : bool, default False
-    WARNING: This is an experimental feature and may be removed at any
-    time without warning or deprecation period.
-    Use KvikIO's remote IO backend, if applicable, by pass-through remote
-    file paths such as "s3://my-bucket/my-object" to libcudf as-it.
 
 Returns
 -------
@@ -1629,6 +1625,16 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
     return expanded_paths
 
 
+def _use_kvikio_remote_io(fs) -> bool:
+    """Whether `kvikio_remote_io` is enabled and `fs` refers to a S3 file"""
+
+    try:
+        from s3fs.core import S3FileSystem
+    except ImportError:
+        return False
+    return cudf.get_option("kvikio_remote_io") and isinstance(fs, S3FileSystem)
+
+
 @doc_get_reader_filepath_or_buffer()
 def get_reader_filepath_or_buffer(
     path_or_data,
@@ -1643,7 +1649,6 @@ def get_reader_filepath_or_buffer(
     warn_meta=None,
     expand_dir_pattern=None,
     prefetch_options=None,
-    kvikio_remote_io=False,
 ):
     """{docstring}"""
 
@@ -1718,9 +1723,10 @@ def get_reader_filepath_or_buffer(
                 raise FileNotFoundError(
                     f"{input_sources} could not be resolved to any files"
                 )
-            from s3fs.core import S3FileSystem
 
-            if kvikio_remote_io and isinstance(fs, S3FileSystem):
+            # If `kvikio_remote_io` is enabled and `fs` refers to a S3 file,
+            # we create S3 URLs and let them pass-through to libcudf.
+            if _use_kvikio_remote_io(fs):
                 filepaths_or_buffers = [f"s3://{fpath}" for fpath in paths]
             else:
                 filepaths_or_buffers = _prefetch_remote_buffers(

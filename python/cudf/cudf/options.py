@@ -357,7 +357,8 @@ _register_option(
     textwrap.dedent(
         """
         Whether to use KvikIO's remote IO backend or not.
-        \tWARN: this is experimental and is implemented for parquet_read().
+        \tWARN: this is experimental and may be removed at any time
+        \twithout warning or deprecation period.
         \tValid values are True or False. Default is False.
     """
     ),

@@ -622,7 +622,6 @@ def read_parquet(
         storage_options=storage_options,
         bytes_per_thread=bytes_per_thread,
         prefetch_options=prefetch_options,
-        kvikio_remote_io=cudf.get_option("kvikio_remote_io"),
     )
 
     # Warn user if they are not using cudf for IO
