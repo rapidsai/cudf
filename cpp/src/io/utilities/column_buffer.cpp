@@ -21,6 +21,7 @@
 
 #include "column_buffer.hpp"
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
