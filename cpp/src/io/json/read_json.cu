@@ -141,17 +141,6 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
   int num_subchunks_prealloced        = should_load_all_sources ? 0 : max_subchunks_prealloced;
   std::size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
 
-  // The allocation for single source compressed input is estimated by assuming a ~4:1
-  // compression ratio. For uncompressed inputs, we can getter a better estimate using the idea
-  // of subchunks.
-  // auto constexpr header_size = 4096;
-  /*
-  std::size_t buffer_size =
-    reader_compression != compression_type::NONE
-      ? total_source_size * estimated_compression_ratio + header_size
-      : std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
-          num_extra_delimiters;
-  */
   std::size_t buffer_size =
     std::min(total_source_size, chunk_size + num_subchunks_prealloced * size_per_subchunk) +
     num_extra_delimiters;
@@ -198,13 +187,6 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
           // Our buffer_size estimate is insufficient to read until the end of the line! We need to
           // allocate more memory and try again!
           num_subchunks_prealloced *= 2;
-          /*
-          buffer_size = reader_compression != compression_type::NONE
-                          ? 2 * buffer_size
-                          : std::min(total_source_size,
-                                     buffer_size + num_subchunks_prealloced * size_per_subchunk) +
-                              num_extra_delimiters;
-          */
           buffer_size = std::min(total_source_size,
                                  buffer_size + num_subchunks_prealloced * size_per_subchunk) +
                         num_extra_delimiters;
@@ -387,16 +369,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     auto data_size = std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
     auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
                        (num_delimiter_chars * delimiter_map.size());
-    if (compression == compression_type::NONE) {
-      if (sources[i]->is_device_read_preferred(data_size)) {
-        bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
-      } else {
-        h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
-        auto const& h_buffer = h_buffers.back();
-        CUDF_CUDA_TRY(cudaMemcpyAsync(
-          destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
-        bytes_read += h_buffer->size();
-      }
+    if (sources[i]->is_device_read_preferred(data_size)) {
+      bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
@@ -425,24 +399,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   }
   stream.synchronize();
   return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
-  /*
-  // TODO: allow byte range reading from multiple compressed files.
-  auto remaining_bytes_to_read = std::min(range_size, sources[0]->size() - range_offset);
-  auto hbuffer                 = std::vector<uint8_t>(remaining_bytes_to_read);
-  // Single read because only a single compressed source is supported
-  // Reading to host because decompression of a single block is much faster on the CPU
-  sources[0]->host_read(range_offset, remaining_bytes_to_read, hbuffer.data());
-  auto uncomp_data = decompress(compression, hbuffer);
-  std::printf("decompressed into host buffer\n");
-  CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(),
-                                reinterpret_cast<char*>(uncomp_data.data()),
-                                uncomp_data.size() * sizeof(char),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
-  std::printf("rekt\n");
-  stream.synchronize();
-  return buffer.first(uncomp_data.size());
-  */
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
@@ -465,10 +421,6 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   if (reader_opts.get_compression() == compression_type::NONE)
     return create_batched_cudf_table(sources, reader_opts, stream, mr);
 
-  /*
-  CUDF_EXPECTS(reader_opts.get_byte_range_offset() == 0 && reader_opts.get_byte_range_size() == 0,
-      "Byte range reading from compressed inputs is not supported");
-  */
   CUDF_EXPECTS(reader_opts.get_compression() == compression_type::GZIP ||
                  reader_opts.get_compression() == compression_type::ZIP ||
                  reader_opts.get_compression() == compression_type::SNAPPY,
