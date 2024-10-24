@@ -184,7 +184,7 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   } else if (is_boolean(chunk)) {
     return is_list(chunk)     ? decode_kernel_mask::BOOLEAN_LIST
            : is_nested(chunk) ? decode_kernel_mask::BOOLEAN_NESTED
-           : decode_kernel_mask::BOOLEAN;
+                              : decode_kernel_mask::BOOLEAN;
   }
 
   if (!is_byte_array(chunk)) {
