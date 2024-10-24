@@ -49,7 +49,7 @@ target_compile_options(
 
 target_link_libraries(
   ndsh_data_generator
-  PUBLIC cudf GTest::gmock GTest::gtest cudf::cudftestutil nvtx3::nvtx3-cpp
+  PUBLIC cudf cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -384,6 +384,7 @@ ConfigureNVBench(
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp
+  string/make_strings_column.cu
   string/replace_re.cpp
   string/reverse.cpp
   string/slice.cpp

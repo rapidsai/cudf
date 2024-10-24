@@ -5,6 +5,10 @@ from . cimport (
     generate_ngrams,
     jaccard,
     minhash,
+    ngrams_tokenize,
+    normalize,
+    replace,
+    stemmer,
     subword_tokenize,
 )
 
@@ -12,6 +16,10 @@ __all__ = [
     "edit_distance",
     "generate_ngrams",
     "jaccard",
-    "minhash"
-    "subword_tokenize"
+    "minhash",
+    "ngrams_tokenize",
+    "normalize",
+    "replace",
+    "stemmer",
+    "subword_tokenize",
 ]

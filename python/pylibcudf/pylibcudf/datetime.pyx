@@ -33,7 +33,7 @@ cpdef Column extract_year(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_extract_year(values.view()))
+        result = cpp_extract_year(values.view())
     return Column.from_libcudf(move(result))
 
 cpdef Column extract_datetime_component(
@@ -60,5 +60,5 @@ cpdef Column extract_datetime_component(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_extract_datetime_component(values.view(), component))
+        result = cpp_extract_datetime_component(values.view(), component)
     return Column.from_libcudf(move(result))
