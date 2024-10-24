@@ -865,7 +865,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
     switch (codec.compression_type) {
       case GZIP:
-        if (cudf::io::nvcomp_integration::is_all_enabled()) {
+        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
                                      d_comp_in_view,
                                      d_comp_out_view,
