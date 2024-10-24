@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ size_t decompress(compression_type compression,
                   host_span<uint8_t> dst,
                   rmm::cuda_stream_view stream);
 
+size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
 /**
  * @brief GZIP header flags
  * See https://tools.ietf.org/html/rfc1952
