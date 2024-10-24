@@ -336,58 +336,50 @@ auto get_test_hostdevice_vector()
 
 TEST(HostDeviceSpanTest, CanCreateFullSubspan)
 {
-  auto message = get_test_hostdevice_vector();
-  auto const message_span =
-    cudf::detail::hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+  auto message            = get_test_hostdevice_vector();
+  auto const message_span = cudf::detail::hostdevice_span<char>{message};
 
-  expect_equivalent(message_span, message.subspan(0, message_span.size()));
+  expect_equivalent(message_span.subspan(0, message_span.size()), message_span);
 }
 
 TEST(HostDeviceSpanTest, CanCreateHostSpan)
 {
   auto message            = get_test_hostdevice_vector();
   auto const message_span = host_span<char>(message.host_ptr(), message.size());
-  auto const hd_span =
-    cudf::detail::hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+  auto const hd_span      = cudf::detail::hostdevice_span<char>{message};
 
   expect_equivalent(message_span, cudf::host_span<char>(hd_span));
 }
 
 TEST(HostDeviceSpanTest, CanTakeSubspanFull)
 {
-  auto message = get_test_hostdevice_vector();
-  auto const message_span =
-    cudf::detail::hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+  auto message            = get_test_hostdevice_vector();
+  auto const message_span = cudf::detail::hostdevice_span<char>{message};
 
-  expect_match("hello world", message.subspan(0, 11));
   expect_match("hello world", message_span.subspan(0, 11));
 }
 
 TEST(HostDeviceSpanTest, CanTakeSubspanPartial)
 {
-  auto message = get_test_hostdevice_vector();
-  auto const message_span =
-    cudf::detail::hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+  auto message            = get_test_hostdevice_vector();
+  auto const message_span = cudf::detail::hostdevice_span<char>{message};
 
-  expect_match("lo w", message.subspan(3, 4));
   expect_match("lo w", message_span.subspan(3, 4));
 }
 
 TEST(HostDeviceSpanTest, CanGetData)
 {
-  auto message = get_test_hostdevice_vector();
-  auto const message_span =
-    cudf::detail::hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+  auto message            = get_test_hostdevice_vector();
+  auto const message_span = cudf::detail::hostdevice_span<char>{message};
 
   EXPECT_EQ(message.host_ptr(), message_span.host_ptr());
 }
 
 TEST(HostDeviceSpanTest, CanGetSize)
 {
-  auto message = get_test_hostdevice_vector();
-  auto const message_span =
-    cudf::detail::hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
-  auto const empty_span = cudf::detail::hostdevice_span<char>();
+  auto message            = get_test_hostdevice_vector();
+  auto const message_span = cudf::detail::hostdevice_span<char>{message};
+  auto const empty_span   = cudf::detail::hostdevice_span<char>();
 
   EXPECT_EQ(static_cast<size_t>(11), message_span.size());
   EXPECT_EQ(static_cast<size_t>(0), empty_span.size());
@@ -413,8 +405,7 @@ TEST(HostDeviceSpanTest, CanCopySpan)
   cudf::detail::hostdevice_span<char> message_span_copy;
 
   {
-    auto const message_span =
-      cudf::detail::hostdevice_span<char>(message.host_ptr(), message.device_ptr(), message.size());
+    auto const message_span = cudf::detail::hostdevice_span<char>{message};
 
     message_span_copy = message_span;
   }

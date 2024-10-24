@@ -384,6 +384,7 @@ ConfigureNVBench(
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp
+  string/make_strings_column.cu
   string/replace_re.cpp
   string/reverse.cpp
   string/slice.cpp

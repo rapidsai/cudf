@@ -18,12 +18,14 @@
 #include "io/json/nested_json.hpp"
 #include "read_json.hpp"
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -31,8 +33,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_copy.cuh>
+#include <cub/device/device_histogram.cuh>
 #include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
 
 #include <numeric>
@@ -383,10 +388,16 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
    * JSON inputs.
    */
   std::size_t const total_source_size = sources_size(sources, 0, 0);
-  std::size_t chunk_offset            = reader_opts.get_byte_range_offset();
-  std::size_t chunk_size              = reader_opts.get_byte_range_size();
-  chunk_size                          = !chunk_size ? total_source_size - chunk_offset
-                                                    : std::min(chunk_size, total_source_size - chunk_offset);
+
+  // Batching is enabled only for JSONL inputs, not regular JSON files
+  CUDF_EXPECTS(
+    reader_opts.is_enabled_lines() || total_source_size < std::numeric_limits<int32_t>::max(),
+    "Parsing Regular JSON inputs of size greater than INT_MAX bytes is not supported");
+
+  std::size_t chunk_offset = reader_opts.get_byte_range_offset();
+  std::size_t chunk_size   = reader_opts.get_byte_range_size();
+  chunk_size               = !chunk_size ? total_source_size - chunk_offset
+                                         : std::min(chunk_size, total_source_size - chunk_offset);
 
   std::size_t const size_per_subchunk      = estimate_size_per_subchunk(chunk_size);
   std::size_t const batch_size_upper_bound = get_batch_size_upper_bound();
@@ -466,6 +477,120 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  [](auto const& table) { return table.tbl->view(); });
   return table_with_metadata{cudf::concatenate(partial_table_views, stream, mr),
                              {partial_tables[0].metadata.schema_info}};
+}
+
+std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const& input,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
+{
+  auto constexpr num_levels  = 256;
+  auto constexpr lower_level = std::numeric_limits<char>::min();
+  auto constexpr upper_level = std::numeric_limits<char>::max();
+  auto const num_chars       = input.chars_size(stream);
+
+  char delimiter;
+  {
+    auto histogram =
+      cudf::detail::make_zeroed_device_uvector_async<uint32_t>(num_levels, stream, mr);
+    size_t temp_storage_bytes = 0;
+    cub::DeviceHistogram::HistogramEven(nullptr,
+                                        temp_storage_bytes,
+                                        input.chars_begin(stream),
+                                        histogram.begin(),
+                                        num_levels,
+                                        lower_level,
+                                        upper_level,
+                                        num_chars,
+                                        stream.value());
+    rmm::device_buffer d_temp(temp_storage_bytes, stream);
+    cub::DeviceHistogram::HistogramEven(d_temp.data(),
+                                        temp_storage_bytes,
+                                        input.chars_begin(stream),
+                                        histogram.begin(),
+                                        num_levels,
+                                        lower_level,
+                                        upper_level,
+                                        num_chars,
+                                        stream.value());
+
+    auto const zero_level_idx       = -lower_level;  // the bin storing count for character `\0`
+    auto const first_zero_count_pos = thrust::find_if(
+      rmm::exec_policy_nosync(stream),
+      thrust::make_counting_iterator(0) + zero_level_idx,  // ignore the negative characters
+      thrust::make_counting_iterator(0) + num_levels,
+      [zero_level_idx, counts = histogram.begin()] __device__(auto idx) -> bool {
+        auto const count = counts[idx];
+        if (count > 0) { return false; }
+        auto const first_non_existing_char = static_cast<char>(idx - zero_level_idx);
+        return json_reader_options::can_be_delimiter(first_non_existing_char);
+      });
+
+    // This should never happen since the input should never cover the entire char range.
+    if (first_zero_count_pos == thrust::make_counting_iterator(0) + num_levels) {
+      throw std::logic_error(
+        "Cannot find any character suitable as delimiter during joining json strings.");
+    }
+    delimiter = static_cast<char>(
+      thrust::distance(thrust::make_counting_iterator(0) + zero_level_idx, first_zero_count_pos));
+  }
+
+  auto d_offsets_colview = input.offsets();
+  device_span<cudf::size_type const> d_offsets(d_offsets_colview.data<cudf::size_type>(),
+                                               d_offsets_colview.size());
+
+  rmm::device_buffer concatenated_buffer(num_chars + d_offsets.size() - 2, stream);
+
+  thrust::scatter(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_constant_iterator(delimiter),
+    thrust::make_constant_iterator(delimiter) + d_offsets.size() - 2,
+    thrust::make_transform_iterator(
+      thrust::make_counting_iterator(1),
+      cuda::proclaim_return_type<cudf::size_type>(
+        [d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> cudf::size_type {
+          return d_offsets[idx] + idx - 1;
+        })),
+    reinterpret_cast<char*>(concatenated_buffer.data()));
+
+  {
+    // cub device batched copy
+    auto input_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      cuda::proclaim_return_type<char const*>(
+        [input = input.chars_begin(stream), d_offsets = d_offsets.begin()] __device__(
+          cudf::size_type idx) -> char const* { return input + d_offsets[idx]; }));
+    auto output_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      cuda::proclaim_return_type<char*>(
+        [output    = reinterpret_cast<char*>(concatenated_buffer.data()),
+         d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> char* {
+          return output + d_offsets[idx] + idx;
+        }));
+    auto sizes_it = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      cuda::proclaim_return_type<cudf::size_type>(
+        [d_offsets = d_offsets.begin()] __device__(cudf::size_type idx) -> cudf::size_type {
+          return d_offsets[idx + 1] - d_offsets[idx];
+        }));
+    size_t temp_storage_bytes = 0;
+    cub::DeviceCopy::Batched(nullptr,
+                             temp_storage_bytes,
+                             input_it,
+                             output_it,
+                             sizes_it,
+                             static_cast<uint32_t>(d_offsets.size() - 1),
+                             stream.value());
+    rmm::device_buffer temp_storage(temp_storage_bytes, stream);
+    cub::DeviceCopy::Batched(temp_storage.data(),
+                             temp_storage_bytes,
+                             input_it,
+                             output_it,
+                             sizes_it,
+                             static_cast<uint32_t>(d_offsets.size() - 1),
+                             stream.value());
+  }
+
+  return std::tuple{std::move(concatenated_buffer), delimiter};
 }
 
 }  // namespace cudf::io::json::detail

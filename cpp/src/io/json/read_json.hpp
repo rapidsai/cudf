@@ -18,6 +18,7 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -73,6 +74,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr);
+
+std::tuple<rmm::device_buffer, char> preprocess(cudf::strings_column_view const& input,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr);
 
 }  // namespace io::json::detail
 }  // namespace CUDF_EXPORT cudf
