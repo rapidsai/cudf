@@ -37,7 +37,7 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
     ) except +
 
     DLManagedTensor* to_dlpack(
-        table_view input
+        const table_view& input
     ) except +
 
     cdef cppclass column_metadata:
