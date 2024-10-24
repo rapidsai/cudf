@@ -110,7 +110,9 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    if (driver_close != nullptr) driver_close();
+    // TODO: revisit the segfault issue presumably caused by cuFile's implicit driver-close function
+    // using CUDA API after the main() returns, which constitutes UB.
+    // https://github.com/rapidsai/cudf/issues/17121
     if (cf_lib != nullptr) dlclose(cf_lib);
   }
 
