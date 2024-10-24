@@ -3170,6 +3170,60 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
         cudf::test::fixed_width_column_wrapper<bool>{{true, true, true, true}, {0, 0, 0, 0}};
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), all_null_bools);
     }
+    // test struct, list of string, list of struct.
+    //  multiple - not all present nested
+    {
+      cudf::io::schema_element dtype_schema{
+        data_type{cudf::type_id::STRUCT},
+        {
+          {"b",
+           {data_type{cudf::type_id::STRUCT},
+            {
+              {"2", {data_type{cudf::type_id::STRING}}},
+            },
+            {{"2"}}}},
+          {"d", {data_type{cudf::type_id::LIST}, {{"element", {dtype<int32_t>()}}}}},
+          {"e",
+           {data_type{cudf::type_id::LIST},
+            {{"element",
+              {
+                data_type{cudf::type_id::STRUCT},
+                {
+                  {"3", {data_type{cudf::type_id::STRING}}},
+                },  //{{"3"}} missing column_order, but output should not have it.
+              }}}}},
+        },
+        {{"b", "d", "e"}}};
+      in_options.set_dtypes(dtype_schema);
+      cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+      // Make sure we have columns "b" (empty struct) and "c"
+      ASSERT_EQ(result.tbl->num_columns(), 3);
+      ASSERT_EQ(result.metadata.schema_info.size(), 3);
+      EXPECT_EQ(result.metadata.schema_info[0].name, "b");
+      ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
+      ASSERT_EQ(result.metadata.schema_info[0].children[0].name, "2");
+      EXPECT_EQ(result.metadata.schema_info[1].name, "d");
+      auto all_null_strings = cudf::test::strings_column_wrapper{{"", "", "", ""}, {0, 0, 0, 0}};
+      EXPECT_EQ(result.tbl->get_column(0).num_children(), 1);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(0), all_null_strings);
+      auto const all_null_list = cudf::test::lists_column_wrapper<int32_t>{
+        {{0, 0}, {1, 1}, {2, 2}, {3, 3}}, cudf::test::iterators::all_nulls()};
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), all_null_list);
+      EXPECT_EQ(result.metadata.schema_info[2].name, "e");
+      ASSERT_EQ(result.metadata.schema_info[2].children.size(), 2);
+      ASSERT_EQ(result.metadata.schema_info[2].children[1].children.size(), 0);
+      // ASSERT_EQ(result.metadata.schema_info[2].children[1].children[0].name, "3");
+      auto empty_string_col = cudf::test::strings_column_wrapper{};
+      cudf::test::structs_column_wrapper expected_structs{{}, cudf::test::iterators::all_nulls()};
+      // make all null column of list of struct of string
+      auto wrapped = make_lists_column(
+        4,
+        cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 0, 0}.release(),
+        expected_structs.release(),
+        4,
+        cudf::create_null_mask(4, cudf::mask_state::ALL_NULL));
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), *wrapped);
+    }
   }
 }
 CUDF_TEST_PROGRAM_MAIN()

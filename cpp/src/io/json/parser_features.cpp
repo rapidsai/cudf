@@ -142,6 +142,31 @@ std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
   return cudf::type_dispatcher(schema.type, allnull_column_functor{stream, mr}, schema, num_rows);
 }
 
+column_name_info make_column_name_info(schema_element const& schema, std::string const& col_name)
+{
+  column_name_info info;
+  info.name = col_name;
+  if (schema.type.id() == type_id::STRUCT) {
+    for (auto const& child_name : schema.column_order.value_or(std::vector<std::string>{})) {
+      info.children.push_back(make_column_name_info(schema.child_types.at(child_name), child_name));
+    }
+  } else if (schema.type.id() == type_id::LIST) {
+    info.children.emplace_back("offsets");
+    for (auto const& [child_name, child_schema] : schema.child_types) {
+      info.children.push_back(make_column_name_info(child_schema, child_name));
+    }
+  } else if (schema.type.id() == type_id::DICTIONARY32) {
+    info.children.emplace_back("indices");
+    for (auto const& [child_name, child_schema] : schema.child_types) {
+      info.children.push_back(make_column_name_info(child_schema, child_name));
+    }
+  } else if (schema.type.id() == type_id::STRING) {
+    info.children.emplace_back("offsets");
+    info.children.emplace_back("chars");
+  }
+  return info;
+}
+
 std::optional<schema_element> child_schema_element(std::string const& col_name,
                                                    cudf::io::json_reader_options const& options)
 {

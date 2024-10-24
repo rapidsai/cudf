@@ -420,11 +420,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                 ? schema.value().column_order.value()
                                 : json_col.column_order;
       for (auto const& col_name : col_order) {
-        auto const& found_col = json_col.child_columns.find(col_name);
+        auto child_schema_element = get_child_schema(col_name);
+        auto const& found_col     = json_col.child_columns.find(col_name);
         if (prune_columns and found_col == std::end(json_col.child_columns)) {
-          column_names.emplace_back(col_name);
+          column_names.emplace_back(make_column_name_info(
+            child_schema_element.value_or(schema_element{data_type{type_id::EMPTY}}), col_name));
           auto all_null_column = make_all_nulls_column(
-            schema.has_value() ? schema.value() : schema_element{data_type{type_id::EMPTY}},
+            child_schema_element.value_or(schema_element{data_type{type_id::EMPTY}}),
             num_rows,
             stream,
             mr);
@@ -432,8 +434,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
           continue;
         }
         column_names.emplace_back(found_col->first);
-        auto& child_col           = found_col->second;
-        auto child_schema_element = get_child_schema(col_name);
+        auto& child_col = found_col->second;
         if (!prune_columns or child_schema_element.has_value()) {
           auto [child_column, names] = device_json_column_to_cudf_column(
             child_col, d_input, options, prune_columns, child_schema_element, stream, mr);
@@ -666,13 +667,13 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     if (options.is_enabled_prune_columns() and
         found_col == std::end(root_struct_col.child_columns)) {
       // inserts empty null column
-      out_column_names.emplace_back(col_name);
-      auto all_null_column = make_all_nulls_column(child_schema_element.has_value()
-                                                     ? child_schema_element.value()
-                                                     : schema_element{data_type{type_id::EMPTY}},
-                                                   root_col_size,
-                                                   stream,
-                                                   mr);
+      out_column_names.emplace_back(make_column_name_info(
+        child_schema_element.value_or(schema_element{data_type{type_id::EMPTY}}), col_name));
+      auto all_null_column = make_all_nulls_column(
+        child_schema_element.value_or(schema_element{data_type{type_id::EMPTY}}),
+        root_col_size,
+        stream,
+        mr);
       out_columns.emplace_back(std::move(all_null_column));
       column_index++;
       continue;
