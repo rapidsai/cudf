@@ -82,6 +82,7 @@ class compressed_host_buffer_source final : public datasource {
     : _ch_buffer{ch_buffer}, _comptype{comptype}
   {
     _decompressed_ch_buffer_size = estimate_uncompressed_size(_comptype, _ch_buffer);
+    _decompressed_buffer.resize(0);
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
@@ -94,10 +95,17 @@ class compressed_host_buffer_source final : public datasource {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    auto decompressed_hbuf = decompress(_comptype, _ch_buffer);
-    auto const count       = std::min(size, decompressed_hbuf.size() - offset);
-    return std::make_unique<owning_buffer<std::vector<uint8_t>>>(
-      std::move(decompressed_hbuf), decompressed_hbuf.data() + offset, count);
+    if (_decompressed_buffer.empty()) {
+      auto decompressed_hbuf = decompress(_comptype, _ch_buffer);
+      auto const count       = std::min(size, decompressed_hbuf.size() - offset);
+      bool partial_read      = offset + count < decompressed_hbuf.size();
+      if (!partial_read)
+        return std::make_unique<owning_buffer<std::vector<uint8_t>>>(
+          std::move(decompressed_hbuf), decompressed_hbuf.data() + offset, count);
+      _decompressed_buffer = std::move(decompressed_hbuf);
+    }
+    auto const count = std::min(size, _decompressed_buffer.size() - offset);
+    return std::make_unique<non_owning_buffer>(_decompressed_buffer.data() + offset, count);
   }
 
   [[nodiscard]] bool supports_device_read() const override { return false; }
@@ -108,6 +116,7 @@ class compressed_host_buffer_source final : public datasource {
   cudf::host_span<std::uint8_t const> _ch_buffer;  ///< A non-owning view of the existing host data
   compression_type _comptype;
   size_t _decompressed_ch_buffer_size;
+  std::vector<std::uint8_t> _decompressed_buffer;
 };
 
 }  // namespace io::json::detail
