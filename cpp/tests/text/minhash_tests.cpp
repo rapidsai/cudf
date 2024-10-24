@@ -169,7 +169,7 @@ TEST_F(MinHashTest, MultiSeedWithNullInputRow)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }
 
-TEST_F(MinHashTest, PermutedMultiSeed)
+TEST_F(MinHashTest, Permuted)
 {
   auto input =
     cudf::test::strings_column_wrapper({"doc 1",
@@ -185,31 +185,31 @@ TEST_F(MinHashTest, PermutedMultiSeed)
 
   auto view = cudf::strings_column_view(input);
 
-  auto first = thrust::counting_iterator<uint32_t>(10);
-  auto seeds = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto first  = thrust::counting_iterator<uint32_t>(10);
+  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
   auto results =
-    nvtext::minhash_permuted(view, 0, cudf::column_view(seeds), cudf::column_view(seeds), 4);
+    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
 
-  using LCW = cudf::test::lists_column_wrapper<uint32_t>;
+  using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
   // clang-format off
-  LCW expected({
-    LCW{1392101586u,  394869177u,  811528444u},
-    LCW{ 211415830u,  187088503u,  130291444u},
-    LCW{2098117052u,  394869177u,  799753544u},
-    LCW{2264583304u, 2920538364u, 3576493424u},
-    LCW{ 253327882u,   41747273u,  302030804u},
-    LCW{2109809594u, 1017470651u,  326988172u},
-    LCW{1303819864u,  850676747u,  147107852u},
-    LCW{ 736021564u,  720812292u, 1405158760u},
-    LCW{ 902780242u,  134064807u, 1613944636u},
-    LCW{ 547084870u, 1748895564u,  656501844u}
+  LCW32 expected({
+    LCW32{1392101586u,  394869177u,  811528444u},
+    LCW32{ 211415830u,  187088503u,  130291444u},
+    LCW32{2098117052u,  394869177u,  799753544u},
+    LCW32{2264583304u, 2920538364u, 3576493424u},
+    LCW32{ 253327882u,   41747273u,  302030804u},
+    LCW32{2109809594u, 1017470651u,  326988172u},
+    LCW32{1303819864u,  850676747u,  147107852u},
+    LCW32{ 736021564u,  720812292u, 1405158760u},
+    LCW32{ 902780242u,  134064807u, 1613944636u},
+    LCW32{ 547084870u, 1748895564u,  656501844u}
   });
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  auto seeds64 = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
-  auto results64 =
-    nvtext::minhash64_permuted(view, 0, cudf::column_view(seeds64), cudf::column_view(seeds64), 4);
+  auto params64  = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 = nvtext::minhash64_permuted(
+    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
 
   using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
   // clang-format off
@@ -225,6 +225,41 @@ TEST_F(MinHashTest, PermutedMultiSeed)
     LCW64{  54617739511834072ul,  231454301607238929ul,  97466271004074331ul},
     LCW64{ 576418665851990314ul,  231454301607238929ul,  97466271004074331ul}
   });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
+}
+
+TEST_F(MinHashTest, PermutedWide)
+{
+  std::string const small(2 << 10, 'x');  // below wide_string_threshold
+  std::string const wide(2 << 19, 'y');   // above wide_string_threshold
+  auto input = cudf::test::strings_column_wrapper({small, wide});
+  auto view  = cudf::strings_column_view(input);
+
+  auto first  = thrust::counting_iterator<uint32_t>(20);
+  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto results =
+    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
+
+  using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
+  // clang-format off
+  LCW32 expected({
+    LCW32{1731998032u,  315359380u, 3193688024u},
+    LCW32{1293098788u, 2860992281u,  133918478u}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto params64  = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 = nvtext::minhash64_permuted(
+    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
+
+  using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
+  // clang-format off
+   LCW64 expected64({
+     LCW64{1818322427062143853ul, 641024893347719371ul, 1769570368846988848ul},
+     LCW64{1389920339306667795ul, 421787002125838902ul, 1759496674158703968ul}
+   });
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results64, expected64);
 }

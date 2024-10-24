@@ -97,12 +97,12 @@ std::unique_ptr<cudf::column> minhash(
  *
  * The input strings are first hashed using the given `seed` over substrings
  * of `width` characters. These hash values are then combined with the `a`
- * and `b` values using the following formula:
+ * and `b` parameter values using the following formula:
  * ```
  *   max_hash = max of uint32
  *   mp = (1 << 61) - 1
- *   hv = hash value of a substring
- *   pv[i] = ((hv * a[i] + b[i]) % mp) & max_hash
+ *   hv[i] = hash value of a substring at i
+ *   pv[i] = ((hv[i] * a[i] + b[i]) % mp) & max_hash
  * ```
  *
  * This calculation is performed on each substring and the minimum value is computed
@@ -205,12 +205,12 @@ std::unique_ptr<cudf::column> minhash64(
  *
  * The input strings are first hashed using the given `seed` over substrings
  * of `width` characters. These hash values are then combined with the `a`
- * and `b` values using the following formula:
+ * and `b` parameter values using the following formula:
  * ```
  *   max_hash = max of uint64
  *   mp = (1 << 61) - 1
- *   hv = hash value of a substring
- *   pv[i] = ((hv * a[i] + b[i]) % mp) & max_hash
+ *   hv[i] = hash value of a substring at i
+ *   pv[i] = ((hv[i] * a[i] + b[i]) % mp) & max_hash
  * ```
  *
  * This calculation is performed on each substring and the minimum value is computed

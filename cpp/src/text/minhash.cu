@@ -175,7 +175,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
 // The intermediate values are stored in shared-memory and therefore limits this count.
 // This value was found to be the most efficient size for both uint32 and uint64
 // hash types based on benchmarks.
-constexpr cuda::std::size_t calc_chunk_size = 16;
+constexpr cuda::std::size_t params_per_thread = 16;
 
 // this is deprecated and to be removed in the future;
 // keeping it for now for verifying results from the faster kernels below
@@ -208,19 +208,19 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
 
   // Found to be the most efficient shared memory size for both hash types
-  __shared__ char shmem[block_size * calc_chunk_size * sizeof(hash_value_type)];
+  __shared__ char shmem[block_size * params_per_thread * sizeof(hash_value_type)];
   auto const block_values = reinterpret_cast<hash_value_type*>(shmem);
 
   auto const hasher = HashFunction(seed);
 
-  for (std::size_t i = 0; i < parameter_a.size(); i += calc_chunk_size) {
+  for (std::size_t i = 0; i < parameter_a.size(); i += params_per_thread) {
     // initialize working memory
-    auto const tile_hashes = block_values + (lane_idx * calc_chunk_size);
-    thrust::uninitialized_fill(thrust::seq, tile_hashes, tile_hashes + calc_chunk_size, init);
+    auto const tile_hashes = block_values + (lane_idx * params_per_thread);
+    thrust::uninitialized_fill(thrust::seq, tile_hashes, tile_hashes + params_per_thread, init);
     block.sync();
 
     auto const param_count =
-      cuda::std::min(static_cast<cuda::std::size_t>(calc_chunk_size), parameter_a.size() - i);
+      cuda::std::min(static_cast<cuda::std::size_t>(params_per_thread), parameter_a.size() - i);
 
     // each lane hashes 'width' substrings of d_str
     for (auto itr = begin; itr < end; itr += block_size) {
@@ -244,7 +244,7 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
         // permutation formula used by datatrove
         hash_value_type const v =
           ((hv * parameter_a[param_idx] + parameter_b[param_idx]) % mersenne_prime) & hash_max;
-        auto const block_idx    = ((param_idx % calc_chunk_size) * block_size) + lane_idx;
+        auto const block_idx    = ((param_idx % params_per_thread) * block_size) + lane_idx;
         block_values[block_idx] = cuda::std::min(v, block_values[block_idx]);
       }
     }
@@ -284,7 +284,7 @@ constexpr cudf::size_type blocks_per_string = 64;
  * @param seed The seed used for the hash function
  * @param width Width in characters used for determining substrings to hash
  * @param d_hashes The resulting hash values are stored here
- * @param count Stores the number of strings above wide_string_threshold
+ * @param threshold_count Stores the number of strings above wide_string_threshold
  * @param param_count Number of parameters (used for proactive initialize)
  * @param d_results Final results vector (used for proactive initialize)
  */
@@ -351,7 +351,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
       cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> ref{*threshold_count};
       ref.fetch_add(1, cuda::std::memory_order_relaxed);
     }
-    // initialize the output for wider strings
+    // initialize the output -- only needed for wider strings
     auto d_output = d_results + (str_idx * param_count);
     for (auto i = lane_idx; i < param_count; i += tile_size) {
       d_output[i] = std::numeric_limits<hash_value_type>::max();
@@ -362,8 +362,8 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
 /**
  * @brief Permutation calculation kernel
  *
- * This kernel computes uses the hashes from the minhash_seed_kernel to
- * compute the results using the parameter_a and parameter_b values.
+ * This kernel uses the hashes from the minhash_seed_kernel and the parameter_a and
+ * parameter_b values to compute the final output results.
  * The output is the number of input rows (N) by the number of parameter values (M).
  * Each output[i] is the calculated result for parameter_a/b[0:M].
  *
@@ -433,20 +433,20 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
 
   // found to be the most efficient shared memory size for both hash types
-  __shared__ char shmem[block_size * calc_chunk_size * sizeof(hash_value_type)];
+  __shared__ char shmem[block_size * params_per_thread * sizeof(hash_value_type)];
   auto const block_values = reinterpret_cast<hash_value_type*>(shmem);
 
-  for (std::size_t i = 0; i < parameter_a.size(); i += calc_chunk_size) {
-    // initialize our chunk of shared memory
-    // each thread handles calc_chunk_size of values
-    auto const chunk_values = block_values + (lane_idx * calc_chunk_size);
-    thrust::uninitialized_fill(thrust::seq, chunk_values, chunk_values + calc_chunk_size, init);
+  for (std::size_t i = 0; i < parameter_a.size(); i += params_per_thread) {
+    // initialize this block's chunk of shared memory
+    // each thread handles params_per_thread of values
+    auto const chunk_values = block_values + (lane_idx * params_per_thread);
+    thrust::uninitialized_fill(thrust::seq, chunk_values, chunk_values + params_per_thread, init);
     block.sync();
 
     auto const param_count =
-      cuda::std::min(static_cast<cuda::std::size_t>(calc_chunk_size), parameter_a.size() - i);
+      cuda::std::min(static_cast<cuda::std::size_t>(params_per_thread), parameter_a.size() - i);
 
-    // each lane accumulates min hashes in its spot in shared memory
+    // each lane accumulates min hashes in its shared memory
     for (auto itr = begin; itr < end; itr += block_size) {
       auto const hv = *itr;
       if (hv == 0) { continue; }  // 0 is used as a skip sentinel
@@ -455,14 +455,14 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
         // permutation formula used by datatrove
         hash_value_type const v =
           ((hv * parameter_a[param_idx] + parameter_b[param_idx]) % mersenne_prime) & hash_max;
-        auto const block_idx    = ((param_idx % calc_chunk_size) * block_size) + lane_idx;
+        auto const block_idx    = ((param_idx % params_per_thread) * block_size) + lane_idx;
         block_values[block_idx] = cuda::std::min(v, block_values[block_idx]);
       }
     }
     block.sync();
 
     // reduce each parameter values vector to a single min value
-    // assumes that the block_size > calc_chunk_size
+    // assumes that the block_size > params_per_thread
     // each thread reduces a block_size of parameter values (thread per parameter)
     if (lane_idx < param_count) {
       auto const values = block_values + (lane_idx * block_size);
@@ -568,7 +568,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
 
   // handle the strings above the threshold width
   if (threshold_index < input.size()) {
-    auto count = static_cast<cudf::thread_index_type>(input.size() - threshold_index);
+    auto const count = static_cast<cudf::thread_index_type>(input.size() - threshold_index);
     auto d_indices =
       cudf::device_span<cudf::size_type const>(indices.data() + threshold_index, count);
     cudf::detail::grid_1d grid{count * block_size * blocks_per_string, block_size};
