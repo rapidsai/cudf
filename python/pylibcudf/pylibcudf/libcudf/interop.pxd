@@ -32,11 +32,13 @@ cdef extern from "cudf/interop.hpp" nogil:
 
 cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
-    cdef unique_ptr[table] from_dlpack(const DLManagedTensor* tensor
-                                       ) except +
+    cdef unique_ptr[table] from_dlpack(
+        const DLManagedTensor* managed_tensor
+    ) except +
 
-    DLManagedTensor* to_dlpack(table_view input_table
-                               ) except +
+    DLManagedTensor* to_dlpack(
+        const table_view& input
+    ) except +
 
     cdef cppclass column_metadata:
         column_metadata() except +

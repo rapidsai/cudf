@@ -1,49 +1,22 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from cpython cimport pycapsule
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
 import pylibcudf
 
-from pylibcudf.libcudf.interop cimport (
-    DLManagedTensor,
-    from_dlpack as cpp_from_dlpack,
-    to_dlpack as cpp_to_dlpack,
-)
-from pylibcudf.libcudf.table.table cimport table
-from pylibcudf.libcudf.table.table_view cimport table_view
-
-from cudf._lib.utils cimport (
-    columns_from_pylibcudf_table,
-    columns_from_unique_ptr,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.dtypes import ListDtype, StructDtype
 
 
-def from_dlpack(dlpack_capsule):
+def from_dlpack(object dlpack_capsule):
     """
     Converts a DLPack Tensor PyCapsule into a list of columns.
 
     DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
-    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>pycapsule.\
-        PyCapsule_GetPointer(dlpack_capsule, 'dltensor')
-    pycapsule.PyCapsule_SetName(dlpack_capsule, 'used_dltensor')
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_from_dlpack(dlpack_tensor)
-        )
-
-    res = columns_from_unique_ptr(move(c_result))
-    dlpack_tensor.deleter(dlpack_tensor)
-    return res
+    return columns_from_pylibcudf_table(
+        pylibcudf.interop.from_dlpack(dlpack_capsule)
+    )
 
 
 def to_dlpack(list source_columns):
@@ -52,37 +25,11 @@ def to_dlpack(list source_columns):
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
-    if any(column.null_count for column in source_columns):
-        raise ValueError(
-            "Cannot create a DLPack tensor with null values. \
-                Input is required to have null count as zero."
+    return pylibcudf.interop.to_dlpack(
+        pylibcudf.Table(
+            [col.to_pylibcudf(mode="read") for col in source_columns]
         )
-
-    cdef DLManagedTensor *dlpack_tensor
-    cdef table_view source_table_view = table_view_from_columns(source_columns)
-
-    with nogil:
-        dlpack_tensor = cpp_to_dlpack(
-            source_table_view
-        )
-
-    return pycapsule.PyCapsule_New(
-        dlpack_tensor,
-        'dltensor',
-        dlmanaged_tensor_pycapsule_deleter
     )
-
-
-cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj) noexcept:
-    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>0
-    try:
-        dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
-            pycap_obj, 'used_dltensor')
-        return  # we do not call a used capsule's deleter
-    except Exception:
-        dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
-            pycap_obj, 'dltensor')
-    dlpack_tensor.deleter(dlpack_tensor)
 
 
 def gather_metadata(object cols_dtypes):
