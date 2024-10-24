@@ -9,6 +9,7 @@ from . import (
     normalize,
     replace,
     stemmer,
+    subword_tokenize,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "normalize",
     "replace",
     "stemmer",
+    "subword_tokenize",
 ]
