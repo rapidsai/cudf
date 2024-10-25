@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/dictionary.hpp>
 
 namespace cudf {
 
