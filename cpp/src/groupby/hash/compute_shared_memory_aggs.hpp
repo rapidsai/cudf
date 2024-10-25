@@ -23,11 +23,10 @@
 
 namespace cudf::groupby::detail::hash {
 
-size_t available_shared_memory_size(cudf::size_type grid_size);
-
-size_t shmem_offsets_size(cudf::size_type num_cols);
+std::size_t available_shared_memory_size(cudf::size_type grid_size);
 
 void compute_shared_memory_aggs(cudf::size_type grid_size,
+                                std::size_t available_shmem_size,
                                 cudf::size_type num_input_rows,
                                 bitmask_type const* row_bitmask,
                                 bool skip_rows_with_nulls,

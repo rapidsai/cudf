@@ -275,7 +275,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 }
 }  // namespace
 
-size_t available_shared_memory_size(cudf::size_type grid_size)
+std::size_t available_shared_memory_size(cudf::size_type grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
@@ -288,6 +288,7 @@ size_t available_shared_memory_size(cudf::size_type grid_size)
 }
 
 void compute_shared_memory_aggs(cudf::size_type grid_size,
+                                std::size_t available_shmem_size,
                                 cudf::size_type num_input_rows,
                                 bitmask_type const* row_bitmask,
                                 bool skip_rows_with_nulls,
@@ -299,15 +300,14 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
                                 cudf::aggregation::Kind const* d_agg_kinds,
                                 rmm::cuda_stream_view stream)
 {
-  auto const shmem_size = available_shared_memory_size(grid_size);
   // For each aggregation, need one offset determining where the aggregation is
   // performed, another indicating the validity of the aggregation
   auto const shmem_offsets_size = output_values.num_columns() * sizeof(cudf::size_type);
   // The rest of shmem is utilized for the actual arrays in shmem
-  CUDF_EXPECTS(shmem_size > shmem_offsets_size * 2,
+  CUDF_EXPECTS(available_shmem_size > shmem_offsets_size * 2,
                "No enough space for shared memory aggregations");
-  auto const shmem_agg_size = shmem_size - shmem_offsets_size * 2;
-  single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
+  auto const shmem_agg_size = available_shmem_size - shmem_offsets_size * 2;
+  single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
     skip_rows_with_nulls,
