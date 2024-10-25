@@ -56,7 +56,7 @@ void set_thread_pool_nthreads_from_env()
 {
   static std::once_flag flag{};
   std::call_once(flag, [] {
-    auto nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 8U);
+    auto nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 4U);
     kvikio::defaults::thread_pool_nthreads_reset(nthreads);
   });
 }
