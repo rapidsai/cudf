@@ -95,13 +95,11 @@ public final class DType {
   }
 
   final DTypeEnum typeId;
-
-  // Variables for Decimal Type
   private final int scale;
-  private final int precision;
 
   private DType(DTypeEnum id) {
-    this(id, 0, 0);
+    typeId = id;
+    scale = 0;
   }
 
   /**
@@ -110,42 +108,8 @@ public final class DType {
    * @param decimalScale Scale of fixed point decimal type
    */
   private DType(DTypeEnum id, int decimalScale) {
-    this(id, decimalScale, 0);
-  }
-
-  /**
-   * Constructor for Decimal Type.
-   * <p>
-   * If precision is less than or equal to 0, it will be set to the maximum precision of
-   * the corresponding decimal type.
-   *
-   * @param id Enum representing data type.
-   * @param decimalScale Scale of fixed point decimal type
-   * @param decimalPrecision Precision of the original decimal type
-   */
-  private DType(DTypeEnum id, int decimalScale, int  decimalPrecision) {
     typeId = id;
     scale = decimalScale;
-
-    if (decimalPrecision <= 0) {
-      if (id == DTypeEnum.DECIMAL32) {
-        precision = DECIMAL32_MAX_PRECISION;
-      } else if (id == DTypeEnum.DECIMAL64) {
-        precision = DECIMAL64_MAX_PRECISION;
-      } else if (id == DTypeEnum.DECIMAL128) {
-        precision = DType.DECIMAL128_MAX_PRECISION;
-      } else {
-        precision = 0; // this is not a decimal type
-      }
-    } else {
-      if ((id == DTypeEnum.DECIMAL32 && decimalPrecision > DECIMAL32_MAX_PRECISION) ||
-          (id == DTypeEnum.DECIMAL64 && decimalPrecision > DECIMAL64_MAX_PRECISION) ||
-          (id == DTypeEnum.DECIMAL128 && decimalPrecision > DECIMAL128_MAX_PRECISION)) {
-        throw new IllegalArgumentException("Precision " + decimalPrecision +
-            " exceeds max precision for " + id);
-      }
-      precision = decimalPrecision;
-    }
   }
 
   public static final DType EMPTY = new DType(DTypeEnum.EMPTY);
@@ -256,12 +220,6 @@ public final class DType {
    *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
    */
   public int getScale() { return scale; }
-
-  /**
-   * Returns precision for Decimal Type.
-   * @return number of digits in the unscaled value
-   */
-  public int getDecimalPrecision() { return precision; }
 
   /**
    * Return enum for this DType
