@@ -246,7 +246,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param in input stream to copy bytes from
    * @param byteLength number of bytes to copy
    */
-  final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
+  public final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
     addressOutOfBoundsCheck(address + destOffset, byteLength, "copy from stream");
     byte[] arrayBuffer = new byte[(int) Math.min(1024 * 128, byteLength)];
     long left = byteLength;
