@@ -607,7 +607,7 @@ class DataFrameScan(IR):
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
-        self._non_child_args = (schema, df, projection, predicate)
+        self._non_child_args = (schema, df, self.projection, predicate)
         self.children = ()
 
     def get_hashable(self) -> Hashable:
@@ -665,7 +665,7 @@ class Select(IR):
         self.exprs = tuple(exprs)
         self.should_broadcast = should_broadcast
         self.children = (df,)
-        self._non_child_args = (exprs, should_broadcast)
+        self._non_child_args = (self.exprs, should_broadcast)
 
     @classmethod
     def do_evaluate(
@@ -700,7 +700,7 @@ class Reduce(IR):
         self.schema = schema
         self.exprs = tuple(exprs)
         self.children = (df,)
-        self._non_child_args = (exprs,)
+        self._non_child_args = (self.exprs,)
 
     @classmethod
     def do_evaluate(
@@ -757,8 +757,8 @@ class GroupBy(IR):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
         self._non_child_args = (
-            keys,
-            agg_requests,
+            self.keys,
+            self.agg_requests,
             maintain_order,
             options,
             self.agg_infos,
