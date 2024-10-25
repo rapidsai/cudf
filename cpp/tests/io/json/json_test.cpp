@@ -2975,4 +2975,26 @@ TEST_F(JsonReaderTest, JsonDtypeSchema)
                                  cudf::test::debug_output_level::ALL_ERRORS);
 }
 
+TEST_F(JsonReaderTest, Debug)
+{
+  // unicode at nested and leaf levels
+  std::string data = R"({"data": 0}
+  [1, 2, 3]
+  "null")";
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .experimental(true)
+      .lines(true);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 3);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info.at(0).name, "data");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{0, 0, 0}, {true, false, false}},
+                                 cudf::test::debug_output_level::ALL_ERRORS);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
