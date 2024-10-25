@@ -31,7 +31,7 @@ public class Schema {
   private static final int UNKNOWN_PRECISION = -1;
 
   private final DType topLevelType;
-  private final int precision; // storing precision for decimal types
+  private final int topLevelPrecision; // only applicable if the top level is a decimal type
   private final List<String> childNames;
   private final List<Schema> childSchemas;
   private boolean flattened = false;
@@ -40,14 +40,12 @@ public class Schema {
   private int[] flattenedCounts;
   private int[] flattenedPrecisions;
 
-
-
   private Schema(DType topLevelType,
-                 int precision,
+                 int topLevelPrecision,
                  List<String> childNames,
                  List<Schema> childSchemas) {
     this.topLevelType = topLevelType;
-    this.precision = precision;
+    this.topLevelPrecision = topLevelPrecision;
     this.childNames = childNames;
     this.childSchemas = childSchemas;
   }
@@ -63,7 +61,7 @@ public class Schema {
    */
   private Schema() {
     topLevelType = null;
-    precision = UNKNOWN_PRECISION;
+    topLevelPrecision = UNKNOWN_PRECISION;
     childNames = null;
     childSchemas = null;
   }
@@ -152,7 +150,7 @@ public class Schema {
         Schema child = childSchemas.get(i);
         names[offset] = childNames.get(i);
         types[offset] = child.topLevelType;
-        precisions[offset] = child.precision;
+        precisions[offset] = child.topLevelPrecision;
         if (child.childNames != null) {
           counts[offset] = child.childNames.size();
         } else {
@@ -340,9 +338,9 @@ public class Schema {
     private final List<String> names;
     private final List<Builder> types;
 
-    private Builder(DType topLevelType, int precision) {
+    private Builder(DType topLevelType, int topLevelPrecision) {
       this.topLevelType = topLevelType;
-      this.topLevelPrecision = precision;
+      this.topLevelPrecision = topLevelPrecision;
       if (topLevelType == DType.STRUCT || topLevelType == DType.LIST) {
         // There can be children
         names = new ArrayList<>();
