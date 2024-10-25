@@ -611,6 +611,7 @@ ConfigureTest(
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
+  text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
   text/normalize_tests.cpp

@@ -52,56 +52,54 @@ namespace nvtext {
 namespace detail {
 namespace {
 
-constexpr cudf::thread_index_type block_size = 256;
-// for tuning independently from block_size
-constexpr cudf::thread_index_type tile_size = block_size;
-
 /**
  * @brief Compute the minhash of each string for each seed
  *
- * This is a block-per-string algorithm where parallel threads within a block
- * work on a single string row.
+ * This is a warp-per-string algorithm where parallel threads within a warp
+ * work on substrings of a single string row.
  *
  * @tparam HashFunction hash function to use on each substring
  *
  * @param d_strings Strings column to process
  * @param seeds Seeds for hashing each string
  * @param width Substring window size in characters
- * @param working_memory Memory used to hold intermediate hash values
  * @param d_hashes Minhash output values for each string
  */
-template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
+template <
+  typename HashFunction,
+  typename hash_value_type = std::
+    conditional_t<std::is_same_v<typename HashFunction::result_type, uint32_t>, uint32_t, uint64_t>>
 CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
                                 cudf::device_span<hash_value_type const> seeds,
                                 cudf::size_type width,
-                                hash_value_type* working_memory,
                                 hash_value_type* d_hashes)
 {
-  auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = idx / block_size;
-  if (str_idx >= d_strings.size()) { return; }
+  auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
+  if (idx >= (static_cast<std::size_t>(d_strings.size()) *
+              static_cast<std::size_t>(cudf::detail::warp_size))) {
+    return;
+  }
+
+  auto const str_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
+
   if (d_strings.is_null(str_idx)) { return; }
 
   auto const d_str    = d_strings.element<cudf::string_view>(str_idx);
-  auto const init     = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
-  auto const lane_idx = idx % block_size;
-
-  auto tile_hashes = working_memory + (str_idx * block_size * seeds.size());
-
-  // initialize working memory
-  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size(); seed_idx += block_size) {
-    auto begin = tile_hashes + (seed_idx * block_size);
-    thrust::uninitialized_fill(thrust::seq, begin, begin + block_size, init);
-  }
-  __syncthreads();
-
   auto const d_output = d_hashes + (str_idx * seeds.size());
+
+  // initialize hashes output for this string
+  if (lane_idx == 0) {
+    auto const init = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
+    thrust::fill(thrust::seq, d_output, d_output + seeds.size(), init);
+  }
+  __syncwarp();
 
   auto const begin = d_str.data() + lane_idx;
   auto const end   = d_str.data() + d_str.size_bytes();
 
   // each lane hashes 'width' substrings of d_str
-  for (auto itr = begin; itr < end; itr += block_size) {
+  for (auto itr = begin; itr < end; itr += cudf::detail::warp_size) {
     if (cudf::strings::detail::is_utf8_continuation_char(*itr)) { continue; }
     auto const check_str =  // used for counting 'width' characters
       cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
@@ -109,29 +107,30 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
     if ((itr != d_str.data()) && (left > 0)) { continue; }  // true if past the end of the string
 
     auto const hash_str = cudf::string_view(itr, bytes);
+    // hashing with each seed on the same section of the string is 10x faster than
+    // computing the substrings for each seed
     for (std::size_t seed_idx = 0; seed_idx < seeds.size(); ++seed_idx) {
       auto const hasher = HashFunction(seeds[seed_idx]);
-      hash_value_type hv;
+      // hash substring and store the min value
       if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
-        hv = hasher(hash_str);
+        auto const hvalue = hasher(hash_str);
+        cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
+        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
       } else {
-        hv = thrust::get<0>(hasher(hash_str));
+        // This code path assumes the use of MurmurHash3_x64_128 which produces 2 uint64 values
+        // but only uses the first uint64 value as requested by the LLM team.
+        auto const hvalue = thrust::get<0>(hasher(hash_str));
+        cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
+        ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
       }
-      tile_hashes[(seed_idx * block_size) + lane_idx] =
-        cuda::std::min(hv, tile_hashes[(seed_idx * block_size) + lane_idx]);
     }
-  }
-  __syncthreads();
-
-  // compute final result
-  for (std::size_t seed_idx = lane_idx; seed_idx < seeds.size(); seed_idx += block_size) {
-    auto begin = tile_hashes + (seed_idx * block_size);
-    auto hv    = thrust::reduce(thrust::seq, begin, begin + block_size, init, thrust::minimum{});
-    d_output[seed_idx] = hv;
   }
 }
 
-template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
+template <
+  typename HashFunction,
+  typename hash_value_type = std::
+    conditional_t<std::is_same_v<typename HashFunction::result_type, uint32_t>, uint32_t, uint64_t>>
 std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                          cudf::device_span<hash_value_type const> seeds,
                                          cudf::size_type width,
@@ -159,107 +158,24 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                                           mr);
   auto d_hashes = hashes->mutable_view().data<hash_value_type>();
 
-  auto const wm_size  = cudf::util::round_up_safe(seeds.size() * tile_size * input.size(),
-                                                 static_cast<std::size_t>(block_size));
-  auto working_memory = rmm::device_uvector<hash_value_type>(wm_size, stream);
-
-  cudf::detail::grid_1d grid{static_cast<cudf::thread_index_type>(input.size()) * tile_size,
-                             block_size};
+  constexpr cudf::thread_index_type block_size = 256;
+  cudf::detail::grid_1d grid{
+    static_cast<cudf::thread_index_type>(input.size()) * cudf::detail::warp_size, block_size};
   minhash_kernel<HashFunction><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    *d_strings, seeds, width, working_memory.data(), d_hashes);
+    *d_strings, seeds, width, d_hashes);
 
   return hashes;
 }
 
-// Number of parameter a/b values to process per thread.
+constexpr cudf::thread_index_type block_size = 256;
+// for tuning independently from block_size
+constexpr cudf::thread_index_type tile_size = block_size;
+
+// Number of a/b parameter values to process per thread.
 // The intermediate values are stored in shared-memory and therefore limits this count.
 // This value was found to be the most efficient size for both uint32 and uint64
 // hash types based on benchmarks.
 constexpr cuda::std::size_t params_per_thread = 16;
-
-// this is deprecated and to be removed in the future;
-// keeping it for now for verifying results from the faster kernels below
-template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
-CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_strings,
-                                         hash_value_type seed,
-                                         cudf::device_span<hash_value_type const> parameter_a,
-                                         cudf::device_span<hash_value_type const> parameter_b,
-                                         cudf::size_type width,
-                                         hash_value_type* d_hashes)
-{
-  auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = idx / block_size;
-  if (str_idx >= d_strings.size()) { return; }
-  if (d_strings.is_null(str_idx)) { return; }
-
-  auto const block = cooperative_groups::this_thread_block();
-
-  auto const d_str    = d_strings.element<cudf::string_view>(str_idx);
-  auto const init     = d_str.empty() ? 0 : std::numeric_limits<hash_value_type>::max();
-  auto const lane_idx = block.thread_rank();  // idx % block_size;
-
-  auto const d_output = d_hashes + (str_idx * parameter_a.size());
-
-  auto const begin = d_str.data() + lane_idx;
-  auto const end   = d_str.data() + d_str.size_bytes();
-
-  // constants used for the permutation calculations
-  constexpr uint64_t mersenne_prime  = (1UL << 61) - 1;
-  constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
-
-  // Found to be the most efficient shared memory size for both hash types
-  __shared__ char shmem[block_size * params_per_thread * sizeof(hash_value_type)];
-  auto const block_values = reinterpret_cast<hash_value_type*>(shmem);
-
-  auto const hasher = HashFunction(seed);
-
-  for (std::size_t i = 0; i < parameter_a.size(); i += params_per_thread) {
-    // initialize working memory
-    auto const tile_hashes = block_values + (lane_idx * params_per_thread);
-    thrust::uninitialized_fill(thrust::seq, tile_hashes, tile_hashes + params_per_thread, init);
-    block.sync();
-
-    auto const param_count =
-      cuda::std::min(static_cast<cuda::std::size_t>(params_per_thread), parameter_a.size() - i);
-
-    // each lane hashes 'width' substrings of d_str
-    for (auto itr = begin; itr < end; itr += block_size) {
-      if (cudf::strings::detail::is_utf8_continuation_char(*itr)) { continue; }
-      auto const check_str =  // used for counting 'width' characters
-        cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
-      auto const [bytes, left] =
-        cudf::strings::detail::bytes_to_character_position(check_str, width);
-      if ((itr != d_str.data()) && (left > 0)) { continue; }  // true if past the end of the string
-
-      auto const hash_str = cudf::string_view(itr, bytes);
-      hash_value_type hv;
-      if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
-        hv = hasher(hash_str);
-      } else {
-        hv = thrust::get<0>(hasher(hash_str));
-      }
-      hv = cuda::std::max(hv, hash_value_type{1});
-
-      for (std::size_t param_idx = i; param_idx < (i + param_count); ++param_idx) {
-        // permutation formula used by datatrove
-        hash_value_type const v =
-          ((hv * parameter_a[param_idx] + parameter_b[param_idx]) % mersenne_prime) & hash_max;
-        auto const block_idx    = ((param_idx % params_per_thread) * block_size) + lane_idx;
-        block_values[block_idx] = cuda::std::min(v, block_values[block_idx]);
-      }
-    }
-    block.sync();
-
-    // reduce each parameter values vector to a single min value
-    if (lane_idx < param_count) {
-      auto const values = block_values + (lane_idx * block_size);
-      auto const minv =
-        thrust::reduce(thrust::seq, values, values + block_size, init, thrust::minimum{});
-      d_output[lane_idx + i] = minv;
-    }
-    block.sync();
-  }
-}
 
 // Separate kernels are used to process strings above and below this value (in bytes).
 constexpr cudf::size_type wide_string_threshold = 1 << 18;  // 256K
