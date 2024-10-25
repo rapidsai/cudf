@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections.abc import Iterator
 from functools import wraps
-import warnings
 
 import cupy
 import numpy as np

@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 import cupy as cp
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.common import infer_dtype_from_object
 import pyarrow as pa
+from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 

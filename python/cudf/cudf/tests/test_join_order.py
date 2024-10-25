@@ -1,9 +1,9 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
-from collections import defaultdict
 import itertools
 import operator
 import string
+from collections import defaultdict
 
 import numpy as np
 import pytest

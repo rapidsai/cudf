@@ -7,9 +7,9 @@ import os
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+import pytest
 from pyarrow.orc import write_table as orc_write_table
 from pyarrow.parquet import write_table as pq_write_table
-import pytest
 
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType

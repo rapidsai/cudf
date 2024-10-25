@@ -1,9 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from contextlib import contextmanager
-from functools import reduce
 import operator
 import warnings
+from contextlib import contextmanager
+from functools import reduce
 
 import cupy as cp
 import numpy as np

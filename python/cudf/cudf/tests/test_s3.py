@@ -1,14 +1,14 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from contextlib import contextmanager
-from io import BytesIO, StringIO
 import os
 import socket
+from contextlib import contextmanager
+from io import BytesIO, StringIO
 
-from fsspec.core import get_fs_token_paths
 import numpy as np
 import pandas as pd
 import pytest
+from fsspec.core import get_fs_token_paths
 
 import cudf
 from cudf.testing import assert_eq

@@ -1,7 +1,8 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import operator
 
+import numpy as np
 from numba import types
 from numba.core.extending import (
     make_attribute_wrapper,
@@ -18,7 +19,6 @@ from numba.core.typing.templates import (
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.np.numpy_support import from_dtype
-import numpy as np
 
 from cudf.core.missing import NA
 from cudf.core.udf import api

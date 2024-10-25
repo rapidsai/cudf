@@ -6,8 +6,8 @@ import calendar
 import datetime
 import functools
 import locale
-from locale import nl_langinfo
 import re
+from locale import nl_langinfo
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np

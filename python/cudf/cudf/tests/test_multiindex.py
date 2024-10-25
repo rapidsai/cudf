@@ -4,13 +4,13 @@
 Test related to MultiIndex
 """
 
-from contextlib import contextmanager
 import datetime
-from io import BytesIO
 import itertools
 import operator
 import pickle
 import re
+from contextlib import contextmanager
+from io import BytesIO
 
 import cupy as cp
 import numpy as np
@@ -817,8 +817,8 @@ def test_multiindex_copy_deep(data, copy_on_write, deep):
     cudf.set_option("copy_on_write", copy_on_write)
 
     if isinstance(data, dict):
-        from functools import reduce
         import operator
+        from functools import reduce
 
         gdf = cudf.DataFrame(data)
         mi1 = gdf.groupby(["Date", "Symbol"]).mean().index

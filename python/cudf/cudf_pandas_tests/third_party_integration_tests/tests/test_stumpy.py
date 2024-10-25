@@ -1,11 +1,11 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
-from numba import cuda
 import numpy as np
 import pandas as pd
-from pandas._testing import assert_equal
 import pytest
 import stumpy
+from numba import cuda
+from pandas._testing import assert_equal
 
 
 def stumpy_assert_equal(expected, got):

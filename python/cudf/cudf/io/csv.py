@@ -1,8 +1,8 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections import abc
 from io import BytesIO, StringIO
-import warnings
 
 import numpy as np
 

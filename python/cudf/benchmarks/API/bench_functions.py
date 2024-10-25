@@ -2,10 +2,10 @@
 
 """Benchmarks of free functions that accept cudf objects."""
 
-from config import NUM_ROWS, cudf, cupy
 import numpy as np
 import pytest
 import pytest_cases
+from config import NUM_ROWS, cudf, cupy
 from utils import benchmark_with_object
 
 

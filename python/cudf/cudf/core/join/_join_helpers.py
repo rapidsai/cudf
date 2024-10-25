@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, cast
-import warnings
 
 import numpy as np
 

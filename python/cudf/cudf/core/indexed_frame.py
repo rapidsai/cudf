@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-from collections import Counter, abc
 import operator
 import textwrap
+import warnings
+from collections import Counter, abc
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -14,7 +15,6 @@ from typing import (
     cast,
 )
 from uuid import uuid4
-import warnings
 
 import cupy as cp
 import numpy as np
@@ -25,6 +25,8 @@ import pylibcudf
 
 import cudf
 import cudf._lib as libcudf
+import cudf.core
+import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -32,10 +34,8 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-import cudf.core
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
-import cudf.core.algorithms
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor

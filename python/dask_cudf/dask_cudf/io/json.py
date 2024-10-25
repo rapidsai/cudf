@@ -2,8 +2,8 @@
 
 from functools import partial
 
-from fsspec.core import get_compression, get_fs_token_paths
 import numpy as np
+from fsspec.core import get_compression, get_fs_token_paths
 
 import dask
 from dask.utils import parse_bytes

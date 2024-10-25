@@ -70,7 +70,6 @@ extend = "../../pyproject.toml"
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
-force-sort-within-sections = true
 known-first-party = ["streamz"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 

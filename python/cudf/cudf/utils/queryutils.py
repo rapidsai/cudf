@@ -5,8 +5,8 @@ import ast
 import datetime
 from typing import Any
 
-from numba import cuda
 import numpy as np
+from numba import cuda
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock

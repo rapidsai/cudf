@@ -2,13 +2,13 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import defaultdict
 import contextlib
-from functools import wraps
 import json
 import os
 import sys
 import traceback
+from collections import defaultdict
+from functools import wraps
 
 import pytest
 

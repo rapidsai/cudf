@@ -4,15 +4,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
-from enum import IntEnum
 import functools
 import inspect
 import operator
 import pickle
 import types
-from typing import Any, Literal
 import warnings
+from collections.abc import Callable, Iterator, Mapping
+from enum import IntEnum
+from typing import Any, Literal
 
 import numpy as np
 

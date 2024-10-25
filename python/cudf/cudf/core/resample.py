@@ -16,21 +16,21 @@
 from __future__ import annotations
 
 import pickle
-from typing import TYPE_CHECKING
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 import cudf
 import cudf._lib.labeling
+import cudf.core.index
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
     SeriesGroupBy,
     _Grouping,
 )
-import cudf.core.index
 
 if TYPE_CHECKING:
     from cudf._typing import DataFrameOrSeries

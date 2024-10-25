@@ -1,11 +1,11 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-from contextlib import ExitStack as does_not_raise
-from decimal import Decimal
 import json
 import re
-from sys import getsizeof
 import urllib.parse
+from contextlib import ExitStack as does_not_raise
+from decimal import Decimal
+from sys import getsizeof
 
 import cupy
 import numpy as np

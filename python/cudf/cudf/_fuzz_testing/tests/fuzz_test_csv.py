@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from io import StringIO
 import sys
+from io import StringIO
 
 import pandas as pd
 

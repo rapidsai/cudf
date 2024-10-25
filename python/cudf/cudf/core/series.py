@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections import abc
 import functools
 import inspect
 import pickle
-from shutil import get_terminal_size
 import textwrap
-from typing import TYPE_CHECKING, Any, Literal
 import warnings
+from collections import abc
+from shutil import get_terminal_size
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numpy as np

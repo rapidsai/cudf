@@ -1,12 +1,12 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
+import pandas as pd
+import pytest
+import seaborn as sns
 from matplotlib.axes import Axes
 from matplotlib.collections import PathCollection
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
-import pandas as pd
 from pandas._testing import assert_equal
-import pytest
-import seaborn as sns
 
 
 def assert_plots_equal(expect, got):

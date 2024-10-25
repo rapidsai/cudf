@@ -4,20 +4,20 @@
 
 from __future__ import annotations
 
-from abc import abstractmethod
 import contextlib
 import functools
 import importlib
-from importlib._bootstrap import _ImportLockContext as ImportLock
 import importlib.abc
 import importlib.machinery
 import os
 import pathlib
 import sys
 import threading
+import warnings
+from abc import abstractmethod
+from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
 from typing import Any, ContextManager, NamedTuple  # noqa: UP035
-import warnings
 
 from typing_extensions import Self
 

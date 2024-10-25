@@ -7,8 +7,8 @@ import itertools
 import os
 
 import numpy as np
-from packaging import version
 import pytest
+from packaging import version
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION

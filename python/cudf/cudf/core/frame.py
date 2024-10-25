@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections import abc
 import operator
 import pickle
-from typing import TYPE_CHECKING, Any, Literal
 import warnings
+from collections import abc
+from typing import TYPE_CHECKING, Any, Literal
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.

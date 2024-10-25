@@ -1,9 +1,9 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 
 """Benchmarks of Index methods."""
 
-from config import cudf, cupy
 import pytest
+from config import cudf, cupy
 from utils import benchmark_with_object
 
 

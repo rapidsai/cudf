@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from functools import partial
 import inspect
+from functools import partial
 from io import StringIO
 
 import numpy as np

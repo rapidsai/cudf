@@ -2,9 +2,9 @@
 
 import datetime
 import decimal
-from io import BytesIO
 import os
 import random
+from io import BytesIO
 from string import ascii_lowercase
 
 import numpy as np

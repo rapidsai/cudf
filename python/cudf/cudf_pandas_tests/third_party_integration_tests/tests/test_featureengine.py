@@ -1,8 +1,8 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
-from feature_engine.imputation import DropMissingData
-from feature_engine.preprocessing import MatchVariables
 import numpy as np
 import pandas as pd
+from feature_engine.imputation import DropMissingData
+from feature_engine.preprocessing import MatchVariables
 
 
 def test_drop_missing_data():

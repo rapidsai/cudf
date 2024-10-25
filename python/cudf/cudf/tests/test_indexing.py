@@ -1,8 +1,8 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+import weakref
 from datetime import datetime
 from itertools import combinations
-import weakref
 
 import cupy
 import numpy as np

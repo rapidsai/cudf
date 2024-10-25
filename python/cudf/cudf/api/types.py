@@ -4,11 +4,11 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
 from typing import cast
-import warnings
 
 import cupy as cp
 import numpy as np

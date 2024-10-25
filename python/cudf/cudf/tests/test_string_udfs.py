@@ -1,12 +1,12 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import numba
-from numba import cuda
-from numba.core.typing import signature as nb_signature
-from numba.types import CPointer, void
 import numpy as np
 import pandas as pd
 import pytest
+from numba import cuda
+from numba.core.typing import signature as nb_signature
+from numba.types import CPointer, void
 
 import rmm
 

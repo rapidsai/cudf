@@ -1,9 +1,9 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import decimal
-from itertools import combinations_with_replacement, product
 import operator
 import warnings
+from itertools import combinations_with_replacement, product
 
 import cupy as cp
 import numpy as np

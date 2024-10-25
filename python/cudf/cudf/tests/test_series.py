@@ -1,10 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from collections import OrderedDict, defaultdict
 import datetime
 import decimal
 import hashlib
 import operator
 import re
+from collections import OrderedDict, defaultdict
 from string import ascii_letters, digits
 
 import cupy as cp

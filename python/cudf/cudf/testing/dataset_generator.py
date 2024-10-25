@@ -6,10 +6,10 @@
 # are exaggerated.
 
 import copy
-from multiprocessing import Pool
 import random
 import string
 import uuid
+from multiprocessing import Pool
 
 import numpy as np
 import pandas as pd

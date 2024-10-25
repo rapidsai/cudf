@@ -2,8 +2,8 @@
 
 """Test cases for benchmarks in bench_functions.py."""
 
-from config import NUM_ROWS, cudf, cupy
 import pytest_cases
+from config import NUM_ROWS, cudf, cupy
 
 
 @pytest_cases.parametrize("nr", NUM_ROWS)

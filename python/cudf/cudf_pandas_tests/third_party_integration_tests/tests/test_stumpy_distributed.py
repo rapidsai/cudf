@@ -2,9 +2,9 @@
 
 import numpy as np
 import pandas as pd
-from pandas._testing import assert_equal
 import pytest
 import stumpy
+from pandas._testing import assert_equal
 
 from dask.distributed import Client, LocalCluster
 

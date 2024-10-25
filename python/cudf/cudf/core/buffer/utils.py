@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import ContextDecorator
 import threading
+from contextlib import ContextDecorator
 from typing import Any
 
 from cudf.core.buffer.buffer import (

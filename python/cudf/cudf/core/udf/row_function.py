@@ -1,9 +1,9 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 import math
 
+import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-import numpy as np
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.masked_typing import MaskedType

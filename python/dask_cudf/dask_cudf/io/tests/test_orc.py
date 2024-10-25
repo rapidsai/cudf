@@ -1,8 +1,8 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-from datetime import datetime, timezone
 import glob
 import os
+from datetime import datetime, timezone
 
 import pytest
 

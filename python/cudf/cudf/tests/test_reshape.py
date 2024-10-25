@@ -1,7 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-from itertools import chain
 import re
+from itertools import chain
 
 import numpy as np
 import pandas as pd

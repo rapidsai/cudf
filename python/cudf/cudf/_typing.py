@@ -1,7 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-from collections.abc import Callable, Iterable
 import sys
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 import numpy as np

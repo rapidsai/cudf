@@ -1,14 +1,14 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import datetime
-from decimal import Decimal
 import re
+from decimal import Decimal
 
 import numpy as np
-from packaging import version
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 
 import rmm
 

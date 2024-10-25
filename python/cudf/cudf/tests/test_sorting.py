@@ -1,7 +1,7 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-from itertools import product
 import string
+from itertools import product
 
 import numpy as np
 import pandas as pd

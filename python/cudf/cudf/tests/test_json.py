@@ -2,9 +2,9 @@
 
 import copy
 import gzip
-from io import BytesIO, StringIO
 import itertools
 import os
+from io import BytesIO, StringIO
 from pathlib import Path
 
 import numpy as np

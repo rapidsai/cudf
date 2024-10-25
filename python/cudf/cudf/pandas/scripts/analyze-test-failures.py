@@ -13,10 +13,10 @@ Example:
     python analyze-test-failures.py log.json frame/*
 """
 
-from collections import Counter
-from fnmatch import fnmatch
 import json
 import sys
+from collections import Counter
+from fnmatch import fnmatch
 
 from rich.console import Console
 from rich.table import Table

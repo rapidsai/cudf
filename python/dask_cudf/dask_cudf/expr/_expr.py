@@ -1,6 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import functools
 
+import dask_expr._shuffle as _shuffle_module
+import pandas as pd
 from dask_expr import new_collection
 from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
@@ -9,10 +11,8 @@ from dask_expr._groupby import (
     GroupbyAggregation,
 )
 from dask_expr._reductions import Reduction, Var
-import dask_expr._shuffle as _shuffle_module
 from dask_expr.io.io import FusedParquetIO
 from dask_expr.io.parquet import FragmentWrapper, ReadParquetPyarrowFS
-import pandas as pd
 
 from dask.dataframe.core import (
     _concat,

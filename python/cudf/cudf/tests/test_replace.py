@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from decimal import Decimal
 import operator
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd

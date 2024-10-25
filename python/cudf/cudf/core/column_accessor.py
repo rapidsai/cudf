@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import itertools
+import sys
 from collections import abc
 from collections.abc import Mapping
 from functools import cached_property, reduce
-import itertools
-import sys
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np

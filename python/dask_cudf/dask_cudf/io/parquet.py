@@ -1,8 +1,8 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
-from functools import partial
-from io import BufferedWriter, BytesIO, IOBase
 import itertools
 import warnings
+from functools import partial
+from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
 import pandas as pd

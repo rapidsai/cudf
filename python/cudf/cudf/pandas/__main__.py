@@ -11,10 +11,10 @@ python -m cudf.pandas -m module <args>
 
 import argparse
 import code
-from contextlib import contextmanager
 import runpy
 import sys
 import tempfile
+from contextlib import contextmanager
 
 from . import install
 from .profiler import Profiler, lines_with_profiling

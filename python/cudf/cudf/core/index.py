@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import operator
+import pickle
+import warnings
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
 from numbers import Number
-import operator
-import pickle
 from typing import TYPE_CHECKING, Any, Literal, cast
-import warnings
 
 import cupy
 import numpy as np

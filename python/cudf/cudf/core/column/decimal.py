@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
-import warnings
 
 import cupy as cp
 import numpy as np

@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from contextlib import contextmanager
-from dataclasses import dataclass
-from functools import partial
 import gc
 import io
 import textwrap
 import threading
 import traceback
-from typing import TYPE_CHECKING
 import warnings
 import weakref
+from collections import defaultdict
+from contextlib import contextmanager
+from dataclasses import dataclass
+from functools import partial
+from typing import TYPE_CHECKING
 
 import rmm.mr
 

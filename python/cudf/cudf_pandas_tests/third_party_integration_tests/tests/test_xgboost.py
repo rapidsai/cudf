@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import scipy.sparse
-from sklearn.datasets import make_regression
 import xgboost as xgb
+from sklearn.datasets import make_regression
 from xgboost.testing import IteratorForTest, make_categorical
 
 n_samples = 128

@@ -2,11 +2,11 @@
 import operator
 
 import cupy as cp
+import numpy as np
+import pytest
 from numba import cuda, types
 from numba.cuda import compile_ptx
 from numba.np.numpy_support import from_dtype
-import numpy as np
-import pytest
 
 from cudf import NA
 from cudf.core.udf.api import Masked

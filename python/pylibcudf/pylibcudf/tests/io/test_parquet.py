@@ -1,8 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import pyarrow as pa
 import pyarrow.compute as pc
-from pyarrow.parquet import read_table
 import pytest
+from pyarrow.parquet import read_table
 from utils import assert_table_and_meta_eq, make_source
 
 import pylibcudf as plc

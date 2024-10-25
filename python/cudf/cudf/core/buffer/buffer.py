@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import math
 import pickle
+import weakref
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal
-import weakref
 
 import numpy
 from typing_extensions import Self

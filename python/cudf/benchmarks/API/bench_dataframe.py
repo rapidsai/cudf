@@ -4,11 +4,11 @@
 
 import string
 
-from config import cudf, cupy
 import numba.cuda
 import numpy
 import pytest
 import pytest_cases
+from config import cudf, cupy
 from utils import benchmark_with_object
 
 

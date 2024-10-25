@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from collections import abc
 import logging
 import random
+from collections import abc
 
 import numpy as np
 

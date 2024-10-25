@@ -2,18 +2,18 @@
 
 import collections
 import datetime
-from decimal import Decimal
-from functools import partial
 import itertools
 import operator
 import string
 import textwrap
+from decimal import Decimal
+from functools import partial
 
-from numba import cuda
 import numpy as np
-from numpy.testing import assert_array_equal
 import pandas as pd
 import pytest
+from numba import cuda
+from numpy.testing import assert_array_equal
 
 import rmm
 

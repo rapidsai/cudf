@@ -1,17 +1,17 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from collections import defaultdict
-from contextlib import ExitStack
-from functools import partial, reduce
 import itertools
 import math
 import operator
 import shutil
 import tempfile
+import warnings
+from collections import defaultdict
+from contextlib import ExitStack
+from functools import partial, reduce
 from typing import TYPE_CHECKING
 from uuid import uuid4
-import warnings
 
 import numpy as np
 import pandas as pd

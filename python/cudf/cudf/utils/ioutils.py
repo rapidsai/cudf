@@ -1,20 +1,20 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-from collections.abc import Callable
 import datetime
 import functools
-from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 import operator
 import os
-from threading import Thread
 import urllib
 import warnings
+from collections.abc import Callable
+from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
+from threading import Thread
 
 import fsspec
-from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 import fsspec.implementations.local
 import numpy as np
 import pandas as pd
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300

@@ -1,7 +1,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-from pandas import NA
 import pytest
+from pandas import NA
 
 from dask import dataframe as dd
 

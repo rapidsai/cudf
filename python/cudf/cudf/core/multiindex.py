@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from functools import cached_property
 import itertools
 import numbers
 import operator
 import pickle
-from typing import TYPE_CHECKING, Any
 import warnings
+from functools import cached_property
+from typing import TYPE_CHECKING, Any
 
 import cupy as cp
 import numpy as np

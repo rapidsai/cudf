@@ -6,16 +6,16 @@ import os
 from typing import TYPE_CHECKING, Any
 
 import cachetools
-from cuda import cudart
 import cupy as cp
 import llvmlite.binding as ll
+import numpy as np
+from cuda import cudart
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager, models
 from numba.core.errors import TypingError
 from numba.core.extending import register_model
 from numba.np import numpy_support
 from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
-import numpy as np
 
 import rmm
 

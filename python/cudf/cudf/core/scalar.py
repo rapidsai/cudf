@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from collections import OrderedDict
 import decimal
 import operator
+from collections import OrderedDict
 
 import numpy as np
 import pyarrow as pa

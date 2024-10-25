@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import io
-from io import StringIO
 import os
+from io import StringIO
 
 import pandas as pd
 import pyarrow as pa

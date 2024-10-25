@@ -74,7 +74,6 @@ extend = "../../pyproject.toml"
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
-force-sort-within-sections = true
 known-first-party = ["dask_cudf"]
 section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 

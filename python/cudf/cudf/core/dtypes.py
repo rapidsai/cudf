@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import decimal
-from functools import cached_property
 import operator
 import pickle
 import textwrap
-from typing import TYPE_CHECKING, Any
 import warnings
+from functools import cached_property
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-import pyarrow as pa
 
 import cudf
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300

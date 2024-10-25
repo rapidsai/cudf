@@ -1,19 +1,19 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from collections import abc
-from contextlib import contextmanager
-from decimal import Decimal
 import itertools
 import string
 import time
+from collections import abc
+from contextlib import contextmanager
+from decimal import Decimal
 
+import numpy as np
+import pandas as pd
+import pytest
 from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.cuda.cudaimpl import lower as cuda_lower
-import numpy as np
-import pandas as pd
-import pytest
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes

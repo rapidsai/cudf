@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from functools import cached_property
 import re
-from typing import TYPE_CHECKING, cast, overload
 import warnings
+from functools import cached_property
+from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 import pandas as pd
@@ -14,11 +14,11 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
+import cudf.api.types
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
-import cudf.api.types
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase

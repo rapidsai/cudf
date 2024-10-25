@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from collections import defaultdict
 import inspect
 import operator
 import pickle
 import sys
 import time
+from collections import defaultdict
 
 from rich.console import Console
 from rich.syntax import Syntax

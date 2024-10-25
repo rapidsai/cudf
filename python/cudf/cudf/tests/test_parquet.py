@@ -1,25 +1,25 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-from contextlib import contextmanager
 import datetime
 import glob
 import hashlib
-from io import BytesIO
 import math
 import os
 import pathlib
 import random
 import string
+from contextlib import contextmanager
+from io import BytesIO
 from string import ascii_letters
 
 import cupy
-from fsspec.core import get_fs_token_paths
 import numpy as np
-from packaging import version
 import pandas as pd
 import pyarrow as pa
-from pyarrow import parquet as pq
 import pytest
+from fsspec.core import get_fs_token_paths
+from packaging import version
+from pyarrow import parquet as pq
 
 import cudf
 from cudf._lib.parquet import read_parquet_chunked

@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from io import BytesIO
 import os
+from io import BytesIO
 
 import fastavro
 import numpy as np

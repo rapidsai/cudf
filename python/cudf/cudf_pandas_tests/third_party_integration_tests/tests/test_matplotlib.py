@@ -1,13 +1,13 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pytest
 from matplotlib.axes import Axes
 from matplotlib.collections import PathCollection
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 from pandas._testing import assert_equal
-import pytest
 
 
 def assert_plots_equal(expect, got):

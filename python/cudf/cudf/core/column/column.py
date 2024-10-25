@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
+import pickle
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
 from itertools import chain
-import pickle
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
-from numba import cuda
 import numpy as np
 import pandas as pd
-from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 import pyarrow as pa
 import pyarrow.compute as pc
+from numba import cuda
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
 import rmm

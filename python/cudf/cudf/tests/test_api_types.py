@@ -2,8 +2,8 @@
 
 import numpy as np
 import pandas as pd
-from pandas.api import types as pd_types
 import pytest
+from pandas.api import types as pd_types
 
 import cudf
 from cudf.api import types

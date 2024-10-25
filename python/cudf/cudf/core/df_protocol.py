@@ -1,13 +1,13 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from collections import abc
 import enum
+from collections import abc
 from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
-from numba.cuda import as_cuda_array
 import numpy as np
+from numba.cuda import as_cuda_array
 
 import rmm
 

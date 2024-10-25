@@ -1,10 +1,7 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import array as arr
-from collections import OrderedDict, defaultdict, namedtuple
 import contextlib
-from contextlib import contextmanager
-from copy import copy
 import datetime
 import decimal
 import functools
@@ -15,14 +12,17 @@ import re
 import string
 import textwrap
 import warnings
+from collections import OrderedDict, defaultdict, namedtuple
+from contextlib import contextmanager
+from copy import copy
 
 import cupy
-from numba import cuda
 import numpy as np
-from packaging import version
 import pandas as pd
 import pyarrow as pa
 import pytest
+from numba import cuda
+from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default

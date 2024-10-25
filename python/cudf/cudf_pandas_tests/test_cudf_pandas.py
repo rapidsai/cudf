@@ -6,7 +6,6 @@ import collections
 import contextlib
 import copy
 import datetime
-from io import BytesIO, StringIO
 import operator
 import os
 import pathlib
@@ -14,20 +13,21 @@ import pickle
 import subprocess
 import tempfile
 import types
+from io import BytesIO, StringIO
 
 import cupy as cp
 import jupyter_client
-from nbconvert.preprocessors import ExecutePreprocessor
 import nbformat
+import numpy as np
+import pyarrow as pa
+import pytest
+from nbconvert.preprocessors import ExecutePreprocessor
 from numba import (
     NumbaDeprecationWarning,
     __version__ as numba_version,
     vectorize,
 )
-import numpy as np
 from packaging import version
-import pyarrow as pa
-import pytest
 from pytz import utc
 
 from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION

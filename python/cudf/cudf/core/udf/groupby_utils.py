@@ -2,12 +2,13 @@
 
 
 import cupy as cp
+import numpy as np
 from numba import cuda, types
 from numba.core.errors import TypingError
 from numba.cuda.cudadrv.devices import get_context
 from numba.np import numpy_support
-import numpy as np
 
+import cudf.core.udf.utils
 from cudf.core.udf.groupby_typing import (
     SUPPORTED_GROUPBY_NUMPY_TYPES,
     Group,
@@ -18,7 +19,6 @@ from cudf.core.udf.templates import (
     group_initializer_template,
     groupby_apply_kernel_template,
 )
-import cudf.core.udf.utils
 from cudf.core.udf.utils import (
     UDFError,
     _all_dtypes_from_frame,

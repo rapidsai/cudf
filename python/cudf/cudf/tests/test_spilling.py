@@ -1,13 +1,13 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import importlib
 import random
 import time
 import warnings
 import weakref
+from concurrent.futures import ThreadPoolExecutor
 
 import cupy
 import numpy as np
@@ -18,6 +18,8 @@ import pytest
 import rmm
 
 import cudf
+import cudf.core.buffer.spill_manager
+import cudf.options
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -25,7 +27,6 @@ from cudf.core.buffer import (
     as_buffer,
     get_spill_lock,
 )
-import cudf.core.buffer.spill_manager
 from cudf.core.buffer.spill_manager import (
     SpillManager,
     get_global_manager,
@@ -38,7 +39,6 @@ from cudf.core.buffer.spillable_buffer import (
     SpillableBufferOwner,
     SpillLock,
 )
-import cudf.options
 from cudf.testing import assert_eq
 
 if get_global_manager() is not None:

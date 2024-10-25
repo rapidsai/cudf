@@ -1,13 +1,13 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import codecs
-from collections import OrderedDict
 import gzip
-from io import BytesIO, StringIO
 import os
-from pathlib import Path
 import re
 import shutil
+from collections import OrderedDict
+from io import BytesIO, StringIO
+from pathlib import Path
 
 import cupy as cp
 import numpy as np

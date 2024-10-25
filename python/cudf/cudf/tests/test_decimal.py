@@ -4,9 +4,9 @@ import decimal
 from decimal import Decimal
 
 import numpy as np
-from packaging import version
 import pyarrow as pa
 import pytest
+from packaging import version
 
 import cudf
 from cudf.core.column import Decimal32Column, Decimal64Column, NumericalColumn

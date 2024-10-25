@@ -1,12 +1,12 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-from contextlib import ExitStack as does_not_raise
 import itertools
+from contextlib import ExitStack as does_not_raise
 
 import cupy
 import numpy as np
-from packaging import version
 import pytest
+from packaging import version
 
 import cudf
 from cudf.testing import assert_eq

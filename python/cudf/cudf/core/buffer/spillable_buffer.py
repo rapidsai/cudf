@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import collections.abc
 import pickle
-from threading import RLock
 import time
-from typing import TYPE_CHECKING, Any, Literal
 import weakref
+from threading import RLock
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
 import nvtx

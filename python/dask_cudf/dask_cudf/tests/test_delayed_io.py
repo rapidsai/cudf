@@ -5,8 +5,8 @@ Test IO with dask.delayed API
 """
 
 import numpy as np
-from pandas.testing import assert_frame_equal
 import pytest
+from pandas.testing import assert_frame_equal
 
 from dask.delayed import delayed
 

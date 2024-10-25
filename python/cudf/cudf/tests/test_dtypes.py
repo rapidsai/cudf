@@ -2,9 +2,9 @@
 
 import numpy as np
 import pandas as pd
-from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 import pyarrow as pa
 import pytest
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
 from cudf.core.column import ColumnBase

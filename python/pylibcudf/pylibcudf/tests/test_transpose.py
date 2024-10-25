@@ -1,8 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from packaging.version import parse
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 
 import pylibcudf as plc
 
