@@ -610,15 +610,15 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
     auto const [def_level, start_depth, end_depth] = [&]() {
       if (!within_batch) { return cuda::std::make_tuple(-1, -1, -1); }
 
-      int const index       = rolling_index<state_buf::nz_buf_size>(value_count + t);
-      int const rep_level   = static_cast<int>(rep[index]);
+      int const level_index = rolling_index<state_buf::nz_buf_size>(value_count + t);
+      int const rep_level   = static_cast<int>(rep[level_index]);
       int const start_depth = s->nesting_info[rep_level].start_depth;
 
       if constexpr (!nullable) {
         return cuda::std::make_tuple(-1, start_depth, max_depth);
       } else {
         if (def != nullptr) {
-          int const def_level = static_cast<int>(def[index]);
+          int const def_level = static_cast<int>(def[level_index]);
           return cuda::std::make_tuple(
             def_level, start_depth, s->nesting_info[def_level].end_depth);
         } else {
@@ -639,13 +639,13 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
       total_num_new_rows = new_row_scan_results.block_count;
     }
 
-    int const row_index = input_row_count + (num_prior_new_rows + is_new_row - 1);
+    int const row_index = input_row_count + ((num_prior_new_rows + is_new_row) - 1);
     input_row_count += total_num_new_rows;
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
     // VALUE COUNT:
-    // if we are within the range of nesting levels we should be adding value indices for
-    // is from/in current rep level to/in the rep level AT the depth with the def value
+    // in_nesting_bounds: if at a nesting level where we need to add value indices
+    // the bounds: from current rep to the rep AT the def depth
     int in_nesting_bounds = ((0 >= start_depth && 0 <= end_depth) && in_row_bounds) ? 1 : 0;
     int thread_value_count_within_warp, warp_value_count, thread_value_count, block_value_count;
     {
@@ -724,7 +724,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
         }
       }
 
-      // validity is processed per-warp (on lane 0's), because writes are 32-bit atomic ops
+      // validity is processed per-warp (on lane 0's)
+      // thi is because when atomic writes are needed, they are 32-bit operations
       //
       // lists always read and write to the same bounds
       // (that is, read and write positions are already pre-bounded by first_row/num_rows).
@@ -820,7 +821,7 @@ __device__ inline bool maybe_has_nulls(page_state_s* s)
   return run_val != s->col.max_level[lvl];
 }
 
-template <int decode_block_size_t, typename stream_type>
+template <int rolling_buf_size, typename stream_type>
 __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
 {
   // it could be that (e.g.) we skip 5000 but starting at row 4000 we have a run of length 2000:
@@ -828,7 +829,8 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
   // modulo 2 * block_size of course, since that's as many as we process at once
   int num_skipped = parquet_stream.skip_decode(t, num_to_skip);
   while (num_skipped < num_to_skip) {
-    auto const to_decode = min(2 * decode_block_size_t, num_to_skip - num_skipped);
+    // TODO: Instead of decoding, skip within the run to the appropriate location
+    auto const to_decode = min(rolling_buf_size, num_to_skip - num_skipped);
     num_skipped += parquet_stream.decode_next(t, to_decode);
     __syncthreads();
   }
@@ -967,11 +969,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     auto const skipped_leaf_values = s->page.skipped_leaf_values;
     if (skipped_leaf_values > 0) {
       if (should_process_nulls) {
-        skip_decode<decode_block_size_t>(def_decoder, skipped_leaf_values, t);
+        skip_decode<rolling_buf_size>(def_decoder, skipped_leaf_values, t);
       }
-      processed_count = skip_decode<decode_block_size_t>(rep_decoder, skipped_leaf_values, t);
+      processed_count = skip_decode<rolling_buf_size>(rep_decoder, skipped_leaf_values, t);
       if constexpr (has_dict_t) {
-        skip_decode<decode_block_size_t>(dict_stream, skipped_leaf_values, t);
+        skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
       }
     }
   }

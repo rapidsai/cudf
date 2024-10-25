@@ -248,10 +248,12 @@ struct rle_stream {
             fill_index < decode_index + run_buffer_size) &&
            cur < end) {
       // Encoding::RLE
+      // Pass by reference to fill the runs shared memory with the run data
       auto& run           = runs[rolling_index<run_buffer_size>(fill_index)];
       int const run_bytes = get_rle_run_info(run);
-      run.remaining       = run.size;
-      run.output_pos      = output_pos;
+
+      run.remaining  = run.size;
+      run.output_pos = output_pos;
 
       cur += run_bytes;
       output_pos += run.size;
