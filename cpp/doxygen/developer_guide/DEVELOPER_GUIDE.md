@@ -1486,9 +1486,10 @@ struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` o
 # Empty Columns
 
 The libcudf columns support empty, typed content. These columns have no data and no validity mask.
-Empty strings columns may or may not contain a child offsets column. It is undefined behavior (UB)
-to access the children of an empty strings column. Nested columns like lists and structs may
-require children columns to provide the nested structure of the empty types.
+Empty strings or lists columns may or may not contain a child offsets column.
+It is undefined behavior (UB) to access the offsets child of an empty strings or lists column.
+Nested columns like lists and structs may require other children columns to provide the
+nested structure of the empty types.
 
 Use `cudf::make_empty_column()` to create fixed-width and strings columns.
 Use `cudf::empty_like()` to create an empty column from an existing `cudf::column_view`.
