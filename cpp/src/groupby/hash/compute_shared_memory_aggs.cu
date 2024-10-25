@@ -44,6 +44,9 @@ struct size_of_functor {
   }
 };
 
+/// Shared memory data alignment
+CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
+
 // Prepares shared memory data required by each output column, exits if
 // no enough memory space to perform the shared memory aggregation for the
 // current output column
@@ -59,14 +62,16 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
   col_start                       = col_end;
   cudf::size_type bytes_allocated = 0;
 
-  auto const valid_col_size = round_to_multiple_of_8(sizeof(bool) * cardinality);
+  auto const valid_col_size =
+    cudf::util::round_up_safe(static_cast<cudf::size_type>(sizeof(bool) * cardinality), ALIGNMENT);
 
   while (bytes_allocated < total_agg_size && col_end < output_size) {
     auto const col_idx = col_end;
     auto const next_col_size =
-      round_to_multiple_of_8(cudf::type_dispatcher<cudf::dispatch_storage_type>(
-                               output_values.column(col_idx).type(), size_of_functor{}) *
-                             cardinality);
+      cudf::util::round_up_safe(cudf::type_dispatcher<cudf::dispatch_storage_type>(
+                                  output_values.column(col_idx).type(), size_of_functor{}) *
+                                  cardinality,
+                                ALIGNMENT);
     auto const next_col_total_size = next_col_size + valid_col_size;
 
     if (bytes_allocated + next_col_total_size > total_agg_size) {
@@ -268,9 +273,6 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                d_agg_kinds);
   }
 }
-
-constexpr size_t get_previous_multiple_of_8(size_t number) { return number / 8 * 8; }
-
 }  // namespace
 
 size_t available_shared_memory_size(cudf::size_type grid_size)
@@ -281,7 +283,8 @@ size_t available_shared_memory_size(cudf::size_type grid_size)
   size_t dynamic_shmem_size = 0;
   CUDF_CUDA_TRY(cudaOccupancyAvailableDynamicSMemPerBlock(
     &dynamic_shmem_size, single_pass_shmem_aggs_kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
-  return get_previous_multiple_of_8(0.5 * dynamic_shmem_size);
+  return cudf::util::round_down_safe(static_cast<cudf::size_type>(0.5 * dynamic_shmem_size),
+                                     ALIGNMENT);
 }
 
 size_t shmem_offsets_size(cudf::size_type num_cols) { return sizeof(cudf::size_type) * num_cols; }
