@@ -10,6 +10,8 @@ from distributed.protocol import deserialize, serialize
 
 from polars.testing.asserts import assert_frame_equal
 
+# To register dask serializers, we need to import dask_serialize
+import cudf_polars.experimental.dask_serialize  # noqa: F401
 from cudf_polars.containers import DataFrame
 
 
@@ -26,9 +28,6 @@ from cudf_polars.containers import DataFrame
 )
 @pytest.mark.parametrize("protocol", ["cuda", "dask"])
 def test_dask_serialize(arrow_tbl, protocol):
-    # To register dask serializers, we need to import dask_serialize
-    import cudf_polars.experimental.dask_serialize  # noqa: F401
-
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 

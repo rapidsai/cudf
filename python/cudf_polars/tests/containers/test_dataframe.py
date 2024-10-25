@@ -8,6 +8,7 @@ import pylibcudf as plc
 import pytest
 
 import polars as pl
+from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -181,4 +182,4 @@ def test_serialize(arrow_tbl):
     header, frames = df.serialize()
     res = DataFrame.deserialize(header, frames)
 
-    pl.testing.asserts.assert_frame_equal(df.to_polars(), res.to_polars())
+    assert_frame_equal(df.to_polars(), res.to_polars())
