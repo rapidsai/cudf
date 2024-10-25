@@ -9,7 +9,7 @@ from functools import partial, reduce, singledispatch
 from typing import TYPE_CHECKING, TypeAlias
 
 import pylibcudf as plc
-from pylibcudf import expressions as pexpr
+from pylibcudf import expressions as plc_expr
 
 from polars.polars import _expr_nodes as pl_expr
 
@@ -24,52 +24,52 @@ if TYPE_CHECKING:
 # are exposed by cython with equality/hash based one their underlying
 # representation type. So in a dict they are just treated as integers.
 BINOP_TO_ASTOP = {
-    plc.binaryop.BinaryOperator.EQUAL: pexpr.ASTOperator.EQUAL,
-    plc.binaryop.BinaryOperator.NULL_EQUALS: pexpr.ASTOperator.NULL_EQUAL,
-    plc.binaryop.BinaryOperator.NOT_EQUAL: pexpr.ASTOperator.NOT_EQUAL,
-    plc.binaryop.BinaryOperator.LESS: pexpr.ASTOperator.LESS,
-    plc.binaryop.BinaryOperator.LESS_EQUAL: pexpr.ASTOperator.LESS_EQUAL,
-    plc.binaryop.BinaryOperator.GREATER: pexpr.ASTOperator.GREATER,
-    plc.binaryop.BinaryOperator.GREATER_EQUAL: pexpr.ASTOperator.GREATER_EQUAL,
-    plc.binaryop.BinaryOperator.ADD: pexpr.ASTOperator.ADD,
-    plc.binaryop.BinaryOperator.SUB: pexpr.ASTOperator.SUB,
-    plc.binaryop.BinaryOperator.MUL: pexpr.ASTOperator.MUL,
-    plc.binaryop.BinaryOperator.DIV: pexpr.ASTOperator.DIV,
-    plc.binaryop.BinaryOperator.TRUE_DIV: pexpr.ASTOperator.TRUE_DIV,
-    plc.binaryop.BinaryOperator.FLOOR_DIV: pexpr.ASTOperator.FLOOR_DIV,
-    plc.binaryop.BinaryOperator.PYMOD: pexpr.ASTOperator.PYMOD,
-    plc.binaryop.BinaryOperator.BITWISE_AND: pexpr.ASTOperator.BITWISE_AND,
-    plc.binaryop.BinaryOperator.BITWISE_OR: pexpr.ASTOperator.BITWISE_OR,
-    plc.binaryop.BinaryOperator.BITWISE_XOR: pexpr.ASTOperator.BITWISE_XOR,
-    plc.binaryop.BinaryOperator.LOGICAL_AND: pexpr.ASTOperator.LOGICAL_AND,
-    plc.binaryop.BinaryOperator.LOGICAL_OR: pexpr.ASTOperator.LOGICAL_OR,
-    plc.binaryop.BinaryOperator.NULL_LOGICAL_AND: pexpr.ASTOperator.NULL_LOGICAL_AND,
-    plc.binaryop.BinaryOperator.NULL_LOGICAL_OR: pexpr.ASTOperator.NULL_LOGICAL_OR,
+    plc.binaryop.BinaryOperator.EQUAL: plc_expr.ASTOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NULL_EQUALS: plc_expr.ASTOperator.NULL_EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL: plc_expr.ASTOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS: plc_expr.ASTOperator.LESS,
+    plc.binaryop.BinaryOperator.LESS_EQUAL: plc_expr.ASTOperator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER: plc_expr.ASTOperator.GREATER,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL: plc_expr.ASTOperator.GREATER_EQUAL,
+    plc.binaryop.BinaryOperator.ADD: plc_expr.ASTOperator.ADD,
+    plc.binaryop.BinaryOperator.SUB: plc_expr.ASTOperator.SUB,
+    plc.binaryop.BinaryOperator.MUL: plc_expr.ASTOperator.MUL,
+    plc.binaryop.BinaryOperator.DIV: plc_expr.ASTOperator.DIV,
+    plc.binaryop.BinaryOperator.TRUE_DIV: plc_expr.ASTOperator.TRUE_DIV,
+    plc.binaryop.BinaryOperator.FLOOR_DIV: plc_expr.ASTOperator.FLOOR_DIV,
+    plc.binaryop.BinaryOperator.PYMOD: plc_expr.ASTOperator.PYMOD,
+    plc.binaryop.BinaryOperator.BITWISE_AND: plc_expr.ASTOperator.BITWISE_AND,
+    plc.binaryop.BinaryOperator.BITWISE_OR: plc_expr.ASTOperator.BITWISE_OR,
+    plc.binaryop.BinaryOperator.BITWISE_XOR: plc_expr.ASTOperator.BITWISE_XOR,
+    plc.binaryop.BinaryOperator.LOGICAL_AND: plc_expr.ASTOperator.LOGICAL_AND,
+    plc.binaryop.BinaryOperator.LOGICAL_OR: plc_expr.ASTOperator.LOGICAL_OR,
+    plc.binaryop.BinaryOperator.NULL_LOGICAL_AND: plc_expr.ASTOperator.NULL_LOGICAL_AND,
+    plc.binaryop.BinaryOperator.NULL_LOGICAL_OR: plc_expr.ASTOperator.NULL_LOGICAL_OR,
 }
 
 UOP_TO_ASTOP = {
-    plc.unary.UnaryOperator.SIN: pexpr.ASTOperator.SIN,
-    plc.unary.UnaryOperator.COS: pexpr.ASTOperator.COS,
-    plc.unary.UnaryOperator.TAN: pexpr.ASTOperator.TAN,
-    plc.unary.UnaryOperator.ARCSIN: pexpr.ASTOperator.ARCSIN,
-    plc.unary.UnaryOperator.ARCCOS: pexpr.ASTOperator.ARCCOS,
-    plc.unary.UnaryOperator.ARCTAN: pexpr.ASTOperator.ARCTAN,
-    plc.unary.UnaryOperator.SINH: pexpr.ASTOperator.SINH,
-    plc.unary.UnaryOperator.COSH: pexpr.ASTOperator.COSH,
-    plc.unary.UnaryOperator.TANH: pexpr.ASTOperator.TANH,
-    plc.unary.UnaryOperator.ARCSINH: pexpr.ASTOperator.ARCSINH,
-    plc.unary.UnaryOperator.ARCCOSH: pexpr.ASTOperator.ARCCOSH,
-    plc.unary.UnaryOperator.ARCTANH: pexpr.ASTOperator.ARCTANH,
-    plc.unary.UnaryOperator.EXP: pexpr.ASTOperator.EXP,
-    plc.unary.UnaryOperator.LOG: pexpr.ASTOperator.LOG,
-    plc.unary.UnaryOperator.SQRT: pexpr.ASTOperator.SQRT,
-    plc.unary.UnaryOperator.CBRT: pexpr.ASTOperator.CBRT,
-    plc.unary.UnaryOperator.CEIL: pexpr.ASTOperator.CEIL,
-    plc.unary.UnaryOperator.FLOOR: pexpr.ASTOperator.FLOOR,
-    plc.unary.UnaryOperator.ABS: pexpr.ASTOperator.ABS,
-    plc.unary.UnaryOperator.RINT: pexpr.ASTOperator.RINT,
-    plc.unary.UnaryOperator.BIT_INVERT: pexpr.ASTOperator.BIT_INVERT,
-    plc.unary.UnaryOperator.NOT: pexpr.ASTOperator.NOT,
+    plc.unary.UnaryOperator.SIN: plc_expr.ASTOperator.SIN,
+    plc.unary.UnaryOperator.COS: plc_expr.ASTOperator.COS,
+    plc.unary.UnaryOperator.TAN: plc_expr.ASTOperator.TAN,
+    plc.unary.UnaryOperator.ARCSIN: plc_expr.ASTOperator.ARCSIN,
+    plc.unary.UnaryOperator.ARCCOS: plc_expr.ASTOperator.ARCCOS,
+    plc.unary.UnaryOperator.ARCTAN: plc_expr.ASTOperator.ARCTAN,
+    plc.unary.UnaryOperator.SINH: plc_expr.ASTOperator.SINH,
+    plc.unary.UnaryOperator.COSH: plc_expr.ASTOperator.COSH,
+    plc.unary.UnaryOperator.TANH: plc_expr.ASTOperator.TANH,
+    plc.unary.UnaryOperator.ARCSINH: plc_expr.ASTOperator.ARCSINH,
+    plc.unary.UnaryOperator.ARCCOSH: plc_expr.ASTOperator.ARCCOSH,
+    plc.unary.UnaryOperator.ARCTANH: plc_expr.ASTOperator.ARCTANH,
+    plc.unary.UnaryOperator.EXP: plc_expr.ASTOperator.EXP,
+    plc.unary.UnaryOperator.LOG: plc_expr.ASTOperator.LOG,
+    plc.unary.UnaryOperator.SQRT: plc_expr.ASTOperator.SQRT,
+    plc.unary.UnaryOperator.CBRT: plc_expr.ASTOperator.CBRT,
+    plc.unary.UnaryOperator.CEIL: plc_expr.ASTOperator.CEIL,
+    plc.unary.UnaryOperator.FLOOR: plc_expr.ASTOperator.FLOOR,
+    plc.unary.UnaryOperator.ABS: plc_expr.ASTOperator.ABS,
+    plc.unary.UnaryOperator.RINT: plc_expr.ASTOperator.RINT,
+    plc.unary.UnaryOperator.BIT_INVERT: plc_expr.ASTOperator.BIT_INVERT,
+    plc.unary.UnaryOperator.NOT: plc_expr.ASTOperator.NOT,
 }
 
 SUPPORTED_STATISTICS_BINOPS = {
@@ -91,11 +91,11 @@ REVERSED_COMPARISON = {
 }
 
 
-Transformer: TypeAlias = GenericTransformer[expr.Expr, pexpr.Expression]
+Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression]
 
 
 @singledispatch
-def _to_ast(node: expr.Expr, self: Transformer) -> pexpr.Expression:
+def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
     """
     Translate an expression to a pylibcudf Expression.
 
@@ -125,22 +125,22 @@ def _to_ast(node: expr.Expr, self: Transformer) -> pexpr.Expression:
 
 
 @_to_ast.register
-def _(node: expr.Col, self: Transformer) -> pexpr.Expression:
+def _(node: expr.Col, self: Transformer) -> plc_expr.Expression:
     if self.state["for_parquet"]:
-        return pexpr.ColumnNameReference(node.name)
-    return pexpr.ColumnReference(self.state["name_to_index"][node.name])
+        return plc_expr.ColumnNameReference(node.name)
+    return plc_expr.ColumnReference(self.state["name_to_index"][node.name])
 
 
 @_to_ast.register
-def _(node: expr.Literal, self: Transformer) -> pexpr.Expression:
-    return pexpr.Literal(plc.interop.from_arrow(node.value))
+def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
+    return plc_expr.Literal(plc.interop.from_arrow(node.value))
 
 
 @_to_ast.register
-def _(node: expr.BinOp, self: Transformer) -> pexpr.Expression:
+def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
     if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
-        return pexpr.Operation(
-            pexpr.ASTOperator.NOT,
+        return plc_expr.Operation(
+            plc_expr.ASTOperator.NOT,
             self(
                 # Reconstruct and apply, rather than directly
                 # constructing the right expression so we get the
@@ -166,26 +166,28 @@ def _(node: expr.BinOp, self: Transformer) -> pexpr.Expression:
                 raise NotImplementedError(
                     "Parquet filter binops must have form 'col binop literal'"
                 )
-            return pexpr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
+            return plc_expr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
         elif op1_col and op2_col:
             raise NotImplementedError(
                 "Parquet filter binops must have one column reference not two"
             )
-    return pexpr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
+    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
 
 
 @_to_ast.register
-def _(node: expr.BooleanFunction, self: Transformer) -> pexpr.Expression:
+def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
     if node.name == pl_expr.BooleanFunction.IsIn:
         needles, haystack = node.children
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             # 16 is an arbitrary limit
             needle_ref = self(needles)
-            values = [pexpr.Literal(plc.interop.from_arrow(v)) for v in haystack.value]
+            values = [
+                plc_expr.Literal(plc.interop.from_arrow(v)) for v in haystack.value
+            ]
             return reduce(
-                partial(pexpr.Operation, pexpr.ASTOperator.LOGICAL_OR),
+                partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
                 (
-                    pexpr.Operation(pexpr.ASTOperator.EQUAL, needle_ref, value)
+                    plc_expr.Operation(plc_expr.ASTOperator.EQUAL, needle_ref, value)
                     for value in values
                 ),
             )
@@ -194,29 +196,29 @@ def _(node: expr.BooleanFunction, self: Transformer) -> pexpr.Expression:
             f"Parquet filters don't support {node.name} on columns"
         )
     if node.name == pl_expr.BooleanFunction.IsNull:
-        return pexpr.Operation(pexpr.ASTOperator.IS_NULL, self(node.children[0]))
+        return plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, self(node.children[0]))
     elif node.name == pl_expr.BooleanFunction.IsNotNull:
-        return pexpr.Operation(
-            pexpr.ASTOperator.NOT,
-            pexpr.Operation(pexpr.ASTOperator.IS_NULL, self(node.children[0])),
+        return plc_expr.Operation(
+            plc_expr.ASTOperator.NOT,
+            plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, self(node.children[0])),
         )
     elif node.name == pl_expr.BooleanFunction.Not:
-        return pexpr.Operation(pexpr.ASTOperator.NOT, self(node.children[0]))
+        return plc_expr.Operation(plc_expr.ASTOperator.NOT, self(node.children[0]))
     raise NotImplementedError(f"AST conversion does not support {node.name}")
 
 
 @_to_ast.register
-def _(node: expr.UnaryFunction, self: Transformer) -> pexpr.Expression:
+def _(node: expr.UnaryFunction, self: Transformer) -> plc_expr.Expression:
     if isinstance(node.children[0], expr.Col) and self.state["for_parquet"]:
         raise NotImplementedError(
             "Parquet filters don't support {node.name} on columns"
         )
-    return pexpr.Operation(
+    return plc_expr.Operation(
         UOP_TO_ASTOP[node._OP_MAPPING[node.name]], self(node.children[0])
     )
 
 
-def to_parquet_filter(node: expr.Expr) -> pexpr.Expression | None:
+def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for parquet filtering.
 
@@ -238,7 +240,7 @@ def to_parquet_filter(node: expr.Expr) -> pexpr.Expression | None:
 
 def to_ast(
     node: expr.Expr, *, name_to_index: Mapping[str, int]
-) -> pexpr.Expression | None:
+) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for compute_column.
 
