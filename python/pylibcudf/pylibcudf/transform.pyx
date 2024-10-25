@@ -63,10 +63,8 @@ cpdef Column compute_column(Table input, Expression expr):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_transform.compute_column(
-                input.view(), dereference(expr.c_obj.get())
-            )
+        c_result = cpp_transform.compute_column(
+            input.view(), dereference(expr.c_obj.get())
         )
 
     return Column.from_libcudf(move(c_result))
