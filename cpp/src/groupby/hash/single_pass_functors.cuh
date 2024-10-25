@@ -13,22 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
-
-#include "multi_pass_kernels.cuh"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <thrust/pair.h>
+#include <cuco/static_set_ref.cuh>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
-namespace hash {
+namespace cudf::groupby::detail::hash {
 /**
  * @brief Computes single-pass aggregations and store results into a sparse `output_values` table,
  * and populate `set` with indices of unique keys
@@ -104,8 +98,4 @@ struct compute_single_pass_aggs_fn {
     }
   }
 };
-
-}  // namespace hash
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+}  // namespace cudf::groupby::detail::hash

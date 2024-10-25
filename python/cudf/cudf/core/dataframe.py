@@ -781,8 +781,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
-                "Use cudf.Series._from_data for constructing a Series from "
+                "Use cudf.DataFrame._from_data for constructing a DataFrame from "
                 "ColumnAccessor"
+            )
+        elif isinstance(data, ColumnBase):
+            raise TypeError(
+                "Use cudf.DataFrame._from_arrays for constructing a DataFrame from "
+                "ColumnBase or Use cudf.DataFrame._from_data by passing a dict "
+                "of column name and column as key-value pair."
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
@@ -5118,11 +5124,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         useful for big DataFrames and fine-tune memory optimization:
 
         >>> import numpy as np
-        >>> random_strings_array = np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        >>> rng = np.random.default_rng(seed=0)
+        >>> random_strings_array = rng.choice(['a', 'b', 'c'], 10 ** 6)
         >>> df = cudf.DataFrame({
-        ...     'column_1': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_2': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_3': np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        ...     'column_1': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_2': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_3': rng.choice(['a', 'b', 'c'], 10 ** 6)
         ... })
         >>> df.info(memory_usage='deep')
         <class 'cudf.core.dataframe.DataFrame'>
@@ -5883,7 +5890,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"records dimension expected 1 or 2 but found: {array_data.ndim}"
             )
 
-        if data.ndim == 2:
+        if array_data.ndim == 2:
             num_cols = array_data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,

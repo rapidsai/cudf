@@ -6,6 +6,7 @@ strings
 
     capitalize
     char_types
+    combine
     contains
     extract
     find
@@ -15,6 +16,7 @@ strings
     regex_flags
     regex_program
     repeat
+    replace_re
     replace
     side_type
     slice

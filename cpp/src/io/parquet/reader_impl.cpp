@@ -78,7 +78,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
   auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
-  std::vector<size_t> col_string_sizes(_input_columns.size(), 0L);
+  auto col_string_sizes  = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
   if (has_strings) {
     // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
     // TODO: we could probably dummy up size stats for FLBA data since we know the width
