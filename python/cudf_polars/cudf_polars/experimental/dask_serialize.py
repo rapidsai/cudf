@@ -12,14 +12,8 @@ import rmm
 from cudf_polars.containers import DataFrame
 
 try:
-    from distributed.protocol import (
-        dask_deserialize,
-        dask_serialize,
-    )
-    from distributed.protocol.cuda import (
-        cuda_deserialize,
-        cuda_serialize,
-    )
+    from distributed.protocol import dask_deserialize, dask_serialize
+    from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
     from distributed.utils import log_errors
 
     @cuda_serialize.register(DataFrame)

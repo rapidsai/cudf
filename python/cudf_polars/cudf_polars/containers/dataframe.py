@@ -148,21 +148,23 @@ class DataFrame:
         )
 
     @classmethod
-    def deserialize(cls, header: dict, frames: tuple[memoryview, plc.gpumemoryview]):
+    def deserialize(
+        cls, header: dict, frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> Self:
         """
-        Create an DataFrame from a serialized representation returned by `.serialize()`.
+        Create a DataFrame from a serialized representation returned by `.serialize()`.
 
         Parameters
         ----------
         header
             The (unpickled) metadata required to reconstruct the object.
         frames
-            Two-tuple of frames (a memoryview and a gpumemoryviews).
+            Two-tuple of frames (a memoryview and a gpumemoryview).
 
         Returns
         -------
-        Buffer
-            The deserialized Buffer.
+        DataFrame
+            The deserialized DataFrame.
         """
         packed_metadata, packed_gpu_data = frames
         table = plc.contiguous_split.unpack_from_memoryviews(
@@ -188,7 +190,7 @@ class DataFrame:
         Returns
         -------
         header
-            A dict containing any picklabe metadata required to reconstruct the object.
+            A dict containing any picklable metadata required to reconstruct the object.
         frames
             Two-tuple of frames suitable for passing to `unpack_from_memoryviews`
         """
