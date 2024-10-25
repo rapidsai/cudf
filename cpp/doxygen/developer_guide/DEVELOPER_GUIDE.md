@@ -1483,6 +1483,16 @@ struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` o
 
 `cudf::type_dispatcher` dispatches to the `struct_view` data type when invoked on a `STRUCT` column.
 
+# Empty Columns
+
+The libcudf columns support empty, typed content. These columns have no data and no validity mask.
+Empty strings columns may or may not contain a child offsets column. If is undefined behavior (UB)
+to access the children of an empty strings column. Nested columns like lists and structs may
+require children columns to provide the nested structure of the empty types.
+
+Use the `cudf::make_empty_column()` to create fixed-width and strings columns.
+Use the `cudf::empty_like()` to create an empty column from an existing `cudf::column_view`.
+
 # cuIO: file reading and writing
 
 cuIO is a component of libcudf that provides GPU-accelerated reading and writing of data file
