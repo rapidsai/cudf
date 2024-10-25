@@ -142,10 +142,9 @@ class Column:
             return self
 
         if dtype.id() == plc.TypeId.STRING or self.obj.type().id() == plc.TypeId.STRING:
-            result = self._handle_string_cast(dtype)
+            return Column(self._handle_string_cast(dtype))
         else:
-            result = plc.unary.cast(self.obj, dtype)
-        return Column(result).sorted_like(self)
+            return Column(plc.unary.cast(self.obj, dtype)).sorted_like(self)
 
     def _handle_string_cast(self, dtype: plc.DataType) -> plc.Column:
         if dtype.id() == plc.TypeId.STRING:

@@ -9,7 +9,7 @@ from functools import cache
 
 import pyarrow as pa
 import pylibcudf as plc
-from pylibcudf.traits import is_floating_point, is_integral_not_bool
+from pylibcudf.traits import is_numeric_not_bool
 from typing_extensions import assert_never
 
 import polars as pl
@@ -46,10 +46,6 @@ def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
     return typ
 
 
-def _is_int_or_float(dtype: plc.DataType) -> bool:
-    return is_integral_not_bool(dtype) or is_floating_point(dtype)
-
-
 def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     """
     Can we cast (via :func:`~.pylibcudf.unary.cast`) between two datatypes.
@@ -71,8 +67,8 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
             and plc.traits.is_fixed_width(from_)
             and plc.unary.is_supported_cast(from_, to)
         )
-        or (from_.id() == plc.TypeId.STRING and _is_int_or_float(to))
-        or (_is_int_or_float(from_) and to.id() == plc.TypeId.STRING)
+        or (from_.id() == plc.TypeId.STRING and is_numeric_not_bool(to))
+        or (is_numeric_not_bool(from_) and to.id() == plc.TypeId.STRING)
     )
 
 
