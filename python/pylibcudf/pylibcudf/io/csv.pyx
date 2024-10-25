@@ -27,7 +27,7 @@ from pylibcudf.types cimport DataType
 import io
 
 from pylibcudf.libcudf.io.types cimport sink_info
-
+from pylibcudf.table cimport Table
 import codecs
 import os
 
@@ -349,14 +349,6 @@ cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
     return info
 
 
-def columns_apply_na_rep(column_names, na_rep):
-    return tuple(
-        na_rep if str(col_name)=="<NA>"
-        else col_name
-        for col_name in column_names
-    )
-
-
 def write_csv(
     TableWithMetadata table,
     *,
@@ -367,6 +359,7 @@ def write_csv(
     str lineterminator="\n",
     int rows_per_chunk=8,
     bool index=True,
+    object indices=None,
 ):
     """
     Writes a :py:class:`~pylibcudf.io.types.TableWithMetadata` to CSV format.
@@ -390,8 +383,6 @@ def write_csv(
         The character used to determine the end of a line.
     rows_per_chunk: int, default 8
         The maximum number of rows to write at a time.
-    index : bool, default True
-        Whether to include index names in headers.
     """
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
@@ -405,10 +396,9 @@ def write_csv(
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True:
-        all_names = columns_apply_na_rep(table._column_names, na_rep)
+        all_names = table.column_names()
         if index is True:
-            all_names = table._index.names + all_names
-
+            all_names = indices.names + all_names
         if len(all_names) > 0:
             col_names.reserve(len(all_names))
             if len(all_names) == 1:
@@ -426,9 +416,16 @@ def write_csv(
                         col_names.push_back(
                             str(col_name).encode()
                         )
-
+    cdef Table new_table = table.tbl
+    if index:
+        new_table = Table(
+            [col.to_pylibcudf(mode="read") for col in indices._columns] + table.columns
+        )
     cdef csv_writer_options options = move(
-        csv_writer_options.builder(sink_info_c, table.tbl.view())
+        csv_writer_options.builder(
+            sink_info_c,
+            new_table.view()
+        )
         .names(col_names)
         .na_rep(na_c)
         .include_header(include_header_c)

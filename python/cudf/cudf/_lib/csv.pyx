@@ -312,21 +312,24 @@ def write_csv(
     col_names = []
     for name in table._column_names:
         col_names.append((name, _dtype_to_names_list(table[name]._column)))
+    for i, t in enumerate(col_names):
+        if not isinstance(t[0], str):
+            col_names[i] = (na_rep, t[1])
+    columns = [col.to_pylibcudf(mode="read") for col in table._columns]
     try:
         plc.io.csv.write_csv(
             plc.io.TableWithMetadata(
-                plc.Table([
-                    col.to_pylibcudf(mode="read") for col in table._columns
-                ]),
+                plc.Table(columns),
                 col_names
             ),
             path_or_buf=path_or_buf,
-            sep=sep,
-            na_rep=na_rep,
+            sep=str(sep),
+            na_rep=str(na_rep),
             header=header,
-            lineterminator=lineterminator,
+            lineterminator=str(lineterminator),
             rows_per_chunk=rows_per_chunk,
             index=index,
+            indices=table._index,
         )
     except OverflowError:
         raise OverflowError(
@@ -376,11 +379,3 @@ cdef DataType _get_plc_data_type_from_dtype(object dtype) except *:
 
     dtype = cudf.dtype(dtype)
     return dtype_to_pylibcudf_type(dtype)
-
-
-def columns_apply_na_rep(column_names, na_rep):
-    return tuple(
-        na_rep if pd.isnull(col_name)
-        else col_name
-        for col_name in column_names
-    )
