@@ -38,8 +38,8 @@ public class Schema {
   private boolean flattened = false;
   private String[] flattenedNames;
   private DType[] flattenedTypes;
-  private int[] flattenedCounts;
   private int[] flattenedPrecisions;
+  private int[] flattenedCounts;
 
   private Schema(DType topLevelType,
                  int topLevelPrecision,
@@ -118,18 +118,18 @@ public class Schema {
       if (flatLen == 0) {
         flattenedNames = null;
         flattenedTypes = null;
-        flattenedCounts = null;
         flattenedPrecisions = null;
+        flattenedCounts = null;
       } else {
         String[] names = new String[flatLen];
         DType[] types = new DType[flatLen];
-        int[] counts = new int[flatLen];
         int[] precisions = new int[flatLen];
-        collectFlattened(names, types, counts, precisions, 0);
+        int[] counts = new int[flatLen];
+        collectFlattened(names, types, precisions, counts, 0);
         flattenedNames = names;
         flattenedTypes = types;
-        flattenedCounts = counts;
         flattenedPrecisions = precisions;
+        flattenedCounts = counts;
       }
       flattened = true;
     }
@@ -145,7 +145,7 @@ public class Schema {
     return startingLength;
   }
 
-  private int collectFlattened(String[] names, DType[] types, int[] counts, int[] precisions, int offset) {
+  private int collectFlattened(String[] names, DType[] types, int[] precisions, int[] counts, int offset) {
     if (childSchemas != null) {
       for (int i = 0; i < childSchemas.size(); i++) {
         Schema child = childSchemas.get(i);
@@ -158,7 +158,7 @@ public class Schema {
           counts[offset] = 0;
         }
         offset++;
-        offset = this.childSchemas.get(i).collectFlattened(names, types, counts, precisions, offset);
+        offset = this.childSchemas.get(i).collectFlattened(names, types, precisions, counts, offset);
       }
     }
     return offset;
