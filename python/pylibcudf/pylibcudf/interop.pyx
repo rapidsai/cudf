@@ -342,16 +342,18 @@ cpdef Table from_dlpack(object managed_tensor):
         Table with a copy of the tensor data.
     """
     if not PyCapsule_IsValid(managed_tensor, "dltensor"):
-        raise ValueError("Invalid capsule object")
+        raise ValueError("Invalid PyCapsule object")
     cdef unique_ptr[table] c_result
     cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(
         managed_tensor, "dltensor"
     )
+    if dlpack_tensor is NULL:
+        raise ValueError("PyCapsule object contained a NULL pointer")
     PyCapsule_SetName(managed_tensor, "used_dltensor")
 
     # Note: A copy is always performed when converting the dlpack
     # data to a libcudf table. We also delete the dlpack_tensor pointer
-    # as the poionter is not deleted by libcudf's from_dlpack function.
+    # as the pointer is not deleted by libcudf's from_dlpack function.
     # TODO: https://github.com/rapidsai/cudf/issues/10874
     # TODO: https://github.com/rapidsai/cudf/issues/10849
     with nogil:
@@ -400,6 +402,8 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj) noexcept:
     if PyCapsule_IsValid(pycap_obj, "used_dltensor"):
         # we do not call a used capsule's deleter
         return
-    cdef DLManagedTensor* dlpack_tensor
-    dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(pycap_obj, "dltensor")
-    dlpack_tensor.deleter(dlpack_tensor)
+    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>PyCapsule_GetPointer(
+        pycap_obj, "dltensor"
+    )
+    if dlpack_tensor is not NULL:
+        dlpack_tensor.deleter(dlpack_tensor)

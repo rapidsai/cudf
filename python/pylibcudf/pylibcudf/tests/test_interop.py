@@ -95,5 +95,5 @@ def test_to_dlpack_error():
 
 
 def test_from_dlpack_error():
-    with pytest.raises(ValueError, match="Invalid capsule object"):
+    with pytest.raises(ValueError, match="Invalid PyCapsule object"):
         plc.interop.from_dlpack(1)
