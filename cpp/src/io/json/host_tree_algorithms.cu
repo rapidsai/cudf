@@ -487,7 +487,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
 
   if (adj[parent_node_sentinel].empty())
     return {cudf::detail::make_host_vector<bool>(0, stream), {}};  // for empty file
-  CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
+  // CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
 
@@ -595,38 +595,53 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                  }},
                options.get_dtypes());
   } else {
-    auto root_struct_col_id =
-      is_enabled_lines
-        ? adj[parent_node_sentinel][0]
-        : (adj[adj[parent_node_sentinel][0]].empty() ? -1 : adj[adj[parent_node_sentinel][0]][0]);
-    // mark root and row struct col_id as not pruned.
-    if (!is_enabled_lines) {
-      auto top_level_list_id       = adj[parent_node_sentinel][0];
-      is_pruned[top_level_list_id] = false;
+    auto mark_row_struct_col_id = [&is_pruned, &adj, is_enabled_lines, &mark_is_pruned, &options](
+                                    NodeIndexT root_struct_col_id) {
+      // mark root and row struct col_id as not pruned.
+      if (!is_enabled_lines) {
+        auto top_level_list_id       = adj[parent_node_sentinel][0];
+        is_pruned[top_level_list_id] = false;
+      }
+      is_pruned[root_struct_col_id] = false;
+      schema_element u_schema{data_type{type_id::STRUCT}};
+      u_schema.child_types = unified_schema(options);
+      std::visit(
+        cudf::detail::visitor_overload{
+          [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
+            std::vector<data_type> const& user_dtypes) -> void {
+            for (size_t i = 0; i < adj[root_struct_col_id].size() && i < user_dtypes.size(); i++) {
+              NodeIndexT const first_field_id = adj[root_struct_col_id][i];
+              is_pruned[first_field_id]       = false;
+              for (auto const& child_id : adj[first_field_id])  // children of field (>1 if mixed)
+                mark_is_pruned(child_id, schema_element{user_dtypes[i]});
+            }
+          },
+          [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
+            std::map<std::string, data_type> const& user_dtypes) -> void {
+            mark_is_pruned(root_struct_col_id, u_schema);
+          },
+          [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
+            std::map<std::string, schema_element> const& user_dtypes) -> void {
+            mark_is_pruned(root_struct_col_id, u_schema);
+          }},
+        options.get_dtypes());
+    };
+    auto parent = is_enabled_lines ? parent_node_sentinel : adj[parent_node_sentinel][0];
+    NodeIndexT root_struct_node = 0;
+    for (size_t child = 0; child < adj[parent].size(); child++) {
+      if (column_categories[adj[parent][child]] == NC_STRUCT) {
+        root_struct_node = child;
+        mark_row_struct_col_id(adj[parent][child]);
+      } else {
+        is_pruned[adj[parent][child]] = true;
+        ignore_all_children(adj[parent][child]);
+      }
     }
-    is_pruned[root_struct_col_id] = false;
-    schema_element u_schema{data_type{type_id::STRUCT}};
-    u_schema.child_types = unified_schema(options);
-    std::visit(
-      cudf::detail::visitor_overload{
-        [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
-          std::vector<data_type> const& user_dtypes) -> void {
-          for (size_t i = 0; i < adj[root_struct_col_id].size() && i < user_dtypes.size(); i++) {
-            NodeIndexT const first_field_id = adj[root_struct_col_id][i];
-            is_pruned[first_field_id]       = false;
-            for (auto const& child_id : adj[first_field_id])  // children of field (>1 if mixed)
-              mark_is_pruned(child_id, schema_element{user_dtypes[i]});
-          }
-        },
-        [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
-          std::map<std::string, data_type> const& user_dtypes) -> void {
-          mark_is_pruned(root_struct_col_id, u_schema);
-        },
-        [&root_struct_col_id, &adj, &mark_is_pruned, &u_schema](
-          std::map<std::string, schema_element> const& user_dtypes) -> void {
-          mark_is_pruned(root_struct_col_id, u_schema);
-        }},
-      options.get_dtypes());
+    if (is_enabled_lines) {
+      std::swap(adj[parent][0], adj[parent][root_struct_node]);
+      adj[parent].resize(1);
+    } else if (adj[parent].empty())
+      mark_row_struct_col_id(-1);
   }
   // Useful for array of arrays
   auto named_level =
