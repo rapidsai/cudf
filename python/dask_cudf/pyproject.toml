@@ -69,50 +69,17 @@ version = {file = "dask_cudf/VERSION"}
 [tool.setuptools.packages.find]
 exclude = ["*tests*"]
 
-[tool.isort]
-line_length = 79
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-combine_as_imports = true
-order_by_type = true
+[tool.ruff]
+extend = "../../pyproject.toml"
 
-known_dask = [
-    "dask",
-    "distributed",
-    "dask_cuda",
-]
-known_rapids = [
-    "rmm",
-    "cudf",
-]
-known_first_party = [
-    "dask_cudf",
-]
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["dask_cudf"]
+section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
 
-default_section = "THIRDPARTY"
-sections = [
-    "FUTURE",
-    "STDLIB",
-    "THIRDPARTY",
-    "DASK",
-    "RAPIDS",
-    "FIRSTPARTY",
-    "LOCALFOLDER",
-]
-skip = [
-    "thirdparty",
-    ".eggs",
-    ".git",
-    ".hg",
-    ".mypy_cache",
-    ".tox",
-    ".venv",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-]
+[tool.ruff.lint.isort.sections]
+dask = ["dask", "distributed", "dask_cuda"]
+rapids = ["rmm", "cudf"]
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"
