@@ -615,9 +615,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
       std::get<schema_element>(options.get_dtypes()).child_types.size() == col_order.size(),
       "Input schema column order size mismatch with input schema child types");
   }
-  auto root_col_size = root_struct_col.child_columns.empty()
-                         ? device_json_column::row_offset_t{0}
-                         : root_struct_col.child_columns.begin()->second.num_rows;
+  auto root_col_size = root_struct_col.num_rows;
   for (auto const& col_name : col_order) {
     std::optional<schema_element> child_schema_element = std::visit(
       cudf::detail::visitor_overload{
