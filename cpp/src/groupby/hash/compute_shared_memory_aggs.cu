@@ -304,8 +304,9 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
   // performed, another indicating the validity of the aggregation
   auto const shmem_offsets_size = output_values.num_columns() * sizeof(cudf::size_type);
   // The rest of shmem is utilized for the actual arrays in shmem
-  CUDF_EXPECTS(shmem_size > offsets_size * 2, "No enough space for shared memory aggregations");
-  auto const shmem_agg_size = shmem_size - offsets_size * 2;
+  CUDF_EXPECTS(shmem_size > shmem_offsets_size * 2,
+               "No enough space for shared memory aggregations");
+  auto const shmem_agg_size = shmem_size - shmem_offsets_size * 2;
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
