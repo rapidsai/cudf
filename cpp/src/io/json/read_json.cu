@@ -44,10 +44,11 @@ namespace {
 
 class compressed_host_buffer_source final : public datasource {
  public:
-  explicit compressed_host_buffer_source(cudf::host_span<std::uint8_t const> ch_buffer,
-                                         compression_type comptype)
-    : _ch_buffer{ch_buffer}, _comptype{comptype}
+  explicit compressed_host_buffer_source(std::unique_ptr<datasource> src, compression_type comptype)
+    : _comptype{comptype}
   {
+    auto dbuf  = src->host_read(0, src->size());
+    _ch_buffer = std::vector<std::uint8_t>(dbuf->data(), dbuf->data() + dbuf->size());
     if (comptype == compression_type::GZIP || comptype == compression_type::ZIP ||
         comptype == compression_type::SNAPPY) {
       _decompressed_ch_buffer_size = estimate_uncompressed_size(_comptype, _ch_buffer);
@@ -86,7 +87,7 @@ class compressed_host_buffer_source final : public datasource {
   [[nodiscard]] size_t size() const override { return _decompressed_ch_buffer_size; }
 
  private:
-  cudf::host_span<std::uint8_t const> _ch_buffer;  ///< A non-owning view of the existing host data
+  std::vector<std::uint8_t> _ch_buffer;
   compression_type _comptype;
   size_t _decompressed_ch_buffer_size;
   std::vector<std::uint8_t> _decompressed_buffer;
@@ -472,15 +473,10 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   if (reader_opts.get_compression() == compression_type::NONE)
     return create_batched_cudf_table(sources, reader_opts, stream, mr);
 
-  std::vector<std::unique_ptr<datasource::buffer>> compressed_buffers;
   std::vector<std::unique_ptr<datasource>> compressed_sources;
   for (size_t i = 0; i < sources.size(); i++) {
-    compressed_buffers.emplace_back(sources[i]->host_read(0, sources[i]->size()));
     compressed_sources.emplace_back(std::make_unique<compressed_host_buffer_source>(
-      cudf::host_span<std::uint8_t const>(
-        reinterpret_cast<std::uint8_t const*>(compressed_buffers.back()->data()),
-        compressed_buffers.back()->size()),
-      reader_opts.get_compression()));
+      std::move(sources[i]), reader_opts.get_compression()));
   }
   // in create_batched_cudf_table, we need the compressed source size to actually be the
   // uncompressed source size for correct batching
