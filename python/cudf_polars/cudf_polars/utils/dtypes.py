@@ -68,7 +68,7 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
             and plc.unary.is_supported_cast(from_, to)
         )
         or (from_.id() == plc.TypeId.STRING and is_numeric_not_bool(to))
-        or (is_numeric_not_bool(from_) and to.id() == plc.TypeId.STRING)
+        or (to.id() == plc.TypeId.STRING and is_numeric_not_bool(from_))
     )
 
 
