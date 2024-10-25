@@ -26,7 +26,7 @@ tips_df = consumer.read_gdf(topic="custreamz_tips",
                         partition=0,
                         start=0,
                         end=10000,
-                        message_format="CSV")
+                        message_format="csv")
 
 print(tips_df.head())
 tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100

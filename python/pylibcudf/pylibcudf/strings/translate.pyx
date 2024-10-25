@@ -62,11 +62,9 @@ cpdef Column translate(Column input, dict chars_table):
     )
 
     with nogil:
-        c_result = move(
-            cpp_translate.translate(
-                input.view(),
-                c_chars_table
-            )
+        c_result = cpp_translate.translate(
+            input.view(),
+            c_chars_table
         )
     return Column.from_libcudf(move(c_result))
 
@@ -111,12 +109,10 @@ cpdef Column filter_characters(
     )
 
     with nogil:
-        c_result = move(
-            cpp_translate.filter_characters(
-                input.view(),
-                c_characters_to_filter,
-                keep_characters,
-                dereference(c_replacement),
-            )
+        c_result = cpp_translate.filter_characters(
+            input.view(),
+            c_characters_to_filter,
+            keep_characters,
+            dereference(c_replacement),
         )
     return Column.from_libcudf(move(c_result))

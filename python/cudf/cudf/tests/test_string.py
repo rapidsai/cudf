@@ -36,6 +36,7 @@ data_id_list = ["no_nulls", "some_nulls", "all_nulls"]
 idx_list = [None, [10, 11, 12, 13, 14]]
 
 idx_id_list = ["None_index", "Set_index"]
+rng = np.random.default_rng(seed=0)
 
 
 def raise_builder(flags, exceptions):
@@ -132,9 +133,14 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         cupy.asarray(np.array([True] * 5)),
         cupy.asarray(np.array([False] * 5)),
-        np.random.randint(0, 2, 5).astype("bool").tolist(),
-        np.random.randint(0, 2, 5).astype("bool"),
-        cupy.asarray(np.random.randint(0, 2, 5).astype("bool")),
+        np.random.default_rng(seed=0)
+        .integers(0, 2, 5)
+        .astype("bool")
+        .tolist(),
+        np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool"),
+        cupy.asarray(
+            np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool")
+        ),
     ],
 )
 def test_string_bool_mask(ps_gs, item):
@@ -1078,7 +1084,8 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
-    pdf = pd.DataFrame(np.random.rand(5, 5))
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(5, 5)))
     gdf = cudf.DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
     pdf.index = stringIndex
@@ -1896,6 +1903,26 @@ def test_string_findall(pat, flags):
 
     expected = ps.str.findall(pat, flags)
     actual = gs.str.findall(pat, flags)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pat, flags, pos",
+    [
+        ("Monkey", 0, [-1, 0, -1, -1]),
+        ("on", 0, [2, 1, -1, 1]),
+        ("bit", 0, [-1, -1, 3, -1]),
+        ("on$", 0, [2, -1, -1, -1]),
+        ("on$", re.MULTILINE, [2, -1, -1, 1]),
+        ("o.*k", re.DOTALL, [-1, 1, -1, 1]),
+    ],
+)
+def test_string_find_re(pat, flags, pos):
+    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
+    gs = cudf.Series(test_data)
+
+    expected = pd.Series(pos, dtype=np.int32)
+    actual = gs.str.find_re(pat, flags)
     assert_eq(expected, actual)
 
 

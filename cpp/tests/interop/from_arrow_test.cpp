@@ -52,7 +52,7 @@ std::unique_ptr<cudf::table> get_cudf_table()
                          .release());
   auto col4 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7},
                                                               {true, false, true, true, true});
-  columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
+  columns.emplace_back(cudf::dictionary::encode(col4));
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          {true, false, true, false, true}, {true, false, true, true, false})
                          .release());
@@ -339,9 +339,9 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   std::vector<std::unique_ptr<cudf::column>> columns;
   auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7},
                                                              {true, false, true, true, true});
-  columns.emplace_back(std::move(cudf::dictionary::encode(col)));
-  columns.emplace_back(std::move(cudf::dictionary::encode(col)));
-  columns.emplace_back(std::move(cudf::dictionary::encode(col)));
+  columns.emplace_back(cudf::dictionary::encode(col));
+  columns.emplace_back(cudf::dictionary::encode(col));
+  columns.emplace_back(cudf::dictionary::encode(col));
 
   cudf::table expected_table(std::move(columns));
 

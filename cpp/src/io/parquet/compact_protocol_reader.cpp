@@ -228,7 +228,8 @@ class parquet_field_string : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-struct parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
+class parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
+ public:
   parquet_field_string_list(int f, std::vector<std::string>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
@@ -308,10 +309,10 @@ class parquet_field_struct : public parquet_field {
 template <typename E, typename T>
 class parquet_field_union_struct : public parquet_field {
   E& enum_val;
-  cuda::std::optional<T>& val;  // union structs are always wrapped in std::optional
+  std::optional<T>& val;  // union structs are always wrapped in std::optional
 
  public:
-  parquet_field_union_struct(int f, E& ev, cuda::std::optional<T>& v)
+  parquet_field_union_struct(int f, E& ev, std::optional<T>& v)
     : parquet_field(f), enum_val(ev), val(v)
   {
   }
@@ -396,8 +397,9 @@ class parquet_field_binary : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-struct parquet_field_binary_list
+class parquet_field_binary_list
   : public parquet_field_list<std::vector<uint8_t>, FieldType::BINARY> {
+ public:
   parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v) : parquet_field_list(f, v)
   {
     auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
@@ -437,10 +439,10 @@ class parquet_field_struct_blob : public parquet_field {
  */
 template <typename T, typename FieldFunctor>
 class parquet_field_optional : public parquet_field {
-  cuda::std::optional<T>& val;
+  std::optional<T>& val;
 
  public:
-  parquet_field_optional(int f, cuda::std::optional<T>& v) : parquet_field(f), val(v) {}
+  parquet_field_optional(int f, std::optional<T>& v) : parquet_field(f), val(v) {}
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {

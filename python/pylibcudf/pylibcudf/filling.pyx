@@ -48,13 +48,11 @@ cpdef Column fill(
 
     cdef unique_ptr[column] result
     with nogil:
-        result = move(
-            cpp_fill(
-                destination.view(),
-                begin,
-                end,
-                dereference((<Scalar> value).c_obj)
-            )
+        result = cpp_fill(
+            destination.view(),
+            begin,
+            end,
+            dereference((<Scalar> value).c_obj)
         )
     return Column.from_libcudf(move(result))
 
@@ -112,12 +110,10 @@ cpdef Column sequence(size_type size, Scalar init, Scalar step):
     cdef unique_ptr[column] result
     cdef size_type c_size = size
     with nogil:
-        result = move(
-            cpp_sequence(
-                c_size,
-                dereference(init.c_obj),
-                dereference(step.c_obj),
-            )
+        result = cpp_sequence(
+            c_size,
+            dereference(init.c_obj),
+            dereference(step.c_obj),
         )
     return Column.from_libcudf(move(result))
 
@@ -152,18 +148,14 @@ cpdef Table repeat(
 
     if ColumnOrSize is Column:
         with nogil:
-            result = move(
-                cpp_repeat(
-                    input_table.view(),
-                    count.view()
-                )
+            result = cpp_repeat(
+                input_table.view(),
+                count.view()
             )
     if ColumnOrSize is size_type:
         with nogil:
-            result = move(
-                cpp_repeat(
-                    input_table.view(),
-                    count
-                )
+            result = cpp_repeat(
+                input_table.view(),
+                count
             )
     return Table.from_libcudf(move(result))

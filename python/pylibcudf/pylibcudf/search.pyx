@@ -41,13 +41,11 @@ cpdef Column lower_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_search.lower_bound(
-                haystack.view(),
-                needles.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_search.lower_bound(
+            haystack.view(),
+            needles.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -82,13 +80,11 @@ cpdef Column upper_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_search.upper_bound(
-                haystack.view(),
-                needles.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_search.upper_bound(
+            haystack.view(),
+            needles.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -112,10 +108,8 @@ cpdef Column contains(Column haystack, Column needles):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_search.contains(
-                haystack.view(),
-                needles.view(),
-            )
+        c_result = cpp_search.contains(
+            haystack.view(),
+            needles.view(),
         )
     return Column.from_libcudf(move(c_result))

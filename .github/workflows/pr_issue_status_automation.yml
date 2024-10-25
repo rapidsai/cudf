@@ -62,3 +62,33 @@ jobs:
         UPDATE_ITEM: true
         UPDATE_LINKED_ISSUES: true
       secrets: inherit
+
+    process-branch-name:
+      if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
+      needs: get-project-id
+      runs-on: ubuntu-latest
+      outputs:
+        branch-name: ${{ steps.process-branch-name.outputs.branch-name }}
+      steps:
+        - name: Extract branch name
+          id: process-branch-name
+          run: |
+            branch=${{ github.event.pull_request.base.ref }}
+            release=${branch#branch-}
+            echo "branch-name=$release" >> "$GITHUB_OUTPUT"
+
+    update-release:
+      # This job sets the PR and its linked issues to the release they are targeting
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@branch-24.12
+      if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
+      needs: [get-project-id, process-branch-name]
+      with:
+        PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
+        SINGLE_SELECT_FIELD_ID: "PVTSSF_lADOAp2shc4AiNzlzgg52UQ"
+        SINGLE_SELECT_FIELD_NAME: "Release"
+        SINGLE_SELECT_OPTION_VALUE: "${{ needs.process-branch-name.outputs.branch-name }}"
+        ITEM_PROJECT_ID: "${{ needs.get-project-id.outputs.ITEM_PROJECT_ID }}"
+        ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
+        UPDATE_ITEM: true
+        UPDATE_LINKED_ISSUES: true
+      secrets: inherit

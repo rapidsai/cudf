@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
+import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 import pylibcudf as plc
@@ -19,8 +20,12 @@ import polars.polars as plrs
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.traversal import make_recursive, reuse_if_unchanged
 from cudf_polars.typing import NodeTraverser
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import dtypes, sorting
+
+if TYPE_CHECKING:
+    from cudf_polars.typing import ExprTransformer
 
 __all__ = ["translate_ir", "translate_named_expr"]
 
@@ -148,7 +153,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
-    return ir.Select(schema, inp, exprs, node.should_broadcast)
+    return ir.Select(schema, exprs, node.should_broadcast, inp)
 
 
 @_translate_ir.register
@@ -161,11 +166,11 @@ def _(
         keys = [translate_named_expr(visitor, n=e) for e in node.keys]
     return ir.GroupBy(
         schema,
-        inp,
-        aggs,
         keys,
+        aggs,
         node.maintain_order,
         node.options,
+        inp,
     )
 
 
@@ -182,7 +187,71 @@ def _(
     with set_node(visitor, node.input_right):
         inp_right = translate_ir(visitor, n=None)
         right_on = [translate_named_expr(visitor, n=e) for e in node.right_on]
-    return ir.Join(schema, inp_left, inp_right, left_on, right_on, node.options)
+    if (how := node.options[0]) in {
+        "inner",
+        "left",
+        "right",
+        "full",
+        "cross",
+        "semi",
+        "anti",
+    }:
+        return ir.Join(schema, left_on, right_on, node.options, inp_left, inp_right)
+    else:
+        how, op1, op2 = how
+        if how != "ie_join":
+            raise NotImplementedError(
+                f"Unsupported join type {how}"
+            )  # pragma: no cover; asof joins not yet exposed
+        # No exposure of mixed/conditional joins in pylibcudf yet, so in
+        # the first instance, implement by doing a cross join followed by
+        # a filter.
+        _, join_nulls, zlice, suffix, coalesce = node.options
+        cross = ir.Join(
+            schema,
+            [],
+            [],
+            ("cross", join_nulls, None, suffix, coalesce),
+            inp_left,
+            inp_right,
+        )
+        dtype = plc.DataType(plc.TypeId.BOOL8)
+        if op2 is None:
+            ops = [op1]
+        else:
+            ops = [op1, op2]
+        suffix = cross.options[3]
+
+        # Column references in the right table refer to the post-join
+        # names, so with suffixes.
+        def _rename(e: expr.Expr, rec: ExprTransformer) -> expr.Expr:
+            if isinstance(e, expr.Col) and e.name in inp_left.schema:
+                return type(e)(e.dtype, f"{e.name}{suffix}")
+            return reuse_if_unchanged(e, rec)
+
+        mapper = make_recursive(_rename)
+        right_on = [
+            expr.NamedExpr(
+                f"{old.name}{suffix}" if old.name in inp_left.schema else old.name, new
+            )
+            for new, old in zip(
+                (mapper(e.value) for e in right_on), right_on, strict=True
+            )
+        ]
+        mask = functools.reduce(
+            functools.partial(
+                expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
+            ),
+            (
+                expr.BinOp(dtype, expr.BinOp._MAPPING[op], left.value, right.value)
+                for op, left, right in zip(ops, left_on, right_on, strict=True)
+            ),
+        )
+        filtered = ir.Filter(schema, expr.NamedExpr("mask", mask), cross)
+        if zlice is not None:
+            offset, length = zlice
+            return ir.Slice(schema, offset, length, filtered)
+        return filtered
 
 
 @_translate_ir.register
@@ -192,7 +261,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.exprs]
-    return ir.HStack(schema, inp, exprs, node.should_broadcast)
+    return ir.HStack(schema, exprs, node.should_broadcast, inp)
 
 
 @_translate_ir.register
@@ -202,17 +271,23 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         exprs = [translate_named_expr(visitor, n=e) for e in node.expr]
-    return ir.Reduce(schema, inp, exprs)
+    return ir.Reduce(schema, exprs, inp)
 
 
 @_translate_ir.register
 def _(
     node: pl_ir.Distinct, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
+    (keep, subset, maintain_order, zlice) = node.options
+    keep = ir.Distinct._KEEP_MAP[keep]
+    subset = frozenset(subset) if subset is not None else None
     return ir.Distinct(
         schema,
+        keep,
+        subset,
+        zlice,
+        maintain_order,
         translate_ir(visitor, n=node.input),
-        node.options,
     )
 
 
@@ -223,14 +298,18 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         by = [translate_named_expr(visitor, n=e) for e in node.by_column]
-    return ir.Sort(schema, inp, by, node.sort_options, node.slice)
+    stable, nulls_last, descending = node.sort_options
+    order, null_order = sorting.sort_order(
+        descending, nulls_last=nulls_last, num_keys=len(by)
+    )
+    return ir.Sort(schema, by, order, null_order, stable, node.slice, inp)
 
 
 @_translate_ir.register
 def _(
     node: pl_ir.Slice, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.Slice(schema, translate_ir(visitor, n=node.input), node.offset, node.len)
+    return ir.Slice(schema, node.offset, node.len, translate_ir(visitor, n=node.input))
 
 
 @_translate_ir.register
@@ -240,7 +319,7 @@ def _(
     with set_node(visitor, node.input):
         inp = translate_ir(visitor, n=None)
         mask = translate_named_expr(visitor, n=node.predicate)
-    return ir.Filter(schema, inp, mask)
+    return ir.Filter(schema, mask, inp)
 
 
 @_translate_ir.register
@@ -259,10 +338,10 @@ def _(
     name, *options = node.function
     return ir.MapFunction(
         schema,
-        # TODO: merge_sorted breaks this pattern
-        translate_ir(visitor, n=node.input),
         name,
         options,
+        # TODO: merge_sorted breaks this pattern
+        translate_ir(visitor, n=node.input),
     )
 
 
@@ -271,7 +350,7 @@ def _(
     node: pl_ir.Union, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
     return ir.Union(
-        schema, [translate_ir(visitor, n=n) for n in node.inputs], node.options
+        schema, node.options, *(translate_ir(visitor, n=n) for n in node.inputs)
     )
 
 
@@ -279,7 +358,7 @@ def _(
 def _(
     node: pl_ir.HConcat, visitor: NodeTraverser, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.HConcat(schema, [translate_ir(visitor, n=n) for n in node.inputs])
+    return ir.HConcat(schema, *(translate_ir(visitor, n=n) for n in node.inputs))
 
 
 def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
@@ -309,8 +388,7 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     # IR is versioned with major.minor, minor is bumped for backwards
     # compatible changes (e.g. adding new nodes), major is bumped for
     # incompatible changes (e.g. renaming nodes).
-    # Polars 1.7 changes definition of the CSV reader options schema name.
-    if (version := visitor.version()) >= (3, 0):
+    if (version := visitor.version()) >= (4, 0):
         raise NotImplementedError(
             f"No support for polars IR {version=}"
         )  # pragma: no cover; no such version for now.
