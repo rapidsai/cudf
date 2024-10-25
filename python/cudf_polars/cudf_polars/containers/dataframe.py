@@ -149,7 +149,7 @@ class DataFrame:
 
     @classmethod
     def deserialize(
-        cls, header: dict, frames: tuple[memoryview, plc.gpumemoryview]
+        cls, header: Mapping[str, Any], frames: tuple[memoryview, plc.gpumemoryview]
     ) -> Self:
         """
         Create a DataFrame from a serialized representation returned by `.serialize()`.
