@@ -107,7 +107,7 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
-  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+  std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.
   bool has_compressed_data{false};
