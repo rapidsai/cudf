@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 public class Schema {
   public static final Schema INFERRED = new Schema();
 
+  // Default value for precision value, when it is not specified or the column type is not decimal.
   private static final int UNKNOWN_PRECISION = -1;
 
   private final DType topLevelType;
