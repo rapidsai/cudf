@@ -102,7 +102,7 @@ class test_manager:
         self.run_bench_command(subtest_env)
 
     def use_policy_kvikio(self):
-        num_threads_options = [1, 8]
+        num_threads_options = [1, 2, 4, 8]
 
         # Let KVIKIO use cuFile API that uses GDS
         subtest_env = self.test_env.copy()
