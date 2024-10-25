@@ -51,6 +51,7 @@ static void BM_binaryop_transform(nvbench::state& state)
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(table_size * (tree_levels + 1));
+  state.add_global_memory_writes<key_type>(table_size);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
     // Execute tree that chains additions like (((a + b) + c) + d)
