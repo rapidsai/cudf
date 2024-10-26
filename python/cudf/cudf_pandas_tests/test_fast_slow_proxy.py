@@ -387,7 +387,8 @@ def test_dir_bound_method(
 ):
     """This test will fail because dir for bound methods is currently
     incorrect, but we have no way to fix it without materializing the slow
-    type, which is unnecessarily expensive."""
+    type, which is unnecessarily expensive.
+    """
     Fast, FastIntermediate = fast_and_intermediate_with_doc
     Slow, SlowIntermediate = slow_and_intermediate_with_doc
 

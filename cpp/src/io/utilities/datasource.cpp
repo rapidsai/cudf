@@ -15,8 +15,10 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/datasource.hpp>
@@ -47,6 +49,7 @@ class file_source : public datasource {
   {
     detail::force_init_cuda_context();
     if (cufile_integration::is_kvikio_enabled()) {
+      cufile_integration::set_thread_pool_nthreads_from_env();
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");
@@ -135,27 +138,6 @@ class file_source : public datasource {
 };
 
 /**
- * @brief Memoized pageableMemoryAccessUsesHostPageTables device property.
- */
-[[nodiscard]] bool pageableMemoryAccessUsesHostPageTables()
-{
-  static std::unordered_map<int, bool> result_cache{};
-
-  int deviceId{};
-  CUDF_CUDA_TRY(cudaGetDevice(&deviceId));
-
-  if (result_cache.find(deviceId) == result_cache.end()) {
-    cudaDeviceProp props{};
-    CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, deviceId));
-    result_cache[deviceId] = (props.pageableMemoryAccessUsesHostPageTables == 1);
-    CUDF_LOG_INFO(
-      "Device {} pageableMemoryAccessUsesHostPageTables: {}", deviceId, result_cache[deviceId]);
-  }
-
-  return result_cache[deviceId];
-}
-
-/**
  * @brief Implementation class for reading from a file using memory mapped access.
  *
  * Unlike Arrow's memory mapped IO class, this implementation allows memory mapping a subset of the
@@ -163,28 +145,18 @@ class file_source : public datasource {
  */
 class memory_mapped_source : public file_source {
  public:
-  explicit memory_mapped_source(char const* filepath,
-                                size_t offset,
-                                size_t max_size_estimate,
-                                size_t min_size_estimate)
+  explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
     : file_source(filepath)
   {
     if (_file.size() != 0) {
       // Memory mapping is not exclusive, so we can include the whole region we expect to read
       map(_file.desc(), offset, max_size_estimate);
-      // Buffer registration is exclusive (can't overlap with other registered buffers) so we
-      // register the lower estimate; this avoids issues when reading adjacent ranges from the same
-      // file from multiple threads
-      register_mmap_buffer(offset, min_size_estimate);
     }
   }
 
   ~memory_mapped_source() override
   {
-    if (_map_addr != nullptr) {
-      unmap();
-      unregister_mmap_buffer();
-    }
+    if (_map_addr != nullptr) { unmap(); }
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
@@ -227,46 +199,6 @@ class memory_mapped_source : public file_source {
   }
 
  private:
-  /**
-   * @brief Page-locks (registers) the memory range of the mapped file.
-   *
-   * Fixes nvbugs/4215160
-   */
-  void register_mmap_buffer(size_t offset, size_t size)
-  {
-    if (_map_addr == nullptr or not pageableMemoryAccessUsesHostPageTables()) { return; }
-
-    // Registered region must be within the mapped region
-    _reg_offset = std::max(offset, _map_offset);
-    _reg_size   = std::min(size != 0 ? size : _map_size, (_map_offset + _map_size) - _reg_offset);
-
-    _reg_addr         = static_cast<std::byte*>(_map_addr) - _map_offset + _reg_offset;
-    auto const result = cudaHostRegister(_reg_addr, _reg_size, cudaHostRegisterReadOnly);
-    if (result != cudaSuccess) {
-      _reg_addr = nullptr;
-      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})",
-                    static_cast<int>(result),
-                    cudaGetErrorString(result));
-    }
-  }
-
-  /**
-   * @brief Unregisters the memory range of the mapped file.
-   */
-  void unregister_mmap_buffer()
-  {
-    if (_reg_addr == nullptr) { return; }
-
-    auto const result = cudaHostUnregister(_reg_addr);
-    if (result == cudaSuccess) {
-      _reg_addr = nullptr;
-    } else {
-      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})",
-                    static_cast<int>(result),
-                    cudaGetErrorString(result));
-    }
-  }
-
   void map(int fd, size_t offset, size_t size)
   {
     CUDF_EXPECTS(offset < _file.size(), "Offset is past end of file", std::overflow_error);
@@ -316,17 +248,18 @@ class device_buffer_source final : public datasource {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto const count  = std::min(size, this->size() - offset);
-    auto const stream = cudf::get_default_stream();
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
-    stream.synchronize();
+    auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
+    cudf::detail::cuda_memcpy(host_span<uint8_t>{dst, count},
+                              device_span<uint8_t const>{
+                                reinterpret_cast<uint8_t const*>(_d_buffer.data() + offset), count},
+                              stream);
     return count;
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     auto const count  = std::min(size, this->size() - offset);
-    auto const stream = cudf::get_default_stream();
+    auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
     auto h_data       = cudf::detail::make_host_vector_async(
       cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
     stream.synchronize();
@@ -461,21 +394,23 @@ class user_datasource_wrapper : public datasource {
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
-                                               size_t max_size_estimate,
-                                               size_t min_size_estimate)
+                                               size_t max_size_estimate)
 {
-  CUDF_EXPECTS(max_size_estimate == 0 or min_size_estimate <= max_size_estimate,
-               "Invalid min/max size estimates for datasource creation");
+  auto const use_memory_mapping = [] {
+    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"ON"});
 
-#ifdef CUFILE_FOUND
-  if (cufile_integration::is_always_enabled()) {
-    // avoid mmap as GDS is expected to be used for most reads
+    if (policy == "ON") { return true; }
+    if (policy == "OFF") { return false; }
+
+    CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
+  }();
+
+  if (use_memory_mapping) {
+    return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
+  } else {
+    // `file_source` reads the file directly, without memory mapping
     return std::make_unique<file_source>(filepath.c_str());
   }
-#endif
-  // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(
-    filepath.c_str(), offset, max_size_estimate, min_size_estimate);
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)

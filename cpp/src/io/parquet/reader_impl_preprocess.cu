@@ -44,6 +44,7 @@
 #include <thrust/unique.h>
 
 #include <bitset>
+#include <limits>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -217,7 +218,7 @@ void generate_depth_remappings(
  */
 [[nodiscard]] std::future<void> read_column_chunks_async(
   std::vector<std::unique_ptr<datasource>> const& sources,
-  std::vector<std::unique_ptr<datasource::buffer>>& page_data,
+  cudf::host_span<rmm::device_buffer> page_data,
   cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
   size_t begin_chunk,
   size_t end_chunk,
@@ -250,23 +251,24 @@ void generate_depth_remappings(
       if (source->is_device_read_preferred(io_size)) {
         // Buffer needs to be padded.
         // Required by `gpuDecodePageData`.
-        auto buffer =
+        page_data[chunk] =
           rmm::device_buffer(cudf::util::round_up_safe(io_size, BUFFER_PADDING_MULTIPLE), stream);
         auto fut_read_size = source->device_read_async(
-          io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
+          io_offset, io_size, static_cast<uint8_t*>(page_data[chunk].data()), stream);
         read_tasks.emplace_back(std::move(fut_read_size));
-        page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
         auto const read_buffer = source->host_read(io_offset, io_size);
         // Buffer needs to be padded.
         // Required by `gpuDecodePageData`.
-        auto tmp_buffer = rmm::device_buffer(
+        page_data[chunk] = rmm::device_buffer(
           cudf::util::round_up_safe(read_buffer->size(), BUFFER_PADDING_MULTIPLE), stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(
-          tmp_buffer.data(), read_buffer->data(), read_buffer->size(), cudaMemcpyDefault, stream));
-        page_data[chunk] = datasource::buffer::create(std::move(tmp_buffer));
+        CUDF_CUDA_TRY(cudaMemcpyAsync(page_data[chunk].data(),
+                                      read_buffer->data(),
+                                      read_buffer->size(),
+                                      cudaMemcpyDefault,
+                                      stream));
       }
-      auto d_compdata = page_data[chunk]->data();
+      auto d_compdata = static_cast<uint8_t const*>(page_data[chunk].data());
       do {
         chunks[chunk].compressed_data = d_compdata;
         d_compdata += chunks[chunk].compressed_size;
@@ -979,7 +981,7 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
   std::vector<size_type> chunk_source_map(num_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  raw_page_data = std::vector<std::unique_ptr<datasource::buffer>>(num_chunks);
+  raw_page_data = std::vector<rmm::device_buffer>(num_chunks);
 
   // Keep track of column chunk file offsets
   std::vector<size_t> column_chunk_offsets(num_chunks);
@@ -1592,36 +1594,68 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     auto const d_cols_info = cudf::detail::make_device_uvector_async(
       h_cols_info, _stream, cudf::get_current_device_resource_ref());
 
-    auto const num_keys = _input_columns.size() * max_depth * subpass.pages.size();
-    // size iterator. indexes pages by sorted order
-    rmm::device_uvector<size_type> size_input{num_keys, _stream};
-    thrust::transform(
-      rmm::exec_policy(_stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_keys),
-      size_input.begin(),
-      get_page_nesting_size{
-        d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
-    auto const reduction_keys =
-      cudf::detail::make_counting_transform_iterator(0, get_reduction_key{subpass.pages.size()});
+    // Vector to store page sizes for each column at each depth
     cudf::detail::hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
 
-    // find the size of each column
-    thrust::reduce_by_key(rmm::exec_policy(_stream),
-                          reduction_keys,
-                          reduction_keys + num_keys,
-                          size_input.cbegin(),
-                          thrust::make_discard_iterator(),
-                          sizes.d_begin());
+    // Total number of keys to process
+    auto const num_keys = _input_columns.size() * max_depth * subpass.pages.size();
 
-    // for nested hierarchies, compute per-page start offset
-    thrust::exclusive_scan_by_key(
-      rmm::exec_policy(_stream),
-      reduction_keys,
-      reduction_keys + num_keys,
-      size_input.cbegin(),
-      start_offset_output_iterator{
-        subpass.pages.device_begin(), 0, d_cols_info.data(), max_depth, subpass.pages.size()});
+    // Maximum 1 billion keys processed per iteration
+    auto constexpr max_keys_per_iter =
+      static_cast<size_t>(std::numeric_limits<size_type>::max() / 2);
+
+    // Number of keys for per each column
+    auto const num_keys_per_col = max_depth * subpass.pages.size();
+
+    // The largest multiple of `num_keys_per_col` that is <= `num_keys`
+    auto const num_keys_per_iter =
+      num_keys <= max_keys_per_iter
+        ? num_keys
+        : num_keys_per_col * std::max<size_t>(1, max_keys_per_iter / num_keys_per_col);
+
+    // Size iterator. Indexes pages by sorted order
+    rmm::device_uvector<size_type> size_input{num_keys_per_iter, _stream};
+
+    // To keep track of the starting key of an iteration
+    size_t key_start = 0;
+    // Loop until all keys are processed
+    while (key_start < num_keys) {
+      // Number of keys processed in this iteration
+      auto const num_keys_this_iter = std::min<size_t>(num_keys_per_iter, num_keys - key_start);
+      thrust::transform(
+        rmm::exec_policy_nosync(_stream),
+        thrust::make_counting_iterator<size_t>(key_start),
+        thrust::make_counting_iterator<size_t>(key_start + num_keys_this_iter),
+        size_input.begin(),
+        get_page_nesting_size{
+          d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
+
+      // Manually create a size_t `key_start` compatible counting_transform_iterator.
+      auto const reduction_keys =
+        thrust::make_transform_iterator(thrust::make_counting_iterator<std::size_t>(key_start),
+                                        get_reduction_key{subpass.pages.size()});
+
+      // Find the size of each column
+      thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
+                            reduction_keys,
+                            reduction_keys + num_keys_this_iter,
+                            size_input.cbegin(),
+                            thrust::make_discard_iterator(),
+                            sizes.d_begin() + (key_start / subpass.pages.size()));
+
+      // For nested hierarchies, compute per-page start offset
+      thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
+                                    reduction_keys,
+                                    reduction_keys + num_keys_this_iter,
+                                    size_input.cbegin(),
+                                    start_offset_output_iterator{subpass.pages.device_begin(),
+                                                                 key_start,
+                                                                 d_cols_info.data(),
+                                                                 max_depth,
+                                                                 subpass.pages.size()});
+      // Increment the key_start
+      key_start += num_keys_this_iter;
+    }
 
     sizes.device_to_host_sync(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
@@ -1662,15 +1696,14 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
-std::vector<size_t> reader::impl::calculate_page_string_offsets()
+cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
   auto page_keys = make_page_key_iterator(subpass.pages);
 
-  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
-  rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), _stream);
+  rmm::device_uvector<size_t> d_col_sizes(_input_columns.size(), _stream);
 
   // use page_index to fetch page string sizes in the proper order
   auto val_iter = thrust::make_transform_iterator(subpass.pages.device_begin(),
@@ -1684,7 +1717,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
                                 page_offset_output_iter{subpass.pages.device_ptr()});
 
   // now sum up page sizes
-  rmm::device_uvector<int> reduce_keys(col_sizes.size(), _stream);
+  rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
   thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
                         page_keys,
                         page_keys + subpass.pages.size(),
@@ -1692,14 +1725,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
                         reduce_keys.begin(),
                         d_col_sizes.begin());
 
-  cudaMemcpyAsync(col_sizes.data(),
-                  d_col_sizes.data(),
-                  sizeof(size_t) * col_sizes.size(),
-                  cudaMemcpyDeviceToHost,
-                  _stream);
-  _stream.synchronize();
-
-  return col_sizes;
+  return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail

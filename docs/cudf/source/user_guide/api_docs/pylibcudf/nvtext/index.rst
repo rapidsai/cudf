@@ -9,3 +9,6 @@ nvtext
     jaccard
     minhash
     ngrams_tokenize
+    normalize
+    replace
+    stemmer

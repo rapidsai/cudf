@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union, overload
-
-from typing_extensions import Literal
+from typing import Literal, Union, overload
 
 import cudf
 import cudf.core.column
