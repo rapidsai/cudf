@@ -50,7 +50,7 @@ static void BM_binaryop_transform(nvbench::state& state)
   cudf::table_view table{*source_table};
 
   // Use the number of bytes read from global memory
-  state.add_global_memory_reads<key_type>(table_size * (tree_levels + 1));
+  state.add_global_memory_reads<key_type>(static_cast<size_t>(table_size) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(table_size);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
