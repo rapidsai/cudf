@@ -41,6 +41,7 @@ print(tips_df.groupby("size").tip_percentage.mean())
 
 ## Resources
 
+- [Try cudf.pandas on any GPU](https://lightning.ai/lightning-ai/studios/run-pandas-on-gpus-for-a-150x-speed-up-powered-by-rapids-cudf): Explore `cudf.pandas` on a free GPU enabled Lightning Studio ⚡️!
 - [Try cudf.pandas now](https://nvda.ws/rapids-cudf): Explore `cudf.pandas` on a free GPU enabled instance on Google Colab!
 - [Install](https://docs.rapids.ai/install): Instructions for installing cuDF and other [RAPIDS](https://rapids.ai) libraries.
 - [cudf (Python) documentation](https://docs.rapids.ai/api/cudf/stable/)
