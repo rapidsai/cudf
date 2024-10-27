@@ -8,7 +8,7 @@ import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Iterable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy as cp
 import numpy as np
@@ -36,6 +36,8 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from cudf._typing import (
         AggType,
         DataFrameOrSeries,

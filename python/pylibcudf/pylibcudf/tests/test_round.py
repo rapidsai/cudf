@@ -2,9 +2,10 @@
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(params=["float32", "float64"])

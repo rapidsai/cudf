@@ -10,9 +10,7 @@ from collections import Counter, abc
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Literal,
-    MutableMapping,
     TypeVar,
     cast,
 )
@@ -63,6 +61,8 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, MutableMapping
+
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,

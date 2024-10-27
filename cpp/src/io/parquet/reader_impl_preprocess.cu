@@ -218,7 +218,7 @@ void generate_depth_remappings(
  */
 [[nodiscard]] std::future<void> read_column_chunks_async(
   std::vector<std::unique_ptr<datasource>> const& sources,
-  std::vector<std::unique_ptr<datasource::buffer>>& page_data,
+  cudf::host_span<rmm::device_buffer> page_data,
   cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
   size_t begin_chunk,
   size_t end_chunk,
@@ -251,23 +251,24 @@ void generate_depth_remappings(
       if (source->is_device_read_preferred(io_size)) {
         // Buffer needs to be padded.
         // Required by `gpuDecodePageData`.
-        auto buffer =
+        page_data[chunk] =
           rmm::device_buffer(cudf::util::round_up_safe(io_size, BUFFER_PADDING_MULTIPLE), stream);
         auto fut_read_size = source->device_read_async(
-          io_offset, io_size, static_cast<uint8_t*>(buffer.data()), stream);
+          io_offset, io_size, static_cast<uint8_t*>(page_data[chunk].data()), stream);
         read_tasks.emplace_back(std::move(fut_read_size));
-        page_data[chunk] = datasource::buffer::create(std::move(buffer));
       } else {
         auto const read_buffer = source->host_read(io_offset, io_size);
         // Buffer needs to be padded.
         // Required by `gpuDecodePageData`.
-        auto tmp_buffer = rmm::device_buffer(
+        page_data[chunk] = rmm::device_buffer(
           cudf::util::round_up_safe(read_buffer->size(), BUFFER_PADDING_MULTIPLE), stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(
-          tmp_buffer.data(), read_buffer->data(), read_buffer->size(), cudaMemcpyDefault, stream));
-        page_data[chunk] = datasource::buffer::create(std::move(tmp_buffer));
+        CUDF_CUDA_TRY(cudaMemcpyAsync(page_data[chunk].data(),
+                                      read_buffer->data(),
+                                      read_buffer->size(),
+                                      cudaMemcpyDefault,
+                                      stream));
       }
-      auto d_compdata = page_data[chunk]->data();
+      auto d_compdata = static_cast<uint8_t const*>(page_data[chunk].data());
       do {
         chunks[chunk].compressed_data = d_compdata;
         d_compdata += chunks[chunk].compressed_size;
@@ -980,7 +981,7 @@ std::pair<bool, std::future<void>> reader::impl::read_column_chunks()
   std::vector<size_type> chunk_source_map(num_chunks);
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  raw_page_data = std::vector<std::unique_ptr<datasource::buffer>>(num_chunks);
+  raw_page_data = std::vector<rmm::device_buffer>(num_chunks);
 
   // Keep track of column chunk file offsets
   std::vector<size_t> column_chunk_offsets(num_chunks);
@@ -1695,15 +1696,14 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 
-std::vector<size_t> reader::impl::calculate_page_string_offsets()
+cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
 
   auto page_keys = make_page_key_iterator(subpass.pages);
 
-  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
-  rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), _stream);
+  rmm::device_uvector<size_t> d_col_sizes(_input_columns.size(), _stream);
 
   // use page_index to fetch page string sizes in the proper order
   auto val_iter = thrust::make_transform_iterator(subpass.pages.device_begin(),
@@ -1717,7 +1717,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
                                 page_offset_output_iter{subpass.pages.device_ptr()});
 
   // now sum up page sizes
-  rmm::device_uvector<int> reduce_keys(col_sizes.size(), _stream);
+  rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
   thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
                         page_keys,
                         page_keys + subpass.pages.size(),
@@ -1725,14 +1725,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
                         reduce_keys.begin(),
                         d_col_sizes.begin());
 
-  cudaMemcpyAsync(col_sizes.data(),
-                  d_col_sizes.data(),
-                  sizeof(size_t) * col_sizes.size(),
-                  cudaMemcpyDeviceToHost,
-                  _stream);
-  _stream.synchronize();
-
-  return col_sizes;
+  return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail
