@@ -231,7 +231,6 @@ def test_murmurhash3_x86_32_struct():
         combined_hash = uint_hash_combine_32(0, combined_hash)
         combined_hash = uint_hash_combine_32(seed, combined_hash)
 
-        # Step 3: Process the remaining fields
         for key in keys[1:]:
             current_hash = hash_single_uint32(s[key], seed=seed)
             combined_hash = uint_hash_combine_32(combined_hash, current_hash)
