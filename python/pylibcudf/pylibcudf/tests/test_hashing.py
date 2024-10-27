@@ -28,10 +28,13 @@ def scalar_to_binary(x):
         raise NotImplementedError
 
 
+def hash_combine_32(lhs, rhs):
+    return lhs ^ (rhs + 0x9E3779B9 + (lhs << 6) + (lhs >> 2))
+
 def libcudf_mmh3_x86_32(binary):
     seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     hashval = mmh3.hash(binary, seed)
-    return seed ^ (hashval + 0x9E3779B9 + (seed << 6) + (seed >> 2))
+    return hash_combine_32(seed, hashval)
 
 
 @pytest.fixture(params=[pa.int64(), pa.float64(), pa.string(), pa.bool_()])
@@ -151,8 +154,66 @@ def test_murmurhash3_x86_32(pa_scalar_input_column, plc_scalar_input_tbl):
     assert_column_eq(got, expect)
 
 
-# def test_murmurhash_x86_32_list_struct TODO
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_murmurhash3_x86_32_list():
+    pa_tbl = pa.Table.from_pydict({"list": pa.array([[1, 2, 3], [4,5,6], [7,8,9]], type=pa.list_(pa.uint32()))})
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
 
+    def hash_single_uint32(val, seed=0):
+        return mmh3.hash(np.uint32(val).tobytes(), seed=seed, signed=False)
+    
+    def uint_hash_combine_32(lhs, rhs):
+        lhs = np.uint32(lhs)
+        rhs = np.uint32(rhs)
+        return hash_combine_32(lhs, rhs)
+
+    def hash_list(l):
+        hash_value = uint_hash_combine_32(0, hash_single_uint32(len(l)))
+
+        for element in l:
+            hash_value = uint_hash_combine_32(hash_value, hash_single_uint32(element, seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED))
+
+        final = uint_hash_combine_32(plc.hashing.LIBCUDF_DEFAULT_HASH_SEED, hash_value)
+        return final
+
+    expect = pa.array([hash_list(val) for val in pa_tbl["list"].to_pylist()], type=pa.uint32())
+    got = plc.hashing.murmurhash3_x86_32(plc_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
+    assert_column_eq(got, expect)
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_murmurhash3_x86_32_struct():
+    pa_tbl = pa.table(
+        {
+            'struct': pa.array(
+                [
+                    {"a": 1, "b": 2}
+                ], 
+                type=pa.struct([pa.field("a", pa.uint32()), pa.field("b", pa.uint32())])
+            )
+        }
+    )
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+
+    def hash_single_uint32(val, seed=0):
+        return mmh3.hash(np.uint32(val).tobytes(), seed=seed, signed=False)
+    
+    def uint_hash_combine_32(lhs, rhs):
+        lhs = np.uint32(lhs)
+        rhs = np.uint32(rhs)
+        return hash_combine_32(lhs, rhs)
+
+    def hash_struct(s):
+        hash_value = uint_hash_combine_32(0, hash_single_uint32(len(s)))
+
+        for key in s:
+            hash_value = uint_hash_combine_32(hash_value, hash_single_uint32(s[key], seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED))
+
+        final = uint_hash_combine_32(plc.hashing.LIBCUDF_DEFAULT_HASH_SEED, hash_value)
+        return final
+
+    expect = pa.array([hash_struct(val) for val in pa_tbl["struct"].to_pylist()], type=pa.uint32())
+    got = plc.hashing.murmurhash3_x86_32(plc_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
+    assert_column_eq(got, expect)
 
 def test_murmurhash3_x64_128(pa_scalar_input_column, plc_scalar_input_tbl):
     def py_hasher(val):
