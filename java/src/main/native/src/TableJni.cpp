@@ -1826,7 +1826,6 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
                                                  jboolean allow_leading_zeros,
                                                  jboolean allow_nonnumeric_numbers,
                                                  jboolean allow_unquoted_control,
-                                                 jboolean prune_columns,
                                                  jboolean experimental,
                                                  jbyte line_delimiter,
                                                  jlong ds_handle)
@@ -1855,6 +1854,7 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
     cudf::io::json_recovery_mode_t recovery_mode =
       recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                         : cudf::io::json_recovery_mode_t::FAIL;
+
     cudf::io::json_reader_options_builder opts =
       cudf::io::json_reader_options::builder(source)
         .dayfirst(static_cast<bool>(day_first))
@@ -1866,7 +1866,6 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
         .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes)
-        .prune_columns(prune_columns)
         .experimental(experimental);
     if (strict_validation) {
       opts.numeric_leading_zeros(allow_leading_zeros)
@@ -1896,10 +1895,11 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
           name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
         name_order.push_back(name);
       }
-
+      auto const prune_columns = data_types.size() != 0;
       cudf::io::schema_element structs{
         cudf::data_type{cudf::type_id::STRUCT}, std::move(data_types), {std::move(name_order)}};
-      opts.dtypes(structs);
+      opts.prune_columns(prune_columns).dtypes(structs);
+
     } else {
       // should infer the types
     }
@@ -1932,7 +1932,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
                                                            jboolean allow_leading_zeros,
                                                            jboolean allow_nonnumeric_numbers,
                                                            jboolean allow_unquoted_control,
-                                                           jboolean prune_columns,
                                                            jboolean experimental,
                                                            jbyte line_delimiter)
 {
@@ -1975,6 +1974,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
     cudf::io::json_recovery_mode_t recovery_mode =
       recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                         : cudf::io::json_recovery_mode_t::FAIL;
+
     cudf::io::json_reader_options_builder opts =
       cudf::io::json_reader_options::builder(source)
         .dayfirst(static_cast<bool>(day_first))
@@ -1986,7 +1986,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
         .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes)
-        .prune_columns(prune_columns)
         .experimental(experimental);
     if (strict_validation) {
       opts.numeric_leading_zeros(allow_leading_zeros)
@@ -2017,9 +2016,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
           name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
         name_order.emplace_back(std::move(name));
       }
+      auto const prune_columns = data_types.size() != 0;
       cudf::io::schema_element structs{
         cudf::data_type{cudf::type_id::STRUCT}, std::move(data_types), {std::move(name_order)}};
-      opts.dtypes(structs);
+      opts.prune_columns(prune_columns).dtypes(structs);
     } else {
       // should infer the types
     }
