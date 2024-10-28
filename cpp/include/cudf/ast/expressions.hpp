@@ -578,10 +578,13 @@ class tree {
    * @returns a reference to the added expression
    */
   template <typename Expr, typename... Args>
-  expression const& emplace(Args&&... args)
+  Expr const& emplace(Args&&... args)
   {
     static_assert(std::is_base_of_v<expression, Expr>);
-    return *expressions.emplace_back(std::make_unique<Expr>(std::forward<Args>(args)...));
+    std::unique_ptr<Expr> expr = std::make_unique<Expr>(std::forward<Args>(args)...);
+    Expr const& expr_ref       = *expr;
+    expressions.emplace_back(std::static_pointer_cast<expression>(std::move(expr)));
+    return expr_ref;
   }
 
   /**
@@ -590,7 +593,7 @@ class tree {
    * @returns a reference to the added expression
    */
   template <typename Expr>
-  expression const& push(Expr expr)
+  Expr const& push(Expr expr)
   {
     return emplace<Expr>(std::move(expr));
   }
