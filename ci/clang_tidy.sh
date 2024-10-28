@@ -43,7 +43,7 @@ cmake --build cpp/build 2>&1 | tee build_output.txt
 
 # Parse the build output to extract only IWYU's proposed changes.
 # TODO: Faking that this is a JSON file to leverage the existing automated upload
-python cpp/scripts/parse_iwyu_output.py build_output.txt gh-status.json
+python cpp/scripts/parse_iwyu_output.py build_output.txt clang_tidy_results.txt
 
 # Remove invalid components of the path for local usage.
-sed -i 's/\/__w\/cudf\/cudf\///' gh-status.json
+sed -i 's/\/__w\/cudf\/cudf\///' clang_tidy_results.txt
