@@ -10,9 +10,9 @@ import operator
 import pickle
 import types
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from enum import IntEnum
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 import numpy as np
 
