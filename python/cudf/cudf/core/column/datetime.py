@@ -8,7 +8,7 @@ import functools
 import locale
 import re
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, Sequence, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,8 @@ from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import (
         ColumnBinaryOperand,
         DatetimeLikeScalar,

@@ -6,7 +6,7 @@ import math
 import pickle
 import weakref
 from types import SimpleNamespace
-from typing import Any, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
 from typing_extensions import Self
@@ -17,6 +17,9 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def host_memory_allocation(nbytes: int) -> memoryview:
