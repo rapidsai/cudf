@@ -563,10 +563,19 @@ class tree {
   /**
    * @brief construct an empty ast tree
    */
-  tree()                  = default;
-  tree(tree&&)            = default;
+  tree() = default;
+
+  /**
+   * @brief Moves the ast tree
+   */
+  tree(tree&&) = default;
+
+  /**
+   * @brief move-assigns the AST tree
+   */
   tree& operator=(tree&&) = default;
-  ~tree()                 = default;
+
+  ~tree() = default;
 
   // the tree is not copyable
   tree(tree const&)            = delete;
@@ -600,27 +609,32 @@ class tree {
 
   /**
    * @brief get the first expression in the tree
+   * @returns the first inserted expression into the tree
    */
   expression const& front() const { return *expressions.front(); }
 
   /**
    * @brief get the last expression in the tree
+   * @returns the last inserted expression into the tree
    */
   expression const& back() const { return *expressions.back(); }
 
   /**
    * @brief get the number of expressions added to the tree
+   * @returns the number of expressions added to the tree
    */
   size_t size() const { return expressions.size(); }
 
   /**
-   * @brief get the expression at a checked index in the tree
+   * @brief get the expression at an index in the tree. index is checked.
+   * @param index index of expression in the ast tree
    * @returns the expression at the specified index
    */
   expression const& at(size_t index) { return *expressions.at(index); }
 
   /**
-   * @brief get the expression at an unchecked index in the tree
+   * @brief get the expression at an index in the tree. index is unchecked.
+   * @param index index of expression in the ast tree
    * @returns the expression at the specified index
    */
   expression const& operator[](size_t index) const { return *expressions[index]; }
