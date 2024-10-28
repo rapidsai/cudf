@@ -7,15 +7,15 @@ from dask import config
 # do anything for dask==2024.2.0)
 config.set({"dataframe.query-planning-warning": False})
 
-import dask.dataframe as dd
-from dask.dataframe import from_delayed
+import dask.dataframe as dd  # noqa: E402
+from dask.dataframe import from_delayed  # noqa: E402
 
-import cudf
+import cudf  # noqa: E402
 
-from . import backends
-from ._version import __git_commit__, __version__
-from .core import concat, from_cudf, from_dask_dataframe
-from .expr import QUERY_PLANNING_ON
+from . import backends  # noqa: E402, F401
+from ._version import __git_commit__, __version__  # noqa: E402, F401
+from .core import concat, from_cudf, from_dask_dataframe  # noqa: E402
+from .expr import QUERY_PLANNING_ON  # noqa: E402
 
 
 def read_csv(*args, **kwargs):
@@ -55,9 +55,9 @@ if QUERY_PLANNING_ON:
     to_orc = raise_not_implemented_error("to_orc")
 
 else:
-    from .core import DataFrame, Index, Series
-    from .groupby import groupby_agg
-    from .io import read_text, to_orc
+    from .core import DataFrame, Index, Series  # noqa: F401
+    from .groupby import groupby_agg  # noqa: F401
+    from .io import read_text, to_orc  # noqa: F401
 
 
 __all__ = [

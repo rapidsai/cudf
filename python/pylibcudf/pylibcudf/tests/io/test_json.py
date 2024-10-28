@@ -3,15 +3,16 @@ import io
 
 import pandas as pd
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
-from pylibcudf.io.types import CompressionType
 from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
     write_source_str,
 )
+
+import pylibcudf as plc
+from pylibcudf.io.types import CompressionType
 
 # Shared kwargs to pass to make_source
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}

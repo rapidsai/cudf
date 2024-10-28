@@ -12,8 +12,8 @@ if QUERY_PLANNING_ON:
     config.set({"dataframe.shuffle.method": "tasks"})
 
     try:
-        import dask_cudf.expr._collection
-        import dask_cudf.expr._expr
+        import dask_cudf.expr._collection  # noqa: F401
+        import dask_cudf.expr._expr  # noqa: F401
 
     except ImportError as err:
         # Dask *should* raise an error before this.
