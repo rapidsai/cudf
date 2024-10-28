@@ -168,12 +168,12 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
 }
 
 constexpr cudf::thread_index_type block_size = 256;
-// for tuning independently from block_size
+// for potentially tuning minhash_seed_kernel independently from block_size
 constexpr cudf::thread_index_type tile_size = block_size;
 
 // Number of a/b parameter values to process per thread.
 // The intermediate values are stored in shared-memory and therefore limits this count.
-// This value was found to be the most efficient size for both uint32 and uint64
+// This value was found to be an efficient size for both uint32 and uint64
 // hash types based on benchmarks.
 constexpr cuda::std::size_t params_per_thread = 16;
 
@@ -181,7 +181,7 @@ constexpr cuda::std::size_t params_per_thread = 16;
 constexpr cudf::size_type wide_string_threshold = 1 << 18;  // 256K
 // The number of blocks per string for the above-threshold kernel processing.
 constexpr cudf::size_type blocks_per_string = 64;
-// These values determined using redpajama and books_sample datasets
+// The above values were determined using the redpajama and books_sample datasets
 
 /**
  * @brief Hashing kernel launched as a thread per tile-size (block or warp)
@@ -201,8 +201,8 @@ constexpr cudf::size_type blocks_per_string = 64;
  * @param width Width in characters used for determining substrings to hash
  * @param d_hashes The resulting hash values are stored here
  * @param threshold_count Stores the number of strings above wide_string_threshold
- * @param param_count Number of parameters (used for proactive initialize)
- * @param d_results Final results vector (used for proactive initialize)
+ * @param param_count Number of parameters (used for the proactive initialize)
+ * @param d_results Final results vector (used for the proactive initialize)
  */
 template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
 CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
@@ -218,7 +218,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
   if (str_idx >= d_strings.size()) { return; }
   if (d_strings.is_null(str_idx)) { return; }
 
-  // retrieve this strings offset to locate the output position in d_hashes
+  // retrieve this string's offset to locate the output position in d_hashes
   auto const offsets = d_strings.child(cudf::strings_column_view::offsets_column_index);
   auto const offsets_itr =
     cudf::detail::input_offsetalator(offsets.head(), offsets.type(), d_strings.offset());
@@ -229,7 +229,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
   auto const d_str    = cudf::string_view(d_strings.head<char>() + offset, size_bytes);
   auto const lane_idx = tid % tile_size;
 
-  // hashes for this string/thread stored here
+  // hashes for this string/thread are stored here
   auto seed_hashes = d_hashes + offset - offsets_itr[0] + lane_idx;
 
   auto const begin  = d_str.data() + lane_idx;
@@ -244,7 +244,8 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
     auto const check_str =  // used for counting 'width' characters
       cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
     auto const [bytes, left] = cudf::strings::detail::bytes_to_character_position(check_str, width);
-    if ((itr != d_str.data()) && (left > 0)) {  // true if past the end of the string
+    if ((itr != d_str.data()) && (left > 0)) {
+      // true itr+width is past the end of the string
       *seed_hashes = 0;
       continue;
     }
@@ -291,10 +292,10 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
  * @tparam blocks_per_string Number of blocks used to process each string
  *
  * @param d_strings The input strings to hash
- * @param indices The indices of the strings in d_strings to process here
+ * @param indices The indices of the strings in d_strings to process
  * @param parameter_a 1st set of parameters for the calculation result
  * @param parameter_b 2nd set of parameters for the calculation result
- * @param width Width used for calculating the number of available hashes in each string
+ * @param width Used for calculating the number of available hashes in each string
  * @param d_hashes The hash values computed in minhash_seed_kernel
  * @param d_results Final results vector of calculate values
  */
@@ -323,13 +324,16 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   auto const size_bytes = static_cast<cudf::size_type>(offsets_itr[str_idx + 1] - offset);
 
   // number of items to process in this block;
-  // last block includes any remainder values from the size_bytes/blocks_per_string truncation
+  // last block also includes any remainder values from the size_bytes/blocks_per_string truncation
+  // example:
+  //  each section_size for string with size 588090 and blocks_per_string=64 is 9188
+  //  except the last section which is 9188 + (588090 % 64) = 9246
   auto const section_size =
     (size_bytes / blocks_per_string) +
     (section_idx < (blocks_per_string - 1) ? 0 : size_bytes % blocks_per_string);
   auto const section_offset = section_idx * (size_bytes / blocks_per_string);
 
-  // hash values for this block
+  // hash values for this block/section
   auto const seed_hashes = d_hashes + offset - offsets_itr[0] + section_offset;
   // width used here as a max value since a string's char-count <= byte-count
   auto const hashes_size =
@@ -348,7 +352,7 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   constexpr uint64_t mersenne_prime  = (1UL << 61) - 1;
   constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
 
-  // found to be the most efficient shared memory size for both hash types
+  // found to be an efficient shared memory size for both hash types
   __shared__ char shmem[block_size * params_per_thread * sizeof(hash_value_type)];
   auto const block_values = reinterpret_cast<hash_value_type*>(shmem);
 
@@ -365,7 +369,8 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
     // each lane accumulates min hashes in its shared memory
     for (auto itr = begin; itr < end; itr += block_size) {
       auto const hv = *itr;
-      if (hv == 0) { continue; }  // 0 is used as a skip sentinel
+      // 0 is used as a skip sentinel for UTF-8 and trailing bytes
+      if (hv == 0) { continue; }
 
       for (std::size_t param_idx = i; param_idx < (i + param_count); ++param_idx) {
         // permutation formula used by datatrove
@@ -377,8 +382,8 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
     }
     block.sync();
 
-    // reduce each parameter values vector to a single min value
-    // assumes that the block_size > params_per_thread
+    // reduce each parameter values vector to a single min value;
+    // assumes that the block_size > params_per_thread;
     // each thread reduces a block_size of parameter values (thread per parameter)
     if (lane_idx < param_count) {
       auto const values = block_values + (lane_idx * block_size);
