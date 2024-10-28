@@ -576,10 +576,10 @@ class tree {
   tree& operator=(tree const&) = delete;
 
   /**
-  @brief Add an expression to the AST tree
-  @param args Arguments to use to construct the ast expression
-  @returns a reference to the added expression
- */
+   * @brief Add an expression to the AST tree
+   * @param args Arguments to use to construct the ast expression
+   * @returns a reference to the added expression
+   */
   template <typename Expr, typename... Args>
   expression const& emplace(Args&&... args)
   {
@@ -588,10 +588,10 @@ class tree {
   }
 
   /**
-   @brief Add an expression to the AST tree
-   @param expr AST expression to be added
-   @returns a reference to the added expression
-    */
+   * @brief Add an expression to the AST tree
+   * @param expr AST expression to be added
+   * @returns a reference to the added expression
+   */
   template <typename Expr>
   expression const& push(Expr expr)
   {
@@ -599,35 +599,35 @@ class tree {
   }
 
   /**
-  @brief get the first expression in the tree
+   * @brief get the first expression in the tree
    */
   expression const& front() const { return *expressions.front(); }
 
   /**
-  @brief get the last expression in the tree
+   * @brief get the last expression in the tree
    */
   expression const& back() const { return *expressions.back(); }
 
   /**
-  @brief get the number of expressions added to the tree
+   * @brief get the number of expressions added to the tree
    */
   size_t size() const { return expressions.size(); }
 
   /**
-  @brief get the expression at a checked index in the tree
-  @returns the expression at the specified index
+   * @brief get the expression at a checked index in the tree
+   * @returns the expression at the specified index
    */
   expression const& at(size_t index) { return *expressions.at(index); }
 
   /**
-  @brief get the expression at an unchecked index in the tree
-  @returns the expression at the specified index
+   * @brief get the expression at an unchecked index in the tree
+   * @returns the expression at the specified index
    */
   expression const& operator[](size_t index) const { return *expressions[index]; }
 
   /**
-  @brief get an immutable span to the expressions in the tree
-  @returns all expressions added to the tree
+   * @brief get an immutable span to the expressions in the tree
+   * @returns all expressions added to the tree
    */
   cudf::host_span<std::unique_ptr<expression> const> get_expressions() const { return expressions; }
 
