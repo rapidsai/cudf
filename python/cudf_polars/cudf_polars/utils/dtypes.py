@@ -9,12 +9,21 @@ from functools import cache
 
 import pyarrow as pa
 import pylibcudf as plc
-from pylibcudf.traits import is_numeric_not_bool
+from pylibcudf.traits import (
+    is_floating_point,
+    is_integral_not_bool,
+    is_numeric_not_bool,
+)
 from typing_extensions import assert_never
 
 import polars as pl
 
-__all__ = ["from_polars", "downcast_arrow_lists", "can_cast"]
+__all__ = [
+    "from_polars",
+    "downcast_arrow_lists",
+    "can_cast",
+    "is_order_preserving_cast",
+]
 
 
 def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
@@ -70,6 +79,47 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
         or (from_.id() == plc.TypeId.STRING and is_numeric_not_bool(to))
         or (to.id() == plc.TypeId.STRING and is_numeric_not_bool(from_))
     )
+
+
+def is_order_preserving_cast(from_: plc.DataType, to: plc.DataType) -> bool:
+    """
+    Determine if a cast would preserve the order of the source data.
+
+    Parameters
+    ----------
+    from_
+        Source datatype
+    to
+        Target datatype
+
+    Returns
+    -------
+    True if the cast is order-preserving, False otherwise
+    """
+    if from_.id() == to.id():
+        return True
+
+    if is_integral_not_bool(from_) and is_integral_not_bool(to):
+        # True if signedness is the same and the target is larger
+        if plc.traits.is_unsigned(from_) == plc.traits.is_unsigned(to):
+            if plc.types.size_of(to) >= plc.types.size_of(from_):
+                return True
+        elif (plc.traits.is_unsigned(from_) and not plc.traits.is_unsigned(to)) and (
+            plc.types.size_of(to) > plc.types.size_of(from_)
+        ):
+            # Unsigned to signed is order preserving if target is large enough
+            # But signed to unsigned is never order preserving due to negative values
+            return True
+    elif is_floating_point(from_) and is_floating_point(to):
+        # True if the target is larger
+        if plc.types.size_of(to) > plc.types.size_of(from_):
+            return True
+    elif (is_integral_not_bool(from_) and is_floating_point(to)) and (
+        plc.types.size_of(to) > plc.types.size_of(from_)
+    ):
+        # Int64 fits in float64, but not in float32
+        return True
+    return False
 
 
 @cache

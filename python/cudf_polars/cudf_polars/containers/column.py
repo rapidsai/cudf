@@ -19,6 +19,8 @@ from pylibcudf.traits import is_floating_point
 
 from polars.exceptions import InvalidOperationError
 
+from cudf_polars.utils.dtypes import is_order_preserving_cast
+
 if TYPE_CHECKING:
     from typing_extensions import Self
 
@@ -144,7 +146,10 @@ class Column:
         if dtype.id() == plc.TypeId.STRING or self.obj.type().id() == plc.TypeId.STRING:
             return Column(self._handle_string_cast(dtype))
         else:
-            return Column(plc.unary.cast(self.obj, dtype)).sorted_like(self)
+            result = Column(plc.unary.cast(self.obj, dtype))
+            if is_order_preserving_cast(self.obj.type(), dtype):
+                return result.sorted_like(self)
+            return result
 
     def _handle_string_cast(self, dtype: plc.DataType) -> plc.Column:
         if dtype.id() == plc.TypeId.STRING:
