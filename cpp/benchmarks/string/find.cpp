@@ -26,10 +26,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows,
-                                                 cudf::size_type row_width,
-                                                 int32_t hit_rate);
-
 static void bench_find_string(nvbench::state& state)
 {
   auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
@@ -43,7 +39,7 @@ static void bench_find_string(nvbench::state& state)
   }
 
   auto const stream = cudf::get_default_stream();
-  auto const col    = build_input_column(n_rows, row_width, hit_rate);
+  auto const col    = create_string_column(n_rows, row_width, hit_rate);
   auto const input  = cudf::strings_column_view(col->view());
 
   cudf::string_scalar target("0987 5W43");
