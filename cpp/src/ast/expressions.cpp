@@ -23,20 +23,24 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <stdexcept>
+
 namespace cudf {
 namespace ast {
 
 operation::operation(ast_operator op, expression const& input) : op{op}, operands{input}
 {
   CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1,
-               "The provided operator is not a unary operator.");
+               "The provided operator is not a unary operator.",
+               std::invalid_argument);
 }
 
 operation::operation(ast_operator op, expression const& left, expression const& right)
   : op{op}, operands{left, right}
 {
   CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-               "The provided operator is not a binary operator.");
+               "The provided operator is not a binary operator.",
+               std::invalid_argument);
 }
 
 cudf::size_type literal::accept(detail::expression_parser& visitor) const
