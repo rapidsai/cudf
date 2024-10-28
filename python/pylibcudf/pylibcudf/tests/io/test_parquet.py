@@ -1,9 +1,11 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from pyarrow.parquet import read_table
+from utils import assert_table_and_meta_eq, make_source
+
+import pylibcudf as plc
 from pylibcudf.expressions import (
     ASTOperator,
     ColumnNameReference,
@@ -11,7 +13,6 @@ from pylibcudf.expressions import (
     Literal,
     Operation,
 )
-from utils import assert_table_and_meta_eq, make_source
 
 # Shared kwargs to pass to make_source
 _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
