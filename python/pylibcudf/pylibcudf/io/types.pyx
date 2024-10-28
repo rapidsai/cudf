@@ -144,8 +144,8 @@ cdef class SourceInfo:
 
         Mixing different types of sources will raise a `ValueError`.
     """
-    # Regular expression to match remote files
-    _is_remote_file_pattern = re.compile(r"(s3|http|https)://", re.IGNORECASE)
+    # Regular expression that match remote file paths supported by libcudf
+    _is_remote_file_pattern = re.compile(r"s3://", re.IGNORECASE)
 
     def __init__(self, list sources):
         if not sources:

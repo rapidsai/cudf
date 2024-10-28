@@ -458,11 +458,13 @@ class remote_file_source : public datasource {
 
   /**
    * @brief Is `url` referring to a remote file supported by KvikIO?
+   *
+   * For now, only S3 urls (urls starting with "s3://") are supported.
    */
   static bool is_supported_remote_url(std::string const& url)
   {
-    // Regular expression to match "<s3|http|https>://"
-    std::regex pattern{R"(^(s3|http|https)://)", std::regex_constants::icase};
+    // Regular expression to match "s3://"
+    std::regex pattern{R"(^s3://)", std::regex_constants::icase};
     return std::regex_search(url, pattern);
   }
 
