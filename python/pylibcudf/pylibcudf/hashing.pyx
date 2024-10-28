@@ -28,7 +28,7 @@ cpdef Column murmurhash3_x86_32(
 ):
     """Computes the MurmurHash3 32-bit hash value of each row in the given table.
 
-    For details, see :cpp:func:`murmurhash3_x86_32`.
+    For details, see :cpp:func:`cudf::hashing::murmurhash3_x86_32`.
 
     Parameters
     ----------
@@ -58,7 +58,7 @@ cpdef Table murmurhash3_x64_128(
 ):
     """Computes the MurmurHash3 64-bit hash value of each row in the given table.
 
-    For details, see :cpp:func:`murmurhash3_x64_128`.
+    For details, see :cpp:func:`cudf::hashing::murmurhash3_x64_128`.
 
     Parameters
     ----------
@@ -88,7 +88,7 @@ cpdef Column xxhash_64(
 ):
     """Computes the xxHash 64-bit hash value of each row in the given table.
 
-    For details, see :cpp:func:`xxhash_64`.
+    For details, see :cpp:func:`cudf::hashing::xxhash_64`.
 
     Parameters
     ----------
@@ -116,7 +116,7 @@ cpdef Column xxhash_64(
 cpdef Column md5(Table input):
     """Computes the MD5 hash value of each row in the given table.
 
-    For details, see :cpp:func:`md5`.
+    For details, see :cpp:func:`cudf::hashing::md5`.
 
     Parameters
     ----------
@@ -138,7 +138,7 @@ cpdef Column md5(Table input):
 cpdef Column sha1(Table input):
     """Computes the SHA-1 hash value of each row in the given table.
 
-    For details, see :cpp:func:`sha1`.
+    For details, see :cpp:func:`cudf::hashing::sha1`.
 
     Parameters
     ----------
@@ -159,7 +159,7 @@ cpdef Column sha1(Table input):
 cpdef Column sha224(Table input):
     """Computes the SHA-224 hash value of each row in the given table.
 
-    For details, see :cpp:func:`sha224`.
+    For details, see :cpp:func:`cudf::hashing::sha224`.
 
     Parameters
     ----------
@@ -180,7 +180,7 @@ cpdef Column sha224(Table input):
 cpdef Column sha256(Table input):
     """Computes the SHA-256 hash value of each row in the given table.
 
-    For details, see :cpp:func:`sha256`.
+    For details, see :cpp:func:`cudf::hashing::sha256`.
 
     Parameters
     ----------
@@ -201,7 +201,7 @@ cpdef Column sha256(Table input):
 cpdef Column sha384(Table input):
     """Computes the SHA-384 hash value of each row in the given table.
 
-    For details, see :cpp:func:`sha384`.
+    For details, see :cpp:func:`cudf::hashing::sha384`.
 
     Parameters
     ----------
@@ -222,7 +222,7 @@ cpdef Column sha384(Table input):
 cpdef Column sha512(Table input):
     """Computes the SHA-512 hash value of each row in the given table.
 
-    For details, see :cpp:func:`sha512`.
+    For details, see :cpp:func:`cudf::hashing::sha512`.
 
     Parameters
     ----------
