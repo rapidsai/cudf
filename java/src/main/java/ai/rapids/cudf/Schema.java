@@ -28,11 +28,23 @@ import java.util.stream.Collectors;
 public class Schema {
   public static final Schema INFERRED = new Schema();
 
-  // Default value for precision value, when it is not specified or the column type is not decimal.
+  private final DType topLevelType;
+
+  /**
+   * Default value for precision value, when it is not specified or the column type is not decimal.
+   */
   private static final int UNKNOWN_PRECISION = -1;
 
-  private final DType topLevelType;
-  private final int topLevelPrecision; // only applicable if the top level is a decimal type
+  /**
+  * Store precision for the top level column, only applicable if the column is a decimal type.
+  * <p/>
+  * This variable is not designed to be used by any libcudf's APIs since libcudf does not support
+  * precisions for fixed point numbers.
+  * Instead, it is used only to pass down the precision values from Spark's DecimalType to the
+  * JNI level, where some JNI functions require these values to perform their operations.
+  */
+  private final int topLevelPrecision;
+
   private final List<String> childNames;
   private final List<Schema> childSchemas;
   private boolean flattened = false;
@@ -245,8 +257,14 @@ public class Schema {
   }
 
   /**
-   * Get decimal precisions of the columns' types flattened from all levels in schema by depth-first
-   * traversal.
+   * Get decimal precisions of the columns' types flattened from all levels in schema by
+   * depth-first traversal.
+   * <p/>
+   * This is used to pass down the decimal precisions from Spark to only the JNI layer, where
+   * some JNI functions require precision values to perform their operations.
+   * Decimal precisions should not be consumed by any libcudf's APIs since libcudf does not
+   * support precisions for fixed point numbers.
+   *
    * @return An array containing decimal precision of all columns in schema.
    */
   public int[] getFlattenedDecimalPrecisions() {
