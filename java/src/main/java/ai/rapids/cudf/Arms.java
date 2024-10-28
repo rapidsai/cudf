@@ -19,6 +19,7 @@
 package ai.rapids.cudf;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.function.Function;
 
@@ -45,9 +46,13 @@ public class Arms {
     }
 
     /**
-     * This method safes closes the resources.
+     * This method safely closes all the resources.
+     * <p>
+     * This method will iterate through all the resources and closes them. If any exception happened during the
+     * traversal, exception will be captured and rethrown after all resources closed.
+     * </p>
      */
-    public static <R extends AutoCloseable> void close(Iterator<R> resources) {
+    public static <R extends AutoCloseable> void closeAll(Iterator<R> resources) {
         Throwable t = null;
         while (resources.hasNext()) {
             try {
@@ -60,19 +65,22 @@ public class Arms {
                 }
             }
         }
+
+        if (t != null) throw new RuntimeException(t);
+    }
+
+
+    /**
+     * This method safely closes all the resources. See {@link #closeAll(Iterator)} for more details.
+     */
+    public static <R extends AutoCloseable> void closeAll(R... resources) {
+        closeAll(Arrays.asList(resources));
     }
 
     /**
-     * This method safes closes the resources.
+     * This method safely closes the resources. See {@link #closeAll(Iterator)} for more details.
      */
-    public static <R extends AutoCloseable> void close(R... resources) {
-        close(Arrays.asList(resources));
-    }
-
-    /**
-     * This method safes closes the resources.
-     */
-    public static <R extends AutoCloseable> void close(Iterable<R> resources) {
-        close(resources.iterator());
+    public static <R extends AutoCloseable> void closeAll(Collection<R> resources) {
+        closeAll(resources.iterator());
     }
 }
