@@ -25,9 +25,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
@@ -37,8 +35,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <arrow/c/bridge.h>
-#include <nanoarrow/nanoarrow.h>
-#include <nanoarrow/nanoarrow_device.h>
 
 std::unique_ptr<cudf::table> get_cudf_table()
 {
