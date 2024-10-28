@@ -6,10 +6,11 @@ import struct
 import mmh3
 import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 import xxhash
 from utils import assert_column_eq, assert_table_eq
+
+import pylibcudf as plc
 
 SEED = 0
 METHODS = ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
