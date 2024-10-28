@@ -86,14 +86,7 @@ def str_to_float_data(with_nulls):
 
 @pytest.fixture
 def str_from_integer_data(with_nulls, integer_type):
-    a = [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-    ]
+    a = [1, 2, 3, 4, 5, 6]
     if with_nulls:
         a[4] = None
     return pl.LazyFrame({"a": pl.Series(a, dtype=integer_type)})
