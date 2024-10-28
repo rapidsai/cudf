@@ -418,7 +418,7 @@ class remote_file_source : public datasource {
                                         uint8_t* dst,
                                         rmm::cuda_stream_view stream) override
   {
-    CUDF_EXPECTS(supports_device_read(), "Remote reads are not supported for this file.");
+    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, this->size() - offset);
     return _kvikio_file.pread(dst, read_size, offset);
