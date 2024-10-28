@@ -286,6 +286,12 @@ ConfigureNVBench(
 ConfigureBench(HASHING_BENCH hashing/partition.cpp)
 ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
+
+# ##################################################################################################
+# * interop benchmark ------------------------------------------------------------------------------
+ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp)
+
+
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
