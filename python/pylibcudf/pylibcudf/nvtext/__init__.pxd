@@ -7,6 +7,8 @@ from . cimport (
     minhash,
     ngrams_tokenize,
     normalize,
+    replace,
+    stemmer,
 )
 
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "minhash",
     "ngrams_tokenize",
     "normalize",
+    "replace",
+    "stemmer",
 ]
