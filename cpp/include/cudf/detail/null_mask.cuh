@@ -166,16 +166,9 @@ size_type inplace_bitmask_binop(Binop op,
 
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
   cudf::detail::device_scalar<size_type> d_counter{0, stream, mr};
-  rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
-  rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyDefault, stream.value()));
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
-                                masks_begin_bits.data(),
-                                masks_begin_bits.size_bytes(),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  auto d_masks      = cudf::detail::make_device_uvector_async(masks, stream, mr);
+  auto d_begin_bits = cudf::detail::make_device_uvector_async(masks_begin_bits, stream, mr);
 
   auto constexpr block_size = 256;
   cudf::detail::grid_1d config(dest_mask.size(), block_size);

@@ -17,7 +17,7 @@ import warnings
 from abc import abstractmethod
 from importlib._bootstrap import _ImportLockContext as ImportLock
 from types import ModuleType
-from typing import Any, ContextManager, NamedTuple
+from typing import Any, ContextManager, NamedTuple  # noqa: UP035
 
 from typing_extensions import Self
 
