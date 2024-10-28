@@ -20,6 +20,8 @@
 #include "orc_gpu.hpp"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -1087,37 +1089,42 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 /**
  * @brief Merge chunked column data into a single contiguous stream
  *
- * @param[in,out] strm_desc StripeStream device array [stripe][stream]
- * @param[in,out] streams List of encoder chunk streams [column][rowgroup]
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] streams List of encoder chunk streams [column][rowgroup]
+ * @param[out] srcs  List of source encoder chunk stream data addresses
+ * @param[out] dsts List of destination StripeStream data addresses
+ * @param[out] sizes List of stream sizes in bytes
  */
 // blockDim {compact_streams_block_size,1,1}
 CUDF_KERNEL void __launch_bounds__(compact_streams_block_size)
-  gpuCompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
-                           device_2dspan<encoder_chunk_streams> streams)
+  gpuInitBatchedMemcpy(device_2dspan<StripeStream const> strm_desc,
+                       device_2dspan<encoder_chunk_streams> streams,
+                       device_span<uint8_t*> srcs,
+                       device_span<uint8_t*> dsts,
+                       device_span<size_t> sizes)
 {
-  __shared__ __align__(16) StripeStream ss;
-
-  auto const stripe_id = blockIdx.x;
+  auto const stripe_id = cudf::detail::grid_1d::global_thread_id();
   auto const stream_id = blockIdx.y;
-  auto const t         = threadIdx.x;
+  if (stripe_id >= strm_desc.size().first) { return; }
 
-  if (t == 0) { ss = strm_desc[stripe_id][stream_id]; }
-  __syncthreads();
+  auto const out_id = stream_id * strm_desc.size().first + stripe_id;
+  StripeStream ss   = strm_desc[stripe_id][stream_id];
 
   if (ss.data_ptr == nullptr) { return; }
 
   auto const cid = ss.stream_type;
   auto dst_ptr   = ss.data_ptr;
   for (auto group = ss.first_chunk_id; group < ss.first_chunk_id + ss.num_chunks; ++group) {
+    auto const out_id = stream_id * streams.size().second + group;
+    srcs[out_id]      = streams[ss.column_id][group].data_ptrs[cid];
+    dsts[out_id]      = dst_ptr;
+
+    // Also update the stream here, data will be copied in a separate kernel
+    streams[ss.column_id][group].data_ptrs[cid] = dst_ptr;
+
     auto const len = streams[ss.column_id][group].lengths[cid];
-    if (len > 0) {
-      auto const src_ptr = streams[ss.column_id][group].data_ptrs[cid];
-      for (uint32_t i = t; i < len; i += blockDim.x) {
-        dst_ptr[i] = src_ptr[i];
-      }
-      __syncthreads();
-    }
-    if (t == 0) { streams[ss.column_id][group].data_ptrs[cid] = dst_ptr; }
+    // len is the size (in bytes) of the current stream.
+    sizes[out_id] = len;
     dst_ptr += len;
   }
 }
@@ -1325,9 +1332,26 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
                            device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream)
 {
+  auto const num_rowgroups = enc_streams.size().second;
+  auto const num_streams   = strm_desc.size().second;
+  auto const num_stripes   = strm_desc.size().first;
+  auto const num_chunks    = num_rowgroups * num_streams;
+  auto srcs                = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
+    num_chunks, stream, rmm::mr::get_current_device_resource());
+  auto dsts = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
+    num_chunks, stream, rmm::mr::get_current_device_resource());
+  auto lengths = cudf::detail::make_zeroed_device_uvector_async<size_t>(
+    num_chunks, stream, rmm::mr::get_current_device_resource());
+
   dim3 dim_block(compact_streams_block_size, 1);
-  dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
-  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(strm_desc, enc_streams);
+  dim3 dim_grid(cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size),
+                strm_desc.size().second);
+  gpuInitBatchedMemcpy<<<dim_grid, dim_block, 0, stream.value()>>>(
+    strm_desc, enc_streams, srcs, dsts, lengths);
+
+  // Copy streams in a batched manner.
+  cudf::detail::batched_memcpy_async(
+    srcs.begin(), dsts.begin(), lengths.begin(), lengths.size(), stream);
 }
 
 std::optional<writer_compression_statistics> CompressOrcDataStreams(

@@ -50,22 +50,18 @@ cpdef Column find(
     cdef unique_ptr[column] result
     if ColumnOrScalar is Column:
         with nogil:
-            result = move(
-                cpp_find.find(
-                    input.view(),
-                    target.view(),
-                    start
-                )
+            result = cpp_find.find(
+                input.view(),
+                target.view(),
+                start
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
-            result = move(
-                cpp_find.find(
-                    input.view(),
-                    dereference(<string_scalar*>(target.c_obj.get())),
-                    start,
-                    stop
-                )
+            result = cpp_find.find(
+                input.view(),
+                dereference(<string_scalar*>(target.c_obj.get())),
+                start,
+                stop
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -104,13 +100,11 @@ cpdef Column rfind(
     """
     cdef unique_ptr[column] result
     with nogil:
-        result = move(
-            cpp_find.rfind(
-                input.view(),
-                dereference(<string_scalar*>(target.c_obj.get())),
-                start,
-                stop
-            )
+        result = cpp_find.rfind(
+            input.view(),
+            dereference(<string_scalar*>(target.c_obj.get())),
+            start,
+            stop
         )
     return Column.from_libcudf(move(result))
 
@@ -149,19 +143,15 @@ cpdef Column contains(
     cdef unique_ptr[column] result
     if ColumnOrScalar is Column:
         with nogil:
-            result = move(
-                cpp_find.contains(
-                    input.view(),
-                    target.view()
-                )
+            result = cpp_find.contains(
+                input.view(),
+                target.view()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
-            result = move(
-                cpp_find.contains(
-                    input.view(),
-                    dereference(<string_scalar*>(target.c_obj.get()))
-                )
+            result = cpp_find.contains(
+                input.view(),
+                dereference(<string_scalar*>(target.c_obj.get()))
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -204,19 +194,15 @@ cpdef Column starts_with(
 
     if ColumnOrScalar is Column:
         with nogil:
-            result = move(
-                cpp_find.starts_with(
-                    input.view(),
-                    target.view()
-                )
+            result = cpp_find.starts_with(
+                input.view(),
+                target.view()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
-            result = move(
-                cpp_find.starts_with(
-                    input.view(),
-                    dereference(<string_scalar*>(target.c_obj.get()))
-                )
+            result = cpp_find.starts_with(
+                input.view(),
+                dereference(<string_scalar*>(target.c_obj.get()))
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -256,19 +242,15 @@ cpdef Column ends_with(
     cdef unique_ptr[column] result
     if ColumnOrScalar is Column:
         with nogil:
-            result = move(
-                cpp_find.ends_with(
-                    input.view(),
-                    target.view()
-                )
+            result = cpp_find.ends_with(
+                input.view(),
+                target.view()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
-            result = move(
-                cpp_find.ends_with(
-                    input.view(),
-                    dereference(<string_scalar*>(target.c_obj.get()))
-                )
+            result = cpp_find.ends_with(
+                input.view(),
+                dereference(<string_scalar*>(target.c_obj.get()))
             )
     else:
         raise ValueError(f"Invalid target {target}")

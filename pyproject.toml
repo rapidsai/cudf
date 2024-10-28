@@ -34,6 +34,8 @@ select = [
     "F",
     # pycodestyle Warning
     "W",
+    # isort
+    "I",
     # no-blank-line-before-function
     "D201",
     # one-blank-line-after-class
@@ -90,6 +92,8 @@ select = [
     "UP007",
     # Import from `collections.abc` instead: `Callable`
     "UP035",
+    # usage of legacy `np.random` function calls
+    "NPY002",
 ]
 ignore = [
     # whitespace before :

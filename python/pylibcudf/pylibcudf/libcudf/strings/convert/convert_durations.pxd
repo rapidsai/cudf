@@ -10,7 +10,7 @@ from pylibcudf.libcudf.types cimport data_type
 cdef extern from "cudf/strings/convert/convert_durations.hpp" namespace \
         "cudf::strings" nogil:
     cdef unique_ptr[column] to_durations(
-        const column_view & strings_col,
+        const column_view & input,
         data_type duration_type,
         const string & format) except +
 

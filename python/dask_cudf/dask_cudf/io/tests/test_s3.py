@@ -11,6 +11,8 @@ import pytest
 
 from dask.dataframe import assert_eq
 
+import cudf
+
 import dask_cudf
 from dask_cudf.tests.utils import QUERY_PLANNING_ON
 
@@ -168,6 +170,8 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
                 filesystem=filesystem,
             )
         assert df.b.sum().compute() == 9
+        assert isinstance(df._meta, cudf.DataFrame)
+        assert isinstance(df.compute(), cudf.DataFrame)
 
 
 def test_read_parquet_filesystem_explicit(s3_base, s3so, pdf):

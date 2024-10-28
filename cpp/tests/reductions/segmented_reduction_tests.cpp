@@ -1092,11 +1092,10 @@ TEST_F(SegmentedReductionTestUntyped, EmptyInputWithOffsets)
   auto aggregates =
     std::vector<std::unique_ptr<cudf::segmented_reduce_aggregation,
                                 std::default_delete<cudf::segmented_reduce_aggregation>>>();
-  aggregates.push_back(std::move(cudf::make_max_aggregation<cudf::segmented_reduce_aggregation>()));
-  aggregates.push_back(std::move(cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>()));
-  aggregates.push_back(std::move(cudf::make_sum_aggregation<cudf::segmented_reduce_aggregation>()));
-  aggregates.push_back(
-    std::move(cudf::make_product_aggregation<cudf::segmented_reduce_aggregation>()));
+  aggregates.push_back(cudf::make_max_aggregation<cudf::segmented_reduce_aggregation>());
+  aggregates.push_back(cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>());
+  aggregates.push_back(cudf::make_sum_aggregation<cudf::segmented_reduce_aggregation>());
+  aggregates.push_back(cudf::make_product_aggregation<cudf::segmented_reduce_aggregation>());
 
   auto output_type = cudf::data_type{cudf::type_to_id<int32_t>()};
   for (auto&& agg : aggregates) {

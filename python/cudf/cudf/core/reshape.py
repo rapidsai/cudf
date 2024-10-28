@@ -681,7 +681,7 @@ def melt(
     nval = len(value_vars)
     dtype = min_unsigned_type(nval)
 
-    if not var_name:
+    if var_name is None:
         var_name = "variable"
 
     if not value_vars:
