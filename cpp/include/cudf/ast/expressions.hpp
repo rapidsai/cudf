@@ -480,9 +480,9 @@ class operation : public expression {
    *
    * @return Vector of operands
    */
-  [[nodiscard]] cudf::host_span<std::reference_wrapper<expression const> const> get_operands() const
+  [[nodiscard]] std::vector<std::reference_wrapper<expression const>> const& get_operands() const
   {
-    return cudf::host_span<std::reference_wrapper<expression const> const>{operands, arity};
+    return operands;
   }
 
   /**
@@ -500,9 +500,8 @@ class operation : public expression {
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
   {
-    auto operands = get_operands();
-    return std::any_of(operands.begin(),
-                       operands.end(),
+    return std::any_of(operands.cbegin(),
+                       operands.cend(),
                        [&left, &right, &stream](std::reference_wrapper<expression const> subexpr) {
                          return subexpr.get().may_evaluate_null(left, right, stream);
                        });
@@ -510,9 +509,7 @@ class operation : public expression {
 
  private:
   ast_operator op;
-  // TODO: replace with cuda::std::inplace_vector<std::reference_wrapper<expression const>, 2>
-  std::reference_wrapper<expression const> operands[2];
-  size_t arity;
+  std::vector<std::reference_wrapper<expression const>> operands;
 };
 
 /**
@@ -629,11 +626,9 @@ class tree {
    * @brief get an immutable span to the expressions in the tree
    * @returns all expressions added to the tree
    */
-  cudf::host_span<std::unique_ptr<expression> const> get_expressions() const { return expressions; }
+  std::vector<std::unique_ptr<expression>> const& get_expressions() const { return expressions; }
 
  private:
-  // TODO: ideally we'd use a custom bump allocator for constructing the expression objects and
-  // release all the objects at once.
   std::vector<std::unique_ptr<expression>> expressions;
 };
 

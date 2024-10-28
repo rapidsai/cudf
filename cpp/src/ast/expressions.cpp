@@ -26,15 +26,14 @@
 namespace cudf {
 namespace ast {
 
-operation::operation(ast_operator op, expression const& input)
-  : op{op}, operands{input, input}, arity{1}
+operation::operation(ast_operator op, expression const& input) : op{op}, operands{input}
 {
   CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 1,
                "The provided operator is not a unary operator.");
 }
 
 operation::operation(ast_operator op, expression const& left, expression const& right)
-  : op{op}, operands{left, right}, arity{2}
+  : op{op}, operands{left, right}
 {
   CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
                "The provided operator is not a binary operator.");
