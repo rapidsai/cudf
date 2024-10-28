@@ -2,8 +2,9 @@
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 def test_all_characters_of_type():
