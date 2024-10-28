@@ -75,6 +75,8 @@ def str_to_float_data(with_nulls):
         "inf",
         "+inf",
         "-inf",
+        "Inf",
+        "-Inf",
         "nan",
         "-1.234",
         "2e2",
@@ -425,8 +427,22 @@ def test_string_to_float(str_to_float_data, floating_type):
     assert_gpu_result_equal(query)
 
 
-def test_string_from_float(str_from_float_data):
+def test_string_from_float(request, str_from_float_data):
+    if str_from_float_data.collect_schema()["a"] == pl.Float32:
+        # libcudf will return a string representing the precision out to
+        # a certain number of hardcoded decimal places. This results in
+        # the fractional part being thrown away which causes discrepancies
+        # for certain numbers. For instance, the float32 representation of
+        # 1.1 is 1.100000023841858. When cast to a string, this will become
+        # 1.100000024. But the float64 representation of 1.1 is
+        # 1.1000000000000000888 which will result in libcudf truncating the
+        # final value to 1.1.
+        request.applymarker(pytest.mark.xfail(reason="libcudf truncation"))
     query = str_from_float_data.select(pl.col("a").cast(pl.String))
+
+    # libcudf reads float('inf') -> "inf"
+    # but polars reads float('inf') -> "Inf"
+    query = query.select(pl.col("a").str.to_lowercase())
     assert_gpu_result_equal(query)
 
 
