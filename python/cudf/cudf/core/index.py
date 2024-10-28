@@ -5,10 +5,10 @@ from __future__ import annotations
 import operator
 import pickle
 import warnings
-from collections.abc import Hashable
+from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
 from numbers import Number
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
 import numpy as np
