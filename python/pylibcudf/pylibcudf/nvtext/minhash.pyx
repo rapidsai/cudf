@@ -68,7 +68,7 @@ cpdef Column minhash_permuted(
     Returns the minhash values for each string.
     This function uses MurmurHash3_x86_32 for the hash algorithm.
 
-    For details, see :cpp:func:`minhash`.
+    For details, see :cpp:func:`minhash_permuted`.
 
     Parameters
     ----------
@@ -77,9 +77,9 @@ cpdef Column minhash_permuted(
     seed : uint32_t
         Seed used for the hash function
     a : Column
-        Seed value(s) used for the hash algorithm.
+        1st parameter value used for the minhash algorithm.
     b : Column
-        2nd seed value(s) used for the hash algorithm.
+        2nd parameter value used for the minhash algorithm.
     width : size_type
         Character width used for apply substrings;
 
@@ -151,7 +151,7 @@ cpdef Column minhash64_permuted(
     Returns the minhash values for each string.
     This function uses MurmurHash3_x64_128 for the hash algorithm.
 
-    For details, see :cpp:func:`minhash`.
+    For details, see :cpp:func:`minhash64_permuted`.
 
     Parameters
     ----------
@@ -160,9 +160,9 @@ cpdef Column minhash64_permuted(
     seed : uint64_t
         Seed used for the hash function
     a : Column
-        Seed value(s) used for the hash algorithm.
+        1st parameter value used for the minhash algorithm.
     b : Column
-        2nd seed value(s) used for the hash algorithm.
+        2nd parameter value used for the minhash algorithm.
     width : size_type
         Character width used for apply substrings;
 
