@@ -14,58 +14,66 @@
  * limitations under the License.
  */
 
-#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-TEST_F(AstTreeTest, ExpressionTree)
+template <typename T>
+using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
+
+TEST(AstTreeTest, ExpressionTree)
 {
-  // compute y = mx + c, across multiple columns and apply weights to them and then fold them
-  auto a     = column_wrapper<int32_t>{3, 20, 1, 50};
-  auto b     = column_wrapper<int32_t>{10, 7, 20, 0};
-  auto c     = column_wrapper<int32_t>{10, 7, 20, 0};
-  auto d     = column_wrapper<float>{10, 7, 20, 0};
-  auto e     = column_wrapper<int32_t>{10, 7, 20, 0};
-  auto f     = column_wrapper<float>{10, 7, 20, 0};
-  auto table = cudf::table_view{{a, b, c, d, e, f}};
-  cudf::ast::tree tree;
+  namespace ast   = cudf::ast;
+  using op        = ast::ast_operator;
+  using operation = ast::operation;
 
-  auto const& a_ref   = tree.push(cudf::ast::column_reference(0));
-  auto const& b_ref   = tree.push(cudf::ast::column_reference(1));
-  auto const& c_ref   = tree.push(cudf::ast::column_reference(2));
-  auto const& d_ref   = tree.push(cudf::ast::column_reference(3));
-  auto const& e_ref   = tree.push(cudf::ast::column_reference(4));
-  auto const& f_ref   = tree.push(cudf::ast::column_reference(5));
-  auto const& literal = tree.push(cudf::ast::literal{255});
+  // computes (y = mx + c)... and linearly interpolates them using interpolator t
+  auto m0_col = column_wrapper<float>{10, 20, 50, 100};
+  auto x0_col = column_wrapper<float>{10, 5, 2, 1};
+  auto c0_col = column_wrapper<float>{100, 100, 100, 100};
 
-  /// compute: (a + b) - c
-  auto const& op_0 = tree.push(cudf::ast::operation{
-    cudf::ast::ast_operator::SUBTRACT,
-    tree.push(cudf::ast::operation{cudf::ast::ast_operator::ADD, a_ref, b_ref}),
-    c_ref});
+  auto m1_col = column_wrapper<float>{10, 20, 50, 100};
+  auto x1_col = column_wrapper<float>{20, 10, 4, 2};
+  auto c1_col = column_wrapper<float>{200, 200, 200, 200};
 
-  auto const& op_1 = tree.push(cudf::ast::operation{
-    cudf::ast::ast_operator::MULTIPLY,
-    tree.push(cudf::ast::operation{cudf::ast::ast_operator::SUBTRACR, d_ref, e_ref}),
-    e_ref});
+  auto one_scalar = cudf::numeric_scalar<float>{1};
+  auto t_scalar   = cudf::numeric_scalar<float>{0.5F};
 
-  auto result = cudf::compute_column(
-    table, tree.push(cudf::ast::operation{cudf::ast::ast_operator::ADD, op_0, op_1}));
+  auto table = cudf::table_view{{m0_col, x0_col, c0_col, m1_col, x1_col, c1_col}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+  ast::tree tree{};
+
+  auto const& one = tree.push(ast::literal{one_scalar});
+  auto const& t   = tree.push(ast::literal{t_scalar});
+  auto const& m0  = tree.push(ast::column_reference(0));
+  auto const& x0  = tree.push(ast::column_reference(1));
+  auto const& c0  = tree.push(ast::column_reference(2));
+  auto const& m1  = tree.push(ast::column_reference(3));
+  auto const& x1  = tree.push(ast::column_reference(4));
+  auto const& c1  = tree.push(ast::column_reference(5));
+
+  // compute: y = mx + c
+  auto const& y0 = tree.push(operation{op::ADD, tree.push(operation{op::MUL, m0, x0}), c0});
+
+  // compute: y = mx + c
+  auto const& y1 = tree.push(operation{op::ADD, tree.push(operation{op::MUL, m1, x1}), c1});
+
+  // compute weighted: (1 - t) * y
+  auto const& y0_w = tree.push(operation{op::MUL, tree.push(operation{op::SUB, one, t}), y0});
+
+  // compute weighted: y = t * y
+  auto const& y1_w = tree.push(operation{op::MUL, t, y1});
+
+  // add weighted: result = lerp(y0, y1, t) = (1 - t) * y0 + t * y1
+  auto result = cudf::compute_column(table, tree.push(operation{op::ADD, y0_w, y1_w}));
+
+  auto expected = column_wrapper<float>{300, 300, 300, 300};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
