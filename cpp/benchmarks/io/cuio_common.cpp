@@ -186,7 +186,7 @@ std::string exec_cmd(std::string_view cmd)
   std::fflush(nullptr);
   // Switch stderr and stdout to only capture stderr
   auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
-  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
+  std::unique_ptr<FILE, int (*)(FILE*)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
   CUDF_EXPECTS(pipe != nullptr, "popen() failed");
 
   std::array<char, 128> buffer;

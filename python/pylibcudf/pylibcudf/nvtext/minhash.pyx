@@ -91,14 +91,12 @@ cpdef Column minhash_permuted(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_minhash_permuted(
-                input.view(),
-                seed,
-                a.view(),
-                b.view(),
-                width
-            )
+        c_result = cpp_minhash_permuted(
+            input.view(),
+            seed,
+            a.view(),
+            b.view(),
+            width
         )
 
     return Column.from_libcudf(move(c_result))
@@ -174,14 +172,12 @@ cpdef Column minhash64_permuted(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_minhash64_permuted(
-                input.view(),
-                seed,
-                a.view(),
-                b.view(),
-                width
-            )
+        c_result = cpp_minhash64_permuted(
+            input.view(),
+            seed,
+            a.view(),
+            b.view(),
+            width
         )
 
     return Column.from_libcudf(move(c_result))
