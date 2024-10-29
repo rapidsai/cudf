@@ -3059,10 +3059,9 @@ TEST_F(JsonReaderTest, Debug)
   EXPECT_EQ(result.tbl->num_rows(), 3);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.metadata.schema_info.at(0).name, "data");
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    result.tbl->get_column(0),
-    int64_wrapper{{0, 0, 1}, {true, false, true}},
-    cudf::test::debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{0, 0, 1}, {true, false, true}},
+                                 cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 TEST_F(JsonReaderTest, Debug1)
@@ -3081,10 +3080,9 @@ TEST_F(JsonReaderTest, Debug1)
   EXPECT_EQ(result.tbl->num_rows(), 2);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.metadata.schema_info.at(0).name, "data");
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    result.tbl->get_column(0),
-    int64_wrapper{{0, 0}, {true, false}},
-    cudf::test::debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{0, 0}, {true, false}},
+                                 cudf::test::debug_output_level::ALL_ERRORS);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

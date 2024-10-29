@@ -218,14 +218,18 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
   }
 
-  // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are reading till the end of the last source i.e. should_load_till_last_source is true 
-  // Note that the table generated from the JSONL input remains unchanged since empty lines are ignored by the parser.
+  // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are
+  // reading till the end of the last source i.e. should_load_till_last_source is true Note that the
+  // table generated from the JSONL input remains unchanged since empty lines are ignored by the
+  // parser.
   size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
   if (num_chars) {
     auto last_char = delimiter;
     cudf::detail::cuda_memcpy_async<char>(
-        device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size()).subspan(readbufspan.size(), 1), 
-        host_span<char const>(&last_char, 1, false), stream);
+      device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size())
+        .subspan(readbufspan.size(), 1),
+      host_span<char const>(&last_char, 1, false),
+      stream);
     num_chars++;
   }
 
