@@ -1,7 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 
 @pytest.mark.parametrize("pat", ["(", "*", "\\"])

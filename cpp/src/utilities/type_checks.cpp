@@ -21,8 +21,6 @@
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <algorithm>
 
 namespace cudf {

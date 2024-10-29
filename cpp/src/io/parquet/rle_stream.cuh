@@ -216,7 +216,7 @@ struct rle_stream {
     decode_index = -1;  // signals the first iteration. Nothing to decode.
   }
 
-  __device__ inline int get_rle_run_info(rle_run& run)
+  __device__ inline int get_rle_run_info(rle_run<level_t>& run)
   {
     run.start     = cur;
     run.level_run = get_vlq32(run.start, end);
@@ -225,7 +225,6 @@ struct rle_stream {
     int run_bytes = run.start - cur;
     if (is_literal_run(run.level_run)) {
       // from the parquet spec: literal runs always come in multiples of 8 values.
-      // bit shift level_run down because low bit indicates whether literal/repeated
       run.size = (run.level_run >> 1) * 8;
       run_bytes += util::div_rounding_up_unsafe(run.size * level_bits, 8);
     } else {
@@ -248,10 +247,12 @@ struct rle_stream {
             fill_index < decode_index + run_buffer_size) &&
            cur < end) {
       // Encoding::RLE
+      // Pass by reference to fill the runs shared memory with the run data
       auto& run           = runs[rolling_index<run_buffer_size>(fill_index)];
       int const run_bytes = get_rle_run_info(run);
-      run.remaining       = run.size;
-      run.output_pos      = output_pos;
+
+      run.remaining  = run.size;
+      run.output_pos = output_pos;
 
       cur += run_bytes;
       output_pos += run.size;
@@ -382,7 +383,7 @@ struct rle_stream {
     // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
     // the first time
     while (cur < end) {
-      rle_run run;
+      rle_run<level_t> run;
       int run_bytes = get_rle_run_info(run);
 
       if ((output_pos + run.size) > target_count) {

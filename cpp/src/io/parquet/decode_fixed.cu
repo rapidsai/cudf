@@ -37,7 +37,14 @@ struct block_scan_results {
 };
 
 template <int decode_block_size>
-__device__ inline static void scan_block_exclusive_sum(int thread_bit, block_scan_results& results)
+using block_scan_temp_storage = int[decode_block_size / cudf::detail::warp_size];
+
+// Similar to CUB, must __syncthreads() after calling if reusing temp_storage
+template <int decode_block_size>
+__device__ inline static void scan_block_exclusive_sum(
+  int thread_bit,
+  block_scan_results& results,
+  block_scan_temp_storage<decode_block_size>& temp_storage)
 {
   int const t              = threadIdx.x;
   int const warp_index     = t / cudf::detail::warp_size;
@@ -45,15 +52,19 @@ __device__ inline static void scan_block_exclusive_sum(int thread_bit, block_sca
   uint32_t const lane_mask = (uint32_t(1) << warp_lane) - 1;
 
   uint32_t warp_bits = ballot(thread_bit);
-  scan_block_exclusive_sum<decode_block_size>(warp_bits, warp_lane, warp_index, lane_mask, results);
+  scan_block_exclusive_sum<decode_block_size>(
+    warp_bits, warp_lane, warp_index, lane_mask, results, temp_storage);
 }
 
+// Similar to CUB, must __syncthreads() after calling if reusing temp_storage
 template <int decode_block_size>
-__device__ static void scan_block_exclusive_sum(uint32_t warp_bits,
-                                                int warp_lane,
-                                                int warp_index,
-                                                uint32_t lane_mask,
-                                                block_scan_results& results)
+__device__ static void scan_block_exclusive_sum(
+  uint32_t warp_bits,
+  int warp_lane,
+  int warp_index,
+  uint32_t lane_mask,
+  block_scan_results& results,
+  block_scan_temp_storage<decode_block_size>& temp_storage)
 {
   // Compute # warps
   constexpr int num_warps = decode_block_size / cudf::detail::warp_size;
@@ -64,16 +75,15 @@ __device__ static void scan_block_exclusive_sum(uint32_t warp_bits,
   results.thread_count_within_warp = __popc(results.warp_bits & lane_mask);
 
   // Share the warp counts amongst the block threads
-  __shared__ int warp_counts[num_warps];
-  if (warp_lane == 0) { warp_counts[warp_index] = results.warp_count; }
-  __syncthreads();
+  if (warp_lane == 0) { temp_storage[warp_index] = results.warp_count; }
+  __syncthreads();  // Sync to share counts between threads/warps
 
   // Compute block-wide results
   results.block_count               = 0;
   results.thread_count_within_block = results.thread_count_within_warp;
   for (int warp_idx = 0; warp_idx < num_warps; ++warp_idx) {
-    results.block_count += warp_counts[warp_idx];
-    if (warp_idx < warp_index) { results.thread_count_within_block += warp_counts[warp_idx]; }
+    results.block_count += temp_storage[warp_idx];
+    if (warp_idx < warp_index) { results.thread_count_within_block += temp_storage[warp_idx]; }
   }
 }
 
@@ -603,6 +613,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
   bool const is_first_lane = (warp_lane == 0);
 
   __syncthreads();
+  __shared__ block_scan_temp_storage<decode_block_size> temp_storage;
 
   while (value_count < target_value_count) {
     bool const within_batch = value_count + t < target_value_count;
@@ -612,15 +623,15 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
     auto const [def_level, start_depth, end_depth] = [&]() {
       if (!within_batch) { return cuda::std::make_tuple(-1, -1, -1); }
 
-      int const index       = rolling_index<state_buf::nz_buf_size>(value_count + t);
-      int const rep_level   = static_cast<int>(rep[index]);
+      int const level_index = rolling_index<state_buf::nz_buf_size>(value_count + t);
+      int const rep_level   = static_cast<int>(rep[level_index]);
       int const start_depth = s->nesting_info[rep_level].start_depth;
 
       if constexpr (!nullable) {
         return cuda::std::make_tuple(-1, start_depth, max_depth);
       } else {
         if (def != nullptr) {
-          int const def_level = static_cast<int>(def[index]);
+          int const def_level = static_cast<int>(def[level_index]);
           return cuda::std::make_tuple(
             def_level, start_depth, s->nesting_info[def_level].end_depth);
         } else {
@@ -636,23 +647,26 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
     int num_prior_new_rows, total_num_new_rows;
     {
       block_scan_results new_row_scan_results;
-      scan_block_exclusive_sum<decode_block_size>(is_new_row, new_row_scan_results);
+      scan_block_exclusive_sum<decode_block_size>(is_new_row, new_row_scan_results, temp_storage);
+      __syncthreads();
       num_prior_new_rows = new_row_scan_results.thread_count_within_block;
       total_num_new_rows = new_row_scan_results.block_count;
     }
 
-    int const row_index = input_row_count + (num_prior_new_rows + is_new_row - 1);
+    int const row_index = input_row_count + ((num_prior_new_rows + is_new_row) - 1);
     input_row_count += total_num_new_rows;
     int const in_row_bounds = (row_index >= row_index_lower_bound) && (row_index < last_row);
 
     // VALUE COUNT:
-    // if we are within the range of nesting levels we should be adding value indices for
-    // is from/in current rep level to/in the rep level AT the depth with the def value
+    // in_nesting_bounds: if at a nesting level where we need to add value indices
+    // the bounds: from current rep to the rep AT the def depth
     int in_nesting_bounds = ((0 >= start_depth && 0 <= end_depth) && in_row_bounds) ? 1 : 0;
     int thread_value_count_within_warp, warp_value_count, thread_value_count, block_value_count;
     {
       block_scan_results value_count_scan_results;
-      scan_block_exclusive_sum<decode_block_size>(in_nesting_bounds, value_count_scan_results);
+      scan_block_exclusive_sum<decode_block_size>(
+        in_nesting_bounds, value_count_scan_results, temp_storage);
+      __syncthreads();
 
       thread_value_count_within_warp = value_count_scan_results.thread_count_within_warp;
       warp_value_count               = value_count_scan_results.warp_count;
@@ -684,8 +698,13 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
         auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
 
         block_scan_results valid_count_scan_results;
-        scan_block_exclusive_sum<decode_block_size>(
-          warp_valid_mask, warp_lane, warp_index, thread_mask, valid_count_scan_results);
+        scan_block_exclusive_sum<decode_block_size>(warp_valid_mask,
+                                                    warp_lane,
+                                                    warp_index,
+                                                    thread_mask,
+                                                    valid_count_scan_results,
+                                                    temp_storage);
+        __syncthreads();
         thread_valid_count = valid_count_scan_results.thread_count_within_block;
         block_valid_count  = valid_count_scan_results.block_count;
       }
@@ -702,8 +721,9 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
           ((d_idx + 1 >= start_depth) && (d_idx + 1 <= end_depth) && in_row_bounds) ? 1 : 0;
         {
           block_scan_results next_value_count_scan_results;
-          scan_block_exclusive_sum<decode_block_size>(next_in_nesting_bounds,
-                                                      next_value_count_scan_results);
+          scan_block_exclusive_sum<decode_block_size>(
+            next_in_nesting_bounds, next_value_count_scan_results, temp_storage);
+          __syncthreads();
 
           next_thread_value_count_within_warp =
             next_value_count_scan_results.thread_count_within_warp;
@@ -726,7 +746,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
         }
       }
 
-      // validity is processed per-warp (on lane 0's), because writes are 32-bit atomic ops
+      // validity is processed per-warp (on lane 0's)
+      // thi is because when atomic writes are needed, they are 32-bit operations
       //
       // lists always read and write to the same bounds
       // (that is, read and write positions are already pre-bounded by first_row/num_rows).
@@ -857,6 +878,7 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
   // modulo 2 * block_size of course, since that's as many as we process at once
   int num_skipped = parquet_stream.skip_decode(t, num_to_skip);
   while (num_skipped < num_to_skip) {
+    // TODO: Instead of decoding, skip within the run to the appropriate location
     auto const to_decode = min(2 * decode_block_size_t, num_to_skip - num_skipped);
     num_skipped += parquet_stream.decode_next(t, to_decode);
     __syncthreads();
