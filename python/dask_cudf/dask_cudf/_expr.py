@@ -274,7 +274,9 @@ class CudfFusedParquetIO(FusedParquetIO):
 class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
     @functools.cached_property
     def _dataset_info(self):
-        from dask_cudf.io.parquet import set_object_dtypes_from_pa_schema
+        from dask_cudf.legacy.io.parquet import (
+            set_object_dtypes_from_pa_schema,
+        )
 
         dataset_info = super()._dataset_info
         meta_pd = dataset_info["base_meta"]

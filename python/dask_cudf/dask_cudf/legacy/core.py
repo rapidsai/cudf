@@ -264,14 +264,14 @@ class DataFrame(_Frame, dd.core.DataFrame):
     @_dask_cudf_performance_tracking
     def to_parquet(self, path, *args, **kwargs):
         """Calls dask.dataframe.io.to_parquet with CudfEngine backend"""
-        from dask_cudf.io import to_parquet
+        from dask_cudf.legacy.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
     @_dask_cudf_performance_tracking
     def to_orc(self, path, **kwargs):
-        """Calls dask_cudf.io.to_orc"""
-        from dask_cudf.io import to_orc
+        """Calls dask_cudf.legacy.io.to_orc"""
+        from dask_cudf.legacy.io import to_orc
 
         return to_orc(self, path, **kwargs)
 

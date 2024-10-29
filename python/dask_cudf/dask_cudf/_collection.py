@@ -159,7 +159,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
     def read_text(*args, **kwargs):
         from dask_expr import from_legacy_dataframe
 
-        from dask_cudf.io.text import read_text as legacy_read_text
+        from dask_cudf.legacy.io.text import read_text as legacy_read_text
 
         ddf = legacy_read_text(*args, **kwargs)
         return from_legacy_dataframe(ddf)

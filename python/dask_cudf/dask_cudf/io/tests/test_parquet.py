@@ -15,6 +15,7 @@ from dask.utils import natural_sort_key
 import cudf
 
 import dask_cudf
+from dask_cudf.legacy.io.parquet import create_metadata_file
 from dask_cudf.tests.utils import (
     require_dask_expr,
     skip_dask_expr,
@@ -24,7 +25,7 @@ from dask_cudf.tests.utils import (
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
 need_create_meta = pytest.mark.skipif(
-    dask_cudf.io.parquet.create_metadata_file is None,
+    create_metadata_file is None,
     reason="Need create_metadata_file support in dask.dataframe.",
 )
 
@@ -425,7 +426,7 @@ def test_create_metadata_file(tmpdir, partition_on):
         fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
-    dask_cudf.io.parquet.create_metadata_file(
+    create_metadata_file(
         fns,
         split_every=3,  # Force tree reduction
     )
@@ -472,7 +473,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
     # consistency.
-    dask_cudf.io.parquet.create_metadata_file([p0, p1])
+    create_metadata_file([p0, p1])
 
     # Check that we can still read the ddf
     # with the _metadata file present
@@ -533,9 +534,9 @@ def test_check_file_size(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
     cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
     with pytest.warns(match="large parquet file"):
-        # Need to use `dask_cudf.io` path
+        # Need to use `dask_cudf.legacy.io` path
         # TODO: Remove outdated `check_file_size` functionality
-        dask_cudf.io.read_parquet(fn, check_file_size=1).compute()
+        dask_cudf.legacy.io.read_parquet(fn, check_file_size=1).compute()
 
 
 @xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="2024.3.0")

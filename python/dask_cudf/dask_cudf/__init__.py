@@ -54,7 +54,7 @@ if QUERY_PLANNING_ON:
 else:
     from .legacy.core import DataFrame, Index, Series  # noqa: F401
     from .legacy.groupby import groupby_agg  # noqa: F401
-    from .io import read_text, to_orc  # noqa: F401
+    from .legacy.io import read_text, to_orc  # noqa: F401
 
 
 __all__ = [
