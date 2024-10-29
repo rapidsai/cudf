@@ -193,14 +193,18 @@ function(enable_static_checkers target)
     if(_LINT_CLANG_TIDY)
       # clang will complain about unused link libraries on the compile line unless we specify
       # -Qunused-arguments.
-      message(VERBOSE "Enabling clang-tidy for ${target}")
+      message("Enabling clang-tidy for ${target}")
       set_target_properties(
         ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
       )
+    else()
+      message(FATAL_ERROR "Skipping clang-tidy for ${target}")
     endif()
     if(_LINT_ENABLE_IWYU)
-      message(VERBOSE "Enabling include-what-you-use for ${target}")
+      message("Enabling include-what-you-use for ${target}")
       set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+    else()
+      message(FATAL_ERROR "Skipping IWYU for ${target}")
     endif()
     foreach(file IN LISTS _LINT_SKIPPED_FILES)
       set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
