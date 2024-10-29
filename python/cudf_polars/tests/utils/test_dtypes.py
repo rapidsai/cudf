@@ -51,8 +51,9 @@ def test_is_order_preserving_cast():
     assert is_order_preserving_cast(UINT8, UINT16)  # Unsigned to larger unsigned
     assert is_order_preserving_cast(UINT8, FLOAT32)  # Unsigned to large enough float
     assert is_order_preserving_cast(FLOAT32, FLOAT64)  # Float to larger float
+    assert is_order_preserving_cast(INT64, FLOAT32)  # Int any float
 
     assert not is_order_preserving_cast(INT16, INT8)  # Bigger type
     assert not is_order_preserving_cast(INT8, UINT8)  # Different signedness
-    assert not is_order_preserving_cast(INT64, FLOAT32)  # Int to undersized float
     assert not is_order_preserving_cast(FLOAT32, INT32)  # Float to undersized int
+    assert not is_order_preserving_cast(FLOAT32, INT64)  # float to large int

@@ -110,16 +110,14 @@ def is_order_preserving_cast(from_: plc.DataType, to: plc.DataType) -> bool:
             # Unsigned to signed is order preserving if target is large enough
             # But signed to unsigned is never order preserving due to negative values
             return True
-    elif is_floating_point(from_) and is_floating_point(to):
-        # True if the target is larger
-        if plc.types.size_of(to) >= plc.types.size_of(from_):
-            return True
-    elif (is_integral_not_bool(from_) and is_floating_point(to)) and (
-        plc.types.size_of(to) > plc.types.size_of(from_)
+    elif (
+        is_floating_point(from_)
+        and is_floating_point(to)
+        and (plc.types.size_of(to) >= plc.types.size_of(from_))
     ):
-        # Int64 fits in float64, but not in float32
+        # True if the target is larger
         return True
-    return False
+    return is_integral_not_bool(from_) and is_floating_point(to)
 
 
 @cache
