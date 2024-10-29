@@ -41,7 +41,7 @@ import java.nio.channels.FileChannel.MapMode;
  * Be aware that the off heap memory limits set by Java do not apply to these buffers.
  */
 public class HostMemoryBuffer extends MemoryBuffer {
-  private static final boolean defaultPreferPinned;
+  static final boolean defaultPreferPinned;
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
   static {
@@ -135,13 +135,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @return the newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
-    if (preferPinned) {
-      HostMemoryBuffer pinnedBuffer = PinnedMemoryPool.tryAllocate(bytes);
-      if (pinnedBuffer != null) {
-        return pinnedBuffer;
-      }
-    }
-    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
+    return DefaultHostMemoryAllocator.get().allocate(bytes, preferPinned);
   }
 
   /**
