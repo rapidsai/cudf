@@ -572,6 +572,7 @@ class tree {
 
   /**
    * @brief move-assigns the AST tree
+   * @returns a reference to the move-assigned tree
    */
   tree& operator=(tree&&) = default;
 
