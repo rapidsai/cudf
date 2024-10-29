@@ -193,18 +193,25 @@ function(enable_static_checkers target)
     if(_LINT_CLANG_TIDY)
       # clang will complain about unused link libraries on the compile line unless we specify
       # -Qunused-arguments.
-      message("Enabling clang-tidy for ${target}")
       set_target_properties(
         ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
       )
-    else()
-      message(FATAL_ERROR "Skipping clang-tidy for ${target}")
     endif()
     if(_LINT_IWYU)
-      message("Enabling include-what-you-use for ${target}")
+      # We need to pass -Wno-missing-braces to suppress warnings about missing braces in nvtx
+      # headers that pop up when running with IWYU. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE
+      # does not appear to be sufficient, we must also ensure that it is set to the underlying
+      # target's CXX compile flags. To do this completely cleanly we should modify the flags on the
+      # target rather than the global CUDF_CXX_FLAGS, but this solution is good enough for now.
+      list(FIND CUDF_CXX_FLAGS -Wno-missing-braces _missing_braces_index)
+      if(_missing_braces_index EQUAL -1)
+        list(APPEND CUDF_CXX_FLAGS -Wno-missing-braces)
+        set(CUDF_CXX_FLAGS
+            "${CUDF_CXX_FLAGS}"
+            PARENT_SCOPE
+        )
+      endif()
       set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
-    else()
-      message(FATAL_ERROR "Skipping IWYU for ${target}")
     endif()
     foreach(file IN LISTS _LINT_SKIPPED_FILES)
       set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
@@ -785,12 +792,14 @@ set_target_properties(
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
+# Note: This must come before the target_compile_options below so that the function can modify the
+# flags if necessary.
+enable_static_checkers(
+  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
+)
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-enable_static_checkers(
-  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
 )
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
