@@ -736,7 +736,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             from dask.core import flatten
             from dask.dataframe.utils import pyarrow_strings_enabled
 
-            from dask_cudf._expr import CudfReadParquetPyarrowFS
+            from dask_cudf.io.parquet import CudfReadParquetPyarrowFS
 
             if args:
                 raise ValueError(f"Unexpected positional arguments: {args}")

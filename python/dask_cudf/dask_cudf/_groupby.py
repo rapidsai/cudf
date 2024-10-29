@@ -1,18 +1,230 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+import functools
 
+import pandas as pd
 from dask_expr._collection import new_collection
 from dask_expr._groupby import (
+    DecomposableGroupbyAggregation,
     GroupBy as DXGroupBy,
+    GroupbyAggregation,
     SeriesGroupBy as DXSeriesGroupBy,
     SingleAggregation,
 )
 from dask_expr._util import is_scalar
 
+from dask.dataframe.core import _concat
 from dask.dataframe.groupby import Aggregation
 
 from cudf.core.groupby.groupby import _deprecate_collect
 
-from dask_cudf._expr import _maybe_get_custom_expr
+##
+## Fused groupby aggregations
+##
+
+
+def _get_spec_info(gb):
+    if isinstance(gb.arg, (dict, list)):
+        aggs = gb.arg.copy()
+    else:
+        aggs = gb.arg
+
+    if gb._slice and not isinstance(aggs, dict):
+        aggs = {gb._slice: aggs}
+
+    gb_cols = gb._by_columns
+    if isinstance(gb_cols, str):
+        gb_cols = [gb_cols]
+    columns = [c for c in gb.frame.columns if c not in gb_cols]
+    if not isinstance(aggs, dict):
+        aggs = {col: aggs for col in columns}
+
+    # Assert if our output will have a MultiIndex; this will be the case if
+    # any value in the `aggs` dict is not a string (i.e. multiple/named
+    # aggregations per column)
+    str_cols_out = True
+    aggs_renames = {}
+    for col in aggs:
+        if isinstance(aggs[col], str) or callable(aggs[col]):
+            aggs[col] = [aggs[col]]
+        elif isinstance(aggs[col], dict):
+            str_cols_out = False
+            col_aggs = []
+            for k, v in aggs[col].items():
+                aggs_renames[col, v] = k
+                col_aggs.append(v)
+            aggs[col] = col_aggs
+        else:
+            str_cols_out = False
+        if col in gb_cols:
+            columns.append(col)
+
+    return {
+        "aggs": aggs,
+        "columns": columns,
+        "str_cols_out": str_cols_out,
+        "aggs_renames": aggs_renames,
+    }
+
+
+def _get_meta(gb):
+    spec_info = gb.spec_info
+    gb_cols = gb._by_columns
+    aggs = spec_info["aggs"].copy()
+    aggs_renames = spec_info["aggs_renames"]
+    if spec_info["str_cols_out"]:
+        # Metadata should use `str` for dict values if that is
+        # what the user originally specified (column names will
+        # be str, rather than tuples).
+        for col in aggs:
+            aggs[col] = aggs[col][0]
+    _meta = gb.frame._meta.groupby(gb_cols).agg(aggs)
+    if aggs_renames:
+        col_array = []
+        agg_array = []
+        for col, agg in _meta.columns:
+            col_array.append(col)
+            agg_array.append(aggs_renames.get((col, agg), agg))
+        _meta.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
+    return _meta
+
+
+class DecomposableCudfGroupbyAgg(DecomposableGroupbyAggregation):
+    sep = "___"
+
+    @functools.cached_property
+    def spec_info(self):
+        return _get_spec_info(self)
+
+    @functools.cached_property
+    def _meta(self):
+        return _get_meta(self)
+
+    @property
+    def shuffle_by_index(self):
+        return False  # We always group by column(s)
+
+    @classmethod
+    def chunk(cls, df, *by, **kwargs):
+        from dask_cudf.legacy.groupby import _groupby_partition_agg
+
+        return _groupby_partition_agg(df, **kwargs)
+
+    @classmethod
+    def combine(cls, inputs, **kwargs):
+        from dask_cudf.legacy.groupby import _tree_node_agg
+
+        return _tree_node_agg(_concat(inputs), **kwargs)
+
+    @classmethod
+    def aggregate(cls, inputs, **kwargs):
+        from dask_cudf.legacy.groupby import _finalize_gb_agg
+
+        return _finalize_gb_agg(_concat(inputs), **kwargs)
+
+    @property
+    def chunk_kwargs(self) -> dict:
+        dropna = True if self.dropna is None else self.dropna
+        return {
+            "gb_cols": self._by_columns,
+            "aggs": self.spec_info["aggs"],
+            "columns": self.spec_info["columns"],
+            "dropna": dropna,
+            "sort": self.sort,
+            "sep": self.sep,
+        }
+
+    @property
+    def combine_kwargs(self) -> dict:
+        dropna = True if self.dropna is None else self.dropna
+        return {
+            "gb_cols": self._by_columns,
+            "dropna": dropna,
+            "sort": self.sort,
+            "sep": self.sep,
+        }
+
+    @property
+    def aggregate_kwargs(self) -> dict:
+        dropna = True if self.dropna is None else self.dropna
+        final_columns = self._slice or self._meta.columns
+        return {
+            "gb_cols": self._by_columns,
+            "aggs": self.spec_info["aggs"],
+            "columns": self.spec_info["columns"],
+            "final_columns": final_columns,
+            "as_index": True,
+            "dropna": dropna,
+            "sort": self.sort,
+            "sep": self.sep,
+            "str_cols_out": self.spec_info["str_cols_out"],
+            "aggs_renames": self.spec_info["aggs_renames"],
+        }
+
+
+class CudfGroupbyAgg(GroupbyAggregation):
+    @functools.cached_property
+    def spec_info(self):
+        return _get_spec_info(self)
+
+    @functools.cached_property
+    def _meta(self):
+        return _get_meta(self)
+
+    def _lower(self):
+        return DecomposableCudfGroupbyAgg(
+            self.frame,
+            self.arg,
+            self.observed,
+            self.dropna,
+            self.split_every,
+            self.split_out,
+            self.sort,
+            self.shuffle_method,
+            self._slice,
+            *self.by,
+        )
+
+
+def _maybe_get_custom_expr(
+    gb,
+    aggs,
+    split_every=None,
+    split_out=None,
+    shuffle_method=None,
+    **kwargs,
+):
+    from dask_cudf.legacy.groupby import (
+        OPTIMIZED_AGGS,
+        _aggs_optimized,
+        _redirect_aggs,
+    )
+
+    if kwargs:
+        # Unsupported key-word arguments
+        return None
+
+    if not hasattr(gb.obj._meta, "to_pandas"):
+        # Not cuDF-backed data
+        return None
+
+    _aggs = _redirect_aggs(aggs)
+    if not _aggs_optimized(_aggs, OPTIMIZED_AGGS):
+        # One or more aggregations are unsupported
+        return None
+
+    return CudfGroupbyAgg(
+        gb.obj.expr,
+        _aggs,
+        gb.observed,
+        gb.dropna,
+        split_every,
+        split_out,
+        gb.sort,
+        shuffle_method,
+        gb._slice,
+        *gb.by,
+    )
+
 
 ##
 ## Custom groupby classes
