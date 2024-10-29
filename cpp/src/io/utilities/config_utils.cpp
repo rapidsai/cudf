@@ -16,14 +16,10 @@
 
 #include "getenv_or.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <kvikio/defaults.hpp>
 
-#include <cstdlib>
-#include <mutex>
-#include <sstream>
 #include <string>
 
 namespace cudf::io {

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -34,6 +34,8 @@ from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
 
