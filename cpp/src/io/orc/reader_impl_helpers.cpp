@@ -16,8 +16,6 @@
 
 #include "reader_impl_helpers.hpp"
 
-#include <cudf/utilities/memory_resource.hpp>
-
 namespace cudf::io::orc::detail {
 
 std::unique_ptr<column> create_empty_column(size_type orc_col_id,
