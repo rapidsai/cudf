@@ -611,6 +611,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
   bool const is_first_lane = (warp_lane == 0);
 
   __syncthreads();
+  __shared__ block_scan_temp_storage<decode_block_size> temp_storage;
 
   while (value_count < target_value_count) {
     bool const within_batch = value_count + t < target_value_count;
@@ -644,8 +645,8 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
     int num_prior_new_rows, total_num_new_rows;
     {
       block_scan_results new_row_scan_results;
-      __shared__ block_scan_temp_storage<decode_block_size> temp_storage;
       scan_block_exclusive_sum<decode_block_size>(is_new_row, new_row_scan_results, temp_storage);
+      __syncthreads();
       num_prior_new_rows = new_row_scan_results.thread_count_within_block;
       total_num_new_rows = new_row_scan_results.block_count;
     }
@@ -661,9 +662,9 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
     int thread_value_count_within_warp, warp_value_count, thread_value_count, block_value_count;
     {
       block_scan_results value_count_scan_results;
-      __shared__ block_scan_temp_storage<decode_block_size> temp_storage;
       scan_block_exclusive_sum<decode_block_size>(
         in_nesting_bounds, value_count_scan_results, temp_storage);
+      __syncthreads();
 
       thread_value_count_within_warp = value_count_scan_results.thread_count_within_warp;
       warp_value_count               = value_count_scan_results.warp_count;
@@ -695,13 +696,13 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
         auto thread_mask = (uint32_t(1) << thread_value_count_within_warp) - 1;
 
         block_scan_results valid_count_scan_results;
-        __shared__ block_scan_temp_storage<decode_block_size> temp_storage;
         scan_block_exclusive_sum<decode_block_size>(warp_valid_mask,
                                                     warp_lane,
                                                     warp_index,
                                                     thread_mask,
                                                     valid_count_scan_results,
                                                     temp_storage);
+        __syncthreads();
         thread_valid_count = valid_count_scan_results.thread_count_within_block;
         block_valid_count  = valid_count_scan_results.block_count;
       }
@@ -718,9 +719,9 @@ static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_c
           ((d_idx + 1 >= start_depth) && (d_idx + 1 <= end_depth) && in_row_bounds) ? 1 : 0;
         {
           block_scan_results next_value_count_scan_results;
-          __shared__ block_scan_temp_storage<decode_block_size> temp_storage;
           scan_block_exclusive_sum<decode_block_size>(
             next_in_nesting_bounds, next_value_count_scan_results, temp_storage);
+          __syncthreads();
 
           next_thread_value_count_within_warp =
             next_value_count_scan_results.thread_count_within_warp;
