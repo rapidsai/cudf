@@ -45,7 +45,7 @@ def raise_not_implemented_error(attr_name):
 
 
 if QUERY_PLANNING_ON:
-    from .core import DataFrame, Index, Series  # noqa: E402
+    from ._collection import DataFrame, Index, Series  # noqa: E402
 
     groupby_agg = raise_not_implemented_error("groupby_agg")
     read_text = DataFrame.read_text

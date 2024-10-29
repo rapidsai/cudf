@@ -24,7 +24,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
-from dask_cudf.accessors import ListMethods, StructMethods
+from dask_cudf._accessors import ListMethods, StructMethods
 from dask_cudf.legacy import sorting
 from dask_cudf.legacy.sorting import (
     _deprecate_shuffle_kwarg,

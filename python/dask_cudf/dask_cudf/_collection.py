@@ -173,13 +173,13 @@ class Series(DXSeries, CudfFrameBase):
 
     @cached_property
     def list(self):
-        from dask_cudf.accessors import ListMethods
+        from dask_cudf._accessors import ListMethods
 
         return ListMethods(self)
 
     @cached_property
     def struct(self):
-        from dask_cudf.accessors import StructMethods
+        from dask_cudf._accessors import StructMethods
 
         return StructMethods(self)
 
