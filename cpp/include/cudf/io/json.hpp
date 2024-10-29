@@ -412,15 +412,13 @@ class json_reader_options {
   void set_byte_range_size(size_t size) { _byte_range_size = size; }
 
   /**
-   * @brief Function to decide if passed argument is a valid delimiter
+   * @brief Set delimiter separating records in JSON lines
    *
-   * @param c Character to test as valid delimiter
-   * @return Boolean value indicating if passed character can be used as delimiter
+   * @param delimiter Delimiter separating records in JSON lines
    */
-  static constexpr bool can_be_delimiter(char c)
+  void set_delimiter(char delimiter)
   {
-    // The character list below is from `json_reader_options.set_delimiter`.
-    switch (c) {
+    switch (delimiter) {
       case '{':
       case '[':
       case '}':
@@ -432,20 +430,8 @@ class json_reader_options {
       case '\\':
       case ' ':
       case '\t':
-      case '\r': return false;
-      default: return true;
+      case '\r': CUDF_FAIL("Unsupported delimiter character.", std::invalid_argument); break;
     }
-  }
-
-  /**
-   * @brief Set delimiter separating records in JSON lines
-   *
-   * @param delimiter Delimiter separating records in JSON lines
-   */
-  void set_delimiter(char delimiter)
-  {
-    CUDF_EXPECTS(
-      can_be_delimiter(delimiter), "Unsupported delimiter character", std::invalid_argument);
     _delimiter = delimiter;
   }
 
