@@ -20,8 +20,6 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/transform.hpp>
 
 #include <array>
 

@@ -22,18 +22,17 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/pair.h>
+
+#include <optional>
 
 namespace cudf {
 namespace io {
