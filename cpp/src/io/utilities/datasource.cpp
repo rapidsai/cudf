@@ -35,7 +35,6 @@
 #include <unistd.h>
 
 #include <regex>
-#include <unordered_map>
 #include <vector>
 
 namespace cudf {

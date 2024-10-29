@@ -13,12 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <algorithm>
 #include <filesystem>
