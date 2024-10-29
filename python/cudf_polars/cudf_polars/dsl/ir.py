@@ -34,9 +34,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
     from typing import Literal
 
+    from polars import GPUEngine
+
     from cudf_polars.typing import Schema
 
-parquet_options: dict[str, Any] = {}
+PARQUET_DEFAULT_CHUNK_SIZE = 0
+PARQUET_DEFAULT_PASS_LIMIT = 17179869184  # 16GiB
 
 __all__ = [
     "IR",
@@ -126,11 +129,14 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    __slots__ = ("schema",)
+    __slots__ = ("schema", "_config")
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     schema: Schema
     """Mapping from column names to their data types."""
+
+    _config: GPUEngine
+    """GPU engine configuration."""
 
     def get_hashable(self) -> Hashable:
         """
@@ -419,14 +425,19 @@ class Scan(IR):
                 colnames[0],
             )
         elif self.typ == "parquet":
-            if parquet_options.get("chunked", True):
+            parquet_options = self._config.config.get("parquet_options", {})
+            if parquet_options.get("chunked", False):
                 reader = plc.io.parquet.ChunkedParquetReader(
                     plc.io.SourceInfo(self.paths),
                     columns=with_columns,
                     nrows=n_rows,
                     skip_rows=self.skip_rows,
-                    chunk_read_limit=parquet_options.get("chunk_read_limit", 0),
-                    pass_read_limit=parquet_options.get("pass_read_limit", 1024000000),
+                    chunk_read_limit=parquet_options.get(
+                        "chunk_read_limit", PARQUET_DEFAULT_CHUNK_SIZE
+                    ),
+                    pass_read_limit=parquet_options.get(
+                        "pass_read_limit", PARQUET_DEFAULT_PASS_LIMIT
+                    ),
                 )
                 chk = reader.read_chunk()
                 tbl = chk.tbl

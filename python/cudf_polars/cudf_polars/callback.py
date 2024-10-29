@@ -18,7 +18,6 @@ from polars.exceptions import ComputeError, PerformanceWarning
 import rmm
 from rmm._cuda import gpu
 
-import cudf_polars.dsl.translate
 from cudf_polars.dsl.translate import translate_ir
 
 if TYPE_CHECKING:
@@ -175,8 +174,6 @@ def execute_with_cudf(
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    parquet_options = config.config.get("parquet_options", {})
-    cudf_polars.dsl.translate.ir.parquet_options = parquet_options
     if unsupported := (config.config.keys() - {"raise_on_fail", "parquet_options"}):
         raise ValueError(
             f"Engine configuration contains unsupported settings {unsupported}"
@@ -186,7 +183,7 @@ def execute_with_cudf(
             nt.set_udf(
                 partial(
                     _callback,
-                    translate_ir(nt),
+                    translate_ir(nt, config),
                     device=device,
                     memory_resource=memory_resource,
                 )

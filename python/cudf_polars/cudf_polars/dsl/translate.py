@@ -17,15 +17,19 @@ from typing_extensions import assert_never
 
 import polars as pl
 import polars.polars as plrs
+from polars import GPUEngine
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.expr import Expr
+from cudf_polars.dsl.ir import IR
 from cudf_polars.dsl.traversal import make_recursive, reuse_if_unchanged
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from cudf_polars.typing import ExprTransformer
+
 
 __all__ = ["translate_ir", "translate_named_expr"]
 
@@ -361,7 +365,9 @@ def _(
     return ir.HConcat(schema, *(translate_ir(visitor, n=n) for n in node.inputs))
 
 
-def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
+def translate_ir(
+    visitor: NodeTraverser, config: GPUEngine = None, *, n: int | None = None
+) -> ir.IR:
     """
     Translate a polars-internal IR node to our representation.
 
@@ -369,6 +375,8 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     ----------
     visitor
         Polars NodeTraverser object
+    config
+        GPUEngine configuration object
     n
         Optional node to start traversing from, if not provided uses
         current polars-internal node.
@@ -382,6 +390,9 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
     NotImplementedError
         If we can't translate the nodes due to unsupported functionality.
     """
+    if not config:
+        config = GPUEngine()
+
     ctx: AbstractContextManager[None] = (
         set_node(visitor, n) if n is not None else noop_context
     )
@@ -392,6 +403,9 @@ def translate_ir(visitor: NodeTraverser, *, n: int | None = None) -> ir.IR:
         raise NotImplementedError(
             f"No support for polars IR {version=}"
         )  # pragma: no cover; no such version for now.
+
+    IR._config = config
+    Expr._config = config
 
     with ctx:
         polars_schema = visitor.get_schema()
