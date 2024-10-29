@@ -24,9 +24,12 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
-from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
-from dask_cudf.sorting import _deprecate_shuffle_kwarg, _get_shuffle_method
+from dask_cudf.legacy import sorting
+from dask_cudf.legacy.sorting import (
+    _deprecate_shuffle_kwarg,
+    _get_shuffle_method,
+)
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -52,23 +55,6 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
     def __repr__(self):
         s = "<dask_cudf.%s | %d tasks | %d npartitions>"
         return s % (type(self).__name__, len(self.dask), self.npartitions)
-
-    @_dask_cudf_performance_tracking
-    def to_dask_dataframe(self, **kwargs):
-        """Create a dask.dataframe object from a dask_cudf object
-
-        WARNING: This API is deprecated, and may not work properly
-        when query-planning is active. Please use `*.to_backend("pandas")`
-        to convert the underlying data to pandas.
-        """
-
-        warnings.warn(
-            "The `to_dask_dataframe` API is now deprecated. "
-            "Please use `*.to_backend('pandas')` instead.",
-            FutureWarning,
-        )
-
-        return self.to_backend("pandas", **kwargs)
 
 
 concat = dd.concat
@@ -744,35 +730,6 @@ from_cudf.__doc__ = (
     # since dask-expr does not provide a docstring for from_pandas.
     + textwrap.dedent(dd.from_pandas.__doc__ or "")
 )
-
-
-@_dask_cudf_performance_tracking
-def from_dask_dataframe(df):
-    """
-    Convert a Dask :class:`dask.dataframe.DataFrame` to a Dask-cuDF
-    one.
-
-    WARNING: This API is deprecated, and may not work properly
-    when query-planning is active. Please use `*.to_backend("cudf")`
-    to convert the underlying data to cudf.
-
-    Parameters
-    ----------
-    df : dask.dataframe.DataFrame
-        The Dask dataframe to convert
-
-    Returns
-    -------
-    dask_cudf.DataFrame : A new Dask collection backed by cuDF objects
-    """
-
-    warnings.warn(
-        "The `from_dask_dataframe` API is now deprecated. "
-        "Please use `*.to_backend('cudf')` instead.",
-        FutureWarning,
-    )
-
-    return df.to_backend("cudf")
 
 
 for name in (

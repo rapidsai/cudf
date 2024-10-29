@@ -12,7 +12,7 @@ from dask.dataframe.groupby import Aggregation
 
 from cudf.core.groupby.groupby import _deprecate_collect
 
-from dask_cudf.expr._expr import _maybe_get_custom_expr
+from dask_cudf._expr import _maybe_get_custom_expr
 
 ##
 ## Custom groupby classes

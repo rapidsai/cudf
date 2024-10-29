@@ -46,7 +46,7 @@ import cudf
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
-from .core import DataFrame, Index, Series
+from .legacy.core import DataFrame, Index, Series
 
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
@@ -674,7 +674,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     def to_backend(data, **kwargs):
         import dask_expr as dx
 
-        from dask_cudf.expr._expr import ToCudfBackend
+        from dask_cudf._expr import ToCudfBackend
 
         return dx.new_collection(ToCudfBackend(data, kwargs))
 
@@ -736,7 +736,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             from dask.core import flatten
             from dask.dataframe.utils import pyarrow_strings_enabled
 
-            from dask_cudf.expr._expr import CudfReadParquetPyarrowFS
+            from dask_cudf._expr import CudfReadParquetPyarrowFS
 
             if args:
                 raise ValueError(f"Unexpected positional arguments: {args}")
@@ -874,10 +874,3 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
         ddf = legacy_read_orc(*args, **kwargs)
         return from_legacy_dataframe(ddf)
-
-
-# Import/register cudf-specific classes for dask-expr
-try:
-    import dask_cudf.expr  # noqa: F401
-except ImportError:
-    pass

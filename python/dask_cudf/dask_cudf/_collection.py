@@ -94,7 +94,7 @@ class CudfFrameBase(FrameBase):
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0
     ):
-        from dask_cudf.expr._expr import RenameAxisCudf
+        from dask_cudf._expr import RenameAxisCudf
 
         return new_collection(
             RenameAxisCudf(
@@ -136,7 +136,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         dropna=None,
         **kwargs,
     ):
-        from dask_cudf.expr._groupby import GroupBy
+        from dask_cudf._groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, DXSeries):
             raise ValueError(
@@ -183,7 +183,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
 
 class Series(DXSeries, CudfFrameBase):
     def groupby(self, by, **kwargs):
-        from dask_cudf.expr._groupby import SeriesGroupBy
+        from dask_cudf._groupby import SeriesGroupBy
 
         return SeriesGroupBy(self, by, **kwargs)
 
