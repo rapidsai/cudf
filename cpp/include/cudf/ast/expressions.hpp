@@ -590,8 +590,8 @@ class tree {
   Expr const& emplace(Args&&... args)
   {
     static_assert(std::is_base_of_v<expression, Expr>);
-    std::unique_ptr<Expr> expr = std::make_unique<Expr>(std::forward<Args>(args)...);
-    Expr const& expr_ref       = *expr;
+    auto expr            = std::make_shared<Expr>(std::forward<Args>(args)...);
+    Expr const& expr_ref = *expr;
     expressions.emplace_back(std::static_pointer_cast<expression>(std::move(expr)));
     return expr_ref;
   }
@@ -639,14 +639,10 @@ class tree {
    */
   expression const& operator[](size_t index) const { return *expressions[index]; }
 
-  /**
-   * @brief get an immutable span to the expressions in the tree
-   * @returns all expressions added to the tree
-   */
-  std::vector<std::unique_ptr<expression>> const& get_expressions() const { return expressions; }
-
  private:
-  std::vector<std::unique_ptr<expression>> expressions;
+  // TODO: use better ownership semantics, the shared_ptr here is redundant. consider using a bump
+  // allocator with type-erased deleters.
+  std::vector<std::shared_ptr<expression>> expressions;
 };
 
 /** @} */  // end of group
