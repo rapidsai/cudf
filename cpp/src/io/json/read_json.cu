@@ -21,6 +21,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -217,30 +218,15 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
   }
 
-  // Add delimiter to end of buffer iff
-  //        (i) We are reading till the end of the last source i.e. should_load_till_last_source is
-  //        true (ii) The last character in bufspan is not delimiter.
-  // For (ii) in the case of Spark, if the last character is not a delimiter, it could be the case
-  // that there are characters after the delimiter in the last record. We then consider those
-  // characters to be a part of a new (possibly empty) line.
+  // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are reading till the end of the last source i.e. should_load_till_last_source is true 
+  // Note that the table generated from the JSONL input remains unchanged since empty lines are ignored by the parser.
   size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
   if (num_chars) {
-    char last_char;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&last_char,
-                                  reinterpret_cast<char*>(buffer.data()) + readbufspan.size() - 1,
-                                  sizeof(char),
-                                  cudaMemcpyDeviceToHost,
-                                  stream.value()));
-    stream.synchronize();
-    if (last_char != delimiter) {
-      last_char = delimiter;
-      CUDF_CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<char*>(buffer.data()) + readbufspan.size(),
-                                    &last_char,
-                                    sizeof(char),
-                                    cudaMemcpyHostToDevice,
-                                    stream.value()));
-      num_chars++;
-    }
+    auto last_char = delimiter;
+    cudf::detail::cuda_memcpy_async<char>(
+        device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size()).subspan(readbufspan.size(), 1), 
+        host_span<char const>(&last_char, 1, false), stream);
+    num_chars++;
   }
 
   return datasource::owning_buffer<rmm::device_buffer>(
