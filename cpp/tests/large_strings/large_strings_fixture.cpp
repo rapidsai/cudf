@@ -16,12 +16,10 @@
 
 #include "large_strings_fixture.hpp"
 
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/strings/combine.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 

@@ -39,8 +39,6 @@
 
 #include <thrust/iterator/constant_iterator.h>
 
-#include <arrow/io/api.h>
-
 #include <fstream>
 #include <limits>
 #include <memory>

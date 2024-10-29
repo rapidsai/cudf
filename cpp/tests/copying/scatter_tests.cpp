@@ -15,7 +15,6 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -23,7 +22,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/stream_compaction.hpp>
 
 #include <stdexcept>
 
