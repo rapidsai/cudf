@@ -18,9 +18,7 @@
 
 #include "gpuinflate.hpp"
 
-#include <cudf/io/config_utils.hpp>
 #include <cudf/io/nvcomp_adapter.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
