@@ -870,7 +870,7 @@ inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, 
   if (t == 0) { s->dict_pos = pos; }
 }
 
-template <int decode_block_size_t, typename stream_type>
+template <int rolling_buf_size, typename stream_type>
 __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
 {
   // it could be that (e.g.) we skip 5000 but starting at row 4000 we have a run of length 2000:
@@ -879,7 +879,7 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
   int num_skipped = parquet_stream.skip_decode(t, num_to_skip);
   while (num_skipped < num_to_skip) {
     // TODO: Instead of decoding, skip within the run to the appropriate location
-    auto const to_decode = min(2 * decode_block_size_t, num_to_skip - num_skipped);
+    auto const to_decode = min(rolling_buf_size, num_to_skip - num_skipped);
     num_skipped += parquet_stream.decode_next(t, to_decode);
     __syncthreads();
   }
@@ -1036,11 +1036,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     auto const skipped_leaf_values = s->page.skipped_leaf_values;
     if (skipped_leaf_values > 0) {
       if (should_process_nulls) {
-        skip_decode<decode_block_size_t>(def_decoder, skipped_leaf_values, t);
+        skip_decode<rolling_buf_size>(def_decoder, skipped_leaf_values, t);
       }
-      processed_count = skip_decode<decode_block_size_t>(rep_decoder, skipped_leaf_values, t);
+      processed_count = skip_decode<rolling_buf_size>(rep_decoder, skipped_leaf_values, t);
       if constexpr (has_dict_t) {
-        skip_decode<decode_block_size_t>(dict_stream, skipped_leaf_values, t);
+        skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
       }
     }
   }
