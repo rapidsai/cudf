@@ -37,8 +37,8 @@ cmake --build build
 cmake --install build
 popd
 
-# Run the build via CMake, which will run clang-tidy when CUDF_CLANG_TIDY is enabled.
-cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_CLANG_TIDY=ON -GNinja
+# Run the build via CMake, which will run clang-tidy when CUDF_STATIC_LINTERS is enabled.
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_STATIC_LINTERS=ON -GNinja
 cmake --build cpp/build 2>&1 | tee build_output.txt
 
 # Parse the build output to extract only IWYU's proposed changes.
