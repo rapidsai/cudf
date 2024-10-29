@@ -46,10 +46,12 @@ def raise_not_implemented_error(attr_name):
 
 if QUERY_PLANNING_ON:
     from ._collection import DataFrame, Index, Series  # noqa: E402
+    from ._expr import _patch_dask_expr
 
     groupby_agg = raise_not_implemented_error("groupby_agg")
     read_text = DataFrame.read_text
     to_orc = raise_not_implemented_error("to_orc")
+    _patch_dask_expr()
 
 else:
     from .legacy.core import DataFrame, Index, Series  # noqa: F401
