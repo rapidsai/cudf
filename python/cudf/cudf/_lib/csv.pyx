@@ -313,7 +313,7 @@ def write_csv(
     for name in table._column_names:
         col_names.append((name, _dtype_to_names_list(table[name]._column)))
     for i, t in enumerate(col_names):
-        if not isinstance(t[0], str):
+        if t[0] is None or pd.isnull(t[0]):
             col_names[i] = (na_rep, t[1])
     columns = [col.to_pylibcudf(mode="read") for col in table._columns]
     try:

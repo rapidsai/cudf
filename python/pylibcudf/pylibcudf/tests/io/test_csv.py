@@ -281,3 +281,24 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
 # list true_values = None,
 # list false_values = None,
 # bool dayfirst = False,
+
+
+# @pytest.mark.parametrize("rows_per_chunk", [8, 100])
+# def test_write_csv(table_data, rows_per_chunk, source_or_sink):
+#     plc_table_w_meta, pa_table = table_data
+#     src = source_or_sink
+#     print(table_data)
+
+#     plc.io.csv.write_csv(
+#         plc_table_w_meta,
+#         path_or_buf=src,
+#         index=False,
+#     )
+
+#     # result = plc.io.csv.read_csv(src)
+
+#     # assert_table_and_meta_eq(
+#     #     pa_table,
+#     #     result,
+#     #     check_types_if_empty=False,
+#     # )
