@@ -558,7 +558,7 @@ class _FinalProxy(_FastSlowProxy):
 
         Returns
         -------
-        A new proxied object
+        A new proxied object.
 
         Notes
         -----
