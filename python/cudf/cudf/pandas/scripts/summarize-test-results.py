@@ -5,7 +5,8 @@
 """
 Summarizes the test results per module.
 
-Examples:
+Examples
+--------
     python summarize-test-results.py log.json
     python summarize-test-results.py log.json --output json
     python summarize-test-results.py log.json --output table

@@ -347,13 +347,12 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   // Reading to host because decompression of a single block is much faster on the CPU
   sources[0]->host_read(range_offset, remaining_bytes_to_read, hbuffer.data());
   auto uncomp_data = decompress(compression, hbuffer);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(),
-                                reinterpret_cast<char*>(uncomp_data.data()),
-                                uncomp_data.size() * sizeof(char),
-                                cudaMemcpyHostToDevice,
-                                stream.value()));
-  stream.synchronize();
-  return buffer.first(uncomp_data.size());
+  auto ret_buffer  = buffer.first(uncomp_data.size());
+  cudf::detail::cuda_memcpy<char>(
+    ret_buffer,
+    host_span<char const>{reinterpret_cast<char const*>(uncomp_data.data()), uncomp_data.size()},
+    stream);
+  return ret_buffer;
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
