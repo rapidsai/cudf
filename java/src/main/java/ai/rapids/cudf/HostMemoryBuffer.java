@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -153,6 +153,16 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public static HostMemoryBuffer allocate(long bytes) {
     return allocate(bytes, defaultPreferPinned);
+  }
+
+  /**
+   * Allocate host memory bypassing the default allocator. This is intended to only be used by other allocators.
+   * Pinned memory will not be used for these allocations.
+   * @param bytes size in bytes to allocate
+   * @return the newly created buffer
+   */
+  public static HostMemoryBuffer allocateRaw(long bytes) {
+    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
   }
 
   /**
