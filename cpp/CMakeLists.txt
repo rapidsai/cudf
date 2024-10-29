@@ -146,8 +146,10 @@ if(NOT CUDF_GENERATED_INCLUDE_DIR)
 endif()
 
 # ##################################################################################################
-# * clang-tidy configuration ----------------------------------------------------------------------
+# * linter configuration ---------------------------------------------------------------------------
 if(CUDF_STATIC_LINTERS)
+  # For simplicity, for now we assume that all linters can be installed into an environment where
+  # any linter is being run. We could relax this requirement if desired.
   find_program(
     CLANG_TIDY_EXE
     NAMES "clang-tidy"
