@@ -232,7 +232,7 @@ files:
       key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
-  py_rapids_build_cudf_polars:
+  py_build_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
     extras:
