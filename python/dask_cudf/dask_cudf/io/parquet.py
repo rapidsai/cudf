@@ -383,6 +383,11 @@ class CudfEngine(ArrowDatasetEngine):
             metadata_path = fs.sep.join([path, "_metadata"])
             _meta = []
             if append and fmd is not None:
+                if isinstance(fmd, pq.FileMetaData):
+                    with BytesIO() as myio:
+                        fmd.write_metadata_file(myio)
+                        myio.seek(0)
+                        fmd = np.frombuffer(myio.read(), dtype="uint8")
                 _meta = [fmd]
             _meta.extend([parts[i][0]["meta"] for i in range(len(parts))])
             _meta = (
