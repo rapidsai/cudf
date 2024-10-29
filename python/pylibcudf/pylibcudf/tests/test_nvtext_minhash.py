@@ -21,7 +21,7 @@ def word_minhash_input_data(request):
 
 
 @pytest.mark.parametrize("width", [5, 12])
-def test_minhash(minhash_input_data, width):
+def test_minhash_permuted(minhash_input_data, width):
     input_arr, seeds, seed_type = minhash_input_data
     minhash_func = (
         plc.nvtext.minhash.minhash_permuted
