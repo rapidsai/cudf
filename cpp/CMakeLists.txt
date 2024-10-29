@@ -88,7 +88,7 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-option(CUDF_CLANG_TIDY "Enable clang-tidy checking" OFF)
+option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -147,7 +147,7 @@ endif()
 
 # ##################################################################################################
 # * clang-tidy configuration ----------------------------------------------------------------------
-if(CUDF_CLANG_TIDY)
+if(CUDF_STATIC_LINTERS)
   find_program(
     CLANG_TIDY_EXE
     NAMES "clang-tidy"
@@ -179,24 +179,26 @@ if(CUDF_CLANG_TIDY)
 endif()
 
 # Turn on the clang-tidy property for a target excluding the files specified in SKIPPED_FILES.
-function(enable_clang_tidy target)
-  set(_tidy_options ENABLE_IWYU)
+function(enable_static_checkers target)
+  set(_tidy_options IWYU CLANG_TIDY)
   set(_tidy_one_value)
   set(_tidy_multi_value SKIPPED_FILES)
   cmake_parse_arguments(
-    _TIDY "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
+    _LINT "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
   )
 
-  if(CUDF_CLANG_TIDY)
-    # clang will complain about unused link libraries on the compile line unless we specify
-    # -Qunused-arguments.
-    set_target_properties(
-      ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
-    )
-    if(_TIDY_ENABLE_IWYU)
+  if(CUDF_STATIC_LINTERS)
+    if(_LINT_CLANG_TIDY)
+      # clang will complain about unused link libraries on the compile line unless we specify
+      # -Qunused-arguments.
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
+      )
+    endif()
+    if(_LINT_ENABLE_IWYU)
       set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
     endif()
-    foreach(file IN LISTS _TIDY_SKIPPED_FILES)
+    foreach(file IN LISTS _LINT_SKIPPED_FILES)
       set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
     endforeach()
   endif()
@@ -779,8 +781,8 @@ target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-enable_clang_tidy(
-  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp ENABLE_IWYU
+enable_static_checkers(
+  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
 )
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
