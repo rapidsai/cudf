@@ -92,7 +92,6 @@ strings and apply several methods to it. These can be accessed like
    slice_from
    slice_replace
    split
-   rsplit
    startswith
    strip
    swapcase
