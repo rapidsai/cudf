@@ -15,13 +15,10 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
 
 #include <fstream>
 #include <random>

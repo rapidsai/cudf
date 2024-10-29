@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -198,17 +199,13 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
                                        bool is_enabled_lines,
                                        rmm::cuda_stream_view stream)
 {
-  NodeIndexT value = parent_node_sentinel;
-  if (!col_ids.empty()) {
-    auto const list_node_index = is_enabled_lines ? 0 : 1;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
-                                  col_ids.data() + list_node_index,
-                                  sizeof(NodeIndexT),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    stream.synchronize();
-  }
-  return value;
+  if (col_ids.empty()) { return parent_node_sentinel; }
+
+  auto const list_node_index = is_enabled_lines ? 0 : 1;
+  auto const value           = cudf::detail::make_host_vector_sync(
+    device_span<NodeIndexT const>{col_ids.data() + list_node_index, 1}, stream);
+
+  return value[0];
 }
 /**
  * @brief Holds member data pointers of `d_json_column`
@@ -818,11 +815,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                  column_categories.cbegin(),
                  expected_types.begin(),
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
-  cudaMemcpyAsync(d_column_tree.node_categories.begin(),
-                  expected_types.data(),
-                  expected_types.size() * sizeof(column_categories[0]),
-                  cudaMemcpyDefault,
-                  stream.value());
+  cudf::detail::cuda_memcpy_async<NodeT>(d_column_tree.node_categories, expected_types, stream);
 
   return {is_pruned, columns};
 }

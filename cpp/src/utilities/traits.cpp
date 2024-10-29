@@ -19,8 +19,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/dictionary.hpp>
 
-#include <cuda_runtime.h>
-
 namespace cudf {
 
 namespace {

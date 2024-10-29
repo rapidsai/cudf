@@ -4,7 +4,7 @@ import pickle
 
 from libc.stdint cimport uint8_t, uintptr_t
 from libcpp cimport bool
-from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -30,10 +30,6 @@ from libcpp.memory cimport make_unique
 cimport pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.lists.gather cimport (
-    segmented_gather as cpp_segmented_gather,
-)
-from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
@@ -337,26 +333,6 @@ def get_element(Column input_column, size_type index):
         ),
         dtype=input_column.dtype,
     )
-
-
-@acquire_spill_lock()
-def segmented_gather(Column source_column, Column gather_map):
-    cdef shared_ptr[lists_column_view] source_LCV = (
-        make_shared[lists_column_view](source_column.view())
-    )
-    cdef shared_ptr[lists_column_view] gather_map_LCV = (
-        make_shared[lists_column_view](gather_map.view())
-    )
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_segmented_gather(
-                source_LCV.get()[0], gather_map_LCV.get()[0])
-        )
-
-    result = Column.from_unique_ptr(move(c_result))
-    return result
 
 
 cdef class _CPackedColumns:
