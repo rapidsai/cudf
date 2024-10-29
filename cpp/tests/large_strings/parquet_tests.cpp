@@ -16,8 +16,6 @@
 
 #include "large_strings_fixture.hpp"
 
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>

@@ -22,8 +22,6 @@
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
 
-#include <rmm/device_buffer.hpp>
-
 #include <dlfcn.h>
 
 #include <cerrno>
