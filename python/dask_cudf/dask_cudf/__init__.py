@@ -9,7 +9,7 @@ import cudf  # noqa: E402
 
 from . import backends  # noqa: E402, F401
 from ._version import __git_commit__, __version__  # noqa: E402, F401
-from .legacy.core import concat, from_cudf  # noqa: E402
+from .legacy.core import concat, from_cudf  # noqa: F401
 
 
 QUERY_PLANNING_ON = dd.DASK_EXPR_ENABLED
@@ -45,7 +45,7 @@ def raise_not_implemented_error(attr_name):
 
 
 if QUERY_PLANNING_ON:
-    from ._collection import DataFrame, Index, Series
+    from .core import DataFrame, Index, Series  # noqa: E402
 
     groupby_agg = raise_not_implemented_error("groupby_agg")
     read_text = DataFrame.read_text

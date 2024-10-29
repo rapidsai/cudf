@@ -34,22 +34,6 @@ _LEGACY_WORKAROUND = (
 
 
 class CudfFrameBase(FrameBase):
-    def to_dask_dataframe(self, **kwargs):
-        """Create a dask.dataframe object from a dask_cudf object
-
-        WARNING: This API is deprecated, and may not work properly.
-        Please use `*.to_backend("pandas")` to convert the
-        underlying data to pandas.
-        """
-
-        warnings.warn(
-            "The `to_dask_dataframe` API is now deprecated. "
-            "Please use `*.to_backend('pandas')` instead.",
-            FutureWarning,
-        )
-
-        return self.to_backend("pandas", **kwargs)
-
     def _prepare_cov_corr(self, min_periods, numeric_only):
         # Upstream version of this method sets min_periods
         # to 2 by default (which is not supported by cudf)
