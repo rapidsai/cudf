@@ -412,12 +412,13 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
 {
   int row_count = 512;
 
-  auto data_begin = cudf::detail::make_counting_transform_iterator(0, [](auto idx) {
+  auto validity = cudf::detail::make_counting_transform_iterator(
+    0, [](auto idx) -> bool { return (idx % 23) != 22; });
+  auto data_begin = cudf::detail::make_counting_transform_iterator(0, [validity](auto idx) {
+    if (validity[idx] == 0) return std::string{};
     char const s = static_cast<char>('a' + (idx % 26));
     return std::string{1, s};
   });
-  auto validity   = cudf::detail::make_counting_transform_iterator(
-    0, [](auto idx) -> bool { return (idx % 23) != 22; });
   cudf::test::strings_column_wrapper col(data_begin, data_begin + row_count, validity);
 
   thrust::host_vector<std::string> v(data_begin, data_begin + row_count);
@@ -625,12 +626,12 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "₹1" /*null*/,
+                              "" /*null*/,
                               "aaa" /*NULL*/,
                               "zit",
                               "bat",
                               "aab",
-                              "$1" /*null*/,
+                              "" /*null*/,
                               "€1" /*NULL*/,
                               "wut"},
                              nulls_at({2, 7})};

@@ -1255,6 +1255,12 @@ TEST_P(StringReductionTest, MinMax)
   // data and valid arrays
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
+  std::transform(thrust::counting_iterator<std::size_t>(0),
+                 thrust::counting_iterator<std::size_t>(host_strings.size()),
+                 host_strings.begin(),
+                 [host_strings, host_bools](auto idx) {
+                   return host_bools[idx] ? host_strings[idx] : std::string{};
+                 });
   bool succeed(true);
   std::string initial_value = "init";
 
@@ -1381,7 +1387,7 @@ TEST_F(StringReductionTest, AllNull)
   std::vector<std::string> host_strings(
     {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
   std::vector<bool> host_bools(host_strings.size(), false);
-  auto initial_value = cudf::make_string_scalar("init");
+  auto initial_value = cudf::make_string_scalar("");
   initial_value->set_valid_async(false);
 
   // string column with nulls
@@ -3087,12 +3093,12 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "₹1" /*null*/,
+                              "" /*null*/,
                               "aaa" /*NULL*/,
                               "zit",
                               "bat",
                               "aab",
-                              "$1" /*null*/,
+                              "" /*null*/,
                               "€1" /*NULL*/,
                               "wut"},
                              nulls_at({2, 7})};
