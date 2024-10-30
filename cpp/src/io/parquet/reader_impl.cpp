@@ -219,8 +219,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
-  // launch string decoder
   int s_idx = 0;
+
+  auto decode_data = [&](decode_kernel_mask decoder_mask) {
+    DecodePageData(subpass.pages,
+                   pass.chunks,
+                   num_rows,
+                   skip_rows,
+                   level_type_size,
+                   decoder_mask,
+                   error_code.data(),
+                   streams[s_idx++]);
+  };
+
+  // launch string decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
     DecodeStringPageData(subpass.pages,
                          pass.chunks,
@@ -266,38 +278,17 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch byte stream split decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT);
   }
 
   // launch byte stream split decoder, for nested columns
   if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED);
   }
 
   // launch byte stream split decoder, for list columns
   if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST);
   }
 
   // launch byte stream split decoder
@@ -313,110 +304,47 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch fixed width type decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::FIXED_WIDTH_NO_DICT,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::FIXED_WIDTH_NO_DICT);
   }
 
   // launch fixed width type decoder for lists
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST);
   }
 
   // launch fixed width type decoder, for nested columns
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED);
   }
 
   // launch boolean type decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::BOOLEAN) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::BOOLEAN,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::BOOLEAN);
   }
 
   // launch boolean type decoder, for nested columns
   if (BitAnd(kernel_mask, decode_kernel_mask::BOOLEAN_NESTED) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::BOOLEAN_NESTED,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::BOOLEAN_NESTED);
   }
 
   // launch boolean type decoder, for nested columns
   if (BitAnd(kernel_mask, decode_kernel_mask::BOOLEAN_LIST) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::BOOLEAN_LIST,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::BOOLEAN_LIST);
   }
 
   // launch fixed width type decoder with dictionaries
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::FIXED_WIDTH_DICT,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::FIXED_WIDTH_DICT);
   }
 
   // launch fixed width type decoder with dictionaries for lists
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT_LIST) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::FIXED_WIDTH_DICT_LIST,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::FIXED_WIDTH_DICT_LIST);
   }
 
   // launch fixed width type decoder with dictionaries, for nested columns
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decode_kernel_mask::FIXED_WIDTH_DICT_NESTED,
-                   error_code.data(),
-                   streams[s_idx++]);
+    decode_data(decode_kernel_mask::FIXED_WIDTH_DICT_NESTED);
   }
 
   // launch the catch-all page decoder
