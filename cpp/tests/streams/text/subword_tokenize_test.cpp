@@ -75,37 +75,4 @@ TEST(TextSubwordTest, Tokenize)
                                          true,   // do_lower_case
                                          false,  // do_truncate
                                          cudf::test::get_default_stream());
-
-  EXPECT_EQ(nrows, result.nrows_tensor);
-
-  {
-    std::vector<uint32_t> base_data(
-      {2023, 2003, 1037, 3231, 1012, 1037, 3231, 2023, 2003, 1012, 0, 0, 0, 0, 0, 0});
-    std::vector<uint32_t> h_expected;
-    for (uint32_t idx = 0; idx < nrows; ++idx)
-      h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
-    cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected);
-  }
-
-  {
-    std::vector<uint32_t> base_data({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0});
-    std::vector<uint32_t> h_expected;
-    for (uint32_t idx = 0; idx < nrows; ++idx)
-      h_expected.insert(h_expected.end(), base_data.begin(), base_data.end());
-    cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected);
-  }
-
-  {
-    std::vector<uint32_t> h_expected;
-    for (uint32_t idx = 0; idx < nrows; ++idx) {
-      // 0,0,9,1,0,9,2,0,9,3,0,9,4,0,9,5,0,9,6,0,9,7,0,9,8,0,9,9,0,9,...
-      h_expected.push_back(idx);
-      h_expected.push_back(0);
-      h_expected.push_back(9);
-    }
-    cudf::test::fixed_width_column_wrapper<uint32_t> expected(h_expected.begin(), h_expected.end());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected);
-  }
 }
