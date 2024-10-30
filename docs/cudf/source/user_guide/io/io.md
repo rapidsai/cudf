@@ -97,9 +97,14 @@ This variable also controls the GDS compatibility mode.
 
 There are four valid values for the environment variable:
 
-- "GDS": Enable GDS use; GDS compatibility mode is *off*.
-- "ALWAYS": Enable GDS use; GDS compatibility mode is *on*.
-- "KVIKIO": Enable GDS through [KvikIO](https://github.com/rapidsai/kvikio).
+- "GDS": Enable GDS use. If the cuFile library cannot be properly loaded,
+fall back to the GDS compatibility mode.
+- "ALWAYS": Enable GDS use. If the cuFile library cannot be properly loaded,
+throw an exception.
+- "KVIKIO": Enable GDS through [KvikIO](https://github.com/rapidsai/kvikio). Note
+that if the environment variable `KVIKIO_COMPAT_MODE` is `ON`, or if KvikIO detects
+that the system is not properly configured for GDS, the I/O will fall back to the
+GDS compatibility mode.
 - "OFF": Completely disable GDS use.
 
 If no value is set, behavior will be the same as the "KVIKIO" option.

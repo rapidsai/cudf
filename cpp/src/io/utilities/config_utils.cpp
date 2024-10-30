@@ -56,11 +56,11 @@ void set_up_kvikio()
 {
   static std::once_flag flag{};
   std::call_once(flag, [] {
+    auto compat_mode = kvikio::detail::getenv_or<bool>("KVIKIO_COMPAT_MODE", true);
+    kvikio::defaults::compat_mode_reset(compat_mode);
+
     auto nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 4U);
     kvikio::defaults::thread_pool_nthreads_reset(nthreads);
-
-    auto compat_mode = getenv_or<bool>("KVIKIO_COMPAT_MODE", true);
-    kvikio::defaults::compat_mode_reset(compat_mode);
   });
 }
 }  // namespace cufile_integration
