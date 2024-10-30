@@ -99,9 +99,9 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
 {
   for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
     for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
-      cuda::std::byte* target =
+      auto target =
         reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + shmem_agg_res_offsets[col_idx]);
-      bool* target_mask =
+      auto target_mask =
         reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
       cudf::detail::dispatch_type_and_aggregation(output_values.column(col_idx).type(),
                                                   d_agg_kinds[col_idx],

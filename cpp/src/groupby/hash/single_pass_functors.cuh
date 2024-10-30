@@ -55,11 +55,11 @@ template <typename T, cudf::aggregation::Kind k>
 __device__ T get_identity()
 {
   if ((k == cudf::aggregation::ARGMAX) || (k == cudf::aggregation::ARGMIN)) {
-    if constexpr (cudf::is_timestamp<T>())
+    if constexpr (cudf::is_timestamp<T>()) {
       return k == cudf::aggregation::ARGMAX
                ? T{typename T::duration(cudf::detail::ARGMAX_SENTINEL)}
                : T{typename T::duration(cudf::detail::ARGMIN_SENTINEL)};
-    else {
+    } else {
       using DeviceType = cudf::device_storage_type_t<T>;
       return k == cudf::aggregation::ARGMAX
                ? static_cast<DeviceType>(cudf::detail::ARGMAX_SENTINEL)
@@ -90,11 +90,7 @@ struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target
 
     target_casted[idx] = get_identity<DeviceType, k>();
 
-    if (k == cudf::aggregation::COUNT_ALL || k == cudf::aggregation::COUNT_VALID) {
-      target_mask[idx] = true;
-    } else {
-      target_mask[idx] = false;
-    }
+    target_mask[idx] =  (k == cudf::aggregation::COUNT_ALL || k == cudf::aggregation::COUNT_VALID);
   }
 };
 
