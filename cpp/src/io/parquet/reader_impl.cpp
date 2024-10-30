@@ -108,11 +108,25 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
 
-    // mark any chunks that are large string columns
+    // Mark any chunks that are large string columns
     if (has_large_strings) {
+      if (pass.large_strings_cols.empty()) {
+        pass.large_strings_cols.resize(_input_columns.size());
+      }
       for (auto& chunk : pass.chunks) {
         auto const idx = chunk.src_col_index;
-        if (col_string_sizes[idx] > threshold) { chunk.is_large_string_col = true; }
+        if (col_string_sizes[idx] > threshold) {
+          chunk.is_large_string_col    = true;
+          pass.large_strings_cols[idx] = true;
+        }
+      }
+    }
+    // Mark any chunks belonging to large strings columns for a previous table chunk
+    // in the same pass
+    else if (pass.large_strings_cols.size()) {
+      for (auto& chunk : pass.chunks) {
+        auto const idx = chunk.src_col_index;
+        if (pass.large_strings_cols[idx]) { chunk.is_large_string_col = true; }
       }
     }
   }
@@ -192,10 +206,17 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       if (owning_schema == 0 || owning_schema == input_col.schema_idx) {
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
+        // String size of the current column
+        auto const col_string_size = col_string_sizes[pass.chunks[c].src_col_index];
         // only do string buffer for leaf
-        if (idx == max_depth - 1 and out_buf.string_size() == 0 and
-            col_string_sizes[pass.chunks[c].src_col_index] > 0) {
-          out_buf.create_string_data(col_string_sizes[pass.chunks[c].src_col_index], _stream);
+        if (idx == max_depth - 1 and out_buf.string_size() == 0 and col_string_size > 0) {
+          out_buf.create_string_data(
+            col_string_size,
+            pass.large_strings_cols.empty()
+              ? false
+              : pass.large_strings_cols[pass.chunks[c].src_col_index] or
+                  col_string_size > static_cast<size_t>(strings::detail::get_offset64_threshold()),
+            _stream);
         }
         if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
