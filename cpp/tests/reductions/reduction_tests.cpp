@@ -3088,21 +3088,28 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
   using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
-  // `null` means null at child column.
-  // `NULL` means null at parent column.
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "" /*null*/,
-                              "aaa" /*NULL*/,
+                              "",     // child null
+                              "aaa",  // parent null
                               "zit",
                               "bat",
                               "aab",
-                              "" /*null*/,
-                              "€1" /*NULL*/,
+                              "",    // child null
+                              "€1",  // parent null
                               "wut"},
                              nulls_at({2, 7})};
-    auto child2 = INTS_CW{{1, 2, 3 /*null*/, 4 /*NULL*/, 5, 6, 7, 8 /*null*/, 9 /*NULL*/, 10},
+    auto child2 = INTS_CW{{1,
+                           2,
+                           0,  // child null
+                           4,  // parent null
+                           5,
+                           6,
+                           7,
+                           0,  // child null
+                           9,  // parent NULL
+                           10},
                           nulls_at({2, 7})};
     return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
   }();
