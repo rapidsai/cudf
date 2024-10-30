@@ -97,6 +97,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                              _stream);
     }
 
+    // column string sizes for this subpass
     col_string_sizes = calculate_page_string_offsets();
 
     // check for overflow
@@ -108,22 +109,21 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
 
-    // Mark any chunks that are large string columns
+    // Mark any chunks that are large string columns in this subpass
     if (has_large_strings) {
       if (pass.large_strings_cols.empty()) {
         pass.large_strings_cols.resize(_input_columns.size());
       }
       for (auto& chunk : pass.chunks) {
         auto const idx = chunk.src_col_index;
-        if (col_string_sizes[idx] > threshold) {
+        if (col_string_sizes[idx] > threshold or pass.large_strings_cols[idx]) {
           chunk.is_large_string_col    = true;
           pass.large_strings_cols[idx] = true;
         }
       }
     }
-    // Mark any chunks belonging to large strings columns for a previous table chunk
-    // in the same pass
-    else if (pass.large_strings_cols.size()) {
+    // Mark any chunks previously marked as large strings columns
+    else if (not pass.large_strings_cols.empty()) {
       for (auto& chunk : pass.chunks) {
         auto const idx = chunk.src_col_index;
         if (pass.large_strings_cols[idx]) { chunk.is_large_string_col = true; }
