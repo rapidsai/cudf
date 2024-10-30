@@ -335,9 +335,9 @@ class datasource {
   template <typename Container>
   class owning_buffer : public buffer {
    public:
-    // Disallow the container argument to be an lvalue (in which case Container = T& is a
+    // Require that the argument passed to the constructor be an rvalue (Container&& being an rvalue
     // reference).
-    static_assert(!std::is_reference_v<Container>,
+    static_assert(std::is_rvalue_reference_v<Container&&>,
                   "The container argument passed to the constructor must be an rvalue.");
 
     /**
