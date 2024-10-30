@@ -23,12 +23,6 @@
 namespace CUDF_EXPORT cudf {
 
 /**
- * @addtogroup column_hash
- * @{
- * @file
- */
-
-/**
  * @brief Type of hash value
  *
  */
@@ -41,6 +35,12 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 //! Hash APIs
 namespace hashing {
+
+/**
+ * @addtogroup column_hash
+ * @{
+ * @file
+ */
 
 /**
  * @brief Computes the MurmurHash3 32-bit hash value of each row in the given table
@@ -183,7 +183,8 @@ std::unique_ptr<column> xxhash_64(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/** @} */  // end of group
+
 }  // namespace hashing
 
-/** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
