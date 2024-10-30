@@ -901,11 +901,7 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
  * @param num_rows Maximum number of rows to read
  * @param error_code Error code to set if an error is encountered
  */
-template <typename level_t,
-          int decode_block_size_t,
-          decode_kernel_mask kernel_mask_t,
-          template <int block_size, bool decode_has_lists_t, typename state_buf>
-          typename DecodeValuesFunc>
+template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   gpuDecodePageDataGeneric(PageInfo* pages,
                            device_span<ColumnChunkDesc const> chunks,
@@ -928,6 +924,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST) ||
     (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
     (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) ||
+    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST);
+  constexpr bool split_decode_t =
+    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT) ||
+    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
     (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST);
 
   constexpr int rolling_buf_size    = decode_block_size_t * 2;
@@ -963,7 +963,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   if (s->num_rows == 0) { return; }
 
-  DecodeValuesFunc<decode_block_size_t, has_lists_t, state_buf_t> decode_values;
+  using value_decoder_type = std::conditional_t<
+    split_decode_t,
+    decode_fixed_width_split_values_func<decode_block_size_t, has_lists_t, state_buf_t>,
+    decode_fixed_width_values_func<decode_block_size_t, has_lists_t, state_buf_t>>;
+  value_decoder_type decode_values;
 
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
@@ -1115,260 +1119,82 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
 }  // anonymous namespace
 
-void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
-                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                  size_t num_rows,
-                                  size_t min_row,
-                                  int level_type_size,
-                                  bool has_nesting,
-                                  bool is_list,
-                                  kernel_error::pointer error_code,
-                                  rmm::cuda_stream_view stream)
+template <decode_kernel_mask mask>
+using kernel_tag_t = std::integral_constant<decode_kernel_mask, mask>;
+
+template <int value>
+using int_tag_t = std::integral_constant<int, value>;
+
+void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                             size_t num_rows,
+                             size_t min_row,
+                             int level_type_size,
+                             decode_kernel_mask kernel_mask,
+                             kernel_error::pointer error_code,
+                             rmm::cuda_stream_view stream)
 {
-  constexpr int decode_block_size = 128;
+  // No template parameters on lambdas until C++20, so use type tags instead
+  auto launch_kernel = [&](auto block_size_tag, auto kernel_mask_tag) {
+    constexpr int decode_block_size   = decltype(block_size_tag)::value;
+    constexpr decode_kernel_mask mask = decltype(kernel_mask_tag)::value;
 
-  dim3 dim_block(decode_block_size, 1);
-  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+    dim3 dim_block(decode_block_size, 1);
+    dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  if (level_type_size == 1) {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED,
-                               decode_fixed_width_values_func>
+    if (level_type_size == 1) {
+      gpuDecodePageDataGeneric<uint8_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
     } else {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_NO_DICT,
-                               decode_fixed_width_values_func>
+      gpuDecodePageDataGeneric<uint16_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(
           pages.device_ptr(), chunks, min_row, num_rows, error_code);
     }
-  } else {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_NO_DICT,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    }
-  }
-}
+  };
 
-void __host__ DecodePageDataBoolean(cudf::detail::hostdevice_span<PageInfo> pages,
-                                    cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                    size_t num_rows,
-                                    size_t min_row,
-                                    int level_type_size,
-                                    bool has_nesting,
-                                    bool is_list,
-                                    kernel_error::pointer error_code,
-                                    rmm::cuda_stream_view stream)
-{
-  constexpr int decode_block_size = 128;
-
-  dim3 dim_block(decode_block_size, 1);
-  dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
-
-  if (level_type_size == 1) {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::BOOLEAN_LIST,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::BOOLEAN_NESTED,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::BOOLEAN,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    }
-  } else {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::BOOLEAN_LIST,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::BOOLEAN_NESTED,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::BOOLEAN,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    }
-  }
-}
-
-void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
-                                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                      size_t num_rows,
-                                      size_t min_row,
-                                      int level_type_size,
-                                      bool has_nesting,
-                                      bool is_list,
-                                      kernel_error::pointer error_code,
-                                      rmm::cuda_stream_view stream)
-{
-  constexpr int decode_block_size = 128;
-
-  dim3 dim_block(decode_block_size, 1);  // decode_block_size = 128 threads per block
-  dim3 dim_grid(pages.size(), 1);        // 1 thread block per page => # blocks
-
-  if (level_type_size == 1) {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_DICT_LIST,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_DICT_NESTED,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_DICT,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    }
-  } else {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_DICT_LIST,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_DICT_NESTED,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::FIXED_WIDTH_DICT,
-                               decode_fixed_width_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    }
-  }
-}
-
-void __host__
-DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
-                              cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                              size_t num_rows,
-                              size_t min_row,
-                              int level_type_size,
-                              bool has_nesting,
-                              bool is_list,
-                              kernel_error::pointer error_code,
-                              rmm::cuda_stream_view stream)
-{
-  constexpr int decode_block_size = 128;
-
-  dim3 dim_block(decode_block_size, 1);  // decode_block_size = 128 threads per block
-  dim3 dim_grid(pages.size(), 1);        // 1 thread block per page => # blocks
-
-  if (level_type_size == 1) {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST,
-                               decode_fixed_width_split_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
-                               decode_fixed_width_split_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else {
-      gpuDecodePageDataGeneric<uint8_t,
-                               decode_block_size,
-                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
-                               decode_fixed_width_split_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    }
-  } else {
-    if (is_list) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST,
-                               decode_fixed_width_split_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else if (has_nesting) {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED,
-                               decode_fixed_width_split_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    } else {
-      gpuDecodePageDataGeneric<uint16_t,
-                               decode_block_size,
-                               decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT,
-                               decode_fixed_width_split_values_func>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, error_code);
-    }
+  switch (kernel_mask) {
+    case decode_kernel_mask::FIXED_WIDTH_NO_DICT:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT>{});
+      break;
+    case decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED:
+      launch_kernel(int_tag_t<128>{},
+                    kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED>{});
+      break;
+    case decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST>{});
+      break;
+    case decode_kernel_mask::FIXED_WIDTH_DICT:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT>{});
+      break;
+    case decode_kernel_mask::FIXED_WIDTH_DICT_NESTED:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_NESTED>{});
+      break;
+    case decode_kernel_mask::FIXED_WIDTH_DICT_LIST:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::FIXED_WIDTH_DICT_LIST>{});
+      break;
+    case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT:
+      launch_kernel(int_tag_t<128>{},
+                    kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT>{});
+      break;
+    case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED:
+      launch_kernel(int_tag_t<128>{},
+                    kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED>{});
+      break;
+    case decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST:
+      launch_kernel(int_tag_t<128>{},
+                    kernel_tag_t<decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST>{});
+      break;
+    case decode_kernel_mask::BOOLEAN:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN>{});
+      break;
+    case decode_kernel_mask::BOOLEAN_NESTED:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_NESTED>{});
+      break;
+    case decode_kernel_mask::BOOLEAN_LIST:
+      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::BOOLEAN_LIST>{});
+      break;
+    default: CUDF_EXPECTS(false, "Kernel type not handled by this function"); break;
   }
 }
 
