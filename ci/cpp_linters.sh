@@ -42,7 +42,6 @@ cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_STATIC_LINTERS=ON -G
 cmake --build cpp/build 2>&1 | tee build_output.txt
 
 # Parse the build output to extract only IWYU's proposed changes.
-# TODO: Faking that this is a JSON file to leverage the existing automated upload
 python cpp/scripts/parse_iwyu_output.py build_output.txt iwyu_results.txt
 
 # Remove invalid components of the path for local usage.
