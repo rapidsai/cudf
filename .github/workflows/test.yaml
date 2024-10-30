@@ -64,6 +64,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       run_script: "ci/clang_tidy.sh"
+      file_to_upload: iwyu_results.txt
   conda-python-cudf-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.12
