@@ -19,7 +19,6 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
