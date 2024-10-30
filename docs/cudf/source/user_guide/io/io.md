@@ -91,8 +91,8 @@ SDK is available for download
 [here](https://developer.nvidia.com/gpudirect-storage). GDS is also
 included in CUDA Toolkit 11.4 and higher.
 
-Use of GPUDirect Storage in cuDF is enabled by default, but can be
-disabled through the environment variable `LIBCUDF_CUFILE_POLICY`.
+Use of GPUDirect Storage in cuDF is disabled by default, but can be
+enabled through the environment variable `LIBCUDF_CUFILE_POLICY`.
 This variable also controls the GDS compatibility mode.
 
 There are four valid values for the environment variable:
