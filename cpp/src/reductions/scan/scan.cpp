@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scan.hpp>
 #include <cudf/reduction.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf {
 
