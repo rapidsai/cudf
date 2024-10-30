@@ -28,11 +28,6 @@ def column_input():
     return pa.array(["This is a test"])
 
 
-def test_load_vocabulary_file(vocab_file):
-    vocab = plc.nvtext.subword_tokenize.load_vocabulary_file(str(vocab_file))
-    assert isinstance(vocab, plc.nvtext.subword_tokenize.Hashed_Vocabulary)
-
-
 @pytest.mark.parametrize("max_sequence_length", [64, 128])
 @pytest.mark.parametrize("stride", [32, 64])
 @pytest.mark.parametrize("do_lower_case", [True, False])
@@ -45,7 +40,7 @@ def test_subword_tokenize(
     do_lower_case,
     do_truncate,
 ):
-    vocab = plc.nvtext.subword_tokenize.load_vocabulary_file(vocab_file)
+    vocab = plc.nvtext.subword_tokenize.HashedVocabulary(vocab_file)
     tokens, masks, metadata = plc.nvtext.subword_tokenize.subword_tokenize(
         plc.interop.from_arrow(column_input),
         vocab,

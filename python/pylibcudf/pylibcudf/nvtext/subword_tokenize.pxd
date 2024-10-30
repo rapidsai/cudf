@@ -7,14 +7,12 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.nvtext.subword_tokenize cimport hashed_vocabulary
 
 
-cdef class Hashed_Vocabulary:
+cdef class HashedVocabulary:
     cdef unique_ptr[hashed_vocabulary] c_obj
-
-cpdef Hashed_Vocabulary load_vocabulary_file(str input)
 
 cpdef tuple[Column, Column, Column] subword_tokenize(
     Column input,
-    Hashed_Vocabulary vocabulary_table,
+    HashedVocabulary vocabulary_table,
     uint32_t max_sequence_length,
     uint32_t stride,
     bool do_lower_case,

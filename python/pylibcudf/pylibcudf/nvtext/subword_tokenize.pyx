@@ -14,7 +14,7 @@ from pylibcudf.libcudf.nvtext.subword_tokenize cimport (
 )
 
 
-cdef class Hashed_Vocabulary:
+cdef class HashedVocabulary:
     """The vocabulary data for use with the subword_tokenize function.
 
     For details, see :cpp:class:`cudf::nvtext::hashed_vocabulary`.
@@ -24,28 +24,9 @@ cdef class Hashed_Vocabulary:
         with nogil:
             self.c_obj = move(cpp_load_vocabulary_file(c_hash_file))
 
-
-cpdef Hashed_Vocabulary load_vocabulary_file(str input):
-    """
-    Load the hashed vocabulary file into device memory.
-
-    For details, see cpp:func:`load_vocabulary_file`
-
-    Parameters
-    ----------
-    input : str
-        A path to the preprocessed text file
-
-    Returns
-    -------
-    Hashed_Vocabulary
-        Vocabulary hash-table elements
-    """
-    return Hashed_Vocabulary(input)
-
 cpdef tuple[Column, Column, Column] subword_tokenize(
     Column input,
-    Hashed_Vocabulary vocabulary_table,
+    HashedVocabulary vocabulary_table,
     uint32_t max_sequence_length,
     uint32_t stride,
     bool do_lower_case,
@@ -61,7 +42,7 @@ cpdef tuple[Column, Column, Column] subword_tokenize(
     ----------
     input : Column
         The input strings to tokenize.
-    vocabulary_table : Hashed_Vocabulary
+    vocabulary_table : HashedVocabulary
         The vocabulary table pre-loaded into this object.
     max_sequence_length : uint32_t
         Limit of the number of token-ids per row in final tensor for each string.
@@ -97,7 +78,7 @@ cpdef tuple[Column, Column, Column] subword_tokenize(
                 do_truncate,
             )
         )
-    tokens = Column.from_libcudf(move(c_result.tensor_token_ids))
-    masks = Column.from_libcudf(move(c_result.tensor_attention_mask))
-    metadata = Column.from_libcudf(move(c_result.tensor_metadata))
+    cdef Column tokens = Column.from_libcudf(move(c_result.tensor_token_ids))
+    cdef Column masks = Column.from_libcudf(move(c_result.tensor_attention_mask))
+    cdef Column metadata = Column.from_libcudf(move(c_result.tensor_metadata))
     return tokens, masks, metadata

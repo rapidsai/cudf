@@ -9,14 +9,14 @@ from pylibcudf.libcudf.column.column_view cimport column_view
 
 
 cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
-    cdef cppclass tokenizer_result "nvtext::tokenizer_result":
+    cdef cppclass tokenizer_result:
         uint32_t nrows_tensor
         uint32_t sequence_length
         unique_ptr[column] tensor_token_ids
         unique_ptr[column] tensor_attention_mask
         unique_ptr[column] tensor_metadata
 
-    cdef struct hashed_vocabulary "nvtext::hashed_vocabulary":
+    cdef cppclass hashed_vocabulary:
         uint16_t first_token_id
         uint16_t separator_token_id
         uint16_t unknown_token_id
