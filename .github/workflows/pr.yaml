@@ -98,7 +98,7 @@ jobs:
       enable_check_generated_files: false
   clang-tidy:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@feat/custom_job_artifact
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
     with:
       build_type: pull-request
       run_script: "ci/clang_tidy.sh"
