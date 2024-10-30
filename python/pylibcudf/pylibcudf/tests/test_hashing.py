@@ -34,13 +34,11 @@ def hash_single_uint32(val, seed=0):
 
 
 def hash_combine_32(lhs, rhs):
-    return lhs ^ (rhs + 0x9E3779B9 + (lhs << 6) + (lhs >> 2))
+    return np.uint32(lhs ^ (rhs + 0x9E3779B9 + (lhs << 6) + (lhs >> 2)))
 
 
 def uint_hash_combine_32(lhs, rhs):
-    lhs = np.uint32(lhs)
-    rhs = np.uint32(rhs)
-    return hash_combine_32(lhs, rhs)
+    return hash_combine_32(np.uint32(lhs), np.uint32(rhs))
 
 
 def libcudf_mmh3_x86_32(binary):
