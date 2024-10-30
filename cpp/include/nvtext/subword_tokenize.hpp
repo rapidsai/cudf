@@ -62,6 +62,7 @@ struct hashed_vocabulary {
  * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
  *        Note that this is the file AFTER python/perfect_hash.py has been used
  *        for preprocessing.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate any returned objects.
  * @return vocabulary hash-table elements
  */
@@ -148,6 +149,7 @@ struct tokenizer_result {
  * @param do_truncate If true, the tokenizer will discard all the token-ids after
  *        `max_sequence_length` for each input string. If false, it will use a new row
  *        in the output token-ids to continue generating the output.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate any returned objects.
  * @return token-ids, attention-mask, and metadata
  */
