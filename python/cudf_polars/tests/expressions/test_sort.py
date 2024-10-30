@@ -67,7 +67,7 @@ def test_setsorted(descending, nulls_last, with_nulls):
 
     assert_gpu_result_equal(q)
 
-    df = translate_ir(q._ldf.visit()).evaluate(cache={})
+    df = translate_ir(q._ldf.visit()).evaluate(cache={}, config=pl.GPUEngine())
 
     a = df.column_map["a"]
 

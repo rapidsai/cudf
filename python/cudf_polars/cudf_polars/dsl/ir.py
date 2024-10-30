@@ -129,14 +129,11 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    __slots__ = ("schema", "_config")
+    __slots__ = ("schema",)
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     schema: Schema
     """Mapping from column names to their data types."""
-
-    _config: GPUEngine
-    """GPU engine configuration."""
 
     def get_hashable(self) -> Hashable:
         """
@@ -151,7 +148,9 @@ class IR(Node["IR"]):
         schema_hash = tuple(self.schema.items())
         return (type(self), schema_hash, args)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """
         Evaluate the node and return a dataframe.
 
@@ -160,6 +159,8 @@ class IR(Node["IR"]):
         cache
             Mapping from cached node ids to constructed DataFrames.
             Used to implement evaluation of the `Cache` node.
+        config
+            GPU engine configuration.
 
         Returns
         -------
@@ -346,7 +347,9 @@ class Scan(IR):
             self.predicate,
         )
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         with_columns = self.with_columns
         row_index = self.row_index
@@ -425,7 +428,7 @@ class Scan(IR):
                 colnames[0],
             )
         elif self.typ == "parquet":
-            parquet_options = self._config.config.get("parquet_options", {})
+            parquet_options = config.config.get("parquet_options", {})
             if parquet_options.get("chunked", False):
                 reader = plc.io.parquet.ChunkedParquetReader(
                     plc.io.SourceInfo(self.paths),
@@ -540,13 +543,17 @@ class Cache(IR):
         self.key = key
         self.children = (value,)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         try:
             return cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache))
+            return cache.setdefault(
+                self.key, value.evaluate(cache=cache, config=config)
+            )
 
 
 class DataFrameScan(IR):
@@ -588,7 +595,9 @@ class DataFrameScan(IR):
         schema_hash = tuple(self.schema.items())
         return (type(self), schema_hash, id(self.df), self.projection, self.predicate)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         pdf = pl.DataFrame._from_pydf(self.df)
         if self.projection is not None:
@@ -627,10 +636,12 @@ class Select(IR):
         self.should_broadcast = should_broadcast
         self.children = (df,)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         # Handle any broadcasting
         columns = [e.evaluate(df) for e in self.exprs]
         if self.should_broadcast:
@@ -658,11 +669,11 @@ class Reduce(IR):
         self.children = (df,)
 
     def evaluate(
-        self, *, cache: MutableMapping[int, DataFrame]
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
     ) -> DataFrame:  # pragma: no cover; polars doesn't emit this node yet
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         columns = broadcast(*(e.evaluate(df) for e in self.exprs))
         assert all(column.obj.size() == 1 for column in columns)
         return DataFrame(columns)
@@ -741,10 +752,12 @@ class GroupBy(IR):
         else:
             raise NotImplementedError(f"No handler for {agg=}")
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         keys = broadcast(
             *(k.evaluate(df) for k in self.keys), target_length=df.num_rows
         )
@@ -970,9 +983,11 @@ class Join(IR):
             [plc.types.NullOrder.AFTER, plc.types.NullOrder.AFTER],
         ).columns()
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        left, right = (c.evaluate(cache=cache) for c in self.children)
+        left, right = (c.evaluate(cache=cache, config=config) for c in self.children)
         how, join_nulls, zlice, suffix, coalesce = self.options
         if how == "cross":
             # Separate implementation, since cross_join returns the
@@ -1079,10 +1094,12 @@ class HStack(IR):
         self.should_broadcast = should_broadcast
         self.children = (df,)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         columns = [c.evaluate(df) for c in self.columns]
         if self.should_broadcast:
             columns = broadcast(*columns, target_length=df.num_rows)
@@ -1136,10 +1153,12 @@ class Distinct(IR):
         "any": plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
     }
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         if self.subset is None:
             indices = list(range(df.num_columns))
             keys_sorted = all(c.is_sorted for c in df.column_map.values())
@@ -1212,10 +1231,12 @@ class Sort(IR):
         self.zlice = zlice
         self.children = (df,)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         sort_keys = broadcast(
             *(k.evaluate(df) for k in self.by), target_length=df.num_rows
         )
@@ -1265,10 +1286,12 @@ class Slice(IR):
         self.length = length
         self.children = (df,)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         return df.slice((self.offset, self.length))
 
 
@@ -1285,10 +1308,12 @@ class Filter(IR):
         self.mask = mask
         self.children = (df,)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         (mask,) = broadcast(self.mask.evaluate(df), target_length=df.num_rows)
         return df.filter(mask)
 
@@ -1303,10 +1328,12 @@ class Projection(IR):
         self.schema = schema
         self.children = (df,)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
-        df = child.evaluate(cache=cache)
+        df = child.evaluate(cache=cache, config=config)
         # This can reorder things.
         columns = broadcast(
             *(df.column_map[name] for name in self.schema), target_length=df.num_rows
@@ -1374,21 +1401,23 @@ class MapFunction(IR):
                 )
             self.options = (tuple(indices), tuple(pivotees), variable_name, value_name)
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (child,) = self.children
         if self.name == "rechunk":
             # No-op in our data model
             # Don't think this appears in a plan tree from python
-            return child.evaluate(cache=cache)  # pragma: no cover
+            return child.evaluate(cache=cache, config=config)  # pragma: no cover
         elif self.name == "rename":
-            df = child.evaluate(cache=cache)
+            df = child.evaluate(cache=cache, config=config)
             # final tag is "swapping" which is useful for the
             # optimiser (it blocks some pushdown operations)
             old, new, _ = self.options
             return df.rename_columns(dict(zip(old, new, strict=True)))
         elif self.name == "explode":
-            df = child.evaluate(cache=cache)
+            df = child.evaluate(cache=cache, config=config)
             ((to_explode,),) = self.options
             index = df.column_names.index(to_explode)
             subset = df.column_names_set - {to_explode}
@@ -1398,7 +1427,7 @@ class MapFunction(IR):
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             npiv = len(pivotees)
-            df = child.evaluate(cache=cache)
+            df = child.evaluate(cache=cache, config=config)
             index_columns = [
                 Column(col, name=name)
                 for col, name in zip(
@@ -1453,10 +1482,12 @@ class Union(IR):
         if not all(s.schema == schema for s in self.children[1:]):
             raise NotImplementedError("Schema mismatch")
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice
-        dfs = [df.evaluate(cache=cache) for df in self.children]
+        dfs = [df.evaluate(cache=cache, config=config) for df in self.children]
         return DataFrame.from_table(
             plc.concatenate.concatenate([df.table for df in dfs]), dfs[0].column_names
         ).slice(self.zlice)
@@ -1500,9 +1531,11 @@ class HConcat(IR):
             ]
         )
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        dfs = [df.evaluate(cache=cache) for df in self.children]
+        dfs = [df.evaluate(cache=cache, config=config) for df in self.children]
         max_rows = max(df.num_rows for df in dfs)
         # Horizontal concatenation extends shorter tables with nulls
         dfs = [

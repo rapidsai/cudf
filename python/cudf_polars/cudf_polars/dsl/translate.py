@@ -21,8 +21,6 @@ from polars import GPUEngine
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 from cudf_polars.dsl import expr, ir
-from cudf_polars.dsl.expr import Expr
-from cudf_polars.dsl.ir import IR
 from cudf_polars.dsl.traversal import make_recursive, reuse_if_unchanged
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
@@ -403,9 +401,6 @@ def translate_ir(
         raise NotImplementedError(
             f"No support for polars IR {version=}"
         )  # pragma: no cover; no such version for now.
-
-    IR._config = config
-    Expr._config = config
 
     with ctx:
         polars_schema = visitor.get_schema()

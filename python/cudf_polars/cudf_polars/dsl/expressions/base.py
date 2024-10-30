@@ -18,8 +18,6 @@ from cudf_polars.dsl.nodebase import Node
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from polars import GPUEngine
-
     from cudf_polars.containers import Column, DataFrame
 
 __all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext"]
@@ -38,15 +36,12 @@ class ExecutionContext(IntEnum):
 class Expr(Node["Expr"]):
     """An abstract expression object."""
 
-    __slots__ = ("dtype", "_config")
+    __slots__ = ("dtype",)
     dtype: plc.DataType
     """Data type of the expression."""
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     """Names of non-child data (not Exprs) for reconstruction."""
-
-    _config: GPUEngine
-    """GPU engine configuration."""
 
     def do_evaluate(
         self,

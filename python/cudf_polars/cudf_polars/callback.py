@@ -129,6 +129,7 @@ def set_device(device: int | None) -> Generator[int, None, None]:
 
 def _callback(
     ir: IR,
+    config: GPUEngine,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
@@ -145,7 +146,7 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        return ir.evaluate(cache={}).to_polars()
+        return ir.evaluate(cache={}, config=config).to_polars()
 
 
 def execute_with_cudf(
@@ -183,7 +184,8 @@ def execute_with_cudf(
             nt.set_udf(
                 partial(
                     _callback,
-                    translate_ir(nt, config),
+                    translate_ir(nt),
+                    config,
                     device=device,
                     memory_resource=memory_resource,
                 )
