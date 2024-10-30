@@ -1,0 +1,66 @@
+name: Deploy cudf-java docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      new_stable_value:
+        description: "New stable value for cudf-java"
+        required: true
+        default: "1"
+      version:
+        description: "Version being released. Format: YY.MM or YY.MM.P e.g 24.08 or 24.08.1"
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy-cudf-java-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 7200 # 2h
+
+      - name: Upload cudf-java docs to S3
+        run: ci/upload_cudf_java_docs.sh ${{ inputs.version }}
+
+      - name: Run script to update stable value for cudf-java in docs.yml
+        env :
+          NEW_STABLE_VALUE: ${{ inputs.new_stable_value }}
+        run: |
+          if [ "$NEW_STABLE_VALUE" != "1" ]; then
+            echo "Invalid value for new_stable_value: $NEW_STABLE_VALUE"
+            exit 1
+          fi
+
+          sed -i '/cudf-java:/,/stable:/s/stable: .*/stable: '"$NEW_STABLE_VALUE"'/' _data/docs.yml
+
+          echo "Updated stable value for cudf-java to $NEW_STABLE_VALUE in _data/docs.yml"
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update stable value for cudf-java in docs.yml"
+          branch: "update-stable-value-for-cudf-java"
+          title: Enable cudf-java docs for version ${{ inputs.version }}
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          body: |
+            This PR enables cudf-java docs for version ${{ inputs.version }}.
