@@ -383,6 +383,7 @@ class CudfEngine(ArrowDatasetEngine):
             metadata_path = fs.sep.join([path, "_metadata"])
             _meta = []
             if append and fmd is not None:
+                # Convert to bytes: <https://github.com/rapidsai/cudf/issues/17177>
                 if isinstance(fmd, pq.FileMetaData):
                     with BytesIO() as myio:
                         fmd.write_metadata_file(myio)
