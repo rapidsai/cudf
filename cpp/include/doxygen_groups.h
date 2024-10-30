@@ -48,6 +48,9 @@
  *      @defgroup scalar_factories Factories
  *   @}
  *   @defgroup fixed_point_classes Fixed Point
+ *   @{
+ *      @defgroup floating_conversion Float Conversion
+ *   @}
  * @}
  * @defgroup column_apis Column and Table
  * @{
