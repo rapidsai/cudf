@@ -13,7 +13,10 @@
 # limitations under the License.
 #
 
-"""Helper script to modify IWYU output to only include removals."""
+"""Helper script to modify IWYU output to only include removals.
+
+Lines that are not from include-what-you-use are removed from the output.
+"""
 
 import argparse
 import re
