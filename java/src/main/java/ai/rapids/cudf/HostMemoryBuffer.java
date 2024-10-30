@@ -156,6 +156,16 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
+   * Allocate host memory bypassing the default allocator. This is intended to only be used by other allocators.
+   * Pinned memory will not be used for these allocations.
+   * @param bytes size in bytes to allocate
+   * @return the newly created buffer
+   */
+  public static HostMemoryBuffer allocateRaw(long bytes) {
+    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
+  }
+
+  /**
    * Create a host buffer that is memory-mapped to a file.
    * @param path path to the file to map into host memory
    * @param mode mapping type
