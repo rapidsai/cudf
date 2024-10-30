@@ -109,10 +109,10 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
 
-    // Mark any chunks that are large string columns in this subpass
+    // Mark any chunks that are large string columns in this or previous subpasses
     if (has_large_strings) {
       if (pass.large_strings_cols.empty()) {
-        pass.large_strings_cols.resize(_input_columns.size());
+        pass.large_strings_cols.resize(_input_columns.size(), false);
       }
       for (auto& chunk : pass.chunks) {
         auto const idx = chunk.src_col_index;
@@ -122,7 +122,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         }
       }
     }
-    // Mark any chunks previously marked as large strings columns
+    // Mark all chunks of previously large strings columns
     else if (not pass.large_strings_cols.empty()) {
       for (auto& chunk : pass.chunks) {
         auto const idx = chunk.src_col_index;
