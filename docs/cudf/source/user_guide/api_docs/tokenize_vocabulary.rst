@@ -1,6 +1,6 @@
-================
+==================
 TokenizeVocabulary
-================
+==================
 .. currentmodule:: cudf.core.tokenize_vocabulary
 
 Constructor
