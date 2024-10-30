@@ -8,34 +8,6 @@ ctypedef fused ColumnOrScalar:
     Column
     Scalar
 
-cpdef Column extract_year(
-    Column input
-)
-
-cpdef Column extract_month(
-    Column input
-)
-
-cpdef Column extract_day(
-    Column input
-)
-
-cpdef Column extract_weekday(
-    Column input
-)
-
-cpdef Column extract_hour(
-    Column input
-)
-
-cpdef Column extract_minute(
-    Column input
-)
-
-cpdef Column extract_second(
-    Column input
-)
-
 cpdef Column extract_millisecond_fraction(
     Column input
 )

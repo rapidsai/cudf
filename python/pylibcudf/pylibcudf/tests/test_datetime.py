@@ -80,13 +80,6 @@ def test_extract_datetime_component(datetime_column, component):
 @pytest.mark.parametrize(
     "datetime_func",
     [
-        "extract_year",
-        "extract_month",
-        "extract_day",
-        "extract_weekday",
-        "extract_hour",
-        "extract_minute",
-        "extract_second",
         "extract_millisecond_fraction",
         "extract_microsecond_fraction",
         "extract_nanosecond_fraction",
