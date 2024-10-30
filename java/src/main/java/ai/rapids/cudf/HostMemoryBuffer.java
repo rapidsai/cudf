@@ -255,8 +255,10 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param destOffset  offset in bytes in this buffer to start copying to
    * @param in input stream to copy bytes from
    * @param byteLength number of bytes to copy
+   * @throws EOFException If there are not enough bytes in the stream to copy.
+   * @throws IOException If there is an error reading from the stream.
    */
-  final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
+  public final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
     addressOutOfBoundsCheck(address + destOffset, byteLength, "copy from stream");
     byte[] arrayBuffer = new byte[(int) Math.min(1024 * 128, byteLength)];
     long left = byteLength;
@@ -264,7 +266,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
       int amountToCopy = (int) Math.min(arrayBuffer.length, left);
       int amountRead = in.read(arrayBuffer, 0, amountToCopy);
       if (amountRead < 0) {
-        throw new EOFException();
+        throw new EOFException("Unexpected end of stream, expected " + left + " more bytes");
       }
       setBytes(destOffset, arrayBuffer, 0, amountRead);
       destOffset += amountRead;
