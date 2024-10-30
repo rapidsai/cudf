@@ -347,9 +347,7 @@ class datasource {
      * pass std::move(data_owner) to this function to transfer the ownership.
      */
     owning_buffer(Container&& moved_data_owner)
-      : _data(std::forward<Container>(moved_data_owner)),
-        _data_ptr(_data.data()),
-        _size(_data.size())
+      : _data(std::move(moved_data_owner)), _data_ptr(_data.data()), _size(_data.size())
     {
     }
 
@@ -363,7 +361,7 @@ class datasource {
      * @param size The size of the subspan
      */
     owning_buffer(Container&& moved_data_owner, uint8_t const* data_ptr, size_t size)
-      : _data(std::forward<Container>(moved_data_owner)), _data_ptr(data_ptr), _size(size)
+      : _data(std::move(moved_data_owner)), _data_ptr(data_ptr), _size(size)
     {
     }
 
