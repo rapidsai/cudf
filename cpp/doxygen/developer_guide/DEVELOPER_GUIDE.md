@@ -370,7 +370,7 @@ any type that cudf supports. For example, a `list_scalar` representing a list of
 |Value type|Scalar class|Notes|
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
-|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`|
+|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int64_t`, `float` or `double`|
 |fixed-point|`fixed_point_scalar<T>` | `T` can be `numeric::decimal32` or `numeric::decimal64`|
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
@@ -1482,6 +1482,17 @@ and therefore `cudf::list_view` is the data type of a `cudf::column` of type `LI
 struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` of type `STRUCT`.
 
 `cudf::type_dispatcher` dispatches to the `struct_view` data type when invoked on a `STRUCT` column.
+
+# Empty Columns
+
+The libcudf columns support empty, typed content. These columns have no data and no validity mask.
+Empty strings or lists columns may or may not contain a child offsets column.
+It is undefined behavior (UB) to access the offsets child of an empty strings or lists column.
+Nested columns like lists and structs may require other children columns to provide the
+nested structure of the empty types.
+
+Use `cudf::make_empty_column()` to create fixed-width and strings columns.
+Use `cudf::empty_like()` to create an empty column from an existing `cudf::column_view`.
 
 # cuIO: file reading and writing
 

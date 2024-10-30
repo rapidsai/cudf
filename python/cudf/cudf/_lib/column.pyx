@@ -28,7 +28,7 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from cudf._lib.types cimport (
     dtype_from_column_view,
@@ -688,15 +688,18 @@ cdef class Column:
         # special case for string column
         is_string_column = (cv.type().id() == libcudf_types.type_id.STRING)
         if is_string_column:
-            # get the size from offset child column (device to host copy)
-            offsets_column_index = 0
-            offset_child_column = cv.child(offsets_column_index)
-            if offset_child_column.size() == 0:
+            if cv.num_children() == 0:
                 base_nbytes = 0
             else:
-                chars_size = get_element(
-                    offset_child_column, offset_child_column.size()-1).value
-                base_nbytes = chars_size
+                # get the size from offset child column (device to host copy)
+                offsets_column_index = 0
+                offset_child_column = cv.child(offsets_column_index)
+                if offset_child_column.size() == 0:
+                    base_nbytes = 0
+                else:
+                    chars_size = get_element(
+                        offset_child_column, offset_child_column.size()-1).value
+                    base_nbytes = chars_size
 
         if data_ptr:
             if data_owner is None:

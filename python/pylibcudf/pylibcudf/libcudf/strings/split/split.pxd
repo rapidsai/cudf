@@ -14,22 +14,22 @@ cdef extern from "cudf/strings/split/split.hpp" namespace \
         "cudf::strings" nogil:
 
     cdef unique_ptr[table] split(
-        column_view source_strings,
+        column_view strings_column,
         string_scalar delimiter,
         size_type maxsplit) except +
 
     cdef unique_ptr[table] rsplit(
-        column_view source_strings,
+        column_view strings_column,
         string_scalar delimiter,
         size_type maxsplit) except +
 
     cdef unique_ptr[column] split_record(
-        column_view source_strings,
+        column_view strings,
         string_scalar delimiter,
         size_type maxsplit) except +
 
     cdef unique_ptr[column] rsplit_record(
-        column_view source_strings,
+        column_view strings,
         string_scalar delimiter,
         size_type maxsplit) except +
 
@@ -38,21 +38,21 @@ cdef extern from "cudf/strings/split/split_re.hpp" namespace \
         "cudf::strings" nogil:
 
     cdef unique_ptr[table] split_re(
-        const column_view& source_strings,
-        regex_program,
+        const column_view& input,
+        regex_program prog,
         size_type maxsplit) except +
 
     cdef unique_ptr[table] rsplit_re(
-        const column_view& source_strings,
-        regex_program,
+        const column_view& input,
+        regex_program prog,
         size_type maxsplit) except +
 
     cdef unique_ptr[column] split_record_re(
-        const column_view& source_strings,
-        regex_program,
+        const column_view& input,
+        regex_program prog,
         size_type maxsplit) except +
 
     cdef unique_ptr[column] rsplit_record_re(
-        const column_view& source_strings,
-        regex_program,
+        const column_view& input,
+        regex_program prog,
         size_type maxsplit) except +

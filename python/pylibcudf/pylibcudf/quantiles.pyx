@@ -30,6 +30,8 @@ cpdef Column quantile(
     Computes the specified quantiles by interpolating values between which they lie,
     using the interpolation strategy specified in interp.
 
+    For details see :cpp:func:`quantile`.
+
     Parameters
     ----------
     input: Column
@@ -64,14 +66,12 @@ cpdef Column quantile(
         ordered_indices_view = ordered_indices.view()
 
     with nogil:
-        c_result = move(
-            cpp_quantile(
-                input.view(),
-                q,
-                interp,
-                ordered_indices_view,
-                exact,
-            )
+        c_result = cpp_quantile(
+            input.view(),
+            q,
+            interp,
+            ordered_indices_view,
+            exact,
         )
 
     return Column.from_libcudf(move(c_result))
@@ -90,6 +90,8 @@ cpdef Table quantiles(
     Computes the specified quantiles by retrieving the row corresponding to the
     specified quantiles. In the event a quantile lies in between rows, the specified
     interpolation strategy is used to pick between the rows.
+
+    For details see :cpp:func:`quantiles`.
 
     Parameters
     ----------
@@ -137,15 +139,13 @@ cpdef Table quantiles(
         null_precedence_vec = null_precedence
 
     with nogil:
-        c_result = move(
-            cpp_quantiles(
-                input.view(),
-                q,
-                interp,
-                is_input_sorted,
-                column_order_vec,
-                null_precedence_vec,
-            )
+        c_result = cpp_quantiles(
+            input.view(),
+            q,
+            interp,
+            is_input_sorted,
+            column_order_vec,
+            null_precedence_vec,
         )
 
     return Table.from_libcudf(move(c_result))

@@ -15,20 +15,18 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/binaryop.hpp>
 
-class COMPILED_BINARYOP : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
-void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
+void BM_compiled_binaryop(nvbench::state& state, cudf::binary_operator binop)
 {
-  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
   auto const source_table = create_random_table(
-    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{column_size});
+    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{num_rows});
 
   auto lhs = cudf::column_view(source_table->get_column(0));
   auto rhs = cudf::column_view(source_table->get_column(1));
@@ -38,31 +36,26 @@ void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
   // Call once for hot cache.
   cudf::binary_operation(lhs, rhs, binop, output_dtype);
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
-    cudf::binary_operation(lhs, rhs, binop, output_dtype);
-  }
-
   // use number of bytes read and written to global memory
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * column_size *
-                          (sizeof(TypeLhs) + sizeof(TypeRhs) + sizeof(TypeOut)));
+  state.add_global_memory_reads<TypeLhs>(num_rows);
+  state.add_global_memory_reads<TypeRhs>(num_rows);
+  state.add_global_memory_writes<TypeOut>(num_rows);
+
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { cudf::binary_operation(lhs, rhs, binop, output_dtype); });
 }
 
+#define BM_STRINGIFY(a) #a
+
 // TODO tparam boolean for null.
-#define BM_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)           \
-  BENCHMARK_DEFINE_F(COMPILED_BINARYOP, name)                             \
-  (::benchmark::State & st)                                               \
-  {                                                                       \
-    BM_compiled_binaryop<lhs, rhs, tout>(st, cudf::binary_operator::bop); \
-  }                                                                       \
-  BENCHMARK_REGISTER_F(COMPILED_BINARYOP, name)                           \
-    ->Unit(benchmark::kMicrosecond)                                       \
-    ->UseManualTime()                                                     \
-    ->Arg(10000)      /* 10k */                                           \
-    ->Arg(100000)     /* 100k */                                          \
-    ->Arg(1000000)    /* 1M */                                            \
-    ->Arg(10000000)   /* 10M */                                           \
-    ->Arg(100000000); /* 100M */
+#define BM_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)               \
+  static void name(::nvbench::state& st)                                      \
+  {                                                                           \
+    ::BM_compiled_binaryop<lhs, rhs, tout>(st, ::cudf::binary_operator::bop); \
+  }                                                                           \
+  NVBENCH_BENCH(name)                                                         \
+    .set_name("compiled_binary_op_" BM_STRINGIFY(name))                       \
+    .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
 
 #define build_name(a, b, c, d) a##_##b##_##c##_##d
 

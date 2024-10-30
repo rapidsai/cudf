@@ -22,13 +22,10 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/wrappers/timestamps.hpp>
 
+#include <array>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -370,11 +367,12 @@ TEST_F(SliceStringTableTest, StringWithNulls)
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
-  std::vector<std::string> strings[2] = {
-    {"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
-    {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}};
-  cudf::test::strings_column_wrapper sw[2] = {{strings[0].begin(), strings[0].end(), valids},
-                                              {strings[1].begin(), strings[1].end(), valids}};
+  std::vector<std::vector<std::string>> strings{
+    {{"", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"},
+     {"", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"}}};
+  std::array<cudf::test::strings_column_wrapper, 2> sw{
+    {{strings[0].begin(), strings[0].end(), valids},
+     {strings[1].begin(), strings[1].end(), valids}}};
 
   std::vector<std::unique_ptr<cudf::column>> scols;
   scols.push_back(sw[0].release());

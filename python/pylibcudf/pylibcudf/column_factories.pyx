@@ -18,6 +18,20 @@ from .types import MaskState, TypeId
 
 
 cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
+    """Creates an empty column of the specified type.
+
+    For details, see :cpp:func::`make_empty_column`.
+
+    Parameters
+    ----------
+    type_or_id : Union[DataType, type_id, object]
+        The column data type.
+
+    Returns
+    -------
+    Column
+        An empty Column
+    """
     cdef unique_ptr[column] result
     cdef type_id id
 
@@ -25,29 +39,17 @@ cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
         if isinstance(type_or_id, TypeId):
             id = type_or_id
             with nogil:
-                result = move(
-                    cpp_make_empty_column(
-                        id
-                    )
-                )
+                result = cpp_make_empty_column(id)
         else:
             raise TypeError(
                 "Must pass a TypeId or DataType"
             )
     elif MakeEmptyColumnOperand is DataType:
         with nogil:
-            result = move(
-                cpp_make_empty_column(
-                    type_or_id.c_obj
-                )
-            )
+            result = cpp_make_empty_column(type_or_id.c_obj)
     elif MakeEmptyColumnOperand is type_id:
         with nogil:
-            result = move(
-                cpp_make_empty_column(
-                    type_or_id
-                )
-            )
+            result = cpp_make_empty_column(type_or_id)
     else:
         raise TypeError(
             "Must pass a TypeId or DataType"
@@ -60,7 +62,11 @@ cpdef Column make_numeric_column(
     size_type size,
     MaskArg mstate
 ):
+    """Creates an empty numeric column.
 
+    For details, see :cpp:func::`make_numeric_column`.
+
+    """
     cdef unique_ptr[column] result
     cdef mask_state state
 
@@ -74,12 +80,10 @@ cpdef Column make_numeric_column(
     else:
         raise TypeError("Invalid mask argument")
     with nogil:
-        result = move(
-            cpp_make_numeric_column(
-                type_.c_obj,
-                size,
-                state
-            )
+        result = cpp_make_numeric_column(
+            type_.c_obj,
+            size,
+            state
         )
 
     return Column.from_libcudf(move(result))
@@ -103,12 +107,10 @@ cpdef Column make_fixed_point_column(
     else:
         raise TypeError("Invalid mask argument")
     with nogil:
-        result = move(
-            cpp_make_fixed_point_column(
-                type_.c_obj,
-                size,
-                state
-            )
+        result = cpp_make_fixed_point_column(
+            type_.c_obj,
+            size,
+            state
         )
 
     return Column.from_libcudf(move(result))
@@ -133,12 +135,10 @@ cpdef Column make_timestamp_column(
     else:
         raise TypeError("Invalid mask argument")
     with nogil:
-        result = move(
-            cpp_make_timestamp_column(
-                type_.c_obj,
-                size,
-                state
-            )
+        result = cpp_make_timestamp_column(
+            type_.c_obj,
+            size,
+            state
         )
 
     return Column.from_libcudf(move(result))
@@ -163,12 +163,10 @@ cpdef Column make_duration_column(
     else:
         raise TypeError("Invalid mask argument")
     with nogil:
-        result = move(
-            cpp_make_duration_column(
-                type_.c_obj,
-                size,
-                state
-            )
+        result = cpp_make_duration_column(
+            type_.c_obj,
+            size,
+            state
         )
 
     return Column.from_libcudf(move(result))
@@ -193,12 +191,10 @@ cpdef Column make_fixed_width_column(
     else:
         raise TypeError("Invalid mask argument")
     with nogil:
-        result = move(
-            cpp_make_fixed_width_column(
-                type_.c_obj,
-                size,
-                state
-            )
+        result = cpp_make_fixed_width_column(
+            type_.c_obj,
+            size,
+            state
         )
 
     return Column.from_libcudf(move(result))

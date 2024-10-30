@@ -20,15 +20,10 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 

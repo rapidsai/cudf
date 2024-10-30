@@ -21,11 +21,9 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
@@ -38,7 +36,7 @@ namespace {
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
 // for now would also be treated as a string).
-inline bool is_treat_fixed_length_as_string(cuda::std::optional<LogicalType> const& logical_type)
+inline bool is_treat_fixed_length_as_string(std::optional<LogicalType> const& logical_type)
 {
   if (!logical_type.has_value()) { return true; }
   return logical_type->type != LogicalType::DECIMAL;
@@ -78,7 +76,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
   auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
-  std::vector<size_t> col_string_sizes(_input_columns.size(), 0L);
+  auto col_string_sizes  = cudf::detail::make_host_vector<size_t>(_input_columns.size(), _stream);
   if (has_strings) {
     // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
     // TODO: we could probably dummy up size stats for FLBA data since we know the width
@@ -274,6 +272,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                   skip_rows,
                                   level_type_size,
                                   false,
+                                  false,
                                   error_code.data(),
                                   streams[s_idx++]);
   }
@@ -285,6 +284,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                   num_rows,
                                   skip_rows,
                                   level_type_size,
+                                  true,
+                                  false,
+                                  error_code.data(),
+                                  streams[s_idx++]);
+  }
+
+  // launch byte stream split decoder, for list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) != 0) {
+    DecodeSplitPageFixedWidthData(subpass.pages,
+                                  pass.chunks,
+                                  num_rows,
+                                  skip_rows,
+                                  level_type_size,
+                                  true,
                                   true,
                                   error_code.data(),
                                   streams[s_idx++]);
@@ -309,6 +322,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         skip_rows,
                         level_type_size,
                         false,
+                        false,
+                        error_code.data(),
+                        streams[s_idx++]);
+  }
+
+  // launch fixed width type decoder for lists
+  if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) != 0) {
+    DecodePageDataFixed(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        true,
+                        true,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -321,6 +348,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         skip_rows,
                         level_type_size,
                         true,
+                        false,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -333,6 +361,20 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                             skip_rows,
                             level_type_size,
                             false,
+                            false,
+                            error_code.data(),
+                            streams[s_idx++]);
+  }
+
+  // launch fixed width type decoder with dictionaries for lists
+  if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT_LIST) != 0) {
+    DecodePageDataFixedDict(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            true,
+                            true,
                             error_code.data(),
                             streams[s_idx++]);
   }
@@ -345,6 +387,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                             skip_rows,
                             level_type_size,
                             true,
+                            false,
                             error_code.data(),
                             streams[s_idx++]);
   }
@@ -371,13 +414,15 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
 
-  // for list columns, add the final offset to every offset buffer.
-  // TODO : make this happen in more efficiently. Maybe use thrust::for_each
-  // on each buffer.
+  // For list and string columns, add the final offset to every offset buffer.
   // Note : the reason we are doing this here instead of in the decode kernel is
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
   // page boundaries).
+  std::vector<size_type*> out_buffers;
+  std::vector<size_type> final_offsets;
+  out_buffers.reserve(_input_columns.size());
+  final_offsets.reserve(_input_columns.size());
   for (size_t idx = 0; idx < _input_columns.size(); idx++) {
     input_column_info const& input_col = _input_columns[idx];
 
@@ -393,25 +438,21 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
         // the final offset for a list at level N is the size of it's child
         size_type const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1),
-                                      &offset,
-                                      sizeof(size_type),
-                                      cudaMemcpyDefault,
-                                      _stream.value()));
+        out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1));
+        final_offsets.emplace_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
         auto const sz = static_cast<size_type>(col_string_sizes[idx]);
         if (sz <= strings::detail::get_offset64_threshold()) {
-          CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
-                                        &sz,
-                                        sizeof(size_type),
-                                        cudaMemcpyDefault,
-                                        _stream.value()));
+          out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
+          final_offsets.emplace_back(sz);
         }
       }
     }
   }
+  // Write the final offsets for list and string columns in a batched manner
+  WriteFinalOffsets(final_offsets, out_buffers, _stream);
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {

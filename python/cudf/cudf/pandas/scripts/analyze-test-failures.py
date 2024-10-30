@@ -9,6 +9,7 @@ Usage:
     python analyze-test-failures.py <path-to-test-log> <file-or-pattern>
 
 Example:
+-------
     python analyze-test-failures.py log.json frame/*
 """
 

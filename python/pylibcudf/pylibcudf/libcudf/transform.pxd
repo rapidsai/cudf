@@ -11,7 +11,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, data_type, size_type
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
@@ -25,6 +25,11 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
 
     cdef pair[unique_ptr[device_buffer], size_type] nans_to_nulls(
         column_view input
+    ) except +
+
+    cdef unique_ptr[column] compute_column(
+        table_view table,
+        expression expr
     ) except +
 
     cdef unique_ptr[column] transform(

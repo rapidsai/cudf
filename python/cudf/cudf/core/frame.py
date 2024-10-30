@@ -6,7 +6,7 @@ import operator
 import pickle
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
@@ -36,6 +36,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
     from types import ModuleType
 
     from cudf._typing import Dtype, ScalarLike
@@ -767,11 +768,15 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_performance_tracking
-    def _drop_column(self, name):
-        """Drop a column by *name*"""
-        if name not in self._data:
-            raise KeyError(f"column '{name}' does not exist")
-        del self._data[name]
+    def _drop_column(
+        self, name: abc.Hashable, errors: Literal["ignore", "raise"] = "raise"
+    ) -> None:
+        """Drop a column by *name* inplace."""
+        try:
+            del self._data[name]
+        except KeyError as err:
+            if errors != "ignore":
+                raise KeyError(f"column '{name}' does not exist") from err
 
     @_performance_tracking
     def _quantile_table(

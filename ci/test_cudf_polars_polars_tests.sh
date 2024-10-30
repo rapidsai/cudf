@@ -10,7 +10,7 @@ set -eou pipefail
 # files in cudf_polars/pylibcudf", rather than "are there changes
 # between upstream and this branch which touch cudf_polars/pylibcudf"
 # TODO: is the target branch exposed anywhere in an environment variable?
-if [ -n "$(git diff --name-only origin/branch-24.10...HEAD -- python/cudf_polars/ python/cudf/cudf/_lib/pylibcudf/)" ];
+if [ -n "$(git diff --name-only origin/branch-24.12...HEAD -- python/cudf_polars/ python/cudf/cudf/_lib/pylibcudf/)" ];
 then
     HAS_CHANGES=1
     rapids-logger "PR has changes in cudf-polars/pylibcudf, test fails treated as failure"
@@ -24,14 +24,17 @@ rapids-logger "Download wheels"
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 ./dist
 
-# Download the pylibcudf built in the previous step
-RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-pylibcudf-dep
+# Download libcudf and pylibcudf built in the previous step
+RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./local-libcudf-dep
+RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./local-pylibcudf-dep
 
-rapids-logger "Install pylibcudf"
-python -m pip install ./local-pylibcudf-dep/pylibcudf*.whl
+rapids-logger "Install libcudf, pylibcudf and cudf_polars"
+python -m pip install \
+    -v \
+    "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
+    "$(echo ./local-libcudf-dep/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
+    "$(echo ./local-pylibcudf-dep/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 
-rapids-logger "Install cudf_polars"
-python -m pip install $(echo ./dist/cudf_polars*.whl)
 
 TAG=$(python -c 'import polars; print(f"py-{polars.__version__}")')
 rapids-logger "Clone polars to ${TAG}"

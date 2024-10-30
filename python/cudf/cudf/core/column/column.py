@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import pickle
 from collections import abc
+from collections.abc import MutableSequence, Sequence
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Literal, MutableSequence, Sequence, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
 import numpy as np

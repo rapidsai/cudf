@@ -26,9 +26,7 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -557,7 +555,11 @@ auto NullOp_Result(cudf::column_view lhs, cudf::column_view rhs)
   std::transform(thrust::make_counting_iterator(0),
                  thrust::make_counting_iterator(lhs.size()),
                  result.begin(),
-                 [&lhs_data, &lhs_mask, &rhs_data, &rhs_mask, &result_mask](auto i) -> TypeOut {
+                 [&lhs_data    = lhs_data,
+                  &lhs_mask    = lhs_mask,
+                  &rhs_data    = rhs_data,
+                  &rhs_mask    = rhs_mask,
+                  &result_mask = result_mask](auto i) -> TypeOut {
                    auto lhs_valid    = lhs_mask.data() and cudf::bit_is_set(lhs_mask.data(), i);
                    auto rhs_valid    = rhs_mask.data() and cudf::bit_is_set(rhs_mask.data(), i);
                    bool output_valid = lhs_valid or rhs_valid;

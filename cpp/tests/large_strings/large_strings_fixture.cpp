@@ -16,12 +16,10 @@
 
 #include "large_strings_fixture.hpp"
 
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/strings/combine.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -123,12 +121,9 @@ LargeStringsData* StringsLargeTest::g_ls_data = nullptr;
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  auto const cmd_opts = parse_cudf_test_opts(argc, argv);
-  // hardcoding the CUDA memory resource to keep from exceeding the pool
-  auto mr = cudf::test::make_cuda();
-  cudf::set_current_device_resource(mr.get());
-  auto adaptor = make_stream_mode_adaptor(cmd_opts);
-
+  cudf::test::config config;
+  config.rmm_mode = "cuda";
+  init_cudf_test(argc, argv, config);
   // create object to automatically be destroyed at the end of main()
   auto lsd = cudf::test::StringsLargeTest::get_ls_data();
 

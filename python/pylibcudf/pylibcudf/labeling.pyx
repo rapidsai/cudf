@@ -20,6 +20,8 @@ cpdef Column label_bins(
 ):
     """Labels elements based on membership in the specified bins.
 
+    For details see :cpp:func:`label_bins`.
+
     Parameters
     ----------
     input : Column
@@ -52,14 +54,12 @@ cpdef Column label_bins(
     )
 
     with nogil:
-        c_result = move(
-            cpp_labeling.label_bins(
-                input.view(),
-                left_edges.view(),
-                c_left_inclusive,
-                right_edges.view(),
-                c_right_inclusive,
-            )
+        c_result = cpp_labeling.label_bins(
+            input.view(),
+            left_edges.view(),
+            c_left_inclusive,
+            right_edges.view(),
+            c_right_inclusive,
         )
 
     return Column.from_libcudf(move(c_result))

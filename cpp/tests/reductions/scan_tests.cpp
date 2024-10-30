@@ -20,13 +20,11 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 
 #include <algorithm>
@@ -415,8 +413,8 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
   int row_count = 512;
 
   auto data_begin = cudf::detail::make_counting_transform_iterator(0, [](auto idx) {
-    char const s[] = {static_cast<char>('a' + (idx % 26)), 0};
-    return std::string(s);
+    char const s = static_cast<char>('a' + (idx % 26));
+    return std::string{1, s};
   });
   auto validity   = cudf::detail::make_counting_transform_iterator(
     0, [](auto idx) -> bool { return (idx % 23) != 22; });
