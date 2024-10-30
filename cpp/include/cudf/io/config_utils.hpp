@@ -37,11 +37,11 @@ bool is_gds_enabled();
 bool is_kvikio_enabled();
 
 /**
- * @brief Set kvikIO parameters, including:
+ * @brief Set KvikIO parameters, including:
+ * - Compatibility mode, according to the environment variable KVIKIO_COMPAT_MODE. If
+ *   KVIKIO_COMPAT_MODE is not set, enable it by default, which enforces the use of POSIX I/O.
  * - Thread pool size, according to the environment variable KVIKIO_NTHREADS. If KVIKIO_NTHREADS is
  *   not set, use 4 threads by default.
- * - Compatibility mode, according to the environment variable KVIKIO_COMPAT_MODE. If
- *   KVIKIO_COMPAT_MODE is not set, set it to ON by default.
  */
 void set_up_kvikio();
 
