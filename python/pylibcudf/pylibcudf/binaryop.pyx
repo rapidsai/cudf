@@ -100,6 +100,7 @@ cpdef bool is_supported_operation(
         The right hand side data type.
     op : BinaryOperator
         The operation to check.
+
     Returns
     -------
     bool
