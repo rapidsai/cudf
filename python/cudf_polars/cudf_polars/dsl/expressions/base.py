@@ -163,6 +163,7 @@ class ErrorExpr(Expr):
     def __init__(self, dtype: plc.DataType, error: str) -> None:
         self.dtype = dtype
         self.error = error
+        self.children = ()
 
 
 class NamedExpr:

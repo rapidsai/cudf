@@ -91,14 +91,13 @@ class Translator:
             try:
                 node = self.visitor.view_current_node()
             except Exception as e:
-                raise NotImplementedError(
-                    "Could not retrieve the current IR node"
-                ) from e
+                self.errors.append(e)
+                return ir.ErrorNode({}, str(e))
             try:
                 schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
             except Exception as e:
                 self.errors.append(e)
-                raise NotImplementedError("Could not compute schema") from e
+                return ir.ErrorNode({}, str(e))
             try:
                 result = _translate_ir(node, self, schema)
             except Exception as e:

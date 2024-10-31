@@ -122,20 +122,9 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
        If the specified exceptions were not raised.
     """
     translator = Translator(q._ldf.visit())
-    try:
-        _ = translator.translate_ir()
-    except Exception as e:
-        # The only ways an exception is raised in translation is if
-        # ...
-        if (
-            "No support for polars IR" not in str(e)
-            and "Could not compute schema" not in str(e)
-            and "Could not retrieve the current" not in str(e)
-        ):
-            raise IRTranslationFailed("assert_ir_translation_raises failed") from e
-        return
-    if translator.errors:
-        for err in translator.errors:
+    translator.translate_ir()
+    if errors := translator.errors:
+        for err in errors:
             assert any(isinstance(err, err_type) for err_type in exceptions)
         return
     else:
