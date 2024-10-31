@@ -23,6 +23,87 @@
 #include <cuco/static_set_ref.cuh>
 
 namespace cudf::groupby::detail::hash {
+// TODO: TO BE REMOVED issue tracked via #17171
+template <typename T, cudf::aggregation::Kind k>
+__device__ constexpr bool is_supported()
+{
+  return cudf::is_fixed_width<T>() and
+         ((k == cudf::aggregation::SUM) or (k == cudf::aggregation::SUM_OF_SQUARES) or
+          (k == cudf::aggregation::MIN) or (k == cudf::aggregation::MAX) or
+          (k == cudf::aggregation::COUNT_VALID) or (k == cudf::aggregation::COUNT_ALL) or
+          (k == cudf::aggregation::ARGMIN) or (k == cudf::aggregation::ARGMAX) or
+          (k == cudf::aggregation::STD) or (k == cudf::aggregation::VARIANCE) or
+          (k == cudf::aggregation::PRODUCT) and cudf::detail::is_product_supported<T>());
+}
+
+template <typename T, cudf::aggregation::Kind k>
+__device__ std::enable_if_t<not std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>, T>
+identity_from_operator()
+{
+  using DeviceType = cudf::device_storage_type_t<T>;
+  return cudf::detail::corresponding_operator_t<k>::template identity<DeviceType>();
+}
+
+template <typename T, cudf::aggregation::Kind k, typename Enable = void>
+__device__ std::enable_if_t<std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>, T>
+identity_from_operator()
+{
+  CUDF_UNREACHABLE("Unable to get identity/sentinel from device operator");
+}
+
+template <typename T, cudf::aggregation::Kind k>
+__device__ T get_identity()
+{
+  if ((k == cudf::aggregation::ARGMAX) or (k == cudf::aggregation::ARGMIN)) {
+    if constexpr (cudf::is_timestamp<T>()) {
+      return k == cudf::aggregation::ARGMAX
+               ? T{typename T::duration(cudf::detail::ARGMAX_SENTINEL)}
+               : T{typename T::duration(cudf::detail::ARGMIN_SENTINEL)};
+    } else {
+      using DeviceType = cudf::device_storage_type_t<T>;
+      return k == cudf::aggregation::ARGMAX
+               ? static_cast<DeviceType>(cudf::detail::ARGMAX_SENTINEL)
+               : static_cast<DeviceType>(cudf::detail::ARGMIN_SENTINEL);
+    }
+  }
+  return identity_from_operator<T, k>();
+}
+
+template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
+struct initialize_target_element {
+  __device__ void operator()(cuda::std::byte* target,
+                             bool* target_mask,
+                             cudf::size_type idx) const noexcept
+  {
+    CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
+  }
+};
+
+template <typename Target, cudf::aggregation::Kind k>
+struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target, k>()>> {
+  __device__ void operator()(cuda::std::byte* target,
+                             bool* target_mask,
+                             cudf::size_type idx) const noexcept
+  {
+    using DeviceType          = cudf::device_storage_type_t<Target>;
+    DeviceType* target_casted = reinterpret_cast<DeviceType*>(target);
+
+    target_casted[idx] = get_identity<DeviceType, k>();
+
+    target_mask[idx] = (k == cudf::aggregation::COUNT_ALL) or (k == cudf::aggregation::COUNT_VALID);
+  }
+};
+
+struct initialize_shmem {
+  template <typename Target, cudf::aggregation::Kind k>
+  __device__ void operator()(cuda::std::byte* target,
+                             bool* target_mask,
+                             cudf::size_type idx) const noexcept
+  {
+    initialize_target_element<Target, k>{}(target, target_mask, idx);
+  }
+};
+
 /**
  * @brief Computes single-pass aggregations and store results into a sparse `output_values` table,
  * and populate `set` with indices of unique keys

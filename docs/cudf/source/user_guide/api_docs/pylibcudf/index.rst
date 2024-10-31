@@ -19,6 +19,7 @@ This page provides API documentation for pylibcudf.
     filling
     gpumemoryview
     groupby
+    hashing
     interop
     join
     json

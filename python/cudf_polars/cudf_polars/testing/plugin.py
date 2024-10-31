@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-def pytest_addoption(parser: pytest.Parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     """Add plugin-specific options."""
     group = parser.getgroup(
         "cudf-polars", "Plugin to set GPU as default engine for polars tests"
@@ -28,7 +28,7 @@ def pytest_addoption(parser: pytest.Parser):
     )
 
 
-def pytest_configure(config: pytest.Config):
+def pytest_configure(config: pytest.Config) -> None:
     """Enable use of this module as a pytest plugin to enable GPU collection."""
     no_fallback = config.getoption("--cudf-polars-no-fallback")
     collect = polars.LazyFrame.collect
@@ -172,7 +172,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
 
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
-):
+) -> None:
     """Mark known failing tests."""
     if config.getoption("--cudf-polars-no-fallback"):
         # Don't xfail tests if running without fallback

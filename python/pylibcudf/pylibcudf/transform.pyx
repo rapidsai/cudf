@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move, pair
@@ -41,6 +42,32 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input):
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first))),
         c_result.second
     )
+
+
+cpdef Column compute_column(Table input, Expression expr):
+    """Create a column by evaluating an expression on a table.
+
+    For details see :cpp:func:`compute_column`.
+
+    Parameters
+    ----------
+    input : Table
+        Table used for expression evaluation
+    expr : Expression
+        Expression to evaluate
+
+    Returns
+    -------
+    Column of the evaluated expression
+    """
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = cpp_transform.compute_column(
+            input.view(), dereference(expr.c_obj.get())
+        )
+
+    return Column.from_libcudf(move(c_result))
 
 
 cpdef tuple[gpumemoryview, int] bools_to_mask(Column input):
