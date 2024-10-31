@@ -206,12 +206,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       if (owning_schema == 0 || owning_schema == input_col.schema_idx) {
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
-        // String size of the current column
-        auto const col_string_size = col_string_sizes[pass.chunks[c].src_col_index];
         // only do string buffer for leaf
-        if (idx == max_depth - 1 and out_buf.string_size() == 0 and col_string_size > 0) {
+        if (idx == max_depth - 1 and out_buf.string_size() == 0 and
+            col_string_sizes[pass.chunks[c].src_col_index] > 0) {
           out_buf.create_string_data(
-            col_string_size,
+            col_string_sizes[pass.chunks[c].src_col_index],
             pass.cumulative_col_string_sizes[pass.chunks[c].src_col_index] >
               static_cast<size_t>(strings::detail::get_offset64_threshold()),
             _stream);
