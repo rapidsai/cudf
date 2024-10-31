@@ -188,7 +188,7 @@ required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.isort.sections]
 polars = ["polars"]
-rapids = ["rmm", "cudf"]
+rapids = ["rmm", "pylibcudf"]
 
 [tool.ruff.format]
 docstring-code-format = true
