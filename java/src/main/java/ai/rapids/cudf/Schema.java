@@ -36,13 +36,13 @@ public class Schema {
   private static final int UNKNOWN_PRECISION = -1;
 
   /**
-  * Store precision for the top level column, only applicable if the column is a decimal type.
-  * <p/>
-  * This variable is not designed to be used by any libcudf's APIs since libcudf does not support
-  * precisions for fixed point numbers.
-  * Instead, it is used only to pass down the precision values from Spark's DecimalType to the
-  * JNI level, where some JNI functions require these values to perform their operations.
-  */
+   * Store precision for the top level column, only applicable if the column is a decimal type.
+   * <p/>
+   * This variable is not designed to be used by any libcudf's APIs since libcudf does not support
+   * precisions for fixed point numbers.
+   * Instead, it is used only to pass down the precision values from Spark's DecimalType to the
+   * JNI level, where some JNI functions require these values to perform their operations.
+   */
   private final int topLevelPrecision;
 
   private final List<String> childNames;
@@ -429,7 +429,7 @@ public class Schema {
           children.add(b.build());
         }
       }
-      return new Schema(topLevelType, names, children);
+      return new Schema(topLevelType, topLevelPrecision, names, children);
     }
   }
 }
