@@ -975,7 +975,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   constexpr int rle_run_buffer_bytes =
     cudf::util::round_up_unsafe(rle_run_buffer_size * sizeof(rle_run), size_t{16});
   constexpr int shared_buf_size =
-    rle_run_buffer_bytes * (static_cast<int>(has_dict_t) + static_cast<int>(has_bools_t) + static_cast<int>(has_lists_t) + 1);
+    rle_run_buffer_bytes * (static_cast<int>(has_dict_t) + static_cast<int>(has_bools_t) +
+                            static_cast<int>(has_lists_t) + 1);
   __shared__ __align__(16) uint8_t shared_buf[shared_buf_size];
 
   // setup all shared memory buffers
