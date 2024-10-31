@@ -442,22 +442,18 @@ class Scan(IR):
                         "pass_read_limit", PARQUET_DEFAULT_PASS_LIMIT
                     ),
                 )
+
+                chunks = []  # type: ignore
                 chk = reader.read_chunk()
                 tbl = chk.tbl
+                chunks.append(tbl)
                 names = chk.column_names()
-                concatenated_columns = tbl.columns()
                 while reader.has_next():
-                    tbl = reader.read_chunk().tbl
+                    chunks.append(reader.read_chunk().tbl)
 
-                    for i in range(tbl.num_columns()):
-                        concatenated_columns[i] = plc.concatenate.concatenate(
-                            [concatenated_columns[i], tbl._columns[i]]
-                        )
-                        # Drop residual columns to save memory
-                        tbl._columns[i] = None
-
+                chunks = plc.concatenate.concatenate(chunks)
                 df = DataFrame.from_table(
-                    plc.Table(concatenated_columns),
+                    chunks,
                     names=names,
                 )
             else:
