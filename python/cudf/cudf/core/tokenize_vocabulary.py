@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import pylibcudf as plc
+
 import cudf
 from cudf._lib.nvtext.tokenize import (
-    TokenizeVocabulary as cpp_tokenize_vocabulary,
     tokenize_with_vocabulary as cpp_tokenize_with_vocabulary,
 )
 
@@ -20,7 +21,7 @@ class TokenizeVocabulary:
     """
 
     def __init__(self, vocabulary: "cudf.Series"):
-        self.vocabulary = cpp_tokenize_vocabulary(
+        self.vocabulary = plc.nvtext.tokenize.TokenizeVocabulary(
             vocabulary._column.to_pylibcudf(mode="read")
         )
 
