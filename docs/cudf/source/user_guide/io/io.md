@@ -101,15 +101,14 @@ There are four valid values for the environment variable:
 fall back to the GDS compatibility mode.
 - "ALWAYS": Enable GDS use. If the cuFile library cannot be properly loaded,
 throw an exception.
-- "KVIKIO": Enable GDS through [KvikIO](https://github.com/rapidsai/kvikio).
-Note that KvikIO provides an environment variable `KVIKIO_COMPAT_MODE` to
-control GDS use:
-  - By default, `KVIKIO_COMPAT_MODE` is unset. In this case, KvikIO checks the
-    system configuration, and if GDS requirements are not met, the I/O will fall
-    back to the GDS compatibility mode.
-  - If `KVIKIO_NTHREADS` is set to `ON`, the GDS compatibility mode is always used,
-    and the system configuration check is never performed.
-  - If `KVIKIO_NTHREADS` is set to `OFF`, KvikIO enforces GDS I/O without system
+- "KVIKIO": Enable GDS compatibility mode through [KvikIO](https://github.com/rapidsai/kvikio).
+Note that KvikIO also provides the environment variable `KVIKIO_COMPAT_MODE` for GDS
+control that may alter the effect of "KVIKIO" option in cuDF:
+  - By default, `KVIKIO_COMPAT_MODE` is unset. In this case, cuDF enforces
+    the GDS compatibility mode, and the system configuration check for GDS I/O
+    is never performed.
+  - If `KVIKIO_COMPAT_MODE=ON`, this is the same with the above case.
+  - If `KVIKIO_COMPAT_MODE=OFF`, KvikIO enforces GDS I/O without system
     configuration check, and will error out if GDS requirements are not met. The
     only exceptional case is that if the system does not support files being
     opened with the `O_DIRECT` flag, the GDS compatibility mode will be used.
