@@ -96,10 +96,6 @@ def assert_gpu_result_equal(
     )
 
 
-class IRTranslationFailed(Exception):
-    pass
-
-
 def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) -> None:
     """
     Assert that translation of a query raises an exception.

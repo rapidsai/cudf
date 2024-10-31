@@ -14,7 +14,7 @@ from cudf_polars.testing.asserts import (
 )
 
 
-def test_translation_assert_raises(monkeypatch):
+def test_translation_assert_raises():
     df = pl.LazyFrame({"a": [1, 2, 3]})
 
     # This should succeed
