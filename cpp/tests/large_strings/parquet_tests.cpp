@@ -71,8 +71,7 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
   unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 }
 
-// The test below requires a huge amount of memory, thus it is disabled by default.
-TEST_F(ParquetStringsTest, DISABLED_ChunkedReadLargeStrings)
+TEST_F(ParquetStringsTest, ChunkedReadLargeStrings)
 {
   // Construct a table with one large strings column > 2GB
   auto const wide = this->wide_column();
