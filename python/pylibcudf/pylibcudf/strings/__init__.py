@@ -32,6 +32,7 @@ __all__ = [
     "capitalize",
     "case",
     "char_types",
+    "combine",
     "contains",
     "convert",
     "extract",
