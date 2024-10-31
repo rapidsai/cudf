@@ -4061,6 +4061,9 @@ def test_ndim():
     assert pgb.ndim == ggb.ndim
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_220, reason="pandas behavior applicable in >=2.2"
+)
 def test_get_group_list_like():
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     result = df.groupby(["a"]).get_group((1,))
