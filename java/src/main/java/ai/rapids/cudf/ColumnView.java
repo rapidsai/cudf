@@ -3829,7 +3829,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *   1. FIND_FIRST finds the first occurrence of a search key.
    *   2. FIND_LAST finds the last occurrence of a search key.
    */
-  public enum FindOptions {FIND_FIRST, FIND_LAST};
+  public enum FindOptions { FIND_LAST};
 
   /**
    * Create a column of int32 indices, indicating the position of the scalar search key
