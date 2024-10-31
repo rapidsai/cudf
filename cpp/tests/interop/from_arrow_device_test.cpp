@@ -17,17 +17,13 @@
 #include "nanoarrow_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -270,9 +266,9 @@ TEST_F(FromArrowDeviceTest, StructColumn)
   auto int_col2 =
     cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}, {1, 0, 1}}.release();
   auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
-  auto list_col =
-    cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})
-      .release();
+  auto list_col = cudf::test::lists_column_wrapper<int64_t>(
+                    {{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})  // NOLINT
+                    .release();
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
@@ -414,9 +410,9 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
 {
   std::vector<std::unique_ptr<cudf::column>> columns;
   auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7}, {1, 0, 1, 1, 1});
-  columns.emplace_back(std::move(cudf::dictionary::encode(col)));
-  columns.emplace_back(std::move(cudf::dictionary::encode(col)));
-  columns.emplace_back(std::move(cudf::dictionary::encode(col)));
+  columns.emplace_back(cudf::dictionary::encode(col));
+  columns.emplace_back(cudf::dictionary::encode(col));
+  columns.emplace_back(cudf::dictionary::encode(col));
 
   cudf::table expected_table(std::move(columns));
   cudf::table_view expected_table_view = expected_table.view();

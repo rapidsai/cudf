@@ -20,6 +20,8 @@ cpdef TableWithMetadata read_avro(
     """
     Reads an Avro dataset into a :py:class:`~.types.TableWithMetadata`.
 
+    For details, see :cpp:func:`read_avro`.
+
     Parameters
     ----------
     source_info: SourceInfo
@@ -43,7 +45,7 @@ cpdef TableWithMetadata read_avro(
         for col in columns:
             c_columns.push_back(str(col).encode())
 
-    cdef avro_reader_options avro_opts = move(
+    cdef avro_reader_options avro_opts = (
         avro_reader_options.builder(source_info.c_obj)
         .columns(c_columns)
         .skip_rows(skip_rows)

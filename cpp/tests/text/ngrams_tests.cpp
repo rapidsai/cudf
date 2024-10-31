@@ -28,8 +28,6 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <vector>
-
 struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextGenerateNgramsTest, Ngrams)

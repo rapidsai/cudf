@@ -24,12 +24,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
-
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -425,7 +423,7 @@ TYPED_TEST(StringsIntegerConvertTest, IntegerToHex)
     if (v == 0) { return std::string("00"); }
     // special handling for single-byte types
     if constexpr (std::is_same_v<TypeParam, int8_t> || std::is_same_v<TypeParam, uint8_t>) {
-      char const hex_digits[16] = {
+      std::array const hex_digits = {
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
       std::string str;
       str += hex_digits[(v & 0xF0) >> 4];

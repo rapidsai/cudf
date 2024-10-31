@@ -8,7 +8,7 @@ import functools
 import locale
 import re
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Literal, Sequence, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,8 @@ from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import (
         ColumnBinaryOperand,
         DatetimeLikeScalar,
@@ -480,6 +482,11 @@ class DatetimeColumn(column.ColumnBase):
     def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
         if dtype == self.dtype:
             return self
+        elif isinstance(dtype, pd.DatetimeTZDtype):
+            raise TypeError(
+                "Cannot use .astype to convert from timezone-naive dtype to timezone-aware dtype. "
+                "Use tz_localize instead."
+            )
         return libcudf.unary.cast(self, dtype=dtype)
 
     def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
@@ -939,6 +946,16 @@ class DatetimeTZColumn(DatetimeColumn):
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self._local_time.as_string_column()
+
+    def as_datetime_column(self, dtype: Dtype) -> DatetimeColumn:
+        if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
+            if dtype.unit != self.time_unit:
+                # TODO: Doesn't check that new unit is valid.
+                casted = self._with_type_metadata(dtype)
+            else:
+                casted = self
+            return casted.tz_convert(str(dtype.tz))
+        return super().as_datetime_column(dtype)
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(

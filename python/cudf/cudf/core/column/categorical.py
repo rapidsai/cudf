@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ from cudf.utils.dtypes import (
 
 if TYPE_CHECKING:
     from collections import abc
+    from collections.abc import Mapping, Sequence
 
     import numba.cuda
 
@@ -1337,7 +1338,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
-            new_cats = cudf.Series(new_cats)._column.unique()
+            new_cats = new_cats.unique()
 
         if cur_cats.equals(new_cats, check_dtypes=True):
             # TODO: Internal usages don't always need a copy; add a copy keyword

@@ -24,8 +24,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cuda_runtime.h>
-
 #include <zlib.h>  // uncompress
 
 #include <cstring>  // memset
@@ -42,7 +40,7 @@ struct gz_file_header_s {
   uint8_t id2;        // 0x8b
   uint8_t comp_mthd;  // compression method (0-7=reserved, 8=deflate)
   uint8_t flags;      // flags (GZIPHeaderFlag)
-  uint8_t mtime[4];   // If non-zero: modification time (Unix format)
+  uint8_t mtime[4];   // If non-zero: modification time (Unix format)  // NOLINT
   uint8_t xflags;     // Extra compressor-specific flags
   uint8_t os;         // OS id
 };
@@ -103,7 +101,7 @@ struct zip_lfh_s {
 };
 
 struct bz2_file_header_s {
-  uint8_t sig[3];  // "BZh"
+  uint8_t sig[3];  // "BZh" // NOLINT
   uint8_t blksz;   // block size 1..9 in 100kB units (post-RLE)
 };
 
@@ -538,8 +536,10 @@ size_t decompress_zstd(host_span<uint8_t const> src,
   CUDF_EXPECTS(hd_stats[0].status == compression_status::SUCCESS, "ZSTD decompression failed");
 
   // Copy temporary output to `dst`
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    dst.data(), d_dst.data(), hd_stats[0].bytes_written, cudaMemcpyDefault, stream.value()));
+  cudf::detail::cuda_memcpy_async(
+    dst.subspan(0, hd_stats[0].bytes_written),
+    device_span<uint8_t const>{d_dst.data(), hd_stats[0].bytes_written},
+    stream);
 
   return hd_stats[0].bytes_written;
 }

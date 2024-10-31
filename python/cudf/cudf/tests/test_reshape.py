@@ -46,13 +46,12 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 
     pdf = pd.DataFrame()
     id_vars = []
+    rng = np.random.default_rng(seed=0)
     for i in range(num_id_vars):
         colname = "id" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         elif nulls == "all":
             data[:] = np.nan
@@ -62,11 +61,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     value_vars = []
     for i in range(num_value_vars):
         colname = "val" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         elif nulls == "all":
             data[:] = np.nan
@@ -119,6 +116,15 @@ def test_melt_str_scalar_id_var():
     assert_eq(result, expected)
 
 
+def test_melt_falsy_var_name():
+    df = cudf.DataFrame({"A": ["a", "b", "c"], "B": [1, 3, 5], "C": [2, 4, 6]})
+    result = cudf.melt(df, id_vars=["A"], value_vars=["B"], var_name="")
+    expected = pd.melt(
+        df.to_pandas(), id_vars=["A"], value_vars=["B"], var_name=""
+    )
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 1000])
 @pytest.mark.parametrize(
@@ -130,13 +136,12 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
+    rng = np.random.default_rng(seed=0)
     for i in range(num_cols):
         colname = str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -271,8 +276,8 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
         ],
         names=["exp", "animal", "hair_length"],
     )
-
-    df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(rng.standard_normal(size=(4, 4)), columns=columns)
 
     with expect_warning_if(PANDAS_GE_220, FutureWarning):
         expect = df.stack(level=level, future_stack=False)
@@ -299,14 +304,13 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame(dtype=dtype)
+    rng = np.random.default_rng(seed=0)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(0, 26, num_rows)).astype(dtype)
+        data = pd.Series(rng.integers(0, 26, num_rows)).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -335,16 +339,13 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame(dtype=dtype)
+    rng = np.random.default_rng(seed=0)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(num_cols, 26, num_rows)).astype(
-            dtype
-        )
+        data = pd.Series(rng.integers(num_cols, 26, num_rows)).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
-                num_rows, size=int(num_rows / 2), replace=False
-            )
+            idx = rng.choice(num_rows, size=int(num_rows / 2), replace=False)
             data[idx] = np.nan
         pdf[colname] = data
 
@@ -715,23 +716,20 @@ def test_pivot_duplicate_error():
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
+    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
+)
+@pytest.mark.parametrize("fill_value", [0])
+def test_pivot_table_simple(aggfunc, fill_value):
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
         {
             "A": ["one", "one", "two", "three"] * 6,
             "B": ["A", "B", "C"] * 8,
             "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
-            "D": np.random.randn(24),
-            "E": np.random.randn(24),
+            "D": rng.standard_normal(size=24),
+            "E": rng.standard_normal(size=24),
         }
-    ],
-)
-@pytest.mark.parametrize(
-    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
-)
-@pytest.mark.parametrize("fill_value", [0])
-def test_pivot_table_simple(data, aggfunc, fill_value):
-    pdf = pd.DataFrame(data)
+    )
     expected = pd.pivot_table(
         pdf,
         values=["D", "E"],
@@ -740,7 +738,7 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
         aggfunc=aggfunc,
         fill_value=fill_value,
     )
-    cdf = cudf.DataFrame(data)
+    cdf = cudf.DataFrame.from_pandas(pdf)
     actual = cudf.pivot_table(
         cdf,
         values=["D", "E"],
@@ -753,23 +751,20 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
+    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
+)
+@pytest.mark.parametrize("fill_value", [0])
+def test_dataframe_pivot_table_simple(aggfunc, fill_value):
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
         {
             "A": ["one", "one", "two", "three"] * 6,
             "B": ["A", "B", "C"] * 8,
             "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
-            "D": np.random.randn(24),
-            "E": np.random.randn(24),
+            "D": rng.standard_normal(size=24),
+            "E": rng.standard_normal(size=24),
         }
-    ],
-)
-@pytest.mark.parametrize(
-    "aggfunc", ["mean", "count", {"D": "sum", "E": "count"}]
-)
-@pytest.mark.parametrize("fill_value", [0])
-def test_dataframe_pivot_table_simple(data, aggfunc, fill_value):
-    pdf = pd.DataFrame(data)
+    )
     expected = pdf.pivot_table(
         values=["D", "E"],
         index=["A", "B"],
@@ -777,7 +772,7 @@ def test_dataframe_pivot_table_simple(data, aggfunc, fill_value):
         aggfunc=aggfunc,
         fill_value=fill_value,
     )
-    cdf = cudf.DataFrame(data)
+    cdf = cudf.DataFrame.from_pandas(pdf)
     actual = cdf.pivot_table(
         values=["D", "E"],
         index=["A", "B"],
