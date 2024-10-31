@@ -1763,7 +1763,7 @@ def test_fallback_raises_error(monkeypatch):
 
 @pytest.mark.parametrize(
     "attrs",
-    ["_exceptions", "version", "_print_versions", "capitalize_first_letter"],
+    ["_exceptions", "version", "_print_versions", "capitalize_first_letter", "_validators", "_decorators"],
 )
 def test_cudf_pandas_util_version(attrs):
     assert hasattr(pd.util, attrs)
