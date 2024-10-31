@@ -18,6 +18,7 @@
 
 #include <cudf_test/table_utilities.hpp>
 
+#include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
@@ -68,4 +69,59 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
 
   // go back to normal threshold
   unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+}
+
+// The test below requires a huge amount of memory, thus it is disabled by default.
+TEST_F(ParquetStringsTest, DISABLED_ChunkedReadLargeStrings)
+{
+  // Construct a table with one large strings column > 2GB
+  auto const wide = this->wide_column();
+  auto input      = cudf::concatenate(std::vector<cudf::column_view>(120000, wide));  ///< 230MB
+
+  int constexpr multiplier = 12;
+  std::vector<cudf::column_view> input_cols(multiplier, input->view());
+  auto col0 = cudf::concatenate(input_cols);  ///< 2.70GB
+
+  // Expected table
+  auto const expected    = cudf::table_view{{col0->view()}};
+  auto expected_metadata = cudf::io::table_input_metadata{expected};
+  expected_metadata.column_metadata[0].set_encoding(
+    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+
+  // Write to Parquet
+  auto const filepath = g_temp_env->get_temp_filepath("ChunkedReadLargeStrings.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .stats_level(cudf::io::STATISTICS_NONE)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  // Read with chunked_parquet_reader
+  size_t constexpr pass_read_limit =
+    size_t{8} * 1024 * 1024 *
+    1024;  ///< Set to 8GB so we read almost entire table (>2GB string) in the  first subpass
+           ///< and only a small amount in the second subpass.
+  cudf::io::parquet_reader_options default_in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto reader = cudf::io::chunked_parquet_reader(0, pass_read_limit, default_in_opts);
+
+  auto tables = std::vector<std::unique_ptr<cudf::table>>{};
+  while (reader.has_next()) {
+    tables.emplace_back(reader.read_chunk().tbl);
+  }
+  auto table_views = std::vector<cudf::table_view>{};
+  for (auto const& tbl : tables) {
+    table_views.emplace_back(tbl->view());
+  }
+  auto result            = cudf::concatenate(table_views);
+  auto const result_view = result->view();
+
+  // Verify
+  for (auto cv : result_view) {
+    auto const offsets = cudf::strings_column_view(cv).offsets();
+    EXPECT_EQ(offsets.type(), cudf::data_type{cudf::type_id::INT64});
+  }
+  EXPECT_EQ(tables.size(), 2);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result_view, expected);
 }
