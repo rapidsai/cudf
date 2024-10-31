@@ -13,3 +13,4 @@ nvtext
     normalize
     replace
     stemmer
+    tokenize

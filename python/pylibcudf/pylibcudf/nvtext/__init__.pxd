@@ -10,6 +10,7 @@ from . cimport (
     normalize,
     replace,
     stemmer,
+    tokenize,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "normalize",
     "replace",
     "stemmer",
+    "tokenize",
 ]
