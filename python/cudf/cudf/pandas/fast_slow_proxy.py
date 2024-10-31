@@ -1003,6 +1003,17 @@ def _transform_arg(
     elif isinstance(arg, list):
         return type(arg)(_transform_arg(a, attribute_name, seen) for a in arg)
     elif isinstance(arg, tuple):
+        if (
+            len(arg) > 0
+            and isinstance(arg[0], _MethodProxy)
+            and arg[0].__name__ == "__setitem__"
+        ):
+            return tuple(
+                _transform_arg(a, "_fsproxy_slow", seen)
+                if i == 1
+                else _transform_arg(a, attribute_name, seen)
+                for i, a in enumerate(arg)
+            )
         # This attempts to handle arbitrary subclasses of tuple by
         # assuming that if you've subclassed tuple with some special
         # behaviour you'll also make the object pickleable by
