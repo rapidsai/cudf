@@ -87,6 +87,7 @@ def _pandas_util_dir():
         "version",
          "_tester",
          "_validators",
+        "_decorators",
     ]
 
 
