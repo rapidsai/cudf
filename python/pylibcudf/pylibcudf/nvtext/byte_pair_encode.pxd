@@ -14,5 +14,3 @@ cpdef Column byte_pair_encoding(
     BPEMergePairs merge_pairs,
     Scalar separator=*
 )
-
-cpdef BPEMergePairs load_merge_pairs(Column input)

@@ -68,21 +68,3 @@ cpdef Column byte_pair_encoding(
         )
 
     return Column.from_libcudf(move(c_result))
-
-cpdef BPEMergePairs load_merge_pairs(Column input):
-    """
-    Create a nvtext::bpe_merge_pairs from a strings column.
-
-    For details, see cpp:func:`cudf::nvtext::load_merge_pairs`
-
-    Parameters
-    ----------
-    input : Column
-        Column containing the unique merge pairs.
-
-    Returns
-    -------
-    Column
-        An ``BPEMergePairs`` object
-    """
-    return BPEMergePairs(input)

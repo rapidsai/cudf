@@ -33,7 +33,7 @@ def test_byte_pair_encoding(input_col, separator):
     )
     result = plc.nvtext.byte_pair_encode.byte_pair_encoding(
         plc_col,
-        plc.nvtext.byte_pair_encode.load_merge_pairs(
+        plc.nvtext.byte_pair_encode.BPEMergePairs(
             plc.interop.from_arrow(input_col)
         ),
         separator,
@@ -43,10 +43,3 @@ def test_byte_pair_encoding(input_col, separator):
     else:
         expected = pa.array(["teste esenteence", "teheiseise etest"])
     assert_column_eq(result, expected)
-
-
-def test_load_merge_pairs(input_col):
-    result = plc.nvtext.byte_pair_encode.load_merge_pairs(
-        plc.interop.from_arrow(input_col)
-    )
-    assert isinstance(result, plc.nvtext.byte_pair_encode.BPEMergePairs)
