@@ -78,18 +78,13 @@ def test_detokenize(input_col, delimiter):
     assert_column_eq(result, expected)
 
 
-def test_load_vocabulary(input_col):
-    result = plc.nvtext.tokenize.load_vocabulary(
-        plc.interop.from_arrow(input_col)
-    )
-    assert isinstance(result, plc.nvtext.tokenize.TokenizeVocabulary)
-
-
 @pytest.mark.parametrize("default_id", [-1, 0])
 def test_tokenize_with_vocabulary(input_col, default_id):
     result = plc.nvtext.tokenize.tokenize_with_vocabulary(
         plc.interop.from_arrow(input_col),
-        plc.nvtext.tokenize.load_vocabulary(plc.interop.from_arrow(input_col)),
+        plc.nvtext.tokenize.TokenizeVocabulary(
+            plc.interop.from_arrow(input_col)
+        ),
         plc.interop.from_arrow(pa.scalar(" ")),
         default_id,
     )
