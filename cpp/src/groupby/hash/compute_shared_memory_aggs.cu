@@ -74,9 +74,7 @@ __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
                                 ALIGNMENT);
     auto const next_col_total_size = next_col_size + valid_col_size;
 
-    if (bytes_allocated + next_col_total_size > total_agg_size) {
-      CUDF_UNREACHABLE("Not enough memory for shared memory aggregations");
-    }
+    if (bytes_allocated + next_col_total_size > total_agg_size) { break; }
 
     shmem_agg_res_offsets[col_end]  = bytes_allocated;
     shmem_agg_mask_offsets[col_end] = bytes_allocated + next_col_size;
