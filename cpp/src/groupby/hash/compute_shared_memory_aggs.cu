@@ -275,7 +275,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 }
 }  // namespace
 
-std::size_t available_shared_memory_size(cudf::size_type grid_size)
+std::size_t get_available_shared_memory_size(cudf::size_type grid_size)
 {
   auto const active_blocks_per_sm =
     cudf::util::div_rounding_up_safe(grid_size, cudf::detail::num_multiprocessors());
@@ -285,6 +285,11 @@ std::size_t available_shared_memory_size(cudf::size_type grid_size)
     &dynamic_shmem_size, single_pass_shmem_aggs_kernel, active_blocks_per_sm, GROUPBY_BLOCK_SIZE));
   return cudf::util::round_down_safe(static_cast<cudf::size_type>(0.5 * dynamic_shmem_size),
                                      ALIGNMENT);
+}
+
+std::size_t compute_shmem_offsets_size(cudf::size_type num_cols)
+{
+  return sizeof(cudf::size_type) * num_cols;
 }
 
 void compute_shared_memory_aggs(cudf::size_type grid_size,
@@ -302,11 +307,11 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
 {
   // For each aggregation, need one offset determining where the aggregation is
   // performed, another indicating the validity of the aggregation
-  auto const shmem_offsets_size = output_values.num_columns() * sizeof(cudf::size_type);
+  auto const offsets_size = compute_shmem_offsets_size(output_values.num_columns());
   // The rest of shmem is utilized for the actual arrays in shmem
-  CUDF_EXPECTS(available_shmem_size > shmem_offsets_size * 2,
+  CUDF_EXPECTS(available_shmem_size > offsets_size * 2,
                "No enough space for shared memory aggregations");
-  auto const shmem_agg_size = available_shmem_size - shmem_offsets_size * 2;
+  auto const shmem_agg_size = available_shmem_size - offsets_size * 2;
   single_pass_shmem_aggs_kernel<<<grid_size, GROUPBY_BLOCK_SIZE, available_shmem_size, stream>>>(
     num_input_rows,
     row_bitmask,
@@ -318,6 +323,6 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
     output_values,
     d_agg_kinds,
     shmem_agg_size,
-    shmem_offsets_size);
+    offsets_size);
 }
 }  // namespace cudf::groupby::detail::hash
