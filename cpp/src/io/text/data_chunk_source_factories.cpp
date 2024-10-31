@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
+#include <cudf/utilities/cuda_event.hpp>
 
 #include <fstream>
 
@@ -29,15 +30,12 @@ namespace cudf::io::text {
 namespace {
 
 struct host_ticket {
-  cudaEvent_t event{};  // tracks the completion of the last device-to-host copy.
+  cudf::detail::cuda_event event;  // tracks the completion of the last device-to-host copy.
   cudf::detail::host_vector<char> buffer;
 
   host_ticket() : buffer{cudf::detail::make_pinned_vector_sync<char>(0, cudf::get_default_stream())}
   {
-    cudaEventCreate(&event);
   }
-
-  ~host_ticket() { cudaEventDestroy(event); }
 };
 
 /**

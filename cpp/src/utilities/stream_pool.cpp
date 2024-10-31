@@ -16,6 +16,7 @@
 
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/utilities/cuda_event.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -123,26 +124,6 @@ rmm::cuda_device_id get_current_cuda_device()
   CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   return rmm::cuda_device_id{device_id};
 }
-
-/**
- * @brief RAII struct to wrap a cuda event and ensure its proper destruction.
- */
-struct cuda_event {
-  cuda_event() { CUDF_CUDA_TRY(cudaEventCreateWithFlags(&e_, cudaEventDisableTiming)); }
-  virtual ~cuda_event() { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e_)); }
-
-  // Moveable but not copyable.
-  cuda_event(const cuda_event&)            = delete;
-  cuda_event& operator=(const cuda_event&) = delete;
-
-  cuda_event(cuda_event&&)            = default;
-  cuda_event& operator=(cuda_event&&) = default;
-
-  operator cudaEvent_t() { return e_; }
-
- private:
-  cudaEvent_t e_;
-};
 
 /**
  * @brief Returns a cudaEvent_t for the current thread.

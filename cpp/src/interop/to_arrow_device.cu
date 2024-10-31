@@ -31,6 +31,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/cuda_event.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -559,13 +560,12 @@ int dispatch_to_arrow_device_view::operator()<cudf::dictionary32>(ArrowArray* ou
 
 struct ArrowDeviceArrayPrivateData {
   ArrowArray parent;
-  cudaEvent_t sync_event;
+  cudf::detail::cuda_event sync_event;
 };
 
 void ArrowDeviceArrayRelease(ArrowArray* array)
 {
   auto private_data = reinterpret_cast<ArrowDeviceArrayPrivateData*>(array->private_data);
-  RMM_ASSERT_CUDA_SUCCESS(cudaEventDestroy(private_data->sync_event));
   ArrowArrayRelease(&private_data->parent);
   delete private_data;
   array->release = nullptr;
@@ -578,7 +578,6 @@ unique_device_array_t create_device_array(nanoarrow::UniqueArray&& out,
     ArrowArrayFinishBuilding(out.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
 
   auto private_data = std::make_unique<detail::ArrowDeviceArrayPrivateData>();
-  CUDF_CUDA_TRY(cudaEventCreate(&private_data->sync_event));
   CUDF_CUDA_TRY(cudaEventRecord(private_data->sync_event, stream.value()));
 
   ArrowArrayMove(out.get(), &private_data->parent);
