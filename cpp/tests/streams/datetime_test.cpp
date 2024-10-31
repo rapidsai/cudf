@@ -33,41 +33,6 @@ class DatetimeTest : public cudf::test::BaseFixture {
   cudf::test::fixed_width_column_wrapper<int32_t, int32_t> months{{1, -1, 3}};
 };
 
-TEST_F(DatetimeTest, ExtractYear)
-{
-  cudf::datetime::extract_year(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractMonth)
-{
-  cudf::datetime::extract_month(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractDay)
-{
-  cudf::datetime::extract_day(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractWeekday)
-{
-  cudf::datetime::extract_weekday(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractHour)
-{
-  cudf::datetime::extract_hour(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractMinute)
-{
-  cudf::datetime::extract_minute(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractSecond)
-{
-  cudf::datetime::extract_second(timestamps, cudf::test::get_default_stream());
-}
-
 TEST_F(DatetimeTest, ExtractMillisecondFraction)
 {
   cudf::datetime::extract_millisecond_fraction(timestamps, cudf::test::get_default_stream());

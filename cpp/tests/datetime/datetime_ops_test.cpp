@@ -52,13 +52,6 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   cudf::data_type dtype{cudf::type_to_id<T>()};
   cudf::column col{dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
-  EXPECT_THROW(extract_year(col), cudf::logic_error);
-  EXPECT_THROW(extract_month(col), cudf::logic_error);
-  EXPECT_THROW(extract_day(col), cudf::logic_error);
-  EXPECT_THROW(extract_weekday(col), cudf::logic_error);
-  EXPECT_THROW(extract_hour(col), cudf::logic_error);
-  EXPECT_THROW(extract_minute(col), cudf::logic_error);
-  EXPECT_THROW(extract_second(col), cudf::logic_error);
   EXPECT_THROW(extract_millisecond_fraction(col), cudf::logic_error);
   EXPECT_THROW(extract_microsecond_fraction(col), cudf::logic_error);
   EXPECT_THROW(extract_nanosecond_fraction(col), cudf::logic_error);
@@ -103,69 +96,6 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
       23432424,   // 1970-01-01 00:00:00.023432424 GMT
       987234623   // 1970-01-01 00:00:00.987234623 GMT
     };
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_D),
-                                 fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_s),
-                                 fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{1965, 2018, 2023});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps_ns),
-                                 fixed_width_column_wrapper<int16_t>{1969, 1970, 1970});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_D),
-                                 fixed_width_column_wrapper<int16_t>{10, 7, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_s),
-                                 fixed_width_column_wrapper<int16_t>{10, 7, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{10, 7, 1});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps_ns),
-                                 fixed_width_column_wrapper<int16_t>{12, 1, 1});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_D),
-                                 fixed_width_column_wrapper<int16_t>{26, 4, 25});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_s),
-                                 fixed_width_column_wrapper<int16_t>{26, 4, 25});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{26, 4, 25});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps_ns),
-                                 fixed_width_column_wrapper<int16_t>{31, 1, 1});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_D),
-                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_s),
-                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{2, 3, 3});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_D),
-                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_s),
-                                 fixed_width_column_wrapper<int16_t>{14, 12, 7});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{14, 12, 7});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps_ns),
-                                 fixed_width_column_wrapper<int16_t>{23, 0, 0});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_D),
-                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_s),
-                                 fixed_width_column_wrapper<int16_t>{1, 0, 32});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{1, 0, 32});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ns),
-                                 fixed_width_column_wrapper<int16_t>{59, 0, 0});
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_D),
-                                 fixed_width_column_wrapper<int16_t>{0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_s),
-                                 fixed_width_column_wrapper<int16_t>{12, 0, 12});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps_ms),
-                                 fixed_width_column_wrapper<int16_t>{12, 0, 12});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps_ns),
-                                 fixed_width_column_wrapper<int16_t>{59, 0, 0});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps_D),
                                  fixed_width_column_wrapper<int16_t>{0, 0, 0});
@@ -346,108 +276,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
   cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), int16s);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_millisecond_fraction(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_microsecond_fraction(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_nanosecond_fraction(timestamps), int16s);
-}
-
-TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
-{
-  using T = TypeParam;
-  using namespace cudf::test;
-  using namespace cudf::datetime;
-  using namespace cuda::std::chrono;
-
-  auto start      = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop       = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto timestamps = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
-
-  auto expected_years =
-    fixed_width_column_wrapper<int16_t>{1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033};
-  auto expected_months   = fixed_width_column_wrapper<int16_t>{10, 8, 6, 4, 2, 1, 11, 9, 7, 5};
-  auto expected_days     = fixed_width_column_wrapper<int16_t>{11, 16, 20, 24, 26, 1, 5, 9, 14, 18};
-  auto expected_weekdays = fixed_width_column_wrapper<int16_t>{6, 4, 2, 7, 5, 4, 2, 7, 5, 3};
-  auto expected_hours    = fixed_width_column_wrapper<int16_t>{19, 20, 21, 22, 23, 0, 0, 1, 2, 3};
-  auto expected_minutes = fixed_width_column_wrapper<int16_t>{33, 26, 20, 13, 6, 0, 53, 46, 40, 33};
-  auto expected_seconds = fixed_width_column_wrapper<int16_t>{20, 40, 0, 20, 40, 0, 20, 40, 0, 20};
-
-  // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
-  if (std::is_same_v<TypeParam, cudf::timestamp_D>) {
-    expected_hours   = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    expected_minutes = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    expected_seconds = fixed_width_column_wrapper<int16_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  }
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), expected_years);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), expected_months);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps), expected_days);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps), expected_weekdays);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), expected_hours);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), expected_minutes);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), expected_seconds);
-}
-
-TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponents)
-{
-  using T = TypeParam;
-  using namespace cudf::test;
-  using namespace cudf::datetime;
-  using namespace cuda::std::chrono;
-
-  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto timestamps =
-    generate_timestamps<T, true>(this->size(), time_point_ms(start), time_point_ms(stop));
-
-  auto expected_years = fixed_width_column_wrapper<int16_t>{
-    {1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033},
-    {true, false, true, false, true, false, true, false, true, false}};
-  auto expected_months = fixed_width_column_wrapper<int16_t>{
-    {10, 8, 6, 4, 2, 1, 11, 9, 7, 5},
-    {true, false, true, false, true, false, true, false, true, false}};
-  auto expected_days = fixed_width_column_wrapper<int16_t>{
-    {11, 16, 20, 24, 26, 1, 5, 9, 14, 18},
-    {true, false, true, false, true, false, true, false, true, false}};
-  auto expected_weekdays = fixed_width_column_wrapper<int16_t>{
-    {6, 4, 2, 7, 5, 4, 2, 7, 5, 3},
-    {true, false, true, false, true, false, true, false, true, false}};
-  auto expected_hours = fixed_width_column_wrapper<int16_t>{
-    {19, 20, 21, 22, 23, 0, 0, 1, 2, 3},
-    {true, false, true, false, true, false, true, false, true, false}};
-  auto expected_minutes = fixed_width_column_wrapper<int16_t>{
-    {33, 26, 20, 13, 6, 0, 53, 46, 40, 33},
-    {true, false, true, false, true, false, true, false, true, false}};
-  auto expected_seconds = fixed_width_column_wrapper<int16_t>{
-    {20, 40, 0, 20, 40, 0, 20, 40, 0, 20},
-    {true, false, true, false, true, false, true, false, true, false}};
-
-  // Special cases for timestamp_D: zero out the expected hh/mm/ss cols
-  if (std::is_same_v<TypeParam, cudf::timestamp_D>) {
-    expected_hours = fixed_width_column_wrapper<int16_t>{
-      {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-      {true, false, true, false, true, false, true, false, true, false}};
-    expected_minutes = fixed_width_column_wrapper<int16_t>{
-      {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-      {true, false, true, false, true, false, true, false, true, false}};
-    expected_seconds = fixed_width_column_wrapper<int16_t>{
-      {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-      {true, false, true, false, true, false, true, false, true, false}};
-  }
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), expected_years);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), expected_months);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_day(timestamps), expected_days);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_weekday(timestamps), expected_weekdays);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_hour(timestamps), expected_hours);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_minute(timestamps), expected_minutes);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_second(timestamps), expected_seconds);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
