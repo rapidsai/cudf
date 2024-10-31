@@ -21,16 +21,20 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/round.hpp>
 
+#include <vector>
+
 class RoundTest : public cudf::test::BaseFixture {};
 
 TEST_F(RoundTest, RoundHalfToEven)
 {
-  cudf::test::fixed_width_column_wrapper<double> input{1.729, 17.29, 172.9, 1729};
+  std::vector<double> vals = {1.729, 17.29, 172.9, 1729};
+  cudf::test::fixed_width_column_wrapper<double> input(values.begin(), values.end());
   cudf::round(input, 0, cudf::rounding_method::HALF_UP, cudf::test::get_default_stream());
 }
 
 TEST_F(RoundTest, RoundHalfAwayFromEven)
 {
-  cudf::test::fixed_width_column_wrapper<double> input{1.5, 2.5, 1.35, 1.45, 15, 25};
+  std::vector<double> vals = {1.5, 2.5, 1.35, 1.45, 15, 25};
+  cudf::test::fixed_width_column_wrapper<double> input(values.begin(), values.end());
   cudf::round(input, -1, cudf::rounding_method::HALF_EVEN, cudf::test::get_default_stream());
 }
