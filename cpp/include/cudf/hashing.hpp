@@ -24,12 +24,13 @@ namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Type of hash value
- *
+ * @ingroup column_hash
  */
 using hash_value_type = uint32_t;
 
 /**
  * @brief The default seed value for hash functions
+ * @ingroup column_hash
  */
 static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
