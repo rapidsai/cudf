@@ -110,7 +110,9 @@ TEST_F(ParquetStringsTest, ChunkedReadLargeStrings)
     tables.emplace_back(reader.read_chunk().tbl);
   }
   auto table_views = std::vector<cudf::table_view>{};
-  std::transform( tables.begin(), tables.end(), std::back_inserter(table_views), [] (auto& t) { return t->view(); });
+  std::transform(tables.begin(), tables.end(), std::back_inserter(table_views), [](auto& tbl) {
+    return tbl->view();
+  });
   auto result            = cudf::concatenate(table_views);
   auto const result_view = result->view();
 
