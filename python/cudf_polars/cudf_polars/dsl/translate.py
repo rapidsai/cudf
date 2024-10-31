@@ -429,7 +429,9 @@ def _(
 def _(
     node: pl_ir.Slice, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.Slice(schema, node.offset, node.len, translator.translate_ir(n=node.input))
+    return ir.Slice(
+        schema, node.offset, node.len, translator.translate_ir(n=node.input)
+    )
 
 
 @_translate_ir.register

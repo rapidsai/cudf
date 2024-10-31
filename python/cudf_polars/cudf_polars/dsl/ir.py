@@ -173,15 +173,22 @@ class IR(Node["IR"]):
         )  # pragma: no cover
 
 
-@dataclasses.dataclass
 class ErrorNode(IR):
     """Represents an error translating the IR."""
 
+    __slots__ = ("error",)
+    _non_child = (
+        "schema",
+        "error",
+    )
     error: str
     """The error."""
 
+    def __init__(self, schema: Schema, error: str):
+        self.schema = schema
+        self.error = error
 
-@dataclasses.dataclass
+
 class PythonScan(IR):
     """Representation of input from a python function."""
 

@@ -10,7 +10,6 @@ from polars.testing.asserts import assert_frame_equal
 
 import rmm
 
-from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.dsl.ir import IR, ErrorNode
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
