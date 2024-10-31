@@ -129,6 +129,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_sum_empty_and_null_set": "libcudf sums column of all nulls to null, not zero",
     "tests/unit/operations/aggregation/test_aggregations.py::test_binary_op_agg_context_no_simplify_expr_12423": "groupby-agg of just literals should not produce collect_list",
     "tests/unit/operations/aggregation/test_aggregations.py::test_nan_inf_aggregation": "treatment of nans and nulls together is different in libcudf and polars in groupby-agg context",
+    "tests/unit/operations/aggregation/test_horizontal.py::test_mean_horizontal_no_rows": "CUDF failure at:/home/coder/cudf/cpp/include/cudf/utilities/type_dispatcher.hpp:546: Invalid type_id.",
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func0-func0-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func0-func1-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func0-func2-none]": "cudf-polars doesn't nullify division by zero",
