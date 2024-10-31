@@ -9,7 +9,7 @@ import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numpy as np
@@ -71,6 +71,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     import pyarrow as pa
 
     from cudf._typing import (
