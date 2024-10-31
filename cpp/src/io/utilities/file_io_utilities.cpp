@@ -22,8 +22,6 @@
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
 
-#include <rmm/device_buffer.hpp>
-
 #include <dlfcn.h>
 
 #include <cerrno>
@@ -239,7 +237,7 @@ std::vector<std::future<ResultT>> make_sliced_tasks(
   std::vector<std::future<ResultT>> slice_tasks;
   std::transform(slices.cbegin(), slices.cend(), std::back_inserter(slice_tasks), [&](auto& slice) {
     return pool.submit_task(
-      [&] { return function(ptr + slice.offset, slice.size, offset + slice.offset); });
+      [=] { return function(ptr + slice.offset, slice.size, offset + slice.offset); });
   });
   return slice_tasks;
 }

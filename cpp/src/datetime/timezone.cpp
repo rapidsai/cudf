@@ -13,12 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <algorithm>
 #include <filesystem>
@@ -138,7 +136,7 @@ struct timezone_file {
       std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
-    CUDF_EXPECTS(fin, "Failed to open the timezone file.");
+    CUDF_EXPECTS(fin, "Failed to open the timezone file '" + tz_filename.string() + "'");
     auto const file_size = fin.tellg();
     fin.seekg(0);
 

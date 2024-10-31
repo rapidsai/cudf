@@ -20,20 +20,16 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <gtest/gtest.h>
 

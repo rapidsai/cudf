@@ -6,6 +6,10 @@ from . cimport (
     generate_ngrams,
     jaccard,
     minhash,
+    ngrams_tokenize,
+    normalize,
+    replace,
+    stemmer,
 )
 
 __all__ = [
@@ -14,4 +18,8 @@ __all__ = [
     "jaccard",
     "minhash",
     "byte_pair_encode"
+    "ngrams_tokenize",
+    "normalize",
+    "replace",
+    "stemmer",
 ]

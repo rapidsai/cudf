@@ -58,14 +58,14 @@ dependencies:
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcc_linux-64=11.8
-- nvcomp==4.0.1
+- nvcomp==4.1.0.6
 - nvtx>=0.2.1
 - openpyxl
 - packaging
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.8,<1.9
+- polars>=1.11,<1.12
 - pre-commit
 - ptxcompiler
 - pyarrow>=14.0.0,<18.0.0a0
