@@ -154,7 +154,7 @@ TEST_F(SHA384HashTest, ListsUnsupported)
 
   auto const input = cudf::table_view({strings_list_col});
 
-  EXPECT_THROW(cudf::hashing::sha384(input), cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::sha384(input), cudf::data_type_error);
 }
 
 TEST_F(SHA384HashTest, StructsUnsupported)
@@ -163,7 +163,7 @@ TEST_F(SHA384HashTest, StructsUnsupported)
   auto struct_col  = cudf::test::structs_column_wrapper{{child_col}};
   auto const input = cudf::table_view({struct_col});
 
-  EXPECT_THROW(cudf::hashing::sha384(input), cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::sha384(input), cudf::data_type_error);
 }
 
 template <typename T>
