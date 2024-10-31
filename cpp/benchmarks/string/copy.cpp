@@ -34,9 +34,9 @@ static void bench_copy(nvbench::state& state)
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
 
   data_profile const map_profile = data_profile_builder().no_validity().distribution(
-    cudf::type_id::INT32, distribution_id::UNIFORM, 0, num_rows);
+    cudf::type_to_id<cudf::size_type>(), distribution_id::UNIFORM, 0, num_rows);
   auto const map_table =
-    create_random_table({cudf::type_id::INT32}, row_count{num_rows}, map_profile);
+    create_random_table({cudf::type_to_id<cudf::size_type>()}, row_count{num_rows}, map_profile);
   auto const map_view = map_table->view().column(0);
 
   auto stream = cudf::get_default_stream();
@@ -47,7 +47,7 @@ static void bench_copy(nvbench::state& state)
       cudf::gather(source->view(), map_view, cudf::out_of_bounds_policy::NULLIFY, stream);
     auto chars_size = cudf::strings_column_view(result->view().column(0)).chars_size(stream);
     state.add_global_memory_reads<nvbench::int8_t>(chars_size +
-                                                   (map_view.size() * sizeof(int32_t)));
+                                                   (map_view.size() * sizeof(cudf::size_type)));
     state.add_global_memory_writes<nvbench::int8_t>(chars_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::gather(source->view(), map_view, cudf::out_of_bounds_policy::NULLIFY, stream);
@@ -58,7 +58,7 @@ static void bench_copy(nvbench::state& state)
     auto result     = cudf::scatter(source->view(), map_view, target->view(), stream);
     auto chars_size = cudf::strings_column_view(result->view().column(0)).chars_size(stream);
     state.add_global_memory_reads<nvbench::int8_t>(chars_size +
-                                                   (map_view.size() * sizeof(int32_t)));
+                                                   (map_view.size() * sizeof(cudf::size_type)));
     state.add_global_memory_writes<nvbench::int8_t>(chars_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::scatter(source->view(), map_view, target->view(), stream);
