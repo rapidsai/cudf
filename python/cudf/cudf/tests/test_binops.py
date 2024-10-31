@@ -3431,3 +3431,15 @@ def test_binop_eq_ne_index_series(data1, data2):
     expected = gi.to_pandas() != gs.to_pandas()
 
     assert_eq(expected, actual)
+
+
+def test_binop_lhs_numpy_datetime_scalar():
+    dt1 = np.datetime64("2024-03-04T18:24:35.67")
+    dt2 = np.datetime64("2024-03-04T18:24:35.670870310")
+    result = dt1 < cudf.Series([dt2])
+    expected = dt1 < pd.Series([dt2])
+    assert_eq(result, expected)
+
+    result = dt2 < cudf.Series([dt1])
+    expected = dt2 < pd.Series([dt1])
+    assert_eq(result, expected)
