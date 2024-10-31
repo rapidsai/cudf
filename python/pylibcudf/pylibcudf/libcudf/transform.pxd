@@ -27,6 +27,11 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         column_view input
     ) except +
 
+    cdef unique_ptr[column] compute_column(
+        table_view table,
+        expression expr
+    ) except +
+
     cdef unique_ptr[column] transform(
         column_view input,
         string unary_udf,

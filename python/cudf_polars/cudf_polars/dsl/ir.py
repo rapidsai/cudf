@@ -28,6 +28,7 @@ import polars as pl
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
+from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -418,9 +419,14 @@ class Scan(IR):
                 colnames[0],
             )
         elif self.typ == "parquet":
+            filters = None
+            if self.predicate is not None and self.row_index is None:
+                # Can't apply filters during read if we have a row index.
+                filters = to_parquet_filter(self.predicate.value)
             tbl_w_meta = plc.io.parquet.read_parquet(
                 plc.io.SourceInfo(self.paths),
                 columns=with_columns,
+                filters=filters,
                 nrows=n_rows,
                 skip_rows=self.skip_rows,
             )
@@ -429,6 +435,9 @@ class Scan(IR):
                 # TODO: consider nested column names?
                 tbl_w_meta.column_names(include_children=False),
             )
+            if filters is not None:
+                # Mask must have been applied.
+                return df
         elif self.typ == "ndjson":
             json_schema: list[tuple[str, str, list]] = [
                 (name, typ, []) for name, typ in self.schema.items()
@@ -666,11 +675,11 @@ class GroupBy(IR):
             raise NotImplementedError(
                 "rolling window/groupby"
             )  # pragma: no cover; rollingwindow constructor has already raised
+        if self.options.dynamic:
+            raise NotImplementedError("dynamic group by")
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
         self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
-        if len(self.keys) == 0:
-            raise NotImplementedError("dynamic groupby")
 
     @staticmethod
     def check_agg(agg: expr.Expr) -> int:
@@ -802,10 +811,10 @@ class Join(IR):
     right_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the right frame."""
     options: tuple[
-        Literal["inner", "left", "right", "full", "leftsemi", "leftanti", "cross"],
+        Literal["inner", "left", "right", "full", "semi", "anti", "cross"],
         bool,
         tuple[int, int] | None,
-        str | None,
+        str,
         bool,
     ]
     """
@@ -840,7 +849,7 @@ class Join(IR):
     @staticmethod
     @cache
     def _joiners(
-        how: Literal["inner", "left", "right", "full", "leftsemi", "leftanti"],
+        how: Literal["inner", "left", "right", "full", "semi", "anti"],
     ) -> tuple[
         Callable, plc.copying.OutOfBoundsPolicy, plc.copying.OutOfBoundsPolicy | None
     ]:
@@ -862,13 +871,13 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
             )
-        elif how == "leftsemi":
+        elif how == "semi":
             return (
                 plc.join.left_semi_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        elif how == "leftanti":
+        elif how == "anti":
             return (
                 plc.join.left_anti_join,
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
@@ -933,7 +942,6 @@ class Join(IR):
         """Evaluate and return a dataframe."""
         left, right = (c.evaluate(cache=cache) for c in self.children)
         how, join_nulls, zlice, suffix, coalesce = self.options
-        suffix = "_right" if suffix is None else suffix
         if how == "cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
@@ -955,7 +963,7 @@ class Join(IR):
                     columns[left.num_columns :], right.column_names, strict=True
                 )
             ]
-            return DataFrame([*left_cols, *right_cols])
+            return DataFrame([*left_cols, *right_cols]).slice(zlice)
         # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
         left_on = DataFrame(broadcast(*(e.evaluate(left) for e in self.left_on)))
         right_on = DataFrame(broadcast(*(e.evaluate(right) for e in self.right_on)))

@@ -31,7 +31,6 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>

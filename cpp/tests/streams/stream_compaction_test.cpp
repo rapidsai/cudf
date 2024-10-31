@@ -15,19 +15,15 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <cmath>
 
 auto constexpr NaN          = std::numeric_limits<double>::quiet_NaN();
 auto constexpr KEEP_ANY     = cudf::duplicate_keep_option::KEEP_ANY;

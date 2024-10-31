@@ -37,6 +37,10 @@ cdef class RegexProgram:
         flags : Uniont[int, RegexFlags]
             Regex flags for interpreting special characters in the pattern
 
+        Returns
+        -------
+        RegexProgram
+            A new RegexProgram
         """
         cdef unique_ptr[regex_program] c_prog
         cdef regex_flags c_flags
