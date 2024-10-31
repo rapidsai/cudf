@@ -434,6 +434,7 @@ add_library(
   src/io/comp/snap.cu
   src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
+  src/io/comp/comp.cu
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
   src/io/csv/durations.cu
