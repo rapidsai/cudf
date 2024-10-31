@@ -8,6 +8,7 @@ nvtext
     generate_ngrams
     jaccard
     minhash
+    byte_pair_encode
     ngrams_tokenize
     normalize
     replace
