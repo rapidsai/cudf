@@ -187,6 +187,8 @@ enum class datetime_component : uint8_t {
  * A millisecond fraction is only the 3 digits that make up the millisecond portion of a duration.
  * For example, the millisecond fraction of 1.234567890 seconds is 234.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -194,7 +196,7 @@ enum class datetime_component : uint8_t {
  * @returns cudf::column of the extracted int16_t milliseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_millisecond_fraction(
+[[deprecated]] std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -206,6 +208,8 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  * A microsecond fraction is only the 3 digits that make up the microsecond portion of a duration.
  * For example, the microsecond fraction of 1.234567890 seconds is 567.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -213,7 +217,7 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  * @returns cudf::column of the extracted int16_t microseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_microsecond_fraction(
+[[deprecated]] std::unique_ptr<cudf::column> extract_microsecond_fraction(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -225,6 +229,8 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  * A nanosecond fraction is only the 3 digits that make up the nanosecond portion of a duration.
  * For example, the nanosecond fraction of 1.234567890 seconds is 890.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -232,7 +238,7 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  * @returns cudf::column of the extracted int16_t nanoseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_nanosecond_fraction(
+[[deprecated]] std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());

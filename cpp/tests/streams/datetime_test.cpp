@@ -33,21 +33,6 @@ class DatetimeTest : public cudf::test::BaseFixture {
   cudf::test::fixed_width_column_wrapper<int32_t, int32_t> months{{1, -1, 3}};
 };
 
-TEST_F(DatetimeTest, ExtractMillisecondFraction)
-{
-  cudf::datetime::extract_millisecond_fraction(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractMicrosecondFraction)
-{
-  cudf::datetime::extract_microsecond_fraction(timestamps, cudf::test::get_default_stream());
-}
-
-TEST_F(DatetimeTest, ExtractNanosecondFraction)
-{
-  cudf::datetime::extract_nanosecond_fraction(timestamps, cudf::test::get_default_stream());
-}
-
 TEST_F(DatetimeTest, LastDayOfMonth)
 {
   cudf::datetime::last_day_of_month(timestamps, cudf::test::get_default_stream());
