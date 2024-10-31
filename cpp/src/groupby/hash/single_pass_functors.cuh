@@ -25,16 +25,15 @@
 #include <cuda/std/cstddef>
 
 namespace cudf::groupby::detail::hash {
-
-// TODO: TO BE REMOVED
+// TODO: TO BE REMOVED issue tracked via #17171
 template <typename T, cudf::aggregation::Kind k>
 __device__ constexpr bool is_supported()
 {
   return cudf::is_fixed_width<T>() and
-         ((k == cudf::aggregation::SUM) or (k == cudf::aggregation::MIN) or
-          (k == cudf::aggregation::MAX) or (k == cudf::aggregation::COUNT_VALID) or
-          (k == cudf::aggregation::COUNT_ALL) or (k == cudf::aggregation::ARGMAX) or
-          (k == cudf::aggregation::ARGMIN) or (k == cudf::aggregation::SUM_OF_SQUARES) or
+         ((k == cudf::aggregation::SUM) or (k == cudf::aggregation::SUM_OF_SQUARES) or
+          (k == cudf::aggregation::MIN) or (k == cudf::aggregation::MAX) or
+          (k == cudf::aggregation::COUNT_VALID) or (k == cudf::aggregation::COUNT_ALL) or
+          (k == cudf::aggregation::ARGMIN) or (k == cudf::aggregation::ARGMAX) or
           (k == cudf::aggregation::STD) or (k == cudf::aggregation::VARIANCE) or
           (k == cudf::aggregation::PRODUCT) and cudf::detail::is_product_supported<T>());
 }
@@ -57,12 +56,12 @@ identity_from_operator()
 template <typename T, cudf::aggregation::Kind k>
 __device__ T get_identity()
 {
-  if ((k == cudf::aggregation::ARGMAX) || (k == cudf::aggregation::ARGMIN)) {
-    if constexpr (cudf::is_timestamp<T>())
+  if ((k == cudf::aggregation::ARGMAX) or (k == cudf::aggregation::ARGMIN)) {
+    if constexpr (cudf::is_timestamp<T>()) {
       return k == cudf::aggregation::ARGMAX
                ? T{typename T::duration(cudf::detail::ARGMAX_SENTINEL)}
                : T{typename T::duration(cudf::detail::ARGMIN_SENTINEL)};
-    else {
+    } else {
       using DeviceType = cudf::device_storage_type_t<T>;
       return k == cudf::aggregation::ARGMAX
                ? static_cast<DeviceType>(cudf::detail::ARGMAX_SENTINEL)
@@ -93,11 +92,7 @@ struct initialize_target_element<Target, k, std::enable_if_t<is_supported<Target
 
     target_casted[idx] = get_identity<DeviceType, k>();
 
-    if (k == cudf::aggregation::COUNT_ALL || k == cudf::aggregation::COUNT_VALID) {
-      target_mask[idx] = true;
-    } else {
-      target_mask[idx] = false;
-    }
+    target_mask[idx] = (k == cudf::aggregation::COUNT_ALL) or (k == cudf::aggregation::COUNT_VALID);
   }
 };
 
