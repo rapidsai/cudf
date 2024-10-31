@@ -26,10 +26,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows,
-                                                 cudf::size_type row_width,
-                                                 int32_t hit_rate);
-
 static void bench_find_string(nvbench::state& state)
 {
   auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
@@ -38,16 +34,11 @@ static void bench_find_string(nvbench::state& state)
   auto const target_count = static_cast<cudf::size_type>(state.get_int64("targets"));
   auto const api          = state.get_string("api");
 
-  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
   auto const stream = cudf::get_default_stream();
-  auto const col    = build_input_column(n_rows, row_width, hit_rate);
+  auto const col    = create_string_column(n_rows, row_width, hit_rate);
   auto const input  = cudf::strings_column_view(col->view());
 
-  // Note that these all match the first row of the raw_data in build_input_column.
+  // Note that these all match the first row of the raw_data in create_string_column.
   // This is so the hit_rate can properly accounted for.
   std::vector<std::string> target_data(
     {" abc", "W43", "0987 5W43", "123 abc", "23 abc", "3 abc", "7 5W43", "87 5W43", "987 5W43"});
@@ -81,6 +72,6 @@ NVBENCH_BENCH(bench_find_string)
   .set_name("find_multiple")
   .add_string_axis("api", {"find", "contains"})
   .add_int64_axis("targets", {10, 20, 40})
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
-  .add_int64_axis("num_rows", {260'000, 1'953'000, 16'777'216})
+  .add_int64_axis("row_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("hit_rate", {20, 80});  // percentage
