@@ -85,6 +85,8 @@ def _pandas_util_dir():
         "hash_array",
         "hash_pandas_object",
         "version",
+         "_tester",
+         "_validators",
     ]
 
 
