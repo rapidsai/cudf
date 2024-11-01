@@ -1222,7 +1222,7 @@ struct arity_functor {
  * @param op Operator used to determine arity.
  * @return Arity of the operator.
  */
-CUDF_HOST_DEVICE inline cudf::size_type ast_operator_arity(ast_operator op)
+cudf::size_type ast_operator_arity(ast_operator op)
 {
   auto result = cudf::size_type(0);
   ast_operator_dispatcher(op, detail::arity_functor{}, result);
