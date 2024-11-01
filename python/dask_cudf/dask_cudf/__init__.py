@@ -1,7 +1,9 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-from dask import config
+import warnings
+from importlib import import_module
 
+from dask import config
 import dask.dataframe as dd
 from dask.dataframe import from_delayed  # noqa: E402
 
@@ -34,10 +36,20 @@ def read_parquet(*args, **kwargs):
         return dd.read_parquet(*args, **kwargs)
 
 
-def raise_not_implemented_error(attr_name):
+def _deprecated_api(old_api, new_api=None, rec=None):
     def inner_func(*args, **kwargs):
+        if new_api:
+            # Use alternative
+            msg = f"{old_api} is now deprecated. "
+            msg += rec or f"Please use {new_api} instead."
+            warnings.warn(msg, FutureWarning)
+            new_attr = new_api.split(".")
+            module = import_module(".".join(new_attr[:-1]))
+            return getattr(module, new_attr[-1])(*args, **kwargs)
+
+        # No alternative - raise an error
         raise NotImplementedError(
-            f"Top-level {attr_name} API is not available for dask-expr."
+            f"{old_api} is no longer supported. " + (rec or "")
         )
 
     return inner_func
@@ -45,15 +57,23 @@ def raise_not_implemented_error(attr_name):
 
 if QUERY_PLANNING_ON:
     from ._expr.expr import _patch_dask_expr
+    from . import io  # noqa: F401
 
-    groupby_agg = raise_not_implemented_error("groupby_agg")
+    groupby_agg = _deprecated_api("dask_cudf.groupby_agg")
     read_text = DataFrame.read_text
-    to_orc = raise_not_implemented_error("to_orc")
     _patch_dask_expr()
 
 else:
     from ._legacy.groupby import groupby_agg  # noqa: F401
-    from ._legacy.io import read_text, to_orc  # noqa: F401
+    from ._legacy.io import read_text  # noqa: F401
+    from . import io  # noqa: F401
+
+
+to_orc = _deprecated_api(
+    "dask_cudf.to_orc",
+    new_api="dask_cudf._legacy.io.to_orc",
+    rec="Please use DataFrame.to_orc instead.",
+)
 
 
 __all__ = [

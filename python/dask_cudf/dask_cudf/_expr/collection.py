@@ -153,7 +153,10 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         )
 
     def to_orc(self, *args, **kwargs):
-        return self.to_legacy_dataframe().to_orc(*args, **kwargs)
+        from dask_cudf._legacy.io import to_orc
+
+        return to_orc(self, *args, **kwargs)
+        # return self.to_legacy_dataframe().to_orc(*args, **kwargs)
 
     @staticmethod
     def read_text(*args, **kwargs):

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
 import functools
 
 import pandas as pd
@@ -6,6 +6,8 @@ from dask_expr.io.io import FusedParquetIO
 from dask_expr.io.parquet import FragmentWrapper, ReadParquetPyarrowFS
 
 import cudf
+
+from dask_cudf import _deprecated_api
 
 # Dask-expr imports CudfEngine from this module
 from dask_cudf._legacy.io.parquet import CudfEngine  # noqa: F401
@@ -115,3 +117,19 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         if isinstance(parent, CudfFusedParquetIO):
             return
         return parent.substitute(self, CudfFusedParquetIO(self))
+
+
+read_parquet = _deprecated_api(
+    "dask_cudf.io.parquet.read_parquet",
+    new_api="dask_cudf.read_parquet",
+)
+to_parquet = _deprecated_api(
+    "dask_cudf.io.parquet.to_parquet",
+    new_api="dask_cudf._legacy.io.parquet.to_parquet",
+    rec="Please use the DataFrame.to_parquet method instead.",
+)
+create_metadata_file = _deprecated_api(
+    "dask_cudf.io.parquet.create_metadata_file",
+    new_api="dask_cudf._legacy.io.parquet.create_metadata_file",
+    rec="Please raise an issue if this feature is needed.",
+)
