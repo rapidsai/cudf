@@ -111,7 +111,7 @@ class Translator:
                     f"No GPU support for {result} with Null column dtype."
                 )
                 self.errors.append(error)
-                return ir.ErrorNode(schema, str(error))
+                raise error
 
             return result
 
@@ -135,12 +135,7 @@ class Translator:
         After translation is complete, this list of errors should be inspected
         to determine if the query is supported.
         """
-        try:
-            node = self.visitor.view_expression(n)
-        except Exception as e:
-            raise NotImplementedError(
-                "Could not retrieve the current expression"
-            ) from e
+        node = self.visitor.view_expression(n)
         dtype = dtypes.from_polars(self.visitor.get_dtype(n))
         try:
             return _translate_expr(node, self, dtype)
