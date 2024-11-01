@@ -531,10 +531,10 @@ def write_parquet(
             "Valid values are '1.0' and '2.0'"
         )
 
-    cdef cudf_io_types.dictionary_policy dict_policy = (
-        cudf_io_types.dictionary_policy.ADAPTIVE
+    dict_policy = (
+        plc.io.types.DictionaryPolicy.ADAPTIVE
         if use_dictionary
-        else cudf_io_types.dictionary_policy.NEVER
+        else plc.io.types.DictionaryPolicy.NEVER
     )
 
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
