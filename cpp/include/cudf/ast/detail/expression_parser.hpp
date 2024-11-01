@@ -17,6 +17,7 @@
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -84,6 +85,7 @@ struct expression_device_view {
   device_span<detail::device_data_reference const> data_references;
   device_span<generic_scalar_device_view const> literals;
   device_span<ast_operator const> operators;
+  device_span<int8_t const> operator_arities;
   device_span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
 };
@@ -244,12 +246,17 @@ class expression_parser {
     extract_size_and_pointer(_data_references, sizes, data_pointers);
     extract_size_and_pointer(_literals, sizes, data_pointers);
     extract_size_and_pointer(_operators, sizes, data_pointers);
+    extract_size_and_pointer(_operator_arities, sizes, data_pointers);
     extract_size_and_pointer(_operator_source_indices, sizes, data_pointers);
 
     // Create device buffer
     auto const buffer_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
     auto buffer_offsets    = std::vector<int>(sizes.size());
-    thrust::exclusive_scan(sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0);
+    thrust::exclusive_scan(
+      sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0, [](auto a, auto b) {
+        // Must align each part of the AST program on 4-byte addresses
+        return a + cudf::util::round_up_safe(b, 4);
+      });
 
     auto h_data_buffer = std::vector<char>(buffer_size);
     for (unsigned int i = 0; i < data_pointers.size(); ++i) {
@@ -273,8 +280,11 @@ class expression_parser {
     device_expression_data.operators = device_span<ast_operator const>(
       reinterpret_cast<ast_operator const*>(device_data_buffer_ptr + buffer_offsets[2]),
       _operators.size());
+    device_expression_data.operator_arities = device_span<int8_t const>(
+      reinterpret_cast<int8_t const*>(device_data_buffer_ptr + buffer_offsets[3]),
+      _operators.size());
     device_expression_data.operator_source_indices = device_span<cudf::size_type const>(
-      reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
+      reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[4]),
       _operator_source_indices.size());
     device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
     shmem_per_thread                         = static_cast<int>(
@@ -318,6 +328,7 @@ class expression_parser {
   bool _has_nulls;
   std::vector<detail::device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
+  std::vector<int8_t> _operator_arities;
   std::vector<cudf::size_type> _operator_source_indices;
   std::vector<generic_scalar_device_view> _literals;
 };
