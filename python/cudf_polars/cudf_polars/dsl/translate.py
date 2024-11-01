@@ -85,8 +85,8 @@ class Translator:
             error = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
-            self.errors.append(error)
-            raise error
+            self.errors.append(error)  # pragma: no cover
+            raise error  # pragma: no cover
 
         with ctx:
             polars_schema = self.visitor.get_schema()
