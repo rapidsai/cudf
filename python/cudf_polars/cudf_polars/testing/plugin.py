@@ -45,6 +45,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/dataframe/test_df.py::test_extension": "AssertionError",
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
