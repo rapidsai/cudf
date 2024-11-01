@@ -82,9 +82,11 @@ class Translator:
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
         if (version := self.visitor.version()) >= (4, 0):
-            raise NotImplementedError(
+            error = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
+            self.errors.append(error)
+            raise error
 
         with ctx:
             polars_schema = self.visitor.get_schema()
