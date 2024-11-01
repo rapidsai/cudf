@@ -1,6 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
@@ -27,5 +26,4 @@ def test_multibyte_split(source_func, options, tmp_path):
         source = func(str(fle))
     result = plc.io.text.multibyte_split(source, "::", options)
     expected = pa.array(["x::", "y::", "z"])
-    breakpoint()
     assert_column_eq(result, expected)
