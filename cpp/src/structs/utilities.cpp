@@ -21,13 +21,10 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>

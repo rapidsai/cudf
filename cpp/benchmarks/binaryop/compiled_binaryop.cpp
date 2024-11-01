@@ -39,7 +39,7 @@ void BM_compiled_binaryop(nvbench::state& state, cudf::binary_operator binop)
   // use number of bytes read and written to global memory
   state.add_global_memory_reads<TypeLhs>(table_size);
   state.add_global_memory_reads<TypeRhs>(table_size);
-  state.add_global_memory_reads<TypeOut>(table_size);
+  state.add_global_memory_writes<TypeOut>(table_size);
 
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch&) { cudf::binary_operation(lhs, rhs, binop, output_dtype); });
