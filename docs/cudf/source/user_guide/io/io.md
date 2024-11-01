@@ -112,7 +112,7 @@ control that may alter the effect of "KVIKIO" option in cuDF:
     configuration check, and will error out if GDS requirements are not met. The
     only exceptional case is that if the system does not support files being
     opened with the `O_DIRECT` flag, the GDS compatibility mode will be used.
-- "OFF": Completely disable GDS use.
+- "OFF": Completely disable GDS and kvikIO use.
 
 If no value is set, behavior will be the same as the "KVIKIO" option.
 
