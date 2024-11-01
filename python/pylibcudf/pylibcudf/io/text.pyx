@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libc.stdint cimport uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -34,13 +35,13 @@ cdef class DataChunkSource:
     def __init__(self):
         raise ValueError(
             "This class cannot be instantiated directly. "
-            "Use one of the make_source functions instead"
+            "Use one of the make_source functions instead."
         )
 
     @staticmethod
-    cdef DataChunkSource from_source(data_chunk_source source):
+    cdef DataChunkSource from_source(unique_ptr[data_chunk_source] source):
         cdef DataChunkSource datasource = DataChunkSource.__new__(DataChunkSource)
-        datasource.c_data_chunk_source = source
+        datasource.c_data_chunk_source = move(source)
         return datasource
 
 
@@ -59,13 +60,13 @@ cpdef DataChunkSource make_source(str data):
     DataChunkSource
         The data chunk source for the provided host data.
     """
-    cdef data_chunk_source c_source
+    cdef unique_ptr[data_chunk_source] c_source
     cdef string c_data = data.encode()
 
     with nogil:
         c_source = cpp_text.make_source(c_data)
 
-    return DataChunkSource.from_source(c_source)
+    return DataChunkSource.from_source(move(c_source))
 
 
 cpdef DataChunkSource make_source_from_file(str filename):
@@ -82,18 +83,18 @@ cpdef DataChunkSource make_source_from_file(str filename):
     DataChunkSource
         The data chunk source for the provided filename.
     """
-    cdef data_chunk_source c_source
+    cdef unique_ptr[data_chunk_source] c_source
     cdef string c_filename = filename.encode()
 
     with nogil:
         c_source = cpp_text.make_source_from_file(c_filename)
 
-    return DataChunkSource.from_source(c_source)
+    return DataChunkSource.from_source(move(c_source))
 
 cpdef DataChunkSource make_source_from_bgzip_file(
     str filename,
-    int virtual_begin=None,
-    int virtual_end=None,
+    int virtual_begin=-1,
+    int virtual_end=-1,
 ):
     """
     Creates a data source capable of producing device-buffered views of
@@ -104,39 +105,41 @@ cpdef DataChunkSource make_source_from_bgzip_file(
     filename : str
         The filename of the BGZIP-compressed file to be exposed as a data chunk source.
 
-    virtual_begin : int, default None
+    virtual_begin : int
         The virtual (Tabix) offset of the first byte to be read. Its upper 48 bits
         describe the offset into the compressed file, its lower 16 bits describe the
         block-local offset.
 
     virtual_end : int, default None
-        The data chunk source for the provided filename.
+        The virtual (Tabix) offset one past the last byte to be read
 
     Returns
     -------
     DataChunkSource
         The data chunk source for the provided filename.
     """
-    cdef data_chunk_source c_source
+    cdef unique_ptr[data_chunk_source] c_source
     cdef string c_filename = filename.encode()
+    cdef uint64_t c_virtual_begin
+    cdef uint64_t c_virtual_end
 
-    if virtual_begin is None and virtual_end is None:
+    if virtual_begin == -1 and virtual_end == -1:
         with nogil:
             c_source = cpp_text.make_source_from_bgzip_file(c_filename)
-    elif virtual_begin is not None and virtual_end is not None:
-        cdef uint64_t c_virtual_begin = virtual_begin
-        cdef uint64_t c_virtual_end = c_virtual_end
+    elif virtual_begin != -1 and virtual_end != -1:
+        c_virtual_begin = virtual_begin
+        c_virtual_end = virtual_end
         with nogil:
             c_source = cpp_text.make_source_from_bgzip_file(
                 c_filename,
-                virtual_begin,
+                c_virtual_begin,
                 c_virtual_end
             )
     else:
         raise ValueError(
             "virtual_begin and virtual_end must both be None or both be int"
         )
-    return DataChunkSource.from_source(c_source)
+    return DataChunkSource.from_source(move(c_source))
 
 cpdef Column multibyte_split(
     DataChunkSource source,
@@ -166,7 +169,7 @@ cpdef Column multibyte_split(
         within the relevant byte range.
     """
     cdef unique_ptr[column] c_result
-    cdef data_chunk_source c_source = source.c_data_chunk_source
+    cdef unique_ptr[data_chunk_source] c_source = move(source.c_data_chunk_source)
     cdef string c_delimiter = delimiter.encode()
 
     if options is None:
@@ -176,7 +179,7 @@ cpdef Column multibyte_split(
 
     with nogil:
         c_result = cpp_text.multibyte_split(
-            c_source
+            dereference(c_source),
             c_delimiter,
             c_options
         )

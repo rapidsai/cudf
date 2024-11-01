@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
+
 from io import TextIOBase
 
 import pylibcudf as plc
