@@ -19,13 +19,11 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/subword_tokenize.hpp>
 
 #include <fstream>
-#include <iostream>
 #include <vector>
 
 // Global environment for temporary files

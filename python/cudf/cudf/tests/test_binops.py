@@ -3431,3 +3431,16 @@ def test_binop_eq_ne_index_series(data1, data2):
     expected = gi.to_pandas() != gs.to_pandas()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("scalar", [np.datetime64, np.timedelta64])
+def test_binop_lhs_numpy_datetimelike_scalar(scalar):
+    slr1 = scalar(1, "ms")
+    slr2 = scalar(1, "ns")
+    result = slr1 < cudf.Series([slr2])
+    expected = slr1 < pd.Series([slr2])
+    assert_eq(result, expected)
+
+    result = slr2 < cudf.Series([slr1])
+    expected = slr2 < pd.Series([slr1])
+    assert_eq(result, expected)

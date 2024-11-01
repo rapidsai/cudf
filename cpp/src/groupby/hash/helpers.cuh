@@ -54,15 +54,6 @@ using shmem_extent_t =
 CUDF_HOST_DEVICE auto constexpr window_extent =
   cuco::make_window_extent<GROUPBY_CG_SIZE, GROUPBY_WINDOW_SIZE>(shmem_extent_t{});
 
-/**
- * @brief Returns the smallest multiple of 8 that is greater than or equal to the given integer.
- */
-CUDF_HOST_DEVICE constexpr std::size_t round_to_multiple_of_8(std::size_t num)
-{
-  std::size_t constexpr base = 8;
-  return cudf::util::div_rounding_up_safe(num, base) * base;
-}
-
 using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC>;
