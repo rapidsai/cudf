@@ -574,7 +574,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     >>> with dask.config.set({"dataframe.backend": "cudf"}):
     ...     ddf = dd.from_dict({"a": range(10)})
     >>> type(ddf)
-    <class 'dask_cudf.core.DataFrame'>
+    <class 'dask_cudf._legacy.core.DataFrame'>
     """
 
     @classmethod

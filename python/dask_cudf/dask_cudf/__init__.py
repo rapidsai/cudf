@@ -2,15 +2,14 @@
 
 from dask import config
 
-import dask.dataframe as dd  # noqa: E402
+import dask.dataframe as dd
 from dask.dataframe import from_delayed  # noqa: E402
 
 import cudf  # noqa: E402
 
 from . import backends  # noqa: E402, F401
 from ._version import __git_commit__, __version__  # noqa: E402, F401
-from ._legacy.core import concat, from_cudf  # noqa: F401
-
+from .core import concat, from_cudf, DataFrame, Index, Series  # noqa: F401
 
 QUERY_PLANNING_ON = dd.DASK_EXPR_ENABLED
 
@@ -45,7 +44,6 @@ def raise_not_implemented_error(attr_name):
 
 
 if QUERY_PLANNING_ON:
-    from ._expr.collection import DataFrame, Index, Series  # noqa: E402
     from ._expr.expr import _patch_dask_expr
 
     groupby_agg = raise_not_implemented_error("groupby_agg")
@@ -54,7 +52,6 @@ if QUERY_PLANNING_ON:
     _patch_dask_expr()
 
 else:
-    from ._legacy.core import DataFrame, Index, Series  # noqa: F401
     from ._legacy.groupby import groupby_agg  # noqa: F401
     from ._legacy.io import read_text, to_orc  # noqa: F401
 
