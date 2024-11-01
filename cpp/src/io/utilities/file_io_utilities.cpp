@@ -22,8 +22,6 @@
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
 
-#include <rmm/device_buffer.hpp>
-
 #include <dlfcn.h>
 
 #include <cerrno>
@@ -110,7 +108,11 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    if (driver_close != nullptr) driver_close();
+    // Explicit cuFile driver close should not be performed here to avoid segfault. However, in the
+    // absence of driver_close(), cuFile will implicitly do that, which in most cases causes
+    // segfault anyway. TODO: Revisit this conundrum once cuFile is fixed.
+    // https://github.com/rapidsai/cudf/issues/17121
+
     if (cf_lib != nullptr) dlclose(cf_lib);
   }
 
@@ -239,7 +241,7 @@ std::vector<std::future<ResultT>> make_sliced_tasks(
   std::vector<std::future<ResultT>> slice_tasks;
   std::transform(slices.cbegin(), slices.cend(), std::back_inserter(slice_tasks), [&](auto& slice) {
     return pool.submit_task(
-      [&] { return function(ptr + slice.offset, slice.size, offset + slice.offset); });
+      [=] { return function(ptr + slice.offset, slice.size, offset + slice.offset); });
   });
   return slice_tasks;
 }

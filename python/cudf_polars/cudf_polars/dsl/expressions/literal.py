@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -16,7 +17,7 @@ from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Hashable, Mapping
 
     import pyarrow as pa
 
@@ -31,12 +32,12 @@ class Literal(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
     value: pa.Scalar[Any]
-    children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pa.Scalar[Any]) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         assert value.type == plc.interop.to_arrow(dtype)
         self.value = value
+        self.children = ()
 
     def do_evaluate(
         self,
@@ -58,19 +59,19 @@ class LiteralColumn(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
     value: pa.Array[Any, Any]
-    children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         data = value.to_arrow()
         self.value = data.cast(dtypes.downcast_arrow_lists(data.type))
+        self.children = ()
 
-    def get_hash(self) -> int:
+    def get_hashable(self) -> Hashable:
         """Compute a hash of the column."""
         # This is stricter than necessary, but we only need this hash
         # for identity in groupby replacements so it's OK. And this
         # way we avoid doing potentially expensive compute.
-        return hash((type(self), self.dtype, id(self.value)))
+        return (type(self), self.dtype, id(self.value))
 
     def do_evaluate(
         self,

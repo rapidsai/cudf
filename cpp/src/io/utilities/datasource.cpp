@@ -15,8 +15,10 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/datasource.hpp>
@@ -31,7 +33,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <unordered_map>
 #include <vector>
 
 namespace cudf {
@@ -47,6 +48,7 @@ class file_source : public datasource {
   {
     detail::force_init_cuda_context();
     if (cufile_integration::is_kvikio_enabled()) {
+      cufile_integration::set_thread_pool_nthreads_from_env();
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");
@@ -245,17 +247,18 @@ class device_buffer_source final : public datasource {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto const count  = std::min(size, this->size() - offset);
-    auto const stream = cudf::get_default_stream();
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
-    stream.synchronize();
+    auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
+    cudf::detail::cuda_memcpy(host_span<uint8_t>{dst, count},
+                              device_span<uint8_t const>{
+                                reinterpret_cast<uint8_t const*>(_d_buffer.data() + offset), count},
+                              stream);
     return count;
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     auto const count  = std::min(size, this->size() - offset);
-    auto const stream = cudf::get_default_stream();
+    auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
     auto h_data       = cudf::detail::make_host_vector_async(
       cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
     stream.synchronize();
@@ -392,14 +395,21 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
                                                size_t offset,
                                                size_t max_size_estimate)
 {
-#ifdef CUFILE_FOUND
-  if (cufile_integration::is_always_enabled()) {
-    // avoid mmap as GDS is expected to be used for most reads
+  auto const use_memory_mapping = [] {
+    auto const policy = getenv_or("LIBCUDF_MMAP_ENABLED", std::string{"ON"});
+
+    if (policy == "ON") { return true; }
+    if (policy == "OFF") { return false; }
+
+    CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
+  }();
+
+  if (use_memory_mapping) {
+    return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
+  } else {
+    // `file_source` reads the file directly, without memory mapping
     return std::make_unique<file_source>(filepath.c_str());
   }
-#endif
-  // Use our own memory mapping implementation for direct file reads
-  return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
 }
 
 std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-import pylibcudf as plc
-
 from polars.polars import _expr_nodes as pl_expr
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
@@ -24,9 +24,8 @@ __all__ = ["BinOp"]
 
 
 class BinOp(Expr):
-    __slots__ = ("op", "children")
+    __slots__ = ("op",)
     _non_child = ("dtype", "op")
-    children: tuple[Expr, Expr]
 
     def __init__(
         self,
@@ -35,7 +34,7 @@ class BinOp(Expr):
         left: Expr,
         right: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         if plc.traits.is_boolean(self.dtype):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the

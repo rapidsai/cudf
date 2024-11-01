@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
@@ -126,7 +125,7 @@ auto make_input_column()
 {
   if constexpr (std::is_same_v<TypeParam, cudf::string_view>) {
     return cudf::test::strings_column_wrapper{
-      {"0", "0", "4", "4", "4", "5", "7", "7", "7", "9", "9", "9"},
+      {"0", "0", "4", "4", "4", "", "7", "7", "7", "9", "9", "9"},
       cudf::test::iterators::null_at(5)};
   } else {
     using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;

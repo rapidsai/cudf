@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import DEFAULT_STRUCT_TESTING_TYPE, assert_column_eq
+
+import pylibcudf as plc
 
 EMPTY_COL_SIZE = 3
 

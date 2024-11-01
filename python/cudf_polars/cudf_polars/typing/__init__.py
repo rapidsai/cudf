@@ -5,12 +5,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Literal, Protocol, Union
-
-import pylibcudf as plc
+from collections.abc import Hashable, Mapping
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, Union
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+
+import pylibcudf as plc
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -18,7 +18,19 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-IR: TypeAlias = Union[
+    from cudf_polars.dsl import expr, ir, nodebase
+
+__all__: list[str] = [
+    "PolarsIR",
+    "PolarsExpr",
+    "NodeTraverser",
+    "OptimizationArgs",
+    "GenericTransformer",
+    "ExprTransformer",
+    "IRTransformer",
+]
+
+PolarsIR: TypeAlias = Union[
     pl_ir.PythonScan,
     pl_ir.Scan,
     pl_ir.Cache,
@@ -38,7 +50,7 @@ IR: TypeAlias = Union[
     pl_ir.ExtContext,
 ]
 
-Expr: TypeAlias = Union[
+PolarsExpr: TypeAlias = Union[
     pl_expr.Function,
     pl_expr.Window,
     pl_expr.Literal,
@@ -68,7 +80,7 @@ class NodeTraverser(Protocol):
         """Set the current plan node to n."""
         ...
 
-    def view_current_node(self) -> IR:
+    def view_current_node(self) -> PolarsIR:
         """Convert current plan node to python rep."""
         ...
 
@@ -80,7 +92,7 @@ class NodeTraverser(Protocol):
         """Get the datatype of the given expression id."""
         ...
 
-    def view_expression(self, n: int) -> Expr:
+    def view_expression(self, n: int) -> PolarsExpr:
         """Convert the given expression to python rep."""
         ...
 
@@ -107,3 +119,29 @@ OptimizationArgs: TypeAlias = Literal[
     "cluster_with_columns",
     "no_optimization",
 ]
+
+
+U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
+V_co = TypeVar("V_co", covariant=True)
+NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
+
+
+class GenericTransformer(Protocol[U_contra, V_co]):
+    """Abstract protocol for recursive visitors."""
+
+    def __call__(self, __value: U_contra) -> V_co:
+        """Apply the visitor to the node."""
+        ...
+
+    @property
+    def state(self) -> Mapping[str, Any]:
+        """Arbitrary immutable state."""
+        ...
+
+
+# Quotes to avoid circular import
+ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr"]
+"""Protocol for transformation of Expr nodes."""
+
+IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR"]
+"""Protocol for transformation of IR nodes."""

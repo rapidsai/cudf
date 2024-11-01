@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Sequence, cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 import pandas as pd
@@ -35,6 +35,8 @@ def str_to_boolean(column: StringColumn):
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import cupy
     import numba.cuda
 
@@ -998,7 +1000,7 @@ class StringMethods(ColumnMethods):
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
                     self._column,
-                    pat,
+                    list(pat),
                     column.as_column(repl, dtype="str"),
                 )
                 if regex

@@ -176,13 +176,19 @@ class hostdevice_2dvector {
   operator device_2dspan<T const>() const { return {device_span<T const>{_data}, _size.second}; }
 
   device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
-  device_2dspan<T const> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
+  [[nodiscard]] device_2dspan<T const> device_view() const
+  {
+    return static_cast<device_2dspan<T const>>(*this);
+  }
 
   operator host_2dspan<T>() { return {host_span<T>{_data}, _size.second}; }
   operator host_2dspan<T const>() const { return {host_span<T const>{_data}, _size.second}; }
 
   host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
-  host_2dspan<T const> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
+  [[nodiscard]] host_2dspan<T const> host_view() const
+  {
+    return static_cast<host_2dspan<T const>>(*this);
+  }
 
   host_span<T> operator[](size_t row)
   {
@@ -194,16 +200,19 @@ class hostdevice_2dvector {
     return host_span<T const>{_data}.subspan(row * _size.second, _size.second);
   }
 
-  auto size() const noexcept { return _size; }
-  auto count() const noexcept { return _size.first * _size.second; }
-  auto is_empty() const noexcept { return count() == 0; }
+  [[nodiscard]] auto size() const noexcept { return _size; }
+  [[nodiscard]] auto count() const noexcept { return _size.first * _size.second; }
+  [[nodiscard]] auto is_empty() const noexcept { return count() == 0; }
 
   T* base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
   T* base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }
 
-  T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
+  [[nodiscard]] T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
 
-  T const* base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
+  [[nodiscard]] T const* base_device_ptr(size_t offset = 0) const
+  {
+    return _data.device_ptr(offset);
+  }
 
   [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
