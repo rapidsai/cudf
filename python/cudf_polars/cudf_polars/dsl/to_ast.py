@@ -8,10 +8,10 @@ from __future__ import annotations
 from functools import partial, reduce, singledispatch
 from typing import TYPE_CHECKING, TypeAlias
 
+from polars.polars import _expr_nodes as pl_expr
+
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
-
-from polars.polars import _expr_nodes as pl_expr
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.traversal import CachingVisitor
