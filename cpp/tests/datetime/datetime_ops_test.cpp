@@ -52,6 +52,26 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   cudf::data_type dtype{cudf::type_to_id<T>()};
   cudf::column col{dtype, 0, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::YEAR),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::MONTH),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::DAY),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::WEEKDAY),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::HOUR),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::MINUTE),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::SECOND),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::MILLISECOND),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::MICROSECOND),
+               cudf::logic_error);
+  EXPECT_THROW(extract_datetime_component(col, cudf::datetime::datetime_component::NANOSECOND),
+               cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
   EXPECT_THROW(day_of_year(col), cudf::logic_error);
   EXPECT_THROW(add_calendrical_months(col, *cudf::make_empty_column(cudf::type_id::INT16)),
