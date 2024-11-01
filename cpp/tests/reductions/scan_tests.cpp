@@ -20,13 +20,11 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 
 #include <algorithm>
@@ -414,12 +412,13 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
 {
   int row_count = 512;
 
-  auto data_begin = cudf::detail::make_counting_transform_iterator(0, [](auto idx) {
+  auto validity = cudf::detail::make_counting_transform_iterator(
+    0, [](auto idx) -> bool { return (idx % 23) != 22; });
+  auto data_begin = cudf::detail::make_counting_transform_iterator(0, [validity](auto idx) {
+    if (validity[idx] == 0) return std::string{};
     char const s = static_cast<char>('a' + (idx % 26));
     return std::string{1, s};
   });
-  auto validity   = cudf::detail::make_counting_transform_iterator(
-    0, [](auto idx) -> bool { return (idx % 23) != 22; });
   cudf::test::strings_column_wrapper col(data_begin, data_begin + row_count, validity);
 
   thrust::host_vector<std::string> v(data_begin, data_begin + row_count);
@@ -622,21 +621,28 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
   using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
-  // `null` means null at child column.
-  // `NULL` means null at parent column.
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "₹1" /*null*/,
-                              "aaa" /*NULL*/,
+                              "",     // child null
+                              "aaa",  // parent null
                               "zit",
                               "bat",
                               "aab",
-                              "$1" /*null*/,
-                              "€1" /*NULL*/,
+                              "",    // child null
+                              "€1",  // parent null
                               "wut"},
                              nulls_at({2, 7})};
-    auto child2 = INTS_CW{{1, 2, 3 /*null*/, 4 /*NULL*/, 5, 6, 7, 8 /*null*/, 9 /*NULL*/, 10},
+    auto child2 = INTS_CW{{1,
+                           2,
+                           0,  // child null
+                           4,  // parent null
+                           5,
+                           6,
+                           7,
+                           0,  // child null
+                           9,  // parent null
+                           10},
                           nulls_at({2, 7})};
     return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
   }();
@@ -694,25 +700,25 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
     auto const expected = [] {
       auto child1 = STRINGS_CW{{"año",
                                 "año",
-                                "" /*null*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/},
+                                "",   // child null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                ""},  // parent null
                                null_at(2)};
       auto child2 = INTS_CW{{1,
                              1,
-                             0 /*null*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/},
+                             0,   // child null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0},  // parent null
                             null_at(2)};
       return STRUCTS_CW{{child1, child2}, nulls_at({3, 4, 5, 6, 7, 8, 9})};
     }();

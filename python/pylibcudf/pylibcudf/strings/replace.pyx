@@ -136,6 +136,7 @@ cpdef Column replace_slice(
         Start position where repl will be added.
     stop : size_type, default -1
         End position (exclusive) to use for replacement.
+
     Returns
     -------
     pylibcudf.Column

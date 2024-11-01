@@ -8,15 +8,15 @@ from __future__ import annotations
 from functools import cache
 
 import pyarrow as pa
-import pylibcudf as plc
+from typing_extensions import assert_never
+
+import polars as pl
+
 from pylibcudf.traits import (
     is_floating_point,
     is_integral_not_bool,
     is_numeric_not_bool,
 )
-from typing_extensions import assert_never
-
-import polars as pl
 
 __all__ = [
     "from_polars",
@@ -24,6 +24,7 @@ __all__ = [
     "can_cast",
     "is_order_preserving_cast",
 ]
+import pylibcudf as plc
 
 
 def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:

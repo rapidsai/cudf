@@ -24,9 +24,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
-
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 

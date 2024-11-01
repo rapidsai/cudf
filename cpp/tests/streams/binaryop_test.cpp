@@ -21,7 +21,6 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 class BinaryopTest : public cudf::test::BaseFixture {};

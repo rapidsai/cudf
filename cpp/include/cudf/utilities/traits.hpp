@@ -22,8 +22,6 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cuda/std/type_traits>
-
 namespace CUDF_EXPORT cudf {
 
 /**
