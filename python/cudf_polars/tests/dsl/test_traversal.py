@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from functools import singledispatch
 
-import pylibcudf as plc
-
 import polars as pl
 from polars.testing import assert_frame_equal
+
+import pylibcudf as plc
 
 from cudf_polars import translate_ir
 from cudf_polars.dsl import expr, ir
