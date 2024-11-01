@@ -24,9 +24,9 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
-from dask_cudf._accessors import ListMethods, StructMethods
-from dask_cudf.legacy import sorting
-from dask_cudf.legacy.sorting import (
+from dask_cudf._expr.accessors import ListMethods, StructMethods
+from dask_cudf._legacy import sorting
+from dask_cudf._legacy.sorting import (
     _deprecate_shuffle_kwarg,
     _get_shuffle_method,
 )
@@ -264,14 +264,14 @@ class DataFrame(_Frame, dd.core.DataFrame):
     @_dask_cudf_performance_tracking
     def to_parquet(self, path, *args, **kwargs):
         """Calls dask.dataframe.io.to_parquet with CudfEngine backend"""
-        from dask_cudf.legacy.io import to_parquet
+        from dask_cudf._legacy.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
     @_dask_cudf_performance_tracking
     def to_orc(self, path, **kwargs):
-        """Calls dask_cudf.legacy.io.to_orc"""
-        from dask_cudf.legacy.io import to_orc
+        """Calls dask_cudf._legacy.io.to_orc"""
+        from dask_cudf._legacy.io import to_orc
 
         return to_orc(self, path, **kwargs)
 

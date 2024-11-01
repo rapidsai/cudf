@@ -78,7 +78,7 @@ class CudfFrameBase(FrameBase):
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0
     ):
-        from dask_cudf._expr import RenameAxisCudf
+        from dask_cudf._expr.expr import RenameAxisCudf
 
         return new_collection(
             RenameAxisCudf(
@@ -120,7 +120,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         dropna=None,
         **kwargs,
     ):
-        from dask_cudf._groupby import GroupBy
+        from dask_cudf._expr.groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, DXSeries):
             raise ValueError(
@@ -159,7 +159,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
     def read_text(*args, **kwargs):
         from dask_expr import from_legacy_dataframe
 
-        from dask_cudf.legacy.io.text import read_text as legacy_read_text
+        from dask_cudf._legacy.io.text import read_text as legacy_read_text
 
         ddf = legacy_read_text(*args, **kwargs)
         return from_legacy_dataframe(ddf)
@@ -167,19 +167,19 @@ class DataFrame(DXDataFrame, CudfFrameBase):
 
 class Series(DXSeries, CudfFrameBase):
     def groupby(self, by, **kwargs):
-        from dask_cudf._groupby import SeriesGroupBy
+        from dask_cudf._expr.groupby import SeriesGroupBy
 
         return SeriesGroupBy(self, by, **kwargs)
 
     @cached_property
     def list(self):
-        from dask_cudf._accessors import ListMethods
+        from dask_cudf._expr.accessors import ListMethods
 
         return ListMethods(self)
 
     @cached_property
     def struct(self):
-        from dask_cudf._accessors import StructMethods
+        from dask_cudf._expr.accessors import StructMethods
 
         return StructMethods(self)
 

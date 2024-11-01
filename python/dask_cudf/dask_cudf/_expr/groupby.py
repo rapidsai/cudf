@@ -105,19 +105,19 @@ class DecomposableCudfGroupbyAgg(DecomposableGroupbyAggregation):
 
     @classmethod
     def chunk(cls, df, *by, **kwargs):
-        from dask_cudf.legacy.groupby import _groupby_partition_agg
+        from dask_cudf._legacy.groupby import _groupby_partition_agg
 
         return _groupby_partition_agg(df, **kwargs)
 
     @classmethod
     def combine(cls, inputs, **kwargs):
-        from dask_cudf.legacy.groupby import _tree_node_agg
+        from dask_cudf._legacy.groupby import _tree_node_agg
 
         return _tree_node_agg(_concat(inputs), **kwargs)
 
     @classmethod
     def aggregate(cls, inputs, **kwargs):
-        from dask_cudf.legacy.groupby import _finalize_gb_agg
+        from dask_cudf._legacy.groupby import _finalize_gb_agg
 
         return _finalize_gb_agg(_concat(inputs), **kwargs)
 
@@ -193,7 +193,7 @@ def _maybe_get_custom_expr(
     shuffle_method=None,
     **kwargs,
 ):
-    from dask_cudf.legacy.groupby import (
+    from dask_cudf._legacy.groupby import (
         OPTIMIZED_AGGS,
         _aggs_optimized,
         _redirect_aggs,

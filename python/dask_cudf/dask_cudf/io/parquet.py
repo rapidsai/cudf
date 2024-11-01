@@ -8,7 +8,7 @@ from dask_expr.io.parquet import FragmentWrapper, ReadParquetPyarrowFS
 import cudf
 
 # Dask-expr imports CudfEngine from this module
-from dask_cudf.legacy.io.parquet import CudfEngine  # noqa: F401
+from dask_cudf._legacy.io.parquet import CudfEngine  # noqa: F401
 
 
 class CudfFusedParquetIO(FusedParquetIO):
@@ -51,7 +51,7 @@ class CudfFusedParquetIO(FusedParquetIO):
 class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
     @functools.cached_property
     def _dataset_info(self):
-        from dask_cudf.legacy.io.parquet import (
+        from dask_cudf._legacy.io.parquet import (
             set_object_dtypes_from_pa_schema,
         )
 

@@ -15,7 +15,7 @@ from dask.utils import natural_sort_key
 import cudf
 
 import dask_cudf
-from dask_cudf.legacy.io.parquet import create_metadata_file
+from dask_cudf._legacy.io.parquet import create_metadata_file
 from dask_cudf.tests.utils import (
     require_dask_expr,
     skip_dask_expr,
@@ -534,9 +534,9 @@ def test_check_file_size(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
     cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
     with pytest.warns(match="large parquet file"):
-        # Need to use `dask_cudf.legacy.io` path
+        # Need to use `dask_cudf._legacy.io` path
         # TODO: Remove outdated `check_file_size` functionality
-        dask_cudf.legacy.io.read_parquet(fn, check_file_size=1).compute()
+        dask_cudf._legacy.io.read_parquet(fn, check_file_size=1).compute()
 
 
 @xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="2024.3.0")
