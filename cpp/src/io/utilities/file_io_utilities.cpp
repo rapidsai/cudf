@@ -112,15 +112,11 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-<<<<<<< HEAD
     // Explicit cuFile driver close should not be performed here to avoid segfault. However, in the
     // absence of driver_close(), cuFile will implicitly do that, which in most cases causes
     // segfault anyway. TODO: Revisit this conundrum once cuFile is fixed.
     // https://github.com/rapidsai/cudf/issues/17121
 
-=======
-    if (driver_close != nullptr) driver_close();
->>>>>>> bf117d6231 (Hotfix)
     if (cf_lib != nullptr) dlclose(cf_lib);
   }
 
