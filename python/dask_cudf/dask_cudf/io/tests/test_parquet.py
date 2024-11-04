@@ -426,10 +426,14 @@ def test_create_metadata_file(tmpdir, partition_on):
         fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
-    create_metadata_file(
-        fns,
-        split_every=3,  # Force tree reduction
-    )
+
+    with pytest.warns(
+        match="dask_cudf.io.parquet.create_metadata_file is now deprecated"
+    ):
+        dask_cudf.io.parquet.create_metadata_file(
+            fns,
+            split_every=3,  # Force tree reduction
+        )
 
     # Check that we can now read the ddf
     # with the _metadata file present
@@ -665,3 +669,21 @@ def test_to_parquet_append(tmpdir, write_metadata_file):
     )
     ddf2 = dask_cudf.read_parquet(tmpdir)
     dd.assert_eq(cudf.concat([df, df]), ddf2)
+
+
+def test_deprecated_api_paths(tmpdir):
+    df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
+    # Top-level to_parquet function is deprecated
+    with pytest.warns(match="dask_cudf.to_parquet is now deprecated"):
+        dask_cudf.to_parquet(df, tmpdir)
+
+    # Encourage top-level read_parquet import only
+    with pytest.warns(match="dask_cudf.io.read_parquet is now deprecated"):
+        df2 = dask_cudf.io.read_parquet(tmpdir)
+    dd.assert_eq(df, df2, check_divisions=False)
+
+    with pytest.warns(
+        match="dask_cudf.io.parquet.read_parquet is now deprecated"
+    ):
+        df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
+    dd.assert_eq(df, df2, check_divisions=False)
