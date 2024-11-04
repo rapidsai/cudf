@@ -3023,7 +3023,8 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
           {"b",
            {data_type{cudf::type_id::STRUCT},
             {{"0", {data_type{cudf::type_id::STRING}}},
-             {"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}}}},
+             {"1", {data_type{cudf::type_id::LIST}, {{"element", {dtype<float>()}}}}}},
+            {{"0", "1"}}}},
           {"a", {dtype<int32_t>()}},
           {"c", {dtype<bool>()}},
         },
@@ -3109,8 +3110,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
                                               {"a", {dtype<int32_t>()}},
                                             },
                                             {{"a", "b"}}};
-      in_options.set_dtypes(dtype_schema);
-      EXPECT_THROW(cudf::io::read_json(in_options), cudf::logic_error);
+      EXPECT_THROW(in_options.set_dtypes(dtype_schema), cudf::logic_error);
       // Input schema column order size mismatch with input schema child types
     }
     //// repetition, Error
@@ -3120,8 +3120,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
                                               {"a", {dtype<int32_t>()}},
                                             },
                                             {{"a", "a"}}};
-      in_options.set_dtypes(dtype_schema);
-      EXPECT_THROW(cudf::io::read_json(in_options), cudf::logic_error);
+      EXPECT_THROW(in_options.set_dtypes(dtype_schema), cudf::logic_error);
       // Input schema column order size mismatch with input schema child types
     }
     //// different column name in order, Error
@@ -3131,12 +3130,10 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
                                               {"a", {dtype<int32_t>()}},
                                             },
                                             {{"b"}}};
-      in_options.set_dtypes(dtype_schema);
-      EXPECT_THROW(cudf::io::read_json(in_options), cudf::logic_error);
+      EXPECT_THROW(in_options.set_dtypes(dtype_schema), cudf::logic_error);
       // Column name not found in input schema map, but present in column order and
       // prune_columns is enabled
     }
-
     // include only one column (nested)
     {
       cudf::io::schema_element dtype_schema{

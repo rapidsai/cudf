@@ -397,9 +397,12 @@ class json_reader_options {
   /**
    * @brief Set data types for a potentially nested column hierarchy.
    *
-   * @param types Map of column names to schema_element to support arbitrary nesting of data types
+   * @throw cudf::logic_error if the `types` does not have column order specified.
+   *
+   * @param types schema element with column names and column order to support arbitrary nesting of
+   * data types
    */
-  void set_dtypes(schema_element types) { _dtypes = std::move(types); }
+  void set_dtypes(schema_element types);
 
   /**
    * @brief Set the compression type.
@@ -638,12 +641,12 @@ class json_reader_options_builder {
   /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Column name -> schema_element with map and order
+   * @param types Struct schema_element with Column name -> schema_element with map and order
    * @return this for chaining
    */
   json_reader_options_builder& dtypes(schema_element types)
   {
-    options._dtypes = std::move(types);
+    options.set_dtypes(std::move(types));
     return *this;
   }
 
