@@ -892,6 +892,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - *numpy
           - rapids-dask-dependency==24.12.*,>=0.0.0a0
   depends_on_libcudf:
     common:
