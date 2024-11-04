@@ -644,3 +644,23 @@ def test_read_parquet_arrow_filesystem(tmpdir, min_part_size):
         dd.assert_eq(df, ddf, check_index=False)
         assert isinstance(ddf._meta, cudf.DataFrame)
         assert isinstance(ddf.compute(), cudf.DataFrame)
+
+
+@pytest.mark.parametrize("write_metadata_file", [True, False])
+def test_to_parquet_append(tmpdir, write_metadata_file):
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    ddf = dask_cudf.from_cudf(df, npartitions=1)
+    ddf.to_parquet(
+        tmpdir,
+        append=True,
+        write_metadata_file=write_metadata_file,
+        write_index=False,
+    )
+    ddf.to_parquet(
+        tmpdir,
+        append=True,
+        write_metadata_file=write_metadata_file,
+        write_index=False,
+    )
+    ddf2 = dask_cudf.read_parquet(tmpdir)
+    dd.assert_eq(cudf.concat([df, df]), ddf2)

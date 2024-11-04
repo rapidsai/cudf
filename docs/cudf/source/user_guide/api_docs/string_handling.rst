@@ -60,6 +60,7 @@ strings and apply several methods to it. These can be accessed like
    isupper
    istimestamp
    istitle
+   jaccard_index
    join
    len
    like
@@ -67,6 +68,7 @@ strings and apply several methods to it. These can be accessed like
    lower
    lstrip
    match
+   minhash
    ngrams
    ngrams_tokenize
    normalize_characters
@@ -90,7 +92,6 @@ strings and apply several methods to it. These can be accessed like
    slice_from
    slice_replace
    split
-   rsplit
    startswith
    strip
    swapcase

@@ -20,14 +20,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
-import pylibcudf as plc
 from typing_extensions import assert_never
 
 import polars as pl
 
+import pylibcudf as plc
+
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
+from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -478,9 +480,14 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
+            filters = None
+            if predicate is not None and row_index is None:
+                # Can't apply filters during read if we have a row index.
+                filters = to_parquet_filter(predicate.value)
             tbl_w_meta = plc.io.parquet.read_parquet(
                 plc.io.SourceInfo(paths),
                 columns=with_columns,
+                filters=filters,
                 nrows=n_rows,
                 skip_rows=skip_rows,
             )
@@ -489,6 +496,9 @@ class Scan(IR):
                 # TODO: consider nested column names?
                 tbl_w_meta.column_names(include_children=False),
             )
+            if filters is not None:
+                # Mask must have been applied.
+                return df
         elif typ == "ndjson":
             json_schema: list[tuple[str, str, list]] = [
                 (name, typ, []) for name, typ in schema.items()

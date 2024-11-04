@@ -1,5 +1,5 @@
 =====
-Table
+table
 =====
 
 .. automodule:: pylibcudf.table

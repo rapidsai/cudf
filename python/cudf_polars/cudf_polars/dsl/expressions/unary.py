@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
