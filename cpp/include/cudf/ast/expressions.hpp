@@ -627,7 +627,7 @@ class tree {
   size_t size() const { return expressions.size(); }
 
   /**
-   * @brief get the expression at an index in the tree. index is checked.
+   * @brief get the expression at an index in the tree. Index is checked.
    * @param index index of expression in the ast tree
    * @returns the expression at the specified index
    */
