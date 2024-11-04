@@ -29,6 +29,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
+#include <src/io/parquet/parquet_gpu.hpp>
+
 #include <array>
 
 TEST_F(ParquetReaderTest, UserBounds)

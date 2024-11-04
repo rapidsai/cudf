@@ -7,20 +7,11 @@ from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
-from cython.operator cimport dereference
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
-cimport pylibcudf.libcudf.transform as libcudf_transform
 from pylibcudf cimport transform as plc_transform
 from pylibcudf.expressions cimport Expression
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.expressions cimport expression
-from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
-from cudf._lib.utils cimport table_view_from_columns
 
 import pylibcudf as plc
 
@@ -121,13 +112,8 @@ def compute_column(list columns, tuple column_names, expr: str):
 
     # At the end, all the stack contains is the expression to evaluate.
     cdef Expression cudf_expr = visitor.expression
-    cdef table_view tbl = table_view_from_columns(columns)
-    cdef unique_ptr[column] col
-    with nogil:
-        col = move(
-            libcudf_transform.compute_column(
-                tbl,
-                <expression &> dereference(cudf_expr.c_obj.get())
-            )
-        )
-    return Column.from_unique_ptr(move(col))
+    result = plc_transform.compute_column(
+        plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+        cudf_expr,
+    )
+    return Column.from_pylibcudf(result)
