@@ -17,17 +17,19 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/table_utilities.hpp>
 
+#include <cudf/detail/interop.hpp>
 #include <cudf/interop.hpp>
 
+#include <nanoarrow/nanoarrow.hpp>
+#include <nanoarrow/nanoarrow_device.h>
+#include <nanoarrow_utils.hpp>
 #include <nvbench/nvbench.cuh>
 
 #include <algorithm>
 #include <vector>
 
-enum class System : uint8_t { Host = 0, Device = 1 };
-
-template <cudf::type_id data_type, System dst>
-void BM_to_arrow(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
+template <cudf::type_id data_type>
+void BM_to_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
   auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   int32_t const num_columns = 1;
@@ -46,11 +48,31 @@ void BM_to_arrow(nvbench::state& state, nvbench::type_list<nvbench::enum_type<da
   state.add_global_memory_writes(size_bytes);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    if constexpr (dst == Destination::Host) {
-      cudf::to_arrow_device(source_table->view(), rmm::cuda_stream_view{launch.get_stream()});
-    } else {
-      cudf::to_arrow_host(source_table->view(), rmm::cuda_stream_view{launch.get_stream()});
-    }
+    cudf::to_arrow_device(source_table->view(), rmm::cuda_stream_view{launch.get_stream()});
+  });
+}
+
+template <cudf::type_id data_type>
+void BM_to_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
+{
+  auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  int32_t const num_columns = 1;
+  auto const num_elements   = static_cast<int64_t>(num_rows) * num_columns;
+
+  std::vector<cudf::type_id> types;
+
+  std::fill_n(std::back_inserter(types), num_columns, data_type);
+
+  auto const source_table  = create_random_table(types, row_count{num_rows});
+  int64_t const size_bytes = estimate_size(source_table->view());
+
+  state.add_element_count(num_elements, "num_elements");
+
+  state.add_global_memory_reads(size_bytes);
+  state.add_global_memory_writes(size_bytes);
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    cudf::to_arrow_host(source_table->view(), rmm::cuda_stream_view{launch.get_stream()});
   });
 }
 
@@ -92,10 +114,6 @@ static ArrowTypeInfo to_arrow_type(cudf::type_id dtype)
       return {NANOARROW_TYPE_DURATION, NANOARROW_TIME_UNIT_NANO};
     case cudf::type_id::STRING: return {NANOARROW_TYPE_STRING};
     case cudf::type_id::LIST: return {NANOARROW_TYPE_LIST};
-    case cudf::type_id::DECIMAL32:
-      return {NANOARROW_TYPE_DECIMAL, std::nullopt, cudf::detail::max_precision<int32_t>()};
-    case cudf::type_id::DECIMAL64:
-      return {NANOARROW_TYPE_DECIMAL, std::nullopt, cudf::detail::max_precision<int64_t>()};
     case cudf::type_id::DECIMAL128:
       return {NANOARROW_TYPE_DECIMAL128, std::nullopt, cudf::detail::max_precision<__int128_t>()};
     case cudf::type_id::STRUCT: return {NANOARROW_TYPE_STRUCT};
@@ -126,65 +144,129 @@ static void set_arrow_type(ArrowSchema& schema, cudf::type_id dtype)
   CUDF_UNREACHABLE("Unexpected Error");
 }
 
-template <cudf::type_id data_type, System src>
-void BM_from_arrow(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
+template <cudf::type_id data_type>
+struct nanoarrow_rep {};
+
+#define DEFINE_ARROW_REP(data_type, rep)           \
+  template <>                                      \
+  struct nanoarrow_rep<cudf::type_id::data_type> { \
+    using type = rep;                              \
+  };
+
+DEFINE_ARROW_REP(UINT8, uint8_t)
+DEFINE_ARROW_REP(UINT16, uint16_t)
+DEFINE_ARROW_REP(UINT32, uint32_t)
+DEFINE_ARROW_REP(UINT64, uint64_t)
+DEFINE_ARROW_REP(INT8, int8_t)
+DEFINE_ARROW_REP(INT16, int16_t)
+DEFINE_ARROW_REP(INT32, int32_t)
+DEFINE_ARROW_REP(INT64, int64_t)
+DEFINE_ARROW_REP(FLOAT32, float)
+DEFINE_ARROW_REP(FLOAT64, double)
+DEFINE_ARROW_REP(BOOL8, bool)
+DEFINE_ARROW_REP(TIMESTAMP_DAYS, int64_t)
+DEFINE_ARROW_REP(TIMESTAMP_SECONDS, int64_t)
+DEFINE_ARROW_REP(TIMESTAMP_MILLISECONDS, int64_t)
+DEFINE_ARROW_REP(TIMESTAMP_MICROSECONDS, int64_t)
+DEFINE_ARROW_REP(TIMESTAMP_NANOSECONDS, int64_t)
+DEFINE_ARROW_REP(DURATION_DAYS, int64_t)
+DEFINE_ARROW_REP(DURATION_SECONDS, int64_t)
+DEFINE_ARROW_REP(DURATION_MILLISECONDS, int64_t)
+DEFINE_ARROW_REP(DURATION_MICROSECONDS, int64_t)
+DEFINE_ARROW_REP(DURATION_NANOSECONDS, int64_t)
+DEFINE_ARROW_REP(DECIMAL32, int32_t)
+DEFINE_ARROW_REP(DECIMAL64, int64_t)
+DEFINE_ARROW_REP(DECIMAL128, __int128_t)
+
+template <cudf::type_id data_type>
+void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
+  auto const num_columns  = 1;
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
-  nanoarrow::UniqueSchema input_schema;
-  ArrowSchemaInit(input_schema.get());
-  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
-  ArrowSchemaInit(input_schema->children[0]);
-  set_arrow_type(*input->children[0], data_type);
-  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
+  nanoarrow::UniqueSchema schema;
+  ArrowSchemaInit(schema.get());
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(schema.get(), 1));
+  ArrowSchemaInit(schema->children[0]);
+  set_arrow_type(*schema->children[0], data_type);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(schema->children[0], "a"));
 
-  nanoarrow::UniqueArray input_array;
-  std::unique_ptr<cudf::column> cudf_column;
-  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
-  input_array->length                  = num_rows;
-  input_array->null_count              = 0;
-  input_array->offset                  = 0;
-  input_array->children[0]->length     = num_rows;
-  input_array->children[0]->null_count = 0;
+  nanoarrow::UniqueArray input;
 
-  ArrowDeviceArray input_device_array;
-  input_device_array.array      = *input_array;
-  input_device_array.sync_event = nullptr;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input.get(), schema.get(), nullptr));
 
-  if constexpr (src == System::Device) {
-    cudf_column = create_random_column(data_type, row_count{num_rows});
-    NANOARROW_THROW_NOT_OK(
-      ArrowBufferSetAllocator(ArrowArrayBuffer(input_array->children[0], 1), noop_alloc));
-    ArrowArrayBuffer(input_array->children[0], 1)->data =
-      const_cast<uint8_t*>(cudf_column->get_data());
-    ArrowArrayBuffer(input_array->children[0], 1)->size_bytes = sizeof(T) * data_size;
+  input->length = num_rows;
 
-    NANOARROW_THROW_NOT_OK(
-      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+  std::unique_ptr<cudf::column> cudf_column = create_random_column(data_type, row_count{num_rows});
+  populate_from_col<cudf::id_to_type<data_type>>(input->children[0], cudf_column->view());
 
-    input_device_array.device_id   = rmm::get_current_cuda_device().value();
-    input_device_array.device_type = ARROW_DEVICE_CUDA;
-  } else {
-    input_device_array.device_id   = -1;
-    input_device_array.device_type = ARROW_DEVICE_CPU;
-  }
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+  ArrowDeviceArray device_array;
+  device_array.array       = *input.get();
+  device_array.device_id   = rmm::get_current_cuda_device().value();
+  device_array.device_type = ARROW_DEVICE_CUDA;
+  device_array.sync_event  = nullptr;
 
   state.add_element_count(num_elements, "num_elements");
-  state.add_global_memory_reads(size_bytes);
-  state.add_global_memory_writes(size_bytes);
-
-  // must use stream
+  state.add_global_memory_reads<cudf::id_to_type<data_type>>(num_rows);
+  state.add_global_memory_writes<cudf::id_to_type<data_type>>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    if constexpr (src == System::Device) {
-      cudf::from_arrow_device(
-        input_schema.get(), &input_device_array, rmm::cuda_stream_view{launch.get_stream()});
-    } else {
-      cudf::from_arrow_host(
-        input_schema.get(), &input_device_array, rmm::cuda_stream_view{launch.get_stream()});
-    }
+    cudf::from_arrow_device_column(
+      schema.get(), &device_array, rmm::cuda_stream_view{launch.get_stream()});
+  });
+}
+
+template <cudf::type_id data_type>
+void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
+{
+  auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_columns  = 1;
+  auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
+
+  nanoarrow::UniqueSchema schema;
+  ArrowSchemaInit(schema.get());
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(schema.get(), 1));
+  ArrowSchemaInit(schema->children[0]);
+  set_arrow_type(*schema->children[0], data_type);
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(schema->children[0], "a"));
+
+  nanoarrow::UniqueArray input;
+
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input.get(), schema.get(), nullptr));
+  input->length                  = 0;
+  input->null_count              = 0;
+  input->children[0]->length     = num_rows;
+  input->children[0]->null_count = 0;
+
+  std::vector<typename nanoarrow_rep<data_type>::type> rep;
+  rep.resize(num_rows, {});
+
+  ArrowBuffer* buffer    = ArrowArrayBuffer(input->children[0], 1);
+  buffer->allocator      = noop_alloc;
+  buffer->data           = reinterpret_cast<uint8_t*>(rep.data());
+  buffer->size_bytes     = rep.size() * sizeof(typename nanoarrow_rep<data_type>::type);
+  buffer->capacity_bytes = buffer->size_bytes;
+
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+  ArrowDeviceArray host_array;
+  host_array.array       = *input.get();
+  host_array.device_id   = -1;
+  host_array.device_type = ARROW_DEVICE_CPU;
+  host_array.sync_event  = nullptr;
+
+  state.add_element_count(num_elements, "num_elements");
+  state.add_global_memory_reads<typename nanoarrow_rep<data_type>::type>(num_rows);
+  state.add_global_memory_writes<cudf::id_to_type<data_type>>(num_rows);
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    cudf::from_arrow_host_column(
+      schema.get(), &host_array, rmm::cuda_stream_view{launch.get_stream()});
   });
 }
 
@@ -198,8 +280,6 @@ using data_types = nvbench::enum_type_list<cudf::type_id::INT8,
                                            cudf::type_id::UINT64,
                                            cudf::type_id::FLOAT32,
                                            cudf::type_id::FLOAT64,
-                                           cudf::type_id::BOOL8,
-                                           cudf::type_id::TIMESTAMP_DAYS,
                                            cudf::type_id::TIMESTAMP_SECONDS,
                                            cudf::type_id::TIMESTAMP_MILLISECONDS,
                                            cudf::type_id::TIMESTAMP_MICROSECONDS,
@@ -208,14 +288,7 @@ using data_types = nvbench::enum_type_list<cudf::type_id::INT8,
                                            cudf::type_id::DURATION_MILLISECONDS,
                                            cudf::type_id::DURATION_MICROSECONDS,
                                            cudf::type_id::DURATION_NANOSECONDS,
-                                           cudf::type_id::STRING,
-                                           cudf::type_id::LIST,
-                                           cudf::type_id::DECIMAL32,
-                                           cudf::type_id::DECIMAL64,
-                                           cudf::type_id::DECIMAL128,
-                                           cudf::type_id::STRUCT>;
-
-using systems = nvbench::enum_type_list<System::Device, System::Host>;
+                                           cudf::type_id::DECIMAL128>;
 
 static char const* stringify_type(cudf::type_id value)
 {
@@ -241,30 +314,27 @@ static char const* stringify_type(cudf::type_id value)
     case cudf::type_id::DURATION_MILLISECONDS: return "DURATION_MILLISECONDS";
     case cudf::type_id::DURATION_MICROSECONDS: return "DURATION_MICROSECONDS";
     case cudf::type_id::DURATION_NANOSECONDS: return "DURATION_NANOSECONDS";
-    case cudf::type_id::DICTIONARY32: return "DICTIONARY32";
-    case cudf::type_id::STRING: return "STRING";
-    case cudf::type_id::LIST: return "LIST";
     case cudf::type_id::DECIMAL32: return "DECIMAL32";
     case cudf::type_id::DECIMAL64: return "DECIMAL64";
     case cudf::type_id::DECIMAL128: return "DECIMAL128";
-    case cudf::type_id::STRUCT: return "STRUCT";
-    default: return "unknown";
-  }
-}
-
-static char const* stringify_system(System sys)
-{
-  switch (sys) {
-    case System::Device: return "Device";
-    case System::Host: return "Host";
     default: return "unknown";
   }
 }
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(cudf::type_id, stringify_type, stringify_type)
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(System, stringify_system, stringify_system)
 
-NVBENCH_BENCH_TYPES(BM_to_arrow, NVBENCH_TYPE_AXES(data_types), NVBENCH_TYPE_AXES(systems))
-  .set_type_axes_names({"data_type", "system"})
-  .set_name("to_arrow")
+NVBENCH_BENCH_TYPES(BM_to_arrow_host, NVBENCH_TYPE_AXES(data_types))
+  .set_name("to_arrow_host")
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
+
+NVBENCH_BENCH_TYPES(BM_to_arrow_device, NVBENCH_TYPE_AXES(data_types))
+  .set_name("to_arrow_device")
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
+
+NVBENCH_BENCH_TYPES(BM_from_arrow_host, NVBENCH_TYPE_AXES(data_types))
+  .set_name("from_arrow_host")
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
+
+NVBENCH_BENCH_TYPES(BM_from_arrow_device, NVBENCH_TYPE_AXES(data_types))
+  .set_name("from_arrow_device")
   .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
