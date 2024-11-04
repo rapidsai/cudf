@@ -11,7 +11,19 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
 
 cdef class ParseOptions:
-    """Parsing options for `multibyte_split`"""
+    """
+    Parsing options for `multibyte_split`
+
+    Parameters
+    ----------
+    byte_range : list | tuple, default None
+        Only rows starting inside this byte range will be
+        part of the output column.
+
+    strip_delimiters : bool, default True
+        Whether delimiters at the end of rows should
+        be stripped from the output column.
+    """
     def __init__(
         self,
         *,
