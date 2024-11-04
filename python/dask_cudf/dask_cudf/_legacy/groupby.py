@@ -18,7 +18,7 @@ import cudf
 from cudf.core.groupby.groupby import _deprecate_collect
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
-from dask_cudf.sorting import _deprecate_shuffle_kwarg
+from dask_cudf._legacy.sorting import _deprecate_shuffle_kwarg
 
 # aggregations that are dask-cudf optimized
 OPTIMIZED_AGGS = (
