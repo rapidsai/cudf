@@ -429,7 +429,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
 
-/** @brief Create all null column of a given nested schema
+/**
+ * @brief Create all null column of a given nested schema
  *
  * @param schema The schema of the column to create
  * @param num_rows The number of rows in the column
@@ -442,7 +443,8 @@ std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr);
 
-/** @brief Create metadata for a column of a given schema
+/**
+ * @brief Create metadata for a column of a given schema
  *
  * @param schema The schema of the column
  * @param col_name The name of the column

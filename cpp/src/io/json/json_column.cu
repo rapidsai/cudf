@@ -410,10 +410,6 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       std::vector<std::unique_ptr<column>> child_columns;
       std::vector<column_name_info> column_names{};
       size_type num_rows{json_col.num_rows};
-      if (schema.has_value() and schema.value().column_order.has_value()) {
-        CUDF_EXPECTS(schema.value().child_types.size() == schema.value().column_order->size(),
-                     "Input schema column order size mismatch with input schema child types");
-      }
       // Create children columns
       auto const& col_order = prune_columns and schema.has_value() and
                                   schema.value().column_order.has_value() and

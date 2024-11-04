@@ -73,13 +73,13 @@ struct empty_column_functor {
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
-  template <typename T, std::enable_if_t<!cudf::is_nested<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(!cudf::is_nested<T>())>
   std::unique_ptr<column> operator()(schema_element const& schema) const
   {
     return make_empty_column(schema.type);
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::list_view>)>
   std::unique_ptr<column> operator()(schema_element const& schema) const
   {
     CUDF_EXPECTS(schema.child_types.size() == 1, "List column should have only one child");
@@ -90,11 +90,11 @@ struct empty_column_functor {
     return make_lists_column(0, std::move(offsets), std::move(child), 0, {}, stream, mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::struct_view>)>
   std::unique_ptr<column> operator()(schema_element const& schema) const
   {
     std::vector<std::unique_ptr<column>> child_columns;
-    for (auto child_name : schema.column_order.value_or(std::vector<std::string>{})) {
+    for (auto const& child_name : schema.column_order.value_or(std::vector<std::string>{})) {
       child_columns.push_back(cudf::type_dispatcher(
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name)));
     }
@@ -107,6 +107,7 @@ struct allnull_column_functor {
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
+ private:
   auto make_zeroed_offsets(size_type size) const
   {
     auto offsets_buff =
@@ -114,13 +115,14 @@ struct allnull_column_functor {
     return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
   }
 
-  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+ public:
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     return make_fixed_width_column(schema.type, size, mask_state::ALL_NULL, stream, mr);
   }
 
-  template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_dictionary<T>())>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     CUDF_EXPECTS(schema.child_types.size() == 1, "Dictionary column should have only one child");
@@ -135,7 +137,7 @@ struct allnull_column_functor {
       std::move(child), std::move(indices), std::move(null_mask), size, stream, mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::string_view>)>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     auto offsets   = make_zeroed_offsets(size);
@@ -143,7 +145,7 @@ struct allnull_column_functor {
     return make_strings_column(
       size, std::move(offsets), rmm::device_buffer{}, size, std::move(null_mask));
   }
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::list_view>)>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     CUDF_EXPECTS(schema.child_types.size() == 1, "List column should have only one child");
@@ -157,11 +159,11 @@ struct allnull_column_functor {
       size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::struct_view>)>
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     std::vector<std::unique_ptr<column>> child_columns;
-    for (auto child_name : schema.column_order.value_or(std::vector<std::string>{})) {
+    for (auto const& child_name : schema.column_order.value_or(std::vector<std::string>{})) {
       child_columns.push_back(cudf::type_dispatcher(
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name), size));
     }
@@ -183,23 +185,30 @@ column_name_info make_column_name_info(schema_element const& schema, std::string
 {
   column_name_info info;
   info.name = col_name;
-  if (schema.type.id() == type_id::STRUCT) {
-    for (auto const& child_name : schema.column_order.value_or(std::vector<std::string>{})) {
-      info.children.push_back(make_column_name_info(schema.child_types.at(child_name), child_name));
-    }
-  } else if (schema.type.id() == type_id::LIST) {
-    info.children.emplace_back("offsets");
-    for (auto const& [child_name, child_schema] : schema.child_types) {
-      info.children.push_back(make_column_name_info(child_schema, child_name));
-    }
-  } else if (schema.type.id() == type_id::DICTIONARY32) {
-    info.children.emplace_back("indices");
-    for (auto const& [child_name, child_schema] : schema.child_types) {
-      info.children.push_back(make_column_name_info(child_schema, child_name));
-    }
-  } else if (schema.type.id() == type_id::STRING) {
-    info.children.emplace_back("offsets");
-    info.children.emplace_back("chars");
+  switch (schema.type.id()) {
+    case type_id::STRUCT:
+      for (auto const& child_name : schema.column_order.value_or(std::vector<std::string>{})) {
+        info.children.push_back(
+          make_column_name_info(schema.child_types.at(child_name), child_name));
+      }
+      break;
+    case type_id::LIST:
+      info.children.emplace_back("offsets");
+      for (auto const& [child_name, child_schema] : schema.child_types) {
+        info.children.push_back(make_column_name_info(child_schema, child_name));
+      }
+      break;
+    case type_id::DICTIONARY32:
+      info.children.emplace_back("indices");
+      for (auto const& [child_name, child_schema] : schema.child_types) {
+        info.children.push_back(make_column_name_info(child_schema, child_name));
+      }
+      break;
+    case type_id::STRING:
+      info.children.emplace_back("offsets");
+      info.children.emplace_back("chars");
+      break;
+    default: break;
   }
   return info;
 }

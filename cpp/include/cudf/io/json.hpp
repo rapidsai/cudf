@@ -55,7 +55,8 @@ struct schema_element {
    */
   std::map<std::string, schema_element> child_types;
 
-  /** @brief Allows specifying the order of the columns
+  /**
+   * @brief Allows specifying the order of the columns
    */
   std::optional<std::vector<std::string>> column_order;
 };
@@ -396,8 +397,6 @@ class json_reader_options {
 
   /**
    * @brief Set data types for a potentially nested column hierarchy.
-   *
-   * @throw cudf::logic_error if the `types` does not have column order specified.
    *
    * @param types schema element with column names and column order to support arbitrary nesting of
    * data types
