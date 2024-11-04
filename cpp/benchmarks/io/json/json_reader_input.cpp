@@ -58,16 +58,20 @@ void json_read_common(cuio_source_sink_pair& source_sink,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-cudf::size_type json_write_bm_data(cudf::io::sink_info sink,
-                                   std::vector<cudf::type_id> const& dtypes, 
-                                   cudf::io::compression_type comptype = cudf::io::compression_type::NONE)
+cudf::size_type json_write_bm_data(
+  cudf::io::sink_info sink,
+  std::vector<cudf::type_id> const& dtypes,
+  cudf::io::compression_type comptype = cudf::io::compression_type::NONE)
 {
   auto const tbl = create_random_table(
     cycle_dtypes(dtypes, num_cols), table_size_bytes{data_size}, data_profile_builder());
   auto const view = tbl->view();
 
   cudf::io::json_writer_options const write_opts =
-    cudf::io::json_writer_options::builder(sink, view).na_rep("null").rows_per_chunk(100'000).compression(comptype);
+    cudf::io::json_writer_options::builder(sink, view)
+      .na_rep("null")
+      .rows_per_chunk(100'000)
+      .compression(comptype);
   cudf::io::write_json(write_opts);
   return view.num_rows();
 }
@@ -90,7 +94,8 @@ void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_typ
 }
 
 template <cudf::io::compression_type comptype, io_type IO>
-void BM_json_read_compressed_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<comptype>, nvbench::enum_type<IO>>)
+void BM_json_read_compressed_io(
+  nvbench::state& state, nvbench::type_list<nvbench::enum_type<comptype>, nvbench::enum_type<IO>>)
 {
   cuio_source_sink_pair source_sink(IO);
   auto const d_type   = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -143,7 +148,8 @@ NVBENCH_BENCH_TYPES(BM_json_read_io, NVBENCH_TYPE_AXES(io_list))
   .set_type_axes_names({"io"})
   .set_min_samples(4);
 
-NVBENCH_BENCH_TYPES(BM_json_read_compressed_io, NVBENCH_TYPE_AXES(compression_list, nvbench::enum_type_list<io_type::FILEPATH>))
+NVBENCH_BENCH_TYPES(BM_json_read_compressed_io,
+                    NVBENCH_TYPE_AXES(compression_list, nvbench::enum_type_list<io_type::FILEPATH>))
   .set_name("json_read_compressed_io")
   .set_type_axes_names({"compression_type", "io"})
   .set_min_samples(4);

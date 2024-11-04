@@ -18,8 +18,8 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/default_stream.hpp>
 #include <cudf_test/debug_utilities.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -39,12 +39,13 @@ struct JsonWriterTest : public cudf::test::BaseFixture {};
  * @brief Test fixture for parametrized JSON reader tests
  */
 struct JsonCompressedWriterTest : public cudf::test::BaseFixture,
-                                public testing::WithParamInterface<cudf::io::compression_type> {};
+                                  public testing::WithParamInterface<cudf::io::compression_type> {};
 
 // Parametrize qualifying JSON tests for multiple compression types
 INSTANTIATE_TEST_SUITE_P(JsonCompressedWriterTest,
                          JsonCompressedWriterTest,
-                         ::testing::Values(cudf::io::compression_type::GZIP, cudf::io::compression_type::NONE));
+                         ::testing::Values(cudf::io::compression_type::GZIP,
+                                           cudf::io::compression_type::NONE));
 
 TEST_F(JsonWriterTest, EmptyInput)
 {
@@ -206,15 +207,20 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
   cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
   if (comptype == cudf::io::compression_type::GZIP) {
-    auto decomp_out_buffer = cudf::io::decompress(comptype, 
-        cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t*>(out_buffer.data()), out_buffer.size()));
+    auto decomp_out_buffer =
+      cudf::io::decompress(comptype,
+                           cudf::host_span<uint8_t const>(
+                             reinterpret_cast<uint8_t*>(out_buffer.data()), out_buffer.size()));
     std::string const expected =
       R"([{"col1":"a","col2":"d","col3":1,"col4":1.5,"col5":null},{"col1":"b","col2":"e","col3":2,"col4":2.5,"col5":2},{"col1":"c","col2":"f","col3":3,"col4":3.5,"col5":null}])";
-    EXPECT_EQ(expected, std::string(reinterpret_cast<char*>(decomp_out_buffer.data()), decomp_out_buffer.size()));
+    EXPECT_EQ(
+      expected,
+      std::string(reinterpret_cast<char*>(decomp_out_buffer.data()), decomp_out_buffer.size()));
   }
 
   cudf::io::json_reader_options json_parser_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
       .lines(false)
       .compression(comptype);
 

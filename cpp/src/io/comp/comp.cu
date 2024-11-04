@@ -24,6 +24,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <zlib.h>  // compress
+
 #include <cstring>  // memset
 
 namespace cudf {
@@ -128,19 +129,20 @@ struct zip_archive_s {
 std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src, rmm::cuda_stream_view stream)
 {
   z_stream zs;
-  zs.zalloc = Z_NULL;
-  zs.zfree = Z_NULL;
-  zs.opaque = Z_NULL;
+  zs.zalloc   = Z_NULL;
+  zs.zfree    = Z_NULL;
+  zs.opaque   = Z_NULL;
   zs.avail_in = src.size();
-  zs.next_in = reinterpret_cast<unsigned char*>(const_cast<unsigned char*>(src.data()));
+  zs.next_in  = reinterpret_cast<unsigned char*>(const_cast<unsigned char*>(src.data()));
 
   std::vector<uint8_t> dst(src.size());
   zs.avail_out = src.size();
-  zs.next_out = dst.data();
+  zs.next_out  = dst.data();
 
-  int windowbits = 15;
+  int windowbits    = 15;
   int gzip_encoding = 16;
-  int ret = deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, windowbits | gzip_encoding, 8, Z_DEFAULT_STRATEGY);
+  int ret           = deflateInit2(
+    &zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, windowbits | gzip_encoding, 8, Z_DEFAULT_STRATEGY);
   CUDF_EXPECTS(ret == Z_OK, "GZIP DEFLATE compression initialization failed.");
 
   deflate(&zs, Z_FINISH);
@@ -153,7 +155,8 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src, rmm::cuda_
 /**
  * @brief SNAPPY host decompressor
  */
-std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src, rmm::cuda_stream_view stream)
+std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
+                                          rmm::cuda_stream_view stream)
 {
   // TODO: to be completed
   rmm::device_uvector<std::uint8_t> d_src(src.size(), stream);
@@ -165,18 +168,18 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src, rmm::cud
   rmm::device_uvector<compression_result> d_status(1, stream);
 
   /*
-  gpu_snap(device_span<device_span<std::uint8_t const> const>{d_src}, 
+  gpu_snap(device_span<device_span<std::uint8_t const> const>{d_src},
       device_span<device_span<std::uint8_t> const>{d_dst}, d_status, stream);
   */
-  
+
   std::vector<uint8_t> dst(d_dst.size());
   cudf::detail::cuda_memcpy(host_span<uint8_t>{dst}, device_span<uint8_t const>{d_dst}, stream);
   return dst;
 }
 
 std::vector<std::uint8_t> compress(compression_type compression,
-                  host_span<uint8_t const> src,
-                  rmm::cuda_stream_view stream)
+                                   host_span<uint8_t const> src,
+                                   rmm::cuda_stream_view stream)
 {
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src, stream);

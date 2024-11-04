@@ -34,7 +34,9 @@ namespace io {
  *
  * @return Vector containing the Decompressed output
  */
-std::vector<uint8_t> compress(compression_type compression, host_span<uint8_t const> src, rmm::cuda_stream_view stream);
+std::vector<uint8_t> compress(compression_type compression,
+                              host_span<uint8_t const> src,
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief GZIP header flags
