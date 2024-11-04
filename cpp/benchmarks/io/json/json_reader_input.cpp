@@ -31,10 +31,11 @@ constexpr cudf::size_type num_cols = 64;
 
 void json_read_common(cuio_source_sink_pair& source_sink,
                       cudf::size_type num_rows_to_read,
-                      nvbench::state& state)
+                      nvbench::state& state,
+                      cudf::io::compression_type comptype = cudf::io::compression_type::NONE)
 {
   cudf::io::json_reader_options read_opts =
-    cudf::io::json_reader_options::builder(source_sink.make_source_info());
+    cudf::io::json_reader_options::builder(source_sink.make_source_info()).compression(comptype);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
@@ -58,14 +59,15 @@ void json_read_common(cuio_source_sink_pair& source_sink,
 }
 
 cudf::size_type json_write_bm_data(cudf::io::sink_info sink,
-                                   std::vector<cudf::type_id> const& dtypes)
+                                   std::vector<cudf::type_id> const& dtypes, 
+                                   cudf::io::compression_type comptype = cudf::io::compression_type::NONE)
 {
   auto const tbl = create_random_table(
     cycle_dtypes(dtypes, num_cols), table_size_bytes{data_size}, data_profile_builder());
   auto const view = tbl->view();
 
   cudf::io::json_writer_options const write_opts =
-    cudf::io::json_writer_options::builder(sink, view).na_rep("null").rows_per_chunk(100'000);
+    cudf::io::json_writer_options::builder(sink, view).na_rep("null").rows_per_chunk(100'000).compression(comptype);
   cudf::io::write_json(write_opts);
   return view.num_rows();
 }
@@ -83,6 +85,23 @@ void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_typ
                                            static_cast<int32_t>(data_type::LIST),
                                            static_cast<int32_t>(data_type::STRUCT)});
   auto const num_rows = json_write_bm_data(source_sink.make_sink_info(), d_type);
+
+  json_read_common(source_sink, num_rows, state);
+}
+
+template <cudf::io::compression_type comptype, io_type IO>
+void BM_json_read_compressed_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<comptype>, nvbench::enum_type<IO>>)
+{
+  cuio_source_sink_pair source_sink(IO);
+  auto const d_type   = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
+                                           static_cast<int32_t>(data_type::FLOAT),
+                                           static_cast<int32_t>(data_type::DECIMAL),
+                                           static_cast<int32_t>(data_type::TIMESTAMP),
+                                           static_cast<int32_t>(data_type::DURATION),
+                                           static_cast<int32_t>(data_type::STRING),
+                                           static_cast<int32_t>(data_type::LIST),
+                                           static_cast<int32_t>(data_type::STRUCT)});
+  auto const num_rows = json_write_bm_data(source_sink.make_sink_info(), d_type, comptype);
 
   json_read_common(source_sink, num_rows, state);
 }
@@ -111,7 +130,7 @@ using io_list =
   nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::DEVICE_BUFFER>;
 
 using compression_list =
-  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
+  nvbench::enum_type_list<cudf::io::compression_type::GZIP, cudf::io::compression_type::NONE>;
 
 NVBENCH_BENCH_TYPES(BM_json_read_data_type,
                     NVBENCH_TYPE_AXES(d_type_list, nvbench::enum_type_list<io_type::DEVICE_BUFFER>))
@@ -122,4 +141,9 @@ NVBENCH_BENCH_TYPES(BM_json_read_data_type,
 NVBENCH_BENCH_TYPES(BM_json_read_io, NVBENCH_TYPE_AXES(io_list))
   .set_name("json_read_io")
   .set_type_axes_names({"io"})
+  .set_min_samples(4);
+
+NVBENCH_BENCH_TYPES(BM_json_read_compressed_io, NVBENCH_TYPE_AXES(compression_list, nvbench::enum_type_list<io_type::FILEPATH>))
+  .set_name("json_read_compressed_io")
+  .set_type_axes_names({"compression_type", "io"})
   .set_min_samples(4);

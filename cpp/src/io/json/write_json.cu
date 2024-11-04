@@ -21,6 +21,7 @@
 
 #include "io/csv/durations.hpp"
 #include "io/utilities/parsing_utils.cuh"
+#include "io/comp/comp.hpp"
 #include "lists/utilities.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -828,7 +829,7 @@ void write_chunked(data_sink* out_sink,
   }
 }
 
-void write_json(data_sink* out_sink,
+void write_json_helper(data_sink* out_sink,
                 table_view const& table,
                 json_writer_options const& options,
                 rmm::cuda_stream_view stream)
@@ -932,6 +933,22 @@ void write_json(data_sink* out_sink,
       out_sink->host_write(list_braces.data() + 1, 1);
     }
   }
+}
+
+void write_json(data_sink* out_sink,
+                table_view const& table,
+                json_writer_options const& options,
+                rmm::cuda_stream_view stream) {
+
+  if(options.get_compression() != compression_type::NONE) {
+    std::vector<char> hbuf;
+    auto hbuf_sink_ptr = data_sink::create(&hbuf);
+    write_json_helper(hbuf_sink_ptr.get(), table, options, stream);
+    auto comp_hbuf = compress(options.get_compression(), host_span<uint8_t>(reinterpret_cast<uint8_t*>(hbuf.data()), hbuf.size()), stream);
+    out_sink->host_write(comp_hbuf.data(), comp_hbuf.size());
+    return;
+  }
+  write_json_helper(out_sink, table, options, stream);
 }
 
 }  // namespace cudf::io::json::detail
