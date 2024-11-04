@@ -13,6 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_112
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -88,7 +89,7 @@ def test_left_join_with_slice(left, right, join_nulls, zlice):
     if zlice is not None:
         q_expect = q.collect().slice(*zlice)
         q = q.slice(*zlice)
-        if zlice == (1, 5) or zlice == (0, 2):
+        if POLARS_VERSION_LT_112 and (zlice == (1, 5) or zlice == (0, 2)):
             # https://github.com/pola-rs/polars/issues/19403
             # https://github.com/pola-rs/polars/issues/19405
             ctx = pytest.raises(AssertionError)
