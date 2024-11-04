@@ -47,7 +47,7 @@ build_example() {
   build_dir="${example_dir}/build"
 
   # Configure
-  cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}"
+  cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Debug
   # Build
   cmake --build ${build_dir} -j${PARALLEL_LEVEL}
   # Install if needed
@@ -56,9 +56,10 @@ build_example() {
   fi
 }
 
-build_example basic
-build_example strings
-build_example nested_types
-build_example parquet_io
-build_example billion_rows
-build_example interop
+#build_example basic
+#build_example strings
+#build_example nested_types
+#build_example parquet_io
+build_example orc_io
+#build_example billion_rows
+#build_example interop
