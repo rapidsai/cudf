@@ -33,7 +33,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <unordered_map>
 #include <vector>
 
 namespace cudf {
@@ -49,7 +48,7 @@ class file_source : public datasource {
   {
     detail::force_init_cuda_context();
     if (cufile_integration::is_kvikio_enabled()) {
-      cufile_integration::set_thread_pool_nthreads_from_env();
+      cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");

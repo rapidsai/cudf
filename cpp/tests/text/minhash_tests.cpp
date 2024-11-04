@@ -21,12 +21,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <nvtext/minhash.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
 #include <vector>
 

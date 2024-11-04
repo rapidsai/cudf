@@ -43,7 +43,7 @@ requirements:
   run:
     - python
     - pylibcudf ={{ version }}
-    - polars >=1.8,<1.9
+    - polars >=1.11,<1.12
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
 
 test:

@@ -9,9 +9,10 @@ from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
 import pyarrow as pa
-import pylibcudf as plc
 
 import polars as pl
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.utils import dtypes
