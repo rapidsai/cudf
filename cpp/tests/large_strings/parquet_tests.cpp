@@ -117,7 +117,7 @@ TEST_F(ParquetStringsTest, ChunkedReadLargeStrings)
   auto const result_view = result->view();
 
   // Verify
-  for (auto cv : result_view) {
+  for (auto const& cv : result_view) {
     auto const offsets = cudf::strings_column_view(cv).offsets();
     EXPECT_EQ(offsets.type(), cudf::data_type{cudf::type_id::INT64});
   }
