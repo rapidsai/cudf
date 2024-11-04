@@ -1773,4 +1773,7 @@ def test_fallback_raises_error(monkeypatch):
     ],
 )
 def test_cudf_pandas_util_version(attrs):
-    assert hasattr(pd.util, attrs)
+    if PANDAS_GE_220 and attrs == "capitalize_first_letter":
+        assert not hasattr(pd.util, attrs)
+    else:
+        assert hasattr(pd.util, attrs)
