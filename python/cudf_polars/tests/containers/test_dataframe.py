@@ -3,10 +3,11 @@
 
 from __future__ import annotations
 
-import pylibcudf as plc
 import pytest
 
 import polars as pl
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.testing.asserts import assert_gpu_result_equal
