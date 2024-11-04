@@ -96,12 +96,13 @@ class json_reader_options {
   source_info _source;
 
   /**
-   * @brief Data types of the column; empty to infer dtypes
+   * @brief Variant type holding dtypes information for the columns.
    */
   using dtype_variant = std::variant<std::vector<data_type>,
                                      std::map<std::string, data_type>,
                                      std::map<std::string, schema_element>,
                                      schema_element>;
+  // Data types of the column; empty to infer dtypes
   dtype_variant _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
