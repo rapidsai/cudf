@@ -10,7 +10,7 @@ import dask.dataframe as dd
 
 import cudf
 
-from dask_cudf.expr import QUERY_PLANNING_ON
+from dask_cudf import QUERY_PLANNING_ON
 
 if QUERY_PLANNING_ON:
     DASK_VERSION = Version(dask.__version__)
