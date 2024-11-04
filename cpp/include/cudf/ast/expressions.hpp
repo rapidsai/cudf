@@ -634,7 +634,7 @@ class tree {
   expression const& at(size_t index) { return *expressions.at(index); }
 
   /**
-   * @brief get the expression at an index in the tree. index is unchecked.
+   * @brief get the expression at an index in the tree. Index is unchecked.
    * @param index index of expression in the ast tree
    * @returns the expression at the specified index
    */
