@@ -434,7 +434,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
  * @param schema The schema of the column to create
  * @param num_rows The number of rows in the column
  * @param stream The CUDA stream to which kernels are dispatched
- * @param mr Optional, resource with which to allocate
+ * @param mr resource with which to allocate
  * @return The all null column
  */
 std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
@@ -443,6 +443,9 @@ std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
                                               rmm::device_async_resource_ref mr);
 
 /** @brief Create metadata for a column of a given schema
+ *
+ * @param schema The schema of the column
+ * @param col_name The name of the column
  */
 column_name_info make_column_name_info(schema_element const& schema, std::string const& col_name);
 

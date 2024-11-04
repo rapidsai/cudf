@@ -30,18 +30,13 @@
 #include <string>
 #include <vector>
 
-/*
-  data_type type;
-  std::map<std::string, schema_element> child_types;
-  std::optional<std::vector<std::string>> column_order;
-*/
 namespace cudf::io {
 namespace {
 bool validate_column_order(schema_element const& types)
 {
-  // for struct types, check if column_order size matches child_types size and all elements in
+  // For struct types, check if column_order size matches child_types size and all elements in
   // column_order are in child_types, in child_types, call this function recursively.
-  // for list types, check if child_types size is 1 and call this function recursively.
+  // For list types, check if child_types size is 1 and call this function recursively.
   if (types.type.id() == type_id::STRUCT) {
     if (types.column_order.has_value()) {
       if (types.column_order.value().size() != types.child_types.size()) { return false; }
@@ -63,6 +58,7 @@ bool validate_column_order(schema_element const& types)
   return true;
 }
 }  // namespace
+
 void json_reader_options::set_dtypes(schema_element types)
 {
   CUDF_EXPECTS(validate_column_order(types), "Column order does not match child types");
