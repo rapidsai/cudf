@@ -334,9 +334,9 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
           cdfh_ofs += cdfh_len;
         }
       }
-    }
       if (compression != compression_type::AUTO) break;
       [[fallthrough]];
+    }
     case compression_type::BZIP2:
       if (src.size() > 4) {
         auto const* fhdr = reinterpret_cast<bz2_file_header_s const*>(raw);
@@ -555,6 +555,70 @@ size_t decompress(compression_type compression,
     case compression_type::SNAPPY: return decompress_snappy(src, dst);
     case compression_type::ZSTD: return decompress_zstd(src, dst, stream);
     default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src)
+{
+  auto raw = src.data();
+  switch (compression) {
+    case compression_type::NONE: return src.size();
+    case compression_type::GZIP: {
+      gz_archive_s gz;
+      if (ParseGZArchive(&gz, src.data(), src.size())) return gz.isize;
+    }
+    case compression_type::ZIP: {
+      zip_archive_s za;
+      if (OpenZipArchive(&za, src.data(), src.size())) {
+        size_t cdfh_ofs = 0;
+        for (int i = 0; i < za.eocd->num_entries; i++) {
+          auto const* cdfh = reinterpret_cast<zip_cdfh_s const*>(
+            reinterpret_cast<uint8_t const*>(za.cdfh) + cdfh_ofs);
+          int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
+          if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x0201'4b50) {
+            // Bad cdir
+            break;
+          }
+          // For now, only accept with non-zero file sizes and DEFLATE
+          if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
+            size_t lfh_ofs  = cdfh->hdr_ofs;
+            auto const* lfh = reinterpret_cast<zip_lfh_s const*>(raw + lfh_ofs);
+            if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x0403'4b50 &&
+                lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
+              if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
+                size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
+                size_t file_end   = file_start + lfh->comp_size;
+                if (file_end <= src.size()) {
+                  // Pick the first valid file of non-zero size (only 1 file expected in archive)
+                  return lfh->uncomp_size;
+                }
+              }
+            }
+          }
+          cdfh_ofs += cdfh_len;
+        }
+      }
+    }
+    case compression_type::SNAPPY: {
+      uint32_t uncompressed_size;
+      auto cur       = src.begin();
+      auto const end = src.end();
+      // Read uncompressed length (varint)
+      {
+        uint32_t l        = 0, c;
+        uncompressed_size = 0;
+        do {
+          c              = *cur++;
+          auto const lo7 = c & 0x7f;
+          if (l >= 28 && c > 0xf) { return 0; }
+          uncompressed_size |= lo7 << l;
+          l += 7;
+        } while (c > 0x7f && cur < end);
+        CUDF_EXPECTS(uncompressed_size != 0 and cur < end, "Destination buffer too small");
+      }
+      return uncompressed_size;
+    }
+    default: return 0;
   }
 }
 
