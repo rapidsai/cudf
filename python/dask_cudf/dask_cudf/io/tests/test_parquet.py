@@ -673,9 +673,9 @@ def test_to_parquet_append(tmpdir, write_metadata_file):
 
 def test_deprecated_api_paths(tmpdir):
     df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
-    # Top-level to_parquet function is deprecated
-    with pytest.warns(match="dask_cudf.to_parquet is now deprecated"):
-        dask_cudf.to_parquet(df, tmpdir)
+    # io.to_parquet function is deprecated
+    with pytest.warns(match="dask_cudf.io.to_parquet is now deprecated"):
+        dask_cudf.io.to_parquet(df, tmpdir)
 
     # Encourage top-level read_parquet import only
     with pytest.warns(match="dask_cudf.io.read_parquet is now deprecated"):
