@@ -173,9 +173,8 @@ class IR(Node["IR"]):
     Raises
     ------
     NotImplementedError
-        If we couldn't evaluate things. Ideally this should not occur,
-        since the translation phase should pick up things that we
-        cannot handle.
+        If evaluation fails. Ideally this should not occur, since the
+        translation phase should fail earlier.
     """
 
     def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
@@ -197,14 +196,13 @@ class IR(Node["IR"]):
         Returns
         -------
         DataFrame (on device) representing the evaluation of this plan
-        node (and it's children).
+        node (and its children).
 
         Raises
         ------
         NotImplementedError
-            If we couldn't evaluate things. Ideally this should not occur,
-            since the translation phase should pick up things that we
-            cannot handle.
+            If evaluation fails. Ideally this should not occur, since the
+            translation phase should fail earlier.
         """
         return self.do_evaluate(
             *self._non_child_args,
