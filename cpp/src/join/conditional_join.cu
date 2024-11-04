@@ -28,6 +28,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -178,7 +179,8 @@ conditional_join(table_view const& left,
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
+               "The expression must produce a boolean output.",
+               cudf::data_type_error);
 
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
@@ -330,7 +332,8 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
+               "The expression must produce a boolean output.",
+               cudf::data_type_error);
 
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
