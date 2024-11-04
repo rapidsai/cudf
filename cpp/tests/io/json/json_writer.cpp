@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -207,6 +208,34 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
       .lines(false)
       .compression(comptype);
   auto result = cudf::io::read_json(json_parser_options);
+
+  cudf::test::print(tbl_view.column(0));
+  cudf::test::print(tbl_view.column(1));
+  cudf::test::print(tbl_view.column(2));
+  cudf::test::print(tbl_view.column(3));
+  cudf::test::print(tbl_view.column(4));
+  std::cout << "=======================\n";
+  cudf::test::print(result.tbl->get_column(0));
+  cudf::test::print(result.tbl->get_column(1));
+  cudf::test::print(result.tbl->get_column(2));
+  cudf::test::print(result.tbl->get_column(3));
+  cudf::test::print(result.tbl->get_column(4));
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(result.tbl->get_column(3).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result.tbl->get_column(4).type().id(), cudf::type_id::INT16);
+
+  EXPECT_EQ(tbl_view.column(0).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(tbl_view.column(1).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(tbl_view.column(2).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(tbl_view.column(3).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(tbl_view.column(4).type().id(), cudf::type_id::INT16);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "b");
+  EXPECT_EQ(result.metadata.schema_info[2].name, "c");
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl_view, result.tbl->view());
 }
