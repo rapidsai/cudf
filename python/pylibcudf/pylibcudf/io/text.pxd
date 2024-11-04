@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.io.text cimport parse_options, data_chunk_source
 
@@ -8,10 +9,8 @@ cdef class ParseOptions:
     cdef parse_options c_options
 
 cdef class DataChunkSource:
-    cdef unique_ptr[data_chunk_source] c_data_chunk_source
-
-    @staticmethod
-    cdef DataChunkSource from_source(unique_ptr[data_chunk_source] source)
+    cdef unique_ptr[data_chunk_source] c_source
+    cdef string data_ref
 
 
 cpdef Column multibyte_split(
