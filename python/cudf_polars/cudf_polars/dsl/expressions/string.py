@@ -10,10 +10,11 @@ from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 
 from polars.exceptions import InvalidOperationError
 from polars.polars import _expr_nodes as pl_expr
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr

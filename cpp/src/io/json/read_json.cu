@@ -20,6 +20,7 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -127,7 +128,8 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
 
   std::size_t const total_source_size       = sources_size(sources, 0, 0);
   auto constexpr num_delimiter_chars        = 1;
-  auto const num_extra_delimiters           = num_delimiter_chars * (sources.size() - 1);
+  auto const delimiter                      = reader_opts.get_delimiter();
+  auto const num_extra_delimiters           = num_delimiter_chars * sources.size();
   compression_type const reader_compression = reader_opts.get_compression();
   std::size_t const chunk_offset            = reader_opts.get_byte_range_offset();
   std::size_t chunk_size                    = reader_opts.get_byte_range_size();
@@ -135,10 +137,10 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
   CUDF_EXPECTS(total_source_size ? chunk_offset < total_source_size : !chunk_offset,
                "Invalid offsetting",
                std::invalid_argument);
-  auto should_load_all_sources = !chunk_size || chunk_size >= total_source_size - chunk_offset;
-  chunk_size = should_load_all_sources ? total_source_size - chunk_offset : chunk_size;
+  auto should_load_till_last_source = !chunk_size || chunk_size >= total_source_size - chunk_offset;
+  chunk_size = should_load_till_last_source ? total_source_size - chunk_offset : chunk_size;
 
-  int num_subchunks_prealloced        = should_load_all_sources ? 0 : max_subchunks_prealloced;
+  int num_subchunks_prealloced        = should_load_till_last_source ? 0 : max_subchunks_prealloced;
   std::size_t const size_per_subchunk = estimate_size_per_subchunk(chunk_size);
 
   // The allocation for single source compressed input is estimated by assuming a ~4:1
@@ -155,17 +157,17 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
 
   // Offset within buffer indicating first read position
   std::int64_t buffer_offset = 0;
-  auto readbufspan =
-    ingest_raw_input(bufspan, sources, reader_compression, chunk_offset, chunk_size, stream);
+  auto readbufspan           = ingest_raw_input(
+    bufspan, sources, reader_compression, chunk_offset, chunk_size, delimiter, stream);
 
   auto const shift_for_nonzero_offset = std::min<std::int64_t>(chunk_offset, 1);
   auto const first_delim_pos =
-    chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, '\n', stream);
+    chunk_offset == 0 ? 0 : find_first_delimiter(readbufspan, delimiter, stream);
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
     auto empty_buf = rmm::device_buffer(0, stream);
     return datasource::owning_buffer<rmm::device_buffer>(std::move(empty_buf));
-  } else if (!should_load_all_sources) {
+  } else if (!should_load_till_last_source) {
     // Find next delimiter
     std::int64_t next_delim_pos     = -1;
     std::size_t next_subchunk_start = chunk_offset + chunk_size;
@@ -180,14 +182,15 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
                                        reader_compression,
                                        next_subchunk_start,
                                        size_per_subchunk,
+                                       delimiter,
                                        stream);
-        next_delim_pos = find_first_delimiter(readbufspan, '\n', stream) + buffer_offset;
+        next_delim_pos = find_first_delimiter(readbufspan, delimiter, stream) + buffer_offset;
         next_subchunk_start += size_per_subchunk;
       }
       if (next_delim_pos < buffer_offset) {
         if (next_subchunk_start >= total_source_size) {
           // If we have reached the end of source list but the source does not terminate with a
-          // newline character
+          // delimiter character
           next_delim_pos = buffer_offset + readbufspan.size();
         } else {
           // Our buffer_size estimate is insufficient to read until the end of the line! We need to
@@ -209,10 +212,26 @@ datasource::owning_buffer<rmm::device_buffer> get_record_range_raw_input(
       reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
       next_delim_pos - first_delim_pos - shift_for_nonzero_offset);
   }
+
+  // Add delimiter to end of buffer - possibly adding an empty line to the input buffer - iff we are
+  // reading till the end of the last source i.e. should_load_till_last_source is true Note that the
+  // table generated from the JSONL input remains unchanged since empty lines are ignored by the
+  // parser.
+  size_t num_chars = readbufspan.size() - first_delim_pos - shift_for_nonzero_offset;
+  if (num_chars) {
+    auto last_char = delimiter;
+    cudf::detail::cuda_memcpy_async<char>(
+      device_span<char>(reinterpret_cast<char*>(buffer.data()), buffer.size())
+        .subspan(readbufspan.size(), 1),
+      host_span<char const>(&last_char, 1, false),
+      stream);
+    num_chars++;
+  }
+
   return datasource::owning_buffer<rmm::device_buffer>(
     std::move(buffer),
     reinterpret_cast<uint8_t*>(buffer.data()) + first_delim_pos + shift_for_nonzero_offset,
-    readbufspan.size() - first_delim_pos - shift_for_nonzero_offset);
+    num_chars);
 }
 
 // Helper function to read the current batch using byte range offsets and size
@@ -245,6 +264,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                    compression_type compression,
                                    std::size_t range_offset,
                                    std::size_t range_size,
+                                   char delimiter,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -296,7 +316,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     if (sources.size() > 1) {
       static_assert(num_delimiter_chars == 1,
                     "Currently only single-character delimiters are supported");
-      auto const delimiter_source = thrust::make_constant_iterator('\n');
+      auto const delimiter_source = thrust::make_constant_iterator(delimiter);
       auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
         delimiter_map, stream, cudf::get_current_device_resource_ref());
       thrust::scatter(rmm::exec_policy_nosync(stream),

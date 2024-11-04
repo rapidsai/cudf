@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ import java.nio.channels.FileChannel.MapMode;
  * Be aware that the off heap memory limits set by Java do not apply to these buffers.
  */
 public class HostMemoryBuffer extends MemoryBuffer {
-  private static final boolean defaultPreferPinned;
+  static final boolean defaultPreferPinned;
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
   static {
@@ -135,13 +135,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @return the newly created buffer
    */
   public static HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
-    if (preferPinned) {
-      HostMemoryBuffer pinnedBuffer = PinnedMemoryPool.tryAllocate(bytes);
-      if (pinnedBuffer != null) {
-        return pinnedBuffer;
-      }
-    }
-    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
+    return DefaultHostMemoryAllocator.get().allocate(bytes, preferPinned);
   }
 
   /**
@@ -153,6 +147,16 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public static HostMemoryBuffer allocate(long bytes) {
     return allocate(bytes, defaultPreferPinned);
+  }
+
+  /**
+   * Allocate host memory bypassing the default allocator. This is intended to only be used by other allocators.
+   * Pinned memory will not be used for these allocations.
+   * @param bytes size in bytes to allocate
+   * @return the newly created buffer
+   */
+  public static HostMemoryBuffer allocateRaw(long bytes) {
+    return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
   }
 
   /**
@@ -245,8 +249,10 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param destOffset  offset in bytes in this buffer to start copying to
    * @param in input stream to copy bytes from
    * @param byteLength number of bytes to copy
+   * @throws EOFException If there are not enough bytes in the stream to copy.
+   * @throws IOException If there is an error reading from the stream.
    */
-  final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
+  public final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
     addressOutOfBoundsCheck(address + destOffset, byteLength, "copy from stream");
     byte[] arrayBuffer = new byte[(int) Math.min(1024 * 128, byteLength)];
     long left = byteLength;
@@ -254,7 +260,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
       int amountToCopy = (int) Math.min(arrayBuffer.length, left);
       int amountRead = in.read(arrayBuffer, 0, amountToCopy);
       if (amountRead < 0) {
-        throw new EOFException();
+        throw new EOFException("Unexpected end of stream, expected " + left + " more bytes");
       }
       setBytes(destOffset, arrayBuffer, 0, amountRead);
       destOffset += amountRead;
