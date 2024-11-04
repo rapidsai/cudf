@@ -95,7 +95,9 @@ enum class json_recovery_mode_t {
 class json_reader_options {
   source_info _source;
 
-  // Data types of the column; empty to infer dtypes
+  /**
+   * @brief Data types of the column; empty to infer dtypes
+   */
   using dtype_variant = std::variant<std::vector<data_type>,
                                      std::map<std::string, data_type>,
                                      std::map<std::string, schema_element>,
