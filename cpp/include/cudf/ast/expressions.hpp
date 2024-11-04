@@ -555,7 +555,7 @@ class column_name_reference : public expression {
 };
 
 /**
- * @brief An AST expression tree. it owns and contains multiple dependent expressions. All the
+ * @brief An AST expression tree. It owns and contains multiple dependent expressions. All the
  * expressions are destroyed once the tree is destructed.
  */
 class tree {
