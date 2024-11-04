@@ -97,7 +97,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                              _stream);
     }
 
-    // column string sizes for this subpass
+    // Compute column string sizes (using page string offsets) for this subpass
     col_string_sizes = calculate_page_string_offsets();
 
     // ensure cumulative column string sizes have been initialized
@@ -105,14 +105,15 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       pass.cumulative_col_string_sizes.resize(_input_columns.size(), 0);
     }
 
-    // add to cumulative column string sizes from this subpass
+    // Add to the cumulative column string sizes of this pass
     std::transform(pass.cumulative_col_string_sizes.begin(),
                    pass.cumulative_col_string_sizes.end(),
                    col_string_sizes.begin(),
                    pass.cumulative_col_string_sizes.begin(),
                    std::plus<>{});
 
-    // check for overflow
+    // Check for overflow in cumulative column string sizes of this pass so that the page string
+    // offsets of overflowing (large) string columns are treated as 64-bit.
     auto const threshold         = static_cast<size_t>(strings::detail::get_offset64_threshold());
     auto const has_large_strings = std::any_of(pass.cumulative_col_string_sizes.cbegin(),
                                                pass.cumulative_col_string_sizes.cend(),
@@ -121,8 +122,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
 
-    // Mark any chunks for which the cumulative string columns size has exceeded the large strings
-    // threshold
+    // Mark any chunks for which the cumulative column string size has exceeded the
+    // large strings threshold
     if (has_large_strings) {
       for (auto& chunk : pass.chunks) {
         auto const idx = chunk.src_col_index;
