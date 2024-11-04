@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "cudf/detail/utilities/vector_factories.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -60,13 +62,12 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is copied to device memory
   // and then set into the d_children member pointer.
-  std::vector<char> staging_buffer(descendant_storage_bytes);
+  auto staging_buffer = detail::make_host_vector<char>(descendant_storage_bytes, stream);
 
   // Each ColumnDeviceView instance may have child objects that
   // require setting some internal device pointers before being copied
   // from CPU to device.
-  rmm::device_buffer* const descendant_storage =
-    new rmm::device_buffer(descendant_storage_bytes, stream);
+  auto* const descendant_storage = new rmm::device_buffer(descendant_storage_bytes, stream);
 
   auto deleter = [descendant_storage](ColumnDeviceView* v) {
     v->destroy();
@@ -77,13 +78,10 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
     new ColumnDeviceView(source, staging_buffer.data(), descendant_storage->data()), deleter};
 
   // copy the CPU memory with all the children into device memory
-  CUDF_CUDA_TRY(cudaMemcpyAsync(descendant_storage->data(),
-                                staging_buffer.data(),
-                                descendant_storage->size(),
-                                cudaMemcpyDefault,
-                                stream.value()));
-
-  stream.synchronize();
+  detail::cuda_memcpy<char>(
+    device_span<char>{static_cast<char*>(descendant_storage->data()), descendant_storage->size()},
+    staging_buffer,
+    stream);
 
   return result;
 }
