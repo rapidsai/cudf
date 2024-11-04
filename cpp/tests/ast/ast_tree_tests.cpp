@@ -58,16 +58,16 @@ TEST(AstTreeTest, ExpressionTree)
   auto const& x1  = tree.push(ast::column_reference(4));
   auto const& c1  = tree.push(ast::column_reference(5));
 
-  // compute: y = mx + c
+  // compute: y0 = m0 x0 + c0
   auto const& y0 = tree.push(operation{op::ADD, tree.push(operation{op::MUL, m0, x0}), c0});
 
-  // compute: y = mx + c
+  // compute: y1 = m1 x1 + c1
   auto const& y1 = tree.push(operation{op::ADD, tree.push(operation{op::MUL, m1, x1}), c1});
 
-  // compute weighted: (1 - t) * y
+  // compute weighted: (1 - t) * y0
   auto const& y0_w = tree.push(operation{op::MUL, tree.push(operation{op::SUB, one, t}), y0});
 
-  // compute weighted: y = t * y
+  // compute weighted: y = t * y1
   auto const& y1_w = tree.push(operation{op::MUL, t, y1});
 
   // add weighted: result = lerp(y0, y1, t) = (1 - t) * y0 + t * y1
