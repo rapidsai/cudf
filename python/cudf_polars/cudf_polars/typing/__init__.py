@@ -8,9 +8,9 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, Union
 
-import pylibcudf as plc
-
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
+
+import pylibcudf as plc
 
 if TYPE_CHECKING:
     from collections.abc import Callable
