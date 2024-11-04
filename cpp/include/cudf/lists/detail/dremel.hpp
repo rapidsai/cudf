@@ -74,7 +74,7 @@ struct dremel_data {
  *
  * http://www.goldsborough.me/distributed-systems/2019/05/18/21-09-00-a_look_at_dremel/
  * https://akshays-blog.medium.com/wrapping-head-around-repetition-and-definition-levels-in-dremel-powering-bigquery-c1a33c9695da
- * https://blog.twitter.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet
+ * https://blog.x.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet
  *
  * The remainder of this documentation assumes familiarity with the Dremel concepts.
  *
@@ -102,7 +102,7 @@ struct dremel_data {
  * ```
  * We can represent it in cudf format with two level of offsets like this:
  * ```
- * Level 0 offsets = {0, 0, 3, 5, 6}
+ * Level 0 offsets = {0, 0, 3, 4}
  * Level 1 offsets = {0, 0, 3, 5, 5}
  * Values          = {1, 2, 3, 4, 5}
  * ```
