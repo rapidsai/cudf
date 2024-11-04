@@ -3,7 +3,7 @@
 import subprocess
 import enum
 import os
-
+import copy
 
 class FileSize:
     def __init__(self, fileSize: int | str):
@@ -96,12 +96,15 @@ class Analyzer:
         self.benchName: str = config.get("benchname", "placeholder_name")
         self.engine: str = config["engine"]
         self.blockSize: FileSize = config.get("blocksize", FileSize("4 KiB"))
-        self.ioDepth: int = config.get("iodepth", 8)
+        self.ioDepth: int = config.get("iodepth", 1)
         self.maxRuntime: int = config.get("max_runtime", 600)
         self.fileSize: FileSize = config.get("filesize", FileSize("1 MiB"))
         self.numThreads: int = config.get("num_threads", 4)
         self.useDirect: int = config.get("use_direct", 0)
         self.debug: bool = config.get("debug", False)
+
+        if self.engine == "libcufile":
+            self.cudaIO: str = config.get("cuda_io", "cufile")
 
         self.fileSizeIncrementPerThread: FileSize = FileSize(
             int(self.fileSize.toB() / self.numThreads))
@@ -141,6 +144,9 @@ class Analyzer:
             + "--filesize={}".format(self.fileSize.toB())
         )
 
+        if self.engine == "libcufile":
+            fullCmd += f" --cuda_io={self.cudaIO}"
+
         if self.debug:
             fullCmd += " --debug=file,io --number_ios=100"
 
@@ -161,6 +167,31 @@ class Analyzer:
         self._benchSeqOp(FileOp.READ)
         self._benchSeqOp(FileOp.WRITE)
 
+def testAll(configBase):
+    config = copy.deepcopy(configBase)
+
+    engineList = ["psync", "sync", "io_uring", "libaio", "posixaio", "mmap"]
+    for engine in engineList:
+        config["engine"] = engine
+        config["iodepth"] = 1
+        az = Analyzer(config)
+        az.run()
+
+def testCufile(configBase):
+    config = copy.deepcopy(configBase)
+    config["engine"] = "libcufile"
+
+    # Use GDS to copy from file to GPU
+    config["cuda_io"] = "cufile"
+    az = Analyzer(config)
+    az.run()
+
+    # Use POSIX to copy from file to host, then to GPU
+    config["cuda_io"] = "posix"
+    az = Analyzer(config)
+    az.run()
+
+
 
 if __name__ == "__main__":
     # Build fio from source:
@@ -171,20 +202,20 @@ if __name__ == "__main__":
     # e.g. MY_LDFLAGS="-L/usr/local/cuda/lib64"
     # CFLAGS=$MY_CFLAGS LDFLAGS=$MY_LDFLAGS ./configure --prefix=/mnt/fio/install --enable-libcufile
 
-    # engineList = ["psync", "sync", "io_uring", "libaio", "posixaio", "mmap"]
-    engineList = ["libaio", "libcufile"]
+    configBase = {
+        "fio_bin": "/mnt/fio/install/bin/fio",
+        "benchname": "seq_read_and_write",
+        "directory": ".",
+        "filesize": FileSize("1 GiB"),
+        "blocksize": FileSize("4 MiB"),
+        "num_threads": 4,
+        "iodepth": 1,
+        "use_direct": 1,
+    }
 
-    for engine in engineList:
-        config = {
-            "fio_bin": "/mnt/fio/install/bin/fio",
-            "benchname": "seq_read_and_write",
-            "directory": ".",
-            "engine": engine,
-            "filesize": FileSize("1 GiB"),
-            "blocksize": FileSize("4 MiB"),
-            "num_threads": 4,
-            "iodepth": 4,
-            "use_direct": 1,
-        }
-        az = Analyzer(config)
-        az.run()
+    testAll(configBase)
+
+    testCufile(configBase)
+
+
+
