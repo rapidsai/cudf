@@ -21,9 +21,11 @@
     "-v",
     "/usr/local/cuda-12.4/gds:/mnt/gds",
     "-v",
-    "/opt/nvidia/nsight-systems-cli/2024.5.1:/mnt/nsight-systems-cli"
+    "/opt/nvidia/nsight-systems-cli/2024.5.1:/mnt/nsight-systems-cli",
     "-v",
     "${localEnv:HOME}/Downloads:/mnt/profile",
+    "-v",
+    "${localEnv:HOME}/biubiu/fio:/mnt/fio",
     "--privileged",
     "--cap-add=SYS_ADMIN",
     "--rm",
