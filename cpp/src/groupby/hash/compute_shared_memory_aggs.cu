@@ -47,9 +47,8 @@ struct size_of_functor {
 /// Shared memory data alignment
 CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
 
-// Prepares shared memory data required by each output column, exits if
-// no enough memory space to perform the shared memory aggregation for the
-// current output column
+// Allocates shared memory required for output columns. Exits if there is insufficient memory to
+// perform shared memory aggregation for the current output column.
 __device__ void calculate_columns_to_aggregate(cudf::size_type& col_start,
                                                cudf::size_type& col_end,
                                                cudf::mutable_table_device_view output_values,
