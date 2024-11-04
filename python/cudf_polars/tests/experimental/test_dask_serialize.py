@@ -4,11 +4,12 @@
 from __future__ import annotations
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from distributed.protocol import deserialize, serialize
 
 from polars.testing.asserts import assert_frame_equal
+
+import pylibcudf as plc
 
 # To register dask serializers, we need to import dask_serialize
 import cudf_polars.experimental.dask_serialize  # noqa: F401

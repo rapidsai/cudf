@@ -5,11 +5,11 @@
 
 from __future__ import annotations
 
-import pylibcudf as plc
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
 from distributed.utils import log_errors
 
+import pylibcudf as plc
 import rmm
 
 from cudf_polars.containers import DataFrame
