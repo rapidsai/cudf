@@ -2991,4 +2991,21 @@ TEST_F(JsonReaderTest, LastRecordInvalid)
   CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), cudf::table_view{{expected}});
 }
 
+TEST_F(JsonReaderTest, Debug)
+{
+  std::string data = R"({"col1":"a","col2":"d","col3":1,"col4":1.5,"col5":null}
+{"col1":"b","col2":"e","col3":2,"col4":2.5,"col5":2}
+{"col1":"c","col2":"f","col3":3,"col4":3.5,"col5":null}
+)";
+  auto opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL)
+      .build();
+  auto const result = cudf::io::read_json(opts);
+
+  EXPECT_EQ(result.tbl->num_columns(), 5);
+  EXPECT_EQ(result.tbl->num_rows(), 3);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

@@ -25,7 +25,7 @@
 
 using cudf::host_span;
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**

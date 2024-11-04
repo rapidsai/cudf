@@ -412,6 +412,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                    compression_type compression,
                                    std::size_t range_offset,
                                    std::size_t range_size,
+                                   char delimiter,
                                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -459,7 +460,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   if (sources.size() > 1 && !delimiter_map.empty()) {
     static_assert(num_delimiter_chars == 1,
                   "Currently only single-character delimiters are supported");
-    auto const delimiter_source = thrust::make_constant_iterator('\n');
+    auto const delimiter_source = thrust::make_constant_iterator(delimiter);
     auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
       delimiter_map, stream, cudf::get_current_device_resource_ref());
     thrust::scatter(rmm::exec_policy_nosync(stream),

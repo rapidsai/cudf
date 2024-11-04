@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/comp/io_uncomp.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
@@ -185,12 +187,12 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
   cudf::io::compression_type const comptype = GetParam();
   cudf::test::strings_column_wrapper col1{"a", "b", "c"};
   cudf::test::strings_column_wrapper col2{"d", "e", "f"};
-  cudf::test::fixed_width_column_wrapper<int> col3{1, 2, 3};
-  cudf::test::fixed_width_column_wrapper<float> col4{1.5, 2.5, 3.5};
-  cudf::test::fixed_width_column_wrapper<int16_t> col5{{1, 2, 3},
+  cudf::test::fixed_width_column_wrapper<int64_t> col3{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<double> col4{1.5, 2.5, 3.5};
+  cudf::test::fixed_width_column_wrapper<int64_t> col5{{1, 2, 3},
                                                        cudf::test::iterators::nulls_at({0, 2})};
   cudf::table_view tbl_view{{col1, col2, col3, col4, col5}};
-  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"col3"}, {"col4"}, {"col5"}}};
 
   std::vector<char> out_buffer;
   auto destination     = cudf::io::sink_info(&out_buffer);
@@ -203,12 +205,22 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
 
   cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
+  if (comptype == cudf::io::compression_type::GZIP) {
+    auto decomp_out_buffer = cudf::io::decompress(comptype, 
+        cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t*>(out_buffer.data()), out_buffer.size()));
+    std::string const expected =
+      R"([{"col1":"a","col2":"d","col3":1,"col4":1.5,"col5":null},{"col1":"b","col2":"e","col3":2,"col4":2.5,"col5":2},{"col1":"c","col2":"f","col3":3,"col4":3.5,"col5":null}])";
+    EXPECT_EQ(expected, std::string(reinterpret_cast<char*>(decomp_out_buffer.data()), decomp_out_buffer.size()));
+  }
+
   cudf::io::json_reader_options json_parser_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{out_buffer.data(), out_buffer.size()})
       .lines(false)
       .compression(comptype);
+
   auto result = cudf::io::read_json(json_parser_options);
 
+  /*
   cudf::test::print(tbl_view.column(0));
   cudf::test::print(tbl_view.column(1));
   cudf::test::print(tbl_view.column(2));
@@ -220,22 +232,28 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
   cudf::test::print(result.tbl->get_column(2));
   cudf::test::print(result.tbl->get_column(3));
   cudf::test::print(result.tbl->get_column(4));
+  */
+
+  EXPECT_EQ(result.tbl->num_columns(), 5);
+  EXPECT_EQ(result.tbl->num_rows(), 3);
 
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.tbl->get_column(3).type().id(), cudf::type_id::FLOAT64);
-  EXPECT_EQ(result.tbl->get_column(4).type().id(), cudf::type_id::INT16);
+  EXPECT_EQ(result.tbl->get_column(4).type().id(), cudf::type_id::INT64);
 
   EXPECT_EQ(tbl_view.column(0).type().id(), cudf::type_id::STRING);
   EXPECT_EQ(tbl_view.column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(tbl_view.column(2).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(tbl_view.column(2).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(tbl_view.column(3).type().id(), cudf::type_id::FLOAT64);
-  EXPECT_EQ(tbl_view.column(4).type().id(), cudf::type_id::INT16);
+  EXPECT_EQ(tbl_view.column(4).type().id(), cudf::type_id::INT64);
 
-  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
-  EXPECT_EQ(result.metadata.schema_info[1].name, "b");
-  EXPECT_EQ(result.metadata.schema_info[2].name, "c");
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col1");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
+  EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
+  EXPECT_EQ(result.metadata.schema_info[3].name, "col4");
+  EXPECT_EQ(result.metadata.schema_info[4].name, "col5");
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl_view, result.tbl->view());
 }
