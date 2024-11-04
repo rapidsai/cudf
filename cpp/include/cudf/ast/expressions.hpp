@@ -641,7 +641,7 @@ class tree {
   expression const& operator[](size_t index) const { return *expressions[index]; }
 
  private:
-  // TODO: use better ownership semantics, the shared_ptr here is redundant. consider using a bump
+  // TODO: use better ownership semantics, the shared_ptr here is redundant. Consider using a bump
   // allocator with type-erased deleters.
   std::vector<std::shared_ptr<expression>> expressions;
 };
