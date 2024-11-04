@@ -513,12 +513,9 @@ class Scan(IR):
                 plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
             )
             col_order = list(schema.keys())
-            # TODO: remove condition when dropping support for polars 1.0
-            # https://github.com/pola-rs/polars/pull/17363
-            if row_index is not None and row_index[0] in schema:
+            if row_index is not None:
                 col_order.remove(row_index[0])
-            if col_order is not None:
-                df = df.select(col_order)
+            df = df.select(col_order)
         else:
             raise NotImplementedError(
                 f"Unhandled scan type: {typ}"
