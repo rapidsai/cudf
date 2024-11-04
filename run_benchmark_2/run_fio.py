@@ -109,9 +109,18 @@ class Analyzer:
         self.fileSizeIncrementPerThread: FileSize = FileSize(
             int(self.fileSize.toB() / self.numThreads))
 
+        self._drop_cache()
+
+    def _drop_cache(self):
+        subprocess.run(["sync"])
+
+        fullCmd = "sudo /sbin/sysctl vm.drop_caches=3"
+        cmdList = fullCmd.split()
+        subprocess.run(cmdList)
+
     def _showInfo(self):
         print("--> fio version")
-        fullCmd = "fio --version"
+        fullCmd = f"{self.fioBin} --version"
         cmdList = fullCmd.split()
         subprocess.run(cmdList)
 
@@ -173,7 +182,16 @@ def testAll(configBase):
     engineList = ["psync", "sync", "io_uring", "libaio", "posixaio", "mmap"]
     for engine in engineList:
         config["engine"] = engine
-        config["iodepth"] = 1
+        az = Analyzer(config)
+        az.run()
+
+def testAsync(configBase):
+    config = copy.deepcopy(configBase)
+
+    engineList = ["io_uring", "libaio", "posixaio"]
+    for engine in engineList:
+        config["engine"] = engine
+        config["iodepth"] = 4
         az = Analyzer(config)
         az.run()
 
@@ -205,8 +223,9 @@ if __name__ == "__main__":
     configBase = {
         "fio_bin": "/mnt/fio/install/bin/fio",
         "benchname": "seq_read_and_write",
+        # "directory": "/mnt/profile",
         "directory": ".",
-        "filesize": FileSize("1 GiB"),
+        "filesize": FileSize("4 GiB"),
         "blocksize": FileSize("4 MiB"),
         "num_threads": 4,
         "iodepth": 1,
@@ -215,7 +234,6 @@ if __name__ == "__main__":
 
     testAll(configBase)
 
+    testAsync(configBase)
+
     testCufile(configBase)
-
-
-
