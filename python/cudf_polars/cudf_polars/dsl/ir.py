@@ -31,6 +31,7 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.versions import POLARS_VERSION_GT_112
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
@@ -522,6 +523,12 @@ class Scan(IR):
             )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
+            if POLARS_VERSION_GT_112:
+                # If we sliced away some data from the start, that
+                # shifts the row index.
+                # But prior to 1.13, polars had this wrong, so we match behaviour
+                # https://github.com/pola-rs/polars/issues/19607
+                offset += skip_rows  # pragma: no cover; polars 1.13 not yet released
             dtype = schema[name]
             step = plc.interop.from_arrow(
                 pa.scalar(1, type=plc.interop.to_arrow(dtype))
