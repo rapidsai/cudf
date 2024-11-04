@@ -6,6 +6,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.optional cimport optional
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.table.table cimport table
@@ -82,66 +83,66 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type conditional_inner_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type conditional_left_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type conditional_left_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type conditional_full_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type conditional_full_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type conditional_left_semi_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type conditional_left_semi_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type conditional_left_anti_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type conditional_left_anti_join(
         const table_view left,
         const table_view right,
         const expression binary_predicate,
         optional[size_t] output_size
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type mixed_inner_join(
         const table_view left_equality,
@@ -150,7 +151,7 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type mixed_left_join(
         const table_view left_equality,
@@ -159,7 +160,7 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_pair_type mixed_full_join(
         const table_view left_equality,
@@ -168,7 +169,7 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type mixed_left_semi_join(
         const table_view left_equality,
@@ -177,7 +178,7 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef gather_map_type mixed_left_anti_join(
         const table_view left_equality,
@@ -186,4 +187,4 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view right_conditional,
         const expression binary_predicate,
         null_equality compare_nulls
-    ) except +
+    ) except +libcudf_exception_handler
