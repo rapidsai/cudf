@@ -177,8 +177,8 @@ files:
     extras:
       table: project
     includes:
-      - depends_on_nvcomp
       - depends_on_libkvikio
+      - depends_on_nvcomp
   py_build_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
