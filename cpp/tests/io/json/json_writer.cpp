@@ -18,6 +18,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -30,6 +31,17 @@
 #include <vector>
 
 struct JsonWriterTest : public cudf::test::BaseFixture {};
+
+/**
+ * @brief Test fixture for parametrized JSON reader tests
+ */
+struct JsonCompressedWriterTest : public cudf::test::BaseFixture,
+                                public testing::WithParamInterface<cudf::io::compression_type> {};
+
+// Parametrize qualifying JSON tests for multiple compression types
+INSTANTIATE_TEST_SUITE_P(JsonCompressedWriterTest,
+                         JsonCompressedWriterTest,
+                         ::testing::Values(cudf::io::compression_type::GZIP, cudf::io::compression_type::NONE));
 
 TEST_F(JsonWriterTest, EmptyInput)
 {
@@ -165,6 +177,38 @@ TEST_F(JsonWriterTest, PlainTable)
   std::string const expected =
     R"([{"col1":"a","col2":"d","int":1,"float":1.5,"int16":null},{"col1":"b","col2":"e","int":2,"float":2.5,"int16":2},{"col1":"c","col2":"f","int":3,"float":3.5,"int16":null}])";
   EXPECT_EQ(expected, std::string(out_buffer.data(), out_buffer.size()));
+}
+
+TEST_P(JsonCompressedWriterTest, PlainTable)
+{
+  cudf::io::compression_type const comptype = GetParam();
+  cudf::test::strings_column_wrapper col1{"a", "b", "c"};
+  cudf::test::strings_column_wrapper col2{"d", "e", "f"};
+  cudf::test::fixed_width_column_wrapper<int> col3{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<float> col4{1.5, 2.5, 3.5};
+  cudf::test::fixed_width_column_wrapper<int16_t> col5{{1, 2, 3},
+                                                       cudf::test::iterators::nulls_at({0, 2})};
+  cudf::table_view tbl_view{{col1, col2, col3, col4, col5}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int"}, {"float"}, {"int16"}}};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(true)
+                           .metadata(mt)
+                           .lines(false)
+                           .compression(comptype)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
+
+  cudf::io::json_reader_options json_parser_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      .lines(false)
+      .compression(comptype);
+  auto result = cudf::io::read_json(json_parser_options);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl_view, result.tbl->view());
 }
 
 TEST_F(JsonWriterTest, SimpleNested)
