@@ -15,9 +15,16 @@ rapids-logger "Install cudf, pylibcudf, and test requirements"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf ./constraints.txt
 
+# Download wheel from <https://github.com/rapidsai/kvikio/pull/527>
+LIBKVIKIO_CHANNEL=$(
+  RAPIDS_PY_WHEEL_NAME=libkvikio_${RAPIDS_PY_CUDA_SUFFIX} rapids-get-pr-wheel-artifact kvikio 527 cpp  # also python?
+)
+echo ${LIBKVIKIO_CHANNEL}/libkvikio_*.whl >> /tmp/requirements-build.txt
+
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install \
     -v \
+    -r /tmp/requirements-build.txt \
     --constraint ./constraints.txt \
   "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
   "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \

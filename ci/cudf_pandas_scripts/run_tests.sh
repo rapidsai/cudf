@@ -57,8 +57,15 @@ else
     # generate constraints (possibly pinning to oldest support versions of dependencies)
     rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
 
+    # Download wheel from <https://github.com/rapidsai/kvikio/pull/527>
+    LIBKVIKIO_CHANNEL=$(
+    RAPIDS_PY_WHEEL_NAME=libkvikio_${RAPIDS_PY_CUDA_SUFFIX} rapids-get-pr-wheel-artifact kvikio 527 cpp  # also python?
+    )
+    echo ${LIBKVIKIO_CHANNEL}/libkvikio_*.whl >> /tmp/requirements-build.txt
+
     python -m pip install \
         -v \
+        -r /tmp/requirements-build.txt \
         --constraint ./constraints.txt \
         "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,cudf-pandas-tests]" \
         "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
