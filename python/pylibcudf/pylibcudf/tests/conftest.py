@@ -8,8 +8,9 @@ import sys
 
 import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
@@ -17,13 +18,23 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 from utils import ALL_PA_TYPES, DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
 
 
-# This fixture defines the standard set of types that all tests should default to
+def _type_to_str(typ):
+    if isinstance(typ, pa.ListType):
+        return f"list[{_type_to_str(typ.value_type)}]"
+    elif isinstance(typ, pa.StructType):
+        return f"struct[{', '.join(_type_to_str(typ.field(i).type) for i in range(typ.num_fields))}]"
+    else:
+        return str(typ)
+
+
+# This fixture defines [the standard set of types that all tests should default to
 # running on. If there is a need for some tests to run on a different set of types, that
 # type list fixture should also be defined below here if it is likely to be reused
 # across modules. Otherwise it may be defined on a per-module basis.
 @pytest.fixture(
     scope="session",
     params=DEFAULT_PA_TYPES,
+    ids=_type_to_str,
 )
 def pa_type(request):
     return request.param

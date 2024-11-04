@@ -4,11 +4,12 @@
 from __future__ import annotations
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 
 import polars as pl
 from polars.testing.asserts import assert_frame_equal
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.testing.asserts import assert_gpu_result_equal

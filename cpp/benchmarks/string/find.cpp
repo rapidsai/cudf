@@ -19,7 +19,6 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/find.hpp>
@@ -28,10 +27,6 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
-
-std::unique_ptr<cudf::column> build_input_column(cudf::size_type n_rows,
-                                                 cudf::size_type row_width,
-                                                 int32_t hit_rate);
 
 static void bench_find_string(nvbench::state& state)
 {
@@ -46,7 +41,7 @@ static void bench_find_string(nvbench::state& state)
   }
 
   auto const stream = cudf::get_default_stream();
-  auto const col    = build_input_column(n_rows, row_width, hit_rate);
+  auto const col    = create_string_column(n_rows, row_width, hit_rate);
   auto const input  = cudf::strings_column_view(col->view());
 
   std::vector<std::string> h_targets({"5W", "5W43", "0987 5W43"});

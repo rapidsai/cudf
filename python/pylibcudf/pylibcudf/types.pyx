@@ -79,6 +79,16 @@ cpdef size_type size_of(DataType t):
     Only fixed-width types are supported.
 
     For details, see :cpp:func:`size_of`.
+
+    Parameters
+    ----------
+    t : DataType
+        The DataType to get the size of.
+
+    Returns
+    -------
+    int
+        Size in bytes of an element of the specified type.
     """
     with nogil:
         return cpp_size_of(t.c_obj)

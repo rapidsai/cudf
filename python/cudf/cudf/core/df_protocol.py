@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import enum
 from collections import abc
-from typing import Any, Iterable, Mapping, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
@@ -19,6 +19,9 @@ from cudf.core.column import (
     as_column,
     build_column,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
 
 # Implementation of interchange protocol classes
 # ----------------------------------------------
@@ -61,7 +64,7 @@ _SUPPORTED_KINDS = {
     _DtypeKind.BOOL,
     _DtypeKind.STRING,
 }
-ProtoDtype = Tuple[_DtypeKind, int, str, str]
+ProtoDtype = tuple[_DtypeKind, int, str, str]
 
 
 class _CuDFBuffer:
