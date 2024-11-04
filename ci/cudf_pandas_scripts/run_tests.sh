@@ -54,18 +54,18 @@ else
     RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
     RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
 
-    echo "" > ./constraints.txt
-    if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
-        # `test_python_cudf_pandas` constraints are for `[test]` not `[cudf-pandas-tests]`
-        rapids-dependency-file-generator \
-            --output requirements \
-            --file-key test_python_cudf_pandas \
-            --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
-        | tee ./constraints.txt
-    fi
+    # generate constraints (possibly pinning to oldest support versions of dependencies)
+    rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
+
+    # Download wheel from <https://github.com/rapidsai/kvikio/pull/527>
+    LIBKVIKIO_CHANNEL=$(
+    RAPIDS_PY_WHEEL_NAME=libkvikio_${RAPIDS_PY_CUDA_SUFFIX} rapids-get-pr-wheel-artifact kvikio 527 cpp  # also python?
+    )
+    echo ${LIBKVIKIO_CHANNEL}/libkvikio_*.whl >> /tmp/requirements-build.txt
 
     python -m pip install \
         -v \
+        -r /tmp/requirements-build.txt \
         --constraint ./constraints.txt \
         "$(echo ./dist/cudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,cudf-pandas-tests]" \
         "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \

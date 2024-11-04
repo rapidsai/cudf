@@ -15,6 +15,13 @@ rapids-dependency-file-generator \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};cuda_suffixed=true" \
 | tee /tmp/requirements-build.txt
 
+
+# Download wheel from <https://github.com/rapidsai/kvikio/pull/527>
+LIBKVIKIO_CHANNEL=$(
+  RAPIDS_PY_WHEEL_NAME=libkvikio_cu12 rapids-get-pr-wheel-artifact kvikio 527 cpp
+)
+echo ${LIBKVIKIO_CHANNEL}/libkvikio_*.whl >> /tmp/requirements-build.txt
+
 rapids-logger "Installing build requirements"
 python -m pip install \
     -v \
@@ -25,7 +32,7 @@ python -m pip install \
 # 0 really means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/5735)
 export PIP_NO_BUILD_ISOLATION=0
 
-export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON"
+export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON;-DUSE_LIBKVIKIO_RUNTIME_WHEEL=ON"
 ./ci/build_wheel.sh "${package_name}" "${package_dir}"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
@@ -33,6 +40,7 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 mkdir -p ${package_dir}/final_dist
 python -m auditwheel repair \
     --exclude libnvcomp.so.4 \
+    --exclude libkvikio.so \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 
