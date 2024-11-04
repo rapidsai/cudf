@@ -52,6 +52,7 @@ cdef class DataChunkSource:
     """
 
     def __cinit__(self, str data):
+        # Need to keep a reference alive for make_source
         self.data_ref = data.encode()
 
 
