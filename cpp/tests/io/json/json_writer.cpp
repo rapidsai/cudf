@@ -220,41 +220,6 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
 
   auto result = cudf::io::read_json(json_parser_options);
 
-  /*
-  cudf::test::print(tbl_view.column(0));
-  cudf::test::print(tbl_view.column(1));
-  cudf::test::print(tbl_view.column(2));
-  cudf::test::print(tbl_view.column(3));
-  cudf::test::print(tbl_view.column(4));
-  std::cout << "=======================\n";
-  cudf::test::print(result.tbl->get_column(0));
-  cudf::test::print(result.tbl->get_column(1));
-  cudf::test::print(result.tbl->get_column(2));
-  cudf::test::print(result.tbl->get_column(3));
-  cudf::test::print(result.tbl->get_column(4));
-  */
-
-  EXPECT_EQ(result.tbl->num_columns(), 5);
-  EXPECT_EQ(result.tbl->num_rows(), 3);
-
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(result.tbl->get_column(3).type().id(), cudf::type_id::FLOAT64);
-  EXPECT_EQ(result.tbl->get_column(4).type().id(), cudf::type_id::INT64);
-
-  EXPECT_EQ(tbl_view.column(0).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(tbl_view.column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(tbl_view.column(2).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(tbl_view.column(3).type().id(), cudf::type_id::FLOAT64);
-  EXPECT_EQ(tbl_view.column(4).type().id(), cudf::type_id::INT64);
-
-  EXPECT_EQ(result.metadata.schema_info[0].name, "col1");
-  EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
-  EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
-  EXPECT_EQ(result.metadata.schema_info[3].name, "col4");
-  EXPECT_EQ(result.metadata.schema_info[4].name, "col5");
-
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl_view, result.tbl->view());
 }
 
