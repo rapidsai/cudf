@@ -318,6 +318,7 @@ def write_csv(
     columns = [col.to_pylibcudf(mode="read") for col in table._columns]
     try:
         plc.io.csv.write_csv(
+            plc.io.SinkInfo([path_or_buf]),
             plc.io.TableWithMetadata(
                 plc.Table(columns),
                 col_names

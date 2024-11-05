@@ -8,7 +8,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
+from pylibcudf.io.types cimport SourceInfo, SinkInfo, TableWithMetadata
 from pylibcudf.libcudf.io.csv cimport (
     csv_reader_options,
     csv_writer_options,
@@ -278,78 +278,79 @@ def read_csv(
     return TableWithMetadata.from_libcudf(c_result)
 
 
-# Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
-# write from cudf to any python file-like object (File/BytesIO/SocketIO etc)
-cdef cppclass iobase_data_sink(data_sink):
-    object buf
+# # Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
+# # write from cudf to any python file-like object (File/BytesIO/SocketIO etc)
+# cdef cppclass iobase_data_sink(data_sink):
+#     object buf
 
-    iobase_data_sink(object buf_):
-        this.buf = buf_
+#     iobase_data_sink(object buf_):
+#         this.buf = buf_
 
-    void host_write(const void * data, size_t size) with gil:
-        if isinstance(buf, io.StringIO):
-            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ)
-                      .tobytes().decode())
-        else:
-            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
+#     void host_write(const void * data, size_t size) with gil:
+#         if isinstance(buf, io.StringIO):
+#             buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ)
+#                       .tobytes().decode())
+#         else:
+#             buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
 
-    void flush() with gil:
-        buf.flush()
+#     void flush() with gil:
+#         buf.flush()
 
-    size_t bytes_written() with gil:
-        return buf.tell()
-
-
-# Converts the Python sink input to libcudf IO sink_info.
-cdef sink_info make_sinks_info(
-    list src, vector[unique_ptr[data_sink]] & sink
-) except*:
-    cdef vector[data_sink *] data_sinks
-    cdef vector[string] paths
-    if isinstance(src[0], io.StringIO):
-        data_sinks.reserve(len(src))
-        for s in src:
-            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
-            data_sinks.push_back(sink.back().get())
-        return sink_info(data_sinks)
-    elif isinstance(src[0], io.TextIOBase):
-        data_sinks.reserve(len(src))
-        for s in src:
-            # Files opened in text mode expect writes to be str rather than
-            # bytes, which requires conversion from utf-8. If the underlying
-            # buffer is utf-8, we can bypass this conversion by writing
-            # directly to it.
-            if codecs.lookup(s.encoding).name not in {"utf-8", "ascii"}:
-                raise NotImplementedError(f"Unsupported encoding {s.encoding}")
-            sink.push_back(
-                unique_ptr[data_sink](new iobase_data_sink(s.buffer))
-            )
-            data_sinks.push_back(sink.back().get())
-        return sink_info(data_sinks)
-    elif isinstance(src[0], io.IOBase):
-        data_sinks.reserve(len(src))
-        for s in src:
-            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
-            data_sinks.push_back(sink.back().get())
-        return sink_info(data_sinks)
-    elif isinstance(src[0], (basestring, os.PathLike)):
-        paths.reserve(len(src))
-        for s in src:
-            paths.push_back(<string> os.path.expanduser(s).encode())
-        return sink_info(move(paths))
-    else:
-        raise TypeError("Unrecognized input type: {}".format(type(src)))
+#     size_t bytes_written() with gil:
+#         return buf.tell()
 
 
-cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
-    cdef vector[unique_ptr[data_sink]] datasinks
-    cdef sink_info info = make_sinks_info([src], datasinks)
-    if not datasinks.empty():
-        sink.swap(datasinks[0])
-    return info
+# # Converts the Python sink input to libcudf IO sink_info.
+# cdef sink_info make_sinks_info(
+#     list src, vector[unique_ptr[data_sink]] & sink
+# ) except*:
+#     cdef vector[data_sink *] data_sinks
+#     cdef vector[string] paths
+#     if isinstance(src[0], io.StringIO):
+#         data_sinks.reserve(len(src))
+#         for s in src:
+#             sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+#             data_sinks.push_back(sink.back().get())
+#         return sink_info(data_sinks)
+#     elif isinstance(src[0], io.TextIOBase):
+#         data_sinks.reserve(len(src))
+#         for s in src:
+#             # Files opened in text mode expect writes to be str rather than
+#             # bytes, which requires conversion from utf-8. If the underlying
+#             # buffer is utf-8, we can bypass this conversion by writing
+#             # directly to it.
+#             if codecs.lookup(s.encoding).name not in {"utf-8", "ascii"}:
+#                 raise NotImplementedError(f"Unsupported encoding {s.encoding}")
+#             sink.push_back(
+#                 unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+#             )
+#             data_sinks.push_back(sink.back().get())
+#         return sink_info(data_sinks)
+#     elif isinstance(src[0], io.IOBase):
+#         data_sinks.reserve(len(src))
+#         for s in src:
+#             sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+#             data_sinks.push_back(sink.back().get())
+#         return sink_info(data_sinks)
+#     elif isinstance(src[0], (basestring, os.PathLike)):
+#         paths.reserve(len(src))
+#         for s in src:
+#             paths.push_back(<string> os.path.expanduser(s).encode())
+#         return sink_info(move(paths))
+#     else:
+#         raise TypeError("Unrecognized input type: {}".format(type(src)))
+
+
+# cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
+#     cdef vector[unique_ptr[data_sink]] datasinks
+#     cdef sink_info info = make_sinks_info([src], datasinks)
+#     if not datasinks.empty():
+#         sink.swap(datasinks[0])
+#     return info
 
 
 def write_csv(
+    SinkInfo sink_info,
     TableWithMetadata table,
     *,
     object path_or_buf=None,
@@ -368,6 +369,8 @@ def write_csv(
 
     Parameters
     ----------
+    sink_info: SinkInfo
+        The SinkInfo object to write to.
     table : TableWithMetadata
         The TableWithMetadata object containing the Table to write.
     path_or_buf : object, default None
@@ -392,8 +395,8 @@ def write_csv(
     cdef vector[string] col_names
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
-    cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
+    # cdef unique_ptr[data_sink] data_sink_c
+    # cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True:
         all_names = table.column_names()
@@ -423,7 +426,8 @@ def write_csv(
         )
     cdef csv_writer_options options = move(
         csv_writer_options.builder(
-            sink_info_c,
+            # sink_info_c,
+            sink_info.c_obj,
             new_table.view()
         )
         .names(col_names)
