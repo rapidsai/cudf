@@ -8,6 +8,8 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING
 
+from polars.exceptions import InvalidOperationError
+
 import pylibcudf as plc
 from pylibcudf.strings.convert.convert_floats import from_floats, is_float, to_floats
 from pylibcudf.strings.convert.convert_integers import (
@@ -16,8 +18,6 @@ from pylibcudf.strings.convert.convert_integers import (
     to_integers,
 )
 from pylibcudf.traits import is_floating_point
-
-from polars.exceptions import InvalidOperationError
 
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
