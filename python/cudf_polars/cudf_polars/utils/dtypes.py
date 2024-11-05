@@ -118,7 +118,9 @@ def is_order_preserving_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     ):
         # True if the target is larger
         return True
-    return is_integral_not_bool(from_) and is_floating_point(to)
+    return (is_integral_not_bool(from_) and is_floating_point(to)) or (
+        is_floating_point(from_) and is_integral_not_bool(to)
+    )
 
 
 @cache

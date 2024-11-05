@@ -3,10 +3,11 @@
 
 from __future__ import annotations
 
-import pylibcudf as plc
 import pytest
 
 import polars as pl
+
+import pylibcudf as plc
 
 from cudf_polars.utils.dtypes import from_polars, is_order_preserving_cast
 
@@ -52,8 +53,9 @@ def test_is_order_preserving_cast():
     assert is_order_preserving_cast(UINT8, FLOAT32)  # Unsigned to large enough float
     assert is_order_preserving_cast(FLOAT32, FLOAT64)  # Float to larger float
     assert is_order_preserving_cast(INT64, FLOAT32)  # Int any float
+    assert is_order_preserving_cast(FLOAT32, INT32)  # Float to undersized int
+    assert is_order_preserving_cast(FLOAT32, INT64)  # float to large int
 
     assert not is_order_preserving_cast(INT16, INT8)  # Bigger type
     assert not is_order_preserving_cast(INT8, UINT8)  # Different signedness
-    assert not is_order_preserving_cast(FLOAT32, INT32)  # Float to undersized int
-    assert not is_order_preserving_cast(FLOAT32, INT64)  # float to large int
+    assert not is_order_preserving_cast(FLOAT64, FLOAT32)  # Smaller float
