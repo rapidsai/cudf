@@ -148,7 +148,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
-  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4);
 
 using col_selections = nvbench::enum_type_list<column_selection::ALL,
@@ -167,7 +167,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
-  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4);
 
 NVBENCH_BENCH_TYPES(
@@ -183,5 +183,5 @@ NVBENCH_BENCH_TYPES(
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
-  .add_string_axis("io_type", {"PINNED_BUFFER", "DEVICE_BUFFER"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4);
