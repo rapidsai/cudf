@@ -21,8 +21,6 @@ cpdef Column character_tokenize(Column input)
 
 cpdef Column detokenize(Column input, Column row_indices, Scalar separator=*)
 
-cpdef TokenizeVocabulary load_vocabulary(Column input)
-
 cpdef Column tokenize_with_vocabulary(
     Column input,
     TokenizeVocabulary vocabulary,
