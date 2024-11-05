@@ -111,7 +111,7 @@ struct dremel_data {
  * ```
  * col = {[], [[], [1, 2, 3], [4, 5]], [[]]}
  * def = { 0    1,  2, 2, 2,   2, 2,     1 }
- * rep = { 0,   0,  0, 2, 2,   1, 2,     0 }
+ * rep = { 0,   0,  1, 2, 2,   1, 2,     0 }
  * ```
  *
  * Since repetition and definition levels arrays contain a value for each empty list, the size of
