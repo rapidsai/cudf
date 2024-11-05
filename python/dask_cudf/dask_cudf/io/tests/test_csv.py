@@ -264,3 +264,18 @@ def test_read_csv_nrows_error(csv_end_bad_lines):
         dask_cudf.read_csv(
             csv_end_bad_lines, nrows=2, blocksize="100 MiB"
         ).compute()
+
+
+def test_deprecated_api_paths(tmp_path):
+    csv_path = str(tmp_path / "data-*.csv")
+    df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
+    df.to_csv(csv_path, index=False)
+
+    # Encourage top-level read_csv import only
+    with pytest.warns(match="dask_cudf.io.read_csv is now deprecated"):
+        df2 = dask_cudf.io.read_csv(csv_path)
+    dd.assert_eq(df, df2, check_divisions=False)
+
+    with pytest.warns(match="dask_cudf.io.csv.read_csv is now deprecated"):
+        df2 = dask_cudf.io.csv.read_csv(csv_path)
+    dd.assert_eq(df, df2, check_divisions=False)
