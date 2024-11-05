@@ -93,15 +93,16 @@ enum class json_recovery_mode_t {
  * | `chunksize`          | use `byte_range_xxx` for chunking instead        |
  */
 class json_reader_options {
+ public:
+  using dtype_variant =
+    std::variant<std::vector<data_type>,
+                 std::map<std::string, data_type>,
+                 std::map<std::string, schema_element>,
+                 schema_element>;  ///< Variant type holding dtypes information for the columns
+
+ private:
   source_info _source;
 
-  /**
-   * @brief Variant type holding dtypes information for the columns.
-   */
-  using dtype_variant = std::variant<std::vector<data_type>,
-                                     std::map<std::string, data_type>,
-                                     std::map<std::string, schema_element>,
-                                     schema_element>;
   // Data types of the column; empty to infer dtypes
   dtype_variant _dtypes;
   // Specify the compression format of the source or infer from file extension
