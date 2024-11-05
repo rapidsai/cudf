@@ -97,7 +97,7 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
   column_metadata.children_meta = children_metadata;
   std::vector<cudf::column_metadata> metadata{column_metadata};
   cudf::unique_schema_t schema      = cudf::to_arrow_schema(table_view, metadata);
-  cudf::unique_device_array_t input = cudf::to_arrow_host(table_view);
+  cudf::unique_device_array_t input = cudf::to_arrow_device(table_view);
 
   state.add_element_count(num_elements, "num_elements");
   state.add_global_memory_reads(size_bytes);
