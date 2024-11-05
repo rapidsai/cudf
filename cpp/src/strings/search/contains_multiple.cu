@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -113,7 +114,9 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
   // get the string for this tile
   auto const d_str = d_strings.element<string_view>(str_idx);
 
-  auto const lane_idx    = idx % tile_size;
+  namespace cg           = cooperative_groups;
+  auto const tile        = cg::tiled_partition<tile_size>(cg::this_thread_block());
+  auto const lane_idx    = tile.thread_rank();
   auto const tile_idx    = static_cast<cudf::thread_index_type>(threadIdx.x) / tile_size;
   auto const num_targets = d_targets.size();
 
@@ -134,7 +137,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
       thrust::uninitialized_fill(thrust::seq, begin, begin + tile_size, d_target.empty());
     }
   }
-  if constexpr (tile_size == cudf::detail::warp_size) { __syncwarp(); }
+  tile.sync();
 
   auto const last_ptr = d_first_bytes + unique_count;
   for (size_type str_byte_idx = lane_idx; str_byte_idx < d_str.size_bytes();
@@ -178,7 +181,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
       auto const begin = bools + (target_idx * tile_size);
       d_results[target_idx][str_idx] =
         thrust::any_of(thrust::seq, begin, begin + tile_size, thrust::identity<bool>{});
-      // cooperative group implementation was almost 3x slower than this parallel reduce
+      // cooperative_group any() implementation was almost 3x slower than this parallel reduce
     }
   }
 }
