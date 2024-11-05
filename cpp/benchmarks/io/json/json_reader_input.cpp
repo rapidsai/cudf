@@ -108,7 +108,7 @@ void BM_json_read_compressed_io(
                                            static_cast<int32_t>(data_type::STRUCT)});
   auto const num_rows = json_write_bm_data(source_sink.make_sink_info(), d_type, comptype);
 
-  json_read_common(source_sink, num_rows, state);
+  json_read_common(source_sink, num_rows, state, comptype);
 }
 
 template <data_type DataType, io_type IO>
