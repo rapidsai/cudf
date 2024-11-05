@@ -134,8 +134,9 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
 using io_list =
   nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::DEVICE_BUFFER>;
 
-using compression_list =
-  nvbench::enum_type_list<cudf::io::compression_type::GZIP, cudf::io::compression_type::NONE>;
+using compression_list = nvbench::enum_type_list<cudf::io::compression_type::GZIP,
+                                                 cudf::io::compression_type::SNAPPY,
+                                                 cudf::io::compression_type::NONE>;
 
 NVBENCH_BENCH_TYPES(BM_json_read_data_type,
                     NVBENCH_TYPE_AXES(d_type_list, nvbench::enum_type_list<io_type::DEVICE_BUFFER>))
