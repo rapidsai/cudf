@@ -585,9 +585,11 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
+
+  // offsets are created as INT32 or INT64 as appropriate
   auto [offsets, chars_length] = cudf::strings::detail::make_offsets_child_column(
     valid_lengths, valid_lengths + num_rows, stream, mr);
-
+  // use the offsetalator to normalize the offset values for use by the string_generator
   auto offsets_itr = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
