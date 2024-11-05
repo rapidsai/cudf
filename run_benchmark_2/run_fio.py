@@ -5,6 +5,7 @@ import enum
 import os
 import copy
 
+
 class FileSize:
     def __init__(self, fileSize: int | str):
         self._KiB = 1024
@@ -109,8 +110,6 @@ class Analyzer:
         self.fileSizeIncrementPerThread: FileSize = FileSize(
             int(self.fileSize.toB() / self.numThreads))
 
-        self._drop_cache()
-
     def _drop_cache(self):
         subprocess.run(["sync"])
 
@@ -134,6 +133,8 @@ class Analyzer:
         Emulate the workload in cuDF/KvikIO where multiple threads read from the same file, starting at different offset.
         """
 
+        self._drop_cache()
+
         fileOpStr = ""
         if fileOp == FileOp.READ:
             fileOpStr = "read"
@@ -150,7 +151,7 @@ class Analyzer:
             )
             + "--iodepth={} --blocksize={} --runtime={} ".format(
                 self.ioDepth, self.blockSize.toB(), self.maxRuntime)
-            + "--filesize={}".format(self.fileSize.toB())
+            + "--size={}".format(self.fileSizeIncrementPerThread.toB())
         )
 
         if self.engine == "libcufile":
@@ -176,6 +177,7 @@ class Analyzer:
         self._benchSeqOp(FileOp.READ)
         self._benchSeqOp(FileOp.WRITE)
 
+
 def testAll(configBase):
     config = copy.deepcopy(configBase)
 
@@ -184,6 +186,7 @@ def testAll(configBase):
         config["engine"] = engine
         az = Analyzer(config)
         az.run()
+
 
 def testAsync(configBase):
     config = copy.deepcopy(configBase)
@@ -194,6 +197,7 @@ def testAsync(configBase):
         config["iodepth"] = 4
         az = Analyzer(config)
         az.run()
+
 
 def testCufile(configBase):
     config = copy.deepcopy(configBase)
@@ -208,7 +212,6 @@ def testCufile(configBase):
     config["cuda_io"] = "posix"
     az = Analyzer(config)
     az.run()
-
 
 
 if __name__ == "__main__":
