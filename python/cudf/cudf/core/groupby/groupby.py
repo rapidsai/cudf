@@ -481,6 +481,11 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
+        if is_list_like(self._by):
+            if isinstance(name, tuple) and len(name) == 1:
+                name = name[0]
+            else:
+                raise KeyError(name)
         return obj.iloc[self.indices[name]]
 
     @_performance_tracking

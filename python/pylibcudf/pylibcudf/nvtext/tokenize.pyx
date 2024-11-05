@@ -43,8 +43,7 @@ cpdef Column tokenize_scalar(Column input, Scalar delimiter=None):
     input : Column
         Strings column to tokenize
     delimiter : Scalar
-        String scalar used to separate individual
-        strings into tokens
+        String scalar used to separate individual strings into tokens
 
     Returns
     -------
@@ -106,7 +105,7 @@ cpdef Column count_tokens_scalar(Column input, Scalar delimiter=None):
     ----------
     input : Column
         Strings column to count tokens
-    delimiters : Scalar]
+    delimiters : Scalar
         String scalar used to separate each string into tokens
 
     Returns
@@ -141,8 +140,7 @@ cpdef Column count_tokens_column(Column input, Column delimiters):
     input : Column
         Strings column to count tokens
     delimiters : Column
-        Strings column used to separate
-        each string into tokens
+        Strings column used to separate each string into tokens
 
     Returns
     -------
@@ -198,11 +196,9 @@ cpdef Column detokenize(
     input : Column
         Strings column to detokenize
     row_indices : Column
-        The relative output row index assigned
-        for each token in the input column
+        The relative output row index assigned for each token in the input column
     separator : Scalar
-        String to append after concatenating
-        each token to the proper output row
+        String to append after concatenating each token to the proper output row
 
     Returns
     -------
@@ -225,25 +221,6 @@ cpdef Column detokenize(
 
     return Column.from_libcudf(move(c_result))
 
-cpdef TokenizeVocabulary load_vocabulary(Column input):
-    """
-    Create a ``TokenizeVocabulary`` object from a strings column.
-
-    For details, see cpp:func:`cudf::nvtext::load_vocabulary`
-
-    Parameters
-    ----------
-    input : Column
-        Strings for the vocabulary
-
-    Returns
-    -------
-    TokenizeVocabulary
-        Object to be used with cpp:func:`cudf::nvtext::tokenize_with_vocabulary`
-    """
-    return TokenizeVocabulary(input)
-
-
 cpdef Column tokenize_with_vocabulary(
     Column input,
     TokenizeVocabulary vocabulary,
@@ -265,8 +242,7 @@ cpdef Column tokenize_with_vocabulary(
     delimiter : Scalar
         Used to identify tokens within ``input``
     default_id : size_type
-        The token id to be used for tokens not found
-        in the vocabulary; Default is -1
+        The token id to be used for tokens not found in the vocabulary; Default is -1
 
     Returns
     -------
