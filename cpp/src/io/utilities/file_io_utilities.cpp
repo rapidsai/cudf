@@ -19,8 +19,8 @@
 #include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/logger.hpp>
 
 #include <dlfcn.h>
 

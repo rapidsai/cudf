@@ -60,7 +60,7 @@
 
 #include "base64_utilities.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 

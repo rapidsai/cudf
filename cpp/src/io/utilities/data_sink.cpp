@@ -16,9 +16,9 @@
 
 #include "file_io_utilities.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <kvikio/file_handle.hpp>

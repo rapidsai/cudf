@@ -265,6 +265,15 @@ endif()
 
 # add third party dependencies using CPM
 rapids_cpm_init()
+
+# TODO: Replace with a rapids_cpm_find (or maybe just a FetchContent since we never expect to find
+# this.
+add_subdirectory(../../rmm/rapids_logger rapids_logger/)
+rapids_make_logger(
+  cudf VISIBILITY_MACRO "__attribute__((visibility(\"default\")))" EXPORT_SET cudf-exports
+  SUPPORTS_LOGGING CUDF_BACKWARDS_COMPATIBILITY
+)
+
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 # find NVTX
@@ -764,7 +773,6 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
   src/utilities/linked_column.cpp
-  src/utilities/logger.cpp
   src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
@@ -927,7 +935,7 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-         spdlog::spdlog_header_only
+         spdlog::spdlog_header_only cudf_logger
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
           cuco::cuco
           ZLIB::ZLIB
@@ -936,6 +944,7 @@ target_link_libraries(
           $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
           nanoarrow
           rmm::rmm_logger_impl
+          cudf_logger_impl
 )
 
 # Add Conda library, and include paths if specified

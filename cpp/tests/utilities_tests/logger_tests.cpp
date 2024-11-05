@@ -16,7 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
 
 #include <spdlog/sinks/ostream_sink.h>
 
