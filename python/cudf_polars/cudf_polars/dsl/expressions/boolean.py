@@ -10,9 +10,10 @@ from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
-import pylibcudf as plc
 
 from polars.polars import _expr_nodes as pl_expr
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import (

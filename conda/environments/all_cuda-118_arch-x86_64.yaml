@@ -46,6 +46,7 @@ dependencies:
 - librdkafka>=2.5.0,<2.6.0a0
 - librmm==24.12.*,>=0.0.0a0
 - make
+- mmh3
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
@@ -58,14 +59,14 @@ dependencies:
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcc_linux-64=11.8
-- nvcomp==4.0.1
+- nvcomp==4.1.0.6
 - nvtx>=0.2.1
 - openpyxl
 - packaging
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.11,<1.12
+- polars>=1.11,<1.13
 - pre-commit
 - ptxcompiler
 - pyarrow>=14.0.0,<18.0.0a0
@@ -76,6 +77,7 @@ dependencies:
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=2.5.0,<2.6.0a0
+- python-xxhash
 - python>=3.10,<3.13
 - pytorch>=2.1.0
 - rapids-build-backend>=0.3.0,<0.4.0.dev0

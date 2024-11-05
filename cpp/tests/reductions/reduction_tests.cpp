@@ -22,9 +22,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -33,11 +31,9 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <iostream>
 #include <iterator>
 #include <vector>
 
@@ -1259,6 +1255,12 @@ TEST_P(StringReductionTest, MinMax)
   // data and valid arrays
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
+  std::transform(thrust::counting_iterator<std::size_t>(0),
+                 thrust::counting_iterator<std::size_t>(host_strings.size()),
+                 host_strings.begin(),
+                 [host_strings, host_bools](auto idx) {
+                   return host_bools[idx] ? host_strings[idx] : std::string{};
+                 });
   bool succeed(true);
   std::string initial_value = "init";
 
@@ -1385,7 +1387,7 @@ TEST_F(StringReductionTest, AllNull)
   std::vector<std::string> host_strings(
     {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
   std::vector<bool> host_bools(host_strings.size(), false);
-  auto initial_value = cudf::make_string_scalar("init");
+  auto initial_value = cudf::make_string_scalar("");
   initial_value->set_valid_async(false);
 
   // string column with nulls
@@ -3086,21 +3088,28 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
   using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
-  // `null` means null at child column.
-  // `NULL` means null at parent column.
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "₹1" /*null*/,
-                              "aaa" /*NULL*/,
+                              "",     // child null
+                              "aaa",  // parent null
                               "zit",
                               "bat",
                               "aab",
-                              "$1" /*null*/,
-                              "€1" /*NULL*/,
+                              "",    // child null
+                              "€1",  // parent null
                               "wut"},
                              nulls_at({2, 7})};
-    auto child2 = INTS_CW{{1, 2, 3 /*null*/, 4 /*NULL*/, 5, 6, 7, 8 /*null*/, 9 /*NULL*/, 10},
+    auto child2 = INTS_CW{{1,
+                           2,
+                           0,  // child null
+                           4,  // parent null
+                           5,
+                           6,
+                           7,
+                           0,  // child null
+                           9,  // parent NULL
+                           10},
                           nulls_at({2, 7})};
     return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
   }();
