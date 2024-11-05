@@ -52,6 +52,8 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
   auto const filepath = g_temp_env->get_temp_filepath("ReadLargeStrings.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .stats_level(cudf::io::STATISTICS_NONE)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
@@ -83,21 +85,23 @@ TEST_F(ParquetStringsTest, ChunkedReadLargeStrings)
   auto const expected    = cudf::table_view{{col0->view()}};
   auto expected_metadata = cudf::io::table_input_metadata{expected};
   expected_metadata.column_metadata[0].set_encoding(
-    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);  ///< Needed to get exactly 2 chunks when
+                                                          ///< chunked reading
 
   // Write to Parquet
   std::vector<char> buffer;
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-      .compression(cudf::io::compression_type::ZSTD)
+      .compression(
+        cudf::io::compression_type::ZSTD)  ///< Needed to get exactly 2 chunks when chunked reading
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
   // Read with chunked_parquet_reader
   size_t constexpr pass_read_limit =
     size_t{8} * 1024 * 1024 *
-    1024;  ///< Set to 8GB so we read almost entire table (>2GB string) in the first subpass
-           ///< and only a small amount in the second subpass.
+    1024;  ///< Empirically set to 8GB so we read almost entire table (>2GB string) in the first
+           ///< subpass and only a small amount in the second subpass.
   cudf::io::parquet_reader_options default_in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
   auto reader = cudf::io::chunked_parquet_reader(0, pass_read_limit, default_in_opts);
