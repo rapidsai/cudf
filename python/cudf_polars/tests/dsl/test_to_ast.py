@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-import pylibcudf as plc
 import pytest
 
 import polars as pl
 from polars.testing import assert_frame_equal
+
+import pylibcudf as plc
 
 import cudf_polars.dsl.ir as ir_nodes
 from cudf_polars import translate_ir

@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import pyarrow
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 
