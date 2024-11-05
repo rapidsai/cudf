@@ -104,14 +104,7 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(compression == compression_type::SNAPPY, "Unsupported compression type");
   auto const num_chunks = inputs.size();
-
-  auto const h_inputs = detail::make_host_vector_sync(inputs, stream);
-  auto const total_size =
-    std::accumulate(h_inputs.begin(), h_inputs.end(), 0ul, [](auto acc, auto const& input) {
-      return acc + input.size();
-    });
 
   // cuDF inflate inputs converted to nvcomp inputs
   auto const nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
@@ -121,7 +114,6 @@ void batched_decompress(compression_type compression,
   auto const temp_size = batched_decompress_temp_size(
     compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size);
   rmm::device_buffer scratch(temp_size, stream);
-  auto start               = std::chrono::steady_clock::now();
   auto const nvcomp_status = batched_decompress_async(compression,
                                                       nvcomp_args.input_data_ptrs.data(),
                                                       nvcomp_args.input_data_sizes.data(),
@@ -133,16 +125,7 @@ void batched_decompress(compression_type compression,
                                                       nvcomp_args.output_data_ptrs.data(),
                                                       nvcomp_statuses.data(),
                                                       stream.value());
-  auto end_async           = std::chrono::steady_clock::now();
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "unable to perform decompression");
-
-  stream.synchronize();
-  auto end_sync = std::chrono::steady_clock::now();
-  auto async_time =
-    std::chrono::duration_cast<std::chrono::microseconds>(end_async - start).count();
-  auto sync_time = std::chrono::duration_cast<std::chrono::microseconds>(end_sync - start).count();
-  std::cout << inputs.size() << ',' << total_size << ',' << async_time << ',' << sync_time
-            << std::endl;
 
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
