@@ -56,6 +56,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                    compression_type compression,
                                    size_t range_offset,
                                    size_t range_size,
+                                   char delimiter,
                                    rmm::cuda_stream_view stream);
 
 /**
