@@ -41,9 +41,11 @@ files:
       - test_cpp
       - test_python_common
       - test_python_cudf
+      - test_python_cudf_common
       - test_python_dask_cudf
       - test_python_pylibcudf
       - test_python_cudf_pandas
+      - test_python_cudf_polars
   test_static_build:
     output: none
     includes:
@@ -59,6 +61,7 @@ files:
       - cuda_version
       - py_version
       - test_python_common
+      - test_python_cudf_common
       - test_python_cudf
       - test_python_cudf_pandas
   test_python_cudf:
@@ -67,6 +70,7 @@ files:
       - cuda_version
       - py_version
       - test_python_common
+      - test_python_cudf_common
       - test_python_cudf
   test_python_other:
     output: none
@@ -74,6 +78,7 @@ files:
       - cuda_version
       - py_version
       - test_python_common
+      - test_python_cudf_common
       - test_python_dask_cudf
   test_java:
     output: none
@@ -216,6 +221,7 @@ files:
       key: test
     includes:
       - test_python_common
+      - test_python_cudf_common
       - test_python_pylibcudf
   py_test_pandas_cudf:
     output: pyproject
@@ -256,7 +262,7 @@ files:
       key: test
     includes:
       - test_python_common
-      - test_cudf_polars
+      - test_python_cudf_polars
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -888,7 +894,7 @@ dependencies:
               - pyarrow==14.0.1
           - matrix:
             packages:
-  test_cudf_polars:
+  test_python_cudf_polars:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
