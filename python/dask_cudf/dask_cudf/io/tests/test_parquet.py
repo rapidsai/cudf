@@ -607,6 +607,9 @@ def test_parquet_read_filter_and_project(tmpdir):
     dd.assert_eq(got, expected)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:DatetimeTZBlock"
+)  # pandas >=2.2 and pyarrow <15
 def test_timezone_column(tmpdir):
     path = str(tmpdir.join("test.parquet"))
     pdf = pd.DataFrame(
