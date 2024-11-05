@@ -791,6 +791,23 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                                                               mr));
 }
 
+template <>
+void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
+{
+  // TODO: Add a name string to the aggregation so that we can look up different host UDFs.
+  if (cache.has_result(values, agg)) { return; }
+  auto const udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).host_udf_ptr;
+  CUDF_EXPECTS(udf_ptr != nullptr, "errrrrrrrrr");
+  cache.add_result(values,
+                   agg,
+                   udf_ptr(get_grouped_values(),
+                           helper.group_offsets(stream),
+                           helper.group_labels(stream),
+                           helper.num_groups(stream),
+                           stream,
+                           mr));
+}
+
 }  // namespace detail
 
 // Sort-based groupby

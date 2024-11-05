@@ -144,6 +144,9 @@ struct reduce_dispatch_functor {
         auto td_agg = static_cast<cudf::detail::merge_tdigest_aggregation const&>(agg);
         return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
       }
+      case aggregation::HOST_UDF: {
+        CUDF_FAIL("Host UDF aggregation is not implemented in `reduction`");
+      }
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }

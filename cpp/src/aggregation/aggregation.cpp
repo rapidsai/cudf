@@ -237,6 +237,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
 
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, host_udf_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
 // aggregation_finalizer ----------------------------------------
 
 void aggregation_finalizer::visit(aggregation const& agg) {}
@@ -406,6 +412,11 @@ void aggregation_finalizer::visit(tdigest_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(merge_tdigest_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(host_udf_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -916,6 +927,18 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
 make_merge_tdigest_aggregation<groupby_aggregation>(int max_centroids);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_merge_tdigest_aggregation<reduce_aggregation>(int max_centroids);
+
+template <typename Base>
+std::unique_ptr<Base> make_host_udf_aggregation(host_udf_func_type udf_func_)
+{
+  return std::make_unique<detail::host_udf_aggregation>(udf_func_);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_host_udf_aggregation<aggregation>(
+  host_udf_func_type);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+  make_host_udf_aggregation<groupby_aggregation>(host_udf_func_type);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+  make_host_udf_aggregation<reduce_aggregation>(host_udf_func_type);
 
 namespace detail {
 namespace {

@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <functional>
@@ -104,6 +105,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class tdigest_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class merge_tdigest_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class host_udf_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -144,6 +147,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class tdigest_aggregation const& agg);
   virtual void visit(class merge_tdigest_aggregation const& agg);
   virtual void visit(class ewma_aggregation const& agg);
+  virtual void visit(class host_udf_aggregation const& agg);
 };
 
 /**
@@ -1187,6 +1191,30 @@ class merge_tdigest_aggregation final : public groupby_aggregation, public reduc
 };
 
 /**
+ * @brief
+ */
+class host_udf_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  host_udf_func_type host_udf_ptr;
+
+  explicit host_udf_aggregation(host_udf_func_type host_udf_ptr_)
+    : aggregation{HOST_UDF}, host_udf_ptr{std::move(host_udf_ptr_)}
+  {
+  }
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<host_udf_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
  * The output column for an `ARGMAX` aggregation is initialized with the
@@ -1462,6 +1490,11 @@ struct target_type_impl<Source,
   using type = struct_view;
 };
 
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::HOST_UDF> {
+  using type = struct_view;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -1579,6 +1612,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
     case aggregation::EWMA:
       return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
+    case aggregation::HOST_UDF:
+      return f.template operator()<aggregation::HOST_UDF>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
