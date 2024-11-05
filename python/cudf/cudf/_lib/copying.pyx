@@ -34,6 +34,7 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_table_view
+cimport pylibcudf as plc
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -352,11 +353,10 @@ cdef class _CPackedColumns:
             or input_table.index.stop != len(input_table)
             or input_table.index.step != 1
         ):
-            input_table_view = table_view_from_table(input_table)
+            columns = input_table._index._columns + input_table._columns
             p.index_names = input_table._index_names
         else:
-            input_table_view = table_view_from_table(
-                input_table, ignore_index=True)
+            columns = input_table._columns
 
         p.column_names = input_table._column_names
         p.column_dtypes = {}
@@ -364,7 +364,13 @@ cdef class _CPackedColumns:
             if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 
-        p.c_obj = move(cpp_contiguous_split.pack(input_table_view))
+        p.c_obj = move(plc.contiguous_split.pack(
+            plc.Table(
+                [
+                    col.to_pylibcudf(mode="read") for col in columns
+                ]
+            )
+        ).c_obj.get()[0])
 
         return p
 

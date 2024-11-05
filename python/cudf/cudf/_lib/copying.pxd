@@ -2,7 +2,6 @@
 
 from pylibcudf.libcudf.contiguous_split cimport packed_columns
 
-
 cdef class _CPackedColumns:
     cdef packed_columns c_obj
     cdef object column_names
