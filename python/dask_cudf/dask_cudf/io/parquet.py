@@ -22,7 +22,7 @@ from dask.utils import parse_bytes
 
 import cudf
 
-from dask_cudf import _deprecated_api
+from dask_cudf import QUERY_PLANNING_ON, _deprecated_api
 
 # Dask-expr imports CudfEngine from this module
 from dask_cudf._legacy.io.parquet import CudfEngine  # noqa: F401
@@ -446,7 +446,7 @@ class CudfFusedParquetIOHost(CudfFusedParquetIO):
         )
 
 
-def read_parquet(
+def read_parquet_expr(
     path,
     *args,
     columns=None,
@@ -589,6 +589,13 @@ def read_parquet(
     )
 
 
+if QUERY_PLANNING_ON:
+    read_parquet = read_parquet_expr
+else:
+    read_parquet = _deprecated_api(
+        "dask_cudf.io.parquet.read_parquet",
+        new_api="dask_cudf.read_parquet",
+    )
 to_parquet = _deprecated_api(
     "dask_cudf.io.parquet.to_parquet",
     new_api="dask_cudf._legacy.io.parquet.to_parquet",
