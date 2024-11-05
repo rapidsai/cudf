@@ -14,44 +14,46 @@ import rmm
 
 from cudf_polars.containers import DataFrame
 
-
-@cuda_serialize.register(DataFrame)
-def _(x: DataFrame):
-    with log_errors():
-        header, frames = x.serialize()
-        return header, list(frames)  # Dask expect a list of frames
+__all__ = ["register"]
 
 
-@cuda_deserialize.register(DataFrame)
-def _(header, frames):
-    with log_errors():
-        assert len(frames) == 2
-        return DataFrame.deserialize(header, tuple(frames))
+def register() -> None:
+    """Register dask serialization routines for DataFrames."""
 
+    @cuda_serialize.register(DataFrame)
+    def _(x: DataFrame):
+        with log_errors():
+            header, frames = x.serialize()
+            return header, list(frames)  # Dask expect a list of frames
 
-@dask_serialize.register(DataFrame)
-def _(x: DataFrame):
-    with log_errors():
-        header, (metadata, gpudata) = x.serialize()
+    @cuda_deserialize.register(DataFrame)
+    def _(header, frames):
+        with log_errors():
+            assert len(frames) == 2
+            return DataFrame.deserialize(header, tuple(frames))
 
-        # For robustness, we check that the gpu data is contiguous
-        cai = gpudata.__cuda_array_interface__
-        assert len(cai["shape"]) == 1
-        assert cai["strides"] is None or cai["strides"] == (1,)
-        assert cai["typestr"] == "|u1"
-        nbytes = cai["shape"][0]
+    @dask_serialize.register(DataFrame)
+    def _(x: DataFrame):
+        with log_errors():
+            header, (metadata, gpudata) = x.serialize()
 
-        # Copy the gpudata to host memory
-        gpudata_on_host = memoryview(
-            rmm.DeviceBuffer(ptr=gpudata.ptr, size=nbytes).copy_to_host()
-        )
-        return header, (metadata, gpudata_on_host)
+            # For robustness, we check that the gpu data is contiguous
+            cai = gpudata.__cuda_array_interface__
+            assert len(cai["shape"]) == 1
+            assert cai["strides"] is None or cai["strides"] == (1,)
+            assert cai["typestr"] == "|u1"
+            nbytes = cai["shape"][0]
 
+            # Copy the gpudata to host memory
+            gpudata_on_host = memoryview(
+                rmm.DeviceBuffer(ptr=gpudata.ptr, size=nbytes).copy_to_host()
+            )
+            return header, (metadata, gpudata_on_host)
 
-@dask_deserialize.register(DataFrame)
-def _(header, frames):
-    with log_errors():
-        assert len(frames) == 2
-        # Copy the second frame (the gpudata in host memory) back to the gpu
-        frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
-        return DataFrame.deserialize(header, frames)
+    @dask_deserialize.register(DataFrame)
+    def _(header, frames) -> DataFrame:
+        with log_errors():
+            assert len(frames) == 2
+            # Copy the second frame (the gpudata in host memory) back to the gpu
+            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
+            return DataFrame.deserialize(header, frames)

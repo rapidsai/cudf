@@ -11,9 +11,11 @@ from polars.testing.asserts import assert_frame_equal
 
 import pylibcudf as plc
 
-# To register dask serializers, we need to import dask_serialize
-import cudf_polars.experimental.dask_serialize  # noqa: F401
 from cudf_polars.containers import DataFrame
+from cudf_polars.experimental.dask_serialize import register
+
+# Must register serializers before running tests
+register()
 
 
 @pytest.mark.parametrize(

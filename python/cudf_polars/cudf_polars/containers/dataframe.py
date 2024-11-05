@@ -185,8 +185,10 @@ class DataFrame:
         Follows the Dask serialization scheme with a picklable header (dict) and
         a tuple of frames (in this case a contiguous host and device buffer).
 
-        To enable dask support, register the dask serializers by importing:
-        >>> import cudf_polars.experimental.dask_serialize
+        To enable dask support, dask serializers must be registered
+
+        >>> from cudf_polars.experimental.dask_serialize import register
+        >>> register()
 
         Returns
         -------
