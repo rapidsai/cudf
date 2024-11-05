@@ -1003,17 +1003,6 @@ def _transform_arg(
     elif isinstance(arg, list):
         return type(arg)(_transform_arg(a, attribute_name, seen) for a in arg)
     elif isinstance(arg, tuple):
-        if (
-            len(arg) > 0
-            and isinstance(arg[0], _MethodProxy)
-            and arg[0].__name__ == "__setitem__"
-        ):
-            return tuple(
-                _transform_arg(a, "_fsproxy_slow", seen)
-                if i == 1
-                else _transform_arg(a, attribute_name, seen)
-                for i, a in enumerate(arg)
-            )
         # This attempts to handle arbitrary subclasses of tuple by
         # assuming that if you've subclassed tuple with some special
         # behaviour you'll also make the object pickleable by
@@ -1022,7 +1011,34 @@ def _transform_arg(
         # use __reduce_ex__ instead...
         if type(arg) is tuple:
             # Must come first to avoid infinite recursion
-            return tuple(_transform_arg(a, attribute_name, seen) for a in arg)
+            if (
+                len(arg) > 0
+                and isinstance(arg[0], _MethodProxy)
+                and arg[0].__name__ == "__setitem__"
+            ):
+                method_proxy, cust_args, cust_kwargs = arg
+                new_args = []
+                for i, a in enumerate(cust_args):
+                    if i == 1:
+                        new_args.append(
+                            _transform_arg(a, "_fsproxy_slow", seen)
+                        )
+                    else:
+                        new_args.append(
+                            _transform_arg(a, attribute_name, seen)
+                        )
+                cust_args = tuple(new_args)
+                cust_kwargs = _transform_arg(cust_kwargs, attribute_name, seen)
+                res = (
+                    _transform_arg(method_proxy, attribute_name, seen),
+                    tuple(cust_args),
+                    cust_kwargs,
+                )
+                return res
+            else:
+                return tuple(
+                    _transform_arg(a, attribute_name, seen) for a in arg
+                )
         elif hasattr(arg, "__getnewargs_ex__"):
             # Partial implementation of to reconstruct with
             # transformed pieces
