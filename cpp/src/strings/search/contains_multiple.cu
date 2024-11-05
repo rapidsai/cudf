@@ -117,15 +117,15 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
   namespace cg           = cooperative_groups;
   auto const tile        = cg::tiled_partition<tile_size>(cg::this_thread_block());
   auto const lane_idx    = tile.thread_rank();
-  auto const tile_idx    = static_cast<cudf::thread_index_type>(threadIdx.x) / tile_size;
   auto const num_targets = d_targets.size();
 
   // size of shared_bools = num_targets * block_size
   // each thread uses num_targets bools
   extern __shared__ bool shared_bools[];
   // bools for the current string
-  auto bools = working_memory == nullptr ? (shared_bools + (tile_idx * tile_size * num_targets))
-                                         : (working_memory + (str_idx * tile_size * num_targets));
+  auto bools = working_memory == nullptr
+                 ? (shared_bools + (tile.meta_group_rank() * tile_size * num_targets))
+                 : (working_memory + (str_idx * tile_size * num_targets));
 
   // initialize result: set true if target is empty, false otherwise
   for (auto target_idx = lane_idx; target_idx < num_targets; target_idx += tile_size) {
