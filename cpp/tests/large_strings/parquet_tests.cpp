@@ -71,7 +71,9 @@ TEST_F(ParquetStringsTest, ReadLargeStrings)
   unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 }
 
-TEST_F(ParquetStringsTest, ChunkedReadLargeStrings)
+// Disabled as the test is too brittle and depends on empirically set `pass_read_limit`,
+// encoding type, and the currently used `ZSTD` scratch space size.
+TEST_F(ParquetStringsTest, DISABLED_ChunkedReadLargeStrings)
 {
   // Construct a table with one large strings column > 2GB
   auto const wide = this->wide_column();
@@ -84,28 +86,40 @@ TEST_F(ParquetStringsTest, ChunkedReadLargeStrings)
   // Expected table
   auto const expected    = cudf::table_view{{col0->view()}};
   auto expected_metadata = cudf::io::table_input_metadata{expected};
-  expected_metadata.column_metadata[0].set_encoding(
-    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);  ///< Needed to get exactly 2 chunks when
-                                                          ///< chunked reading
 
-  // Write to Parquet
+  // Needed to get exactly 2 Parquet subpasses: first with large-strings and the second with
+  // regualar ones. This may change in the future and lead to false failures.
+  expected_metadata.column_metadata[0].set_encoding(
+    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+
+  // Host buffer to write Parquet
   std::vector<char> buffer;
+
+  // Writer options
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-      .compression(
-        cudf::io::compression_type::ZSTD)  ///< Needed to get exactly 2 chunks when chunked reading
       .metadata(expected_metadata);
+
+  // Needed to get exactly 2 Parquet subpasses: first with large-strings and the second with
+  // regualar ones. This may change in the future and lead to false failures.
+  out_opts.set_compression(cudf::io::compression_type::ZSTD);
+
+  // Write to Parquet
   cudf::io::write_parquet(out_opts);
 
-  // Read with chunked_parquet_reader
-  size_t constexpr pass_read_limit =
-    size_t{8} * 1024 * 1024 *
-    1024;  ///< Empirically set to 8GB so we read almost entire table (>2GB string) in the first
-           ///< subpass and only a small amount in the second subpass.
+  // Empirically set pass_read_limit of 8GB so we read almost entire table (>2GB strings) in the
+  // first subpass and only a small amount in the second subpass. This may change in the future
+  // and lead to false failures.
+  size_t constexpr pass_read_limit = size_t{8} * 1024 * 1024 * 1024;
+
+  // Reader options
   cudf::io::parquet_reader_options default_in_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
+
+  // Chunked parquet reader
   auto reader = cudf::io::chunked_parquet_reader(0, pass_read_limit, default_in_opts);
 
+  // Read chunked
   auto tables = std::vector<std::unique_ptr<cudf::table>>{};
   while (reader.has_next()) {
     tables.emplace_back(reader.read_chunk().tbl);
@@ -117,11 +131,15 @@ TEST_F(ParquetStringsTest, ChunkedReadLargeStrings)
   auto result            = cudf::concatenate(table_views);
   auto const result_view = result->view();
 
-  // Verify
+  // Verify offsets
   for (auto const& cv : result_view) {
     auto const offsets = cudf::strings_column_view(cv).offsets();
     EXPECT_EQ(offsets.type(), cudf::data_type{cudf::type_id::INT64});
   }
-  EXPECT_EQ(tables.size(), 2);
+
+  // Verify tables to be equal
   CUDF_TEST_EXPECT_TABLES_EQUAL(result_view, expected);
+
+  // Verify that we read exactly two table chunks
+  EXPECT_EQ(tables.size(), 2);
 }
