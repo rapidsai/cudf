@@ -405,14 +405,14 @@ def test_parquet_range_index_pandas_metadata(tmpdir, pandas_compat, as_bytes):
     assert_eq(expect, got)
 
 
-def test_parquet_read_metadata(tmpdir, pdf):
+def test_parquet_read_metadata(tmp_path, pdf):
     if len(pdf) > 100:
         pytest.skip("Skipping long setup test")
 
     def num_row_groups(rows, group_size):
         return max(1, (rows + (group_size - 1)) // group_size)
 
-    fname = tmpdir.join("metadata.parquet")
+    fname = tmp_path / "metadata.parquet"
     row_group_size = 5
     pdf.to_parquet(fname, compression="snappy", row_group_size=row_group_size)
 
