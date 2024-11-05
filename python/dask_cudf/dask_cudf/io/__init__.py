@@ -22,9 +22,7 @@ to_orc = _deprecated_api(
 read_text = _deprecated_api(
     "dask_cudf.io.read_text", new_api="dask_cudf.read_text"
 )
-read_parquet = _deprecated_api(
-    "dask_cudf.io.read_parquet", new_api="dask_cudf.read_parquet"
-)
+read_parquet = parquet.read_parquet
 to_parquet = _deprecated_api(
     "dask_cudf.io.to_parquet",
     new_api="dask_cudf._legacy.io.parquet.to_parquet",
