@@ -106,8 +106,8 @@ struct dremel_data {
  * Level 1 offsets = {0, 0, 3, 5, 5}
  * Values          = {1, 2, 3, 4, 5}
  * ```
- * The desired result of this function is the dremel offsets, repetition and definition level values
- * that correspond to the data values:
+ * The desired result of this function is the dremel offsets, and repetition and definition level
+ * values that correspond to the data values:
  * ```
  * col =            {[], [[], [1, 2, 3], [4, 5]], [[]]}
  * dremel_offsets = { 0,  1,                       7, 8}
