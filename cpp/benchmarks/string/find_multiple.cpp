@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ static void bench_find_string(nvbench::state& state)
 
   // Note that these all match the first row of the raw_data in create_string_column.
   // This is so the hit_rate can properly accounted for.
-  std::vector<std::string> target_data(
+  std::vector<std::string> const target_data(
     {" abc", "W43", "0987 5W43", "123 abc", "23 abc", "3 abc", "7 5W43", "87 5W43", "987 5W43"});
   auto h_targets = std::vector<std::string>{};
   for (cudf::size_type i = 0; i < target_count; i++) {
