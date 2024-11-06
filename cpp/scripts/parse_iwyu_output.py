@@ -126,7 +126,7 @@ def post_process_includes(include_modifications):
 
 def write_output(include_modifications, output_stream):
     for filename, mods in include_modifications.items():
-        if mods["add_includes"] or mods["remove_includes"]:
+        if mods["remove_includes"]:
             output_stream.write(f"{filename} should add these lines:\n\n")
 
             output_stream.write(f"{filename} should remove these lines:\n")
