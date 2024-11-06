@@ -16,12 +16,18 @@
 import ctypes
 import os
 
-import libkvikio
-
 
 def load_library():
-    # libkvikio must be loaded before libcudf
-    libkvikio.load_library()
+    try:
+        # libkvikio must be loaded before libcudf because libcudf references its symbols
+        import libkvikio
+
+        libkvikio.load_library()
+    except ModuleNotFoundError:
+        # libcudf's runtime dependency on libkvikio may be satisfied by a natively
+        # installed library or a conda package, in which case the import will fail and
+        # we assume the library is discoverable on system paths.
+        pass
 
     # Dynamically load libcudf.so. Prefer a system library if one is present to
     # avoid clobbering symbols that other packages might expect, but if no
