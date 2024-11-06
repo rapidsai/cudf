@@ -45,24 +45,27 @@ namespace {
 
 class compressed_host_buffer_source final : public datasource {
  public:
-  explicit compressed_host_buffer_source(std::unique_ptr<datasource> src, compression_type comptype)
-    : _comptype{comptype}
+  explicit compressed_host_buffer_source(std::unique_ptr<datasource> const& src,
+                                         compression_type comptype)
+    : _comptype{comptype}, _dbuf_ptr{src->host_read(0, src->size())}
   {
-    auto dbuf  = src->host_read(0, src->size());
-    _ch_buffer = std::vector<std::uint8_t>(dbuf->data(), dbuf->data() + dbuf->size());
+    auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
+                                              _dbuf_ptr->size());
     if (comptype == compression_type::GZIP || comptype == compression_type::ZIP ||
         comptype == compression_type::SNAPPY) {
-      _decompressed_ch_buffer_size = get_uncompressed_size(_comptype, _ch_buffer);
+      _decompressed_ch_buffer_size = get_uncompressed_size(_comptype, ch_buffer);
     } else {
-      _decompressed_buffer         = decompress(_comptype, _ch_buffer);
+      _decompressed_buffer         = decompress(_comptype, ch_buffer);
       _decompressed_ch_buffer_size = _decompressed_buffer.size();
     }
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
+    auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
+                                              _dbuf_ptr->size());
     if (_decompressed_buffer.empty()) {
-      auto decompressed_hbuf = decompress(_comptype, _ch_buffer);
+      auto decompressed_hbuf = decompress(_comptype, ch_buffer);
       auto const count       = std::min(size, decompressed_hbuf.size() - offset);
       bool partial_read      = offset + count < decompressed_hbuf.size();
       if (!partial_read) {
@@ -78,8 +81,10 @@ class compressed_host_buffer_source final : public datasource {
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
+    auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
+                                              _dbuf_ptr->size());
     if (_decompressed_buffer.empty()) {
-      auto decompressed_hbuf = decompress(_comptype, _ch_buffer);
+      auto decompressed_hbuf = decompress(_comptype, ch_buffer);
       auto const count       = std::min(size, decompressed_hbuf.size() - offset);
       bool partial_read      = offset + count < decompressed_hbuf.size();
       if (!partial_read)
@@ -96,7 +101,7 @@ class compressed_host_buffer_source final : public datasource {
   [[nodiscard]] size_t size() const override { return _decompressed_ch_buffer_size; }
 
  private:
-  std::vector<std::uint8_t> _ch_buffer;
+  std::unique_ptr<datasource::buffer> _dbuf_ptr;
   compression_type _comptype;
   size_t _decompressed_ch_buffer_size;
   std::vector<std::uint8_t> _decompressed_buffer;
@@ -500,8 +505,8 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 
   std::vector<std::unique_ptr<datasource>> compressed_sources;
   for (size_t i = 0; i < sources.size(); i++) {
-    compressed_sources.emplace_back(std::make_unique<compressed_host_buffer_source>(
-      std::move(sources[i]), reader_opts.get_compression()));
+    compressed_sources.emplace_back(
+      std::make_unique<compressed_host_buffer_source>(sources[i], reader_opts.get_compression()));
   }
   // in read_json_impl, we need the compressed source size to actually be the
   // uncompressed source size for correct batching
