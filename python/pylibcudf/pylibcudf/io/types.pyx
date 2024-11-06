@@ -13,6 +13,7 @@ from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
     column_name_info,
     host_buffer,
+    partition_info,
     source_info,
     table_input_metadata,
     table_with_metadata,
@@ -32,6 +33,22 @@ from pylibcudf.libcudf.io.types import (
     statistics_freq as StatisticsFreq, # no-cython-lint
 )
 
+cdef class PartitionInfo:
+    """
+    Information used while writing partitioned datasets.
+
+    Parameters
+    ----------
+    start_row : int
+        The start row of the partition.
+
+    num_rows : int
+        The number of rows in the partition.
+    """
+    def __init__(self, int start_row, int num_rows):
+        self.c_obj = partition_info(start_row, num_row)
+
+
 cdef class ColumnInMetadata:
     """
     Metadata for a column
@@ -42,7 +59,7 @@ cdef class ColumnInMetadata:
     """
 
     def __init__(self, column_in_metadata metadata):
-        self.metadata = metadata
+        self.c_obj = metadata
 
     cpdef ColumnInMetadata set_name(self, str name):
         """
@@ -57,7 +74,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_name(name.encode())
+        self.c_obj.set_name(name.encode())
         return self
 
     cpdef ColumnInMetadata set_nullability(self, bool nullable):
@@ -73,7 +90,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_nullability(nullable)
+        self.c_obj.set_nullability(nullable)
         return self
 
     cpdef ColumnInMetadata set_list_column_as_map(self):
@@ -85,7 +102,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_list_column_as_map()
+        self.c_obj.set_list_column_as_map()
         return self
 
     cpdef ColumnInMetadata set_int96_timestamps(self, bool req):
@@ -102,7 +119,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_int96_timestamps(req)
+        self.c_obj.set_int96_timestamps(req)
         return self
 
     cpdef ColumnInMetadata set_decimal_precision(self, int req):
@@ -119,7 +136,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_decimal_precision(precision)
+        self.c_obj.set_decimal_precision(precision)
         return self
 
     cpdef ColumnInMetadata child(self, int i):
@@ -133,10 +150,9 @@ cdef class ColumnInMetadata:
 
         Returns
         -------
-        Self
+        ColumnInMetadata
         """
-        self.metadata.child(i)
-        return self
+        return ColumnInMetadata(self.c_obj.child(i))
 
     cpdef ColumnInMetadata set_output_as_binary(self, bool binary):
         """
@@ -151,7 +167,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_output_as_binary(binary)
+        self.c_obj.set_output_as_binary(binary)
         return self
 
     cpdef ColumnInMetadata set_type_length(self, int type_length):
@@ -167,7 +183,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_type_length(type_length)
+        self.c_obj.set_type_length(type_length)
         return self
 
     cpdef ColumnInMetadata set_skip_compression(self, bool skip):
@@ -184,7 +200,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.metadata.set_skip_compression(skip)
+        self.c_obj.set_skip_compression(skip)
         return self
 
     cpdef ColumnInMetadata set_encoding(self, ColumnEncoding encoding):
@@ -201,7 +217,7 @@ cdef class ColumnInMetadata:
         -------
         ColumnInMetadata
         """
-        self.metadata.set_encoding(encoding)
+        self.c_obj.set_encoding(encoding)
         return self
 
     cpdef str get_name(self):
@@ -213,7 +229,7 @@ cdef class ColumnInMetadata:
         str
             The name of this column
         """
-        return self.metadata.get_name()
+        return self.c_obj.get_name().decode()
 
 
 cdef class TableInputMetadata:
@@ -226,12 +242,9 @@ cdef class TableInputMetadata:
         The Table to construct metadata for
     """
     def __init__(self, Table table):
-        self.metadata = table_input_metadata(table.view())
-
-    @property
-    cpdef list column_metadata(self):
-        return [
-            ColumnInMetadata(metadata) for metadata in self.metadata.column_metadata
+        self.c_obj = table_input_metadata(table.view())
+        self.column_metadata = [
+            ColumnInMetadata(metadata) for metadata in self.c_obj.column_metadata
         ]
 
 

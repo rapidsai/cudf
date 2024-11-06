@@ -21,9 +21,11 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.table cimport Table
 from pylibcudf.io.types cimport ColumnEncoding
 
+cdef class PartitionInfo:
+    cdef partition_info c_obj
 
 cdef class ColumnInMetadata:
-    cdef column_in_metadata metadata
+    cdef column_in_metadata c_obj
 
     cpdef set_name(self, str name)
 
@@ -51,10 +53,7 @@ cdef class ColumnInMetadata:
 
 cdef class TableInputMetadata:
     cdef public Table table
-    cdef table_input_metadata metadata
-
-    @property
-    cpdef list column_metadata(self)
+    cdef table_input_metadata c_obj
 
 cdef class TableWithMetadata:
     cdef public Table tbl

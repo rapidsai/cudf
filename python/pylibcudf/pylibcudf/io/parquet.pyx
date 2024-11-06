@@ -266,7 +266,7 @@ cdef class ParquetWriterOptions:
         -------
         None
         """
-        self.options.set_partitions(partitions)
+        self.options.set_partitions([partition.c_obj for partition in partitions])
 
     cpdef void set_column_chunks_file_paths(list file_paths):
         """
