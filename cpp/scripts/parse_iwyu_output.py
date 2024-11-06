@@ -127,6 +127,8 @@ def post_process_includes(include_modifications):
 def write_output(include_modifications, output_stream):
     for filename, mods in include_modifications.items():
         if mods["remove_includes"]:
+            # IWYU requires all sections to exist, so we write out this header even
+            # though we never write out any actual additions.
             output_stream.write(f"{filename} should add these lines:\n\n")
 
             output_stream.write(f"{filename} should remove these lines:\n")
