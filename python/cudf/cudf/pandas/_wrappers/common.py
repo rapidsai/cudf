@@ -52,4 +52,7 @@ def array_interface(self: _FastSlowProxy):
 
 
 def custom_iter(self: _FastSlowProxy):
-    return iter(self._fsproxy_slow)
+    return _maybe_wrap_result(
+        iter(self._fsproxy_slow),
+        None,  # type: ignore
+    )
