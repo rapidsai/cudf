@@ -61,10 +61,15 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     -------
     True if casting is supported, False otherwise
     """
+    has_empty = from_.id() == plc.TypeId.EMPTY or to.id() == plc.TypeId.EMPTY
     return (
-        plc.traits.is_fixed_width(to)
-        and plc.traits.is_fixed_width(from_)
-        and plc.unary.is_supported_cast(from_, to)
+        from_ == to
+        or not has_empty
+        and (
+            plc.traits.is_fixed_width(to)
+            and plc.traits.is_fixed_width(from_)
+            and plc.unary.is_supported_cast(from_, to)
+        )
     )
 
 

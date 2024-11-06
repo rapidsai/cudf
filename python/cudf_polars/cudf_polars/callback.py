@@ -186,7 +186,7 @@ def execute_with_cudf(
             if len(ir_translation_errors):
                 # TODO: Display these errors in user-friendly way.
                 # tracked in https://github.com/rapidsai/cudf/issues/17051
-                unique_errors = sorted(set(ir_translation_errors), key=lambda e: str(e))
+                unique_errors = sorted(set(ir_translation_errors), key=str)
                 error_message = "Query contained unsupported operations"
                 verbose_error_message = (
                     f"{error_message}\nThe errors were:\n{unique_errors}"

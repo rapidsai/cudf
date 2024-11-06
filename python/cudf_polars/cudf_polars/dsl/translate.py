@@ -67,7 +67,8 @@ class Translator:
         Raises
         ------
         NotImplementedError
-            If the version of Polars IR is unsupported.
+            If the version of Polars IR is unsupported or if the result
+            has a Null column dtype.
 
         Notes
         -----
