@@ -18,6 +18,7 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
 from cython.operator import dereference
+import warnings
 
 
 cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
@@ -42,6 +43,12 @@ cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
     Column
         List column of minhash values for each string per seed
     """
+    warnings.warn(
+        "Starting in version 25.02, the signature of this function will "
+        "be changed to match pylibcudf.nvtext.minhash_permuted.",
+        DeprecationWarning
+    )
+
     cdef unique_ptr[column] c_result
 
     if not isinstance(seeds, (Column, Scalar)):
@@ -123,6 +130,12 @@ cpdef Column minhash64(Column input, ColumnOrScalar seeds, size_type width=4):
     Column
         List column of minhash values for each string per seed
     """
+    warnings.warn(
+        "Starting in version 25.02, the signature of this function will "
+        "be changed to match pylibcudf.nvtext.minhash64_permuted.",
+        DeprecationWarning
+    )
+
     cdef unique_ptr[column] c_result
 
     if not isinstance(seeds, (Column, Scalar)):
