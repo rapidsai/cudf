@@ -17,6 +17,8 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold)
 
 cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold)
 
+cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask)
+
 cpdef Table unique(
     Table input,
     list keys,
