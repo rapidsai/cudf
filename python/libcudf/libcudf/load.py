@@ -16,8 +16,13 @@
 import ctypes
 import os
 
+import libkvikio
+
 
 def load_library():
+    # libkvikio must be loaded before libcudf
+    libkvikio.load_library()
+
     # Dynamically load libcudf.so. Prefer a system library if one is present to
     # avoid clobbering symbols that other packages might expect, but if no
     # other library is present use the one in the wheel.

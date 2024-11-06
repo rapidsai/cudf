@@ -25,7 +25,7 @@ python -m pip install \
 # 0 really means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/5735)
 export PIP_NO_BUILD_ISOLATION=0
 
-export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON;-DUSE_LIBKVIKIO_RUNTIME_WHEEL=ON"
+export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON"
 ./ci/build_wheel.sh "${package_name}" "${package_dir}"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"

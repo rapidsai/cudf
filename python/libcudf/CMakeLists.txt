@@ -23,9 +23,6 @@ project(
 )
 
 option(USE_NVCOMP_RUNTIME_WHEEL "Use the nvcomp wheel at runtime instead of the system library" OFF)
-option(USE_LIBKVIKIO_RUNTIME_WHEEL
-       "Use the libkvikio wheel at runtime instead of the system library" OFF
-)
 
 # Check if cudf is already available. If so, it is the user's responsibility to ensure that the
 # CMake package is also available at build time of the Python cudf package.
@@ -55,15 +52,6 @@ add_subdirectory(../../cpp cudf-cpp)
 
 if(USE_NVCOMP_RUNTIME_WHEEL)
   set(rpaths "$ORIGIN/../../nvidia/nvcomp")
-  set_property(
-    TARGET cudf
-    PROPERTY INSTALL_RPATH ${rpaths}
-    APPEND
-  )
-endif()
-
-if(USE_LIBKVIKIO_RUNTIME_WHEEL)
-  set(rpaths "$ORIGIN/../../libkvikio/lib64")
   set_property(
     TARGET cudf
     PROPERTY INSTALL_RPATH ${rpaths}
