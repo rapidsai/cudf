@@ -80,6 +80,8 @@ def parse_output(input_stream):
                 if (
                     line.strip()
                     and "include-what-you-use reported diagnostics" not in line
+                    and "In file included from" not in line
+                    and "has correct #includes/fwd-decls" not in line
                 ):
                     print(line, end="")
 
