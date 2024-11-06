@@ -80,42 +80,38 @@ class CudfReadParquetFSSpec(ReadParquetFSSpec):
             ]
         }
 
-    # ## OLD
-    # @property
-    # def _fusion_compression_factor(self):
-    #     if self.operand("columns") is None:
-    #         return 1
-    #     nr_original_columns = max(len(self._dataset_info["schema"].names) - 1, 1)
-    #     return max(
-    #         len(_convert_to_list(self.operand("columns"))) / nr_original_columns, 0.001
-    #     )
-
     @functools.cached_property
     def _fusion_compression_factor(self):
-        blocksize = self.blocksize
-        if blocksize is None or self.aggregate_files:
-            # NOTE: We cannot fuse files *again* if
-            # aggregate_files is True (this creates
-            # too much OOM risk)
+        if self.blocksize is None:
+            # Let blocksize=None disable fusion
             return 1
-        elif blocksize == "default":
-            blocksize = "256MiB"
+
+        # At this point, `blockwise` was already used to
+        # split/aggregate files. Therefore, we now
+        # need to figure out whether we should fuse
+        # the current partitions to handle column
+        # projection.
+        # NOTE: We don't know if the current partitions
+        # are multiple files or file fragments.
+
+        if self.operand("columns") is None:
+            return 1
 
         approx_stats = self.approx_statistics()
-        projected_size = 0
+        projected_size, original_size = 0, 0
         col_op = self.operand("columns") or self.columns
         for col in approx_stats["columns"]:
+            original_size += col["total_uncompressed_size"]
             if col["path_in_schema"] in col_op or (
                 (split_name := col["path_in_schema"].split("."))
                 and split_name[0] in col_op
             ):
                 projected_size += col["total_uncompressed_size"]
 
-        if projected_size < 1:
+        if original_size < 1 or projected_size < 1:
             return 1
 
-        aggregate_files = max(1, int(parse_bytes(blocksize) / projected_size))
-        return max(1 / aggregate_files, 0.001)
+        return max(projected_size / original_size, 0.001)
 
     def _tune_up(self, parent):
         if self._fusion_compression_factor >= 1:
@@ -317,8 +313,8 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         elif blocksize == "default":
             blocksize = "256MiB"
 
-        approx_stats = self.approx_statistics()
         projected_size = 0
+        approx_stats = self.approx_statistics()
         col_op = self.operand("columns") or self.columns
         for col in approx_stats["columns"]:
             if col["path_in_schema"] in col_op or (
