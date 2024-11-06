@@ -26,13 +26,14 @@
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-constexpr size_t data_size         = 512 << 20;
+// constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 void json_read_common(cuio_source_sink_pair& source_sink,
                       cudf::size_type num_rows_to_read,
                       nvbench::state& state,
-                      cudf::io::compression_type comptype = cudf::io::compression_type::NONE)
+                      cudf::io::compression_type comptype = cudf::io::compression_type::NONE,
+                      size_t datasize = 512 << 20)
 {
   cudf::io::json_reader_options read_opts =
     cudf::io::json_reader_options::builder(source_sink.make_source_info()).compression(comptype);
@@ -52,7 +53,7 @@ void json_read_common(cuio_source_sink_pair& source_sink,
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
+  state.add_element_count(static_cast<double>(datasize) / time, "bytes_per_second");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
@@ -61,10 +62,11 @@ void json_read_common(cuio_source_sink_pair& source_sink,
 cudf::size_type json_write_bm_data(
   cudf::io::sink_info sink,
   std::vector<cudf::type_id> const& dtypes,
-  cudf::io::compression_type comptype = cudf::io::compression_type::NONE)
+  cudf::io::compression_type comptype = cudf::io::compression_type::NONE,
+  size_t datasize = 512 << 20)
 {
   auto const tbl = create_random_table(
-    cycle_dtypes(dtypes, num_cols), table_size_bytes{data_size}, data_profile_builder());
+    cycle_dtypes(dtypes, num_cols), table_size_bytes{datasize}, data_profile_builder());
   auto const view = tbl->view();
 
   cudf::io::json_writer_options const write_opts =
@@ -97,6 +99,7 @@ template <cudf::io::compression_type comptype, io_type IO>
 void BM_json_read_compressed_io(
   nvbench::state& state, nvbench::type_list<nvbench::enum_type<comptype>, nvbench::enum_type<IO>>)
 {
+  size_t const datasize                   = state.get_int64("data_size");
   cuio_source_sink_pair source_sink(IO);
   auto const d_type   = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                            static_cast<int32_t>(data_type::FLOAT),
@@ -106,7 +109,7 @@ void BM_json_read_compressed_io(
                                            static_cast<int32_t>(data_type::STRING),
                                            static_cast<int32_t>(data_type::LIST),
                                            static_cast<int32_t>(data_type::STRUCT)});
-  auto const num_rows = json_write_bm_data(source_sink.make_sink_info(), d_type, comptype);
+  auto const num_rows = json_write_bm_data(source_sink.make_sink_info(), d_type, comptype, datasize);
 
   json_read_common(source_sink, num_rows, state, comptype);
 }
@@ -153,4 +156,5 @@ NVBENCH_BENCH_TYPES(BM_json_read_compressed_io,
                     NVBENCH_TYPE_AXES(compression_list, nvbench::enum_type_list<io_type::FILEPATH>))
   .set_name("json_read_compressed_io")
   .set_type_axes_names({"compression_type", "io"})
+  .add_int64_power_of_two_axis("data_size", nvbench::range(20, 30, 2))
   .set_min_samples(4);
