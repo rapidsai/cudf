@@ -1759,3 +1759,21 @@ def test_fallback_raises_error(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
         with pytest.raises(ProxyFallbackError):
             pd.Series(range(2)).astype(object)
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [
+        "_exceptions",
+        "version",
+        "_print_versions",
+        "capitalize_first_letter",
+        "_validators",
+        "_decorators",
+    ],
+)
+def test_cudf_pandas_util_version(attrs):
+    if not PANDAS_GE_220 and attrs == "capitalize_first_letter":
+        assert not hasattr(pd.util, attrs)
+    else:
+        assert hasattr(pd.util, attrs)
