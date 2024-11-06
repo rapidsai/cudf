@@ -41,5 +41,7 @@ popd
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_STATIC_LINTERS=ON -GNinja
 cmake --build cpp/build 2>&1 | python cpp/scripts/parse_iwyu_output.py
 
-# Remove invalid components of the path for local usage.
+# Remove invalid components of the path for local usage. The path below is
+# valid in the CI due to where the project is cloned, but presumably the fixes
+# will be applied locally from inside a clone of cudf.
 sed -i 's/\/__w\/cudf\/cudf\///' iwyu_results.txt
