@@ -58,7 +58,7 @@ struct dremel_data {
 };
 
 /**
- * @brief Get the dremel offsets, and repetition and definition levels for a LIST column
+ * @brief Get the dremel offsets, repetition levels, and definition levels for a LIST column
  *
  * Dremel is a query system created by Google for ad hoc data analysis. The Dremel engine is
  * described in depth in the paper "Dremel: Interactive Analysis of Web-Scale
@@ -106,7 +106,7 @@ struct dremel_data {
  * Level 1 offsets = {0, 0, 3, 5, 5}
  * Values          = {1, 2, 3, 4, 5}
  * ```
- * This function returns the dremel offsets, and repetition and definition level
+ * This function returns the dremel offsets, repetition levels, and definition level
  * values that correspond to the data values:
  * ```
  * col =            {[], [[], [1, 2, 3], [4, 5]], [[]]}
