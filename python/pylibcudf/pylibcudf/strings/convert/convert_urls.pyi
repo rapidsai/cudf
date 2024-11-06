@@ -1,0 +1,6 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.
+
+from pylibcudf.column import Column
+
+def url_encode(Input: Column) -> Column: ...
+def url_decode(Input: Column) -> Column: ...

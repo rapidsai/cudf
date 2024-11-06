@@ -1,0 +1,13 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.
+
+from pylibcudf.gpumemoryview import gpumemoryview
+from pylibcudf.table import Table
+
+class PackedColumns:
+    def release(self) -> tuple[memoryview, gpumemoryview]: ...
+
+def pack(input: Table) -> PackedColumns: ...
+def unpack(input: PackedColumns) -> Table: ...
+def unpack_from_memoryviews(
+    metadata: memoryview, gpu_data: gpumemoryview
+) -> Table: ...
