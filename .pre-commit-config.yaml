@@ -16,17 +16,6 @@ repos:
             ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        # Use the config file specific to each subproject so that each
-        # project can specify its own first/third-party packages.
-        args: ["--config-root=python/", "--resolve-all-configs"]
-        files: python/.*
-        exclude: |
-          (?x)^(^python/cudf_polars/.*)
-        types_or: [python, cython, pyi]
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.16.2
     hooks:
@@ -150,6 +139,7 @@ repos:
     rev: v0.4.8
     hooks:
       - id: ruff
+        args: ["--fix"]
         files: python/.*$
       - id: ruff-format
         files: python/.*$
@@ -165,7 +155,7 @@ repos:
           )
       - id: verify-alpha-spec
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.13.11
+    rev: v1.16.0
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]

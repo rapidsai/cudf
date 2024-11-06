@@ -8,7 +8,7 @@ import operator
 import pickle
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, MutableMapping
+from typing import TYPE_CHECKING, Any
 
 import cupy as cp
 import numpy as np
@@ -36,7 +36,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable
+    from collections.abc import Generator, Hashable, MutableMapping
 
     from typing_extensions import Self
 

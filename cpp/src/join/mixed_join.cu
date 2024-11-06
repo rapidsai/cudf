@@ -28,6 +28,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -115,7 +116,8 @@ mixed_join(
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
+               "The expression must produce a boolean output.",
+               cudf::data_type_error);
 
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
@@ -381,7 +383,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto const parser = ast::detail::expression_parser{
     binary_predicate, left_conditional, right_conditional, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
+               "The expression must produce a boolean output.",
+               cudf::data_type_error);
 
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins

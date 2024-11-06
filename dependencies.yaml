@@ -232,7 +232,7 @@ files:
       key: cudf-pandas-tests
     includes:
       - test_python_cudf_pandas
-  py_rapids_build_cudf_polars:
+  py_build_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
     extras:
@@ -399,21 +399,21 @@ dependencies:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - nvcomp==4.0.1
+          - nvcomp==4.1.0.6
     specific:
       - output_types: [requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - nvidia-nvcomp-cu12==4.0.1
+              - nvidia-nvcomp-cu12==4.1.0.6
           - matrix:
               cuda: "11.*"
             packages:
-              - nvidia-nvcomp-cu11==4.0.1
+              - nvidia-nvcomp-cu11==4.1.0.6
           - matrix:
             packages:
-              - nvidia-nvcomp==4.0.1
+              - nvidia-nvcomp==4.1.0.6
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -727,7 +727,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.11,<1.12
+          - polars>=1.11,<1.13
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -828,6 +828,7 @@ dependencies:
           - pytest-benchmark
           - pytest-cases>=3.8.2
           - scipy
+          - mmh3
       - output_types: conda
         packages:
           - aiobotocore>=2.2.0
@@ -836,12 +837,14 @@ dependencies:
           - msgpack-python
           - moto>=4.0.8
           - s3fs>=2022.3.0
-      - output_types: pyproject
+          - python-xxhash
+      - output_types: [pyproject, requirements]
         packages:
           - msgpack
           - &tokenizers tokenizers==0.15.2
           - &transformers transformers==4.39.3
           - tzdata
+          - xxhash
     specific:
       - output_types: [conda, requirements]
         matrices:
