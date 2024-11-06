@@ -90,11 +90,12 @@ class CudfReadParquetFSSpec(ReadParquetFSSpec):
         # split/aggregate files. Therefore, we now
         # need to figure out whether we should fuse
         # the current partitions to handle column
-        # projection.
-        # NOTE: We don't know if the current partitions
-        # are multiple files or file fragments.
+        # projection. We don't know if the current
+        # partitions are multiple files or file fragments.
+        # Therefore, we need to use a "multiplier" below
+        # to correct aggregate_files=False partitioning.
 
-        if self.operand("columns") is None:
+        if self.operand("columns") is None and self.aggregate_files:
             return 1
 
         approx_stats = self.approx_statistics()
@@ -111,7 +112,16 @@ class CudfReadParquetFSSpec(ReadParquetFSSpec):
         if original_size < 1 or projected_size < 1:
             return 1
 
-        return max(projected_size / original_size, 0.001)
+        # The multiplier corrects for the fact that the original
+        # files would have been fused for aggregate_files=True
+        multiplier = 1.0
+        if not self.aggregate_files:
+            multiplier = original_size / parse_bytes(self.blocksize)
+
+        return max(
+            (projected_size / original_size) * multiplier,
+            0.001,
+        )
 
     def _tune_up(self, parent):
         if self._fusion_compression_factor >= 1:
