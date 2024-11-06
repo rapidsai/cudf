@@ -268,10 +268,15 @@ rapids_cpm_init()
 
 # TODO: Replace with a rapids_cpm_find (or maybe just a FetchContent since we never expect to find
 # this.
+option(LOGGING_COMPATIBILITY "Enable backwards compatible direct access to the spdlog logger" OFF)
 add_subdirectory(../../rmm/rapids_logger rapids_logger/)
+set(_logging_compat)
+if(LOGGING_COMPATIBILITY)
+  set(_logging_compat "CUDF_BACKWARDS_COMPATIBILITY")
+endif()
 rapids_make_logger(
   cudf VISIBILITY_MACRO "__attribute__((visibility(\"default\")))" EXPORT_SET cudf-exports
-  SUPPORTS_LOGGING CUDF_BACKWARDS_COMPATIBILITY
+  SUPPORTS_LOGGING ${_logging_compat}
 )
 
 # find jitify

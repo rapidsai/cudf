@@ -22,23 +22,49 @@
 
 #include <string>
 
+#ifdef CUDF_BACKWARDS_COMPATIBILITY
+#define GET_LOGGER() cudf::detail::logger()
+#define LEVEL_ENUM   spdlog::level
+#else
+#define GET_LOGGER() cudf::default_logger()
+#define LEVEL_ENUM   cudf::level_enum
+#endif
+
 class LoggerTest : public cudf::test::BaseFixture {
   std::ostringstream oss;
+#ifdef CUDF_BACKWARDS_COMPATIBILITY
   spdlog::level::level_enum prev_level;
   std::vector<spdlog::sink_ptr> prev_sinks;
+#else
+  cudf::level_enum prev_level;
+  spdlog::sink_ptr new_sink;
+#endif
 
  public:
   LoggerTest()
-    : prev_level{cudf::detail::logger().level()}, prev_sinks{cudf::detail::logger().sinks()}
+#ifdef CUDF_BACKWARDS_COMPATIBILITY
+    : prev_level{GET_LOGGER().level()}, prev_sinks{GET_LOGGER().sinks()}
+#else
+    : prev_level{GET_LOGGER().level()},
+      new_sink{std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)}
+#endif
   {
-    cudf::detail::logger().sinks() = {std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)};
-    cudf::detail::logger().set_formatter(
+#ifdef CUDF_BACKWARDS_COMPATIBILITY
+    GET_LOGGER().sinks() = {std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)};
+    GET_LOGGER().set_formatter(
       std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter("%v")));
+#else
+    GET_LOGGER().add_sink(new_sink);
+#endif
   }
   ~LoggerTest() override
   {
-    cudf::detail::logger().set_level(prev_level);
-    cudf::detail::logger().sinks() = prev_sinks;
+    GET_LOGGER().set_level(prev_level);
+#ifdef CUDF_BACKWARDS_COMPATIBILITY
+    GET_LOGGER().sinks() = prev_sinks;
+#else
+    GET_LOGGER().remove_sink(new_sink);
+#endif
   }
 
   void clear_sink() { oss.str(""); }
@@ -47,32 +73,32 @@ class LoggerTest : public cudf::test::BaseFixture {
 
 TEST_F(LoggerTest, Basic)
 {
-  cudf::detail::logger().critical("crit msg");
+  GET_LOGGER().critical("crit msg");
   ASSERT_EQ(this->sink_content(), "crit msg\n");
 }
 
 TEST_F(LoggerTest, DefaultLevel)
 {
-  cudf::detail::logger().trace("trace");
-  cudf::detail::logger().debug("debug");
-  cudf::detail::logger().info("info");
-  cudf::detail::logger().warn("warn");
-  cudf::detail::logger().error("error");
-  cudf::detail::logger().critical("critical");
+  GET_LOGGER().trace("trace");
+  GET_LOGGER().debug("debug");
+  GET_LOGGER().info("info");
+  GET_LOGGER().warn("warn");
+  GET_LOGGER().error("error");
+  GET_LOGGER().critical("critical");
   ASSERT_EQ(this->sink_content(), "warn\nerror\ncritical\n");
 }
 
 TEST_F(LoggerTest, CustomLevel)
 {
-  cudf::detail::logger().set_level(spdlog::level::warn);
-  cudf::detail::logger().info("info");
-  cudf::detail::logger().warn("warn");
+  GET_LOGGER().set_level(LEVEL_ENUM::warn);
+  GET_LOGGER().info("info");
+  GET_LOGGER().warn("warn");
   ASSERT_EQ(this->sink_content(), "warn\n");
 
   this->clear_sink();
 
-  cudf::detail::logger().set_level(spdlog::level::debug);
-  cudf::detail::logger().trace("trace");
-  cudf::detail::logger().debug("debug");
+  GET_LOGGER().set_level(LEVEL_ENUM::debug);
+  GET_LOGGER().trace("trace");
+  GET_LOGGER().debug("debug");
   ASSERT_EQ(this->sink_content(), "debug\n");
 }
