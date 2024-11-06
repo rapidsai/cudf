@@ -34,22 +34,6 @@ _LEGACY_WORKAROUND = (
 
 
 class CudfFrameBase(FrameBase):
-    def to_dask_dataframe(self, **kwargs):
-        """Create a dask.dataframe object from a dask_cudf object
-
-        WARNING: This API is deprecated, and may not work properly.
-        Please use `*.to_backend("pandas")` to convert the
-        underlying data to pandas.
-        """
-
-        warnings.warn(
-            "The `to_dask_dataframe` API is now deprecated. "
-            "Please use `*.to_backend('pandas')` instead.",
-            FutureWarning,
-        )
-
-        return self.to_backend("pandas", **kwargs)
-
     def _prepare_cov_corr(self, min_periods, numeric_only):
         # Upstream version of this method sets min_periods
         # to 2 by default (which is not supported by cudf)
@@ -94,7 +78,7 @@ class CudfFrameBase(FrameBase):
     def rename_axis(
         self, mapper=no_default, index=no_default, columns=no_default, axis=0
     ):
-        from dask_cudf.expr._expr import RenameAxisCudf
+        from dask_cudf._expr.expr import RenameAxisCudf
 
         return new_collection(
             RenameAxisCudf(
@@ -136,7 +120,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         dropna=None,
         **kwargs,
     ):
-        from dask_cudf.expr._groupby import GroupBy
+        from dask_cudf._expr.groupby import GroupBy
 
         if isinstance(by, FrameBase) and not isinstance(by, DXSeries):
             raise ValueError(
@@ -169,13 +153,16 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         )
 
     def to_orc(self, *args, **kwargs):
-        return self.to_legacy_dataframe().to_orc(*args, **kwargs)
+        from dask_cudf._legacy.io import to_orc
+
+        return to_orc(self, *args, **kwargs)
+        # return self.to_legacy_dataframe().to_orc(*args, **kwargs)
 
     @staticmethod
     def read_text(*args, **kwargs):
         from dask_expr import from_legacy_dataframe
 
-        from dask_cudf.io.text import read_text as legacy_read_text
+        from dask_cudf._legacy.io.text import read_text as legacy_read_text
 
         ddf = legacy_read_text(*args, **kwargs)
         return from_legacy_dataframe(ddf)
@@ -183,19 +170,19 @@ class DataFrame(DXDataFrame, CudfFrameBase):
 
 class Series(DXSeries, CudfFrameBase):
     def groupby(self, by, **kwargs):
-        from dask_cudf.expr._groupby import SeriesGroupBy
+        from dask_cudf._expr.groupby import SeriesGroupBy
 
         return SeriesGroupBy(self, by, **kwargs)
 
     @cached_property
     def list(self):
-        from dask_cudf.accessors import ListMethods
+        from dask_cudf._expr.accessors import ListMethods
 
         return ListMethods(self)
 
     @cached_property
     def struct(self):
-        from dask_cudf.accessors import StructMethods
+        from dask_cudf._expr.accessors import StructMethods
 
         return StructMethods(self)
 

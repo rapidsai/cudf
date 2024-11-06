@@ -19,8 +19,6 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-from pylibcudf.libcudf.io.types cimport compression_type
-
 from cudf._lib.utils cimport data_from_pylibcudf_io
 
 import pylibcudf as plc
@@ -139,13 +137,13 @@ def read_csv(
         byte_range = (0, 0)
 
     if compression is None:
-        c_compression = compression_type.NONE
+        c_compression = plc.io.types.CompressionType.NONE
     else:
         compression_map = {
-            "infer": compression_type.AUTO,
-            "gzip": compression_type.GZIP,
-            "bz2": compression_type.BZIP2,
-            "zip": compression_type.ZIP,
+            "infer": plc.io.types.CompressionType.AUTO,
+            "gzip": plc.io.types.CompressionType.GZIP,
+            "bz2": plc.io.types.CompressionType.BZIP2,
+            "zip": plc.io.types.CompressionType.ZIP,
         }
         c_compression = compression_map[compression]
 

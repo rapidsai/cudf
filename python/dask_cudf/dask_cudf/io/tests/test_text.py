@@ -34,3 +34,15 @@ def test_read_text_byte_range(offset, size):
         text_file, chunksize=None, delimiter=".", byte_range=(offset, size)
     )
     dd.assert_eq(df1, df2, check_index=False)
+
+
+def test_deprecated_api_paths():
+    # Encourage top-level read_text import only
+    df = cudf.read_text(text_file, delimiter=".")
+    with pytest.warns(match="dask_cudf.io.read_text is now deprecated"):
+        df2 = dask_cudf.io.read_text(text_file, delimiter=".")
+    dd.assert_eq(df, df2, check_divisions=False)
+
+    with pytest.warns(match="dask_cudf.io.text.read_text is now deprecated"):
+        df2 = dask_cudf.io.text.read_text(text_file, delimiter=".")
+    dd.assert_eq(df, df2, check_divisions=False)
