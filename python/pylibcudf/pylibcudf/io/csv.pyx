@@ -279,7 +279,6 @@ def write_csv(
     bool header=True,
     str lineterminator="\n",
     int rows_per_chunk=8,
-    bool index=True,
     object indices=None,
 ):
     """
@@ -306,6 +305,8 @@ def write_csv(
         The character used to determine the end of a line.
     rows_per_chunk: int, default 8
         The maximum number of rows to write at a time.
+    indices : object
+        The indices in the table.
     """
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
@@ -318,7 +319,7 @@ def write_csv(
 
     if header is True:
         all_names = table.column_names()
-        if index is True:
+        if indices is not None:
             all_names = indices.names + all_names
         if len(all_names) > 0:
             col_names.reserve(len(all_names))
@@ -338,7 +339,7 @@ def write_csv(
                             str(col_name).encode()
                         )
     cdef Table new_table = table.tbl
-    if index:
+    if indices is not None:
         new_table = Table(
             [col.to_pylibcudf(mode="read") for col in indices._columns] + table.columns
         )

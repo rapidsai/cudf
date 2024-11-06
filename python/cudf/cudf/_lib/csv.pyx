@@ -327,8 +327,7 @@ def write_csv(
             header=header,
             lineterminator=str(lineterminator),
             rows_per_chunk=rows_per_chunk,
-            index=index,
-            indices=table._index,
+            indices=table._index if index else None,
         )
     except OverflowError:
         raise OverflowError(

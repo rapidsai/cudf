@@ -7,9 +7,11 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from utils import (
+    NON_NESTED_PA_TYPES,
     _convert_types,
     assert_table_and_meta_eq,
     make_source,
+    sink_to_str,
     write_source_str,
 )
 
@@ -30,7 +32,7 @@ def csv_table_data(table_data):
     since the CSV reader can't handle that
     uint64 is also dropped since it can get confused with int64
     """
-    _, pa_table = table_data
+    _, pa_table = table_data()
     pa_table = pa_table.drop_columns(
         [
             "col_uint64",
@@ -97,7 +99,7 @@ def test_read_csv_basic(
 # infers correctly
 @pytest.mark.parametrize("chunk_size", [1000, 5999])
 def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
-    _, pa_table = table_data
+    _, pa_table = table_data()
     if len(pa_table) == 0:
         # pandas writes nothing when we have empty table
         # and header=None
@@ -284,22 +286,83 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
 # bool dayfirst = False,
 
 
-# @pytest.mark.parametrize("rows_per_chunk", [8, 100])
-# def test_write_csv(table_data, rows_per_chunk, source_or_sink):
-#     plc_table_w_meta, pa_table = table_data
-#     src = source_or_sink
-#     print(table_data)
+def post_process_str_result(
+    str_result, sep=",", lineterminator="\n", header=True
+):
+    lines = str_result.split(lineterminator)[:-1]
 
-#     plc.io.csv.write_csv(
-#         plc_table_w_meta,
-#         path_or_buf=src,
-#         index=False,
-#     )
+    if header:
+        result_lines = [
+            f"{i-1}{sep}{s}" if i > 0 else f"{sep}{s}"
+            for i, s in enumerate(lines)
+        ]
+    else:
+        result_lines = [f"{i}{sep}{s}" for i, s in enumerate(lines)]
 
-#     # result = plc.io.csv.read_csv(src)
+    str_result = lineterminator.join(result_lines)
 
-#     # assert_table_and_meta_eq(
-#     #     pa_table,
-#     #     result,
-#     #     check_types_if_empty=False,
-#     # )
+    if header or len(lines) > 1:
+        str_result += lineterminator
+
+    return str_result
+
+
+@pytest.mark.parametrize("sep", [",", "*"])
+@pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
+@pytest.mark.parametrize("header", [True, False])
+@pytest.mark.parametrize("rows_per_chunk", [8, 100])
+def test_write_csv(
+    table_data, source_or_sink, sep, lineterminator, header, rows_per_chunk
+):
+    plc_table_w_meta, pa_table = table_data(pa_types=NON_NESTED_PA_TYPES)
+    sink = source_or_sink
+
+    plc.io.csv.write_csv(
+        plc.io.SinkInfo([sink]),
+        plc_table_w_meta,
+        sep=sep,
+        lineterminator=lineterminator,
+        header=header,
+        rows_per_chunk=rows_per_chunk,
+    )
+
+    # Convert everything to string to make comparisons easier
+    str_result = sink_to_str(sink)
+    str_result = post_process_str_result(
+        str_result, sep=sep, lineterminator=lineterminator, header=header
+    )
+
+    pd_result = pa_table.to_pandas().to_csv(
+        sep=sep, lineterminator=lineterminator, header=header
+    )
+
+    assert str_result == pd_result
+
+
+@pytest.mark.parametrize("na_rep", ["", "NA"])
+def test_write_csv_na_rep(na_rep):
+    names = ["a", "b"]
+    pa_tbl = pa.Table.from_arrays(
+        [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
+        names=names,
+    )
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl_w_meta = plc.io.types.TableWithMetadata(
+        plc_tbl, column_names=[(name, []) for name in names]
+    )
+
+    sink = io.StringIO()
+
+    plc.io.csv.write_csv(
+        plc.io.SinkInfo([sink]),
+        plc_tbl_w_meta,
+        na_rep=na_rep,
+    )
+
+    # Convert everything to string to make comparisons easier
+    str_result = sink_to_str(sink)
+    str_result = post_process_str_result(str_result)
+
+    pd_result = pa_tbl.to_pandas().to_csv(na_rep=na_rep)
+
+    assert str_result == pd_result

@@ -13,7 +13,7 @@ _COMMON_ORC_SOURCE_KWARGS = {"format": "orc"}
 def test_read_orc_basic(
     table_data, binary_source_or_sink, nrows_skiprows, columns
 ):
-    _, pa_table = table_data
+    _, pa_table = table_data()
     nrows, skiprows = nrows_skiprows
 
     # ORC reader doesn't support skip_rows for nested columns
