@@ -35,52 +35,62 @@ class DatetimeTest : public cudf::test::BaseFixture {
 
 TEST_F(DatetimeTest, ExtractYear)
 {
-  cudf::datetime::extract_year(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::YEAR, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractMonth)
 {
-  cudf::datetime::extract_month(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::MONTH, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractDay)
 {
-  cudf::datetime::extract_day(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::DAY, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractWeekday)
 {
-  cudf::datetime::extract_weekday(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::WEEKDAY, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractHour)
 {
-  cudf::datetime::extract_hour(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::HOUR, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractMinute)
 {
-  cudf::datetime::extract_minute(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::MINUTE, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractSecond)
 {
-  cudf::datetime::extract_second(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::SECOND, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractMillisecondFraction)
 {
-  cudf::datetime::extract_millisecond_fraction(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::MILLISECOND, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractMicrosecondFraction)
 {
-  cudf::datetime::extract_microsecond_fraction(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::MICROSECOND, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, ExtractNanosecondFraction)
 {
-  cudf::datetime::extract_nanosecond_fraction(timestamps, cudf::test::get_default_stream());
+  cudf::datetime::extract_datetime_component(
+    timestamps, cudf::datetime::datetime_component::NANOSECOND, cudf::test::get_default_stream());
 }
 
 TEST_F(DatetimeTest, LastDayOfMonth)
