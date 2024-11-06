@@ -39,29 +39,30 @@ using Types = nvbench::type_list<cudf::timestamp_D,
 template <class DataType>
 void bench_convert_datetime(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const data_type = cudf::data_type(cudf::type_to_id<DataType>());
-  auto const from_ts   = state.get_string("dir") == "from";
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const from_ts  = state.get_string("dir") == "from";
 
-  auto const ts_col = create_random_column(data_type.id(), row_count{num_rows});
-  cudf::column_view input(ts_col->view());
+  auto const data_type = cudf::data_type(cudf::type_to_id<DataType>());
+  auto const ts_col    = create_random_column(data_type.id(), row_count{num_rows});
 
   auto format = std::string{"%Y-%m-%d %H:%M:%S"};
+  auto s_col  = cudf::strings::from_timestamps(ts_col->view(), format);
+  auto sv     = cudf::strings_column_view(s_col->view());
+
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   if (from_ts) {
     state.add_global_memory_reads<DataType>(num_rows);
-    state.add_global_memory_writes<int8_t>((format.size() + 2) * num_rows);  // +2 for 4-digit year
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { cudf::strings::from_timestamps(input, format); });
+    state.add_global_memory_writes<int8_t>(sv.chars_size(stream));
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::from_timestamps(ts_col->view(), format);
+    });
   } else {
-    auto source = cudf::strings::from_timestamps(input, format);
-    auto view   = cudf::strings_column_view(source->view());
-    state.add_global_memory_reads<int8_t>(view.chars_size(stream));
+    state.add_global_memory_reads<int8_t>(sv.chars_size(stream));
     state.add_global_memory_writes<DataType>(num_rows);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      cudf::strings::to_timestamps(view, data_type, format);
+      cudf::strings::to_timestamps(sv, data_type, format);
     });
   }
 }
@@ -70,4 +71,4 @@ NVBENCH_BENCH_TYPES(bench_convert_datetime, NVBENCH_TYPE_AXES(Types))
   .set_name("datetime")
   .set_type_axes_names({"DataType"})
   .add_string_axis("dir", {"to", "from"})
-  .add_int64_axis("num_rows", {1 << 10, 1 << 15, 1 << 20, 1 << 25});
+  .add_int64_axis("num_rows", {1 << 16, 1 << 18, 1 << 20, 1 << 22});
