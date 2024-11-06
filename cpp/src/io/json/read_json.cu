@@ -51,7 +51,7 @@ class compressed_host_buffer_source final : public datasource {
     _ch_buffer = std::vector<std::uint8_t>(dbuf->data(), dbuf->data() + dbuf->size());
     if (comptype == compression_type::GZIP || comptype == compression_type::ZIP ||
         comptype == compression_type::SNAPPY) {
-      _decompressed_ch_buffer_size = estimate_uncompressed_size(_comptype, _ch_buffer);
+      _decompressed_ch_buffer_size = get_uncompressed_size(_comptype, _ch_buffer);
       _decompressed_buffer.resize(0);
     } else {
       _decompressed_buffer         = decompress(_comptype, _ch_buffer);
