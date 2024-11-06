@@ -204,10 +204,7 @@ column_name_info make_column_name_info(schema_element const& schema, std::string
         info.children.push_back(make_column_name_info(child_schema, child_name));
       }
       break;
-    case type_id::STRING:
-      info.children.emplace_back("offsets");
-      info.children.emplace_back("chars");
-      break;
+    case type_id::STRING: info.children.emplace_back("offsets"); break;
     default: break;
   }
   return info;
