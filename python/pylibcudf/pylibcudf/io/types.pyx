@@ -27,6 +27,7 @@ from pylibcudf.libcudf.io.types import (
     compression_type as CompressionType,  # no-cython-lint
     column_encoding as ColumnEncoding,  # no-cython-lint
     dictionary_policy as DictionaryPolicy,  # no-cython-lint
+    quote_style as QuoteStyle,  # no-cython-lint
     statistics_freq as StatisticsFreq, # no-cython-lint
 )
 
