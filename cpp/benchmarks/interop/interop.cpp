@@ -85,18 +85,24 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
 
   std::fill_n(std::back_inserter(types), num_columns, data_type);
 
-  auto const table            = create_random_table(types, row_count{num_rows});
+  data_profile profile;
+  profile.set_struct_depth(1);
+  profile.set_list_depth(1);
+
+  auto const table            = create_random_table(types, row_count{num_rows}, profile);
   cudf::table_view table_view = table->view();
   int64_t const size_bytes    = estimate_size(table_view);
 
+  cudf::column_metadata column_metadata{""};
   std::vector<cudf::column_metadata> children_metadata;
   std::fill_n(std::back_inserter(children_metadata),
               table->get_column(0).num_children(),
-              cudf::column_metadata{"a"});
-  cudf::column_metadata column_metadata{"b"};
+              cudf::column_metadata{""});
   column_metadata.children_meta = children_metadata;
-  std::vector<cudf::column_metadata> metadata{column_metadata};
-  cudf::unique_schema_t schema      = cudf::to_arrow_schema(table_view, metadata);
+  std::vector<cudf::column_metadata> table_metadata;
+  table_metadata.push_back(column_metadata);
+
+  cudf::unique_schema_t schema      = cudf::to_arrow_schema(table_view, table_metadata);
   cudf::unique_device_array_t input = cudf::to_arrow_device(table_view);
 
   state.add_element_count(num_elements, "num_elements");
@@ -120,18 +126,24 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
 
   std::fill_n(std::back_inserter(types), num_columns, data_type);
 
-  auto const table            = create_random_table(types, row_count{num_rows});
+  data_profile profile;
+  profile.set_struct_depth(1);
+  profile.set_list_depth(1);
+
+  auto const table            = create_random_table(types, row_count{num_rows}, profile);
   cudf::table_view table_view = table->view();
   int64_t const size_bytes    = estimate_size(table_view);
 
+  cudf::column_metadata column_metadata{""};
   std::vector<cudf::column_metadata> children_metadata;
   std::fill_n(std::back_inserter(children_metadata),
               table->get_column(0).num_children(),
-              cudf::column_metadata{"a"});
-  cudf::column_metadata column_metadata{"b"};
+              cudf::column_metadata{""});
   column_metadata.children_meta = children_metadata;
-  std::vector<cudf::column_metadata> metadata{column_metadata};
-  cudf::unique_schema_t schema      = cudf::to_arrow_schema(table_view, metadata);
+  std::vector<cudf::column_metadata> table_metadata;
+  table_metadata.push_back(column_metadata);
+
+  cudf::unique_schema_t schema      = cudf::to_arrow_schema(table_view, table_metadata);
   cudf::unique_device_array_t input = cudf::to_arrow_host(table_view);
 
   state.add_element_count(num_elements, "num_elements");
