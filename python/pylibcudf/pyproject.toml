@@ -58,11 +58,10 @@ extend = "../../pyproject.toml"
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
-known-first-party = ["cudf"]
-section-order = ["future", "standard-library", "third-party", "dask", "rapids", "first-party", "local-folder"]
+known-first-party = ["pylibcudf"]
+section-order = ["future", "standard-library", "third-party", "rapids", "first-party", "local-folder"]
 
 [tool.ruff.lint.isort.sections]
-dask = ["dask", "distributed", "dask_cuda"]
 rapids = ["rmm"]
 
 [tool.ruff.lint.per-file-ignores]
