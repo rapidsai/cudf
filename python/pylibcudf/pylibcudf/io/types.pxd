@@ -19,7 +19,42 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 from pylibcudf.table cimport Table
+from pylibcudf.io.types cimport ColumnEncoding
 
+
+cdef class ColumnInMetadata:
+    cdef column_in_metadata metadata
+
+    cpdef set_name(self, str name)
+
+    cpdef ColumnInMetadata set_name(self, str name)
+
+    cpdef ColumnInMetadata set_nullability(self, bool nullable)
+
+    cpdef ColumnInMetadata set_list_column_as_map(self)
+
+    cpdef ColumnInMetadata set_int96_timestamps(self, bool req)
+
+    cpdef ColumnInMetadata set_decimal_precision(self, int req)
+
+    cpdef ColumnInMetadata child(self, int i)
+
+    cpdef ColumnInMetadata set_output_as_binary(self, bool binary)
+
+    cpdef ColumnInMetadata set_type_length(self, int type_length)
+
+    cpdef ColumnInMetadata set_skip_compression(self, bool skip)
+
+    cpdef ColumnInMetadata set_encoding(self, ColumnEncoding encoding)
+
+    cpdef str get_name(self)
+
+cdef class TableInputMetadata:
+    cdef public Table table
+    cdef table_input_metadata metadata
+
+    @property
+    cpdef list column_metadata(self)
 
 cdef class TableWithMetadata:
     cdef public Table tbl

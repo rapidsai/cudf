@@ -14,7 +14,6 @@ except ImportError:
 
 import numpy as np
 
-from cython.operator cimport dereference
 
 from cudf.api.types import is_list_like
 
@@ -38,8 +37,6 @@ from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
-    parquet_writer_options,
-    write_parquet as parquet_writer,
 )
 from pylibcudf.libcudf.io.parquet_metadata cimport (
     parquet_metadata,
@@ -71,46 +68,6 @@ import pylibcudf as plc
 from pylibcudf cimport Table
 
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
-
-
-cdef class BufferArrayFromVector:
-    cdef Py_ssize_t length
-    cdef unique_ptr[vector[uint8_t]] in_vec
-
-    # these two things declare part of the buffer interface
-    cdef Py_ssize_t shape[1]
-    cdef Py_ssize_t strides[1]
-
-    @staticmethod
-    cdef BufferArrayFromVector from_unique_ptr(
-        unique_ptr[vector[uint8_t]] in_vec
-    ):
-        cdef BufferArrayFromVector buf = BufferArrayFromVector()
-        buf.in_vec = move(in_vec)
-        buf.length = dereference(buf.in_vec).size()
-        return buf
-
-    def __getbuffer__(self, Py_buffer *buffer, int flags):
-        cdef Py_ssize_t itemsize = sizeof(uint8_t)
-
-        self.shape[0] = self.length
-        self.strides[0] = 1
-
-        buffer.buf = dereference(self.in_vec).data()
-
-        buffer.format = NULL  # byte
-        buffer.internal = NULL
-        buffer.itemsize = itemsize
-        buffer.len = self.length * itemsize   # product(shape) * itemsize
-        buffer.ndim = 1
-        buffer.obj = self
-        buffer.readonly = 0
-        buffer.shape = self.shape
-        buffer.strides = self.strides
-        buffer.suboffsets = NULL
-
-    def __releasebuffer__(self, Py_buffer *buffer):
-        pass
 
 
 def _parse_metadata(meta):
@@ -442,7 +399,7 @@ def write_parquet(
     object compression="snappy",
     object statistics="ROWGROUP",
     object metadata_file_path=None,
-    object int96_timestamps=False,
+    bool int96_timestamps=False,
     object row_group_size_bytes=None,
     object row_group_size_rows=None,
     object max_page_size_bytes=None,
@@ -469,7 +426,6 @@ def write_parquet(
     # Create the write options
     cdef table_input_metadata tbl_meta
 
-    cdef vector[map[string, string]] user_data
     cdef table_view tv
     cdef vector[unique_ptr[data_sink]] _data_sinks
     cdef sink_info sink = make_sinks_info(
@@ -515,20 +471,18 @@ def write_parquet(
             output_as_binary
         )
 
-    cdef map[string, string] tmp_user_data
     if partitions_info is not None:
+        user_data = []
         for start_row, num_row in partitions_info:
+            # TODO: Avoid shallow copy?
             partitioned_df = table.iloc[start_row: start_row + num_row].copy(
                 deep=False
             )
             pandas_metadata = generate_pandas_metadata(partitioned_df, index)
-            tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
-            user_data.push_back(tmp_user_data)
-            tmp_user_data.clear()
+            user_data.append({"pandas": pandas_metadata})
     else:
         pandas_metadata = generate_pandas_metadata(table, index)
-        tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
-        user_data.push_back(tmp_user_data)
+        user_data = [{"pandas": pandas_metadata}]
 
     if header_version not in ("1.0", "2.0"):
         raise ValueError(
@@ -536,30 +490,22 @@ def write_parquet(
             "Valid values are '1.0' and '2.0'"
         )
 
-    dict_policy = (
-        plc.io.types.DictionaryPolicy.ADAPTIVE
-        if use_dictionary
-        else plc.io.types.DictionaryPolicy.NEVER
-    )
-
-    comp_type = _get_comp_type(compression)
-    stat_freq = _get_stat_freq(statistics)
-
-    cdef unique_ptr[vector[uint8_t]] out_metadata_c
-    cdef vector[string] c_column_chunks_file_paths
-    cdef bool _int96_timestamps = int96_timestamps
     cdef vector[partition_info] partitions
 
     # Perform write
-    cdef parquet_writer_options args = move(
-        parquet_writer_options.builder(sink, tv)
+    options = (
+        plc.io.parquet.ParquetWriterOptions.builder(sink, tv)
         .metadata(tbl_meta)
-        .key_value_metadata(move(user_data))
-        .compression(comp_type)
-        .stats_level(stat_freq)
-        .int96_timestamps(_int96_timestamps)
+        .key_value_metadata(user_data)
+        .compression(_get_comp_type(compression))
+        .stats_level(_get_stat_freq(statistics))
+        .int96_timestamps(int96_timestamps)
         .write_v2_headers(header_version == "2.0")
-        .dictionary_policy(dict_policy)
+        .dictionary_policy(
+            plc.io.types.DictionaryPolicy.ADAPTIVE
+            if use_dictionary
+            else plc.io.types.DictionaryPolicy.NEVER
+        )
         .utc_timestamps(False)
         .write_arrow_schema(write_arrow_schema)
         .build()
@@ -570,33 +516,28 @@ def write_parquet(
             partitions.push_back(
                 partition_info(part[0], part[1])
             )
-        args.set_partitions(move(partitions))
+        options.set_partitions(move(partitions))
     if metadata_file_path is not None:
-        if is_list_like(metadata_file_path):
-            for path in metadata_file_path:
-                c_column_chunks_file_paths.push_back(str.encode(path))
+        if isinstance(metadata_file_path, str):
+            options.set_column_chunks_file_paths([metadata_file_path])
         else:
-            c_column_chunks_file_paths.push_back(
-                str.encode(metadata_file_path)
-            )
-        args.set_column_chunks_file_paths(move(c_column_chunks_file_paths))
+            options.set_column_chunks_file_paths(list(metadata_file_path))
     if row_group_size_bytes is not None:
-        args.set_row_group_size_bytes(row_group_size_bytes)
+        options.set_row_group_size_bytes(row_group_size_bytes)
     if row_group_size_rows is not None:
-        args.set_row_group_size_rows(row_group_size_rows)
+        options.set_row_group_size_rows(row_group_size_rows)
     if max_page_size_bytes is not None:
-        args.set_max_page_size_bytes(max_page_size_bytes)
+        options.set_max_page_size_bytes(max_page_size_bytes)
     if max_page_size_rows is not None:
-        args.set_max_page_size_rows(max_page_size_rows)
+        options.set_max_page_size_rows(max_page_size_rows)
     if max_dictionary_size is not None:
-        args.set_max_dictionary_size(max_dictionary_size)
+        options.set_max_dictionary_size(max_dictionary_size)
 
-    with nogil:
-        out_metadata_c = move(parquet_writer(args))
+    out_metadata = plc.io.parquet.write_parquet(options)
 
     if metadata_file_path is not None:
-        out_metadata_py = BufferArrayFromVector.from_unique_ptr(
-            move(out_metadata_c)
+        out_metadata_py = plc.io.parquet.BufferArrayFromVector.from_unique_ptr(
+            move(out_metadata)
         )
         return np.asarray(out_metadata_py)
     else:
@@ -740,7 +681,7 @@ cdef class ParquetWriter:
             )
 
         if metadata_file_path is not None:
-            out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+            out_metadata_py = plc.io.parquet.BufferArrayFromVector.from_unique_ptr(
                 move(out_metadata_c)
             )
             return np.asarray(out_metadata_py)
@@ -842,7 +783,9 @@ cpdef merge_filemetadata(object filemetadata_list):
     with nogil:
         output_c = move(parquet_merge_metadata(list_c))
 
-    out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))
+    out_metadata_py = plc.io.parquet.BufferArrayFromVector.from_unique_ptr(
+        move(output_c)
+    )
     return np.asarray(out_metadata_py)
 
 

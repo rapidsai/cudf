@@ -1,14 +1,16 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.vector cimport vector
 from pylibcudf.expressions cimport Expression
-from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
+from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
 from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_reader as cpp_chunked_parquet_reader,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.table cimport Table
 from pylibcudf.types cimport DataType
 
 
@@ -33,3 +35,62 @@ cpdef read_parquet(
     # ReaderColumnSchema reader_column_schema = *,
     # DataType timestamp_type = *
 )
+
+cdef class ParquetWriterOptions:
+    cdef parquet_writer_options options
+
+    @staticmethod
+    cpdef ParquetWriterOptionsBuilder builder(SinkInfo sink, Table table)
+
+    cpdef void set_partitions(list partitions)
+
+    cpdef void set_column_chunks_file_paths(list file_paths)
+
+    cpdef void set_row_group_size_bytes(int size_bytes)
+
+    cpdef void set_row_group_size_rows(int size_rows)
+
+    cpdef void set_max_page_size_bytes(int size_bytes)
+
+    cpdef void set_max_page_size_rows(int size_rows)
+
+    cpdef void set_max_dictionary_size(int size_rows)
+
+cdef class ParquetWriterOptionsBuilder:
+    cdef parquet_writer_options_builder builder
+
+    cpdef ParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
+
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, dict metadata)
+
+    cpdef ParquetWriterOptionsBuilder compression(self, CompressionType compression)
+
+    cpdef ParquetWriterOptionsBuilder stats_level(self, StatisticsFreq sf)
+
+    cpdef ParquetWriterOptionsBuilder int96_timestamps(self, bool enabled)
+
+    cpdef ParquetWriterOptionsBuilder write_v2_headers(self, bool enabled)
+
+    cpdef ParquetWriterOptionsBuilder dictionary_policy(self, DictionaryPolicy val)
+
+    cpdef ParquetWriterOptionsBuilder utc_timestamps(self, bool enabled)
+
+    cpdef ParquetWriterOptionsBuilder write_arrow_schema(self, bool enabled)
+
+    cpdef ParquetWriterOptions build(self)
+
+
+cdef class BufferArrayFromVector:
+    cdef Py_ssize_t length
+    cdef unique_ptr[vector[uint8_t]] in_vec
+
+    # these two things declare part of the buffer interface
+    cdef Py_ssize_t shape[1]
+    cdef Py_ssize_t strides[1]
+
+    @staticmethod
+    cdef BufferArrayFromVector from_unique_ptr(
+        unique_ptr[vector[uint8_t]] in_vec
+    )
+
+cpdef BufferArrayFromVector write_parquet(ParquetWriterOptions options)

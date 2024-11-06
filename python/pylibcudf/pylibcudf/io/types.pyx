@@ -10,9 +10,11 @@ from pylibcudf.io.datasource cimport Datasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
+    column_in_metadata,
     column_name_info,
     host_buffer,
     source_info,
+    table_input_metadata,
     table_with_metadata,
 )
 
@@ -29,6 +31,208 @@ from pylibcudf.libcudf.io.types import (
     dictionary_policy as DictionaryPolicy,  # no-cython-lint
     statistics_freq as StatisticsFreq, # no-cython-lint
 )
+
+cdef class ColumnInMetadata:
+    """
+    Metadata for a column
+
+    Parameters
+    ----------
+    metadata : column_in_metadata
+    """
+
+    def __init__(self, column_in_metadata metadata):
+        self.metadata = metadata
+
+    cpdef ColumnInMetadata set_name(self, str name):
+        """
+        Set the name of this column.
+
+        Parameters
+        ----------
+        name : str
+            Name of the column
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_name(name.encode())
+        return self
+
+    cpdef ColumnInMetadata set_nullability(self, bool nullable):
+        """
+        Set the nullability of this column.
+
+        Parameters
+        ----------
+        nullable : bool
+            Whether this column is nullable
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_nullability(nullable)
+        return self
+
+    cpdef ColumnInMetadata set_list_column_as_map(self):
+        """
+        Specify that this list column should be encoded as a map in the
+        written file.
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_list_column_as_map()
+        return self
+
+    cpdef ColumnInMetadata set_int96_timestamps(self, bool req):
+        """
+        Specifies whether this timestamp column should be encoded using
+        the deprecated int96.
+
+        Parameters
+        ----------
+        req : bool
+            True = use int96 physical type. False = use int64 physical type.
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_int96_timestamps(req)
+        return self
+
+    cpdef ColumnInMetadata set_decimal_precision(self, int req):
+        """
+        Set the decimal precision of this column.
+        Only valid if this column is a decimal (fixed-point) type.
+
+        Parameters
+        ----------
+        precision : int
+            The integer precision to set for this decimal column
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_decimal_precision(precision)
+        return self
+
+    cpdef ColumnInMetadata child(self, int i):
+        """
+        Get reference to a child of this column.
+
+        Parameters
+        ----------
+        i : int
+            Index of the child to get.
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.child(i)
+        return self
+
+    cpdef ColumnInMetadata set_output_as_binary(self, bool binary):
+        """
+        Specifies whether this column should be written as binary or string data.
+
+        Parameters
+        ----------
+        binary : bool
+            True = use binary data type. False = use string data type
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_output_as_binary(binary)
+        return self
+
+    cpdef ColumnInMetadata set_type_length(self, int type_length):
+        """
+        Sets the length of fixed length data.
+
+        Parameters
+        ----------
+        type_length : int
+            Size of the data type in bytes
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_type_length(type_length)
+        return self
+
+    cpdef ColumnInMetadata set_skip_compression(self, bool skip):
+        """
+        Specifies whether this column should not be compressed
+        regardless of the compression.
+
+        Parameters
+        ----------
+        skip : bool
+            If `true` do not compress this column
+
+        Returns
+        -------
+        Self
+        """
+        self.metadata.set_skip_compression(skip)
+        return self
+
+    cpdef ColumnInMetadata set_encoding(self, ColumnEncoding encoding):
+        """
+        Specifies whether this column should not be compressed
+        regardless of the compression.
+
+        Parameters
+        ----------
+        encoding : ColumnEncoding
+            The encoding to use
+
+        Returns
+        -------
+        ColumnInMetadata
+        """
+        self.metadata.set_encoding(encoding)
+        return self
+
+    cpdef str get_name(self):
+        """
+        Get the name of this column.
+
+        Returns
+        -------
+        str
+            The name of this column
+        """
+        return self.metadata.get_name()
+
+
+cdef class TableInputMetadata:
+    """
+    Metadata for a table
+
+    Parameters
+    ----------
+    table : Table
+        The Table to construct metadata for
+    """
+    def __init__(self, Table table):
+        self.metadata = table_input_metadata(table.view())
+
+    @property
+    cpdef list column_metadata(self):
+        return [
+            ColumnInMetadata(metadata) for metadata in self.metadata.column_metadata
+        ]
 
 
 cdef class TableWithMetadata:

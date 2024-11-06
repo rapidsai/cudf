@@ -86,7 +86,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
     cdef cppclass parquet_writer_options_base:
         parquet_writer_options_base() except +
-        sink_info get_sink_info() except +
+        sink_info get_sink() except +
         compression_type get_compression() except +
         statistics_freq get_stats_level() except +
         const optional[table_input_metadata]& get_metadata(
@@ -116,11 +116,11 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_utc_timestamps(
             bool enabled
         ) except +
-        void set_row_group_size_bytes(size_t val) except +
-        void set_row_group_size_rows(size_type val) except +
-        void set_max_page_size_bytes(size_t val) except +
-        void set_max_page_size_rows(size_type val) except +
-        void set_max_dictionary_size(size_t val) except +
+        void set_row_group_size_bytes(size_t size_bytes) except +
+        void set_row_group_size_rows(size_type size_rows) except +
+        void set_max_page_size_bytes(size_t size_bytes) except +
+        void set_max_page_size_rows(size_type size_rows) except +
+        void set_max_dictionary_size(size_t size_bytes) except +
         void enable_write_v2_headers(bool val) except +
         void enable_write_arrow_schema(bool val) except +
         void set_dictionary_policy(dictionary_policy policy) except +
@@ -133,7 +133,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             vector[partition_info] partitions
         ) except +
         void set_column_chunks_file_paths(
-            vector[string] column_chunks_file_paths
+            vector[string] file_paths
         ) except +
 
         @staticmethod
@@ -146,10 +146,10 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder_base() except +
 
         BuilderT& metadata(
-            table_input_metadata m
+            table_input_metadata metadata
         ) except +
         BuilderT& key_value_metadata(
-            vector[map[string, string]] kvm
+            vector[map[string, string]] metadata
         ) except +
         BuilderT& stats_level(
             statistics_freq sf
@@ -182,7 +182,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t val
         ) except +
         BuilderT& write_v2_headers(
-            bool val
+            bool enabled
         ) except +
         BuilderT& dictionary_policy(
             dictionary_policy val
@@ -205,7 +205,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
 
     cdef unique_ptr[vector[uint8_t]] write_parquet(
-        parquet_writer_options args
+        parquet_writer_options options
     ) except +
 
     cdef cppclass chunked_parquet_writer_options(parquet_writer_options_base):
