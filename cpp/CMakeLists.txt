@@ -198,19 +198,23 @@ function(enable_static_checkers target)
       )
     endif()
     if(_LINT_IWYU)
-      # We need to pass -Wno-missing-braces to suppress warnings about missing braces in nvtx
-      # headers that pop up when running with IWYU. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE
-      # does not appear to be sufficient, we must also ensure that it is set to the underlying
-      # target's CXX compile flags. To do this completely cleanly we should modify the flags on the
-      # target rather than the global CUDF_CXX_FLAGS, but this solution is good enough for now.
-      list(FIND CUDF_CXX_FLAGS -Wno-missing-braces _missing_braces_index)
-      if(_missing_braces_index EQUAL -1)
-        list(APPEND CUDF_CXX_FLAGS -Wno-missing-braces)
-        set(CUDF_CXX_FLAGS
-            "${CUDF_CXX_FLAGS}"
-            PARENT_SCOPE
-        )
-      endif()
+      # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
+      # relevant since they don't show up in any other build so it's better to suppress them until
+      # we can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not
+      # appear to be sufficient, we must also ensure that it is set to the underlying target's CXX
+      # compile flags. To do this completely cleanly we should modify the flags on the target rather
+      # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
+      # the linters on real builds.
+      foreach(_flag -Wno-missing-braces -Wno-absolute-value -Wunneeded-internal-declaration)
+        list(FIND CUDF_CXX_FLAGS ${flag} _flag_index)
+        if(_flag_index EQUAL -1)
+          list(APPEND CUDF_CXX_FLAGS ${flag})
+        endif()
+      endforeach()
+      set(CUDF_CXX_FLAGS
+          "${CUDF_CXX_FLAGS}"
+          PARENT_SCOPE
+      )
       set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
     endif()
     foreach(file IN LISTS _LINT_SKIPPED_FILES)
