@@ -25,7 +25,7 @@
 
 using cudf::host_span;
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
@@ -57,4 +57,4 @@ constexpr uint8_t fcomment = 0x10;  // Comment present
 };                                  // namespace GZIPHeaderFlag
 
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -48,6 +48,7 @@ constexpr int max_subchunks_prealloced    = 3;
  * @param compression Compression format of source
  * @param range_offset Number of bytes to skip from source start
  * @param range_size Number of bytes to read from source
+ * @param delimiter Delimiter character for JSONL inputs
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @returns A subspan of the input device span containing data read
  */
@@ -56,6 +57,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                                    compression_type compression,
                                    size_t range_offset,
                                    size_t range_size,
+                                   char delimiter,
                                    rmm::cuda_stream_view stream);
 
 /**
