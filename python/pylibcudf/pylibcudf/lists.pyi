@@ -1,17 +1,31 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from enum import IntEnum, auto
+
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
-from pylibcudf.types import NullOrder
+from pylibcudf.types import NanEquality, NullEquality, NullOrder, Order
+
+class ConcatenateNullPolicy(IntEnum):
+    IGNORE = auto()
+    NULLIFY_OUTPUT_ROW = auto()
+
+class DuplicateFindOption(IntEnum):
+    FIND_FIRST = auto()
+    FIND_LAST = auto()
 
 def explode_outer(input: Table, explode_column_idx: int) -> Table: ...
 def concatenate_rows(input: Table) -> Column: ...
-def concatenate_list_elements(input: Column, dropna: bool) -> Column: ...
+def concatenate_list_elements(
+    input: Column, null_policy: ConcatenateNullPolicy
+) -> Column: ...
 def contains(input: Column, search_key: Column | Scalar) -> Column: ...
 def contains_nulls(input: Column) -> Column: ...
 def index_of(
-    input: Column, search_key: Column | Scalar, find_first_option: bool
+    input: Column,
+    search_key: Column | Scalar,
+    find_option: DuplicateFindOption,
 ) -> Column: ...
 def reverse(input: Column) -> Column: ...
 def segmented_gather(input: Column, gather_map_list: Column) -> Column: ...
@@ -22,21 +36,35 @@ def sequences(
 ) -> Column: ...
 def sort_lists(
     input: Column,
-    ascending: bool,
+    sort_order: Order,
     na_position: NullOrder,
     stable: bool = False,
 ) -> Column: ...
 def difference_distinct(
-    lhs: Column, rhs: Column, nulls_equal: bool = True, nans_equal: bool = True
+    lhs: Column,
+    rhs: Column,
+    nulls_equal: NullEquality = NullEquality.EQUAL,
+    nans_equal: NanEquality = NanEquality.ALL_EQUAL,
 ) -> Column: ...
 def have_overlap(
-    lhs: Column, rhs: Column, nulls_equal: bool = True, nans_equal: bool = True
+    lhs: Column,
+    rhs: Column,
+    nulls_equal: NullEquality = NullEquality.EQUAL,
+    nans_equal: NanEquality = NanEquality.ALL_EQUAL,
 ) -> Column: ...
 def intersect_distinct(
-    lhs: Column, rhs: Column, nulls_equal: bool = True, nans_equal: bool = True
+    lhs: Column,
+    rhs: Column,
+    nulls_equal: NullEquality = NullEquality.EQUAL,
+    nans_equal: NanEquality = NanEquality.ALL_EQUAL,
 ) -> Column: ...
 def union_distinct(
-    lhs: Column, rhs: Column, nulls_equal: bool = True, nans_equal: bool = True
+    lhs: Column,
+    rhs: Column,
+    nulls_equal: NullEquality = NullEquality.EQUAL,
+    nans_equal: NanEquality = NanEquality.ALL_EQUAL,
 ) -> Column: ...
 def apply_boolean_mask(input: Column, mask: Column) -> Column: ...
-def distinct(input: Column, nulls_equal: bool, nans_equal: bool) -> Column: ...
+def distinct(
+    input: Column, nulls_equal: NullEquality, nans_equal: NanEquality
+) -> Column: ...
