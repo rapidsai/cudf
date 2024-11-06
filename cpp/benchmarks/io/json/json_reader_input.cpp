@@ -157,5 +157,5 @@ NVBENCH_BENCH_TYPES(BM_json_read_compressed_io,
                     NVBENCH_TYPE_AXES(compression_list, nvbench::enum_type_list<io_type::FILEPATH>))
   .set_name("json_read_compressed_io")
   .set_type_axes_names({"compression_type", "io"})
-  .add_int64_power_of_two_axis("data_size", nvbench::range(20, 30, 2))
+  .add_int64_power_of_two_axis("data_size", nvbench::range(20, 29, 1))
   .set_min_samples(4);

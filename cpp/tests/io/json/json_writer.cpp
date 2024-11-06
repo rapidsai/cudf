@@ -45,6 +45,7 @@ struct JsonCompressedWriterTest : public cudf::test::BaseFixture,
 INSTANTIATE_TEST_SUITE_P(JsonCompressedWriterTest,
                          JsonCompressedWriterTest,
                          ::testing::Values(cudf::io::compression_type::GZIP,
+                                           cudf::io::compression_type::SNAPPY,
                                            cudf::io::compression_type::NONE));
 
 TEST_F(JsonWriterTest, EmptyInput)
@@ -206,7 +207,7 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
 
   cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
-  if (comptype == cudf::io::compression_type::GZIP) {
+  if (comptype != cudf::io::compression_type::GZIP) {
     auto decomp_out_buffer =
       cudf::io::decompress(comptype,
                            cudf::host_span<uint8_t const>(

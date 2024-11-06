@@ -27,28 +27,16 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief Decompresses a system memory buffer.
+ * @brief Compresses a system memory buffer.
  *
  * @param compression Type of compression of the input data
- * @param src Compressed host buffer
+ * @param src Decompressed host buffer
  *
- * @return Vector containing the Decompressed output
+ * @return Vector containing the Compressed output
  */
 std::vector<uint8_t> compress(compression_type compression,
                               host_span<uint8_t const> src,
                               rmm::cuda_stream_view stream);
-
-/**
- * @brief GZIP header flags
- * See https://tools.ietf.org/html/rfc1952
- */
-namespace GZIPHeaderFlag {
-constexpr uint8_t ftext    = 0x01;  // ASCII text hint
-constexpr uint8_t fhcrc    = 0x02;  // Header CRC present
-constexpr uint8_t fextra   = 0x04;  // Extra fields present
-constexpr uint8_t fname    = 0x08;  // Original file name present
-constexpr uint8_t fcomment = 0x10;  // Comment present
-};                                  // namespace GZIPHeaderFlag
 
 }  // namespace io
 }  // namespace cudf
