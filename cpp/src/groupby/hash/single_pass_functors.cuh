@@ -108,8 +108,8 @@ struct initialize_shmem {
 
 template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
 struct initialize_target_element_gmem {
-  __device__ void operator()(cudf::mutable_column_device_view target,
-                             cudf::size_type target_index) const noexcept
+  __device__ void operator()(cudf::mutable_column_device_view,
+                             cudf::size_type) const noexcept
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
