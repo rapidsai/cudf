@@ -49,7 +49,6 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
     rmm::device_uvector<char> buffer(total_source_size, stream);
     auto readbufspan = cudf::io::json::detail::ingest_raw_input(buffer,
                                                                 sources,
-                                                                reader_opts.get_compression(),
                                                                 reader_opts.get_byte_range_offset(),
                                                                 reader_opts.get_byte_range_size(),
                                                                 reader_opts.get_delimiter(),

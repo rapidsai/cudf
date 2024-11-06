@@ -54,7 +54,6 @@ constexpr int max_subchunks_prealloced    = 3;
  */
 device_span<char> ingest_raw_input(device_span<char> buffer,
                                    host_span<std::unique_ptr<datasource>> sources,
-                                   compression_type compression,
                                    size_t range_offset,
                                    size_t range_size,
                                    char delimiter,
