@@ -2828,7 +2828,7 @@ TEST_F(JsonReaderTest, JSONMixedTypeChildren)
     EXPECT_EQ(result.metadata.schema_info[0].name, "Root");
     ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
     EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "Key");
-    ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+    ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 1);
     EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
     // types
     EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
@@ -2866,7 +2866,7 @@ TEST_F(JsonReaderTest, JSONMixedTypeChildren)
     EXPECT_EQ(result.metadata.schema_info[0].name, "Root");
     ASSERT_EQ(result.metadata.schema_info[0].children.size(), 1);
     EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "Key");
-    ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 2);
+    ASSERT_EQ(result.metadata.schema_info[0].children[0].children.size(), 1);
     EXPECT_EQ(result.metadata.schema_info[0].children[0].children[0].name, "offsets");
     // types
     EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRUCT);
