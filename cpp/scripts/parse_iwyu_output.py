@@ -20,34 +20,14 @@ Lines that are not from include-what-you-use are removed from the output.
 
 import argparse
 import re
+from enum import Enum
 
-def parse_log(log_content: str) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, list[str]]]:
-    """Parse the log content to extract the include lists."""
-    add_includes = {}
-    remove_includes = {}
-    full_include_lists = {}
 
-    # Regex to match "should add" and "should remove" sections
-    add_pattern = re.compile(r'(.+)\s+should add these lines:\n((?:.+\n)+)')
-    remove_pattern = re.compile(r'(.+)\s+should remove these lines:\n((?:.+\n)+)')
-    full_include_pattern = re.compile(r'The full include-list for (.+):\n((?:.+\n)+?)---')
-
-    # Parse "should add these lines"
-    for match in add_pattern.finditer(log_content):
-        file_path, includes = match.groups()
-        add_includes[file_path.strip()] = [line.strip() for line in includes.splitlines()]
-
-    # Parse "should remove these lines"
-    for match in remove_pattern.finditer(log_content):
-        file_path, includes = match.groups()
-        remove_includes[file_path.strip()] = [line.strip() for line in includes.splitlines()]
-
-    # Parse "full include-list"
-    for match in full_include_pattern.finditer(log_content):
-        file_path, includes = match.groups()
-        full_include_lists[file_path.strip()] = [line.strip() for line in includes.splitlines()]
-
-    return add_includes, remove_includes, full_include_lists
+class Mode(Enum):
+    NORMAL = 0
+    ADD = 1
+    REMOVE = 2
+    FULL_INCLUDE_LIST = 3
 
 
 def extract_include_file(include_line):
@@ -58,100 +38,128 @@ def extract_include_file(include_line):
     return None
 
 
-def process_includes(add_includes, remove_includes):
-    """Process the include lists to remove any add/remove duplicates."""
-    # Make a copy of the dictionary keys to safely iterate over
-    add_keys = list(add_includes.keys())
+def parse_output(input_stream):
+    include_modifications = {}
+    current_file = None
+    mode = Mode.NORMAL
 
-    for file_path in add_keys:
-        adds = add_includes[file_path]
-        add_files = {extract_include_file(line) for line in adds}
+    for line in input_stream:
+        if match := re.match(r"(\/\S+) should add these lines:", line):
+            current_file = match.group(1)
+            include_modifications.setdefault(
+                current_file,
+                {
+                    "add_includes": [],
+                    "remove_includes": [],
+                    "full_include_list": [],
+                },
+            )
+            mode = Mode.ADD
+        elif match := re.match(r"(\/\S+) should remove these lines:", line):
+            mode = Mode.REMOVE
+        elif match := re.match(r"The full include-list for (\/\S+):", line):
+            mode = Mode.FULL_INCLUDE_LIST
+        elif line.strip() == "---":
+            current_file = None
+            mode = Mode.NORMAL
+        else:
+            if current_file:
+                if mode == Mode.ADD:
+                    include_modifications[current_file]["add_includes"].append(
+                        line.strip()
+                    )
+                elif mode == Mode.REMOVE:
+                    include_modifications[current_file][
+                        "remove_includes"
+                    ].append(line.strip())
+                elif mode == Mode.FULL_INCLUDE_LIST:
+                    include_modifications[current_file][
+                        "full_include_list"
+                    ].append(line.strip())
+            else:
+                if (
+                    line.strip()
+                    and "include-what-you-use reported diagnostics" not in line
+                ):
+                    print(line, end="")
 
-        if file_path in remove_includes:
-            remove_files = {extract_include_file(line) for line in remove_includes[file_path]}
-
-            # Update remove_includes by filtering out matched files
-            remove_includes[file_path] = [
-                line for line in remove_includes[file_path]
-                if extract_include_file(line) not in add_files
-            ]
-
-            # Also remove matching entries from add_includes
-            add_includes[file_path] = [
-                line for line in adds
-                if extract_include_file(line) not in remove_files
-            ]
-
-
-def update_full_include_list(add_includes, full_include_lists):
-    """Update the full include-list to remove any includes that are in add_includes."""
-    # Update the full include-list to remove any includes that are in add_includes based on file name
-    for file_path, adds in add_includes.items():
-        add_files = {extract_include_file(line) for line in adds}
-        if file_path in full_include_lists:
-            full_include_lists[file_path] = [
-                line for line in full_include_lists[file_path]
-                if extract_include_file(line) not in add_files
-            ]
-
-
-def write_output(file_path, remove_includes, full_include_lists):
-    """Write the output back in the desired format."""
-    with open(file_path, 'w') as f:
-        # Only write output for files that have removals
-        for file in remove_includes.keys():
-            # Write "should add these lines", but don't actually include any of the
-            # items in the output.
-            f.write(f"{file} should add these lines:\n\n")
-
-            # Write "should remove these lines"
-            f.write(f"{file} should remove these lines:\n")
-            if remove_includes.get(file):
-                for line in remove_includes[file]:
-                    f.write(f"{line}\n")  # No extra minus sign
-            f.write("\n")
-
-            # Write "The full include-list"
-            f.write(f"The full include-list for {file}:\n")
-            if full_include_lists.get(file):
-                for line in full_include_lists[file]:
-                    f.write(f"{line}\n")
-            f.write("---\n")
+    return include_modifications
 
 
-def modify_log(log_content, output_file="output.txt"):
-    """Modify the log content to only include removals."""
-    # Step 1: Parse the log
-    add_includes, remove_includes, full_include_lists = parse_log(log_content)
+def post_process_includes(include_modifications):
+    """Deduplicate and remove redundant entries from add and remove includes."""
+    for mods in include_modifications.values():
+        # Deduplicate add_includes and remove_includes
+        mods["add_includes"] = list(set(mods["add_includes"]))
+        mods["remove_includes"] = list(set(mods["remove_includes"]))
 
-    # Step 2: Process the includes
-    process_includes(add_includes, remove_includes)
+        # Extract file paths from add_includes and remove_includes
+        add_files = {
+            extract_include_file(line) for line in mods["add_includes"]
+        }
+        remove_files = {
+            extract_include_file(line) for line in mods["remove_includes"]
+        }
 
-    # Step 3: Update the full include-list
-    update_full_include_list(add_includes, full_include_lists)
+        # Remove entries that exist in both add_includes and remove_includes
+        common_files = add_files & remove_files
+        mods["add_includes"] = [
+            line
+            for line in mods["add_includes"]
+            if extract_include_file(line) not in common_files
+        ]
+        mods["remove_includes"] = [
+            line
+            for line in mods["remove_includes"]
+            if extract_include_file(line) not in common_files
+        ]
 
-    # Step 4: Write the output back in the desired format
-    write_output(output_file, remove_includes, full_include_lists)
+        # Remove entries that exist in add_includes from full_include_list
+        mods["full_include_list"] = [
+            include
+            for include in mods["full_include_list"]
+            if extract_include_file(include) not in add_files
+        ]
 
+
+def write_output(include_modifications, output_stream):
+    for filename, mods in include_modifications.items():
+        if mods["add_includes"] or mods["remove_includes"]:
+            output_stream.write(f"{filename} should add these lines:\n\n")
+
+            output_stream.write(f"{filename} should remove these lines:\n")
+            for line in mods["remove_includes"]:
+                output_stream.write(line + "\n")
+            output_stream.write("\n")
+
+            output_stream.write(f"The full include-list for {filename}:\n")
+            for line in mods["full_include_list"]:
+                output_stream.write(line + "\n")
+            output_stream.write("---\n")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Modify IWYU output to only include removals."
+        description="Process include modifications from a build output log."
     )
-    parser.add_argument("input", help="File containing IWYU output")
-
-    # Add output file parameter
     parser.add_argument(
-        "output",
+        "input",
         nargs="?",
-        help="Output file to write the modified output to",
-        default="iwyu_output.txt",
+        type=argparse.FileType("r"),
+        default="-",
+        help="Input file to read (default: stdin)",
+    )
+    parser.add_argument(
+        "--output",
+        type=argparse.FileType("w"),
+        default="iwyu_results.txt",
+        help="Output file to write (default: iwyu_output.txt)",
     )
     args = parser.parse_args()
-    with open(args.input, "r") as f:
-        log_content = f.read()
-        modify_log(log_content, args.output)
+
+    include_modifications = parse_output(args.input)
+    post_process_includes(include_modifications)
+    write_output(include_modifications, args.output)
 
 
 if __name__ == "__main__":
