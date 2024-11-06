@@ -858,7 +858,7 @@ inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, 
       int const bit_in_byte_index = bit_pos & 7;
 
       uint8_t const* const read_from = s->data_start + byte_offset;
-      bool const read_bit            = *read_from & (1 << bit_in_byte_index);
+      bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
 
       int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
       sb->dict_idx[write_to_index] = read_bit;
