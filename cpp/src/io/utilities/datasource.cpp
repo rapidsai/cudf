@@ -90,8 +90,12 @@ class file_source : public datasource {
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    if (size < _gds_read_preferred_threshold) { return false; }
-    return supports_device_read();
+    if (!supports_device_read()) { return false; }
+
+    // Always prefer device reads if kvikio is enabled
+    if (!_kvikio_file.closed()) { return true; }
+
+    return size >= _gds_read_preferred_threshold;
   }
 
   std::future<size_t> device_read_async(size_t offset,
