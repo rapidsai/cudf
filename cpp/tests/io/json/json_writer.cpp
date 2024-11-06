@@ -207,7 +207,7 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
 
   cudf::io::write_json(options_builder.build(), cudf::test::get_default_stream());
 
-  if (comptype != cudf::io::compression_type::GZIP) {
+  if (comptype != cudf::io::compression_type::NONE) {
     auto decomp_out_buffer =
       cudf::io::decompress(comptype,
                            cudf::host_span<uint8_t const>(
