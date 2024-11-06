@@ -25,11 +25,12 @@
 static void bench_copy(nvbench::state& state)
 {
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const api       = state.get_string("api");
 
   data_profile const table_profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
   auto const source =
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
 
@@ -68,6 +69,7 @@ static void bench_copy(nvbench::state& state)
 
 NVBENCH_BENCH(bench_copy)
   .set_name("copy")
-  .add_int64_axis("row_width", {32, 64, 128, 256})
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_string_axis("api", {"gather", "scatter"});
