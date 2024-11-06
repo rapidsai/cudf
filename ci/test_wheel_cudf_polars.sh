@@ -33,16 +33,9 @@ rapids-logger "Installing cudf_polars and its dependencies"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 
-# Download wheel from <https://github.com/rapidsai/kvikio/pull/527>
-LIBKVIKIO_CHANNEL=$(
-  RAPIDS_PY_WHEEL_NAME=libkvikio_${RAPIDS_PY_CUDA_SUFFIX} rapids-get-pr-wheel-artifact kvikio 527 cpp  # also python?
-)
-echo ${LIBKVIKIO_CHANNEL}/libkvikio_*.whl >> /tmp/requirements-build.txt
-
 # echo to expand wildcard before adding `[test]` requires for pip
 python -m pip install \
     -v \
-    -r /tmp/requirements-build.txt \
     --constraint ./constraints.txt \
     "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
     "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
