@@ -67,8 +67,7 @@ class Translator:
         Raises
         ------
         NotImplementedError
-            If the version of Polars IR is unsupported or if the result
-            has a Null column dtype.
+            If the version of Polars IR is unsupported.
 
         Notes
         -----
@@ -84,11 +83,11 @@ class Translator:
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
         if (version := self.visitor.version()) >= (4, 0):
-            error = NotImplementedError(
+            e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
-            self.errors.append(error)  # pragma: no cover
-            raise error  # pragma: no cover
+            self.errors.append(e)  # pragma: no cover
+            raise e  # pragma: no cover
 
         with ctx:
             polars_schema = self.visitor.get_schema()
@@ -115,7 +114,7 @@ class Translator:
                     f"No GPU support for {result} with Null column dtype."
                 )
                 self.errors.append(error)
-                raise error
+                return ir.ErrorNode(schema, str(error))
 
             return result
 

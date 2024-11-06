@@ -118,11 +118,7 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
        If the specified exceptions were not raised.
     """
     translator = Translator(q._ldf.visit())
-    try:
-        translator.translate_ir()
-    except Exception as e:
-        if "No GPU support for" in str(e):
-            pass
+    translator.translate_ir()
     if errors := translator.errors:
         for err in errors:
             assert any(isinstance(err, err_type) for err_type in exceptions)
