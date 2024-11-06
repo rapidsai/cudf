@@ -77,6 +77,10 @@ cpdef void fill_in_place(
         The index at which to stop filling.
     value : Scalar
         The value to fill with.
+
+    Returns
+    -------
+    None
     """
 
     with nogil:
@@ -101,6 +105,7 @@ cpdef Column sequence(size_type size, Scalar init, Scalar step):
         The initial value of the sequence
     step : Scalar
         The step of the sequence
+
     Returns
     -------
     pylibcudf.Column
