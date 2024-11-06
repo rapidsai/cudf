@@ -145,6 +145,12 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
+        if os.environ.get("CUDF_POLARS_DASK", "OFF").upper() == "ON":
+            # Use experimental Dask executor
+            from cudf_polars.experimental.partitioned import evaluate
+
+            return evaluate(ir).to_polars()
+
         return ir.evaluate(cache={}).to_polars()
 
 
