@@ -288,47 +288,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
   parquet_read_common(num_rows_written, n_col, source_sink, state, data_size_bytes);
 }
 
-using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
-                                            data_type::FLOAT,
-                                            data_type::DECIMAL,
-                                            data_type::TIMESTAMP,
-                                            data_type::DURATION,
-                                            data_type::STRING,
-                                            data_type::LIST,
-                                            data_type::STRUCT>;
-
-NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
-  .set_name("parquet_read_decode")
-  .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 2000})
-  .add_int64_axis("run_length", {1, 16});
-
-NVBENCH_BENCH(BM_parquet_read_io_compression)
-  .set_name("parquet_read_io_compression")
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 2000})
-  .add_int64_axis("run_length", {1, 16});
-
-NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
-  .set_name("parquet_read_chunks")
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 2000})
-  .add_int64_axis("run_length", {1, 16})
-  .add_int64_axis("byte_limit", {0, 500'000});
-
-NVBENCH_BENCH(BM_parquet_read_io_small_mixed)
-  .set_name("parquet_read_io_small_mixed")
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 2000})
-  .add_int64_axis("run_length", {1, 16})
-  .add_int64_axis("num_string_cols", {1, 2, 3});
-
-using d_type_list_wide_table = nvbench::enum_type_list<data_type::DECIMAL, data_type::STRING>;
+using d_type_list_wide_table = nvbench::enum_type_list<data_type::STRING>;
 NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_wide_table))
   .set_name("parquet_read_wide_tables")
   .set_min_samples(4)
@@ -336,24 +296,5 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .add_int64_axis("data_size_mb", {1024, 2048, 4096})
   .add_int64_axis("num_cols", {256, 512, 1024})
-  .add_int64_axis("cardinality", {0, 2000})
-  .add_int64_axis("run_length", {1, 16});
-
-NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
-  .set_name("parquet_read_wide_tables_mixed")
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
-  .add_int64_axis("data_size_mb", {1024, 2048, 4096})
-  .add_int64_axis("num_cols", {256, 512, 1024})
-  .add_int64_axis("cardinality", {0, 2000})
-  .add_int64_axis("run_length", {1, 16});
-
-// a benchmark for structs that only contain fixed-width types
-using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
-NVBENCH_BENCH_TYPES(BM_parquet_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type_list_struct_only))
-  .set_name("parquet_read_fixed_width_struct")
-  .set_type_axes_names({"data_type"})
-  .add_string_axis("io_type", {"DEVICE_BUFFER"})
-  .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 2000})
   .add_int64_axis("run_length", {1, 16});
