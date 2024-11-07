@@ -12,15 +12,9 @@ RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-f
 RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
 
 rapids-logger "Install dask_cudf, cudf, pylibcudf, and test requirements"
-# Constraint to minimum dependency versions if job is set up as "oldest"
-echo "" > ./constraints.txt
-if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
-    rapids-dependency-file-generator \
-        --output requirements \
-        --file-key py_test_dask_cudf \
-        --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
-      | tee ./constraints.txt
-fi
+
+# generate constraints (possibly pinning to oldest support versions of dependencies)
+rapids-generate-pip-constraints py_test_dask_cudf ./constraints.txt
 
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install \
