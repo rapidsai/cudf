@@ -183,6 +183,7 @@ files:
     extras:
       table: project
     includes:
+      - depends_on_libkvikio
       - depends_on_nvcomp
   py_build_pylibcudf:
     output: pyproject
@@ -669,10 +670,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0
+              - cuda-python>=12.0,<13.0a0,<=12.6.0
           - matrix: {cuda: "11.*"}
             packages: &run_pylibcudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0
+              - cuda-python>=11.7.1,<12.0a0,<=11.8.3
           - {matrix: null, packages: *run_pylibcudf_packages_all_cu11}
   run_cudf:
     common:
@@ -695,10 +696,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0
+              - cuda-python>=12.0,<13.0a0,<=12.6.0
           - matrix: {cuda: "11.*"}
             packages: &run_cudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0
+              - cuda-python>=11.7.1,<12.0a0,<=11.8.3
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
