@@ -360,7 +360,6 @@ ConfigureBench(
   string/convert_durations.cpp
   string/copy.cu
   string/factory.cu
-  string/filter.cpp
   string/repeat_strings.cpp
   string/replace.cpp
   string/translate.cpp
@@ -379,6 +378,7 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/filter.cpp
   string/find.cpp
   string/gather.cpp
   string/join_strings.cpp
