@@ -30,10 +30,16 @@ from numba import (
 from packaging import version
 from pytz import utc
 
+from rmm import RMMError
+
 from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
+    AttributeFallbackError,
+    NotImplementedFallbackError,
+    OOMFallbackError,
     ProxyFallbackError,
+    TypeFallbackError,
     _Unusable,
     is_proxy_object,
 )
@@ -1759,6 +1765,73 @@ def test_fallback_raises_error(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
         with pytest.raises(ProxyFallbackError):
             pd.Series(range(2)).astype(object)
+
+
+def mock_mean_memory_error(self, *args, **kwargs):
+    raise MemoryError()
+
+
+def mock_mean_rmm_error(self, *args, **kwargs):
+    raise RMMError(1, "error")
+
+
+def mock_mean_not_impl_error(self, *args, **kwargs):
+    raise NotImplementedError()
+
+
+def mock_mean_attr_error(self, *args, **kwargs):
+    raise AttributeError()
+
+
+def mock_mean_type_error(self, *args, **kwargs):
+    raise TypeError()
+
+
+@pytest.mark.parametrize(
+    "mock_mean, err, match_str",
+    [
+        (
+            mock_mean_memory_error,
+            OOMFallbackError,
+            "Out of Memory Error.",
+        ),
+        (
+            mock_mean_rmm_error,
+            OOMFallbackError,
+            "Out of Memory Error.",
+        ),
+        (
+            mock_mean_not_impl_error,
+            NotImplementedFallbackError,
+            "NotImplementedError.",
+        ),
+        (
+            mock_mean_attr_error,
+            AttributeFallbackError,
+            "AttributeError.",
+        ),
+        (
+            mock_mean_type_error,
+            TypeFallbackError,
+            "TypeError.",
+        ),
+    ],
+)
+def test_fallback_raises_specific_error(
+    monkeypatch,
+    mock_mean,
+    err,
+    match_str,
+):
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        s = xpd.Series([1, 2])
+        with pytest.raises(err, match=match_str):
+            assert s.mean() == 1.5
+
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf.Series.mean)
 
 
 @pytest.mark.parametrize(

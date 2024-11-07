@@ -16,6 +16,8 @@ from typing import Any, Literal
 
 import numpy as np
 
+from rmm import RMMError
+
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
@@ -881,8 +883,32 @@ def _assert_fast_slow_eq(left, right):
         assert_eq(left, right)
 
 
-class ProxyFallbackError(Exception):
+class FallbackError(Exception):
     """Raised when fallback occurs"""
+
+    pass
+
+
+class OOMFallbackError(FallbackError):
+    """Warns when cuDF produces a MemoryError or an rmm.RMMError"""
+
+    pass
+
+
+class NotImplementedFallbackError(FallbackError):
+    """Warns cuDF produces a NotImplementedError"""
+
+    pass
+
+
+class AttributeFallbackError(FallbackError):
+    """Warns when cuDF produces an AttributeError"""
+
+    pass
+
+
+class TypeFallbackError(FallbackError):
+    """Warns when cuDF produces a TypeError"""
 
     pass
 
@@ -964,7 +990,27 @@ def _fast_slow_function_call(
                         )
     except Exception as err:
         if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
-            raise ProxyFallbackError(
+            if isinstance(err, (RMMError, MemoryError)):
+                raise OOMFallbackError(
+                    "Out of Memory Error. Falling back to the slow path. "
+                    f"The exception was {err}."
+                )
+            elif isinstance(err, NotImplementedError):
+                raise NotImplementedFallbackError(
+                    "NotImplementedError. Falling back to the slow path. "
+                    f"The exception was {err}."
+                )
+            elif isinstance(err, AttributeError):
+                raise AttributeFallbackError(
+                    "AttributeError. Falling back to the slow path. "
+                    f"The exception was {err}."
+                )
+            elif isinstance(err, TypeError):
+                raise TypeFallbackError(
+                    "TypeError. Falling back to the slow path. "
+                    f"The exception was {err}."
+                )
+            raise FallbackError(
                 f"The operation failed with cuDF, the reason was {type(err)}: {err}"
             ) from err
         with nvtx.annotate(
