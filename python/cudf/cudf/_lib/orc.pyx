@@ -15,7 +15,6 @@ try:
 except ImportError:
     import json
 
-cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.orc cimport (
@@ -26,7 +25,6 @@ from pylibcudf.libcudf.io.orc cimport (
 )
 from pylibcudf.libcudf.io.types cimport (
     column_in_metadata,
-    compression_type,
     sink_info,
     table_input_metadata,
 )
@@ -137,21 +135,22 @@ cpdef read_orc(object filepaths_or_buffers,
     return data, index
 
 
-cdef compression_type _get_comp_type(object compression):
+def _get_comp_type(object compression):
     if compression is None or compression is False:
-        return compression_type.NONE
+        return plc.io.types.CompressionType.NONE
 
     compression = str(compression).upper()
     if compression == "SNAPPY":
-        return compression_type.SNAPPY
+        return plc.io.types.CompressionType.SNAPPY
     elif compression == "ZLIB":
-        return compression_type.ZLIB
+        return plc.io.types.CompressionType.ZLIB
     elif compression == "ZSTD":
-        return compression_type.ZSTD
+        return plc.io.types.CompressionType.ZSTD
     elif compression == "LZ4":
-        return compression_type.LZ4
+        return plc.io.types.CompressionType.LZ4
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
+
 
 cdef tuple _get_index_from_metadata(
         vector[map[string, string]] user_data,
@@ -210,7 +209,8 @@ cdef tuple _get_index_from_metadata(
         range_idx
     )
 
-cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
+
+def _get_orc_stat_freq(str statistics):
     """
     Convert ORC statistics terms to CUDF convention:
       - ORC "STRIPE"   == CUDF "ROWGROUP"
@@ -218,11 +218,11 @@ cdef cudf_io_types.statistics_freq _get_orc_stat_freq(object statistics):
     """
     statistics = str(statistics).upper()
     if statistics == "NONE":
-        return cudf_io_types.statistics_freq.STATISTICS_NONE
+        return plc.io.types.StatisticsFreq.STATISTICS_NONE
     elif statistics == "STRIPE":
-        return cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
+        return plc.io.types.StatisticsFreq.STATISTICS_ROWGROUP
     elif statistics == "ROWGROUP":
-        return cudf_io_types.statistics_freq.STATISTICS_PAGE
+        return plc.io.types.StatisticsFreq.STATISTICS_PAGE
     else:
         raise ValueError(f"Unsupported `statistics_freq` type {statistics}")
 
@@ -232,7 +232,7 @@ def write_orc(
     table,
     object path_or_buf,
     object compression="snappy",
-    object statistics="ROWGROUP",
+    str statistics="ROWGROUP",
     object stripe_size_bytes=None,
     object stripe_size_rows=None,
     object row_index_stride=None,
@@ -246,7 +246,6 @@ def write_orc(
     --------
     cudf.read_orc
     """
-    cdef compression_type compression_ = _get_comp_type(compression)
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
     cdef table_input_metadata tbl_meta
@@ -289,7 +288,7 @@ def write_orc(
             sink_info_c, tv
         ).metadata(tbl_meta)
         .key_value_metadata(move(user_data))
-        .compression(compression_)
+        .compression(_get_comp_type(compression))
         .enable_statistics(_get_orc_stat_freq(statistics))
         .build()
     )
@@ -330,8 +329,8 @@ cdef class ORCWriter:
     cdef unique_ptr[orc_chunked_writer] writer
     cdef sink_info sink
     cdef unique_ptr[data_sink] _data_sink
-    cdef cudf_io_types.statistics_freq stat_freq
-    cdef compression_type comp_type
+    cdef str statistics
+    cdef object compression
     cdef object index
     cdef table_input_metadata tbl_meta
     cdef object cols_as_map_type
@@ -343,15 +342,15 @@ cdef class ORCWriter:
                   object path,
                   object index=None,
                   object compression="snappy",
-                  object statistics="ROWGROUP",
+                  str statistics="ROWGROUP",
                   object cols_as_map_type=None,
                   object stripe_size_bytes=None,
                   object stripe_size_rows=None,
                   object row_index_stride=None):
 
         self.sink = make_sink_info(path, self._data_sink)
-        self.stat_freq = _get_orc_stat_freq(statistics)
-        self.comp_type = _get_comp_type(compression)
+        self.statistics = statistics
+        self.compression = compression
         self.index = index
         self.cols_as_map_type = cols_as_map_type \
             if cols_as_map_type is None else set(cols_as_map_type)
@@ -429,8 +428,8 @@ cdef class ORCWriter:
                 chunked_orc_writer_options.builder(self.sink)
                 .metadata(self.tbl_meta)
                 .key_value_metadata(move(user_data))
-                .compression(self.comp_type)
-                .enable_statistics(self.stat_freq)
+                .compression(_get_comp_type(self.compression))
+                .enable_statistics(_get_orc_stat_freq(self.statistics))
                 .build()
             )
         if self.stripe_size_bytes is not None:
