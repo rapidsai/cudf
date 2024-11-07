@@ -113,6 +113,7 @@ void BM_parquet_read_io_compression(nvbench::state& state)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
+                                         static_cast<int32_t>(data_type::BOOL8),
                                          static_cast<int32_t>(data_type::DECIMAL),
                                          static_cast<int32_t>(data_type::TIMESTAMP),
                                          static_cast<int32_t>(data_type::DURATION),
