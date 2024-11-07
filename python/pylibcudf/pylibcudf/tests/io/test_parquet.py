@@ -1,4 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+import io
+
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
@@ -107,3 +109,91 @@ def test_read_parquet_filters(
 # ^^^ This one is not tested since it's not in pyarrow/pandas, deprecate?
 # bool convert_strings_to_categories = False,
 # bool use_pandas_metadata = True
+
+
+@pytest.mark.parametrize(
+    "compression",
+    [
+        plc.io.types.CompressionType.NONE,
+        plc.io.types.CompressionType.GZIP,
+    ],
+)
+@pytest.mark.parametrize(
+    "stats_level",
+    [
+        plc.io.types.StatisticsFreq.STATISTICS_NONE,
+        plc.io.types.StatisticsFreq.STATISTICS_COLUMN,
+    ],
+)
+@pytest.mark.parametrize("int96_timestamps", [True, False])
+@pytest.mark.parametrize("write_v2_headers", [True, False])
+@pytest.mark.parametrize(
+    "dictionary_policy",
+    [
+        plc.io.types.DictionaryPolicy.ADAPTIVE,
+        plc.io.types.DictionaryPolicy.NEVER,
+    ],
+)
+@pytest.mark.parametrize("utc_timestamps", [True, False])
+@pytest.mark.parametrize("write_arrow_schema", [True, False])
+@pytest.mark.parametrize(
+    "partitions",
+    [None, [plc.io.types.PartitionInfo.from_start_and_num(0, 10)]],
+)
+@pytest.mark.parametrize("column_chunks_file_paths", [None, ["tmp.parquet"]])
+@pytest.mark.parametrize("row_group_size_bytes", [None, 100])
+@pytest.mark.parametrize("row_group_size_rows", [None, 1])
+@pytest.mark.parametrize("max_page_size_bytes", [None, 100])
+@pytest.mark.parametrize("max_page_size_rows", [None, 1])
+@pytest.mark.parametrize("max_dictionary_size", [None, 100])
+def test_write_parquet(
+    table_data,
+    compression,
+    stats_level,
+    int96_timestamps,
+    write_v2_headers,
+    dictionary_policy,
+    utc_timestamps,
+    write_arrow_schema,
+    partitions,
+    column_chunks_file_paths,
+    row_group_size_bytes,
+    row_group_size_rows,
+    max_page_size_bytes,
+    max_page_size_rows,
+    max_dictionary_size,
+):
+    plc_table, _ = table_data
+    table_meta = plc.io.types.TableInputMetadata(plc_table)
+    sink = plc.io.SinkInfo([io.BytesIO()])
+    user_data = [{"foo": "{'bar': 'baz'}"}]
+    options = (
+        plc.io.parquet.ParquetWriterOptions.builder(sink, plc_table)
+        .metadata(table_meta)
+        .key_value_metadata(user_data)
+        .compression(compression)
+        .stats_level(stats_level)
+        .int96_timestamps(int96_timestamps)
+        .write_v2_headers(write_v2_headers)
+        .dictionary_policy(dictionary_policy)
+        .utc_timestamps(utc_timestamps)
+        .write_arrow_schema(write_arrow_schema)
+        .build()
+    )
+    if partitions is not None:
+        options.set_partitions(partitions)
+    if column_chunks_file_paths is not None:
+        options.set_column_chunks_file_paths(column_chunks_file_paths)
+    if row_group_size_bytes is not None:
+        options.set_row_group_size_bytes(row_group_size_bytes)
+    if row_group_size_rows is not None:
+        options.set_row_group_size_rows(row_group_size_rows)
+    if max_page_size_bytes is not None:
+        options.set_max_page_size_bytes(max_page_size_bytes)
+    if max_page_size_rows is not None:
+        options.set_max_page_size_rows(max_page_size_rows)
+    if max_dictionary_size is not None:
+        options.set_max_dictionary_size(max_dictionary_size)
+
+    result = plc.io.parquet.write_parquet(options)
+    assert isinstance(result, plc.io.parquet.BufferArrayFromVector)

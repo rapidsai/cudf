@@ -1,4 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from pylibcudf.libcudf.io.data_sink cimport data_sink
@@ -20,6 +21,46 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.table cimport Table
 
+
+cdef class PartitionInfo:
+    cdef partition_info c_obj
+
+    @staticmethod
+    cdef PartitionInfo from_start_and_num(int start_row, int num_rows)
+
+cdef class ColumnInMetadata:
+    cdef column_in_metadata c_obj
+
+    @staticmethod
+    cdef ColumnInMetadata from_metadata(column_in_metadata metadata)
+
+    cpdef ColumnInMetadata set_name(self, str name)
+
+    cpdef ColumnInMetadata set_name(self, str name)
+
+    cpdef ColumnInMetadata set_nullability(self, bool nullable)
+
+    cpdef ColumnInMetadata set_list_column_as_map(self)
+
+    cpdef ColumnInMetadata set_int96_timestamps(self, bool req)
+
+    cpdef ColumnInMetadata set_decimal_precision(self, int req)
+
+    cpdef ColumnInMetadata child(self, int i)
+
+    cpdef ColumnInMetadata set_output_as_binary(self, bool binary)
+
+    cpdef ColumnInMetadata set_type_length(self, int type_length)
+
+    cpdef ColumnInMetadata set_skip_compression(self, bool skip)
+
+    cpdef ColumnInMetadata set_encoding(self, column_encoding encoding)
+
+    cpdef str get_name(self)
+
+cdef class TableInputMetadata:
+    cdef public Table table
+    cdef table_input_metadata c_obj
 
 cdef class TableWithMetadata:
     cdef public Table tbl
