@@ -33,6 +33,7 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 mkdir -p ${package_dir}/final_dist
 python -m auditwheel repair \
     --exclude libnvcomp.so.4 \
+    --exclude libkvikio.so \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 
