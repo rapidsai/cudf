@@ -68,7 +68,7 @@ cdef class ParquetColumnSchema:
         Returns
         -------
         list[ParquetColumnSchema]
-            Children schemas.
+            Child schemas.
         """
         cdef cpp_parquet_metadata.parquet_column_schema child
         return [
@@ -160,14 +160,14 @@ cdef class ParquetMetadata:
 
     cpdef dict metadata(self):
         """
-        Returns the Key value metadata in the file footer.
+        Returns the key-value metadata in the file footer.
 
         Returns
         -------
         dict[bytes, bytes]
             Key value metadata as a map.
         """
-        return self.meta.metadata()
+        return {key.decode(): val.decode() for key, val in self.meta.metadata()}
 
     cpdef list rowgroup_metadata(self):
         """

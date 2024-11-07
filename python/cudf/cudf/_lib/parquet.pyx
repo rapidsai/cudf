@@ -383,7 +383,7 @@ cpdef read_parquet_metadata(list filepaths_or_buffers):
     col_names = [info.name() for info in parquet_metadata.schema().root().children()]
 
     index_col_names = set()
-    json_str = parquet_metadata.metadata()[b'pandas'].decode('utf-8')
+    json_str = parquet_metadata.metadata()['pandas']
     if json_str != "":
         meta = json.loads(json_str)
         file_is_range_index, index_col, _ = _parse_metadata(meta)
