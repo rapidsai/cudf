@@ -138,7 +138,7 @@ def test_read_parquet_filters(
 @pytest.mark.parametrize("write_arrow_schema", [True, False])
 @pytest.mark.parametrize(
     "partitions",
-    [None, [plc.io.types.PartitionInfo.from_start_and_num(0, 10)]],
+    [None, [plc.io.types.PartitionInfo.from_start_and_rows(0, 10)]],
 )
 @pytest.mark.parametrize("column_chunks_file_paths", [None, ["tmp.parquet"]])
 @pytest.mark.parametrize("row_group_size_bytes", [None, 100])
@@ -163,7 +163,8 @@ def test_write_parquet(
     max_page_size_rows,
     max_dictionary_size,
 ):
-    plc_table, _ = table_data
+    _, pa_table = table_data
+    plc_table = plc.interop.from_arrow(pa_table)
     table_meta = plc.io.types.TableInputMetadata(plc_table)
     sink = plc.io.SinkInfo([io.BytesIO()])
     user_data = [{"foo": "{'bar': 'baz'}"}]

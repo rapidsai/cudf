@@ -39,6 +39,11 @@ cdef class PartitionInfo:
     """
     Information used while writing partitioned datasets.
     """
+
+    @staticmethod
+    def from_start_and_rows(int start_row, int num_rows):
+        return PartitionInfo.from_start_and_num(start_row, num_rows)
+
     @staticmethod
     cdef PartitionInfo from_start_and_num(int start_row, int num_rows):
         """
