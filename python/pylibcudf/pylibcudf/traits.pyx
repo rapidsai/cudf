@@ -29,6 +29,12 @@ cpdef bool is_numeric(DataType typ):
     """
     return traits.is_numeric(typ.c_obj)
 
+cpdef bool is_numeric_not_bool(DataType typ):
+    """Checks if the given data type is numeric excluding booleans.
+
+    For details, see :cpp:func:`is_numeric_not_bool`.
+    """
+    return traits.is_numeric_not_bool(typ.c_obj)
 
 cpdef bool is_index_type(DataType typ):
     """Checks if the given data type is an index type.
