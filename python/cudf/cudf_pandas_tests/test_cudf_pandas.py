@@ -36,9 +36,9 @@ from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
     AttributeFallbackError,
+    FallbackError,
     NotImplementedFallbackError,
     OOMFallbackError,
-    ProxyFallbackError,
     TypeFallbackError,
     _Unusable,
     is_proxy_object,
@@ -1763,7 +1763,7 @@ def test_numpy_ndarray_numba_cuda_ufunc(array):
 def test_fallback_raises_error(monkeypatch):
     with monkeypatch.context() as monkeycontext:
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
-        with pytest.raises(ProxyFallbackError):
+        with pytest.raises(FallbackError):
             pd.Series(range(2)).astype(object)
 
 
