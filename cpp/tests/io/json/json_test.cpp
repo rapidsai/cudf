@@ -2884,9 +2884,9 @@ TEST_F(JsonReaderTest, MixedTypesWithSchema)
   std::map<std::string, cudf::io::schema_element> data_types;
   std::map<std::string, cudf::io::schema_element> child_types;
   child_types.insert(
-    std::pair{"element", cudf::io::schema_element{cudf::data_type{cudf::type_id::STRING, 0}, {}}});
-  data_types.insert(std::pair{
-    "data", cudf::io::schema_element{cudf::data_type{cudf::type_id::LIST, 0}, child_types}});
+    std::pair{"element", cudf::io::schema_element{cudf::data_type{cudf::type_id::STRING}, {}}});
+  data_types.insert(
+    std::pair{"data", cudf::io::schema_element{cudf::data_type{cudf::type_id::LIST}, child_types}});
 
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
