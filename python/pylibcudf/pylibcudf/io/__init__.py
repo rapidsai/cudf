@@ -8,6 +8,7 @@ from . import (
     orc,
     parquet,
     parquet_metadata,
+    text,
     timezone,
     types,
 )

@@ -20,4 +20,5 @@ I/O Functions
     json
     parquet
     parquet_metadata
+    text
     timezone
