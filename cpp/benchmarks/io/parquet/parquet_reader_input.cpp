@@ -45,8 +45,9 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
       try_drop_l3_cache();
 
       timer.start();
-      auto const result = cudf::io::read_parquet(read_opts);
+      cudf::io::read_parquet(read_opts);
       timer.stop();
+      auto const result = cudf::io::read_parquet(read_opts);
 
       CUDF_EXPECTS(result.tbl->num_columns() == num_cols_to_read, "Unexpected number of columns");
       CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
