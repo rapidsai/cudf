@@ -35,7 +35,7 @@ class Cast(Expr):
         self.children = (value,)
         if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
-                f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
+                f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
             )
 
     def do_evaluate(
@@ -48,7 +48,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context, mapping=mapping)
-        return Column(plc.unary.cast(column.obj, self.dtype)).sorted_like(column)
+        return column.astype(self.dtype)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
