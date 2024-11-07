@@ -24,7 +24,7 @@ package ai.rapids.cudf;
  * that is backing it.
  */
 public class DeviceMemoryBufferView extends BaseDeviceMemoryBuffer {
-  DeviceMemoryBufferView(long address, long lengthInBytes) {
+  public DeviceMemoryBufferView(long address, long lengthInBytes) {
     // Set the cleaner to null so we don't end up releasing anything
     super(address, lengthInBytes, (MemoryBufferCleaner) null);
   }
