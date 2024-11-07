@@ -46,7 +46,7 @@ void run_test(std::string const& host_input, std::string const& expected_host_ou
 
   // Preprocessing FST
   cudf::io::datasource::owning_buffer<rmm::device_buffer> device_data(std::move(device_input));
-  cudf::io::json::detail::normalize_single_quotes(device_data, stream_view, rsc.get());
+  cudf::io::json::detail::normalize_single_quotes(device_data, '\n', stream_view, rsc.get());
 
   std::string preprocessed_host_output(device_data.size(), 0);
   CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
@@ -179,22 +179,24 @@ TEST_F(JsonNormalizationTest, ReadJsonOption)
     std::make_shared<rmm::mr::cuda_memory_resource>();
 
   // Test input
-  std::string const host_input = R"({"A":'TEST"'})";
+  std::string const host_input = R"({"a": "1\n2"}h{'a': 12})";
   cudf::io::json_reader_options input_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{host_input.data(), host_input.size()})
       .lines(true)
+      .delimiter('h')
       .normalize_single_quotes(true);
 
   cudf::io::table_with_metadata processed_table =
     cudf::io::read_json(input_options, cudf::test::get_default_stream(), rsc.get());
 
   // Expected table
-  std::string const expected_input = R"({"A":"TEST\""})";
+  std::string const expected_input = R"({"a": "1\n2"}h{"a": 12})";
   cudf::io::json_reader_options expected_input_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{expected_input.data(), expected_input.size()})
-      .lines(true);
+      .lines(true)
+      .delimiter('h');
 
   cudf::io::table_with_metadata expected_table =
     cudf::io::read_json(expected_input_options, cudf::test::get_default_stream(), rsc.get());

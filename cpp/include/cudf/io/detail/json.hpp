@@ -62,6 +62,7 @@ void write_json(data_sink* sink,
  * @param mr Device memory resource to use for device memory allocation
  */
 void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& indata,
+                             char delimiter,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
 
