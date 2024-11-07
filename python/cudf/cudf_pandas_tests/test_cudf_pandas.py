@@ -1784,8 +1784,7 @@ def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
     xdf["b"] = xpd.IntervalIndex.from_arrays(xdf["a"], xdf["b"])
     xdf["a"] = xpd.Series([1, 1, 1, 2, 3], dtype="category")
     dtype_series = xdf.dtypes
-    for x in dtype_series:
-        assert is_proxy_object(x)
+    assert all(is_proxy_object(x) for x in dtype_series)
     assert isinstance(dtype_series.iloc[0], xpd.CategoricalDtype)
     assert isinstance(dtype_series.iloc[1], xpd.IntervalDtype)
 
@@ -1794,5 +1793,5 @@ def test_iter_doesnot_raise(monkeypatch):
     s = xpd.Series([1, 2, 3])
     with monkeypatch.context() as monkeycontext:
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
-        for i in s:
+        for _ in s:
             pass
