@@ -92,15 +92,15 @@ class Translator:
         with ctx:
             polars_schema = self.visitor.get_schema()
             try:
-                node = self.visitor.view_current_node()
-            except Exception as e:
-                self.errors.append(e)
-                return ir.ErrorNode({}, str(e))
-            try:
                 schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
             except Exception as e:
                 self.errors.append(e)
                 return ir.ErrorNode({}, str(e))
+            try:
+                node = self.visitor.view_current_node()
+            except Exception as e:
+                self.errors.append(e)
+                return ir.ErrorNode(schema, str(e))
             try:
                 result = _translate_ir(node, self, schema)
             except Exception as e:

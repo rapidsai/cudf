@@ -177,6 +177,7 @@ files:
     extras:
       table: project
     includes:
+      - depends_on_libkvikio
       - depends_on_nvcomp
   py_build_pylibcudf:
     output: pyproject
@@ -441,7 +442,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=14.0.0,<18.0.0a0
+          - pyarrow>=14.0.0,<19.0.0a0
       - output_types: [requirements, pyproject]
         packages:
           # pyarrow 17.0.0 wheels have a subtle issue around threading that
@@ -449,8 +450,8 @@ dependencies:
           # be highly dependent on the exact build configuration, so we'll just
           # avoid 17.0.0 for now unless we observe similar issues in future
           # releases as well.
-          - pyarrow>=14.0.0,<18.0.0a0; platform_machine=='x86_64'
-          - pyarrow>=14.0.0,<18.0.0a0,!=17.0.0; platform_machine=='aarch64'
+          - pyarrow>=14.0.0,<19.0.0a0; platform_machine=='x86_64'
+          - pyarrow>=14.0.0,<19.0.0a0,!=17.0.0; platform_machine=='aarch64'
   cuda_version:
     specific:
       - output_types: conda
@@ -658,10 +659,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0
+              - cuda-python>=12.0,<13.0a0,<=12.6.0
           - matrix: {cuda: "11.*"}
             packages: &run_pylibcudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0
+              - cuda-python>=11.7.1,<12.0a0,<=11.8.3
           - {matrix: null, packages: *run_pylibcudf_packages_all_cu11}
   run_cudf:
     common:
@@ -684,10 +685,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0
+              - cuda-python>=12.0,<13.0a0,<=12.6.0
           - matrix: {cuda: "11.*"}
             packages: &run_cudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0
+              - cuda-python>=11.7.1,<12.0a0,<=11.8.3
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
