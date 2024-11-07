@@ -147,9 +147,9 @@ def _callback(
     ):
         if os.environ.get("CUDF_POLARS_DASK", "OFF").upper() == "ON":
             # Use experimental Dask executor
-            from cudf_polars.experimental.partitioned import evaluate
+            from cudf_polars.experimental.parallel import evaluate_dask
 
-            return evaluate(ir).to_polars()
+            return evaluate_dask(ir).to_polars()
 
         return ir.evaluate(cache={}).to_polars()
 

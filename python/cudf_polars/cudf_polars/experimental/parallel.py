@@ -65,7 +65,7 @@ def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
     return dsk, key_name
 
 
-def evaluate(ir: IR) -> DataFrame:
+def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
     from dask import get
 

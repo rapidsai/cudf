@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
-from functools import cached_property
+from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import (
+    IR,
     Cache,
     DataFrameScan,
     Distinct,
@@ -27,7 +28,7 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor
-from cudf_polars.experimental.partitioned import PartitionInfo
+from cudf_polars.experimental.parallel import PartitionInfo
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
@@ -122,45 +123,94 @@ class SParHConcat(HConcat, SPartitionwise):
     """Single-partition demo class."""
 
 
+@singledispatch
 def _single_partition_node(node: IR, rec) -> SPartitionwise:
-    children = [rec(child) for child in node.children]
+    raise NotImplementedError(f"Cannot convert {type(node)} to PartitionedIR.")
 
-    if isinstance(node, PythonScan):
-        return SParPythonScan(*node._ctor_arguments(children))
-    elif isinstance(node, Scan):
-        return SParScan(*node._ctor_arguments(children))
-    elif isinstance(node, Cache):
-        return SParCache(*node._ctor_arguments(children))
-    elif isinstance(node, DataFrameScan):
-        return SParDataFrameScan(*node._ctor_arguments(children))
-    elif isinstance(node, Select):
-        return SParSelect(*node._ctor_arguments(children))
-    elif isinstance(node, Reduce):
-        return SParReduce(*node._ctor_arguments(children))
-    elif isinstance(node, GroupBy):
-        return SParGroupBy(*node._ctor_arguments(children))
-    elif isinstance(node, Join):
-        return SParJoin(*node._ctor_arguments(children))
-    elif isinstance(node, HStack):
-        return SParHStack(*node._ctor_arguments(children))
-    elif isinstance(node, Distinct):
-        return SParDistinct(*node._ctor_arguments(children))
-    elif isinstance(node, Sort):
-        return SParSort(*node._ctor_arguments(children))
-    elif isinstance(node, Slice):
-        return SParSlice(*node._ctor_arguments(children))
-    elif isinstance(node, Filter):
-        return SParFilter(*node._ctor_arguments(children))
-    elif isinstance(node, Projection):
-        return SParProjection(*node._ctor_arguments(children))
-    elif isinstance(node, MapFunction):
-        return SParMapFunction(*node._ctor_arguments(children))
-    elif isinstance(node, Union):
-        return SParUnion(*node._ctor_arguments(children))
-    elif isinstance(node, HConcat):
-        return SParHConcat(*node._ctor_arguments(children))
-    else:
-        raise NotImplementedError(f"Cannot convert {type(node)} to PartitionedIR.")
+
+@_single_partition_node.register
+def _(node: PythonScan, rec) -> SParPythonScan:
+    return SParPythonScan(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Scan, rec) -> SParScan:
+    return SParScan(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: DataFrameScan, rec) -> SParDataFrameScan:
+    return SParDataFrameScan(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Cache, rec) -> SParCache:
+    return SParCache(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Reduce, rec) -> SParReduce:
+    return SParReduce(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Select, rec) -> SParSelect:
+    return SParSelect(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: GroupBy, rec) -> SParGroupBy:
+    return SParGroupBy(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Join, rec) -> SParJoin:
+    return SParJoin(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: HStack, rec) -> SParHStack:
+    return SParHStack(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Distinct, rec) -> SParDistinct:
+    return SParDistinct(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Sort, rec) -> SParSort:
+    return SParSort(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Slice, rec) -> SParSlice:
+    return SParSlice(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Filter, rec) -> SParFilter:
+    return SParFilter(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Projection, rec) -> SParProjection:
+    return SParProjection(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: MapFunction, rec) -> SParMapFunction:
+    return SParMapFunction(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: Union, rec) -> SParUnion:
+    return SParUnion(*node._ctor_arguments(map(rec, node.children)))
+
+
+@_single_partition_node.register
+def _(node: HConcat, rec) -> SParHConcat:
+    return SParHConcat(*node._ctor_arguments(map(rec, node.children)))
 
 
 lower_ir_graph = CachingVisitor(_single_partition_node)
