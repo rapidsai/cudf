@@ -20,6 +20,11 @@ def test_is_numeric():
     assert not plc.traits.is_numeric(plc.DataType(plc.TypeId.LIST))
 
 
+def test_is_numeric_not_bool():
+    assert plc.traits.is_numeric_not_bool(plc.DataType(plc.TypeId.FLOAT64))
+    assert not plc.traits.is_numeric_not_bool(plc.DataType(plc.TypeId.BOOL8))
+
+
 def test_is_index_type():
     assert plc.traits.is_index_type(plc.DataType(plc.TypeId.INT8))
     assert not plc.traits.is_index_type(plc.DataType(plc.TypeId.BOOL8))
