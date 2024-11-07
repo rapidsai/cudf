@@ -20,7 +20,7 @@ requires-python = ">=3.10"
 dependencies = [
     "cachetools",
     "cubinlinker",
-    "cuda-python>=11.7.1,<12.0a0",
+    "cuda-python>=11.7.1,<12.0a0,!=11.8.4",
     "cupy-cuda11x>=12.0.0",
     "fsspec>=0.6.0",
     "libcudf==24.12.*,>=0.0.0a0",
@@ -90,6 +90,8 @@ filterwarnings = [
     "error",
     "ignore:::.*xdist.*",
     "ignore:::.*pytest.*",
+    # https://github.com/rapidsai/build-planning/issues/116
+    "ignore:.*cuda..* module is deprecated.*:DeprecationWarning",
     # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
     "ignore:.*datetime.*utcnow.*scheduled for removal.*:DeprecationWarning:botocore",
     # Deprecation warning from Pyarrow Table.to_pandas() with pandas-2.2+
