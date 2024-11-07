@@ -410,13 +410,16 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       std::vector<std::unique_ptr<column>> child_columns;
       std::vector<column_name_info> column_names{};
       size_type num_rows{json_col.num_rows};
-      // Create children columns
-      auto const& col_order = prune_columns and schema.has_value() and
-                                  schema.value().column_order.has_value() and
-                                  not schema.value().column_order->empty()
-                                ? schema.value().column_order.value()
-                                : json_col.column_order;
 
+      bool const has_column_order =
+        prune_columns and not schema.value_or(schema_element{})
+                                .column_order.value_or(std::vector<std::string>{})
+                                .empty();
+
+      auto const& col_order =
+        has_column_order ? schema.value().column_order.value() : json_col.column_order;
+
+      // Create children columns
       for (auto const& col_name : col_order) {
         auto child_schema_element = get_child_schema(col_name);
         auto const found_it       = json_col.child_columns.find(col_name);
@@ -598,18 +601,15 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   std::vector<column_name_info> out_column_names;
   auto parse_opt = parsing_options(options, stream);
 
-  bool const has_column_order =
-    options.is_enabled_prune_columns() and
-    std::holds_alternative<schema_element>(options.get_dtypes()) and
-    std::get<schema_element>(options.get_dtypes()).column_order.has_value() and
-    not std::get<schema_element>(options.get_dtypes()).column_order->empty();
-  auto const& col_order = has_column_order
-                            ? std::get<schema_element>(options.get_dtypes()).column_order.value()
-                            : root_struct_col.column_order;
+  schema_element const* prune_schema = std::get_if<schema_element>(&options.get_dtypes());
+  bool const has_column_order = options.is_enabled_prune_columns() and prune_schema != nullptr and
+                                prune_schema->column_order.has_value() and
+                                not prune_schema->column_order->empty();
+  auto const& col_order =
+    has_column_order ? prune_schema->column_order.value() : root_struct_col.column_order;
   if (has_column_order) {
-    CUDF_EXPECTS(
-      std::get<schema_element>(options.get_dtypes()).child_types.size() == col_order.size(),
-      "Input schema column order size mismatch with input schema child types");
+    CUDF_EXPECTS(prune_schema->child_types.size() == col_order.size(),
+                 "Input schema column order size mismatch with input schema child types");
   }
   auto root_col_size = root_struct_col.num_rows;
 

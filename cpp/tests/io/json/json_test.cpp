@@ -3110,7 +3110,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
                                               {"a", {dtype<int32_t>()}},
                                             },
                                             {{"a", "b"}}};
-      EXPECT_THROW(in_options.set_dtypes(dtype_schema), cudf::logic_error);
+      EXPECT_THROW(in_options.set_dtypes(dtype_schema), std::invalid_argument);
       // Input schema column order size mismatch with input schema child types
     }
     //// repetition, Error
@@ -3120,7 +3120,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
                                               {"a", {dtype<int32_t>()}},
                                             },
                                             {{"a", "a"}}};
-      EXPECT_THROW(in_options.set_dtypes(dtype_schema), cudf::logic_error);
+      EXPECT_THROW(in_options.set_dtypes(dtype_schema), std::invalid_argument);
       // Input schema column order size mismatch with input schema child types
     }
     //// different column name in order, Error
@@ -3130,7 +3130,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
                                               {"a", {dtype<int32_t>()}},
                                             },
                                             {{"b"}}};
-      EXPECT_THROW(in_options.set_dtypes(dtype_schema), cudf::logic_error);
+      EXPECT_THROW(in_options.set_dtypes(dtype_schema), std::invalid_argument);
       // Column name not found in input schema map, but present in column order and
       // prune_columns is enabled
     }

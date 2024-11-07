@@ -493,7 +493,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
 
-  auto lookup_names = [&column_names](auto child_ids, auto name) {
+  auto lookup_names = [&column_names](auto const& child_ids, auto const& name) {
     for (auto const& child_id : child_ids) {
       if (column_names[child_id] == name) return child_id;
     }
@@ -570,7 +570,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                    for (size_t i = 0; i < adj[root_list_col_id].size() && i < user_dtypes.size();
                         i++) {
                      NodeIndexT const first_child_id = adj[root_list_col_id][i];
-                     auto name                       = column_names[first_child_id];
+                     auto const& name                = column_names[first_child_id];
                      auto value_id                   = std::stol(name);
                      if (value_id >= 0 and value_id < static_cast<long>(user_dtypes.size()))
                        mark_is_pruned(first_child_id, schema_element{user_dtypes[value_id]});
@@ -581,7 +581,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                    std::map<std::string, data_type> const& user_dtypes) -> void {
                    for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
                      auto const first_child_id = adj[root_list_col_id][i];
-                     auto name                 = column_names[first_child_id];
+                     auto const& name          = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, schema_element{user_dtypes.at(name)});
                    }
@@ -590,7 +590,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                    std::map<std::string, schema_element> const& user_dtypes) -> void {
                    for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
                      auto const first_child_id = adj[root_list_col_id][i];
-                     auto name                 = column_names[first_child_id];
+                     auto const& name          = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, user_dtypes.at(name));
                    }
@@ -599,8 +599,8 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
                    schema_element const& user_dtypes) -> void {
                    for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
                      auto const first_child_id = adj[root_list_col_id][i];
-                     auto name                 = column_names[first_child_id];
-                     if (user_dtypes.child_types.count(name))
+                     auto const& name          = column_names[first_child_id];
+                     if (user_dtypes.child_types.count(name) != 0)
                        mark_is_pruned(first_child_id, user_dtypes.child_types.at(name));
                    }
                  }},
@@ -726,7 +726,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
     if (expected_category == NC_STRUCT) {
       // find field column ids, and its children and create columns.
       for (auto const& field_id : child_ids) {
-        auto name = column_names[field_id];
+        auto const& name = column_names[field_id];
         if (is_pruned[field_id]) continue;
         auto inserted =
           ref.get().child_columns.try_emplace(name, device_json_column(stream, mr)).second;
@@ -757,7 +757,7 @@ std::pair<cudf::detail::host_vector<bool>, hashmap_of_device_columns> build_tree
         std::map<NodeIndexT, std::vector<NodeIndexT>> array_values;
         for (auto const& child_id : child_ids) {
           if (is_pruned[child_id]) continue;
-          auto name = column_names[child_id];
+          auto const& name = column_names[child_id];
           array_values[std::stoi(name)].push_back(child_id);
         }
         //

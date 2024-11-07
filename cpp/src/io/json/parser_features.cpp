@@ -61,7 +61,8 @@ bool validate_column_order(schema_element const& types)
 
 void json_reader_options::set_dtypes(schema_element types)
 {
-  CUDF_EXPECTS(validate_column_order(types), "Column order does not match child types");
+  CUDF_EXPECTS(
+    validate_column_order(types), "Column order does not match child types", std::invalid_argument);
   _dtypes = std::move(types);
 }
 }  // namespace cudf::io
