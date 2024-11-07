@@ -24,8 +24,12 @@ import re
 
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
-from pylibcudf.libcudf.io.types import \
-    compression_type as CompressionType  # no-cython-lint
+from pylibcudf.libcudf.io.types import (
+    compression_type as CompressionType,  # no-cython-lint
+    column_encoding as ColumnEncoding,  # no-cython-lint
+    dictionary_policy as DictionaryPolicy,  # no-cython-lint
+    statistics_freq as StatisticsFreq, # no-cython-lint
+)
 
 
 cdef class TableWithMetadata:

@@ -91,16 +91,28 @@ SDK is available for download
 [here](https://developer.nvidia.com/gpudirect-storage). GDS is also
 included in CUDA Toolkit 11.4 and higher.
 
-Use of GPUDirect Storage in cuDF is enabled by default, but can be
-disabled through the environment variable `LIBCUDF_CUFILE_POLICY`.
+Use of GPUDirect Storage in cuDF is disabled by default, but can be
+enabled through the environment variable `LIBCUDF_CUFILE_POLICY`.
 This variable also controls the GDS compatibility mode.
 
 There are four valid values for the environment variable:
 
-- "GDS": Enable GDS use; GDS compatibility mode is *off*.
-- "ALWAYS": Enable GDS use; GDS compatibility mode is *on*.
-- "KVIKIO": Enable GDS through [KvikIO](https://github.com/rapidsai/kvikio).
-- "OFF": Completely disable GDS use.
+- "GDS": Enable GDS use. If the cuFile library cannot be properly loaded,
+fall back to the GDS compatibility mode.
+- "ALWAYS": Enable GDS use. If the cuFile library cannot be properly loaded,
+throw an exception.
+- "KVIKIO": Enable GDS compatibility mode through [KvikIO](https://github.com/rapidsai/kvikio).
+Note that KvikIO also provides the environment variable `KVIKIO_COMPAT_MODE` for GDS
+control that may alter the effect of "KVIKIO" option in cuDF:
+  - By default, `KVIKIO_COMPAT_MODE` is unset. In this case, cuDF enforces
+    the GDS compatibility mode, and the system configuration check for GDS I/O
+    is never performed.
+  - If `KVIKIO_COMPAT_MODE=ON`, this is the same with the above case.
+  - If `KVIKIO_COMPAT_MODE=OFF`, KvikIO enforces GDS I/O without system
+    configuration check, and will error out if GDS requirements are not met. The
+    only exceptional case is that if the system does not support files being
+    opened with the `O_DIRECT` flag, the GDS compatibility mode will be used.
+- "OFF": Completely disable GDS and kvikIO use.
 
 If no value is set, behavior will be the same as the "KVIKIO" option.
 
