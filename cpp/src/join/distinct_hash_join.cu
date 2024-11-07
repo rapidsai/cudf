@@ -35,6 +35,7 @@
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
 
 #include <cstddef>
@@ -80,16 +81,9 @@ class build_keys_fn {
 
 /**
  * @brief Device output transform functor to construct `size_type` with `cuco::pair<hash_value_type,
- * lhs_index_type>` or `cuco::pair<hash_value_type, rhs_index_type>`
+ * rhs_index_type>`
  */
 struct output_fn {
-  /*
-  __device__ constexpr cudf::size_type operator()(
-    cuco::pair<hash_value_type, lhs_index_type> const& x) const
-  {
-    return static_cast<cudf::size_type>(x.second);
-  }
-  */
   __device__ constexpr cudf::size_type operator()(
     cuco::pair<hash_value_type, rhs_index_type> const& x) const
   {
@@ -179,31 +173,32 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
   auto const iter           = cudf::detail::make_counting_transform_iterator(
     0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
-  auto found = std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream);
+  auto found_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream);
+  auto const found_begin =
+    thrust::make_transform_output_iterator(found_indices->begin(), output_fn{});
 
-  auto const found_begin = thrust::make_transform_output_iterator(found->begin(), output_fn{});
   // TODO conditional find for nulls once `cuco::static_set::find_if` is added
   this->_hash_table.find_async(iter, iter + probe_table_num_rows, found_begin, stream.value());
 
   auto const tuple_iter = cudf::detail::make_counting_transform_iterator(
     0,
-    [found_iter = found->begin()] __device__(size_type idx) -> thrust::tuple<size_type, size_type> {
+    [found_iter =
+       found_indices->begin()] __device__(size_type idx) -> thrust::tuple<size_type, size_type> {
       return thrust::tuple{*(found_iter + idx), idx};
     });
-
   auto const output_begin = thrust::make_transform_output_iterator(
     thrust::make_zip_iterator(build_indices->begin(), probe_indices->begin()),
     [found_begin] __device__(auto t) { return t; });
-
   auto const output_end =
     thrust::copy_if(rmm::exec_policy_nosync(stream),
                     tuple_iter,
                     tuple_iter + probe_table_num_rows,
-                    found->begin(),
+                    found_indices->begin(),
                     output_begin,
                     [] __device__(size_type idx) -> bool { return idx != JoinNoneValue; });
-
   auto const actual_size = std::distance(output_begin, output_end);
+
   build_indices->resize(actual_size, stream);
   probe_indices->resize(actual_size, stream);
 
