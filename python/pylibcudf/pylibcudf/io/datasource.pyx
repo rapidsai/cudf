@@ -2,6 +2,7 @@
 
 from pylibcudf.libcudf.io.datasource cimport datasource
 
+__all__ = ["Datasource"]
 
 cdef class Datasource:
     cdef datasource* get_datasource(self) except * nogil:

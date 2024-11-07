@@ -49,6 +49,28 @@ from .column cimport Column, ListColumnView
 from .scalar cimport Scalar
 from .table cimport Table
 
+__all__ = [
+    "ConcatenateNullPolicy",
+    "DuplicateFindOption",
+    "apply_boolean_mask",
+    "concatenate_list_elements",
+    "concatenate_rows",
+    "contains",
+    "contains_nulls",
+    "count_elements",
+    "difference_distinct",
+    "distinct",
+    "explode_outer",
+    "extract_list_element",
+    "have_overlap",
+    "index_of",
+    "intersect_distinct",
+    "reverse",
+    "segmented_gather",
+    "sequences",
+    "sort_lists",
+    "union_distinct",
+]
 
 cpdef Table explode_outer(Table input, size_type explode_column_idx):
     """Explode a column of lists into rows.

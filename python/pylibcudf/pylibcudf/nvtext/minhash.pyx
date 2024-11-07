@@ -17,6 +17,12 @@ from pylibcudf.scalar cimport Scalar
 
 from cython.operator import dereference
 
+__all__ = [
+    "minhash",
+    "minhash64",
+    "word_minhash",
+    "word_minhash64",
+]
 
 cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
     """

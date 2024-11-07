@@ -11,6 +11,7 @@ from pylibcudf.strings.regex_flags import RegexFlags
 
 from pylibcudf.strings.regex_flags cimport regex_flags
 
+__all__ = ["RegexProgram"]
 
 cdef class RegexProgram:
     """Regex program class.

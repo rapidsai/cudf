@@ -30,6 +30,12 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.variant cimport get_if, holds_alternative
 
+__all__ = [
+    "OrcColumnStatistics",
+    "ParsedOrcStatistics",
+    "read_orc",
+    "read_parsed_orc_statistics",
+]
 
 cdef class OrcColumnStatistics:
     def __init__(self):

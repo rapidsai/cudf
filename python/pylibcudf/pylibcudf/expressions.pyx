@@ -49,6 +49,16 @@ from .types cimport DataType
 # Aliases for simplicity
 ctypedef unique_ptr[libcudf_exp.expression] expression_ptr
 
+__all__ = [
+    "ASTOperator",
+    "ColumnNameReference",
+    "ColumnReference",
+    "Expression",
+    "Literal",
+    "Operation",
+    "TableReference",
+]
+
 # Define this class just to have a docstring for it
 cdef class Expression:
     """

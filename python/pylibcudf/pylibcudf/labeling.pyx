@@ -10,6 +10,7 @@ from pylibcudf.libcudf.labeling import inclusive as Inclusive  # no-cython-lint
 
 from .column cimport Column
 
+__all__ = ["Inclusive", "label_bins"]
 
 cpdef Column label_bins(
     Column input,

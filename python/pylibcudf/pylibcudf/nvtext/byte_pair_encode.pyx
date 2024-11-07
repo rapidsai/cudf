@@ -16,6 +16,7 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from pylibcudf.scalar cimport Scalar
 
+__all__ = ["BPEMergePairs", "byte_pair_encoding"]
 
 cdef class BPEMergePairs:
     """The table of merge pairs for the BPE encoder.

@@ -20,6 +20,16 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = [
+    "TokenizeVocabulary",
+    "character_tokenize",
+    "count_tokens_column",
+    "count_tokens_scalar",
+    "detokenize",
+    "tokenize_column",
+    "tokenize_scalar",
+    "tokenize_with_vocabulary",
+]
 
 cdef class TokenizeVocabulary:
     """The Vocabulary object to be used with ``tokenize_with_vocabulary``.

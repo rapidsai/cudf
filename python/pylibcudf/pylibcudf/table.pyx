@@ -10,6 +10,7 @@ from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 
+__all__ = ["Table"]
 
 cdef class Table:
     """A list of columns of the same size.

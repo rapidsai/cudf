@@ -25,6 +25,8 @@ from .types cimport null_order, null_policy, order, sorted
 from .utils cimport _as_vector
 
 
+__all__ = ["GroupBy", "GroupByRequest"]
+
 cdef class GroupByRequest:
     """A request for a groupby aggregation or scan.
 

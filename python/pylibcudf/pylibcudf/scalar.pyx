@@ -11,6 +11,8 @@ from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 from .column cimport Column
 from .types cimport DataType
 
+__all__ = ["Scalar"]
+
 
 # The DeviceMemoryResource attribute could be released prematurely
 # by the gc if the Scalar is in a reference cycle. Removing the tp_clear

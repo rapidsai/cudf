@@ -20,6 +20,13 @@ from .table cimport Table
 from .utils cimport int_to_void_ptr
 
 
+__all__ = [
+    "PackedColumns",
+    "pack",
+    "unpack",
+    "unpack_from_memoryviews",
+]
+
 cdef class HostBuffer:
     """Owning host buffer that implements the buffer protocol"""
     cdef unique_ptr[vector[uint8_t]] c_obj

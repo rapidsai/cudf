@@ -1,5 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+__all__ = ["gpumemoryview"]
 
 cdef class gpumemoryview:
     """Minimal representation of a memory buffer.

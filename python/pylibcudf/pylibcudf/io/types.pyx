@@ -31,6 +31,17 @@ from pylibcudf.libcudf.io.types import (
     statistics_freq as StatisticsFreq, # no-cython-lint
 )
 
+__all__ = [
+    "ColumnEncoding",
+    "CompressionType",
+    "DictionaryPolicy",
+    "JSONRecoveryMode",
+    "QuoteStyle",
+    "SinkInfo",
+    "SourceInfo",
+    "StatisticsFreq",
+    "TableWithMetadata",
+]
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
