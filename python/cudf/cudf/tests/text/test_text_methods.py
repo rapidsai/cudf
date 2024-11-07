@@ -882,7 +882,7 @@ def test_is_vowel_consonant():
     assert_eq(expected, actual)
 
 
-def test_minhash():
+def test_minhash_permuted():
     strings = cudf.Series(["this is my", "favorite book", None, ""])
 
     params = cudf.Series([1, 2, 3], dtype=np.uint32)
