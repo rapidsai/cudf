@@ -179,6 +179,8 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     thrust::make_transform_output_iterator(found_indices->begin(), output_fn{});
 
   // TODO conditional find for nulls once `cuco::static_set::find_if` is added
+  // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not equal
+  // to `JoinNoneValue`, then `idx` has a match in the hash set.
   this->_hash_table.find_async(iter, iter + probe_table_num_rows, found_begin, stream.value());
 
   auto const tuple_iter = cudf::detail::make_counting_transform_iterator(
