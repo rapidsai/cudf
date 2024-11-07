@@ -23,6 +23,7 @@ export PIP_CONSTRAINT="/tmp/constraints.txt"
 python -m auditwheel repair \
     --exclude libcudf.so \
     --exclude libnvcomp.so \
+    --exclude libkvikio.so \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 
