@@ -19,7 +19,7 @@ dependencies:
 - cramjam
 - cubinlinker
 - cuda-nvtx=11.8
-- cuda-python>=11.7.1,<12.0a0,!=11.8.4
+- cuda-python>=11.7.1,<12.0a0,<=11.8.3
 - cuda-sanitizer-api=11.8.86
 - cuda-version=11.8
 - cudatoolkit
@@ -69,7 +69,7 @@ dependencies:
 - polars>=1.11,<1.13
 - pre-commit
 - ptxcompiler
-- pyarrow>=14.0.0,<18.0.0a0
+- pyarrow>=14.0.0,<19.0.0a0
 - pydata-sphinx-theme!=0.14.2
 - pytest-benchmark
 - pytest-cases>=3.8.2
