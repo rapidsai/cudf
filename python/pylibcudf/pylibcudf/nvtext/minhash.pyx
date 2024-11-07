@@ -46,7 +46,7 @@ cpdef Column minhash(Column input, ColumnOrScalar seeds, size_type width=4):
     warnings.warn(
         "Starting in version 25.02, the signature of this function will "
         "be changed to match pylibcudf.nvtext.minhash_permuted.",
-        DeprecationWarning
+        FutureWarning
     )
 
     cdef unique_ptr[column] c_result
@@ -133,7 +133,7 @@ cpdef Column minhash64(Column input, ColumnOrScalar seeds, size_type width=4):
     warnings.warn(
         "Starting in version 25.02, the signature of this function will "
         "be changed to match pylibcudf.nvtext.minhash64_permuted.",
-        DeprecationWarning
+        FutureWarning
     )
 
     cdef unique_ptr[column] c_result

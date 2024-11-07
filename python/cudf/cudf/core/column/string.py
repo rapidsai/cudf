@@ -5355,6 +5355,7 @@ class StringMethods(ColumnMethods):
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
+
         This uses the MurmurHash3_x86_32 algorithm for the hash function.
 
         Calculation uses the formula (hv * a + b) % mersenne_prime
@@ -5407,6 +5408,7 @@ class StringMethods(ColumnMethods):
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
+
         This uses the MurmurHash3_x64_128 algorithm for the hash function.
         This function generates 2 uint64 values but only the first
         uint64 value is used.
