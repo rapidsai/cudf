@@ -14,9 +14,6 @@ jobs:
     needs:
       - changed-files
       - checks
-      # TODO: Remove this check before merging this PR and make sure the copy
-      # in test.yaml is up-to-date.
-      - clang-tidy
       - conda-cpp-build
       - conda-cpp-checks
       - conda-cpp-tests
@@ -97,13 +94,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
     with:
       enable_check_generated_files: false
-  clang-tidy:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
-    with:
-      build_type: pull-request
-      run_script: "ci/cpp_linters.sh"
-      file_to_upload: iwyu_results.txt
   conda-cpp-build:
     needs: checks
     secrets: inherit
