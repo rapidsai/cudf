@@ -27,7 +27,7 @@ source rapids-configure-sccache
 # TODO: For testing purposes, clone and build IWYU. We can switch to a release
 # once a clang 19-compatible version is available, which should be soon
 # (https://github.com/include-what-you-use/include-what-you-use/issues/1641).
-git clone https://github.com/include-what-you-use/include-what-you-use.git
+git clone --depth 1 https://github.com/include-what-you-use/include-what-you-use.git
 pushd include-what-you-use
 # IWYU's CMake build uses some Python scripts that assume that the cwd is
 # importable, so support that legacy behavior.
