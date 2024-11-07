@@ -530,9 +530,10 @@ TEST_F(TransformTest, UnaryTrigonometry)
 TEST_F(TransformTest, ArityCheckFailure)
 {
   auto col_ref_0 = cudf::ast::column_reference(0);
-  EXPECT_THROW(cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0), cudf::logic_error);
+  EXPECT_THROW(cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0),
+               std::invalid_argument);
   EXPECT_THROW(cudf::ast::operation(cudf::ast::ast_operator::ABS, col_ref_0, col_ref_0),
-               cudf::logic_error);
+               std::invalid_argument);
 }
 
 TEST_F(TransformTest, StringComparison)
