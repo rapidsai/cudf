@@ -425,7 +425,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
 
  private:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    std::vector<std::reference_wrapper<ast::expression const>> operands);
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
   std::unordered_map<std::string, size_type> column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
