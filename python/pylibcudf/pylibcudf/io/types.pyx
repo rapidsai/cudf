@@ -267,30 +267,30 @@ cdef class SinkInfo:
 
         cdef object initial_sink_cls = type(sinks[0])
 
-        if not all(isinstance(s, initial_sink_cls) for s in sinks):
+        if not all(isinstance(s, initial_sink_cls) or
+                   (isinstance(sinks[0], io.IOBase) and isinstance(s, io.IOBase))
+                   for s in sinks):
             raise ValueError("All sinks must be of the same type!")
 
-        if initial_sink_cls in {
-            io.StringIO,
-            io.BytesIO,
-            io.TextIOBase,
-            io.TextIOWrapper
-        }:
+        if isinstance(sinks[0], io.IOBase):
             data_sinks.reserve(len(sinks))
-            if isinstance(sinks[0], (io.StringIO, io.BytesIO)):
-                for s in sinks:
+            for s in sinks:
+                if isinstance(s, (io.StringIO, io.BytesIO)):
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s))
                     )
-            elif isinstance(sinks[0], io.TextIOBase):
-                for s in sinks:
+                elif isinstance(s, io.TextIOBase):
                     if codecs.lookup(s.encoding).name not in ('utf-8', 'ascii'):
                         raise NotImplementedError(f"Unsupported encoding {s.encoding}")
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s.buffer))
                     )
-            data_sinks.push_back(self.sink_storage.back().get())
-        elif initial_sink_cls is str:
+                else:
+                    self.sink_storage.push_back(
+                        unique_ptr[data_sink](new iobase_data_sink(s))
+                    )
+                data_sinks.push_back(self.sink_storage.back().get())
+        elif isinstance(sinks[0], str):
             paths.reserve(len(sinks))
             for s in sinks:
                 paths.push_back(<string> s.encode())
