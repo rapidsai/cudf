@@ -1476,7 +1476,7 @@ class MapFunction(IR):
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
         schema_hash = tuple(self.schema.items())
-        return (type(self), schema_hash, self.name, str(self.options))
+        return (type(self), schema_hash, self.name, str(self.options), *self.children)
 
     @classmethod
     def do_evaluate(

@@ -18,6 +18,19 @@ __all__: list[str] = ["Node"]
 T = TypeVar("T", bound="Node[Any]")
 
 
+class PartitionInfo:
+    """
+    Partitioning information.
+
+    This class only tracks the partition count (for now).
+    """
+
+    __slots__ = ("count",)
+
+    def __init__(self, count: int | None):
+        self.count = count
+
+
 class Node(Generic[T]):
     """
     An abstract node type.
@@ -34,9 +47,10 @@ class Node(Generic[T]):
     *children).``
     """
 
-    __slots__ = ("_hash_value", "_repr_value", "children")
+    __slots__ = ("_hash_value", "_repr_value", "_parts_info", "children")
     _hash_value: int
     _repr_value: str
+    _parts_info: PartitionInfo
     children: tuple[T, ...]
     _non_child: ClassVar[tuple[str, ...]] = ()
 
@@ -150,3 +164,17 @@ class Node(Generic[T]):
             args = ", ".join(f"{arg!r}" for arg in self._ctor_arguments(self.children))
             self._repr_value = f"{type(self).__name__}({args})"
             return self._repr_value
+
+    @property
+    def parts(self) -> PartitionInfo:
+        """Return Partitioning information for this node."""
+        try:
+            return self._parts_info
+        except AttributeError:
+            self._parts_info = self._get_partition_info()
+            return self._parts_info
+
+    def _get_partition_info(self) -> PartitionInfo:
+        from cudf_polars.experimental.parallel import partition_info_dispatch
+
+        return partition_info_dispatch(self)

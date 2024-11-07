@@ -4,63 +4,72 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from functools import singledispatch
+from typing import TYPE_CHECKING, Any
+
+from cudf_polars.dsl.nodebase import PartitionInfo
+from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.dsl.nodebase import Node
 
 
-class PartitionInfo:
-    """
-    Partitioning information.
-
-    This class only tracks the partition count (for now).
-    """
-
-    __slots__ = ("npartitions",)
-
-    def __init__(self, npartitions: int):
-        self.npartitions = npartitions
+def get_key_name(node: Node) -> str:
+    """Generate the key name for a Node."""
+    return f"{type(node).__name__.lower()}{hash(node)}"
 
 
-@runtime_checkable
-class PartitionedIR(Protocol):
-    """
-    Partitioned IR Protocol.
+@singledispatch
+def partition_info_dispatch(node: Node) -> PartitionInfo:
+    """Return partitioning information for a given node."""
+    # Assume the partition count is preserved by default.
+    count = 1
+    if node.children:
+        count = max(child.parts.count for child in node.children)
+    if count > 1:
+        raise NotImplementedError(
+            f"Multi-partition support is not implemented for {type(node)}."
+        )
+    return PartitionInfo(count=count)
 
-    IR nodes must satistfy this protocol to generate a valid task graph.
-    """
 
-    _key: str
-    _parts: PartitionInfo
+@singledispatch
+def generate_tasks(ir: IR) -> MutableMapping[Any, Any]:
+    """Generate tasks for an IR node."""
+    if ir.parts.count == 1:
+        key_name = get_key_name(ir)
+        return {
+            (key_name, 0): (
+                ir.do_evaluate,
+                *ir._non_child_args,
+                *((get_key_name(child), 0) for child in ir.children),
+            )
+        }
+    raise NotImplementedError(f"Cannot generate tasks for {ir}.")
 
-    def _tasks(self) -> MutableMapping:
-        raise NotImplementedError()
 
-
-def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
+def task_graph(ir: IR) -> tuple[MutableMapping[str, Any], str]:
     """Construct a Dask-compatible task graph."""
-    from cudf_polars.dsl.traversal import traversal
-    from cudf_polars.experimental.single import lower_ir_graph
-
-    # Rewrite IR graph into a ParIR graph
-    ir: PartitionedIR = lower_ir_graph(_ir)
+    # NOTE: It may be necessary to add an optimization
+    # pass here to "rewrite" the single-partition IR graph.
 
     dsk = {
-        k: v for layer in [n._tasks() for n in traversal(ir)] for k, v in layer.items()
+        k: v
+        for layer in [generate_tasks(n) for n in traversal(ir)]
+        for k, v in layer.items()
     }
 
     # Add task to reduce output partitions
-    npartitions = ir._parts.npartitions
-    key_name = ir._key
-    if npartitions == 1:
+    key_name = get_key_name(ir)
+    if ir.parts.count == 1:
         dsk[key_name] = (key_name, 0)
     else:
         # Need DataFrame.concat support
-        raise NotImplementedError()
+        raise NotImplementedError("Multi-partition output is not supported.")
 
     return dsk, key_name
 
