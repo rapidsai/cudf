@@ -40,8 +40,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import Schema
 
-PARQUET_DEFAULT_CHUNK_SIZE = 0
-PARQUET_DEFAULT_PASS_LIMIT = 17179869184  # 16GiB
 
 __all__ = [
     "IR",
@@ -283,6 +281,9 @@ class Scan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
+    PARQUET_DEFAULT_CHUNK_SIZE: int = 0
+    PARQUET_DEFAULT_PASS_LIMIT: int = 17179869184  # 16GiB
+
     def __init__(
         self,
         schema: Schema,
@@ -496,10 +497,10 @@ class Scan(IR):
                     nrows=n_rows,
                     skip_rows=skip_rows,
                     chunk_read_limit=parquet_options.get(
-                        "chunk_read_limit", PARQUET_DEFAULT_CHUNK_SIZE
+                        "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
                     ),
                     pass_read_limit=parquet_options.get(
-                        "pass_read_limit", PARQUET_DEFAULT_PASS_LIMIT
+                        "pass_read_limit", cls.PARQUET_DEFAULT_PASS_LIMIT
                     ),
                 )
 
@@ -512,10 +513,7 @@ class Scan(IR):
                     chunks.append(reader.read_chunk().tbl)
 
                 chunks = plc.concatenate.concatenate(chunks)
-                df = DataFrame.from_table(
-                    chunks,
-                    names=names,
-                )
+                df = DataFrame.from_table(chunks, names=names)
             else:
                 filters = None
                 if predicate is not None and row_index is None:
