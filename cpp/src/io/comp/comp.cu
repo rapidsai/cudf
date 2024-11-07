@@ -19,6 +19,7 @@
 #include "io/utilities/hostdevice_vector.hpp"
 #include "nvcomp_adapter.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -67,7 +68,8 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src, rmm::cuda_
 std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
                                           rmm::cuda_stream_view stream)
 {
-  rmm::device_uvector<uint8_t> d_src(src.size(), stream);
+  auto const d_src =
+    detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
   rmm::device_uvector<uint8_t> d_dst(src.size(), stream);
 
   cudf::detail::hostdevice_vector<device_span<uint8_t const>> inputs(1, stream);
@@ -98,6 +100,7 @@ std::vector<std::uint8_t> compress(compression_type compression,
                                    host_span<uint8_t const> src,
                                    rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src, stream);
     case compression_type::SNAPPY: return compress_snappy(src, stream);
