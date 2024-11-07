@@ -62,7 +62,6 @@ def assert_packed_frame_equality(df):
     packed = pack(df)
     del df
     unpacked = unpack(packed)
-
     assert_eq(unpacked, pdf)
 
 
