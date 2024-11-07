@@ -448,6 +448,7 @@ std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
  *
  * @param schema The schema of the column
  * @param col_name The name of the column
+ * @return column metadata for a given schema
  */
 column_name_info make_column_name_info(schema_element const& schema, std::string const& col_name);
 
