@@ -75,13 +75,27 @@ def _pandas_util_dir():
     # In pandas 2.0, pandas.util contains public APIs under
     # __getattr__ but no __dir__ to find them
     # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/util/__init__.py
-    return list(importlib.import_module("pandas.util").__dict__.keys()) + [
-        "hash_array",
-        "hash_pandas_object",
-        "Appender",
-        "Substitution",
-        "cache_readonly",
-    ]
+    res = list(
+        set(
+            list(importlib.import_module("pandas.util").__dict__.keys())
+            + [
+                "Appender",
+                "Substitution",
+                "_exceptions",
+                "_print_versions",
+                "cache_readonly",
+                "hash_array",
+                "hash_pandas_object",
+                "version",
+                "_tester",
+                "_validators",
+                "_decorators",
+            ]
+        )
+    )
+    if cudf.core._compat.PANDAS_GE_220:
+        res.append("capitalize_first_letter")
+    return res
 
 
 pd.util.__dir__ = _pandas_util_dir

@@ -355,18 +355,8 @@ ConfigureNVBench(
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
-  STRINGS_BENCH
-  string/convert_datetime.cpp
-  string/convert_durations.cpp
-  string/convert_fixed_point.cpp
-  string/convert_numerics.cpp
-  string/copy.cu
-  string/factory.cu
-  string/filter.cpp
-  string/repeat_strings.cpp
-  string/replace.cpp
-  string/translate.cpp
-  string/url_decode.cu
+  STRINGS_BENCH string/factory.cu string/filter.cpp string/repeat_strings.cpp string/replace.cpp
+  string/translate.cpp string/url_decode.cu
 )
 
 ConfigureNVBench(
@@ -375,12 +365,16 @@ ConfigureNVBench(
   string/char_types.cpp
   string/combine.cpp
   string/contains.cpp
+  string/convert_datetime.cpp
+  string/convert_durations.cpp
+  string/convert_fixed_point.cpp
+  string/convert_numerics.cpp
+  string/copy.cpp
   string/copy_if_else.cpp
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
   string/find.cpp
-  string/gather.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp

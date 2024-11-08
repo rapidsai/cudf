@@ -1759,3 +1759,39 @@ def test_fallback_raises_error(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
         with pytest.raises(ProxyFallbackError):
             pd.Series(range(2)).astype(object)
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [
+        "_exceptions",
+        "version",
+        "_print_versions",
+        "capitalize_first_letter",
+        "_validators",
+        "_decorators",
+    ],
+)
+def test_cudf_pandas_util_version(attrs):
+    if not PANDAS_GE_220 and attrs == "capitalize_first_letter":
+        assert not hasattr(pd.util, attrs)
+    else:
+        assert hasattr(pd.util, attrs)
+
+
+def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
+    _, xdf = dataframe
+    xdf["b"] = xpd.IntervalIndex.from_arrays(xdf["a"], xdf["b"])
+    xdf["a"] = xpd.Series([1, 1, 1, 2, 3], dtype="category")
+    dtype_series = xdf.dtypes
+    assert all(is_proxy_object(x) for x in dtype_series)
+    assert isinstance(dtype_series.iloc[0], xpd.CategoricalDtype)
+    assert isinstance(dtype_series.iloc[1], xpd.IntervalDtype)
+
+
+def test_iter_doesnot_raise(monkeypatch):
+    s = xpd.Series([1, 2, 3])
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        for _ in s:
+            pass
