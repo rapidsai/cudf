@@ -15,7 +15,6 @@
  */
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -27,9 +26,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
-#include <exception>
 #include <numeric>
-#include <string>
 #include <vector>
 
 namespace cudf {

@@ -17,7 +17,6 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <memory>

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import pickle
 from collections import abc
+from collections.abc import MutableSequence, Sequence
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Literal, MutableSequence, Sequence, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
 import numpy as np
@@ -579,8 +580,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if cudf.utils.utils.is_na_like(other):
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
-            # Try and maintain the dtype
-            other = other.dtype.type(other.item())
+            # Return numpy scalar
+            other = other[()]
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(

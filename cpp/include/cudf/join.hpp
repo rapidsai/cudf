@@ -573,7 +573,7 @@ class distinct_hash_join {
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -620,7 +620,7 @@ conditional_inner_join(table_view const& left,
  * Result: {{0, 1, 2}, {None, 0, None}}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -666,7 +666,7 @@ conditional_left_join(table_view const& left,
  * Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -705,7 +705,7 @@ conditional_full_join(table_view const& left,
  * Result: {1}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -746,7 +746,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  * Result: {0, 2}
  * @endcode
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -793,7 +793,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * Result: {{1}, {0}}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -855,7 +855,7 @@ mixed_inner_join(
  * Result: {{0, 1, 2}, {None, 0, None}}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -917,7 +917,7 @@ mixed_left_join(
  * Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -972,7 +972,7 @@ mixed_full_join(
  * Result: {1}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -1022,7 +1022,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * Result: {0, 2}
  * @endcode
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -1061,7 +1061,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -1103,7 +1103,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
- * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error If the binary predicate outputs a non-boolean result.
  * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
  * match.
  * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
@@ -1142,7 +1142,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -1167,7 +1167,7 @@ std::size_t conditional_inner_join_size(
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -1192,7 +1192,7 @@ std::size_t conditional_left_join_size(
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table
@@ -1217,7 +1217,7 @@ std::size_t conditional_left_semi_join_size(
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output.
  *
- * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ * @throw cudf::data_type_error if the binary predicate outputs a non-boolean result.
  *
  * @param left The left table
  * @param right The right table

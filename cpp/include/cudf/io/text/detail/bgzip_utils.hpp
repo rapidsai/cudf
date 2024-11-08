@@ -16,16 +16,10 @@
 
 #pragma once
 
-#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <zlib.h>
-
-#include <algorithm>
-#include <array>
 #include <fstream>
-#include <limits>
 
 namespace CUDF_EXPORT cudf {
 namespace io::text::detail::bgzip {

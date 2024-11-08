@@ -19,8 +19,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/dictionary.hpp>
 
-#include <cuda_runtime.h>
-
 namespace cudf {
 
 namespace {
@@ -169,6 +167,19 @@ struct is_integral_not_bool_impl {
 bool is_integral_not_bool(data_type type)
 {
   return cudf::type_dispatcher(type, is_integral_not_bool_impl{});
+}
+
+struct is_numeric_not_bool_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_numeric_not_bool<T>();
+  }
+};
+
+bool is_numeric_not_bool(data_type type)
+{
+  return cudf::type_dispatcher(type, is_numeric_not_bool_impl{});
 }
 
 struct is_floating_point_impl {

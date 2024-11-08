@@ -1,21 +1,19 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import warnings
+from importlib import import_module
+
 from dask import config
-
-# For dask>2024.2.0, we can silence the loud deprecation
-# warning before importing `dask.dataframe` (this won't
-# do anything for dask==2024.2.0)
-config.set({"dataframe.query-planning-warning": False})
-
 import dask.dataframe as dd
-from dask.dataframe import from_delayed
+from dask.dataframe import from_delayed  # noqa: E402
 
-import cudf
+import cudf  # noqa: E402
 
-from . import backends
-from ._version import __git_commit__, __version__
-from .core import concat, from_cudf, from_dask_dataframe
-from .expr import QUERY_PLANNING_ON
+from . import backends  # noqa: E402, F401
+from ._version import __git_commit__, __version__  # noqa: E402, F401
+from .core import concat, from_cudf, DataFrame, Index, Series  # noqa: F401
+
+QUERY_PLANNING_ON = dd.DASK_EXPR_ENABLED
 
 
 def read_csv(*args, **kwargs):
@@ -38,26 +36,44 @@ def read_parquet(*args, **kwargs):
         return dd.read_parquet(*args, **kwargs)
 
 
-def raise_not_implemented_error(attr_name):
+def _deprecated_api(old_api, new_api=None, rec=None):
     def inner_func(*args, **kwargs):
+        if new_api:
+            # Use alternative
+            msg = f"{old_api} is now deprecated. "
+            msg += rec or f"Please use {new_api} instead."
+            warnings.warn(msg, FutureWarning)
+            new_attr = new_api.split(".")
+            module = import_module(".".join(new_attr[:-1]))
+            return getattr(module, new_attr[-1])(*args, **kwargs)
+
+        # No alternative - raise an error
         raise NotImplementedError(
-            f"Top-level {attr_name} API is not available for dask-expr."
+            f"{old_api} is no longer supported. " + (rec or "")
         )
 
     return inner_func
 
 
 if QUERY_PLANNING_ON:
-    from .expr._collection import DataFrame, Index, Series
+    from ._expr.expr import _patch_dask_expr
+    from . import io  # noqa: F401
 
-    groupby_agg = raise_not_implemented_error("groupby_agg")
+    groupby_agg = _deprecated_api("dask_cudf.groupby_agg")
     read_text = DataFrame.read_text
-    to_orc = raise_not_implemented_error("to_orc")
+    _patch_dask_expr()
 
 else:
-    from .core import DataFrame, Index, Series
-    from .groupby import groupby_agg
-    from .io import read_text, to_orc
+    from ._legacy.groupby import groupby_agg  # noqa: F401
+    from ._legacy.io import read_text  # noqa: F401
+    from . import io  # noqa: F401
+
+
+to_orc = _deprecated_api(
+    "dask_cudf.to_orc",
+    new_api="dask_cudf._legacy.io.to_orc",
+    rec="Please use DataFrame.to_orc instead.",
+)
 
 
 __all__ = [
@@ -65,7 +81,6 @@ __all__ = [
     "Series",
     "Index",
     "from_cudf",
-    "from_dask_dataframe",
     "concat",
     "from_delayed",
 ]

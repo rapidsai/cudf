@@ -21,12 +21,12 @@
 
 #include "column_buffer.hpp"
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <iomanip>
 #include <sstream>
 
 namespace cudf::io::detail {
@@ -63,9 +63,11 @@ void cudf::io::detail::inline_column_buffer::allocate_strings_data(bool memset_d
 }
 
 void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes,
+                                                                bool is_large_strings_col,
                                                                 rmm::cuda_stream_view stream)
 {
-  _string_data = rmm::device_buffer(num_bytes, stream, _mr);
+  _is_large_strings_col = is_large_strings_col;
+  _string_data          = rmm::device_buffer(num_bytes, stream, _mr);
 }
 
 namespace {

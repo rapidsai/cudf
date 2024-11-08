@@ -22,18 +22,17 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/pair.h>
+
+#include <optional>
 
 namespace cudf {
 namespace io {
@@ -247,13 +246,17 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   [[nodiscard]] size_t data_size_impl() const { return _data.size(); }
   std::unique_ptr<column> make_string_column_impl(rmm::cuda_stream_view stream);
 
-  void create_string_data(size_t num_bytes, rmm::cuda_stream_view stream);
+  void create_string_data(size_t num_bytes,
+                          bool is_large_strings_col,
+                          rmm::cuda_stream_view stream);
   void* string_data() { return _string_data.data(); }
   [[nodiscard]] void const* string_data() const { return _string_data.data(); }
   [[nodiscard]] size_t string_size() const { return _string_data.size(); }
+  [[nodiscard]] bool is_large_strings_column() const { return _is_large_strings_col; }
 
  private:
   rmm::device_buffer _string_data{};
+  bool _is_large_strings_col{};
 };
 
 using column_buffer = gather_column_buffer;
