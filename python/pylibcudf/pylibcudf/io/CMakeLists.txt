@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx orc.pyx parquet.pyx timezone.pyx
-                   types.pyx
+                   text.pyx types.pyx
 )
 
 set(linked_libraries cudf::cudf)

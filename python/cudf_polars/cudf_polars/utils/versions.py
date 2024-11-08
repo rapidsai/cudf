@@ -14,6 +14,8 @@ POLARS_VERSION = parse(__version__)
 
 POLARS_VERSION_LT_111 = POLARS_VERSION < parse("1.11")
 POLARS_VERSION_LT_112 = POLARS_VERSION < parse("1.12")
+POLARS_VERSION_GT_112 = POLARS_VERSION > parse("1.12")
+POLARS_VERSION_LT_113 = POLARS_VERSION < parse("1.13")
 
 
 def _ensure_polars_version():
