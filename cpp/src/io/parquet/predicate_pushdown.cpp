@@ -25,6 +25,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -373,7 +374,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 
  private:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    std::vector<std::reference_wrapper<ast::expression const>> operands)
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
   {
     std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
     for (auto const& operand : operands) {
@@ -553,7 +554,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 
 std::vector<std::reference_wrapper<ast::expression const>>
 named_to_reference_converter::visit_operands(
-  std::vector<std::reference_wrapper<ast::expression const>> operands)
+  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
 {
   std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
   for (auto const& operand : operands) {
@@ -623,7 +624,7 @@ class names_from_expression : public ast::detail::expression_transformer {
   }
 
  private:
-  void visit_operands(std::vector<std::reference_wrapper<ast::expression const>> operands)
+  void visit_operands(cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
   {
     for (auto const& operand : operands) {
       operand.get().accept(*this);
