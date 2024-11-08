@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pickle
 from typing import TYPE_CHECKING, BinaryIO
@@ -136,15 +137,20 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
         testargs = {
             arg: funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames
         }
-        result = testfunction(**testargs)
+        try:
+            result = testfunction(**testargs)
+        except Exception as e:
+            logging.error(f"Exception: {e}")
+            raise e
         # Tuple-based key-value pairs, key is the node-id
         try:
             pickle.dump(
                 (pyfuncitem.nodeid, result),
                 pyfuncitem.config.stash[file_handle_key],
             )
-        except pickle.PicklingError:
-            pass
+        except pickle.PicklingError as e:
+            logging.error(f"PicklingError in {pyfuncitem.nodeid}: {e}")
+            raise e
     return True
 
 
