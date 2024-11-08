@@ -130,6 +130,9 @@ struct pass_intermediate_data {
   rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
   rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
 
+  // cumulative strings column sizes.
+  std::vector<size_t> cumulative_col_string_sizes{};
+
   int level_type_size{0};
 
   // skip_rows / num_rows for this pass.
