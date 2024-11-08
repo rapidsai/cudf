@@ -9,7 +9,7 @@ import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pyarrow as pa
 from typing_extensions import assert_never
@@ -21,12 +21,9 @@ from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
-from cudf_polars.dsl.traversal import make_recursive, reuse_if_unchanged
+from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
-
-if TYPE_CHECKING:
-    from cudf_polars.typing import ExprTransformer
 
 __all__ = ["translate_ir", "translate_named_expr"]
 
@@ -204,55 +201,40 @@ def _(
             raise NotImplementedError(
                 f"Unsupported join type {how}"
             )  # pragma: no cover; asof joins not yet exposed
-        # No exposure of mixed/conditional joins in pylibcudf yet, so in
-        # the first instance, implement by doing a cross join followed by
-        # a filter.
-        _, join_nulls, zlice, suffix, coalesce = node.options
-        cross = ir.Join(
-            schema,
-            [],
-            [],
-            ("cross", join_nulls, None, suffix, coalesce),
-            inp_left,
-            inp_right,
-        )
-        dtype = plc.DataType(plc.TypeId.BOOL8)
         if op2 is None:
             ops = [op1]
         else:
             ops = [op1, op2]
-        suffix = cross.options[3]
 
-        # Column references in the right table refer to the post-join
-        # names, so with suffixes.
-        def _rename(e: expr.Expr, rec: ExprTransformer) -> expr.Expr:
-            if isinstance(e, expr.Col) and e.name in inp_left.schema:
-                return type(e)(e.dtype, f"{e.name}{suffix}")
-            return reuse_if_unchanged(e, rec)
-
-        mapper = make_recursive(_rename)
-        right_on = [
-            expr.NamedExpr(
-                f"{old.name}{suffix}" if old.name in inp_left.schema else old.name, new
-            )
-            for new, old in zip(
-                (mapper(e.value) for e in right_on), right_on, strict=True
-            )
-        ]
-        mask = functools.reduce(
+        dtype = plc.DataType(plc.TypeId.BOOL8)
+        predicate = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
             ),
             (
-                expr.BinOp(dtype, expr.BinOp._MAPPING[op], left.value, right.value)
+                expr.BinOp(
+                    dtype,
+                    expr.BinOp._MAPPING[op],
+                    insert_colrefs(
+                        left.value,
+                        table_ref=plc.expressions.TableReference.LEFT,
+                        name_to_index={
+                            name: i for i, name in enumerate(inp_left.schema)
+                        },
+                    ),
+                    insert_colrefs(
+                        right.value,
+                        table_ref=plc.expressions.TableReference.RIGHT,
+                        name_to_index={
+                            name: i for i, name in enumerate(inp_right.schema)
+                        },
+                    ),
+                )
                 for op, left, right in zip(ops, left_on, right_on, strict=True)
             ),
         )
-        filtered = ir.Filter(schema, expr.NamedExpr("mask", mask), cross)
-        if zlice is not None:
-            offset, length = zlice
-            return ir.Slice(schema, offset, length, filtered)
-        return filtered
+
+        return ir.ConditionalJoin(schema, predicate, node.options, inp_left, inp_right)
 
 
 @_translate_ir.register
