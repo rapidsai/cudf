@@ -30,7 +30,7 @@ def read_json(
 ) -> TableWithMetadata: ...
 def write_json(
     sink_info: SinkInfo,
-    tbl: TableWithMetadata,
+    table_w_meta: TableWithMetadata,
     na_rep: str = "",
     include_nulls: bool = False,
     lines: bool = False,

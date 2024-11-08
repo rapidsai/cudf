@@ -46,8 +46,8 @@ def stable_distinct(
     nans_equal: NanEquality,
 ) -> Table: ...
 def unique_count(
-    column: Column, null_handling: NullPolicy, nan_handling: NanPolicy
+    source: Column, null_handling: NullPolicy, nan_handling: NanPolicy
 ) -> int: ...
 def distinct_count(
-    column: Column, null_handling: NullPolicy, nan_handling: NanPolicy
+    source: Column, null_handling: NullPolicy, nan_handling: NanPolicy
 ) -> int: ...

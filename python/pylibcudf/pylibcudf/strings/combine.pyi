@@ -25,7 +25,7 @@ def join_strings(
     input: Column, separator: Scalar, narep: Scalar
 ) -> Column: ...
 def join_list_elements(
-    source_strings: Column,
+    lists_strings_column: Column,
     separator: Column | Scalar,
     separator_narep: Scalar,
     string_narep: Scalar,

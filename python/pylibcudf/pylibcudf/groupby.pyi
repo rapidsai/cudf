@@ -31,7 +31,7 @@ class GroupBy:
         self, values: Table, offset: list[int], fill_values: list[Scalar]
     ) -> tuple[Table, Table]: ...
     def replace_nulls(
-        self, values: Table, replace_policies: list[ReplacePolicy]
+        self, value: Table, replace_policies: list[ReplacePolicy]
     ) -> tuple[Table, Table]: ...
     def get_groups(
         self, values: Table | None = None

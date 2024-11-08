@@ -24,7 +24,7 @@ def rank(
     percentage: bool,
 ) -> Column: ...
 def is_sorted(
-    table: Table, column_order: list[Order], null_precedence: list[NullOrder]
+    tbl: Table, column_order: list[Order], null_precedence: list[NullOrder]
 ) -> bool: ...
 def segmented_sort_by_key(
     values: Table,
