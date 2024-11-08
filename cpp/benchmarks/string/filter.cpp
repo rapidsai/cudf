@@ -43,19 +43,32 @@ static void bench_filter(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   auto chars_size = input.chars_size(stream);
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
-  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
 
   if (api == "filter") {
     auto const types = cudf::strings::string_character_types::SPACE;
+    {
+      auto result = cudf::strings::filter_characters_of_type(input, types);
+      auto sv     = cudf::strings_column_view(result->view());
+      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
+    }
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::filter_characters_of_type(input, types);
     });
   } else if (api == "chars") {
+    state.add_global_memory_writes<nvbench::int8_t>(chars_size);
     std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
       {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::filter_characters(input, filter_table);
     });
+  } else if (api == "strip") {
+    {
+      auto result = cudf::strings::strip(input);
+      auto sv     = cudf::strings_column_view(result->view());
+      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
+    }
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::strip(input); });
   }
 }
 
@@ -64,4 +77,4 @@ NVBENCH_BENCH(bench_filter)
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
-  .add_string_axis("api", {"filter", "chars"});
+  .add_string_axis("api", {"filter", "chars", "strip"});
