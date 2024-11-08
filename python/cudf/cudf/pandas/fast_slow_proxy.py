@@ -1099,7 +1099,9 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
     """
     Wraps "result" in a fast-slow proxy if is a "proxiable" object.
     """
-    if _is_final_type(result):
+    if isinstance(result, (int, str, float, bool, type(None))):
+        return result
+    elif _is_final_type(result):
         typ = get_final_type_map()[type(result)]
         return typ._fsproxy_wrap(result, func)
     elif _is_intermediate_type(result):
