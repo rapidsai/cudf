@@ -19,4 +19,5 @@ I/O Functions
     csv
     json
     parquet
+    text
     timezone
