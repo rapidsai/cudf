@@ -48,7 +48,7 @@ namespace CUDF_EXPORT cudf {
  *                            ignored.
  * @param[in] exact           If true, returns doubles.
  *                            If false, returns same type as input.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] stream          CUDA stream used for device memory operations and kernel launches
  * @param[in] mr              Device memory resource used to allocate the returned column's device
  memory
  * @returns Column of specified quantiles, with nulls for indeterminable values
@@ -87,7 +87,7 @@ std::unique_ptr<column> quantile(
  * @param is_input_sorted Indicates if the input has been pre-sorted
  * @param column_order    The desired sort order for each column
  * @param null_precedence The desired order of null compared to other elements
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream          CUDA stream used for device memory operations and kernel launches
  * @param mr              Device memory resource used to allocate the returned table's device memory
  *
  * @returns Table of specified quantiles, with nulls for indeterminable values
@@ -118,7 +118,7 @@ std::unique_ptr<table> quantiles(
  *
  * @param input           tdigest input data. One tdigest per row
  * @param percentiles     Desired percentiles in range [0, 1]
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream          CUDA stream used for device memory operations and kernel launches
  * @param mr              Device memory resource used to allocate the returned column's device
  * memory
  *

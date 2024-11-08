@@ -16,8 +16,6 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
@@ -62,7 +60,7 @@ TEST_F(QuantileTest, TestEmpty)
 TEST_F(QuantileTest, EmptyInput)
 {
   auto empty_ = cudf::tdigest::detail::make_empty_tdigests_column(
-    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    1, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<cudf::column_view> input;
