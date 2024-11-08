@@ -83,7 +83,6 @@ function(ConfigureTest CMAKE_TEST_NAME)
         "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
     )
   endif()
-  enable_clang_tidy(${CMAKE_TEST_NAME})
 endfunction()
 
 # ##################################################################################################
@@ -650,7 +649,7 @@ ConfigureTest(ENCODE_TEST encode/encode_tests.cpp)
 
 # ##################################################################################################
 # * ast tests -------------------------------------------------------------------------------------
-ConfigureTest(AST_TEST ast/transform_tests.cpp)
+ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
 
 # ##################################################################################################
 # * lists tests ----------------------------------------------------------------------------------

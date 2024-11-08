@@ -8,7 +8,18 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING
 
+from polars.exceptions import InvalidOperationError
+
 import pylibcudf as plc
+from pylibcudf.strings.convert.convert_floats import from_floats, is_float, to_floats
+from pylibcudf.strings.convert.convert_integers import (
+    from_integers,
+    is_integer,
+    to_integers,
+)
+from pylibcudf.traits import is_floating_point
+
+from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -129,11 +140,46 @@ class Column:
         This only produces a copy if the requested dtype doesn't match
         the current one.
         """
-        if self.obj.type() != dtype:
-            return Column(plc.unary.cast(self.obj, dtype), name=self.name).sorted_like(
-                self
-            )
-        return self
+        if self.obj.type() == dtype:
+            return self
+
+        if dtype.id() == plc.TypeId.STRING or self.obj.type().id() == plc.TypeId.STRING:
+            return Column(self._handle_string_cast(dtype))
+        else:
+            result = Column(plc.unary.cast(self.obj, dtype))
+            if is_order_preserving_cast(self.obj.type(), dtype):
+                return result.sorted_like(self)
+            return result
+
+    def _handle_string_cast(self, dtype: plc.DataType) -> plc.Column:
+        if dtype.id() == plc.TypeId.STRING:
+            if is_floating_point(self.obj.type()):
+                return from_floats(self.obj)
+            else:
+                return from_integers(self.obj)
+        else:
+            if is_floating_point(dtype):
+                floats = is_float(self.obj)
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        floats,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("Conversion from `str` failed.")
+                return to_floats(self.obj, dtype)
+            else:
+                integers = is_integer(self.obj)
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        integers,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("Conversion from `str` failed.")
+                return to_integers(self.obj, dtype)
 
     def copy_metadata(self, from_: pl.Series, /) -> Self:
         """
