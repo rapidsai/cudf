@@ -68,8 +68,6 @@ def extract_datetime_component(Column col, object field):
 
 
 cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
-    cdef libcudf_datetime.rounding_frequency freq_val
-
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
     old_to_new_freq_map = {
         "H": "h",
