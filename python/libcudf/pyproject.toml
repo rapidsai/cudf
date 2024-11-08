@@ -53,7 +53,7 @@ select = [
     "distro-too-large-compressed",
 ]
 
-# PyPI limit is 100 MiB, fail CI before we get too close to that
+# PyPI limit is 600 MiB, fail CI before we get too close to that
 max_allowed_size_compressed = '75M'
 
 [tool.scikit-build]
