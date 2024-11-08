@@ -83,6 +83,14 @@ cudf-pandas-tests = [
 Homepage = "https://github.com/rapidsai/cudf"
 Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 
+[tool.pydistcheck]
+select = [
+    "distro-too-large-compressed",
+]
+
+# PyPI limit is 100 MiB, fail CI before we get too close to that
+max_allowed_size_compressed = '75M'
+
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"
 empty_parameter_set_mark = "fail_at_collect"
