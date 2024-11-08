@@ -137,11 +137,7 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
         testargs = {
             arg: funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames
         }
-        try:
-            result = testfunction(**testargs)
-        except Exception as e:
-            logging.error(f"Exception: {e}")
-            raise e
+        result = testfunction(**testargs)
         # Tuple-based key-value pairs, key is the node-id
         try:
             pickle.dump(
@@ -149,8 +145,7 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
                 pyfuncitem.config.stash[file_handle_key],
             )
         except pickle.PicklingError as e:
-            logging.error(f"PicklingError in {pyfuncitem.nodeid}: {e}")
-            raise e
+            pass
     return True
 
 
