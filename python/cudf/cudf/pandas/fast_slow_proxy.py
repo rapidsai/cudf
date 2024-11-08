@@ -33,6 +33,9 @@ _CUDF_PANDAS_NVTX_COLORS = {
     "EXECUTE_SLOW": 0x0571B0,
 }
 
+_SPECIAL_FUNCTIONS_ARGS_MAP = {
+    "DataFrame.__setitem__": {0},
+}
 
 _WRAPPER_ASSIGNMENTS = tuple(
     attr
@@ -875,6 +878,10 @@ class _MethodProxy(_FunctionProxy):
             pass
         setattr(self._fsproxy_slow, "__name__", value)
 
+    @property
+    def __customqualname__(self):
+        return self._fsproxy_slow.__qualname__
+
 
 def _assert_fast_slow_eq(left, right):
     if _is_final_type(type(left)) or type(left) in NUMPY_TYPES:
@@ -1014,20 +1021,19 @@ def _transform_arg(
             if (
                 len(arg) > 0
                 and isinstance(arg[0], _MethodProxy)
-                and arg[0].__name__ == "__setitem__"
+                and arg[0].__customqualname__ in _SPECIAL_FUNCTIONS_ARGS_MAP
             ):
+                indices_map = _SPECIAL_FUNCTIONS_ARGS_MAP[
+                    arg[0].__customqualname__
+                ]
                 method_proxy, cust_args, cust_kwargs = arg
-                new_args = []
-                for i, a in enumerate(cust_args):
-                    if i == 1:
-                        new_args.append(
-                            _transform_arg(a, "_fsproxy_slow", seen)
-                        )
-                    else:
-                        new_args.append(
-                            _transform_arg(a, attribute_name, seen)
-                        )
-                cust_args = tuple(new_args)
+
+                cust_args = tuple(
+                    _transform_arg(a, "_fsproxy_slow", seen)
+                    if i - 1 in indices_map
+                    else _transform_arg(a, attribute_name, seen)
+                    for i, a in enumerate(cust_args)
+                )
                 cust_kwargs = _transform_arg(cust_kwargs, attribute_name, seen)
                 res = (
                     _transform_arg(method_proxy, attribute_name, seen),
