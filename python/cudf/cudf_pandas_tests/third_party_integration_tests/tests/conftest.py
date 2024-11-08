@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import pickle
 from typing import TYPE_CHECKING, BinaryIO
@@ -144,7 +143,7 @@ def pytest_pyfunc_call(pyfuncitem: _pytest.python.Function):
                 (pyfuncitem.nodeid, result),
                 pyfuncitem.config.stash[file_handle_key],
             )
-        except pickle.PicklingError as e:
+        except pickle.PicklingError:
             pass
     return True
 
