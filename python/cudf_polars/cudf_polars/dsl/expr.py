@@ -19,6 +19,7 @@ from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import (
     AggInfo,
     Col,
+    ColRef,
     ErrorExpr,
     Expr,
     NamedExpr,
@@ -42,6 +43,7 @@ __all__ = [
     "LiteralColumn",
     "Len",
     "Col",
+    "ColRef",
     "BooleanFunction",
     "StringFunction",
     "TemporalFunction",
