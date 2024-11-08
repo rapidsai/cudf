@@ -915,6 +915,8 @@ class TypeFallbackError(FallbackError):
 
 def _raise_fallback_error(err, name):
     """Raises a fallback error."""
+    err_message = f"Falling back to the slow path. The exception was {err}. \
+        The function called was {name}."
     exception_map = {
         (RMMError, MemoryError): OOMFallbackError,
         NotImplementedError: NotImplementedFallbackError,
@@ -923,14 +925,8 @@ def _raise_fallback_error(err, name):
     }
     for err_type, fallback_err_type in exception_map.items():
         if isinstance(err, err_type):
-            raise fallback_err_type(
-                f"Falling back to the slow path. "
-                f"The exception was {err}. The function called was {name}."
-            ) from err
-    raise FallbackError(
-        f"The operation failed with cuDF, falling back to the slow path. "
-        f"The exception was {err}. The function called was {name}."
-    ) from err
+            raise fallback_err_type(err_message) from err
+    raise FallbackError(err_message) from err
 
 
 def _fast_function_call():

@@ -1788,32 +1788,27 @@ def mock_mean_type_error(self, *args, **kwargs):
 
 
 @pytest.mark.parametrize(
-    "mock_mean, err, match_str",
+    "mock_mean, err",
     [
         (
             mock_mean_memory_error,
             OOMFallbackError,
-            "Out of Memory Error.",
         ),
         (
             mock_mean_rmm_error,
             OOMFallbackError,
-            "Out of Memory Error.",
         ),
         (
             mock_mean_not_impl_error,
             NotImplementedFallbackError,
-            "NotImplementedError.",
         ),
         (
             mock_mean_attr_error,
             AttributeFallbackError,
-            "AttributeError.",
         ),
         (
             mock_mean_type_error,
             TypeFallbackError,
-            "TypeError.",
         ),
     ],
 )
@@ -1821,13 +1816,12 @@ def test_fallback_raises_specific_error(
     monkeypatch,
     mock_mean,
     err,
-    match_str,
 ):
     with monkeypatch.context() as monkeycontext:
         monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean)
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
         s = xpd.Series([1, 2])
-        with pytest.raises(err, match=match_str):
+        with pytest.raises(err, match="Falling back to the slow path"):
             assert s.mean() == 1.5
 
     # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
