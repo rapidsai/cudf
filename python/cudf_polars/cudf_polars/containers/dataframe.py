@@ -215,7 +215,7 @@ class DataFrame:
             "type-serialized": pickle.dumps(type(self)),
             "frame_count": 2,
         }
-        return header, tuple(packed.release())
+        return header, packed.release()
 
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None

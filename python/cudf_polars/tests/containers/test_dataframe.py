@@ -176,7 +176,7 @@ def test_empty_name_roundtrips_no_overlap():
         pa.table({"a": [1, 2, None], "b": [None, 3, 4]}),
     ],
 )
-def test_serialize(arrow_tbl):
+def test_serialization_roundtrip(arrow_tbl):
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 

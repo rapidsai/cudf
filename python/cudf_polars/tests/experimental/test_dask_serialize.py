@@ -30,7 +30,7 @@ register()
     ],
 )
 @pytest.mark.parametrize("protocol", ["cuda", "dask"])
-def test_dask_serialize(arrow_tbl, protocol):
+def test_dask_serialization_roundtrip(arrow_tbl, protocol):
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 
