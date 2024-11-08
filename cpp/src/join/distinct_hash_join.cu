@@ -185,20 +185,22 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
 
   auto const tuple_iter = cudf::detail::make_counting_transform_iterator(
     0,
-    [found_iter =
-       found_indices->begin()] __device__(size_type idx) -> thrust::tuple<size_type, size_type> {
-      return thrust::tuple{*(found_iter + idx), idx};
-    });
+    cuda::proclaim_return_type<thrust::tuple<size_type, size_type>>(
+      [found_iter = found_indices->begin()] __device__(size_type idx) {
+        return thrust::tuple{*(found_iter + idx), idx};
+      }));
   auto const output_begin = thrust::make_transform_output_iterator(
     thrust::make_zip_iterator(build_indices->begin(), probe_indices->begin()),
-    [found_begin] __device__(auto t) { return t; });
+    cuda::proclaim_return_type<thrust::tuple<size_type, size_type>>(
+      [found_begin] __device__(auto t) { return t; }));
   auto const output_end =
     thrust::copy_if(rmm::exec_policy_nosync(stream),
                     tuple_iter,
                     tuple_iter + probe_table_num_rows,
                     found_indices->begin(),
                     output_begin,
-                    [] __device__(size_type idx) -> bool { return idx != JoinNoneValue; });
+                    cuda::proclaim_return_type<bool>(
+                      [] __device__(size_type idx) { return idx != JoinNoneValue; }));
   auto const actual_size = std::distance(output_begin, output_end);
 
   build_indices->resize(actual_size, stream);
