@@ -100,9 +100,13 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
   for (int pos = 0; pos < length; pos += block_size) {
     int const tidx = pos + t;
     size_type tval = tidx < length ? arr[tidx] : 0;
+
     size_type block_sum;
-    block_scan(scan_storage).ExclusiveScan(tval, tval, initial_value, cub::Sum(), block_sum);
-    if (tidx < length) { arr[tidx] = tval; }
+    size_type new_tval;
+    block_scan(scan_storage).ExclusiveSum(tval, new_tval, block_sum);
+    __syncthreads();
+
+    if (tidx < length) { arr[tidx] = new_tval + initial_value; }
     initial_value += block_sum;
   }
 }
