@@ -4,7 +4,7 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-from pylibcudf.libcudf.types cimport null_order, size_type
+from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
 from cudf._lib.utils cimport columns_from_pylibcudf_table
@@ -49,7 +49,11 @@ def sort_lists(Column col, bool ascending, str na_position):
         plc.lists.sort_lists(
             col.to_pylibcudf(mode="read"),
             ascending,
-            null_order.BEFORE if na_position == "first" else null_order.AFTER,
+            (
+                plc.types.NullOrder.BEFORE
+                if na_position == "first"
+                else plc.types.NullOrder.AFTER
+            ),
             False,
         )
     )
