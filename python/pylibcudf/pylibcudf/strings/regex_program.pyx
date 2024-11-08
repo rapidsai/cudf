@@ -25,6 +25,8 @@ cdef class RegexProgram:
     def __init__(self, *args, **kwargs):
         raise ValueError("Do not instantiate RegexProgram directly, use create")
 
+    __hash__ = None
+
     @staticmethod
     def create(str pattern, int flags):
         """Create a program from a pattern.

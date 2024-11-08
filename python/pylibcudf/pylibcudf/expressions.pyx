@@ -68,7 +68,7 @@ cdef class Expression:
 
     For details, see :cpp:class:`cudf::ast::expression`.
     """
-    pass
+    __hash__ = None
 
 cdef class Literal(Expression):
     """

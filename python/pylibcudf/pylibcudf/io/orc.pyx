@@ -45,6 +45,8 @@ cdef class OrcColumnStatistics:
             "use `OrcColumnStatistics.from_libcudf` instead."
         )
 
+    __hash__ = None
+
     @property
     def number_of_values(self):
         if self.number_of_values_c.has_value():
@@ -188,6 +190,8 @@ cdef class OrcColumnStatistics:
 
 
 cdef class ParsedOrcStatistics:
+
+    __hash__ = None
 
     @property
     def column_names(self):

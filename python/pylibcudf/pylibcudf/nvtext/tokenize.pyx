@@ -41,6 +41,8 @@ cdef class TokenizeVocabulary:
         with nogil:
             self.c_obj = move(cpp_load_vocabulary(c_vocab))
 
+    __hash__ = None
+
 cpdef Column tokenize_scalar(Column input, Scalar delimiter=None):
     """
     Returns a single column of strings by tokenizing the input

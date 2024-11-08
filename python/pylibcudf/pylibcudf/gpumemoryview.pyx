@@ -26,3 +26,5 @@ cdef class gpumemoryview:
     @property
     def __cuda_array_interface__(self):
         return self.obj.__cuda_array_interface__
+
+    __hash__ = None

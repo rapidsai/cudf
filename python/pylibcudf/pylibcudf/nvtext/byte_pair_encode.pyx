@@ -28,6 +28,8 @@ cdef class BPEMergePairs:
         with nogil:
             self.c_obj = move(cpp_load_merge_pairs(c_pairs))
 
+    __hash__ = None
+
 cpdef Column byte_pair_encoding(
     Column input,
     BPEMergePairs merge_pairs,

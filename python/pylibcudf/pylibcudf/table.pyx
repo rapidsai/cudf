@@ -25,6 +25,8 @@ cdef class Table:
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
+    __hash__ = None
+
     cdef table_view view(self) nogil:
         """Generate a libcudf table_view to pass to libcudf algorithms.
 

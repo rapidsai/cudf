@@ -47,6 +47,8 @@ cdef class GroupByRequest:
         self._values = values
         self._aggregations = aggregations
 
+    __hash__ = None
+
     cdef aggregation_request _to_libcudf_agg_request(self) except *:
         """Convert to a libcudf aggregation_request object.
 
@@ -128,6 +130,8 @@ cdef class GroupBy:
         # keep a reference to the keys table so it doesn't get
         # deallocated from under us:
         self._keys = keys
+
+    __hash__ = None
 
     @staticmethod
     cdef tuple _parse_outputs(

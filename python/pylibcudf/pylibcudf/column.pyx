@@ -62,6 +62,8 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
+    __hash__ = None
+
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.
 
@@ -384,6 +386,8 @@ cdef class ListColumnView:
         if col.type().id() != type_id.LIST:
             raise TypeError("Column is not a list type")
         self._column = col
+
+    __hash__ = None
 
     cpdef child(self):
         """The data column of the underlying list column."""

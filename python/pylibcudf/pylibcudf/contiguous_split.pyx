@@ -45,6 +45,8 @@ cdef class HostBuffer:
         out.strides[0] = 1
         return out
 
+    __hash__ = None
+
     def __getbuffer__(self, Py_buffer *buffer, int flags):
         buffer.buf = dereference(self.c_obj).data()
         buffer.format = NULL  # byte
@@ -75,6 +77,8 @@ cdef class PackedColumns:
             "PackedColumns should not be constructed directly. "
             "Use one of the factories."
         )
+
+    __hash__ = None
 
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data):

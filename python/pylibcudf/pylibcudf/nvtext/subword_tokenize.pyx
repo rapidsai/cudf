@@ -25,6 +25,8 @@ cdef class HashedVocabulary:
         with nogil:
             self.c_obj = move(cpp_load_vocabulary_file(c_hash_file))
 
+    __hash__ = None
+
 cpdef tuple[Column, Column, Column] subword_tokenize(
     Column input,
     HashedVocabulary vocabulary_table,

@@ -39,6 +39,8 @@ cdef class Scalar:
         # DeviceScalar.
         raise ValueError("Scalar should be constructed with a factory")
 
+    __hash__ = None
+
     cdef const scalar* get(self) noexcept nogil:
         return self.c_obj.get()
 

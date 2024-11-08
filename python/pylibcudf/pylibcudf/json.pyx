@@ -27,6 +27,8 @@ cdef class GetJsonObjectOptions:
         )
         self.set_missing_fields_as_nulls(missing_fields_as_nulls)
 
+    __hash__ = None
+
     def get_allow_single_quotes(self):
         """
         Returns true/false depending on whether single-quotes for representing strings

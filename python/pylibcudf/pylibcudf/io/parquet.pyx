@@ -125,6 +125,8 @@ cdef class ChunkedParquetReader:
                 )
             )
 
+    __hash__ = None
+
     cpdef bool has_next(self):
         """
         Returns True if there is another chunk in the Parquet file
