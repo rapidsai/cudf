@@ -60,14 +60,14 @@ TEST_F(QuantileTest, TestEmpty)
 TEST_F(QuantileTest, EmptyInput)
 {
   auto empty_ = cudf::tdigest::detail::make_empty_tdigests_column(
-    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    1, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<cudf::column_view> input;
   input.push_back(*empty_);
   input.push_back(*empty_);
   input.push_back(*empty_);
-  auto empty = cudf::concatenate(input);
+  auto empty = cudf::concatenate(input, cudf::test::get_default_stream());
 
   cudf::tdigest::tdigest_column_view tdv(*empty);
   auto result = cudf::percentile_approx(tdv, percentiles, cudf::test::get_default_stream());
