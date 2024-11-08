@@ -27,7 +27,7 @@ class PartitionInfo:
 
     __slots__ = ("count",)
 
-    def __init__(self, count: int | None):
+    def __init__(self, count: int):
         self.count = count
 
 
@@ -175,6 +175,6 @@ class Node(Generic[T]):
             return self._parts_info
 
     def _get_partition_info(self) -> PartitionInfo:
-        from cudf_polars.experimental.parallel import partition_info_dispatch
+        from cudf_polars.experimental.parallel import _ir_partition_info_dispatch
 
-        return partition_info_dispatch(self)
+        return _ir_partition_info_dispatch(self)
