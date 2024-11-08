@@ -22,28 +22,11 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
 
 namespace cudf::groupby::detail::hash {
-/**
- * @brief Computes and returns a device vector containing all populated keys in
- * `key_set`.
- *
- * @tparam SetType Type of key hash set
- *
- * @param key_set Key hash set
- * @param num_keys Number of input keys
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return An array of unique keys contained in `key_set`
- */
-template <typename SetType>
-rmm::device_uvector<size_type> extract_populated_keys(SetType const& key_set,
-                                                      size_type num_keys,
-                                                      rmm::cuda_stream_view stream);
-
 /**
  * @brief Computes groupby using hash table.
  *
