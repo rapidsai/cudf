@@ -97,10 +97,9 @@ cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
         "ns": RoundingFrequency.NANOSECOND,
     }
     if freq in rounding_fequency_map:
-        freq_val = rounding_fequency_map[freq]
+        return rounding_fequency_map[freq]
     else:
         raise ValueError(f"Invalid resolution: '{freq}'")
-    return freq_val
 
 
 @acquire_spill_lock()
