@@ -302,7 +302,7 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
 /**
  * @brief SNAPPY host decompressor
  */
-size_t host_decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
+size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
   uint32_t uncompressed_size, bytes_left, dst_pos;
@@ -381,50 +381,6 @@ size_t host_decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> d
   } while (bytes_left && cur < end);
   CUDF_EXPECTS(bytes_left == 0, "Snappy Decompression failed");
   return uncompressed_size;
-}
-
-/**
- * @brief SNAPPY device decompressor
- */
-size_t decompress_snappy(host_span<uint8_t const> src,
-                         host_span<uint8_t> dst,
-                         rmm::cuda_stream_view stream)
-{
-  // Init device span of spans (source)
-  auto const d_src =
-    cudf::detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
-  auto hd_srcs = cudf::detail::hostdevice_vector<device_span<uint8_t const>>(1, stream);
-  hd_srcs[0]   = d_src;
-  hd_srcs.host_to_device_async(stream);
-
-  // Init device span of spans (temporary destination)
-  auto d_dst   = rmm::device_uvector<uint8_t>(dst.size(), stream);
-  auto hd_dsts = cudf::detail::hostdevice_vector<device_span<uint8_t>>(1, stream);
-  hd_dsts[0]   = d_dst;
-  hd_dsts.host_to_device_async(stream);
-
-  auto hd_stats = cudf::detail::hostdevice_vector<compression_result>(1, stream);
-  hd_stats[0]   = compression_result{0, compression_status::FAILURE};
-  hd_stats.host_to_device_async(stream);
-
-  auto const max_uncomp_page_size = dst.size();
-  nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                             hd_srcs,
-                             hd_dsts,
-                             hd_stats,
-                             max_uncomp_page_size,
-                             max_uncomp_page_size,
-                             stream);
-
-  hd_stats.device_to_host_sync(stream);
-  CUDF_EXPECTS(hd_stats[0].status == compression_status::SUCCESS, "ZSTD decompression failed");
-
-  // Copy temporary output to `dst`
-  cudf::detail::cuda_memcpy(dst.subspan(0, hd_stats[0].bytes_written),
-                            device_span<uint8_t const>{d_dst.data(), hd_stats[0].bytes_written},
-                            stream);
-
-  return hd_stats[0].bytes_written;
 }
 
 /**
@@ -594,7 +550,7 @@ size_t decompress(compression_type compression,
   switch (compression) {
     case compression_type::GZIP: return decompress_gzip(src, dst);
     case compression_type::ZLIB: return decompress_zlib(src, dst);
-    case compression_type::SNAPPY: return decompress_snappy(src, dst, stream);
+    case compression_type::SNAPPY: return decompress_snappy(src, dst);
     case compression_type::ZSTD: return decompress_zstd(src, dst, stream);
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -647,7 +603,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   }
   if (compression == compression_type::SNAPPY) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
-    decompress_snappy(src, dst, cudf::get_default_stream());
+    decompress_snappy(src, dst);
     return dst;
   }
 

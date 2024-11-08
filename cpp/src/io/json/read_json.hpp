@@ -32,10 +32,9 @@ namespace CUDF_EXPORT cudf {
 namespace io::json::detail {
 
 // Some magic numbers
-constexpr int num_subchunks               = 10;  // per chunk_size
-constexpr size_t min_subchunk_size        = 10000;
-constexpr int estimated_compression_ratio = 4;
-constexpr int max_subchunks_prealloced    = 3;
+constexpr int num_subchunks            = 10;  // per chunk_size
+constexpr size_t min_subchunk_size     = 10000;
+constexpr int max_subchunks_prealloced = 3;
 
 /**
  * @brief Read from array of data sources into RMM buffer. The size of the returned device span
@@ -45,7 +44,6 @@ constexpr int max_subchunks_prealloced    = 3;
  *
  * @param buffer Device span buffer to which data is read
  * @param sources Array of data sources
- * @param compression Compression format of source
  * @param range_offset Number of bytes to skip from source start
  * @param range_size Number of bytes to read from source
  * @param delimiter Delimiter character for JSONL inputs
