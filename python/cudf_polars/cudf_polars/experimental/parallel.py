@@ -17,7 +17,7 @@ from cudf_polars.dsl.nodebase import PartitionInfo
 from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
+    from collections.abc import Callable, MutableMapping, Sequence
 
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
@@ -308,7 +308,14 @@ def _(expr: Col, child_ir: IR) -> MutableMapping[Any, Any]:
 ## Agg
 ##
 
-_AGG_SUPPORTED = ("sum",)
+_AGG_SUPPORTED = (
+    "min",
+    "max",
+    "first",
+    "last",
+    "sum",
+    "count",
+)
 
 
 @_expr_partition_info_dispatch.register(Agg)
@@ -327,34 +334,12 @@ def _(expr: Agg, child_ir: IR) -> PartitionInfo:
     return PartitionInfo(count=1)
 
 
-def _agg_chunk(
-    column: Column, request: plc.aggregation.Aggregation, dtype: plc.DataType
-) -> Column:
-    # TODO: This logic should be different than `request` in many cases
-    return Column(
-        plc.Column.from_scalar(
-            plc.reduce.reduce(column.obj, request, dtype),
-            1,
-        )
-    )
+def _apply_op(op: Callable, column: Column):
+    return op(column)
 
 
 def _agg_combine(columns: Sequence[Column]) -> Column:
     return Column(plc.concatenate.concatenate([col.obj for col in columns]))
-
-
-def _agg_finalize(
-    column: Column,
-    request: plc.aggregation.Aggregation,
-    dtype: plc.DataType,
-) -> Column:
-    # TODO: This logic should be different than `request` in many cases
-    return Column(
-        plc.Column.from_scalar(
-            plc.reduce.reduce(column.obj, request, dtype),
-            1,
-        )
-    )
 
 
 @generate_expr_tasks.register(Agg)
@@ -368,24 +353,39 @@ def _(expr: Agg, child_ir: IR) -> MutableMapping[Any, Any]:
     child_key = get_key_name(child)
     child_dsk = generate_expr_tasks(child, child_ir)
 
+    # Check for simple case
+    # TODO: Avoid generating entire child_dsk graph?
+    if expr.name in ("first", "last"):
+        if expr.name == "last":
+            index = npartitions_in - 1
+        else:
+            index = 0
+        return {
+            (key, 0): (
+                _apply_op,
+                expr.op,
+                # Fuse with child-expr task
+                child_dsk[(child_key, index)],
+            )
+        }
+
     # Simple all-to-one reduction
+    # TODO: Proper tree reduction
     chunk_key = f"chunk-{key}"
     combine_key = f"concat-{key}"
     graph: MutableMapping[tuple[str, int], Any] = {
         (chunk_key, i): (
-            _agg_chunk,
+            _apply_op,
+            expr.op,
             # Fuse with child-expr task
             child_dsk[(child_key, i)],
-            expr.request,
-            expr.dtype,
         )
         for i in range(npartitions_in)
     }
     graph[(combine_key, 0)] = (_agg_combine, list(graph.keys()))
     graph[(key, 0)] = (
-        _agg_finalize,
+        _apply_op,
+        expr.op,
         (combine_key, 0),
-        expr.request,
-        expr.dtype,
     )
     return graph
