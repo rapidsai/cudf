@@ -124,7 +124,7 @@ namespace CUDF_EXPORT nvtext {
  * @throw std::overflow_error if `parameter_a.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
- * @param seed  Seed value used for the hash algorithm
+ * @param seed Seed value used for the hash algorithm
  * @param parameter_a Values used for the permuted calculation
  * @param parameter_b Values used for the permuted calculation
  * @param width The character width of substrings to hash for each row
@@ -236,7 +236,7 @@ std::unique_ptr<cudf::column> minhash_permuted(
  * @throw std::overflow_error if `parameter_a.size() * input.size()` exceeds the column size limit
  *
  * @param input Strings column to compute minhash
- * @param seed  Seed value used for the hash algorithm
+ * @param seed Seed value used for the hash algorithm
  * @param parameter_a Values used for the permuted calculation
  * @param parameter_b Values used for the permuted calculation
  * @param width The character width of substrings to hash for each row

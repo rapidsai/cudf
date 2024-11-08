@@ -353,8 +353,7 @@ CUDF_KERNEL void minhash_permuted_kernel(cudf::column_device_view const d_string
   constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
 
   // found to be an efficient shared memory size for both hash types
-  __shared__ char shmem[block_size * params_per_thread * sizeof(hash_value_type)];
-  auto const block_values = reinterpret_cast<hash_value_type*>(shmem);
+  __shared__ hash_value_type block_values[block_size * params_per_thread];
 
   for (std::size_t i = 0; i < parameter_a.size(); i += params_per_thread) {
     // initialize this block's chunk of shared memory
