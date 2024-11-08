@@ -127,7 +127,7 @@ def concatenate_list_elements(Column input_column, dropna=False):
             input_column.to_pylibcudf(mode="read"),
             plc.lists.ConcatenateNullPolicy.IGNORE
             if dropna
-            else plc.lists.ConcatenateNullPolicy.NULLIFTY_OUTPUT_ROW,
+            else plc.lists.ConcatenateNullPolicy.NULLIFY_OUTPUT_ROW,
         )
     )
 
