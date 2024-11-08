@@ -116,7 +116,7 @@ def test_catboost_with_categorical_features():
             pd.DataFrame(rng.standard_normal((100, 5))),
             pd.Series(rng.standard_normal(100)),
         ),
-        (rng.standard_normal(100, 5), rng.standard_normal(100)),
+        (rng.standard_normal((100, 5)), rng.standard_normal(100)),
     ],
 )
 def test_catboost_train_test_split(X, y):
