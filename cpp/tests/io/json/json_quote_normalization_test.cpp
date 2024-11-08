@@ -34,7 +34,9 @@
 // Base test fixture for tests
 struct JsonNormalizationTest : public cudf::test::BaseFixture {};
 
-void run_test(std::string const& host_input, std::string const& expected_host_output)
+void run_test(std::string const& host_input,
+              std::string const& expected_host_output,
+              char delimiter = '\n')
 {
   // RMM memory resource
   std::shared_ptr<rmm::mr::device_memory_resource> rsc =
@@ -46,7 +48,7 @@ void run_test(std::string const& host_input, std::string const& expected_host_ou
 
   // Preprocessing FST
   cudf::io::datasource::owning_buffer<rmm::device_buffer> device_data(std::move(device_input));
-  cudf::io::json::detail::normalize_single_quotes(device_data, '\n', stream_view, rsc.get());
+  cudf::io::json::detail::normalize_single_quotes(device_data, delimiter, stream_view, rsc.get());
 
   std::string preprocessed_host_output(device_data.size(), 0);
   CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
@@ -169,6 +171,13 @@ TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_WrongBraces
 {
   std::string input  = R"(}'a': 'b'{)";
   std::string output = R"(}"a": "b"{)";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_NonNewlineDelimiter)
+{
+  std::string input  = R"({'a': 'b\n'}z{'c\n"': "d\"")";
+  std::string output = R"({"a": "b\n"}z{"c\n\"": "d\"")";
   run_test(input, output);
 }
 
