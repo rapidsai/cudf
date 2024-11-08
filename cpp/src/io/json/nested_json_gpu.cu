@@ -2198,9 +2198,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // - String columns will be returned as nullable, iff there's at least one null entry
       if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
-      // For string columns return ["offsets", "char"] schema
+      // For string columns return ["offsets"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {
