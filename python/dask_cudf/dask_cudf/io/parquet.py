@@ -21,7 +21,7 @@ class CudfFusedParquetIO(FusedParquetIO):
         frag_filters,
         columns,
         schema,
-        **to_pandas_args,
+        **to_pandas_kwargs,
     ):
         import pyarrow as pa
 
@@ -48,7 +48,7 @@ class CudfFusedParquetIO(FusedParquetIO):
         )
         return CudfReadParquetPyarrowFS._table_to_pandas(
             get(dsk, name),
-            **to_pandas_args,
+            **to_pandas_kwargs,
         )
 
 
