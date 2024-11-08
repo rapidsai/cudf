@@ -43,11 +43,13 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();
-
       timer.start();
-      cudf::io::read_parquet(read_opts);
-      timer.stop();
       auto const result = cudf::io::read_parquet(read_opts);
+      timer.stop();
+
+      setenv("LOG_COMP", "1", 1);
+      cudf::io::read_parquet(read_opts);
+      setenv("LOG_COMP", "0", 1);
 
       CUDF_EXPECTS(result.tbl->num_columns() == num_cols_to_read, "Unexpected number of columns");
       CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
@@ -216,6 +218,12 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
         CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
       } while (reader.has_next());
       timer.stop();
+
+      setenv("LOG_COMP", "1", 1);
+      do {
+        auto const _ = reader.read_chunk();
+      } while (reader.has_next());
+      setenv("LOG_COMP", "0", 1);
 
       CUDF_EXPECTS(num_rows_read == num_rows_written, "Benchmark did not read the entire table");
     });

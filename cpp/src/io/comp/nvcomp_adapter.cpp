@@ -29,6 +29,7 @@
 #include <nvcomp/snappy.h>
 #include <nvcomp/zstd.h>
 
+#include <fstream>
 #include <mutex>
 #include <numeric>
 
@@ -104,7 +105,14 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(compression == compression_type::SNAPPY, "Unsupported compression type");
   auto const num_chunks = inputs.size();
+
+  auto const h_inputs = detail::make_host_vector_sync(inputs, stream);
+  auto const total_size =
+    std::accumulate(h_inputs.begin(), h_inputs.end(), 0ul, [](auto acc, auto const& input) {
+      return acc + input.size();
+    });
 
   // cuDF inflate inputs converted to nvcomp inputs
   auto const nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
@@ -114,6 +122,7 @@ void batched_decompress(compression_type compression,
   auto const temp_size = batched_decompress_temp_size(
     compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size);
   rmm::device_buffer scratch(temp_size, stream);
+  auto start               = std::chrono::steady_clock::now();
   auto const nvcomp_status = batched_decompress_async(compression,
                                                       nvcomp_args.input_data_ptrs.data(),
                                                       nvcomp_args.input_data_sizes.data(),
@@ -126,6 +135,18 @@ void batched_decompress(compression_type compression,
                                                       nvcomp_statuses.data(),
                                                       stream.value());
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "unable to perform decompression");
+
+  auto const env_var = std::getenv("LOG_COMP");
+  if (env_var && std::string(env_var) == "1") {
+    stream.synchronize();
+    auto end_sync = std::chrono::steady_clock::now();
+    auto sync_time =
+      std::chrono::duration_cast<std::chrono::microseconds>(end_sync - start).count();
+    std::ofstream myfile;
+    myfile.open("comp_time.txt", std::ios_base::app);
+    myfile << inputs.size() << ',' << total_size << ',' << sync_time << std::endl;
+    myfile.close();
+  }
 
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
