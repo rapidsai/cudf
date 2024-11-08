@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any, overload
 
 import pyarrow as pa
@@ -10,6 +11,7 @@ from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
+@dataclass
 class ColumnMetadata:
     name: str
     children_meta: list[ColumnMetadata]
@@ -29,7 +31,7 @@ def to_arrow(
     obj: DataType,
     *,
     precision: int | None = None,
-    fields: Iterable[pa.Field | tuple[str, pa.DataType]]
+    fields: Iterable[pa.Field[pa.DataType] | tuple[str, pa.DataType]]
     | Mapping[str, pa.DataType]
     | None = None,
     value_type: pa.DataType | None = None,

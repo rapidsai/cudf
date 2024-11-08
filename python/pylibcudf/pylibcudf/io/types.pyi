@@ -3,7 +3,7 @@ import io
 import os
 from collections.abc import Mapping
 from enum import IntEnum
-from typing import Literal, TypeAlias, overload
+from typing import Any, Literal, TypeAlias, overload
 
 from pylibcudf.column import Column
 from pylibcudf.io.datasource import Datasource
@@ -83,13 +83,13 @@ class TableWithMetadata:
 
 class SourceInfo:
     def __init__(
-        self, sources: list[str] | list[os.PathLike] | list[Datasource]
+        self, sources: list[str] | list[os.PathLike[Any]] | list[Datasource]
     ) -> None: ...
 
 class SinkInfo:
     def __init__(
         self,
-        sinks: list[os.PathLike]
+        sinks: list[os.PathLike[Any]]
         | list[io.StringIO]
         | list[io.BytesIO]
         | list[io.TextIOBase]

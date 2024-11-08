@@ -6,12 +6,14 @@ from pylibcudf.table import Table
 from pylibcudf.types import NullOrder, NullPolicy, Order
 
 def sorted_order(
-    source_table: Table, column_order: list, null_precedence: list
+    source_table: Table,
+    column_order: list[Order],
+    null_precedence: list[NullOrder],
 ) -> Column: ...
 def stable_sorted_order(
     source_table: Table,
-    column_order: list,
-    null_precedence: list,
+    column_order: list[Order],
+    null_precedence: list[NullOrder],
 ) -> Column: ...
 def rank(
     input_view: Column,

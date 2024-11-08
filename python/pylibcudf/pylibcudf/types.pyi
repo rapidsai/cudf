@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from enum import IntEnum
+from typing import Final
 
 class Interpolation(IntEnum):
     LINEAR = ...
@@ -81,5 +82,5 @@ class DataType:
 
 def size_of(dtype: DataType) -> int: ...
 
-SIZE_TYPE: DataType
-SIZE_TYPE_ID: TypeId
+SIZE_TYPE: Final[DataType]
+SIZE_TYPE_ID: Final[TypeId]
