@@ -42,7 +42,7 @@ public final class ContiguousTable implements AutoCloseable {
   }
 
   /** Construct a contiguous table instance given a table and the device buffer backing it. */
-  public ContiguousTable(Table table, DeviceMemoryBuffer buffer) {
+  ContiguousTable(Table table, DeviceMemoryBuffer buffer) {
     this.meta = new PackedColumnMetadata(createPackedMetadata(table.getNativeView(),
             buffer.getAddress(), buffer.getLength()));
     this.table = table;
