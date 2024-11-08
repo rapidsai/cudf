@@ -81,7 +81,7 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
  * - tgt2_idx = d_indices[map_idx+1] = 1 --> d_targets[1] == 'hello'
  * The logic now only needs to check for either of these 2 targets.
  *
- * This kernel works in either row-per-string or warp-per-string depending
+ * This kernel works in either thread-per-string or warp-per-string depending
  * on the template parameter. If tile_size==1, then this kernel executes as
  * a row-per-string. If tile_size=32, the it executes as a warp-per-string.
  * No other options are supported for now.
