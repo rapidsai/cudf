@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import pandas as pd
+from datetime import datetime
+
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq, assert_table_eq
@@ -73,13 +74,18 @@ def test_repeat_with_count_column(pa_table):
 
 def test_calendrical_month_sequence():
     n = 5
+    init_date = datetime(2020, 1, 31)
     init = plc.interop.from_arrow(
-        pa.scalar(pd.Timestamp("2020-01-31"), type=pa.timestamp("ms"))
+        pa.scalar(init_date, type=pa.timestamp("ms"))
     )
     months = 1
     result = plc.filling.calendrical_month_sequence(n, init, months)
-    expected_dates = pd.to_datetime(
-        ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30", "2020-05-31"]
-    )
+    expected_dates = [
+        datetime(2020, 1, 31),
+        datetime(2020, 2, 29),
+        datetime(2020, 3, 31),
+        datetime(2020, 4, 30),
+        datetime(2020, 5, 31),
+    ]
     expect = pa.array(expected_dates, type=pa.timestamp("ms"))
     assert_column_eq(result, expect)
