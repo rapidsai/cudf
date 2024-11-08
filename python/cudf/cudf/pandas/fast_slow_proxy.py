@@ -879,7 +879,7 @@ class _MethodProxy(_FunctionProxy):
         setattr(self._fsproxy_slow, "__name__", value)
 
     @property
-    def __customqualname__(self):
+    def _customqualname(self):
         return self._fsproxy_slow.__qualname__
 
 
@@ -1021,26 +1021,30 @@ def _transform_arg(
             if (
                 len(arg) > 0
                 and isinstance(arg[0], _MethodProxy)
-                and arg[0].__customqualname__ in _SPECIAL_FUNCTIONS_ARGS_MAP
+                and arg[0]._customqualname in _SPECIAL_FUNCTIONS_ARGS_MAP
             ):
                 indices_map = _SPECIAL_FUNCTIONS_ARGS_MAP[
-                    arg[0].__customqualname__
+                    arg[0]._customqualname
                 ]
-                method_proxy, cust_args, cust_kwargs = arg
+                method_proxy, original_args, original_kwargs = arg
 
-                cust_args = tuple(
+                original_args = tuple(
                     _transform_arg(a, "_fsproxy_slow", seen)
                     if i - 1 in indices_map
                     else _transform_arg(a, attribute_name, seen)
-                    for i, a in enumerate(cust_args)
+                    for i, a in enumerate(original_args)
                 )
-                cust_kwargs = _transform_arg(cust_kwargs, attribute_name, seen)
-                res = (
-                    _transform_arg(method_proxy, attribute_name, seen),
-                    tuple(cust_args),
-                    cust_kwargs,
+                original_kwargs = _transform_arg(
+                    original_kwargs, attribute_name, seen
                 )
-                return res
+                return tuple(
+                    (
+                        _transform_arg(method_proxy, attribute_name, seen),
+                        original_args,
+                        original_kwargs,
+                    )
+                )
+                # return res
             else:
                 return tuple(
                     _transform_arg(a, attribute_name, seen) for a in arg

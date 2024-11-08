@@ -12,6 +12,7 @@ import pathlib
 import pickle
 import subprocess
 import tempfile
+import time
 import types
 from io import BytesIO, StringIO
 
@@ -1797,15 +1798,19 @@ def test_iter_doesnot_raise(monkeypatch):
             pass
 
 
-@pytest.mark.timeout(5)
 def test_dataframe_setitem_slowdown():
-    # We are explictily testing the slowdown of the setitem operation
+    # We are explicitly testing the slowdown of the setitem operation
     df = xpd.DataFrame(
         {"a": [1, 2, 3] * 100000, "b": [1, 2, 3] * 100000}
     ).astype("float64")
     df = xpd.DataFrame({"a": df["a"].repeat(1000), "b": df["b"].repeat(1000)})
     new_df = df + 1
+    start_time = time.time()
     df[df.columns] = new_df
+    end_time = time.time()
+    delta = int(end_time - start_time)
+    if delta > 5:
+        pytest.fail(f"Test took too long to run, runtime: {delta}")
 
 
 def test_dataframe_setitem():
