@@ -1,12 +1,12 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from enum import IntEnum, auto
+from enum import IntEnum
 
 from pylibcudf.column import Column
 
 class RoundingMethod(IntEnum):
-    HALF_UP = auto()
-    HALF_EVEN = auto()
+    HALF_UP = ...
+    HALF_EVEN = ...
 
 def round(
     source: Column,

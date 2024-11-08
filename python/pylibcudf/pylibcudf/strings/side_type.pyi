@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-from enum import IntEnum, auto
+from enum import IntEnum
 
 class SideType(IntEnum):
-    LEFT = auto()
-    RIGHT = auto()
-    BOTH = auto()
+    LEFT = ...
+    RIGHT = ...
+    BOTH = ...

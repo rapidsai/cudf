@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from enum import IntEnum, auto
+from enum import IntEnum
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
@@ -8,12 +8,12 @@ from pylibcudf.table import Table
 from pylibcudf.types import NanEquality, NullEquality, NullOrder, Order
 
 class ConcatenateNullPolicy(IntEnum):
-    IGNORE = auto()
-    NULLIFY_OUTPUT_ROW = auto()
+    IGNORE = ...
+    NULLIFY_OUTPUT_ROW = ...
 
 class DuplicateFindOption(IntEnum):
-    FIND_FIRST = auto()
-    FIND_LAST = auto()
+    FIND_FIRST = ...
+    FIND_LAST = ...
 
 def explode_outer(input: Table, explode_column_idx: int) -> Table: ...
 def concatenate_rows(input: Table) -> Column: ...

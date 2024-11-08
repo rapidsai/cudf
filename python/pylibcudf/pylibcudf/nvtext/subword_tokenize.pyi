@@ -3,7 +3,7 @@
 from pylibcudf.column import Column
 
 class HashedVocabulary:
-    def __init__(self, hash_file: str) -> None: ...
+    def __init__(self, hash_file: str): ...
 
 def subword_tokenize(
     input: Column,

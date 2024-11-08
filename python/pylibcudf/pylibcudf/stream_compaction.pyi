@@ -1,16 +1,16 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from enum import IntEnum, auto
+from enum import IntEnum
 
 from pylibcudf.column import Column
 from pylibcudf.table import Table
 from pylibcudf.types import NanEquality, NanPolicy, NullEquality, NullPolicy
 
 class DuplicateKeepOption(IntEnum):
-    KEEP_ANY = auto()
-    KEEP_FIRST = auto()
-    KEEP_LAST = auto()
-    KEEP_NONE = auto()
+    KEEP_ANY = ...
+    KEEP_FIRST = ...
+    KEEP_LAST = ...
+    KEEP_NONE = ...
 
 def drop_nulls(
     source_table: Table, keys: list[int], keep_threshold: int

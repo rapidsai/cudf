@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-from enum import IntEnum, auto
+from enum import IntEnum
 
 class RegexFlags(IntEnum):
-    DEFAULT = auto()
-    MULTILINE = auto()
-    DOTALL = auto()
+    DEFAULT = ...
+    MULTILINE = ...
+    DOTALL = ...

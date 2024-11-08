@@ -1,13 +1,13 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from enum import IntEnum, auto
+from enum import IntEnum
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 
 class ReplacePolicy(IntEnum):
-    PRECEDING = auto()
-    FOLLOWING = auto()
+    PRECEDING = ...
+    FOLLOWING = ...
 
 def replace_nulls(
     source_column: Column, replacement: Column | Scalar | ReplacePolicy

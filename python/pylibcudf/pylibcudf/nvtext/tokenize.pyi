@@ -4,7 +4,7 @@ from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
 
 class TokenizeVocabulary:
-    def __init__(self, vocab: Column) -> None: ...
+    def __init__(self, vocab: Column): ...
 
 def tokenize_scalar(
     input: Column, delimiter: Scalar | None = None

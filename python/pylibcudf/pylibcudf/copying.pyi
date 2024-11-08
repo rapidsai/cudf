@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from enum import IntEnum, auto
+from enum import IntEnum
 from typing import TypeVar
 
 from pylibcudf.column import Column
@@ -8,13 +8,13 @@ from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 
 class MaskAllocationPolicy(IntEnum):
-    NEVER = auto()
-    RETAIN = auto()
-    ALWAYS = auto()
+    NEVER = ...
+    RETAIN = ...
+    ALWAYS = ...
 
 class OutOfBoundsPolicy(IntEnum):
-    NULLIFY = auto()
-    DONT_CHECK = auto()
+    NULLIFY = ...
+    DONT_CHECK = ...
 
 ColumnOrTable = TypeVar("ColumnOrTable", Column, Table)
 
