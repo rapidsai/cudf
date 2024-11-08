@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,14 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <iterator>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 namespace iterators {
 /**
@@ -136,4 +137,4 @@ template <class T>
 
 }  // namespace iterators
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

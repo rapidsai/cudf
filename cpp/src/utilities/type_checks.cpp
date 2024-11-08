@@ -21,8 +21,6 @@
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <algorithm>
 
 namespace cudf {
@@ -137,11 +135,6 @@ bool scalars_equal_fn::operator()<struct_view>(scalar const& lhs, scalar const& 
 bool have_same_types(column_view const& lhs, column_view const& rhs)
 {
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
-}
-
-bool column_types_equal(column_view const& lhs, column_view const& rhs)
-{
-  return have_same_types(lhs, rhs);
 }
 
 bool have_same_types(column_view const& lhs, scalar const& rhs)

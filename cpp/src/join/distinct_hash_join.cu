@@ -24,11 +24,10 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
@@ -54,7 +53,7 @@ auto prepare_device_equal(
   cudf::null_equality compare_nulls)
 {
   auto const two_table_equal =
-    cudf::experimental::row::equality::two_table_comparator(build, probe);
+    cudf::experimental::row::equality::two_table_comparator(probe, build);
   return comparator_adapter{two_table_equal.equal_to<HasNested == cudf::has_nested::YES>(
     nullate::DYNAMIC{has_nulls}, compare_nulls)};
 }
@@ -113,13 +112,13 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
     _hash_table{build.num_rows(),
                 CUCO_DESIRED_LOAD_FACTOR,
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
-                                           lhs_index_type{JoinNoneValue}}},
+                                           rhs_index_type{JoinNoneValue}}},
                 prepare_device_equal<HasNested>(
                   _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls),
                 {},
                 cuco::thread_scope_device,
                 cuco_storage_type{},
-                cudf::detail::cuco_allocator{stream},
+                cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
                 stream.value()}
 {
   CUDF_FUNC_RANGE();
@@ -131,7 +130,7 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
   auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
 
   auto const iter = cudf::detail::make_counting_transform_iterator(
-    0, build_keys_fn<decltype(d_hasher), lhs_index_type>{d_hasher});
+    0, build_keys_fn<decltype(d_hasher), rhs_index_type>{d_hasher});
 
   size_type const build_table_num_rows{build.num_rows()};
   if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(this->_build))) {
@@ -139,7 +138,8 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
   } else {
     auto stencil = thrust::counting_iterator<size_type>{0};
     auto const row_bitmask =
-      cudf::detail::bitmask_and(this->_build, stream, rmm::mr::get_current_device_resource()).first;
+      cudf::detail::bitmask_and(this->_build, stream, cudf::get_current_device_resource_ref())
+        .first;
     auto const pred =
       cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 
@@ -174,7 +174,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
   auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
   auto const iter           = cudf::detail::make_counting_transform_iterator(
-    0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
+    0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
   auto const build_indices_begin =
     thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
@@ -216,7 +216,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::l
       cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
     auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
     auto const iter           = cudf::detail::make_counting_transform_iterator(
-      0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
+      0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
     auto const output_begin =
       thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});

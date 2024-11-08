@@ -49,9 +49,16 @@ struct type_casted_accessor {
                                         column_device_view const& col,
                                         bool is_scalar) const
   {
-    if constexpr (column_device_view::has_element_accessor<Element>() and
-                  std::is_convertible_v<Element, CastType>)
-      return static_cast<CastType>(col.element<Element>(is_scalar ? 0 : i));
+    if constexpr (column_device_view::has_element_accessor<Element>()) {
+      auto const element = col.element<Element>(is_scalar ? 0 : i);
+      if constexpr (std::is_convertible_v<Element, CastType>) {
+        return static_cast<CastType>(element);
+      } else if constexpr (is_fixed_point<Element>() && cuda::std::is_floating_point_v<CastType>) {
+        return convert_fixed_to_floating<CastType>(element);
+      } else if constexpr (is_fixed_point<CastType>() && cuda::std::is_floating_point_v<Element>) {
+        return convert_floating_to_fixed<CastType>(element, numeric::scale_type{0});
+      }
+    }
     return {};
   }
 };
@@ -159,6 +166,7 @@ struct ops2_wrapper {
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
                       std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or

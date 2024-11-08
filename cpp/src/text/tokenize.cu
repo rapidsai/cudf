@@ -19,6 +19,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -27,6 +28,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/tokenize.hpp>
@@ -34,7 +36,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/atomic>
 #include <thrust/copy.h>
@@ -79,14 +80,14 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
 {
   // get the number of tokens in each string
   auto const token_counts =
-    token_count_fn(strings_count, tokenizer, stream, rmm::mr::get_current_device_resource());
+    token_count_fn(strings_count, tokenizer, stream, cudf::get_current_device_resource_ref());
   auto d_token_counts = token_counts->view();
   // create token-index offsets from the counts
   auto [token_offsets, total_tokens] =
     cudf::detail::make_offsets_child_column(d_token_counts.template begin<cudf::size_type>(),
                                             d_token_counts.template end<cudf::size_type>(),
                                             stream,
-                                            rmm::mr::get_current_device_resource());
+                                            cudf::get_current_device_resource_ref());
   //  build a list of pointers to each token
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   // now go get the tokens
@@ -221,7 +222,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // To minimize memory, count the number of characters so we can
   // build the output offsets without an intermediate buffer.
   // In the worst case each byte is a character so the output is 4x the input.
-  rmm::device_scalar<int64_t> d_count(0, stream);
+  cudf::detail::device_scalar<int64_t> d_count(0, stream);
   auto const num_blocks = cudf::util::div_rounding_up_safe(
     cudf::util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)),
     block_size);

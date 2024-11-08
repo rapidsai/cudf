@@ -17,27 +17,25 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <limits>
 #include <memory>
-#include <stdexcept>
 
 using TestTypes = cudf::test::Types<int32_t>;
 
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto s = new ScalarType(cudf::test::make_type_param_scalar<T>(0), false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
@@ -47,7 +45,7 @@ template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource())
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto s = new ScalarType(value, true, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);

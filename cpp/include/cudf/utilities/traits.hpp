@@ -22,9 +22,7 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cuda/std/type_traits>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup utility_types
@@ -622,4 +620,4 @@ struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestam
 
 /** @} */
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

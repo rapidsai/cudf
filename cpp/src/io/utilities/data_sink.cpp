@@ -15,8 +15,9 @@
  */
 
 #include "file_io_utilities.hpp"
-#include "io/utilities/config_utils.hpp"
 
+#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -40,7 +41,8 @@ class file_sink : public data_sink {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
 
-    if (detail::cufile_integration::is_kvikio_enabled()) {
+    if (cufile_integration::is_kvikio_enabled()) {
+      cufile_integration::set_thread_pool_nthreads_from_env();
       _kvikio_file = kvikio::FileHandle(filepath, "w");
       CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");
@@ -49,7 +51,8 @@ class file_sink : public data_sink {
     }
   }
 
-  ~file_sink() override { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~file_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {
@@ -113,7 +116,8 @@ class host_buffer_sink : public data_sink {
  public:
   explicit host_buffer_sink(std::vector<char>* buffer) : buffer_(buffer) {}
 
-  ~host_buffer_sink() override { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~host_buffer_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {

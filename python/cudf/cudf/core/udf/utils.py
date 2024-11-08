@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import functools
 import os
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import cachetools
 import cupy as cp
@@ -38,8 +38,11 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
     TIMEDELTA_TYPES,
 )
-from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import initfunc
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Maximum size of a string column is 2 GiB
 _STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)
@@ -71,7 +74,7 @@ def _ptx_file():
     )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _get_udf_return_type(argty, func: Callable, args=()):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
@@ -123,25 +126,23 @@ def _get_udf_return_type(argty, func: Callable, args=()):
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
-        colname: col.dtype
-        if str(col.dtype) in supported_types
-        else np.dtype("O")
-        for colname, col in frame._data.items()
+        colname: dtype if str(dtype) in supported_types else np.dtype("O")
+        for colname, dtype in frame._dtypes
     }
 
 
 def _supported_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
-        colname: col.dtype
-        for colname, col in frame._data.items()
-        if str(col.dtype) in supported_types
+        colname: dtype
+        for colname, dtype in frame._dtypes
+        if str(dtype) in supported_types
     }
 
 
 def _supported_cols_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
         colname: col
-        for colname, col in frame._data.items()
+        for colname, col in frame._column_labels_and_values
         if str(col.dtype) in supported_types
     }
 
@@ -229,14 +230,14 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
         *cudautils.make_cache_key(
             func, tuple(_all_dtypes_from_frame(frame).values())
         ),
-        *(col.mask is None for col in frame._data.values()),
-        *frame._data.keys(),
+        *(col.mask is None for col in frame._columns),
+        *frame._column_names,
         scalar_argtypes,
         suffix,
     )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _compile_or_get(
     frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"
 ):

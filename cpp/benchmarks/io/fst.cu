@@ -95,7 +95,9 @@ void BM_FST_JSON(nvbench::state& state)
   auto parser = cudf::io::fst::detail::make_fst(
     cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
     cudf::io::fst::detail::make_transition_table(pda_state_tt),
-    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size,
+                                                  min_translated_out,
+                                                  max_translated_out>(pda_out_tt),
     stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
@@ -134,7 +136,9 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
   auto parser = cudf::io::fst::detail::make_fst(
     cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
     cudf::io::fst::detail::make_transition_table(pda_state_tt),
-    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size,
+                                                  min_translated_out,
+                                                  max_translated_out>(pda_out_tt),
     stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
@@ -171,7 +175,9 @@ void BM_FST_JSON_no_out(nvbench::state& state)
   auto parser = cudf::io::fst::detail::make_fst(
     cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
     cudf::io::fst::detail::make_transition_table(pda_state_tt),
-    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size,
+                                                  min_translated_out,
+                                                  max_translated_out>(pda_out_tt),
     stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
@@ -209,7 +215,9 @@ void BM_FST_JSON_no_str(nvbench::state& state)
   auto parser = cudf::io::fst::detail::make_fst(
     cudf::io::fst::detail::make_symbol_group_lut(pda_sgs),
     cudf::io::fst::detail::make_transition_table(pda_state_tt),
-    cudf::io::fst::detail::make_translation_table<max_translation_table_size>(pda_out_tt),
+    cudf::io::fst::detail::make_translation_table<max_translation_table_size,
+                                                  min_translated_out,
+                                                  max_translated_out>(pda_out_tt),
     stream);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));

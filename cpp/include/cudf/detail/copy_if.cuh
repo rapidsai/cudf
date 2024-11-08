@@ -18,10 +18,12 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/table/table.hpp>
@@ -29,15 +31,14 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <cuda/atomic>
@@ -242,8 +243,8 @@ struct scatter_gather_functor {
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
   {
-    auto output_column = cudf::detail::allocate_like(
-      input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
+    auto output_column =
+      cudf::allocate_like(input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
     auto output = output_column->mutable_view();
 
     bool has_valid = input.nullable();
@@ -255,7 +256,7 @@ struct scatter_gather_functor {
 
     cudf::detail::grid_1d grid{input.size(), block_size, per_thread};
 
-    rmm::device_scalar<cudf::size_type> null_count{0, stream};
+    cudf::detail::device_scalar<cudf::size_type> null_count{0, stream};
     if (output.nullable()) {
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().

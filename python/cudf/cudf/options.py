@@ -5,10 +5,10 @@ import os
 import textwrap
 from contextlib import ContextDecorator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Container
+    from collections.abc import Callable, Container
 
 
 @dataclass
@@ -305,6 +305,46 @@ _register_option(
         If set to `True`, enables pandas compatibility mode,
         which will try to match pandas API behaviors in case of
         any inconsistency.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "memory_profiling",
+    _env_get_bool("CUDF_MEMORY_PROFILING", False),
+    textwrap.dedent(
+        """
+        If set to `False`, disables memory profiling.
+        If set to `True`, enables memory profiling.
+        Read more at: :ref:`memory-profiling-user-doc`
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "io.parquet.low_memory",
+    False,
+    textwrap.dedent(
+        """
+        If set to `False`, reads entire parquet in one go.
+        If set to `True`, reads parquet file in chunks.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "io.json.low_memory",
+    False,
+    textwrap.dedent(
+        """
+        If set to `False`, reads entire json in one go.
+        If set to `True`, reads json file in chunks.
         \tValid values are True or False. Default is False.
     """
     ),

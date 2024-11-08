@@ -6,43 +6,26 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from libc.stdint cimport int64_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+import pylibcudf
+
 import cudf
-from cudf._lib import pylibcudf
 from cudf._lib.types import LIBCUDF_TO_SUPPORTED_NUMPY_TYPES
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 
-cimport cudf._lib.pylibcudf.libcudf.types as libcudf_types
+cimport pylibcudf.libcudf.types as libcudf_types
 # We currently need this cimport because some of the implementations here
 # access the c_obj of the scalar, and because we need to be able to call
 # pylibcudf.Scalar.from_libcudf. Both of those are temporarily acceptable until
 # DeviceScalar is phased out entirely from cuDF Cython (at which point
 # cudf.Scalar will be directly backed by pylibcudf.Scalar).
-from cudf._lib.pylibcudf cimport Scalar as plc_Scalar
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport (
-    duration_scalar,
-    list_scalar,
-    scalar,
-    struct_scalar,
-    timestamp_scalar,
-)
-from cudf._lib.pylibcudf.libcudf.wrappers.durations cimport (
-    duration_ms,
-    duration_ns,
-    duration_s,
-    duration_us,
-)
-from cudf._lib.pylibcudf.libcudf.wrappers.timestamps cimport (
-    timestamp_ms,
-    timestamp_ns,
-    timestamp_s,
-    timestamp_us,
-)
+from pylibcudf cimport Scalar as plc_Scalar
+from pylibcudf.libcudf.scalar.scalar cimport list_scalar, scalar, struct_scalar
+
 from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 
@@ -282,62 +265,6 @@ cdef class DeviceScalar:
             ]
 
 
-# TODO: Currently the only uses of this function and the one below are in
-# _create_proxy_nat_scalar. See if that code path can be simplified to excise
-# or at least simplify these implementations.
-cdef _set_datetime64_from_np_scalar(unique_ptr[scalar]& s,
-                                    object value,
-                                    object dtype,
-                                    bool valid=True):
-
-    value = value if valid else 0
-
-    if dtype == "datetime64[s]":
-        s.reset(
-            new timestamp_scalar[timestamp_s](<int64_t>np.int64(value), valid)
-        )
-    elif dtype == "datetime64[ms]":
-        s.reset(
-            new timestamp_scalar[timestamp_ms](<int64_t>np.int64(value), valid)
-        )
-    elif dtype == "datetime64[us]":
-        s.reset(
-            new timestamp_scalar[timestamp_us](<int64_t>np.int64(value), valid)
-        )
-    elif dtype == "datetime64[ns]":
-        s.reset(
-            new timestamp_scalar[timestamp_ns](<int64_t>np.int64(value), valid)
-        )
-    else:
-        raise ValueError(f"dtype not supported: {dtype}")
-
-cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
-                                     object value,
-                                     object dtype,
-                                     bool valid=True):
-
-    value = value if valid else 0
-
-    if dtype == "timedelta64[s]":
-        s.reset(
-            new duration_scalar[duration_s](<int64_t>np.int64(value), valid)
-        )
-    elif dtype == "timedelta64[ms]":
-        s.reset(
-            new duration_scalar[duration_ms](<int64_t>np.int64(value), valid)
-        )
-    elif dtype == "timedelta64[us]":
-        s.reset(
-            new duration_scalar[duration_us](<int64_t>np.int64(value), valid)
-        )
-    elif dtype == "timedelta64[ns]":
-        s.reset(
-            new duration_scalar[duration_ns](<int64_t>np.int64(value), valid)
-        )
-    else:
-        raise ValueError(f"dtype not supported: {dtype}")
-
-
 def as_device_scalar(val, dtype=None):
     if isinstance(val, (cudf.Scalar, DeviceScalar)):
         if dtype == val.dtype or dtype is None:
@@ -359,22 +286,3 @@ def _is_null_host_scalar(slr):
         return True
     else:
         return False
-
-
-def _create_proxy_nat_scalar(dtype):
-    cdef DeviceScalar result = DeviceScalar.__new__(DeviceScalar)
-
-    dtype = cudf.dtype(dtype)
-    if dtype.char in 'mM':
-        nat = dtype.type('NaT').astype(dtype)
-        if dtype.type == np.datetime64:
-            _set_datetime64_from_np_scalar(
-                (<plc_Scalar> result.c_value).c_obj, nat, dtype, True
-            )
-        elif dtype.type == np.timedelta64:
-            _set_timedelta64_from_np_scalar(
-                (<plc_Scalar> result.c_value).c_obj, nat, dtype, True
-            )
-        return result
-    else:
-        raise TypeError('NAT only valid for datetime and timedelta')

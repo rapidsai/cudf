@@ -9,7 +9,7 @@ from dask.distributed import Client
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 import dask_cudf
 
@@ -80,6 +80,11 @@ def test_str_series_roundtrip():
 
 
 def test_p2p_shuffle():
+    pytest.importorskip(
+        "pyarrow",
+        minversion="14.0.1",
+        reason="P2P shuffling requires pyarrow>=14.0.1",
+    )
     # Check that we can use `shuffle_method="p2p"`
     with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
         with Client(cluster):

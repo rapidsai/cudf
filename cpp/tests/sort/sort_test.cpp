@@ -28,7 +28,6 @@
 #include <cudf/types.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/sort.h>
 
 #include <type_traits>
 #include <vector>
@@ -1087,7 +1086,7 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
   child_columns2.push_back(std::move(child_col_1));
   int_col col4{{5, 4, 3, 2, 1, 0}};
   std::vector<std::unique_ptr<cudf::column>> grand_child;
-  grand_child.push_back(std::move(col4.release()));
+  grand_child.push_back(col4.release());
   auto child_col_2 = cudf::make_structs_column(6, std::move(grand_child), 0, rmm::device_buffer{});
   child_columns2.push_back(std::move(child_col_2));
   auto struct_col3 =

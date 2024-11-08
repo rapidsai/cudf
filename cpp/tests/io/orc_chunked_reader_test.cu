@@ -37,6 +37,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -79,7 +80,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         null_count,
         std::move(col),
         cudf::get_default_stream(),
-        rmm::mr::get_current_device_resource());
+        cudf::get_current_device_resource_ref());
 
       // Shift nulls of the next column by one position, to avoid having all nulls
       // in the same table rows.
@@ -121,7 +122,7 @@ auto chunked_read(std::string const& filepath,
 
   // TODO: remove this scope, when we get rid of mem stat in the reader.
   // This is to avoid use-after-free of memory resource created by the mem stat object.
-  auto mr = rmm::mr::get_current_device_resource();
+  auto mr = cudf::get_current_device_resource_ref();
 
   do {
     auto chunk = reader.read_chunk();
@@ -1357,10 +1358,11 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   int64_t constexpr total_rows  = num_rows * num_reps;
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
-  auto const it  = cudf::detail::make_counting_transform_iterator(0l, [num_rows](int64_t i) {
-    return (i % num_rows) % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
-  });
-  auto const col = data_col(it, it + num_rows);
+  auto const it = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<int64_t>(0), [num_rows](int64_t i) {
+      return (i % num_rows) % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
+    });
+  auto const col         = data_col(it, it + num_rows);
   auto const chunk_table = cudf::table_view{{col}};
 
   std::vector<char> data_buffer;

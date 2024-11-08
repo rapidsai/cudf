@@ -17,10 +17,10 @@ import cudf
 from cudf import concat
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
 )
 from cudf.utils import dtypes as dtypeutils
@@ -36,6 +36,7 @@ data_id_list = ["no_nulls", "some_nulls", "all_nulls"]
 idx_list = [None, [10, 11, 12, 13, 14]]
 
 idx_id_list = ["None_index", "Set_index"]
+rng = np.random.default_rng(seed=0)
 
 
 def raise_builder(flags, exceptions):
@@ -132,9 +133,14 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         cupy.asarray(np.array([True] * 5)),
         cupy.asarray(np.array([False] * 5)),
-        np.random.randint(0, 2, 5).astype("bool").tolist(),
-        np.random.randint(0, 2, 5).astype("bool"),
-        cupy.asarray(np.random.randint(0, 2, 5).astype("bool")),
+        np.random.default_rng(seed=0)
+        .integers(0, 2, 5)
+        .astype("bool")
+        .tolist(),
+        np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool"),
+        cupy.asarray(
+            np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool")
+        ),
     ],
 )
 def test_string_bool_mask(ps_gs, item):
@@ -978,6 +984,22 @@ def test_string_split_re(data, pat, n, expand):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("pat", [None, "\\s+"])
+@pytest.mark.parametrize("regex", [False, True])
+@pytest.mark.parametrize("expand", [False, True])
+def test_string_split_all_empty(pat, regex, expand):
+    ps = pd.Series(["", "", "", ""], dtype="str")
+    gs = cudf.Series(["", "", "", ""], dtype="str")
+
+    expect = ps.str.split(pat=pat, expand=expand, regex=regex)
+    got = gs.str.split(pat=pat, expand=expand, regex=regex)
+
+    if isinstance(got, cudf.DataFrame):
+        assert_eq(expect, got, check_column_type=False)
+    else:
+        assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
@@ -1062,7 +1084,8 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
-    pdf = pd.DataFrame(np.random.rand(5, 5))
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(5, 5)))
     gdf = cudf.DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
     pdf.index = stringIndex
@@ -1076,7 +1099,7 @@ def test_string_index():
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    stringIndex = cudf.Index(
+    stringIndex = cudf.Index._from_column(
         cudf.core.column.as_column(["a", "b", "c", "d", "e"]), name="name"
     )
     pdf.index = stringIndex.to_pandas()
@@ -1883,6 +1906,26 @@ def test_string_findall(pat, flags):
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "pat, flags, pos",
+    [
+        ("Monkey", 0, [-1, 0, -1, -1]),
+        ("on", 0, [2, 1, -1, 1]),
+        ("bit", 0, [-1, -1, 3, -1]),
+        ("on$", 0, [2, -1, -1, -1]),
+        ("on$", re.MULTILINE, [2, -1, -1, 1]),
+        ("o.*k", re.DOTALL, [-1, 1, -1, 1]),
+    ],
+)
+def test_string_find_re(pat, flags, pos):
+    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
+    gs = cudf.Series(test_data)
+
+    expected = pd.Series(pos, dtype=np.int32)
+    actual = gs.str.find_re(pat, flags)
+    assert_eq(expected, actual)
+
+
 def test_string_replace_multi():
     ps = pd.Series(["hello", "goodbye"])
     gs = cudf.Series(["hello", "goodbye"])
@@ -2672,12 +2715,14 @@ def test_string_ip4_to_int():
 
 
 def test_string_int_to_ipv4():
-    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
+    gsr = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449]).astype(
+        "uint32"
+    )
     expected = cudf.Series(
         ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
     )
 
-    got = cudf.Series(gsr._column.int2ip())
+    got = cudf.Series._from_column(gsr._column.int2ip())
 
     assert_eq(expected, got)
 
@@ -2718,7 +2763,7 @@ def test_string_isipv4():
 
 
 @pytest.mark.parametrize(
-    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int64", "uint64"}))
+    "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"uint32"}))
 )
 def test_string_int_to_ipv4_dtype_fail(dtype):
     gsr = cudf.Series([1, 2, 3, 4, 5]).astype(dtype)

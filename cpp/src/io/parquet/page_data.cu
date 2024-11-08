@@ -17,11 +17,16 @@
 #include "page_data.cuh"
 #include "page_decode.cuh"
 
+#include <cudf/detail/utilities/batched_memcpy.hpp>
+
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
+
+namespace cg = cooperative_groups;
 
 namespace {
 
@@ -277,6 +282,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
+    auto const tile_warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
@@ -298,9 +304,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
       } else if (s->col.physical_type == BYTE_ARRAY or
                  s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
-        gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
+        gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile_warp);
       }
-      if (t == 32) { s->dict_pos = src_target_pos; }
+      if (tile_warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       int const dtype = s->col.physical_type;
@@ -461,6 +467,30 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
     gpuDecodeSplitPageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
+}
+
+void WriteFinalOffsets(host_span<size_type const> offsets,
+                       host_span<size_type* const> buff_addrs,
+                       rmm::cuda_stream_view stream)
+{
+  // Copy offsets to device and create an iterator
+  auto d_src_data = cudf::detail::make_device_uvector_async(
+    offsets, stream, cudf::get_current_device_resource_ref());
+  // Iterator for the source (scalar) data
+  auto src_iter = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<std::size_t>(0),
+    cuda::proclaim_return_type<cudf::size_type*>(
+      [src = d_src_data.begin()] __device__(std::size_t i) { return src + i; }));
+
+  // Copy buffer addresses to device and create an iterator
+  auto d_dst_addrs = cudf::detail::make_device_uvector_async(
+    buff_addrs, stream, cudf::get_current_device_resource_ref());
+  // size_iter is simply a constant iterator of sizeof(size_type) bytes.
+  auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
+
+  // Copy offsets to buffers in batched manner.
+  cudf::detail::batched_memcpy_async(
+    src_iter, d_dst_addrs.begin(), size_iter, offsets.size(), stream);
 }
 
 }  // namespace cudf::io::parquet::detail

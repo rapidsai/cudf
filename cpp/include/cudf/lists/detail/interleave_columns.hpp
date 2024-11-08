@@ -17,13 +17,12 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 
 /**
  * @brief Returns a single column by interleaving rows of the given table of list elements.
@@ -50,6 +49,5 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace lists
-}  // namespace cudf
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

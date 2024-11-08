@@ -15,24 +15,33 @@ This page provides API documentation for pylibcudf.
     concatenate
     copying
     datetime
+    expressions
     filling
     gpumemoryview
     groupby
-    io/index.rst
+    hashing
+    interop
     join
+    json
+    labeling
     lists
     merge
+    null_mask
+    partitioning
     quantiles
     reduce
+    replace
     reshape
     rolling
     round
     scalar
     search
-    stream_compaction
     sorting
-    replace
+    stream_compaction
     table
+    traits
+    transform
+    transpose
     types
     unary
 
@@ -40,4 +49,6 @@ This page provides API documentation for pylibcudf.
     :maxdepth: 2
     :caption: Subpackages
 
+    io/index.rst
     strings/index.rst
+    nvtext/index.rst

@@ -19,8 +19,9 @@ else:
 
 
 def _make_random_frame(nelem, npartitions=2, include_na=False):
+    rng = np.random.default_rng(seed=None)
     df = pd.DataFrame(
-        {"x": np.random.random(size=nelem), "y": np.random.random(size=nelem)}
+        {"x": rng.random(size=nelem), "y": rng.random(size=nelem)}
     )
 
     if include_na:
@@ -48,3 +49,7 @@ def xfail_dask_expr(reason=_default_reason, lt_version=None):
     else:
         xfail = QUERY_PLANNING_ON
     return pytest.mark.xfail(xfail, reason=reason)
+
+
+def require_dask_expr(reason="requires dask-expr"):
+    return pytest.mark.skipif(not QUERY_PLANNING_ON, reason=reason)

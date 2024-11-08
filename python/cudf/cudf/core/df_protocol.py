@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import enum
 from collections import abc
-from typing import Any, Iterable, Mapping, Sequence, Tuple, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
@@ -13,7 +13,15 @@ import rmm
 
 import cudf
 from cudf.core.buffer import Buffer, as_buffer
-from cudf.core.column import as_column, build_categorical_column, build_column
+from cudf.core.column import (
+    CategoricalColumn,
+    NumericalColumn,
+    as_column,
+    build_column,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
 
 # Implementation of interchange protocol classes
 # ----------------------------------------------
@@ -56,7 +64,7 @@ _SUPPORTED_KINDS = {
     _DtypeKind.BOOL,
     _DtypeKind.STRING,
 }
-ProtoDtype = Tuple[_DtypeKind, int, str, str]
+ProtoDtype = tuple[_DtypeKind, int, str, str]
 
 
 class _CuDFBuffer:
@@ -648,7 +656,7 @@ _CP_DTYPES = {
 
 def from_dataframe(
     df: DataFrameObject, allow_copy: bool = False
-) -> _CuDFDataFrame:
+) -> cudf.DataFrame:
     """
     Construct a ``DataFrame`` from ``df`` if it supports the
     dataframe interchange protocol (``__dataframe__``).
@@ -830,18 +838,19 @@ def _protocol_to_cudf_column_categorical(
     assert buffers["data"] is not None, "data buffer should not be None"
     codes_buffer, codes_dtype = buffers["data"]
     codes_buffer = _ensure_gpu_buffer(codes_buffer, codes_dtype, allow_copy)
-    cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
-    codes = build_column(
-        codes_buffer._buf,
-        cdtype,
+    cdtype = np.dtype(protocol_dtype_to_cupy_dtype(codes_dtype))
+    codes = NumericalColumn(
+        data=codes_buffer._buf,
+        size=None,
+        dtype=cdtype,
     )
-
-    cudfcol = build_categorical_column(
-        categories=categories,
-        codes=codes,
-        mask=codes.base_mask,
+    cudfcol = CategoricalColumn(
+        data=None,
         size=codes.size,
-        ordered=ordered,
+        dtype=cudf.CategoricalDtype(categories=categories, ordered=ordered),
+        mask=codes.base_mask,
+        offset=codes.offset,
+        children=(codes,),
     )
 
     return _set_missing_values(col, cudfcol, allow_copy), buffers

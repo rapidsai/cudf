@@ -4,7 +4,8 @@ from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 
-from cudf._lib import pylibcudf
+import pylibcudf
+
 from cudf._lib.aggregation import make_aggregation
 
 

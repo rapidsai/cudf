@@ -21,7 +21,7 @@
 #include <memory>
 #include <string>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 /**
@@ -53,6 +53,8 @@ struct regex_program {
   static std::unique_ptr<regex_program> create(std::string_view pattern,
                                                regex_flags flags      = regex_flags::DEFAULT,
                                                capture_groups capture = capture_groups::EXTRACT);
+
+  regex_program() = delete;
 
   /**
    * @brief Move constructor
@@ -115,8 +117,6 @@ struct regex_program {
   ~regex_program();
 
  private:
-  regex_program() = delete;
-
   std::string _pattern;
   regex_flags _flags;
   capture_groups _capture;
@@ -135,4 +135,4 @@ struct regex_program {
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

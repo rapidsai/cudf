@@ -16,11 +16,12 @@
 
 #pragma once
 
-#include <rmm/resource_ref.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <optional>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Set the rmm resource to be used for pinned memory allocations.
@@ -55,4 +56,36 @@ struct pinned_mr_options {
  */
 bool config_default_pinned_memory_resource(pinned_mr_options const& opts);
 
-}  // namespace cudf
+/**
+ * @brief Set the threshold size for using kernels for pinned memory copies.
+ *
+ * @param threshold The threshold size in bytes. If the size of the copy is less than this
+ * threshold, the copy will be done using kernels. If the size is greater than or equal to this
+ * threshold, the copy will be done using cudaMemcpyAsync.
+ */
+void set_kernel_pinned_copy_threshold(size_t threshold);
+
+/**
+ * @brief Get the threshold size for using kernels for pinned memory copies.
+ *
+ * @return The threshold size in bytes.
+ */
+size_t get_kernel_pinned_copy_threshold();
+
+/**
+ * @brief Set the threshold size for allocating host memory as pinned memory.
+ *
+ * @param threshold The threshold size in bytes. If the size of the allocation is less or equal to
+ * this threshold, the memory will be allocated as pinned memory. If the size is greater than this
+ * threshold, the memory will be allocated as pageable memory.
+ */
+void set_allocate_host_as_pinned_threshold(size_t threshold);
+
+/**
+ * @brief Get the threshold size for allocating host memory as pinned memory.
+ *
+ * @return The threshold size in bytes.
+ */
+size_t get_allocate_host_as_pinned_threshold();
+
+}  // namespace CUDF_EXPORT cudf

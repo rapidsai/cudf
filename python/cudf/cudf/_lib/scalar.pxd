@@ -3,9 +3,8 @@
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
-from rmm._lib.memory_resource cimport DeviceMemoryResource
-
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 
 cdef class DeviceScalar:

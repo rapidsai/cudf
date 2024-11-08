@@ -9,7 +9,8 @@ import dask
 from dask import dataframe as dd
 
 from cudf import DataFrame, Series, date_range
-from cudf.testing._utils import assert_eq, does_not_raise
+from cudf.testing import assert_eq
+from cudf.testing._utils import does_not_raise
 
 import dask_cudf
 from dask_cudf.tests.utils import xfail_dask_expr
@@ -24,7 +25,7 @@ def data_dt_1():
 
 
 def data_dt_2():
-    return np.random.randn(100)
+    return np.random.default_rng(seed=0).standard_normal(size=100)
 
 
 dt_fields = ["year", "month", "day", "hour", "minute", "second"]

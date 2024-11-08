@@ -26,7 +26,7 @@
 #include <numeric>
 #include <utility>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 // Visitor pattern
@@ -683,7 +683,7 @@ class ewma_aggregation final : public scan_aggregation {
   {
   }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<ewma_aggregation>(*this);
   }
@@ -694,7 +694,7 @@ class ewma_aggregation final : public scan_aggregation {
     return collector.visit(col_type, *this);
   }
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewma_aggregation const&>(_other);
@@ -1497,8 +1497,7 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
  *
  * @tparam F Type of callable
  * @param k The `aggregation::Kind` value to dispatch
- * aram f The callable that accepts an `aggregation::Kind` non-type template
- * argument.
+ * @param f The callable that accepts an `aggregation::Kind` callable function object.
  * @param args Parameter pack forwarded to the `operator()` invocation
  * @return Forwards the return value of the callable.
  */
@@ -1626,6 +1625,7 @@ struct dispatch_source {
  * parameter of the callable `F`
  * @param k The `aggregation::Kind` used to dispatch an `aggregation::Kind`
  * non-type template parameter for the second template parameter of the callable
+ * @param f The callable that accepts `data_type` and `aggregation::Kind` function object.
  * @param args Parameter pack forwarded to the `operator()` invocation
  * `F`.
  */
@@ -1644,8 +1644,8 @@ CUDF_HOST_DEVICE inline constexpr decltype(auto) dispatch_type_and_aggregation(d
  * @brief Returns the target `data_type` for the specified aggregation  k
  * performed on elements of type  source_type.
  *
- * aram source_type The element type to be aggregated
- * aram k The aggregation
+ * @param source_type The element type to be aggregated
+ * @param k The aggregation kind
  * @return data_type The target_type of  k performed on  source_type
  * elements
  */
@@ -1674,4 +1674,4 @@ constexpr inline bool is_valid_aggregation()
 bool is_valid_aggregation(data_type source, aggregation::Kind k);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

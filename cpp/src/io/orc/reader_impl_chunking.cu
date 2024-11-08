@@ -500,6 +500,8 @@ void reader_impl::load_next_stripe_data(read_mode mode)
   auto const [read_begin, read_end] =
     merge_selected_ranges(_file_itm_data.stripe_data_read_ranges, load_stripe_range);
 
+  bool stream_synchronized{false};
+
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
     auto const& read_info = _file_itm_data.data_read_info[read_idx];
     auto const source_ptr = _metadata.per_file_metadata[read_info.source_idx].source;
@@ -507,10 +509,17 @@ void reader_impl::load_next_stripe_data(read_mode mode)
       lvl_stripe_data[read_info.level][read_info.stripe_idx - stripe_start].data());
 
     if (source_ptr->is_device_read_preferred(read_info.length)) {
-      device_read_tasks.push_back(
-        std::pair(source_ptr->device_read_async(
-                    read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
-                  read_info.length));
+      // `device_read_async` may not use _stream at all.
+      // Instead, it may use some other stream(s) to sync the H->D memcpy.
+      // As such, we need to make sure the device buffers in `lvl_stripe_data` are ready first.
+      if (!stream_synchronized) {
+        _stream.synchronize();
+        stream_synchronized = true;
+      }
+      device_read_tasks.emplace_back(
+        source_ptr->device_read_async(
+          read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
+        read_info.length);
 
     } else {
       auto buffer = source_ptr->host_read(read_info.offset, read_info.length);
@@ -659,8 +668,8 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
-        hd_compinfo.begin(), hd_compinfo.d_begin(), stream_range.size());
+      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>{hd_compinfo}.subspan(
+        0, stream_range.size());
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =

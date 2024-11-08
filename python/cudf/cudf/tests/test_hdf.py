@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, UNSIGNED_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, UNSIGNED_TYPES
 
 pytest.importorskip("tables")
 

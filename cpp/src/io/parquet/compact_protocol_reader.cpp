@@ -137,10 +137,11 @@ class parquet_field_bool : public parquet_field {
 struct parquet_field_bool_list : public parquet_field_list<bool, FieldType::BOOLEAN_TRUE> {
   parquet_field_bool_list(int f, std::vector<bool>& v) : parquet_field_list(f, v)
   {
-    auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const current_byte = cpr->getb();
       assert_bool_field_type(current_byte);
-      this->val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
+      val[i] = current_byte == static_cast<int>(FieldType::BOOLEAN_TRUE);
     };
     bind_read_func(read_value);
   }
@@ -188,8 +189,9 @@ template <typename T, FieldType EXPECTED_TYPE>
 struct parquet_field_int_list : public parquet_field_list<T, EXPECTED_TYPE> {
   parquet_field_int_list(int f, std::vector<T>& v) : parquet_field_list<T, EXPECTED_TYPE>(f, v)
   {
-    auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      this->val[i] = cpr->get_zigzag<T>();
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
+      val[i] = cpr->get_zigzag<T>();
     };
     this->bind_read_func(read_value);
   }
@@ -226,14 +228,16 @@ class parquet_field_string : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * string fails
  */
-struct parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
+class parquet_field_string_list : public parquet_field_list<std::string, FieldType::BINARY> {
+ public:
   parquet_field_string_list(int f, std::vector<std::string>& v) : parquet_field_list(f, v)
   {
-    auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(l < static_cast<size_t>(cpr->m_end - cpr->m_cur), "string length mismatch");
 
-      this->val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
+      val[i].assign(reinterpret_cast<char const*>(cpr->m_cur), l);
       cpr->m_cur += l;
     };
     bind_read_func(read_value);
@@ -269,8 +273,9 @@ struct parquet_field_enum_list : public parquet_field_list<Enum, FieldType::I32>
   parquet_field_enum_list(int f, std::vector<Enum>& v)
     : parquet_field_list<Enum, FieldType::I32>(f, v)
   {
-    auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      this->val[i] = static_cast<Enum>(cpr->get_i32());
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
+      val[i] = static_cast<Enum>(cpr->get_i32());
     };
     this->bind_read_func(read_value);
   }
@@ -304,10 +309,10 @@ class parquet_field_struct : public parquet_field {
 template <typename E, typename T>
 class parquet_field_union_struct : public parquet_field {
   E& enum_val;
-  thrust::optional<T>& val;  // union structs are always wrapped in std::optional
+  std::optional<T>& val;  // union structs are always wrapped in std::optional
 
  public:
-  parquet_field_union_struct(int f, E& ev, thrust::optional<T>& v)
+  parquet_field_union_struct(int f, E& ev, std::optional<T>& v)
     : parquet_field(f), enum_val(ev), val(v)
   {
   }
@@ -354,8 +359,9 @@ struct parquet_field_struct_list : public parquet_field_list<T, FieldType::STRUC
   parquet_field_struct_list(int f, std::vector<T>& v)
     : parquet_field_list<T, FieldType::STRUCT>(f, v)
   {
-    auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
-      cpr->read(&this->val[i]);
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
+      cpr->read(&val[i]);
     };
     this->bind_read_func(read_value);
   }
@@ -391,14 +397,16 @@ class parquet_field_binary : public parquet_field {
  * @return True if field types mismatch or if the process of reading a
  * binary fails
  */
-struct parquet_field_binary_list
+class parquet_field_binary_list
   : public parquet_field_list<std::vector<uint8_t>, FieldType::BINARY> {
+ public:
   parquet_field_binary_list(int f, std::vector<std::vector<uint8_t>>& v) : parquet_field_list(f, v)
   {
-    auto const read_value = [this](uint32_t i, CompactProtocolReader* cpr) {
+    auto const read_value = [&val = v](uint32_t i, CompactProtocolReader* cpr) {
       auto const l = cpr->get_u32();
       CUDF_EXPECTS(l <= static_cast<size_t>(cpr->m_end - cpr->m_cur), "binary length mismatch");
 
+      CUDF_EXPECTS(i < val.size(), "Index out of bounds");
       val[i].resize(l);
       val[i].assign(cpr->m_cur, cpr->m_cur + l);
       cpr->m_cur += l;
@@ -431,10 +439,10 @@ class parquet_field_struct_blob : public parquet_field {
  */
 template <typename T, typename FieldFunctor>
 class parquet_field_optional : public parquet_field {
-  thrust::optional<T>& val;
+  std::optional<T>& val;
 
  public:
-  parquet_field_optional(int f, thrust::optional<T>& v) : parquet_field(f), val(v) {}
+  parquet_field_optional(int f, std::optional<T>& v) : parquet_field(f), val(v) {}
 
   inline void operator()(CompactProtocolReader* cpr, int field_type)
   {
@@ -482,9 +490,7 @@ void CompactProtocolReader::skip_struct_field(int t, int depth)
         skip_struct_field(t, depth + 1);
       }
       break;
-    default:
-      // printf("unsupported skip for type %d\n", t);
-      break;
+    default: break;
   }
 }
 

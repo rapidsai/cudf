@@ -1,4 +1,4 @@
-# libcudf C++ Developer Guide
+# libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
 
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
 to these additional files for further documentation of libcudf best practices.
@@ -52,15 +52,36 @@ header file in `cudf/cpp/include/cudf/`. For example, `cudf/cpp/include/cudf/cop
 contains the APIs for functions related to copying from one column to another. Note the `.hpp`
 file extension used to indicate a C++ header file.
 
-Header files should use the `#pragma once` include guard.
+External/public libcudf C++ API header files need to mark all symbols inside of them with `CUDF_EXPORT`.
+This is done by placing the macro on the `namespace cudf` as seen below. Markup on namespace
+require them not to be nested, so the `cudf` namespace must be kept by itself.
+
+```c++
+
+#pragma once
+
+namespace CUDF_EXPORT cudf {
+namespace lists {
+
+...
+
+
+} // namespace lists
+} // namespace CUDF_EXPORT cudf
+
+```
+
 
 The naming of external API headers should be consistent with the name of the folder that contains
 the source files that implement the API. For example, the implementation of the APIs found in
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for
 the APIs reside in `cudf/tests/copying/`.
 
-Internal API headers containing `detail` namespace definitions that are used across translation
-units inside libcudf should be placed in `include/cudf/detail`.
+Internal API headers containing `detail` namespace definitions that are either used across translation
+units inside libcudf should be placed in `include/cudf/detail`. Just like the public C++ API headers, any
+internal C++ API header requires `CUDF_EXPORT` markup on the `cudf` namespace so that the functions can be tested.
+
+All headers in cudf should use `#pragma once` for include guards.
 
 ## File extensions
 
@@ -202,17 +223,17 @@ can be passed to libcudf functions via `rmm::device_async_resource_ref` paramete
 
 ### Current Device Memory Resource
 
-RMM provides a "default" memory resource for each device that can be accessed and updated via the
-`rmm::mr::get_current_device_resource()` and `rmm::mr::set_current_device_resource(...)` functions,
-respectively. All memory resource parameters should be defaulted to use the return value of
-`rmm::mr::get_current_device_resource()`.
+RMM provides a "default" memory resource for each device and functions to access and set it. libcudf
+provides wrappers for these functions in `cpp/include/cudf/utilities/memory_resource.hpp`.
+All memory resource parameters should be defaulted to use the return value of
+`cudf::get_current_device_resource_ref()`.
 
 ### Resource Refs
 
 Memory resources are passed via resource ref parameters. A resource ref is a memory resource wrapper
 that enables consumers to specify properties of resources that they expect. These are defined
-in the `cuda::mr` namespace of libcu++, but RMM provides some convenience wrappers in
-`rmm/resource_ref.hpp`:
+in the `cuda::mr` namespace of libcu++, but RMM provides some convenience aliases in
+`rmm/resource_ref.hpp`.
  - `rmm::device_resource_ref` accepts a memory resource that provides synchronous allocation
     of device-accessible memory.
  - `rmm::device_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
@@ -226,7 +247,8 @@ in the `cuda::mr` namespace of libcu++, but RMM provides some convenience wrappe
  - `rmm::host_async_resource_ref` accepts a memory resource that provides stream-ordered allocation
     of host- and device-accessible memory.
 
-See the libcu++ [docs on `resource_ref`](https://nvidia.github.io/cccl/libcudacxx/extended_api/memory_resource/resource_ref.html) for more information.
+See the libcu++ [docs on `resource_ref`](https://nvidia.github.io/cccl/libcudacxx/extended_api/memory_resource/resource_ref.html)
+for more information.
 
 ## cudf::column
 
@@ -348,7 +370,7 @@ any type that cudf supports. For example, a `list_scalar` representing a list of
 |Value type|Scalar class|Notes|
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
-|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`|
+|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int64_t`, `float` or `double`|
 |fixed-point|`fixed_point_scalar<T>` | `T` can be `numeric::decimal32` or `numeric::decimal64`|
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
@@ -469,7 +491,7 @@ libcudf throws under different circumstances, see the [section on error handling
 
 # libcudf API and Implementation
 
-## Streams
+## Streams {#streams}
 
 libcudf is in the process of adding support for asynchronous execution using
 CUDA streams. In order to facilitate the usage of streams, all new libcudf APIs
@@ -486,33 +508,37 @@ use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
+The declaration is not necessary if no other libcudf functions call the `detail` function.
 
 For example:
 
 ```c++
 // cpp/include/cudf/header.hpp
-void external_function(...);
+void external_function(...,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 // cpp/include/cudf/detail/header.hpp
 namespace detail{
-void external_function(..., rmm::cuda_stream_view stream)
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 } // namespace detail
 
 // cudf/src/implementation.cpp
 namespace detail{
-    // Use the stream parameter in the detail implementation.
-    void external_function(..., rmm::cuda_stream_view stream){
-        // Implementation uses the stream with async APIs.
-        rmm::device_buffer buff(...,stream);
-        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
-        kernel<<<..., stream>>>(...);
-        thrust::algorithm(rmm::exec_policy(stream), ...);
-    }
+// Use the stream parameter in the detail implementation.
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr){
+  // Implementation uses the stream with async APIs.
+  rmm::device_buffer buff(..., stream, mr);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+  kernel<<<..., stream>>>(...);
+  thrust::algorithm(rmm::exec_policy(stream), ...);
+}
 } // namespace detail
 
-void external_function(...){
-    CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., cudf::get_default_stream());
+void external_function(..., rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
+  detail::external_function(..., stream, mr);
 }
 ```
 
@@ -550,7 +576,7 @@ whose outputs will be returned. Example:
 // Returned `column` contains newly allocated memory,
 // therefore the API must accept a memory resource pointer
 std::unique_ptr<column> returns_output_memory(
-  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
+  ..., rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 // This API does not allocate any new *output* memory, therefore
 // a memory resource is unnecessary
@@ -561,17 +587,17 @@ This rule automatically applies to all detail APIs that allocate memory. Any det
 called by any public API, and therefore could be allocating memory that is returned to the user.
 To support such uses cases, all detail APIs allocating memory resources should accept an `mr`
 parameter. Callers are responsible for either passing through a provided `mr` or
-`rmm::mr::get_current_device_resource()` as needed.
+`cudf::get_current_device_resource_ref()` as needed.
 
 ### Temporary Memory
 
 Not all memory allocated within a libcudf API is returned to the caller. Often algorithms must
 allocate temporary, scratch memory for intermediate results. Always use the default resource
-obtained from `rmm::mr::get_current_device_resource()` for temporary memory allocations. Example:
+obtained from `cudf::get_current_device_resource_ref()` for temporary memory allocations. Example:
 
 ```c++
 rmm::device_buffer some_function(
-  ..., rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource()) {
+  ..., rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) {
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
     ...
     rmm::device_buffer temporary_buffer(...); // Temporary buffer uses default MR
@@ -588,7 +614,7 @@ use memory resources for device memory allocation with automated lifetime manage
 #### rmm::device_buffer
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
 memory resource. If no `rmm::device_async_resource_ref` is explicitly provided, it uses
-`rmm::mr::get_current_device_resource()`.
+`cudf::get_current_device_resource_ref()`.
 
 `rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the
 `device_buffer`'s device memory on the specified stream, whereas a move moves ownership of the
@@ -660,7 +686,7 @@ rmm::device_uvector<int32_t> v(100, s);
 // Initializes the elements to 0
 thrust::uninitialized_fill(thrust::cuda::par.on(s.value()), v.begin(), v.end(), int32_t{0});
 
-rmm::mr::device_memory_resource * mr = new my_custom_resource{...};
+auto mr = new my_custom_resource{...};
 // Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the resource `mr`
 rmm::device_uvector<int32_t> v2{100, s, mr};
 ```
@@ -703,28 +729,28 @@ The preferred style for how inputs are passed in and outputs are returned is the
     - `column_view const&`
   - Tables:
     - `table_view const&`
-    - Scalar:
-        - `scalar const&`
-    - Everything else:
-       - Trivial or inexpensively copied types
-          - Pass by value
-       - Non-trivial or expensive to copy types
-          - Pass by `const&`
+  - Scalar:
+    - `scalar const&`
+  - Everything else:
+    - Trivial or inexpensively copied types
+      - Pass by value
+    - Non-trivial or expensive to copy types
+      - Pass by `const&`
 - In/Outs
   - Columns:
     - `mutable_column_view&`
   - Tables:
     - `mutable_table_view&`
-    - Everything else:
-        - Pass by via raw pointer
+  - Everything else:
+    - Pass by via raw pointer
 - Outputs
   - Outputs should be *returned*, i.e., no output parameters
   - Columns:
     - `std::unique_ptr<column>`
   - Tables:
     - `std::unique_ptr<table>`
-    - Scalars:
-        - `std::unique_ptr<scalar>`
+  - Scalars:
+    - `std::unique_ptr<scalar>`
 
 
 ### Multiple Return Values
@@ -907,6 +933,10 @@ group a broad set of functions, further namespaces may be used. For example, the
 functions that are specific to columns of Strings. These functions reside in the `cudf::strings::`
 namespace. Similarly, functionality used exclusively for unit testing is in the `cudf::test::`
 namespace.
+
+The public function is expected to contain a call to `CUDF_FUNC_RANGE()` followed by a call to
+a `detail` function with same name and parameters as the public function.
+See the [Streams](#streams) section for an example of this pattern.
 
 ### Internal
 
@@ -1452,6 +1482,17 @@ and therefore `cudf::list_view` is the data type of a `cudf::column` of type `LI
 struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` of type `STRUCT`.
 
 `cudf::type_dispatcher` dispatches to the `struct_view` data type when invoked on a `STRUCT` column.
+
+# Empty Columns
+
+The libcudf columns support empty, typed content. These columns have no data and no validity mask.
+Empty strings or lists columns may or may not contain a child offsets column.
+It is undefined behavior (UB) to access the offsets child of an empty strings or lists column.
+Nested columns like lists and structs may require other children columns to provide the
+nested structure of the empty types.
+
+Use `cudf::make_empty_column()` to create fixed-width and strings columns.
+Use `cudf::empty_like()` to create an empty column from an existing `cudf::column_view`.
 
 # cuIO: file reading and writing
 

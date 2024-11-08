@@ -28,19 +28,19 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/optional.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
 
@@ -123,7 +123,7 @@ struct format_compiler {
     : format(fmt), d_items(0, stream)
   {
     specifiers.insert(extra_specifiers.begin(), extra_specifiers.end());
-    std::vector<format_item> items;
+    auto items  = cudf::detail::make_empty_host_vector<format_item>(format.length(), stream);
     auto str    = format.data();
     auto length = format.length();
     while (length > 0) {
@@ -161,7 +161,7 @@ struct format_compiler {
 
     // copy format_items to device memory
     d_items = cudf::detail::make_device_uvector_async(
-      items, stream, rmm::mr::get_current_device_resource());
+      items, stream, cudf::get_current_device_resource_ref());
   }
 
   device_span<format_item const> format_items() { return device_span<format_item const>(d_items); }
@@ -519,7 +519,7 @@ struct check_datetime_format {
    * The checking here is a little more strict than the actual
    * parser used for conversion.
    */
-  __device__ thrust::optional<timestamp_components> check_string(string_view const& d_string)
+  __device__ cuda::std::optional<timestamp_components> check_string(string_view const& d_string)
   {
     timestamp_components dateparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -529,7 +529,7 @@ struct check_datetime_format {
       // eliminate static character values first
       if (item.item_type == format_char_type::literal) {
         // check static character matches
-        if (*ptr != item.value) return thrust::nullopt;
+        if (*ptr != item.value) return cuda::std::nullopt;
         ptr += item.length;
         length -= item.length;
         continue;
@@ -645,7 +645,7 @@ struct check_datetime_format {
         case 'Z': result = true;  // skip
         default: break;
       }
-      if (!result) return thrust::nullopt;
+      if (!result) return cuda::std::nullopt;
       ptr += bytes_read;
       length -= bytes_read;
     }
@@ -821,7 +821,7 @@ struct datetime_formatter_fn {
     // We only dissect the timestamp into components if needed
     // by a specifier. And then we only do it once and reuse it.
     // This can improve performance when not using uncommon specifiers.
-    thrust::optional<cuda::std::chrono::sys_days> days;
+    cuda::std::optional<cuda::std::chrono::sys_days> days;
 
     auto days_from_timestamp = [tstamp]() {
       auto const count = tstamp.time_since_epoch().count();

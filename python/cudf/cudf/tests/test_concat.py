@@ -9,12 +9,10 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @contextmanager
@@ -32,6 +30,7 @@ def _hide_concat_empty_dtype_warning():
 
 
 def make_frames(index=None, nulls="none"):
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
             "x": range(10),
@@ -53,7 +52,7 @@ def make_frames(index=None, nulls="none"):
         df2.y = np.full_like(df2.y, np.nan)
     if nulls == "some":
         mask = np.arange(10)
-        np.random.shuffle(mask)
+        rng.shuffle(mask)
         mask = mask[:5]
         df.loc[mask, "y"] = np.nan
         df2.loc[mask, "y"] = np.nan
@@ -205,10 +204,9 @@ def test_concat_misordered_columns():
 
 @pytest.mark.parametrize("axis", [1, "columns"])
 def test_concat_columns(axis):
-    pdf1 = pd.DataFrame(np.random.randint(10, size=(5, 3)), columns=[1, 2, 3])
-    pdf2 = pd.DataFrame(
-        np.random.randint(10, size=(5, 4)), columns=[4, 5, 6, 7]
-    )
+    rng = np.random.default_rng(seed=0)
+    pdf1 = pd.DataFrame(rng.integers(10, size=(5, 3)), columns=[1, 2, 3])
+    pdf2 = pd.DataFrame(rng.integers(10, size=(5, 4)), columns=[4, 5, 6, 7])
     gdf1 = cudf.from_pandas(pdf1)
     gdf2 = cudf.from_pandas(pdf2)
 
@@ -454,45 +452,75 @@ def test_concat_mixed_input():
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
-        [
-            pd.Series([1, 2, 3.0, 1.2], name="abc"),
-            pd.DataFrame({"a": [1, 2]}),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
+        pytest.param(
+            [
+                pd.Series([1, 2, 3.0, 1.2], name="abc"),
+                pd.DataFrame({"a": [1, 2]}),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame({"a": [1, 2]}),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
+                ),
+                pd.DataFrame({"a": [1, 2]}),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
+                ),
+                pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2, 8, 100],
+                    name="New name",
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+                pd.DataFrame(
+                    {"a": [1, 2, 4, 10, 11, 12]},
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+            ],
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2, 8, 100],
+                    name="New name",
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+                pd.DataFrame(
+                    {"a": [1, 2, 4, 10, 11, 12]},
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+            ]
+            * 7,
+            marks=pytest.mark.skipif(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
-            ),
-        ]
-        * 7,
+        ),
     ],
 )
 def test_concat_series_dataframe_input(objs):
@@ -1370,11 +1398,12 @@ def test_concat_single_object(ignore_index, typ):
     ],
 )
 def test_concat_decimal_dataframe(ltype, rtype):
+    rng = np.random.default_rng(seed=0)
     gdf1 = cudf.DataFrame(
-        {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
+        {"id": rng.integers(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
     )
     gdf2 = cudf.DataFrame(
-        {"id": np.random.randint(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
+        {"id": rng.integers(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
     )
 
     gdf1["val"] = gdf1["val"].astype(ltype)

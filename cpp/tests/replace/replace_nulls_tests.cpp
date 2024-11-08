@@ -20,13 +20,11 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -674,7 +672,7 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
   cudf::test::fixed_width_column_wrapper<int64_t> input_empty_w({});
   auto input_empty = cudf::dictionary::encode(input_empty_w);
   auto result      = cudf::replace_nulls(input_empty->view(), input_empty->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input_empty->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), input_empty->view());
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)

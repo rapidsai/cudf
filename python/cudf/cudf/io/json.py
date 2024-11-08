@@ -9,7 +9,6 @@ import pandas as pd
 
 import cudf
 from cudf._lib import json as libjson
-from cudf.api.types import is_list_like
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
 
@@ -62,37 +61,15 @@ def read_json(
                 f"following positional arguments: {list(args)}"
             )
 
-        # Multiple sources are passed as a list. If a single source is passed,
-        # wrap it in a list for unified processing downstream.
-        if not is_list_like(path_or_buf):
-            path_or_buf = [path_or_buf]
-
-        filepaths_or_buffers = []
-        for source in path_or_buf:
-            if ioutils.is_directory(
-                path_or_data=source, storage_options=storage_options
-            ):
-                fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None,
-                    path=source,
-                    storage_options=storage_options,
-                )
-                source = ioutils.stringify_pathlike(source)
-                source = fs.sep.join([source, "*.json"])
-
-            tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-                path_or_data=source,
-                compression=compression,
-                iotypes=(BytesIO, StringIO),
-                allow_raw_text_input=True,
-                storage_options=storage_options,
-                warn_on_raw_text_input=True,
-                warn_meta=("json", "read_json"),
-            )
-            if isinstance(tmp_source, list):
-                filepaths_or_buffers.extend(tmp_source)
-            else:
-                filepaths_or_buffers.append(tmp_source)
+        filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+            path_or_buf,
+            iotypes=(BytesIO, StringIO),
+            allow_raw_text_input=True,
+            storage_options=storage_options,
+            warn_on_raw_text_input=True,
+            warn_meta=("json", "read_json"),
+            expand_dir_pattern="*.json",
+        )
 
         df = libjson.read_json(
             filepaths_or_buffers=filepaths_or_buffers,
@@ -111,25 +88,18 @@ def read_json(
             "be GPU accelerated in the future"
         )
 
-        if not ioutils.ensure_single_filepath_or_buffer(
+        filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
-            storage_options=storage_options,
-        ):
-            raise NotImplementedError(
-                "`read_json` does not yet support reading "
-                "multiple files via pandas"
-            )
-
-        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=path_or_buf,
-            compression=compression,
             iotypes=(BytesIO, StringIO),
             allow_raw_text_input=True,
             storage_options=storage_options,
         )
+        filepath_or_buffer = ioutils._select_single_source(
+            filepath_or_buffer, "read_json (via pandas)"
+        )
 
         pd_value = pd.read_json(
-            path_or_buf,
+            filepath_or_buffer,
             lines=lines,
             dtype=dtype,
             compression=compression,

@@ -1,4 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION
+from __future__ import annotations
+
+import warnings
+from typing import TYPE_CHECKING
 
 import numba
 import pandas as pd
@@ -13,25 +17,29 @@ from cudf.core.mixins import Reducible
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
+if TYPE_CHECKING:
+    from cudf.core.column.column import ColumnBase
+
 
 class _RollingBase:
     """
-    Contains methods common to all kinds of rolling
+    Contains routines to apply a window aggregation to a column.
     """
 
-    def _apply_agg_dataframe(self, df, agg_name):
-        result_df = cudf.DataFrame({})
-        for i, col_name in enumerate(df.columns):
-            result_col = self._apply_agg_series(df[col_name], agg_name)
-            result_df.insert(i, col_name, result_col)
-        result_df.index = df.index
-        return result_df
+    obj: cudf.DataFrame | cudf.Series
 
-    def _apply_agg(self, agg_name):
-        if isinstance(self.obj, cudf.Series):
-            return self._apply_agg_series(self.obj, agg_name)
-        else:
-            return self._apply_agg_dataframe(self.obj, agg_name)
+    def _apply_agg_column(
+        self, source_column: ColumnBase, agg_name: str
+    ) -> ColumnBase:
+        raise NotImplementedError
+
+    def _apply_agg(self, agg_name: str) -> cudf.DataFrame | cudf.Series:
+        applied = (
+            self._apply_agg_column(col, agg_name) for col in self.obj._columns
+        )
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(applied)
+        )
 
 
 class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
@@ -196,17 +204,26 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         obj,
         window,
         min_periods=None,
-        center=False,
+        center: bool = False,
+        win_type: str | None = None,
+        on=None,
         axis=0,
-        win_type=None,
+        closed: str | None = None,
+        step: int | None = None,
+        method: str = "single",
     ):
         self.obj = obj
         self.window = window
         self.min_periods = min_periods
         self.center = center
         self._normalize()
-        self.agg_params = {}
+        # for var & std only?
+        self.agg_params: dict[str, int] = {}
         if axis != 0:
+            warnings.warn(
+                "axis is deprecated with will be removed in a future version. "
+                "Transpose the DataFrame first instead."
+            )
             raise NotImplementedError("axis != 0 is not supported yet.")
         self.axis = axis
 
@@ -216,6 +233,15 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     "Only the default win_type 'boxcar' is currently supported"
                 )
         self.win_type = win_type
+
+        if on is not None:
+            raise NotImplementedError("on is currently not supported")
+        if closed not in (None, "right"):
+            raise NotImplementedError("closed is currently not supported")
+        if step is not None:
+            raise NotImplementedError("step is currently not supported")
+        if method != "single":
+            raise NotImplementedError("method is currently not supported")
 
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
@@ -267,14 +293,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             center=self.center,
             op=agg_name,
             agg_params=self.agg_params,
-        )
-
-    def _apply_agg(self, agg_name):
-        applied = (
-            self._apply_agg_column(col, agg_name) for col in self.obj._columns
-        )
-        return self.obj._from_data_like_self(
-            self.obj._data._from_columns_like_self(applied)
         )
 
     def _reduce(

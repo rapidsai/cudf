@@ -20,10 +20,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <algorithm>
-#include <cassert>
 #include <vector>
 
 namespace cudf {
@@ -50,12 +47,6 @@ auto concatenate_column_views(std::vector<ViewType> const& views)
     concat_cols.insert(concat_cols.end(), view.begin(), view.end());
   }
   return concat_cols;
-}
-
-template <typename ColumnView>
-ColumnView const& table_view_base<ColumnView>::column(size_type column_index) const
-{
-  return _columns.at(column_index);
 }
 
 // Explicit instantiation for a table of `column_view`s
@@ -172,6 +163,7 @@ bool has_nested_columns(table_view const& table)
   return std::any_of(
     table.begin(), table.end(), [](column_view const& col) { return is_nested(col.type()); });
 }
-
 }  // namespace detail
+
+bool has_nested_columns(table_view const& table) { return detail::has_nested_columns(table); }
 }  // namespace cudf

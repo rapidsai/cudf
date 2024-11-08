@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil nvtx3::nvtx3-cpp
+         cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -35,15 +35,44 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
 )
 
+add_library(
+  ndsh_data_generator STATIC
+  common/ndsh_data_generator/ndsh_data_generator.cpp common/ndsh_data_generator/table_helpers.cpp
+  common/ndsh_data_generator/random_column_generator.cu
+)
+target_compile_features(ndsh_data_generator PUBLIC cxx_std_17 cuda_std_17)
+
+target_compile_options(
+  ndsh_data_generator PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                             "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
+
+target_link_libraries(
+  ndsh_data_generator
+  PUBLIC cudf cudf::cudftestutil nvtx3::nvtx3-cpp
+  PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
+)
+
+target_include_directories(
+  ndsh_data_generator
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
+
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
 
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
-  cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
-                               synchronization/synchronization.cpp io/cuio_common.cpp
+  cudf_benchmark_common OBJECT
+  synchronization/synchronization.cpp io/cuio_common.cpp common/table_utilities.cpp
+  common/benchmark_utilities.cpp common/nvbench_utilities.cpp
 )
-target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
+target_link_libraries(
+  cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env> GTest::gmock
+                                GTest::gtest
+)
+
 add_custom_command(
   OUTPUT CUDF_BENCHMARKS
   COMMAND echo Running benchmarks
@@ -70,7 +99,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
-                                $<TARGET_NAME_IF_EXISTS:conda_env>
+                                cudf::cudftestutil_impl $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -98,8 +127,9 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::nvbench
-                                $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_BENCH_NAME}
+    PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen nvbench::nvbench
+            $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudftestutil_impl
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -147,16 +177,22 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
-# * apply_boolean_mask benchmark ------------------------------------------------------------------
-ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp)
+# * nds-h benchmark --------------------------------------------------------------------------------
+ConfigureNVBench(NDSH_Q01_NVBENCH ndsh/q01.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q05_NVBENCH ndsh/q05.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q06_NVBENCH ndsh/q06.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q09_NVBENCH ndsh/q09.cpp ndsh/utilities.cpp)
+ConfigureNVBench(NDSH_Q10_NVBENCH ndsh/q10.cpp ndsh/utilities.cpp)
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
   STREAM_COMPACTION_NVBENCH
+  stream_compaction/apply_boolean_mask.cpp
   stream_compaction/distinct.cpp
   stream_compaction/distinct_count.cpp
   stream_compaction/stable_distinct.cpp
+  stream_compaction/stream_compaction_common.cpp
   stream_compaction/unique.cpp
   stream_compaction/unique_count.cpp
 )
@@ -196,17 +232,27 @@ ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
 
 # ##################################################################################################
+# * tdigest benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(TDIGEST_NVBENCH quantiles/tdigest.cu)
+
+# ##################################################################################################
 # * type_dispatcher benchmark ---------------------------------------------------------------------
 ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
-ConfigureBench(
-  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
-  reduction/reduce.cpp reduction/scan.cpp
-)
 ConfigureNVBench(
-  REDUCTION_NVBENCH reduction/rank.cpp reduction/scan_structs.cpp reduction/segmented_reduce.cpp
+  REDUCTION_NVBENCH
+  reduction/anyall.cpp
+  reduction/dictionary.cpp
+  reduction/histogram.cpp
+  reduction/minmax.cpp
+  reduction/rank.cpp
+  reduction/reduce.cpp
+  reduction/scan.cpp
+  reduction/scan_structs.cpp
+  reduction/segmented_reduce.cpp
 )
 
 # ##################################################################################################
@@ -226,7 +272,12 @@ ConfigureBench(
 )
 
 ConfigureNVBench(
-  GROUPBY_NVBENCH groupby/group_max.cpp groupby/group_nunique.cpp groupby/group_rank.cpp
+  GROUPBY_NVBENCH
+  groupby/group_histogram.cpp
+  groupby/group_max.cpp
+  groupby/group_max_multithreaded.cpp
+  groupby/group_nunique.cpp
+  groupby/group_rank.cpp
   groupby/group_struct_keys.cpp
 )
 
@@ -286,18 +337,18 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
-ConfigureBench(AST_BENCH ast/transform.cpp)
+ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
+ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
+ConfigureBench(TEXT_BENCH text/subword.cpp)
 
 ConfigureNVBench(
-  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
+  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/ngrams.cpp
   text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
 )
 
@@ -305,7 +356,6 @@ ConfigureNVBench(
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
   STRINGS_BENCH
-  string/combine.cpp
   string/convert_datetime.cpp
   string/convert_durations.cpp
   string/convert_fixed_point.cpp
@@ -315,7 +365,6 @@ ConfigureBench(
   string/filter.cpp
   string/repeat_strings.cpp
   string/replace.cpp
-  string/slice.cpp
   string/translate.cpp
   string/url_decode.cu
 )
@@ -324,6 +373,7 @@ ConfigureNVBench(
   STRINGS_NVBENCH
   string/case.cpp
   string/char_types.cpp
+  string/combine.cpp
   string/contains.cpp
   string/copy_if_else.cpp
   string/copy_range.cpp
@@ -334,8 +384,10 @@ ConfigureNVBench(
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp
+  string/make_strings_column.cu
   string/replace_re.cpp
   string/reverse.cpp
+  string/slice.cpp
   string/split.cpp
   string/split_re.cpp
 )

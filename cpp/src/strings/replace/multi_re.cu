@@ -29,9 +29,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -92,7 +92,7 @@ struct replace_multi_regex_fn {
         }
         reprog_device prog = progs[ptn_idx];
 
-        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : thrust::nullopt;
+        auto const result = !prog.is_empty() ? prog.find(idx, d_str, itr) : cuda::std::nullopt;
         d_ranges[ptn_idx] =
           result ? found_range{result->first, result->second} : found_range{nchars, nchars};
       }
@@ -171,7 +171,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   auto d_buffer          = rmm::device_buffer(buffer_size, stream);
 
   // copy all the reprog_device instances to a device memory array
-  std::vector<reprog_device> progs;
+  auto progs = cudf::detail::make_empty_host_vector<reprog_device>(h_progs.size(), stream);
   std::transform(h_progs.begin(),
                  h_progs.end(),
                  std::back_inserter(progs),
@@ -180,7 +180,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                    return *prog;
                  });
   auto d_progs =
-    cudf::detail::make_device_uvector_async(progs, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::make_device_uvector_async(progs, stream, cudf::get_current_device_resource_ref());
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
   auto const d_repls   = column_device_view::create(replacements.parent(), stream);

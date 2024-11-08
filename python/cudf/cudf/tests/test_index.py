@@ -16,8 +16,13 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.index import CategoricalIndex, DatetimeIndex, Index, RangeIndex
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     ALL_TYPES,
     FLOAT_TYPES,
@@ -28,7 +33,6 @@ from cudf.testing._utils import (
     UNSIGNED_TYPES,
     assert_column_memory_eq,
     assert_column_memory_ne,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -792,9 +796,27 @@ def test_index_to_series(data):
     "name_data,name_other",
     [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_index_difference(data, other, sort, name_data, name_other):
     pd_data = pd.Index(data, name=name_data)
     pd_other = pd.Index(other, name=name_other)
+    if (
+        not PANDAS_GE_220
+        and isinstance(pd_data.dtype, pd.CategoricalDtype)
+        and not isinstance(pd_other.dtype, pd.CategoricalDtype)
+        and pd_other.isnull().any()
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/issues/57318")
+
+    if (
+        not PANDAS_GE_220
+        and len(pd_other) == 0
+        and len(pd_data) != len(pd_data.unique())
+    ):
+        pytest.skip(reason="Bug fixed in pandas-2.2+")
 
     gd_data = cudf.from_pandas(pd_data)
     gd_other = cudf.from_pandas(pd_other)
@@ -1018,6 +1040,10 @@ def test_index_equal_misc(data, other):
         ["abcd", "defgh", "werty", "poiu"],
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
+)
 def test_index_append(data, other):
     pd_data = pd.Index(data)
     pd_other = pd.Index(other)
@@ -1220,6 +1246,10 @@ def test_index_append_error(data, other):
             ],
         ),
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not warn on older versions of pandas",
 )
 def test_index_append_list(data, other):
     pd_data = data
@@ -2085,6 +2115,10 @@ def test_get_indexer_multi_numeric_deviate(key, method):
 
 
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
 def test_get_indexer_multi_error(method):
     pi = pd.MultiIndex.from_tuples(
         [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
@@ -2397,8 +2431,8 @@ def test_intersection_index(idx1, idx2, sort, pandas_compatible):
             expected,
             actual,
             exact=False
-            if (is_bool_dtype(idx1.dtype) and not is_bool_dtype(idx2.dtype))
-            or (not is_bool_dtype(idx1.dtype) or is_bool_dtype(idx2.dtype))
+            if (idx1.dtype.kind == "b" and idx2.dtype.kind != "b")
+            or (idx1.dtype.kind != "b" or idx2.dtype.kind == "b")
             else True,
         )
 
@@ -2528,7 +2562,7 @@ def test_isin_index(index, values):
     )
     with expect_warning_if(is_dt_str):
         got = gidx.isin(values)
-    with expect_warning_if(is_dt_str):
+    with expect_warning_if(PANDAS_GE_220 and is_dt_str):
         expected = pidx.isin(values)
 
     assert_eq(got, expected)
@@ -2611,21 +2645,20 @@ def test_isin_multiindex(data, values, level, err):
         )
 
 
-range_data = [
-    range(np.random.randint(0, 100)),
-    range(9, 12, 2),
-    range(20, 30),
-    range(100, 1000, 10),
-    range(0, 10, -2),
-    range(0, -10, 2),
-    range(0, -10, -2),
-]
-
-
-@pytest.fixture(params=range_data)
+@pytest.fixture(
+    params=[
+        range(np.random.default_rng(seed=0).integers(0, 100)),
+        range(9, 12, 2),
+        range(20, 30),
+        range(100, 1000, 10),
+        range(0, 10, -2),
+        range(0, -10, 2),
+        range(0, -10, -2),
+    ]
+)
 def rangeindex(request):
     """Create a cudf RangeIndex of different `nrows`"""
-    return RangeIndex(request.param)
+    return cudf.RangeIndex(request.param)
 
 
 @pytest.mark.parametrize(
@@ -2796,21 +2829,20 @@ def test_rangeindex_append_return_rangeindex():
     assert_eq(result, expected)
 
 
-index_data = [
-    range(np.random.randint(0, 100)),
-    range(0, 10, -2),
-    range(0, -10, 2),
-    range(0, -10, -2),
-    range(0, 1),
-    [1, 2, 3, 1, None, None],
-    [None, None, 3.2, 1, None, None],
-    [None, "a", "3.2", "z", None, None],
-    pd.Series(["a", "b", None], dtype="category"),
-    np.array([1, 2, 3, None], dtype="datetime64[s]"),
-]
-
-
-@pytest.fixture(params=index_data)
+@pytest.fixture(
+    params=[
+        range(np.random.default_rng(seed=0).integers(0, 100)),
+        range(0, 10, -2),
+        range(0, -10, 2),
+        range(0, -10, -2),
+        range(0, 1),
+        [1, 2, 3, 1, None, None],
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ]
+)
 def index(request):
     """Create a cudf Index of different dtypes"""
     return cudf.Index(request.param)
@@ -3295,3 +3327,12 @@ def test_index_assignment_no_shallow_copy(index):
     df = cudf.DataFrame(range(1))
     df.index = index
     assert df.index is index
+
+
+def test_bool_rangeindex_raises():
+    assert_exceptions_equal(
+        lfunc=bool,
+        rfunc=bool,
+        lfunc_args_and_kwargs=[[pd.RangeIndex(0)]],
+        rfunc_args_and_kwargs=[[cudf.RangeIndex(0)]],
+    )

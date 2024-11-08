@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>

@@ -19,13 +19,12 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace dictionary::detail {
 
 /**
  * @brief Create a new dictionary column by replacing nulls with values
@@ -62,6 +61,5 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace dictionary
-}  // namespace cudf
+}  // namespace dictionary::detail
+}  // namespace CUDF_EXPORT cudf

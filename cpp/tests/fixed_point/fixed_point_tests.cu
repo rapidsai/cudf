@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -82,7 +83,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 
   std::vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
   auto d_vec1 = cudf::detail::make_device_uvector_sync(
-    vec1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    vec1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   auto const sum = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
                                   std::cbegin(d_vec1),
@@ -96,7 +97,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::inclusive_scan(std::cbegin(vec1), std::cend(vec1), std::begin(vec1));
 
   d_vec1 = cudf::detail::make_device_uvector_sync(
-    vec1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    vec1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   std::vector<int32_t> vec2(1000);
   std::iota(std::begin(vec2), std::end(vec2), 1);

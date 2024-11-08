@@ -18,12 +18,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/resource_ref.hpp>
-
-namespace cudf {
-namespace lists {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace lists::detail {
 /**
  * @copydoc cudf::lists::concatenate_rows
  *
@@ -44,6 +42,5 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace lists
-}  // namespace cudf
+}  // namespace lists::detail
+}  // namespace CUDF_EXPORT cudf

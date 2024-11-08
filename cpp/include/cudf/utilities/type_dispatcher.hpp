@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -31,7 +30,7 @@
  * @brief Defines the mapping between `cudf::type_id` runtime type information
  * and concrete C++ types.
  */
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup utility_dispatcher
  * @{
@@ -626,4 +625,4 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) double_type_dispatcher
 std::string type_to_name(data_type type);
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

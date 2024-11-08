@@ -20,19 +20,20 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
@@ -800,7 +801,7 @@ template <typename string_view_pair_it>
 static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                                             size_type col_size,
                                             rmm::device_buffer&& null_mask,
-                                            rmm::device_scalar<size_type>& d_null_count,
+                                            cudf::detail::device_scalar<size_type>& d_null_count,
                                             cudf::io::parse_options_view const& options,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
@@ -930,10 +931,10 @@ std::unique_ptr<column> parse_data(
   CUDF_FUNC_RANGE();
 
   if (col_size == 0) { return make_empty_column(col_type); }
-  auto d_null_count    = rmm::device_scalar<size_type>(null_count, stream);
+  auto d_null_count    = cudf::detail::device_scalar<size_type>(null_count, stream);
   auto null_count_data = d_null_count.data();
   if (null_mask.is_empty()) {
-    null_mask = cudf::detail::create_null_mask(col_size, mask_state::ALL_VALID, stream, mr);
+    null_mask = cudf::create_null_mask(col_size, mask_state::ALL_VALID, stream, mr);
   }
 
   // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion

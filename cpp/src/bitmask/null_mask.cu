@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -27,13 +28,12 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cub/cub.cuh>
 #include <thrust/binary_search.h>
@@ -329,7 +329,7 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
 
   cudf::detail::grid_1d grid(num_words, block_size);
 
-  rmm::device_scalar<size_type> non_zero_count(0, stream);
+  cudf::detail::device_scalar<size_type> non_zero_count(0, stream);
 
   count_set_bits_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(

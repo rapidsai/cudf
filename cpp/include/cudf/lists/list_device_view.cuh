@@ -25,7 +25,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A non-owning, immutable view of device data that represents
@@ -377,4 +377,4 @@ CUDF_HOST_DEVICE auto inline make_list_size_iterator(detail::lists_column_device
   return detail::make_counting_transform_iterator(0, list_size_functor{c});
 }
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -8,11 +8,9 @@ from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
     as_column,
-    build_categorical_column,
     build_column,
     column_empty,
     column_empty_like,
-    column_empty_like_same_mask,
     concat_columns,
     deserialize_columns,
     serialize_columns,
@@ -31,4 +29,3 @@ from cudf.core.column.decimal import (  # noqa: F401
     Decimal128Column,
     DecimalBaseColumn,
 )
-from cudf.core.column.interval import IntervalColumn  # noqa: F401

@@ -18,7 +18,6 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/ast/expressions.hpp>
@@ -26,14 +25,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
-#include <cudf/types.hpp>
-
-#include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -41,7 +34,6 @@
 #include <limits>
 #include <list>
 #include <random>
-#include <type_traits>
 #include <vector>
 
 template <typename T>
@@ -62,6 +54,22 @@ TEST_F(TransformTest, ColumnReference)
   auto const& expected = c_0;
   auto result          = cudf::compute_column(table, col_ref_0);
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, BasicAdditionDoubleCast)
+{
+  auto c_0 = column_wrapper<double>{3, 20, 1, 50};
+  std::vector<__int128_t> data1{10, 7, 20, 0};
+  auto c_1 = cudf::test::fixed_point_column_wrapper<__int128_t>(
+    data1.begin(), data1.end(), numeric::scale_type{0});
+  auto table      = cudf::table_view{{c_0, c_1}};
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto cast       = cudf::ast::operation(cudf::ast::ast_operator::CAST_TO_FLOAT64, col_ref_1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, cast);
+  auto expected   = column_wrapper<double>{13, 27, 21, 50};
+  auto result     = cudf::compute_column(table, expression);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
@@ -362,7 +370,7 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
     auto expressions = std::list<cudf::ast::operation>();
 
     auto op = arithmetic_operator;
-    expressions.push_back(cudf::ast::operation(op, col_ref, col_ref));
+    expressions.emplace_back(op, col_ref, col_ref);
 
     for (int64_t i = 0; i < depth_level - 1; i++) {
       if (i == depth_level - 2) {
@@ -371,9 +379,9 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
         op = arithmetic_operator;
       }
       if (nested_left_tree) {
-        expressions.push_back(cudf::ast::operation(op, expressions.back(), col_ref));
+        expressions.emplace_back(op, expressions.back(), col_ref);
       } else {
-        expressions.push_back(cudf::ast::operation(op, col_ref, expressions.back()));
+        expressions.emplace_back(op, col_ref, expressions.back());
       }
     }
     return expressions;

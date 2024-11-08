@@ -18,9 +18,9 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <unistd.h>
 
@@ -34,7 +34,7 @@ temp_directory const cuio_source_sink_pair::tmpdir{"cudf_gbench"};
 // Don't use cudf's pinned pool for the source data
 rmm::host_async_resource_ref pinned_memory_resource()
 {
-  static rmm::mr::pinned_host_memory_resource mr = rmm::mr::pinned_host_memory_resource{};
+  static auto mr = rmm::mr::pinned_host_memory_resource{};
 
   return mr;
 }
@@ -186,7 +186,7 @@ std::string exec_cmd(std::string_view cmd)
   std::fflush(nullptr);
   // Switch stderr and stdout to only capture stderr
   auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
-  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
+  std::unique_ptr<FILE, int (*)(FILE*)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
   CUDF_EXPECTS(pipe != nullptr, "popen() failed");
 
   std::array<char, 128> buffer;

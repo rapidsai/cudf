@@ -4,7 +4,6 @@ import datetime
 import warnings
 
 import pyarrow as pa
-from fsspec.utils import stringify_path
 
 import cudf
 from cudf._lib import orc as liborc
@@ -170,19 +169,17 @@ def read_orc_statistics(
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        path_or_buf, _ = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs
+        path_or_buf = ioutils.get_reader_filepath_or_buffer(
+            path_or_data=source, **kwargs
+        )
+        path_or_buf = ioutils._select_single_source(
+            path_or_buf, "read_orc_statistics"
         )
         (
             column_names,
             parsed_file_statistics,
             parsed_stripes_statistics,
         ) = liborc.read_parsed_orc_statistics(path_or_buf)
-
-        # Parse column names
-        column_names = [
-            column_name.decode("utf-8") for column_name in column_names
-        ]
 
         # Parse file statistics
         file_statistics = {
@@ -246,9 +243,9 @@ def _filter_stripes(
         num_rows_scanned = 0
         for i, stripe_statistics in enumerate(stripes_statistics):
             num_rows_before_stripe = num_rows_scanned
-            num_rows_scanned += next(iter(stripe_statistics.values()))[
-                "number_of_values"
-            ]
+            num_rows_scanned += next(
+                iter(stripe_statistics.values())
+            ).number_of_values
             if stripes is not None and i not in stripes:
                 continue
             if skip_rows is not None and num_rows_scanned <= skip_rows:
@@ -280,7 +277,6 @@ def read_orc(
     num_rows=None,
     use_index=True,
     timestamp_type=None,
-    use_python_file_object=True,
     storage_options=None,
     bytes_per_thread=None,
 ):
@@ -319,34 +315,12 @@ def read_orc(
                 "A list of stripes must be provided for each input source"
             )
 
-    filepaths_or_buffers = []
-    for source in filepath_or_buffer:
-        if ioutils.is_directory(
-            path_or_data=source, storage_options=storage_options
-        ):
-            fs = ioutils._ensure_filesystem(
-                passed_filesystem=None,
-                path=source,
-                storage_options=storage_options,
-            )
-            source = stringify_path(source)
-            source = fs.sep.join([source, "*.orc"])
-
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            use_python_file_object=use_python_file_object,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
-            )
-        if isinstance(tmp_source, list):
-            filepaths_or_buffers.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+        expand_dir_pattern="*.orc",
+    )
 
     if filters is not None:
         selected_stripes = _filter_stripes(
@@ -417,8 +391,8 @@ def to_orc(
 ):
     """{docstring}"""
 
-    for col in df._data.columns:
-        if isinstance(col, cudf.core.column.CategoricalColumn):
+    for _, dtype in df._dtypes:
+        if isinstance(dtype, cudf.CategoricalDtype):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."

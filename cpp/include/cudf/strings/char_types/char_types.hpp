@@ -19,11 +19,9 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/char_types/char_types_enum.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 /**
  * @addtogroup strings_types
@@ -32,7 +30,7 @@ namespace strings {
  */
 
 /**
- * @brief Returns a boolean column identifying strings entries in which all
+ * @brief Returns a boolean column identifying string entries where all
  * characters are of the type specified.
  *
  * The output row entry will be set to false if the corresponding string element
@@ -68,7 +66,7 @@ std::unique_ptr<column> all_characters_of_type(
   string_character_types types,
   string_character_types verify_types = string_character_types::ALL_TYPES,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr   = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Filter specific character types from a column of strings.
@@ -107,7 +105,8 @@ std::unique_ptr<column> all_characters_of_type(
  *        `types_to_remove` will be filtered.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return New column of boolean results for each string
+ * @return New strings column with the characters of specified types filtered out and replaced by
+ * the specified replacement string
  */
 std::unique_ptr<column> filter_characters_of_type(
   strings_column_view const& input,
@@ -115,8 +114,8 @@ std::unique_ptr<column> filter_characters_of_type(
   string_scalar const& replacement     = string_scalar(""),
   string_character_types types_to_keep = string_character_types::ALL_TYPES,
   rmm::cuda_stream_view stream         = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr    = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr    = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

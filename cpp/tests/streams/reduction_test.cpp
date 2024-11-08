@@ -17,12 +17,10 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
-#include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 class ReductionTest : public cudf::test::BaseFixture {};
 
@@ -53,7 +51,7 @@ TEST_F(ReductionTest, SegmentedReductionSum)
     {true, true, true, true, false, true, true, false, false, false}};
   auto const offsets   = std::vector<cudf::size_type>{0, 3, 6, 7, 8, 10, 10};
   auto const d_offsets = cudf::detail::make_device_uvector_async(
-    offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+    offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
 
   auto res =
     cudf::segmented_reduce(input,
@@ -71,7 +69,7 @@ TEST_F(ReductionTest, SegmentedReductionSumScalarInit)
     {true, true, true, true, false, true, true, false, false, false}};
   auto const offsets   = std::vector<cudf::size_type>{0, 3, 6, 7, 8, 10, 10};
   auto const d_offsets = cudf::detail::make_device_uvector_async(
-    offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+    offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
   auto const init_scalar = cudf::make_fixed_width_scalar<int>(3, cudf::test::get_default_stream());
   auto res =
     cudf::segmented_reduce(input,

@@ -11,7 +11,7 @@ c_stdlib_version:
   - "2.17"
 
 cmake_version:
-  - ">=3.26.4"
+  - ">=3.26.4,!=3.30.0"
 
 cuda_compiler:
   - cuda-nvcc

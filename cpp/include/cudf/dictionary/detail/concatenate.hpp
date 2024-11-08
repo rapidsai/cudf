@@ -18,14 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/resource_ref.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace dictionary::detail {
 /**
  * @brief Returns a single column by vertically concatenating the given vector of
  * dictionary columns.
@@ -42,6 +41,5 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace dictionary
-}  // namespace cudf
+}  // namespace dictionary::detail
+}  // namespace CUDF_EXPORT cudf

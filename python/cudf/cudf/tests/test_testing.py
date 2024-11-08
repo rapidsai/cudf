@@ -17,9 +17,8 @@ from cudf.testing._utils import (
     OTHER_TYPES,
     assert_column_memory_eq,
     assert_column_memory_ne,
-    assert_eq,
 )
-from cudf.testing.testing import assert_column_equal
+from cudf.testing.testing import assert_column_equal, assert_eq
 
 
 @pytest.fixture(

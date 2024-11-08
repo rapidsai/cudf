@@ -23,11 +23,12 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/transform.h>
 

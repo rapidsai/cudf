@@ -17,8 +17,9 @@
 #pragma once
 
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/export.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_rolling
  * @{
@@ -119,4 +120,4 @@ struct range_window_bounds {
 };
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

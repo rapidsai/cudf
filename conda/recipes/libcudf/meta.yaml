@@ -64,10 +64,10 @@ requirements:
     {% endif %}
     - cuda-version ={{ cuda_version }}
     - nvcomp {{ nvcomp_version }}
-    - libarrow {{ libarrow_version }}
     - dlpack {{ dlpack_version }}
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
+    - flatbuffers {{ flatbuffers_version }}
     - spdlog {{ spdlog_version }}
     - zlib {{ zlib_version }}
 
@@ -91,7 +91,6 @@ outputs:
         - cmake {{ cmake_version }}
       host:
         - cuda-version ={{ cuda_version }}
-        - libarrow {{ libarrow_version }}
       run:
         - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
         {% if cuda_major == "11" %}

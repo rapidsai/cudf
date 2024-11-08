@@ -16,7 +16,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -24,8 +23,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 class GatherTestStr : public cudf::test::BaseFixture {};
 
@@ -91,7 +89,7 @@ TEST_F(GatherTestStr, Gather)
                                       cudf::out_of_bounds_policy::NULLIFY,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
-                                      rmm::mr::get_current_device_resource());
+                                      cudf::get_current_device_resource_ref());
 
   std::vector<char const*> h_expected;
   std::vector<int32_t> expected_validity;
@@ -122,7 +120,7 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
                                       cudf::out_of_bounds_policy::DONT_CHECK,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
-                                      rmm::mr::get_current_device_resource());
+                                      cudf::get_current_device_resource_ref());
 
   std::vector<char const*> h_expected;
   for (int itr : h_map) {
@@ -141,7 +139,7 @@ TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
                                       cudf::out_of_bounds_policy::NULLIFY,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
-                                      rmm::mr::get_current_device_resource());
+                                      cudf::get_current_device_resource_ref());
   cudf::test::expect_column_empty(results->get_column(0).view());
 }
 
@@ -155,6 +153,6 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
                                       cudf::out_of_bounds_policy::NULLIFY,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
-                                      rmm::mr::get_current_device_resource());
+                                      cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results->get_column(0).view());
 }

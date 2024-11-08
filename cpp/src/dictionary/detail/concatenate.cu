@@ -27,13 +27,12 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -105,7 +104,7 @@ struct compute_children_offsets_fn {
    */
   rmm::device_uvector<offsets_pair> create_children_offsets(rmm::cuda_stream_view stream)
   {
-    std::vector<offsets_pair> offsets(columns_ptrs.size());
+    auto offsets = cudf::detail::make_host_vector<offsets_pair>(columns_ptrs.size(), stream);
     thrust::transform_exclusive_scan(
       thrust::host,
       columns_ptrs.begin(),
@@ -120,7 +119,7 @@ struct compute_children_offsets_fn {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
     return cudf::detail::make_device_uvector_sync(
-      offsets, stream, rmm::mr::get_current_device_resource());
+      offsets, stream, cudf::get_current_device_resource_ref());
   }
 
  private:
@@ -229,7 +228,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     return keys;
   });
   auto all_keys =
-    cudf::detail::concatenate(keys_views, stream, rmm::mr::get_current_device_resource());
+    cudf::detail::concatenate(keys_views, stream, cudf::get_current_device_resource_ref());
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column

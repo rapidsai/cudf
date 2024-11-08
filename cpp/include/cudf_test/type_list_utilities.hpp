@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #pragma once
 
 #include "cudf_gtest.hpp"
+
+#include <cudf/utilities/export.hpp>
 
 /**
  * @file type_list_utilities.hpp
@@ -68,7 +70,7 @@
  * increased compile-times. Use responsibly.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 // Utilities for creating parameters for typed tests on GoogleTest
 //
@@ -412,9 +414,8 @@ struct RemoveIfImpl<PRED, Types<>> {
 
 template <class PRED, class HEAD, class... TAIL>
 struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>> {
-  using type =
-    Concat<typename std::conditional<PRED::template Call<HEAD>::value, Types<>, Types<HEAD>>::type,
-           typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
+  using type = Concat<std::conditional_t<PRED::template Call<HEAD>::value, Types<>, Types<HEAD>>,
+                      typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
 };
 // @endcond
 
@@ -627,4 +628,4 @@ using Unique = typename UniqueImpl<TYPES>::type;
 
 }  // namespace test
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

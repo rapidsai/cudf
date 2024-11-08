@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import io
 import os
@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 gcsfs = pytest.importorskip("gcsfs")
 
@@ -42,11 +42,8 @@ def test_read_csv(pdf, monkeypatch, tmpdir):
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "size", mock_size)
 
     # Test read from explicit path.
-    # Since we are monkey-patching, we cannot use
-    # use_python_file_object=True, because the pyarrow
-    # `open_input_file` command will fail (since it doesn't
-    # use the monkey-patched `open` definition)
-    got = cudf.read_csv(f"gcs://{fpath}", use_python_file_object=False)
+    with pytest.warns(FutureWarning):
+        got = cudf.read_csv(f"gcs://{fpath}")
     assert_eq(pdf, got)
 
     # AbstractBufferedFile -> PythonFile conversion

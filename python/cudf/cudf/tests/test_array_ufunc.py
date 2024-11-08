@@ -15,11 +15,8 @@ from cudf.core._compat import (
     PANDAS_LT_300,
     PANDAS_VERSION,
 )
-from cudf.testing._utils import (
-    assert_eq,
-    expect_warning_if,
-    set_random_null_mask_inplace,
-)
+from cudf.testing import assert_eq
+from cudf.testing._utils import expect_warning_if, set_random_null_mask_inplace
 
 _UFUNCS = [
     obj

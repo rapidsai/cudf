@@ -17,21 +17,15 @@
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/resource_ref.hpp>
-
-#include <thrust/scan.h>
 
 #include <functional>
 #include <numeric>
 #include <optional>
 
-namespace cudf {
-namespace ast {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace ast::detail {
 
 /**
  * @brief Node data reference types.
@@ -328,8 +322,6 @@ class expression_parser {
   std::vector<generic_scalar_device_view> _literals;
 };
 
-}  // namespace detail
+}  // namespace ast::detail
 
-}  // namespace ast
-
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

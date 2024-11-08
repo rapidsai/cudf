@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
  */
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <cstdint>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 // Type for the character flags table.
 using character_flags_table_type = std::uint8_t;
 
@@ -73,9 +74,9 @@ character_cases_table_type const* get_character_cases_table();
  */
 struct special_case_mapping {
   uint16_t num_upper_chars;
-  uint16_t upper[3];
+  uint16_t upper[3];  // NOLINT
   uint16_t num_lower_chars;
-  uint16_t lower[3];
+  uint16_t lower[3];  // NOLINT
 };
 
 /**
@@ -101,6 +102,5 @@ constexpr uint16_t get_special_case_hash_index(uint32_t code_point)
   return static_cast<uint16_t>(code_point % special_case_prime);
 }
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

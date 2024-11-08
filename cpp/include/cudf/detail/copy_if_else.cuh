@@ -19,14 +19,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/device_scalar.hpp>
-#include <rmm/resource_ref.hpp>
-
+#include <cuda/std/optional>
 #include <thrust/iterator/iterator_traits.h>
-#include <thrust/optional.h>
 
 namespace cudf {
 namespace detail {
@@ -70,7 +69,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
   while (warp_cur <= warp_end) {
     auto const index = static_cast<size_type>(tidx);
     auto const opt_value =
-      (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : thrust::nullopt;
+      (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : cuda::std::nullopt;
     if (opt_value) { out.element<T>(index) = static_cast<T>(*opt_value); }
 
     // update validity
@@ -156,7 +155,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
-  // This is the type of the thrust::optional element in the passed iterators
+  // This is the type of the cuda::std::optional element in the passed iterators
   using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;
 
   size_type size           = std::distance(lhs_begin, lhs_end);
@@ -171,7 +170,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
 
   // if we have validity in the output
   if (nullable) {
-    rmm::device_scalar<size_type> valid_count{0, stream};
+    cudf::detail::device_scalar<size_type> valid_count{0, stream};
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>

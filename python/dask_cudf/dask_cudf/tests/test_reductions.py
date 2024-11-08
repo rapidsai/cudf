@@ -13,10 +13,11 @@ import dask_cudf
 
 
 def _make_random_frame(nelem, npartitions=2):
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=nelem),
-            "y": np.random.normal(size=nelem) + 1,
+            "x": rng.integers(0, 5, size=nelem),
+            "y": rng.normal(loc=1.0, scale=1.0, size=nelem),
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)
@@ -38,7 +39,6 @@ def _get_reduce_fn(name):
 @pytest.mark.parametrize("reducer", _reducers)
 def test_series_reduce(reducer):
     reducer = _get_reduce_fn(reducer)
-    np.random.seed(0)
     size = 10
     df, gdf = _make_random_frame(size)
 

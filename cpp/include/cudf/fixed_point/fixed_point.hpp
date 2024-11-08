@@ -30,7 +30,7 @@
 #include <string>
 
 /// `fixed_point` and supporting types
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 
 /**
  * @addtogroup fixed_point_classes
@@ -84,8 +84,8 @@ template <typename Rep,
           Radix Base,
           typename T,
           typename cuda::std::enable_if_t<(cuda::std::is_same_v<int32_t, T> &&
-                                           is_supported_representation_type<Rep>())>* = nullptr>
-CUDF_HOST_DEVICE inline Rep ipow(T exponent)
+                                           cuda::std::is_integral_v<Rep>)>* = nullptr>
+CUDF_HOST_DEVICE inline constexpr Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
 
@@ -799,4 +799,4 @@ using decimal64  = fixed_point<int64_t, Radix::BASE_10>;     ///<  64-bit decima
 using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;  ///< 128-bit decimal fixed point
 
 /** @} */  // end of group
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric

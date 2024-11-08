@@ -16,7 +16,6 @@
 
 #include "compact_protocol_reader.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
-#include "io/utilities/config_utils.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
@@ -25,6 +24,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/config_utils.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -77,9 +78,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
                                 device_span<cumulative_page_info const> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
-  std::vector<PageInfo> pages              = cudf::detail::make_std_vector_sync(d_pages, stream);
-  std::vector<ColumnChunkDesc> chunks      = cudf::detail::make_std_vector_sync(d_chunks, stream);
-  std::vector<cumulative_page_info> c_info = cudf::detail::make_std_vector_sync(d_c_info, stream);
+  auto const pages  = cudf::detail::make_host_vector_sync(d_pages, stream);
+  auto const chunks = cudf::detail::make_host_vector_sync(d_chunks, stream);
+  auto const c_info = cudf::detail::make_host_vector_sync(d_c_info, stream);
 
   printf("------------\nCumulative sizes by page\n");
 
@@ -337,7 +338,8 @@ int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_index,
                         size_t cur_cumulative_size,
                         cudf::host_span<cumulative_page_info const> sizes,
-                        size_t size_limit)
+                        size_t size_limit,
+                        size_t min_row_count)
 {
   auto const start = thrust::make_transform_iterator(
     sizes.begin(),
@@ -357,7 +359,7 @@ int64_t find_next_split(int64_t cur_pos,
   // this guarantees that even if we cannot fit the set of rows represented by our where our cur_pos
   // is, we will still move forward instead of failing.
   while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
-         (sizes[split_pos].end_row_index == cur_row_index)) {
+         (sizes[split_pos].end_row_index - cur_row_index < min_row_count)) {
     split_pos++;
   }
 
@@ -369,11 +371,11 @@ int64_t find_next_split(int64_t cur_pos,
  *
  * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, thrust::optional<LogicalType>> conversion_info(
+[[nodiscard]] std::tuple<int32_t, std::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  thrust::optional<LogicalType> logical_type)
+  std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
     is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
@@ -384,11 +386,11 @@ int64_t find_next_split(int64_t cur_pos,
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
-      return std::make_tuple(clock_rate, thrust::nullopt);
+      return {clock_rate, std::nullopt};
     }
   }
 
-  return std::make_tuple(clock_rate, std::move(logical_type));
+  return {clock_rate, std::move(logical_type)};
 }
 
 /**
@@ -440,7 +442,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
 {
   // sort by row count
   rmm::device_uvector<cumulative_page_info> c_info_sorted =
-    make_device_uvector_async(c_info, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(c_info, stream, cudf::get_current_device_resource_ref());
   thrust::sort(
     rmm::exec_policy_nosync(stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_less{});
 
@@ -646,7 +648,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_std_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
@@ -657,8 +659,10 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto const start_index = find_start_index(h_aggregated_info, start_row);
   auto const cumulative_size =
     start_row == 0 || start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
+  // when choosing subpasses, we need to guarantee at least 2 rows in the included pages so that all
+  // list columns have a clear start and end.
   auto const end_index =
-    find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit);
+    find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit, 2);
   auto const end_row = h_aggregated_info[end_index].end_row_index;
 
   // for each column, collect the set of pages that spans start_row / end_row
@@ -691,8 +695,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  std::vector<cumulative_page_info> h_aggregated_info =
-    cudf::detail::make_std_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   std::vector<row_range> splits;
@@ -703,8 +706,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t cur_cumulative_size = 0;
   auto const max_row         = min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
   while (cur_row_index < max_row) {
-    auto const split_pos =
-      find_next_split(cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit);
+    auto const split_pos = find_next_split(
+      cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
 
     auto const start_row = cur_row_index;
     cur_row_index        = min(max_row, h_aggregated_info[split_pos].end_row_index);
@@ -801,16 +804,16 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   rmm::device_buffer decomp_pages(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
 
-  std::vector<device_span<uint8_t const>> comp_in;
-  comp_in.reserve(num_comp_pages);
-  std::vector<device_span<uint8_t>> comp_out;
-  comp_out.reserve(num_comp_pages);
+  auto comp_in =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+  auto comp_out =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
   // vectors to save v2 def and rep level data, if any
-  std::vector<device_span<uint8_t const>> copy_in;
-  copy_in.reserve(num_comp_pages);
-  std::vector<device_span<uint8_t>> copy_out;
-  copy_out.reserve(num_comp_pages);
+  auto copy_in =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t const>>(num_comp_pages, stream);
+  auto copy_out =
+    cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
   rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
   thrust::fill(rmm::exec_policy_nosync(stream),
@@ -819,7 +822,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                compression_result{0, compression_status::FAILURE});
 
   size_t decomp_offset = 0;
-  int32_t start_pos    = 0;
   for (auto const& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
 
@@ -833,56 +835,74 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       // input and output buffers. otherwise we'd have to keep both the compressed
       // and decompressed data.
       if (offset != 0) {
-        copy_in.emplace_back(page.page_data, offset);
-        copy_out.emplace_back(dst_base, offset);
+        copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
+        copy_out.push_back({dst_base, static_cast<size_t>(offset)});
       }
-      comp_in.emplace_back(page.page_data + offset,
-                           static_cast<size_t>(page.compressed_page_size - offset));
-      comp_out.emplace_back(dst_base + offset,
-                            static_cast<size_t>(page.uncompressed_page_size - offset));
+      comp_in.push_back(
+        {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
+      comp_out.push_back(
+        {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
       page.page_data = dst_base;
       decomp_offset += page.uncompressed_page_size;
     });
+  }
+  auto d_comp_in = cudf::detail::make_device_uvector_async(
+    comp_in, stream, cudf::get_current_device_resource_ref());
+  auto d_comp_out = cudf::detail::make_device_uvector_async(
+    comp_out, stream, cudf::get_current_device_resource_ref());
 
-    host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
-                                                             codec.num_pages};
-    auto const d_comp_in = cudf::detail::make_device_uvector_async(
-      comp_in_view, stream, rmm::mr::get_current_device_resource());
-    host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
-                                                        codec.num_pages);
-    auto const d_comp_out = cudf::detail::make_device_uvector_async(
-      comp_out_view, stream, rmm::mr::get_current_device_resource());
+  int32_t start_pos = 0;
+  for (auto const& codec : codecs) {
+    if (codec.num_pages == 0) { continue; }
+
+    device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
+                                                                 codec.num_pages};
+
+    device_span<device_span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
+                                                            codec.num_pages);
+
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
 
     switch (codec.compression_type) {
       case GZIP:
-        gpuinflate(d_comp_in, d_comp_out, d_comp_res_view, gzip_header_included::YES, stream);
-        break;
-      case SNAPPY:
-        if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                                     d_comp_in,
-                                     d_comp_out,
+        if (cudf::io::nvcomp_integration::is_all_enabled()) {
+          nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
+                                     d_comp_in_view,
+                                     d_comp_out_view,
                                      d_comp_res_view,
                                      codec.max_decompressed_size,
                                      codec.total_decomp_size,
                                      stream);
         } else {
-          gpu_unsnap(d_comp_in, d_comp_out, d_comp_res_view, stream);
+          gpuinflate(
+            d_comp_in_view, d_comp_out_view, d_comp_res_view, gzip_header_included::YES, stream);
+        }
+        break;
+      case SNAPPY:
+        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
+          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
+                                     d_comp_in_view,
+                                     d_comp_out_view,
+                                     d_comp_res_view,
+                                     codec.max_decompressed_size,
+                                     codec.total_decomp_size,
+                                     stream);
+        } else {
+          gpu_unsnap(d_comp_in_view, d_comp_out, d_comp_res_view, stream);
         }
         break;
       case ZSTD:
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                   d_comp_in,
-                                   d_comp_out,
+                                   d_comp_in_view,
+                                   d_comp_out_view,
                                    d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
                                    stream);
         break;
       case BROTLI:
-        gpu_debrotli(d_comp_in,
-                     d_comp_out,
+        gpu_debrotli(d_comp_in_view,
+                     d_comp_out_view,
                      d_comp_res_view,
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
@@ -890,8 +910,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         break;
       case LZ4_RAW:
         nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
-                                   d_comp_in,
-                                   d_comp_out,
+                                   d_comp_in_view,
+                                   d_comp_out_view,
                                    d_comp_res_view,
                                    codec.max_decompressed_size,
                                    codec.total_decomp_size,
@@ -913,9 +933,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
-      copy_in, stream, rmm::mr::get_current_device_resource());
+      copy_in, stream, cudf::get_current_device_resource_ref());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
-      copy_out, stream, rmm::mr::get_current_device_resource());
+      copy_out, stream, cudf::get_current_device_resource_ref());
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
     stream.synchronize();
@@ -1068,7 +1088,7 @@ struct get_decomp_scratch {
       case BROTLI: return get_gpu_debrotli_scratch_size(di.num_pages);
 
       case SNAPPY:
-        if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
+        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
           return cudf::io::nvcomp::batched_decompress_temp_size(
             cudf::io::nvcomp::compression_type::SNAPPY,
             di.num_pages,
@@ -1124,9 +1144,8 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 decomp_sum{});
 
   // retrieve to host so we can call nvcomp to get compression scratch sizes
-  std::vector<decompression_info> h_decomp_info =
-    cudf::detail::make_std_vector_sync(decomp_info, stream);
-  std::vector<size_t> temp_cost(pages.size());
+  auto h_decomp_info = cudf::detail::make_host_vector_sync(decomp_info, stream);
+  auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
   thrust::transform(thrust::host,
                     h_decomp_info.begin(),
                     h_decomp_info.end(),
@@ -1135,7 +1154,7 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, rmm::mr::get_current_device_resource());
+    temp_cost, stream, cudf::get_current_device_resource_ref());
   auto iter = thrust::make_counting_iterator(size_t{0});
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
@@ -1229,22 +1248,22 @@ void reader::impl::setup_next_pass(read_mode mode)
       pass.skip_rows = _file_itm_data.global_skip_rows;
       pass.num_rows  = _file_itm_data.global_num_rows;
     } else {
-      auto const global_start_row = _file_itm_data.global_skip_rows;
-      auto const global_end_row   = global_start_row + _file_itm_data.global_num_rows;
-      auto const start_row =
-        std::max(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass],
-                 global_start_row);
-      auto const end_row =
-        std::min(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1],
-                 global_end_row);
-
-      // skip_rows is always global in the sense that it is relative to the first row of
-      // everything we will be reading, regardless of what pass we are on.
-      // num_rows is how many rows we are reading this pass.
-      pass.skip_rows =
-        global_start_row +
+      // pass_start_row and pass_end_row are computed from the selected row groups relative to the
+      // global_skip_rows.
+      auto const pass_start_row =
         _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass];
-      pass.num_rows = end_row - start_row;
+      auto const pass_end_row =
+        std::min(_file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1],
+                 _file_itm_data.global_num_rows);
+
+      // pass.skip_rows is always global in the sense that it is relative to the first row of
+      // the data source (global row number 0), regardless of what pass we are on. Therefore,
+      // we must re-add global_skip_rows to the pass_start_row which is relative to the
+      // global_skip_rows.
+      pass.skip_rows = _file_itm_data.global_skip_rows + pass_start_row;
+      // num_rows is how many rows we are reading this pass. Since this is a difference, adding
+      // global_skip_rows to both variables is redundant.
+      pass.num_rows = pass_end_row - pass_start_row;
     }
 
     // load page information for the chunk. this retrieves the compressed bytes for all the
@@ -1295,9 +1314,8 @@ void reader::impl::setup_next_pass(read_mode mode)
     printf("\tskip_rows: %'lu\n", pass.skip_rows);
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
-    auto const num_columns = _input_columns.size();
-    std::vector<size_type> h_page_offsets =
-      cudf::detail::make_std_vector_sync(pass.page_offsets, _stream);
+    auto const num_columns    = _input_columns.size();
+    auto const h_page_offsets = cudf::detail::make_host_vector_sync(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
@@ -1339,7 +1357,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
     [&]() -> std::tuple<rmm::device_uvector<page_span>, size_t, size_t> {
     if (!pass.has_compressed_data || _input_pass_read_limit == 0) {
       rmm::device_uvector<page_span> page_indices(
-        num_columns, _stream, rmm::mr::get_current_device_resource());
+        num_columns, _stream, cudf::get_current_device_resource_ref());
       auto iter = thrust::make_counting_iterator(0);
       thrust::transform(rmm::exec_policy_nosync(_stream),
                         iter,
@@ -1417,7 +1435,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
     subpass.pages = subpass.page_buf;
   }
 
-  std::vector<page_span> h_spans = cudf::detail::make_std_vector_async(page_indices, _stream);
+  auto const h_spans = cudf::detail::make_host_vector_async(page_indices, _stream);
   subpass.pages.device_to_host_async(_stream);
 
   _stream.synchronize();
@@ -1455,7 +1473,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
-  std::vector<page_span> h_page_indices = cudf::detail::make_std_vector_sync(page_indices, _stream);
+  auto const h_page_indices = cudf::detail::make_host_vector_sync(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
@@ -1493,10 +1511,13 @@ void reader::impl::create_global_chunk_info()
     std::transform(
       _input_columns.begin(), _input_columns.end(), column_mapping.begin(), [&](auto const& col) {
         // translate schema_idx into something we can use for the page indexes
-        if (auto it = std::find_if(
-              columns.begin(),
-              columns.end(),
-              [&col](auto const& col_chunk) { return col_chunk.schema_idx == col.schema_idx; });
+        if (auto it = std::find_if(columns.begin(),
+                                   columns.end(),
+                                   [&](auto const& col_chunk) {
+                                     return col_chunk.schema_idx ==
+                                            _metadata->map_schema_index(col.schema_idx,
+                                                                        rg.source_index);
+                                   });
             it != columns.end()) {
           return std::distance(columns.begin(), it);
         }
@@ -1506,6 +1527,7 @@ void reader::impl::create_global_chunk_info()
 
   // Initialize column chunk information
   auto remaining_rows = num_rows;
+  auto skip_rows      = _file_itm_data.global_skip_rows;
   for (auto const& rg : row_groups_info) {
     auto const& row_group      = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_start = rg.start_row;
@@ -1516,7 +1538,8 @@ void reader::impl::create_global_chunk_info()
       auto col = _input_columns[i];
       // look up metadata
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
-      auto& schema   = _metadata->get_schema(col.schema_idx);
+      auto& schema   = _metadata->get_schema(
+        _metadata->map_schema_index(col.schema_idx, rg.source_index), rg.source_index);
 
       auto [clock_rate, logical_type] =
         conversion_info(to_type_id(schema, _strings_to_categorical, _options.timestamp_type.id()),
@@ -1555,10 +1578,15 @@ void reader::impl::create_global_chunk_info()
                                        col.schema_idx,
                                        chunk_info,
                                        list_bytes_per_row_est,
-                                       schema.type == BYTE_ARRAY and _strings_to_categorical));
+                                       schema.type == BYTE_ARRAY and _strings_to_categorical,
+                                       rg.source_index));
     }
-
-    remaining_rows -= row_group_rows;
+    // Adjust for skip_rows when updating the remaining rows after the first group
+    remaining_rows -=
+      (skip_rows) ? std::min<int>(rg.start_row + row_group.num_rows - skip_rows, remaining_rows)
+                  : row_group_rows;
+    // Set skip_rows = 0 as it is no longer needed for subsequent row_groups
+    skip_rows = 0;
   }
 }
 
@@ -1595,6 +1623,9 @@ void reader::impl::compute_input_passes()
   _file_itm_data.input_pass_row_group_offsets.push_back(0);
   _file_itm_data.input_pass_start_row_count.push_back(0);
 
+  // To handle global_skip_rows when computing input passes
+  int skip_rows = _file_itm_data.global_skip_rows;
+
   for (size_t cur_rg_index = 0; cur_rg_index < row_groups_info.size(); cur_rg_index++) {
     auto const& rgi       = row_groups_info[cur_rg_index];
     auto const& row_group = _metadata->get_row_group(rgi.index, rgi.source_index);
@@ -1603,6 +1634,14 @@ void reader::impl::compute_input_passes()
     auto const [compressed_rg_size, _ /*compressed + uncompressed*/] =
       get_row_group_size(row_group);
 
+    // We must use the effective size of the first row group we are reading to accurately calculate
+    // the first non-zero input_pass_start_row_count.
+    auto const row_group_rows =
+      (skip_rows) ? rgi.start_row + row_group.num_rows - skip_rows : row_group.num_rows;
+
+    //  Set skip_rows = 0 as it is no longer needed for subsequent row_groups
+    skip_rows = 0;
+
     // can we add this row group
     if (cur_pass_byte_size + compressed_rg_size >= comp_read_limit) {
       // A single row group (the current one) is larger than the read limit:
@@ -1610,7 +1649,7 @@ void reader::impl::compute_input_passes()
       // row group
       if (cur_rg_start == cur_rg_index) {
         _file_itm_data.input_pass_row_group_offsets.push_back(cur_rg_index + 1);
-        _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group.num_rows);
+        _file_itm_data.input_pass_start_row_count.push_back(cur_row_count + row_group_rows);
         cur_rg_start       = cur_rg_index + 1;
         cur_pass_byte_size = 0;
       }
@@ -1624,7 +1663,7 @@ void reader::impl::compute_input_passes()
     } else {
       cur_pass_byte_size += compressed_rg_size;
     }
-    cur_row_count += row_group.num_rows;
+    cur_row_count += row_group_rows;
   }
 
   // add the last pass if necessary

@@ -7,7 +7,7 @@ import pickle
 import textwrap
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -17,11 +17,18 @@ from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf.core._compat import PANDAS_LT_300
+from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
 
+if PANDAS_GE_210:
+    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.NumpyEADtype
+else:
+    PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
 
@@ -72,7 +79,7 @@ def dtype(arbitrary):
             return np.dtype("object")
         else:
             return dtype(pd_dtype.numpy_dtype)
-    elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
+    elif isinstance(pd_dtype, PANDAS_NUMPY_DTYPE):
         return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(pd_dtype)
@@ -177,7 +184,7 @@ class CategoricalDtype(_BaseDtype):
         self._ordered = ordered
 
     @property
-    def categories(self) -> "cudf.core.index.Index":
+    def categories(self) -> cudf.Index:
         """
         An ``Index`` containing the unique categories allowed.
 
@@ -189,10 +196,12 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            return cudf.Index(
-                cudf.core.column.column_empty(0, dtype="object", masked=False)
+            col = cudf.core.column.column_empty(
+                0, dtype="object", masked=False
             )
-        return cudf.Index(self._categories, copy=False)
+        else:
+            col = self._categories
+        return cudf.Index._from_column(col)
 
     @property
     def type(self):
@@ -254,7 +263,9 @@ class CategoricalDtype(_BaseDtype):
             categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
-    def _init_categories(self, categories: Any):
+    def _init_categories(
+        self, categories: Any
+    ) -> cudf.core.column.ColumnBase | None:
         if categories is None:
             return categories
         if len(categories) == 0 and not isinstance(
@@ -937,7 +948,7 @@ class IntervalDtype(StructDtype):
     def __eq__(self, other):
         if isinstance(other, str):
             # This means equality isn't transitive but mimics pandas
-            return other == self.name
+            return other in (self.name, str(self))
         return (
             type(self) == type(other)
             and self.subtype == other.subtype

@@ -4,14 +4,15 @@ import pickle
 
 from libc.stdint cimport uint8_t, uintptr_t
 from libcpp cimport bool
-from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+
+import pylibcudf
 
 import cudf
-from cudf._lib import pylibcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
@@ -26,17 +27,12 @@ from cudf.core.abc import Serializable
 
 from libcpp.memory cimport make_unique
 
-cimport cudf._lib.pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
-from cudf._lib.pylibcudf.libcudf.column.column cimport column
-from cudf._lib.pylibcudf.libcudf.column.column_view cimport column_view
-from cudf._lib.pylibcudf.libcudf.lists.gather cimport (
-    segmented_gather as cpp_segmented_gather,
-)
-from cudf._lib.pylibcudf.libcudf.lists.lists_column_view cimport (
-    lists_column_view,
-)
-from cudf._lib.pylibcudf.libcudf.scalar.scalar cimport scalar
-from cudf._lib.pylibcudf.libcudf.types cimport size_type
+cimport pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
+from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.types cimport size_type
+
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_table_view
 
 # workaround for https://github.com/cython/cython/issues/3885
@@ -339,26 +335,6 @@ def get_element(Column input_column, size_type index):
     )
 
 
-@acquire_spill_lock()
-def segmented_gather(Column source_column, Column gather_map):
-    cdef shared_ptr[lists_column_view] source_LCV = (
-        make_shared[lists_column_view](source_column.view())
-    )
-    cdef shared_ptr[lists_column_view] gather_map_LCV = (
-        make_shared[lists_column_view](gather_map.view())
-    )
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_segmented_gather(
-                source_LCV.get()[0], gather_map_LCV.get()[0])
-        )
-
-    result = Column.from_unique_ptr(move(c_result))
-    return result
-
-
 cdef class _CPackedColumns:
 
     @staticmethod
@@ -384,7 +360,7 @@ cdef class _CPackedColumns:
 
         p.column_names = input_table._column_names
         p.column_dtypes = {}
-        for name, col in input_table._data.items():
+        for name, col in input_table._column_labels_and_values:
             if isinstance(col.dtype, cudf.core.dtypes._BaseDtype):
                 p.column_dtypes[name] = col.dtype
 

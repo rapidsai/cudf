@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,15 @@
 
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <spdlog/spdlog.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
+
+namespace detail {
+spdlog::logger& logger();
+}
 
 /**
  * @brief Returns the global logger.
@@ -41,6 +47,8 @@ namespace cudf {
  *
  * @return spdlog::logger& The logger.
  */
-spdlog::logger& logger();
+[[deprecated(
+  "Support for direct access to spdlog loggers in cudf is planned for removal")]] spdlog::logger&
+logger();
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

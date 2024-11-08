@@ -24,11 +24,11 @@
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -513,7 +513,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   CUDF_EXPECTS(
     std::all_of(
       input.begin(), input.end(), [](auto const& col) { return sha_leaf_type_check(col.type()); }),
-    "Unsupported column type for hash function.");
+    "Unsupported column type for hash function.",
+    cudf::data_type_error);
 
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(Hasher::digest_size);

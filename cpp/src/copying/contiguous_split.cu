@@ -28,10 +28,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
@@ -1539,7 +1539,8 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
 
     std::vector<std::size_t> num_batches_per_iteration;
     std::vector<std::size_t> size_of_batches_per_iteration;
-    std::vector<std::size_t> accum_size_per_iteration;
+    auto accum_size_per_iteration =
+      cudf::detail::make_empty_host_vector<std::size_t>(h_offsets.size(), stream);
     std::size_t accum_size = 0;
     {
       auto current_offset_it = h_offsets.begin();
@@ -1938,8 +1939,8 @@ struct contiguous_split_state {
       std::transform(h_buf_sizes,
                      h_buf_sizes + num_partitions,
                      std::back_inserter(out_buffers),
-                     [stream = stream,
-                      mr = mr.value_or(rmm::mr::get_current_device_resource())](std::size_t bytes) {
+                     [stream = stream, mr = mr.value_or(cudf::get_current_device_resource_ref())](
+                       std::size_t bytes) {
                        return rmm::device_buffer{bytes, stream, mr};
                      });
     }

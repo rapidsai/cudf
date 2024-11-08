@@ -3,8 +3,9 @@
 import pandas as pd
 from numba.np import numpy_support
 
+import pylibcudf
+
 import cudf
-from cudf._lib import pylibcudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 from cudf.utils import cudautils
 
@@ -77,8 +78,11 @@ class Aggregation:
         )
 
     @classmethod
-    def nunique(cls):
-        return cls(pylibcudf.aggregation.nunique(pylibcudf.types.NullPolicy.EXCLUDE))
+    def nunique(cls, dropna=True):
+        return cls(pylibcudf.aggregation.nunique(
+            pylibcudf.types.NullPolicy.EXCLUDE
+            if dropna else pylibcudf.types.NullPolicy.INCLUDE
+        ))
 
     @classmethod
     def nth(cls, size):

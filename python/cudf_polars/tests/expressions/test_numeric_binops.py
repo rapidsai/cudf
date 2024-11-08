@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 dtypes = [
     pl.Int8,
@@ -111,3 +114,12 @@ def test_binop_with_scalar(left_scalar, right_scalar):
     q = df.select(lop / rop)
 
     assert_gpu_result_equal(q)
+
+
+def test_numeric_to_string_cast_fails():
+    df = pl.DataFrame(
+        {"a": [1, 1, 2, 3, 3, 4, 1], "b": [None, 2, 3, 4, 5, 6, 7]}
+    ).lazy()
+    q = df.select(pl.col("a").cast(pl.String))
+
+    assert_ir_translation_raises(q, NotImplementedError)

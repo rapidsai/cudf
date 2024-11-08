@@ -23,6 +23,8 @@
 
 #include <cudf/io/parquet.hpp>
 
+#include <array>
+
 using cudf::test::iterators::no_nulls;
 
 // Base test fixture for V2 header tests
@@ -47,15 +49,6 @@ TEST_P(ParquetV2Test, MultiColumn)
   auto col6_vals = random_values<int16_t>(num_rows);
   auto col7_vals = random_values<int32_t>(num_rows);
   auto col8_vals = random_values<int64_t>(num_rows);
-  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&col6_vals](auto i) {
-    return numeric::decimal32{col6_vals[i], numeric::scale_type{5}};
-  });
-  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&col7_vals](auto i) {
-    return numeric::decimal64{col7_vals[i], numeric::scale_type{-5}};
-  });
-  auto col8_data = cudf::detail::make_counting_transform_iterator(0, [&col8_vals](auto i) {
-    return numeric::decimal128{col8_vals[i], numeric::scale_type{-6}};
-  });
 
   // column_wrapper<bool> col0{col0_data.begin(), col0_data.end(), no_nulls()};
   column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), no_nulls()};
@@ -63,9 +56,13 @@ TEST_P(ParquetV2Test, MultiColumn)
   column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), no_nulls()};
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), no_nulls()};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), no_nulls()};
-  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, no_nulls()};
-  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, no_nulls()};
-  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, no_nulls()};
+
+  cudf::test::fixed_point_column_wrapper<numeric::decimal32::rep> col6(
+    col6_vals.begin(), col6_vals.end(), no_nulls(), numeric::scale_type{5});
+  cudf::test::fixed_point_column_wrapper<numeric::decimal64::rep> col7(
+    col7_vals.begin(), col7_vals.end(), no_nulls(), numeric::scale_type{-5});
+  cudf::test::fixed_point_column_wrapper<numeric::decimal128::rep> col8(
+    col8_vals.begin(), col8_vals.end(), no_nulls(), numeric::scale_type{-6});
 
   auto expected = table_view{{col1, col2, col3, col4, col5, col6, col7, col8}};
 
@@ -109,14 +106,6 @@ TEST_P(ParquetV2Test, MultiColumnWithNulls)
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int32_t>(num_rows);
   auto col7_vals = random_values<int64_t>(num_rows);
-  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&col6_vals](auto i) {
-    return numeric::decimal32{col6_vals[i], numeric::scale_type{-2}};
-  });
-  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&col7_vals](auto i) {
-    return numeric::decimal64{col7_vals[i], numeric::scale_type{-8}};
-  });
-  // auto col0_mask = cudf::detail::make_counting_transform_iterator(
-  //    0, [](auto i) { return (i % 2); });
   auto col1_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i < 10); });
   auto col2_mask = no_nulls();
@@ -138,8 +127,11 @@ TEST_P(ParquetV2Test, MultiColumnWithNulls)
   column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), col3_mask};
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), col4_mask};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
-  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, col6_mask};
-  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, col7_mask};
+
+  cudf::test::fixed_point_column_wrapper<numeric::decimal32::rep> col6(
+    col6_vals.begin(), col6_vals.end(), col6_mask, numeric::scale_type{-2});
+  cudf::test::fixed_point_column_wrapper<numeric::decimal64::rep> col7(
+    col7_vals.begin(), col7_vals.end(), col7_mask, numeric::scale_type{-8});
 
   auto expected = table_view{{/*col0, */ col1, col2, col3, col4, col5, col6, col7}};
 
@@ -703,9 +695,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
 
   // fixed length strings
   auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    char buf[30];
-    sprintf(buf, "%012d", i);
-    return std::string(buf);
+    std::array<char, 30> buf;
+    sprintf(buf.data(), "%012d", i);
+    return std::string(buf.data());
   });
   auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
 
@@ -725,9 +717,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
 
   // mixed length strings
   auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    char buf[30];
-    sprintf(buf, "%d", i);
-    return std::string(buf);
+    std::array<char, 30> buf;
+    sprintf(buf.data(), "%d", i);
+    return std::string(buf.data());
   });
   auto col7          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
 
@@ -797,9 +789,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
 
   // fixed length strings
   auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    char buf[30];
-    sprintf(buf, "%012d", i);
-    return std::string(buf);
+    std::array<char, 30> buf;
+    sprintf(buf.data(), "%012d", i);
+    return std::string(buf.data());
   });
   auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
 
@@ -829,9 +821,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNulls)
 
   // mixed length strings
   auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    char buf[30];
-    sprintf(buf, "%d", i);
-    return std::string(buf);
+    std::array<char, 30> buf;
+    sprintf(buf.data(), "%d", i);
+    return std::string(buf.data());
   });
   auto col7 = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows, valids);
 
@@ -907,9 +899,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
 
   // fixed length strings
   auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    char buf[30];
-    sprintf(buf, "%012d", i);
-    return std::string(buf);
+    std::array<char, 30> buf;
+    sprintf(buf.data(), "%012d", i);
+    return std::string(buf.data());
   });
   auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
 
@@ -924,9 +916,9 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
 
   // mixed length strings
   auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    char buf[30];
-    sprintf(buf, "%d", i);
-    return std::string(buf);
+    std::array<char, 30> buf;
+    sprintf(buf.data(), "%d", i);
+    return std::string(buf.data());
   });
   auto col3          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
 
@@ -1044,7 +1036,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStruct)
 
   // hard coded schema indices.
   // TODO find a way to do this without magic
-  size_t const colidxs[] = {1, 3, 4, 5, 8};
+  constexpr std::array<size_t, 5> colidxs{1, 3, 4, 5, 8};
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto const& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
@@ -1139,7 +1131,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexStructNulls)
   // col1 will have num_ordered_rows / 2 nulls total
   // col2 will have num_ordered_rows / 3 nulls total
   // col3 will have num_ordered_rows / 4 nulls total
-  int const null_mods[] = {0, 2, 3, 4};
+  constexpr std::array<int, 4> null_mods{0, 2, 3, 4};
 
   for (auto const& rg : fmd.row_groups) {
     for (size_t c = 0; c < rg.columns.size(); c++) {
@@ -1309,25 +1301,25 @@ TEST_P(ParquetV2Test, CheckColumnIndexListWithNulls)
 
   table_view expected({col0, col1, col2, col3, col4, col5, col6, col7});
 
-  int64_t const expected_null_counts[]            = {4, 4, 4, 6, 4, 6, 4, 5, 11};
-  std::vector<int64_t> const expected_def_hists[] = {{1, 1, 2, 3},
-                                                     {1, 3, 10},
-                                                     {1, 1, 2, 10},
-                                                     {1, 1, 2, 2, 8},
-                                                     {1, 1, 1, 1, 10},
-                                                     {1, 1, 1, 1, 2, 8},
-                                                     {1, 3, 9},
-                                                     {1, 3, 1, 8},
-                                                     {1, 0, 4, 1, 1, 4, 9}};
-  std::vector<int64_t> const expected_rep_hists[] = {{4, 3},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 6},
-                                                     {4, 4, 5},
-                                                     {4, 4, 5},
-                                                     {4, 6, 2, 8}};
+  std::array<int64_t, 9> expected_null_counts{4, 4, 4, 6, 4, 6, 4, 5, 11};
+  std::vector<std::vector<int64_t>> const expected_def_hists = {{1, 1, 2, 3},
+                                                                {1, 3, 10},
+                                                                {1, 1, 2, 10},
+                                                                {1, 1, 2, 2, 8},
+                                                                {1, 1, 1, 1, 10},
+                                                                {1, 1, 1, 1, 2, 8},
+                                                                {1, 3, 9},
+                                                                {1, 3, 1, 8},
+                                                                {1, 0, 4, 1, 1, 4, 9}};
+  std::vector<std::vector<int64_t>> const expected_rep_hists = {{4, 3},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 6},
+                                                                {4, 4, 5},
+                                                                {4, 4, 5},
+                                                                {4, 6, 2, 8}};
 
   auto const filepath = temp_env->get_temp_filepath("ColumnIndexListWithNulls.parquet");
   auto out_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)

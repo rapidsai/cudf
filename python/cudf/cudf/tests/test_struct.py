@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,8 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import StructDtype
-from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(
@@ -49,10 +50,14 @@ def test_struct_for_field(key, expect):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("input_obj", [[{"a": 1, "b": cudf.NA, "c": 3}]])
-def test_series_construction_with_nulls(input_obj):
-    expect = pa.array(input_obj, from_pandas=True)
-    got = cudf.Series(input_obj).to_arrow()
+def test_series_construction_with_nulls():
+    fields = [
+        pa.array([1], type=pa.int64()),
+        pa.array([None], type=pa.int64()),
+        pa.array([3], type=pa.int64()),
+    ]
+    expect = pa.StructArray.from_arrays(fields, ["a", "b", "c"])
+    got = cudf.Series(expect).to_arrow()
 
     assert expect == got
 

@@ -2,5 +2,5 @@
 sorting
 =======
 
-.. automodule:: cudf._lib.pylibcudf.sorting
+.. automodule:: pylibcudf.sorting
    :members:

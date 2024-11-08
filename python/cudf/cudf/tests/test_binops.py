@@ -2,7 +2,6 @@
 
 import decimal
 import operator
-import random
 import warnings
 from itertools import combinations_with_replacement, product
 
@@ -13,9 +12,13 @@ import pytest
 
 import cudf
 from cudf import Index, Series
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.testing import _utils as utils
+from cudf.testing import _utils as utils, assert_eq
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -175,7 +178,13 @@ if get_global_manager() is not None:
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("binop", _binops)
-def test_series_binop(binop, obj_class):
+def test_series_binop(request, binop, obj_class):
+    request.applymarker(
+        pytest.mark.xfail(
+            binop is operator.floordiv,
+            reason="https://github.com/rapidsai/cudf/issues/17073",
+        )
+    )
     nelem = 1000
     arr1 = utils.gen_rand("float64", nelem) * 10000
     # Keeping a low value because CUDA 'pow' has 2 full range error
@@ -183,24 +192,27 @@ def test_series_binop(binop, obj_class):
 
     sr1 = Series(arr1)
     sr2 = Series(arr2)
+    psr1 = sr1.to_pandas()
+    psr2 = sr2.to_pandas()
 
     if obj_class == "Index":
         sr1 = Index(sr1)
         sr2 = Index(sr2)
 
+    expect = binop(psr1, psr2)
     result = binop(sr1, sr2)
-    expect = binop(pd.Series(arr1), pd.Series(arr2))
 
     if obj_class == "Index":
         result = Series(result)
 
-    utils.assert_eq(result, expect)
+    assert_eq(result, expect)
 
 
 @pytest.mark.parametrize("binop", _binops)
 def test_series_binop_concurrent(binop):
     def func(index):
-        arr = np.random.random(100) * 10
+        rng = np.random.default_rng(seed=0)
+        arr = rng.random(100) * 10
         sr = Series(arr)
 
         result = binop(sr.astype("int32"), sr)
@@ -219,8 +231,9 @@ def test_series_binop_concurrent(binop):
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem,binop", list(product([1, 2, 100], _binops)))
 def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
-    arr = np.random.random(nelem)
-    rhs = random.choice(arr).item()
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(nelem)
+    rhs = rng.choice(arr).item()
 
     sr = Series(arr)
     if obj_class == "Index":
@@ -243,10 +256,11 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
     "lhs_dtype,rhs_dtype", list(product(_int_types, _int_types))
 )
 def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
-    arr1 = (np.random.random(100) * 100).astype(lhs_dtype)
+    rng = np.random.default_rng(seed=0)
+    arr1 = (rng.random(100) * 100).astype(lhs_dtype)
     sr1 = Series(arr1)
 
-    arr2 = (np.random.random(100) * 100).astype(rhs_dtype)
+    arr2 = (rng.random(100) * 100).astype(rhs_dtype)
     sr2 = Series(arr2)
 
     if obj_class == "Index":
@@ -267,8 +281,9 @@ def test_series_bitwise_binop(binop, obj_class, lhs_dtype, rhs_dtype):
     "dtype", ["int8", "int32", "int64", "float32", "float64", "datetime64[ms]"]
 )
 def test_series_compare(cmpop, obj_class, dtype):
-    arr1 = np.random.randint(0, 100, 100).astype(dtype)
-    arr2 = np.random.randint(0, 100, 100).astype(dtype)
+    rng = np.random.default_rng(seed=0)
+    arr1 = rng.integers(0, 100, 100).astype(dtype)
+    arr2 = rng.integers(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
     sr2 = Series(arr2)
 
@@ -288,6 +303,47 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result1.to_numpy(), cmpop(arr1, arr1))
     np.testing.assert_equal(result2.to_numpy(), cmpop(arr2, arr2))
     np.testing.assert_equal(result3.to_numpy(), cmpop(arr1, arr2))
+
+
+@pytest.mark.parametrize(
+    "dtype,val",
+    [("int8", 200), ("int32", 2**32), ("uint8", -128), ("uint64", -1)],
+)
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_series_compare_integer(dtype, val, op, reverse):
+    # Tests that these actually work, even though they are out of bound.
+    force_cast_val = np.array(val).astype(dtype)
+    sr = Series(
+        [np.iinfo(dtype).min, np.iinfo(dtype).max, force_cast_val, None],
+        dtype=dtype,
+    )
+
+    if reverse:
+        _op = op
+
+        def op(x, y):
+            return _op(y, x)
+
+    # We expect the same result as comparing to a value within range (e.g. 0)
+    # except that a NULL value evaluates to False
+    if op(0, val):
+        expected = Series([True, True, True, None])
+    else:
+        expected = Series([False, False, False, None])
+
+    res = op(sr, val)
+    assert_eq(res, expected)
 
 
 def _series_compare_nulls_typegen():
@@ -318,7 +374,7 @@ def test_series_compare_nulls(cmpop, dtypes):
     expect[expect_mask] = cmpop(lser[expect_mask], rser[expect_mask])
 
     got = cmpop(lser, rser)
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.fixture
@@ -349,7 +405,7 @@ def test_str_series_compare_str(
         Series.from_pandas(str_series_cmp_data), "a"
     )
 
-    utils.assert_eq(expect, got.to_pandas(nullable=True))
+    assert_eq(expect, got.to_pandas(nullable=True))
 
 
 def test_str_series_compare_str_reflected(
@@ -360,7 +416,7 @@ def test_str_series_compare_str_reflected(
         "a", Series.from_pandas(str_series_cmp_data)
     )
 
-    utils.assert_eq(expect, got.to_pandas(nullable=True))
+    assert_eq(expect, got.to_pandas(nullable=True))
 
 
 def test_str_series_compare_num(
@@ -371,7 +427,7 @@ def test_str_series_compare_num(
         Series.from_pandas(str_series_cmp_data), cmp_scalar
     )
 
-    utils.assert_eq(expect, got.to_pandas(nullable=True))
+    assert_eq(expect, got.to_pandas(nullable=True))
 
 
 def test_str_series_compare_num_reflected(
@@ -382,7 +438,7 @@ def test_str_series_compare_num_reflected(
         cmp_scalar, Series.from_pandas(str_series_cmp_data)
     )
 
-    utils.assert_eq(expect, got.to_pandas(nullable=True))
+    assert_eq(expect, got.to_pandas(nullable=True))
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -393,9 +449,10 @@ def test_str_series_compare_num_reflected(
 def test_series_compare_scalar(
     nelem, cmpop, obj_class, dtype, use_cudf_scalar
 ):
-    arr1 = np.random.randint(0, 100, 100).astype(dtype)
+    rng = np.random.default_rng(seed=0)
+    arr1 = rng.integers(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
-    rhs = random.choice(arr1).item()
+    rhs = rng.choice(arr1).item()
 
     if use_cudf_scalar:
         rhs = cudf.Scalar(rhs)
@@ -420,9 +477,9 @@ _nulls = ["none", "some"]
 @pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
 @pytest.mark.parametrize("lhs_nulls,rhs_nulls", list(product(_nulls, _nulls)))
 def test_validity_add(nelem, lhs_nulls, rhs_nulls):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     # LHS
-    lhs_data = np.random.random(nelem)
+    lhs_data = rng.random(nelem)
     if lhs_nulls == "some":
         lhs_mask = utils.random_bitmask(nelem)
         lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)[:nelem]
@@ -433,7 +490,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     else:
         lhs = Series(lhs_data)
     # RHS
-    rhs_data = np.random.random(nelem)
+    rhs_data = rng.random(nelem)
     if rhs_nulls == "some":
         rhs_mask = utils.random_bitmask(nelem)
         rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)[:nelem]
@@ -480,8 +537,9 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
 )
 def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 10
-    lhs = (np.random.random(nelem) * nelem).astype(lhs_dtype)
-    rhs = (np.random.random(nelem) * nelem).astype(rhs_dtype)
+    rng = np.random.default_rng(seed=0)
+    lhs = (rng.random(nelem) * nelem).astype(lhs_dtype)
+    rhs = (rng.random(nelem) * nelem).astype(rhs_dtype)
 
     sr1 = Series(lhs)
     sr2 = Series(rhs)
@@ -505,8 +563,9 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
 )
 def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 5
-    lhs = (np.random.random(nelem) * nelem).astype(lhs_dtype)
-    rhs = (np.random.random(nelem) * nelem).astype(rhs_dtype)
+    rng = np.random.default_rng(seed=0)
+    lhs = (rng.random(nelem) * nelem).astype(lhs_dtype)
+    rhs = (rng.random(nelem) * nelem).astype(rhs_dtype)
 
     sr1 = Series(lhs)
     sr2 = Series(rhs)
@@ -529,8 +588,7 @@ def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
 )
 def test_series_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
-    np.random.seed(12)
-    random_series = utils.gen_rand(dtype, 100, low=10)
+    random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
 
     # gpu series
     gs = Series(random_series)
@@ -539,7 +597,14 @@ def test_series_reflected_ops_scalar(func, dtype, obj_class):
     if obj_class == "Index":
         gs = Index(gs)
 
-    gs_result = func(gs)
+    try:
+        gs_result = func(gs)
+    except OverflowError:
+        # An error is fine, if pandas raises the same error:
+        with pytest.raises(OverflowError):
+            func(random_series)
+
+        return
 
     # class typing
     if obj_class == "Index":
@@ -579,8 +644,7 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     cpu_func, gpu_func = funcs
 
     # create random series
-    np.random.seed(12)
-    random_series = utils.gen_rand(dtype, 100, low=10)
+    random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
 
     # gpu series
     gs = Series(random_series)
@@ -589,7 +653,14 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
     if obj_class == "Index":
         gs = Index(gs)
 
-    gs_result = gpu_func(gs)
+    try:
+        gs_result = gpu_func(gs)
+    except OverflowError:
+        # An error is fine, if pandas raises the same error:
+        with pytest.raises(OverflowError):
+            cpu_func(random_series)
+
+        return
 
     # class typing
     if obj_class == "Index":
@@ -612,12 +683,12 @@ def test_different_shapes_and_columns(binop):
     # Empty frame on the right side
     pd_frame = binop(pd.DataFrame({"x": [1, 2]}), pd.DataFrame({}))
     cd_frame = binop(cudf.DataFrame({"x": [1, 2]}), cudf.DataFrame({}))
-    utils.assert_eq(cd_frame, pd_frame)
+    assert_eq(cd_frame, pd_frame)
 
     # Empty frame on the left side
     pd_frame = pd.DataFrame({}) + pd.DataFrame({"x": [1, 2]})
     cd_frame = cudf.DataFrame({}) + cudf.DataFrame({"x": [1, 2]})
-    utils.assert_eq(cd_frame, pd_frame)
+    assert_eq(cd_frame, pd_frame)
 
     # Note: the below rely on a discrepancy between cudf and pandas
     # While pandas inserts columns in alphabetical order, cudf inserts in the
@@ -627,12 +698,12 @@ def test_different_shapes_and_columns(binop):
     # More rows on the left side
     pd_frame = pd.DataFrame({"x": [1, 2, 3]}) + pd.DataFrame({"y": [1, 2]})
     cd_frame = cudf.DataFrame({"x": [1, 2, 3]}) + cudf.DataFrame({"y": [1, 2]})
-    utils.assert_eq(cd_frame, pd_frame)
+    assert_eq(cd_frame, pd_frame)
 
     # More rows on the right side
     pd_frame = pd.DataFrame({"x": [1, 2]}) + pd.DataFrame({"y": [1, 2, 3]})
     cd_frame = cudf.DataFrame({"x": [1, 2]}) + cudf.DataFrame({"y": [1, 2, 3]})
-    utils.assert_eq(cd_frame, pd_frame)
+    assert_eq(cd_frame, pd_frame)
 
 
 @pytest.mark.parametrize("binop", _binops)
@@ -650,7 +721,7 @@ def test_different_shapes_and_same_columns(binop):
     )
     # cast x as float64 so it matches pandas dtype
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
-    utils.assert_eq(cd_frame, pd_frame)
+    assert_eq(cd_frame, pd_frame)
 
 
 @pytest.mark.parametrize("binop", _binops)
@@ -680,7 +751,7 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     # cast x and y as float64 so it matches pandas dtype
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
-    utils.assert_eq(cd_frame, pd_frame)
+    assert_eq(cd_frame, pd_frame)
 
     pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
     pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
@@ -688,7 +759,7 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     gdf2 = cudf.DataFrame.from_pandas(pdf2)
     pd_frame = binop(pdf1, pdf2)
     cd_frame = binop(gdf1, gdf2)
-    utils.assert_eq(pd_frame, cd_frame)
+    assert_eq(pd_frame, cd_frame)
 
 
 @pytest.mark.parametrize(
@@ -715,14 +786,15 @@ def test_df_different_index_shape(df2, binop):
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
 def test_boolean_scalar_binop(op):
-    psr = pd.Series(np.random.choice([True, False], 10))
+    rng = np.random.default_rng(seed=0)
+    psr = pd.Series(rng.choice([True, False], 10))
     gsr = cudf.from_pandas(psr)
-    utils.assert_eq(op(psr, True), op(gsr, True))
-    utils.assert_eq(op(psr, False), op(gsr, False))
+    assert_eq(op(psr, True), op(gsr, True))
+    assert_eq(op(psr, False), op(gsr, False))
 
     # cuDF scalar
-    utils.assert_eq(op(psr, True), op(gsr, cudf.Scalar(True)))
-    utils.assert_eq(op(psr, False), op(gsr, cudf.Scalar(False)))
+    assert_eq(op(psr, True), op(gsr, cudf.Scalar(True)))
+    assert_eq(op(psr, False), op(gsr, cudf.Scalar(False)))
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
@@ -747,7 +819,7 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
         pdf_series_b, fill_value=fill_value
     )
 
-    utils.assert_eq(pdf_result, gdf_result)
+    assert_eq(pdf_result, gdf_result)
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
@@ -770,10 +842,11 @@ def test_operator_func_series_and_scalar(
         fill_value=fill_value,
     )
     pdf_series_result = getattr(pdf_series, func)(
-        scalar, fill_value=fill_value
+        np.array(scalar)[()] if use_cudf_scalar else scalar,
+        fill_value=fill_value,
     )
 
-    utils.assert_eq(pdf_series_result, gdf_series_result)
+    assert_eq(pdf_series_result, gdf_series_result)
 
 
 _permu_values = [0, 1, None, np.nan]
@@ -812,9 +885,9 @@ def test_operator_func_between_series_logical(
         and np.isnan(fill_value)
     ):
         with pytest.raises(AssertionError):
-            utils.assert_eq(expect, got)
+            assert_eq(expect, got)
         return
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
@@ -851,7 +924,7 @@ def test_operator_func_series_and_scalar_logical(
     expect = pdf_series_result
     got = gdf_series_result.to_pandas(nullable=True)
 
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
@@ -863,16 +936,17 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     num_cols = 3
 
     def gen_df():
+        rng = np.random.default_rng(seed=0)
         pdf = pd.DataFrame()
         from string import ascii_lowercase
 
-        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+        cols = rng.choice(num_cols + 5, num_cols, replace=False)
 
         for i in range(num_cols):
             colname = ascii_lowercase[cols[i]]
             data = utils.gen_rand("float64", num_rows) * 10000
             if nulls == "some":
-                idx = np.random.choice(
+                idx = rng.choice(
                     num_rows, size=int(num_rows / 2), replace=False
                 )
                 data[idx] = np.nan
@@ -887,28 +961,28 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
     expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._data)]
 
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("other", ["df", "scalar"])
 def test_logical_operator_func_dataframe(func, nulls, other):
-    np.random.seed(0)
     num_rows = 100
     num_cols = 3
 
     def gen_df():
+        rng = np.random.default_rng(seed=0)
         pdf = pd.DataFrame()
         from string import ascii_lowercase
 
-        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+        cols = rng.choice(num_cols + 5, num_cols, replace=False)
 
         for i in range(num_cols):
             colname = ascii_lowercase[cols[i]]
             data = utils.gen_rand("float64", num_rows) * 10000
             if nulls == "some":
-                idx = np.random.choice(
+                idx = rng.choice(
                     num_rows, size=int(num_rows / 2), replace=False
                 )
                 data[idx] = np.nan
@@ -917,13 +991,17 @@ def test_logical_operator_func_dataframe(func, nulls, other):
 
     pdf1 = gen_df()
     pdf2 = gen_df() if other == "df" else 59.0
-    gdf1 = cudf.DataFrame.from_pandas(pdf1)
-    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
+    gdf1 = cudf.DataFrame.from_pandas(pdf1, nan_as_null=False)
+    gdf2 = (
+        cudf.DataFrame.from_pandas(pdf2, nan_as_null=False)
+        if other == "df"
+        else 59.0
+    )
 
     got = getattr(gdf1, func)(gdf2)
     expect = getattr(pdf1, func)(pdf2)[list(got._data)]
 
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -949,7 +1027,7 @@ def test_logical_operator_func_dataframe(func, nulls, other):
 def test_binop_bool_uint(func, rhs):
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
-    utils.assert_eq(
+    assert_eq(
         getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False
     )
 
@@ -977,7 +1055,7 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
     else:
         pd_div = pd.Series([0], dtype=divisor_dtype)
         cudf_div = cudf.from_pandas(pd_div)
-    utils.assert_eq(sr // pd_div, cr // cudf_div)
+    assert_eq(sr // pd_div, cr // cudf_div)
 
 
 @pytest.mark.parametrize("scalar_divisor", [False, True])
@@ -1023,27 +1101,27 @@ def test_floordiv_zero_bool(scalar_divisor):
 def test_rmod_zero_nan(dtype):
     sr = pd.Series([1, 1, 0], dtype=dtype)
     cr = cudf.from_pandas(sr)
-    utils.assert_eq(1 % sr, 1 % cr)
+    assert_eq(1 % sr, 1 % cr)
     expected_dtype = np.float64 if cr.dtype.kind != "f" else dtype
-    utils.assert_eq(1 % cr, cudf.Series([0, 0, None], dtype=expected_dtype))
+    assert_eq(1 % cr, cudf.Series([0, 0, None], dtype=expected_dtype))
 
 
 def test_series_misc_binop():
     pds = pd.Series([1, 2, 4], name="abc xyz")
     gds = cudf.Series([1, 2, 4], name="abc xyz")
 
-    utils.assert_eq(pds + 1, gds + 1)
-    utils.assert_eq(1 + pds, 1 + gds)
+    assert_eq(pds + 1, gds + 1)
+    assert_eq(1 + pds, 1 + gds)
 
-    utils.assert_eq(pds + pds, gds + gds)
+    assert_eq(pds + pds, gds + gds)
 
     pds1 = pd.Series([1, 2, 4], name="hello world")
     gds1 = cudf.Series([1, 2, 4], name="hello world")
 
-    utils.assert_eq(pds + pds1, gds + gds1)
-    utils.assert_eq(pds1 + pds, gds1 + gds)
+    assert_eq(pds + pds1, gds + gds1)
+    assert_eq(pds1 + pds, gds1 + gds)
 
-    utils.assert_eq(pds1 + pds + 5, gds1 + gds + 5)
+    assert_eq(pds1 + pds + 5, gds1 + gds + 5)
 
 
 def test_int8_float16_binop():
@@ -1051,7 +1129,7 @@ def test_int8_float16_binop():
     b = np.float16(2)
     expect = cudf.Series([0.5])
     got = a / b
-    utils.assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", ["int64", "float64", "str"])
@@ -1061,7 +1139,7 @@ def test_vector_to_none_binops(dtype):
     expect = Series([None] * 4).astype(dtype)
     got = data + None
 
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 def dtype_scalar(val, dtype):
@@ -1679,12 +1757,7 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
 
     result = op(lhs, rhs)
-    assert result.value is (
-        cudf.NaT
-        if cudf.api.types.is_datetime64_dtype(result.dtype)
-        or cudf.api.types.is_timedelta64_dtype(result.dtype)
-        else cudf.NA
-    )
+    assert result.value is (cudf.NaT if result.dtype.kind in "mM" else cudf.NA)
 
     # make sure dtype is the same as had there been a valid scalar
     valid_lhs = cudf.Scalar(1, dtype=dtype_l)
@@ -1730,6 +1803,20 @@ def test_datetime_dateoffset_binaryop(
             reason="https://github.com/pandas-dev/pandas/issues/57448",
         )
     )
+    if (
+        not PANDAS_GE_220
+        and dtype in {"datetime64[ms]", "datetime64[s]"}
+        and frequency in ("microseconds", "nanoseconds")
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+    if (
+        not PANDAS_GE_220
+        and dtype == "datetime64[us]"
+        and frequency == "nanoseconds"
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
 
     date_col = [
         f"2000-01-01 00:00:{components}",
@@ -1747,12 +1834,12 @@ def test_datetime_dateoffset_binaryop(
     expect = op(psr, poffset)
     got = op(gsr, goffset)
 
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
     expect = op(psr, -poffset)
     got = op(gsr, -goffset)
 
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -1783,7 +1870,11 @@ def test_datetime_dateoffset_binaryop(
     "ignore:Discarding nonzero nanoseconds:UserWarning"
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
-def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
+)
+def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
     gsr = cudf.Series(date_col, dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
@@ -1793,7 +1884,7 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     expect = op(psr, poffset)
     got = op(gsr, goffset)
 
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
@@ -1822,6 +1913,21 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
 def test_datetime_dateoffset_binaryop_reflected(
     n_periods, frequency, dtype, components
 ):
+    if (
+        not PANDAS_GE_220
+        and dtype in {"datetime64[ms]", "datetime64[s]"}
+        and frequency in ("microseconds", "nanoseconds")
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+    if (
+        not PANDAS_GE_220
+        and dtype == "datetime64[us]"
+        and frequency == "nanoseconds"
+        and n_periods != 0
+    ):
+        pytest.skip(reason="https://github.com/pandas-dev/pandas/pull/55595")
+
     date_col = [
         f"2000-01-01 00:00:{components}",
         f"2000-01-31 00:00:{components}",
@@ -1840,7 +1946,7 @@ def test_datetime_dateoffset_binaryop_reflected(
 
     # TODO: Remove check_dtype once we get some clarity on:
     # https://github.com/pandas-dev/pandas/issues/57448
-    utils.assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
     with pytest.raises(TypeError):
         poffset - psr
@@ -1878,7 +1984,7 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     expected = data.to_pandas() == val
     got = data == val
 
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -2302,7 +2408,7 @@ def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
 
     got = op(a, b)
     assert expect.dtype == got.dtype
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -2355,7 +2461,7 @@ def test_binops_reflect_decimal(
 
     got = getattr(a, op)(b)
     assert expect.dtype == got.dtype
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("powers", [0, 1, 2, 3])
@@ -2371,7 +2477,7 @@ def test_binops_decimal_pow(powers):
     )
     ps = s.to_pandas()
 
-    utils.assert_eq(s**powers, ps**powers, check_dtype=False)
+    assert_eq(s**powers, ps**powers, check_dtype=False)
 
 
 def test_binops_raise_error():
@@ -2554,7 +2660,7 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
 
     actual = op(lhs, rhs)
 
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -2804,7 +2910,7 @@ def test_binops_decimal_scalar(args):
 
     got = op(lhs, rhs)
     assert expect.dtype == got.dtype
-    utils.assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -2979,7 +3085,7 @@ def test_binops_decimal_scalar_compare(args, reflected):
 
     actual = op(lhs, rhs)
 
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -3042,7 +3148,7 @@ def test_equality_ops_index_mismatch(fn):
     expected = getattr(pa, fn)(pb)
     actual = getattr(a, fn)(b).to_pandas(nullable=True)
 
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 def generate_test_null_equals_columnops_data():
@@ -3132,7 +3238,7 @@ def test_empty_column(binop, data, scalar):
     got = binop(gdf, scalar)
     expected = binop(pdf, scalar)
 
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -3179,7 +3285,7 @@ def test_binops_dot(df, other):
     expected = pdf @ host_other
     got = df @ other
 
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_dot_preserve_index():
@@ -3187,7 +3293,7 @@ def test_binop_dot_preserve_index():
     df = cudf.DataFrame(np.eye(2), columns=["A", "B"], index=["A", "B"])
     result = ser @ df
     expected = ser.to_pandas() @ df.to_pandas()
-    utils.assert_eq(result, expected)
+    assert_eq(result, expected)
 
 
 def test_binop_series_with_repeated_index():
@@ -3198,7 +3304,7 @@ def test_binop_series_with_repeated_index():
     gsr2 = cudf.from_pandas(psr2)
     expected = psr1 - psr2
     got = gsr1 - gsr2
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_series_series():
@@ -3209,7 +3315,7 @@ def test_binop_integer_power_series_series():
     ps_exponent = gs_exponent.to_pandas()
     expected = ps_base**ps_exponent
     got = gs_base**gs_exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_series_scalar():
@@ -3219,7 +3325,7 @@ def test_binop_integer_power_series_scalar():
     ps_base = gs_base.to_pandas()
     expected = ps_base**exponent.value
     got = gs_base**exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_series_int():
@@ -3229,7 +3335,7 @@ def test_binop_integer_power_series_int():
     ps_base = gs_base.to_pandas()
     expected = ps_base**exponent
     got = gs_base**exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_scalar_series():
@@ -3239,7 +3345,7 @@ def test_binop_integer_power_scalar_series():
     ps_exponent = gs_exponent.to_pandas()
     expected = base.value**ps_exponent
     got = base**gs_exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_scalar_scalar():
@@ -3248,7 +3354,7 @@ def test_binop_integer_power_scalar_scalar():
     exponent = cudf.Scalar(1)
     expected = base.value**exponent.value
     got = base**exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_scalar_int():
@@ -3257,7 +3363,7 @@ def test_binop_integer_power_scalar_int():
     exponent = 1
     expected = base.value**exponent
     got = base**exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_int_series():
@@ -3267,7 +3373,7 @@ def test_binop_integer_power_int_series():
     ps_exponent = gs_exponent.to_pandas()
     expected = base**ps_exponent
     got = base**gs_exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_binop_integer_power_int_scalar():
@@ -3276,7 +3382,7 @@ def test_binop_integer_power_int_scalar():
     exponent = cudf.Scalar(1)
     expected = base**exponent.value
     got = base**exponent
-    utils.assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 def test_numpy_int_scalar_binop():
@@ -3291,7 +3397,7 @@ def test_binop_index_series(op):
     actual = op(gi, gs)
     expected = op(gi.to_pandas(), gs.to_pandas())
 
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("name1", utils.SERIES_OR_INDEX_NAMES)
@@ -3307,7 +3413,7 @@ def test_binop_index_dt_td_series_with_names(name1, name2):
         expected = gi.to_pandas() + gs.to_pandas()
     actual = gi + gs
 
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("data1", [[1, 2, 3], [10, 11, None]])
@@ -3319,9 +3425,22 @@ def test_binop_eq_ne_index_series(data1, data2):
     actual = gi == gs
     expected = gi.to_pandas() == gs.to_pandas()
 
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
     actual = gi != gs
     expected = gi.to_pandas() != gs.to_pandas()
 
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("scalar", [np.datetime64, np.timedelta64])
+def test_binop_lhs_numpy_datetimelike_scalar(scalar):
+    slr1 = scalar(1, "ms")
+    slr2 = scalar(1, "ns")
+    result = slr1 < cudf.Series([slr2])
+    expected = slr1 < pd.Series([slr2])
+    assert_eq(result, expected)
+
+    result = slr2 < cudf.Series([slr1])
+    expected = slr2 < pd.Series([slr1])
+    assert_eq(result, expected)

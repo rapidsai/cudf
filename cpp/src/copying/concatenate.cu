@@ -16,8 +16,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/concatenate.hpp>
 #include <cudf/detail/concatenate_masks.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -31,11 +33,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
@@ -73,18 +75,18 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
   });
 
   // Assemble contiguous array of device views
-  auto device_views = thrust::host_vector<column_device_view>();
-  device_views.reserve(views.size());
+  auto device_views =
+    cudf::detail::make_empty_host_vector<column_device_view>(views.size(), stream);
   std::transform(device_view_owners.cbegin(),
                  device_view_owners.cend(),
                  std::back_inserter(device_views),
                  [](auto const& col) { return *col; });
 
   auto d_views =
-    make_device_uvector_async(device_views, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref());
 
   // Compute the partition offsets
-  auto offsets = thrust::host_vector<size_t>(views.size() + 1);
+  auto offsets = cudf::detail::make_host_vector<size_t>(views.size() + 1, stream);
   thrust::transform_inclusive_scan(
     thrust::host,
     device_views.cbegin(),
@@ -93,7 +95,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     [](auto const& col) { return col.size(); },
     thrust::plus{});
   auto d_offsets =
-    make_device_uvector_async(offsets, stream, rmm::mr::get_current_device_resource());
+    make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = offsets.back();
 
   return std::make_tuple(
@@ -161,7 +163,7 @@ size_type concatenate_masks(device_span<column_device_view const> d_views,
                             size_type output_size,
                             rmm::cuda_stream_view stream)
 {
-  rmm::device_scalar<size_type> d_valid_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
   constexpr size_type block_size{256};
   cudf::detail::grid_1d config(output_size, block_size);
   concatenate_masks_kernel<block_size>
@@ -264,7 +266,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto out_view     = out_col->mutable_view();
   auto d_out_view   = mutable_column_device_view::create(out_view, stream);
 
-  rmm::device_scalar<size_type> d_valid_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
 
   // Launch kernel
   constexpr size_type block_size{256};
@@ -463,10 +465,6 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  */
 void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cudf::all_have_same_types(cols.begin(), cols.end()),
-               "Type mismatch in columns to concatenate.",
-               cudf::data_type_error);
-
   // total size of all concatenated rows
   size_t const total_row_count =
     std::accumulate(cols.begin(), cols.end(), std::size_t{}, [](size_t a, auto const& b) {
@@ -475,6 +473,21 @@ void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_v
   CUDF_EXPECTS(total_row_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "Total number of concatenated rows exceeds the column size limit",
                std::overflow_error);
+
+  if (std::any_of(cols.begin(), cols.end(), [](column_view const& c) {
+        return c.type().id() == cudf::type_id::EMPTY;
+      })) {
+    CUDF_EXPECTS(
+      std::all_of(cols.begin(),
+                  cols.end(),
+                  [](column_view const& c) { return c.type().id() == cudf::type_id::EMPTY; }),
+      "Mismatch in columns to concatenate.",
+      cudf::data_type_error);
+    return;
+  }
+  CUDF_EXPECTS(cudf::all_have_same_types(cols.begin(), cols.end()),
+               "Type mismatch in columns to concatenate.",
+               cudf::data_type_error);
 
   // traverse children
   cudf::type_dispatcher(cols.front().type(), traverse_children{}, cols, stream);
@@ -498,6 +511,15 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
     return empty_like(columns_to_concat.front());
   }
 
+  // For empty columns, we can just create an EMPTY column of the appropriate length.
+  if (columns_to_concat.front().type().id() == cudf::type_id::EMPTY) {
+    auto length = std::accumulate(
+      columns_to_concat.begin(), columns_to_concat.end(), 0, [](auto a, auto const& b) {
+        return a + b.size();
+      });
+    return std::make_unique<column>(
+      data_type(type_id::EMPTY), length, rmm::device_buffer{}, rmm::device_buffer{}, length);
+  }
   return type_dispatcher<dispatch_storage_type>(
     columns_to_concat.front().type(), concatenate_dispatch{columns_to_concat, stream, mr});
 }

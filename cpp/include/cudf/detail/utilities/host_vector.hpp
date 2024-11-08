@@ -18,9 +18,10 @@
 
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/aligned.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -28,10 +29,11 @@
 #include <limits>
 #include <new>  // for bad_alloc
 
-namespace cudf::detail {
+namespace CUDF_EXPORT cudf {
+namespace detail {
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
- *  that employs \c a `rmm::host_async_resource_ref` for allocation.
+ *  that employs \c a `cudf::host_async_resource_ref` for allocation.
  *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */
@@ -61,11 +63,15 @@ class rmm_host_allocator<void> {
   };
 };
 
+template <class DesiredProperty, class... Properties>
+inline constexpr bool contains_property =
+  (cuda::std::is_same_v<DesiredProperty, Properties> || ... || false);
+
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
- *  that employs \c `rmm::host_async_resource_ref` for allocation.
+ *  that employs \c `cudf::host_async_resource_ref` for allocation.
  *
  * The \p rmm_host_allocator provides an interface for host memory allocation through the user
- * provided \c `rmm::host_async_resource_ref`. The \p rmm_host_allocator does not take ownership of
+ * provided \c `cudf::host_async_resource_ref`. The \p rmm_host_allocator does not take ownership of
  * this reference and therefore it is the user's responsibility to ensure its lifetime for the
  * duration of the lifetime of the \p rmm_host_allocator.
  *
@@ -100,8 +106,12 @@ class rmm_host_allocator {
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
-  rmm_host_allocator(rmm::host_async_resource_ref _mr, rmm::cuda_stream_view _stream)
-    : mr(_mr), stream(_stream)
+  template <class... Properties>
+  rmm_host_allocator(cuda::mr::async_resource_ref<cuda::mr::host_accessible, Properties...> _mr,
+                     rmm::cuda_stream_view _stream)
+    : mr(_mr),
+      stream(_stream),
+      _is_device_accessible{contains_property<cuda::mr::device_accessible, Properties...>}
   {
   }
 
@@ -173,15 +183,26 @@ class rmm_host_allocator {
    */
   inline bool operator!=(rmm_host_allocator const& x) const { return !operator==(x); }
 
+  [[nodiscard]] bool is_device_accessible() const { return _is_device_accessible; }
+
  private:
   rmm::host_async_resource_ref mr;
   rmm::cuda_stream_view stream;
+  bool _is_device_accessible;
 };
 
 /**
  * @brief A vector class with rmm host memory allocator
  */
 template <typename T>
-using host_vector = thrust::host_vector<T, rmm_host_allocator<T>>;
+class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
+ public:
+  using base = thrust::host_vector<T, rmm_host_allocator<T>>;
 
-}  // namespace cudf::detail
+  host_vector(rmm_host_allocator<T> const& alloc) : base(alloc) {}
+
+  host_vector(size_t size, rmm_host_allocator<T> const& alloc) : base(size, alloc) {}
+};
+
+}  // namespace detail
+}  // namespace CUDF_EXPORT cudf

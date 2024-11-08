@@ -17,14 +17,17 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/search.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -144,7 +147,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
   auto const dict_col = cudf::dictionary_column_view(haystack);
   // first, find the needle in the dictionary's key set
   auto const index = cudf::dictionary::detail::get_index(
-    dict_col, needle, stream, rmm::mr::get_current_device_resource());
+    dict_col, needle, stream, cudf::get_current_device_resource_ref());
   // if found, check the index is actually in the indices column
   return index->is_valid(stream) && cudf::type_dispatcher(dict_col.indices().type(),
                                                           contains_scalar_dispatch{},

@@ -17,13 +17,14 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
 
 /**
  * @file
  * @brief Class definition for cudf::strings_column_view
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup strings_classes
@@ -44,7 +45,7 @@ class strings_column_view : private column_view {
   strings_column_view(column_view strings_column);
   strings_column_view(strings_column_view&&)      = default;  ///< Move constructor
   strings_column_view(strings_column_view const&) = default;  ///< Copy constructor
-  ~strings_column_view()                          = default;
+  ~strings_column_view() override                 = default;
   /**
    * @brief Copy assignment operator
    *
@@ -126,4 +127,4 @@ namespace strings {
 }  // namespace strings
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

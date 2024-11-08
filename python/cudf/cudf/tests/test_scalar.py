@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 
 import rmm
 
@@ -211,9 +212,7 @@ def test_scalar_roundtrip(value):
 )
 def test_null_scalar(dtype):
     s = cudf.Scalar(None, dtype=dtype)
-    if cudf.api.types.is_datetime64_dtype(
-        dtype
-    ) or cudf.api.types.is_timedelta64_dtype(dtype):
+    if s.dtype.kind in "mM":
         assert s.value is cudf.NaT
     else:
         assert s.value is cudf.NA
@@ -251,6 +250,22 @@ def test_nat_to_null_scalar_succeeds(value):
 def test_generic_null_scalar_construction_fails(value):
     with pytest.raises(TypeError):
         cudf.Scalar(value)
+
+
+@pytest.mark.parametrize(
+    "value, dtype", [(1000, "uint8"), (2**30, "int16"), (-1, "uint16")]
+)
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_scalar_out_of_bounds_pyint_fails(value, dtype):
+    # Test that we align with NumPy on scalar creation behavior from
+    # Python integers.
+    if version.parse(np.__version__) >= version.parse("2.0"):
+        with pytest.raises(OverflowError):
+            cudf.Scalar(value, dtype)
+    else:
+        # NumPy allowed this, but it gives a DeprecationWarning on newer
+        # versions (which cudf did not used to do).
+        assert cudf.Scalar(value, dtype).value == np.dtype(dtype).type(value)
 
 
 @pytest.mark.parametrize(
@@ -352,12 +367,7 @@ def test_scalar_implicit_int_conversion(value):
 @pytest.mark.parametrize("dtype", sorted(set(ALL_TYPES) - {"category"}))
 def test_scalar_invalid_implicit_conversion(cls, dtype):
     try:
-        cls(
-            pd.NaT
-            if cudf.api.types.is_datetime64_dtype(dtype)
-            or cudf.api.types.is_timedelta64_dtype(dtype)
-            else pd.NA
-        )
+        cls(pd.NaT if cudf.dtype(dtype).kind in "mM" else pd.NA)
     except TypeError as e:
         with pytest.raises(TypeError, match=re.escape(str(e))):
             slr = cudf.Scalar(None, dtype=dtype)
