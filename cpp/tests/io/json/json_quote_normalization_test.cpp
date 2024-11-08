@@ -176,9 +176,9 @@ TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_WrongBraces
 
 TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_NonNewlineDelimiter)
 {
-  std::string input  = R"({'a': 'b\n'}z{'c\n"': "d\"")";
-  std::string output = R"({"a": "b\n"}z{"c\n\"": "d\"")";
-  run_test(input, output);
+  std::string input{"{\"a\": \"1\n2\"}z{\'a\': 12}"};
+  std::string output{"{\"a\": \"1\n2\"}z{\"a\": 12}"};
+  run_test(input, output, 'z');
 }
 
 TEST_F(JsonNormalizationTest, ReadJsonOption)
