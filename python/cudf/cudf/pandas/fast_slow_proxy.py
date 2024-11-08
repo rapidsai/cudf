@@ -884,33 +884,53 @@ def _assert_fast_slow_eq(left, right):
 
 
 class FallbackError(Exception):
-    """Raised when fallback occurs"""
+    """Raises when fallback occurs"""
 
     pass
 
 
 class OOMFallbackError(FallbackError):
-    """Warns when cuDF produces a MemoryError or an rmm.RMMError"""
+    """Raises when cuDF produces a MemoryError or an rmm.RMMError"""
 
     pass
 
 
 class NotImplementedFallbackError(FallbackError):
-    """Warns cuDF produces a NotImplementedError"""
+    """Raises cuDF produces a NotImplementedError"""
 
     pass
 
 
 class AttributeFallbackError(FallbackError):
-    """Warns when cuDF produces an AttributeError"""
+    """Raises when cuDF produces an AttributeError"""
 
     pass
 
 
 class TypeFallbackError(FallbackError):
-    """Warns when cuDF produces a TypeError"""
+    """Raises when cuDF produces a TypeError"""
 
     pass
+
+
+def _raise_fallback_error(err, name):
+    """Raises a fallback error."""
+    exception_map = {
+        (RMMError, MemoryError): OOMFallbackError,
+        NotImplementedError: NotImplementedFallbackError,
+        AttributeError: AttributeFallbackError,
+        TypeError: TypeFallbackError,
+    }
+    for err_type, fallback_err_type in exception_map.items():
+        if isinstance(err, err_type):
+            raise fallback_err_type(
+                f"Falling back to the slow path. "
+                f"The exception was {err}. The function called was {name}."
+            ) from err
+    raise FallbackError(
+        f"The operation failed with cuDF, falling back to the slow path. "
+        f"The exception was {err}. The function called was {name}."
+    ) from err
 
 
 def _fast_function_call():
@@ -989,36 +1009,14 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
-        if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
-            if isinstance(err, (RMMError, MemoryError)):
-                raise OOMFallbackError(
-                    "Out of Memory Error. Falling back to the slow path. "
-                    f"The exception was {err}."
-                )
-            elif isinstance(err, NotImplementedError):
-                raise NotImplementedFallbackError(
-                    "NotImplementedError. Falling back to the slow path. "
-                    f"The exception was {err}."
-                )
-            elif isinstance(err, AttributeError):
-                raise AttributeFallbackError(
-                    "AttributeError. Falling back to the slow path. "
-                    f"The exception was {err}."
-                )
-            elif isinstance(err, TypeError):
-                raise TypeFallbackError(
-                    "TypeError. Falling back to the slow path. "
-                    f"The exception was {err}."
-                )
-            raise FallbackError(
-                f"The operation failed with cuDF, the reason was {type(err)}: {err}"
-            ) from err
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+                _raise_fallback_error(err, slow_args[0].__name__)
             if _env_get_bool("LOG_FAST_FALLBACK", False):
                 from ._logger import log_fallback
 
