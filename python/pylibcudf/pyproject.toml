@@ -56,6 +56,12 @@ Documentation = "https://docs.rapids.ai/api/cudf/stable/"
 [tool.ruff]
 extend = "../../pyproject.toml"
 
+[tool.ruff.lint]
+extend-select = [
+  "TCH", # flake8-type-checking
+  "TID", # flake8-tidy-imports
+]
+
 [tool.ruff.lint.isort]
 combine-as-imports = true
 known-first-party = ["pylibcudf"]
