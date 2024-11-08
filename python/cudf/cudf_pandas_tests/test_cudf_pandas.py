@@ -1795,3 +1795,21 @@ def test_iter_doesnot_raise(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
         for _ in s:
             pass
+
+
+@pytest.mark.timeout(5)
+def test_dataframe_setitem_slowdown():
+    # We are explictily testing the slowdown of the setitem operation
+    df = xpd.DataFrame(
+        {"a": [1, 2, 3] * 100000, "b": [1, 2, 3] * 100000}
+    ).astype("float64")
+    df = xpd.DataFrame({"a": df["a"].repeat(1000), "b": df["b"].repeat(1000)})
+    new_df = df + 1
+    df[df.columns] = new_df
+
+
+def test_dataframe_setitem():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]}).astype("float64")
+    new_df = df + 1
+    df[df.columns] = new_df
+    tm.assert_equal(df, new_df)
