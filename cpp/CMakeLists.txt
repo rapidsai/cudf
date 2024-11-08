@@ -88,7 +88,7 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-option(CUDF_CLANG_TIDY "Enable clang-tidy checking" OFF)
+option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -146,8 +146,10 @@ if(NOT CUDF_GENERATED_INCLUDE_DIR)
 endif()
 
 # ##################################################################################################
-# * clang-tidy configuration ----------------------------------------------------------------------
-if(CUDF_CLANG_TIDY)
+# * linter configuration ---------------------------------------------------------------------------
+if(CUDF_STATIC_LINTERS)
+  # For simplicity, for now we assume that all linters can be installed into an environment where
+  # any linter is being run. We could relax this requirement if desired.
   find_program(
     CLANG_TIDY_EXE
     NAMES "clang-tidy"
@@ -174,24 +176,48 @@ if(CUDF_CLANG_TIDY)
         "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
     )
   endif()
+
+  find_program(IWYU_EXE NAMES include-what-you-use iwyu REQUIRED)
 endif()
 
 # Turn on the clang-tidy property for a target excluding the files specified in SKIPPED_FILES.
-function(enable_clang_tidy target)
-  set(_tidy_options)
+function(enable_static_checkers target)
+  set(_tidy_options IWYU CLANG_TIDY)
   set(_tidy_one_value)
   set(_tidy_multi_value SKIPPED_FILES)
   cmake_parse_arguments(
-    _TIDY "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
+    _LINT "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
   )
 
-  if(CUDF_CLANG_TIDY)
-    # clang will complain about unused link libraries on the compile line unless we specify
-    # -Qunused-arguments.
-    set_target_properties(
-      ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
-    )
-    foreach(file IN LISTS _TIDY_SKIPPED_FILES)
+  if(CUDF_STATIC_LINTERS)
+    if(_LINT_CLANG_TIDY)
+      # clang will complain about unused link libraries on the compile line unless we specify
+      # -Qunused-arguments.
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
+      )
+    endif()
+    if(_LINT_IWYU)
+      # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
+      # relevant since they don't show up in any other build so it's better to suppress them until
+      # we can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not
+      # appear to be sufficient, we must also ensure that it is set to the underlying target's CXX
+      # compile flags. To do this completely cleanly we should modify the flags on the target rather
+      # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
+      # the linters on real builds.
+      foreach(_flag -Wno-missing-braces -Wno-absolute-value -Wunneeded-internal-declaration)
+        list(FIND CUDF_CXX_FLAGS "${flag}" _flag_index)
+        if(_flag_index EQUAL -1)
+          list(APPEND CUDF_CXX_FLAGS ${flag})
+        endif()
+      endforeach()
+      set(CUDF_CXX_FLAGS
+          "${CUDF_CXX_FLAGS}"
+          PARENT_SCOPE
+      )
+      set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+    endif()
+    foreach(file IN LISTS _LINT_SKIPPED_FILES)
       set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
     endforeach()
   endif()
@@ -368,11 +394,14 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/compute_aggregations.cu
+  src/groupby/hash/compute_aggregations_null.cu
+  src/groupby/hash/compute_global_memory_aggs.cu
+  src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_shared_memory_aggs.cu
-  src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/create_sparse_results_table.cu
   src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
@@ -771,11 +800,15 @@ set_target_properties(
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
+# Note: This must come before the target_compile_options below so that the function can modify the
+# flags if necessary.
+enable_static_checkers(
+  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
+)
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-enable_clang_tidy(cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp)
 
 if(CUDF_BUILD_STACKTRACE_DEBUG)
   # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
