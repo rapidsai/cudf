@@ -3332,6 +3332,44 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
   }
 
+  private static long[] toPrimitive(Long[] longs) {
+    long[] ret = new long[longs.length];
+    for (int i = 0; i < longs.length; ++i) {
+      ret[i] = longs[i];
+    }
+    return ret;
+  }
+
+  /**
+   * @brief Searches for the given target strings within each string in the provided column
+   *
+   * Each column in the result table corresponds to the result for the target string at the same
+   * ordinal. i.e. 0th column is the BOOL8 column result for the 0th target string, 1th for 1th,
+   * etc.
+   *
+   * If the target is not found for a string, false is returned for that entry in the output column.
+   * If the target is an empty string, true is returned for all non-null entries in the output column.
+   *
+   * Any null input strings return corresponding null entries in the output columns.
+   *
+   * input = ["a", "b", "c"]
+   * targets = ["a", "c"]
+   * output is a table with two boolean columns:
+   *   column 0: [true, false, false]
+   *   column 1: [false, false, true]
+   *
+   * @param targets UTF-8 encoded strings to search for in each string in `input`
+   * @return BOOL8 columns
+   */
+  public final ColumnVector[] stringContains(ColumnView targets) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets.getType().equals(DType.STRING) : "targets type must be a string";
+    assert targets.getNullCount() == 0 : "targets must not be null";
+    assert targets.getRowCount() > 0 : "targets must not be empty";
+    long[] resultPointers = stringContainsMulti(getNativeView(), targets.getNativeView());
+    return Arrays.stream(resultPointers).mapToObj(ColumnVector::new).toArray(ColumnVector[]::new);
+  }
+
   /**
    * Replaces values less than `lo` in `input` with `lo`,
    * and values greater than `hi` with `hi`.
@@ -4436,6 +4474,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method for searching for the given target strings within each string in the provided column.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param targets handle of the column containing the string being searched for.
+   */
+  private static native long[] stringContainsMulti(long cudfViewHandle, long targets) throws CudfException;
 
   /**
    * Native method for extracting results from a regex program pattern. Returns a table handle.
