@@ -343,8 +343,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   bool has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // the level stream decoders
-  __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
-  __shared__ rle_run<level_t> rep_runs[rle_run_buffer_size];
+  __shared__ rle_run def_runs[rle_run_buffer_size];
+  __shared__ rle_run rep_runs[rle_run_buffer_size];
   rle_stream<level_t, preprocess_block_size, rolling_buf_size>
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
