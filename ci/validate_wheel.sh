@@ -13,6 +13,8 @@ python -m pip install \
     'pydistcheck==0.8.0' \
     'twine>=5.0.0'
 
+pyenv rehash
+
 cd "${package_dir}"
 
 rapids-logger "validate packages with 'pydistcheck'"
