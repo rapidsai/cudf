@@ -152,7 +152,6 @@ __device__ inline void decode(level_t* const output,
 }
 
 // a single rle run. may be broken up into multiple rle_batches
-template <typename level_t>
 struct rle_run {
   int size;        // total size of the run
   int output_pos;  // absolute position of this run w.r.t output
@@ -183,14 +182,14 @@ struct rle_stream {
 
   level_t* output;
 
-  rle_run<level_t>* runs;
+  rle_run* runs;
 
   int output_pos;
 
   int fill_index;
   int decode_index;
 
-  __device__ rle_stream(rle_run<level_t>* _runs) : runs(_runs) {}
+  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
@@ -217,7 +216,7 @@ struct rle_stream {
     decode_index = -1;  // signals the first iteration. Nothing to decode.
   }
 
-  __device__ inline int get_rle_run_info(rle_run<level_t>& run)
+  __device__ inline int get_rle_run_info(rle_run& run)
   {
     run.start     = cur;
     run.level_run = get_vlq32(run.start, end);
@@ -384,7 +383,7 @@ struct rle_stream {
     // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
     // the first time
     while (cur < end) {
-      rle_run<level_t> run;
+      rle_run run;
       int run_bytes = get_rle_run_info(run);
 
       if ((output_pos + run.size) > target_count) {
