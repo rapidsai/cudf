@@ -20,11 +20,16 @@ import codecs
 import errno
 import io
 import os
+import re
 
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
-from pylibcudf.libcudf.io.types import \
-    compression_type as CompressionType  # no-cython-lint
+from pylibcudf.libcudf.io.types import (
+    compression_type as CompressionType,  # no-cython-lint
+    column_encoding as ColumnEncoding,  # no-cython-lint
+    dictionary_policy as DictionaryPolicy,  # no-cython-lint
+    statistics_freq as StatisticsFreq, # no-cython-lint
+)
 
 
 cdef class TableWithMetadata:
@@ -143,6 +148,8 @@ cdef class SourceInfo:
 
         Mixing different types of sources will raise a `ValueError`.
     """
+    # Regular expression that match remote file paths supported by libcudf
+    _is_remote_file_pattern = re.compile(r"^s3://", re.IGNORECASE)
 
     def __init__(self, list sources):
         if not sources:
@@ -157,11 +164,10 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not os.path.isfile(src):
-                    raise FileNotFoundError(errno.ENOENT,
-                                            os.strerror(errno.ENOENT),
-                                            src)
-
+                if not (os.path.isfile(src) or self._is_remote_file_pattern.match(src)):
+                    raise FileNotFoundError(
+                        errno.ENOENT, os.strerror(errno.ENOENT), src
+                    )
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))

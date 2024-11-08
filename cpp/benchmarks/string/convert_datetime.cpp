@@ -16,62 +16,59 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-class StringDateTime : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-enum class direction { to, from };
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_D, "cudf::timestamp_D", "cudf::timestamp_D");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_s, "cudf::timestamp_s", "cudf::timestamp_s");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_us, "cudf::timestamp_us", "cudf::timestamp_us");
+NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ns, "cudf::timestamp_ns", "cudf::timestamp_ns");
 
-template <class TypeParam>
-void BM_convert_datetime(benchmark::State& state, direction dir)
+using Types = nvbench::type_list<cudf::timestamp_D,
+                                 cudf::timestamp_s,
+                                 cudf::timestamp_ms,
+                                 cudf::timestamp_us,
+                                 cudf::timestamp_ns>;
+
+template <class DataType>
+void bench_convert_datetime(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  auto const n_rows    = static_cast<cudf::size_type>(state.range(0));
-  auto const data_type = cudf::data_type(cudf::type_to_id<TypeParam>());
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const from_ts  = state.get_string("dir") == "from";
 
-  auto const column = create_random_column(data_type.id(), row_count{n_rows});
-  cudf::column_view input(column->view());
+  auto const data_type = cudf::data_type(cudf::type_to_id<DataType>());
+  auto const ts_col    = create_random_column(data_type.id(), row_count{num_rows});
 
-  auto source = dir == direction::to ? cudf::strings::from_timestamps(input, "%Y-%m-%d %H:%M:%S")
-                                     : make_empty_column(cudf::data_type{cudf::type_id::STRING});
-  cudf::strings_column_view source_string(source->view());
+  auto format = std::string{"%Y-%m-%d %H:%M:%S"};
+  auto s_col  = cudf::strings::from_timestamps(ts_col->view(), format);
+  auto sv     = cudf::strings_column_view(s_col->view());
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    if (dir == direction::to)
-      cudf::strings::to_timestamps(source_string, data_type, "%Y-%m-%d %H:%M:%S");
-    else
-      cudf::strings::from_timestamps(input, "%Y-%m-%d %H:%M:%S");
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  if (from_ts) {
+    state.add_global_memory_reads<DataType>(num_rows);
+    state.add_global_memory_writes<int8_t>(sv.chars_size(stream));
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::from_timestamps(ts_col->view(), format);
+    });
+  } else {
+    state.add_global_memory_reads<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_writes<DataType>(num_rows);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::to_timestamps(sv, data_type, format);
+    });
   }
-
-  auto const bytes = dir == direction::to ? source_string.chars_size(cudf::get_default_stream())
-                                          : n_rows * sizeof(TypeParam);
-  state.SetBytesProcessed(state.iterations() * bytes);
 }
 
-#define STR_BENCHMARK_DEFINE(name, type, dir)                          \
-  BENCHMARK_DEFINE_F(StringDateTime, name)(::benchmark::State & state) \
-  {                                                                    \
-    BM_convert_datetime<type>(state, dir);                             \
-  }                                                                    \
-  BENCHMARK_REGISTER_F(StringDateTime, name)                           \
-    ->RangeMultiplier(1 << 5)                                          \
-    ->Range(1 << 10, 1 << 25)                                          \
-    ->UseManualTime()                                                  \
-    ->Unit(benchmark::kMicrosecond);
-
-STR_BENCHMARK_DEFINE(from_days, cudf::timestamp_D, direction::from);
-STR_BENCHMARK_DEFINE(from_seconds, cudf::timestamp_s, direction::from);
-STR_BENCHMARK_DEFINE(from_mseconds, cudf::timestamp_ms, direction::from);
-STR_BENCHMARK_DEFINE(from_useconds, cudf::timestamp_us, direction::from);
-STR_BENCHMARK_DEFINE(from_nseconds, cudf::timestamp_ns, direction::from);
-
-STR_BENCHMARK_DEFINE(to_days, cudf::timestamp_D, direction::to);
-STR_BENCHMARK_DEFINE(to_seconds, cudf::timestamp_s, direction::to);
-STR_BENCHMARK_DEFINE(to_mseconds, cudf::timestamp_ms, direction::to);
-STR_BENCHMARK_DEFINE(to_useconds, cudf::timestamp_us, direction::to);
-STR_BENCHMARK_DEFINE(to_nseconds, cudf::timestamp_ns, direction::to);
+NVBENCH_BENCH_TYPES(bench_convert_datetime, NVBENCH_TYPE_AXES(Types))
+  .set_name("datetime")
+  .set_type_axes_names({"DataType"})
+  .add_string_axis("dir", {"to", "from"})
+  .add_int64_axis("num_rows", {1 << 16, 1 << 18, 1 << 20, 1 << 22});
