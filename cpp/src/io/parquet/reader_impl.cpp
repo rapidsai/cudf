@@ -251,19 +251,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    streams[s_idx++]);
   };
 
-  int s_idx = 0;
-
-  auto decode_data = [&](decode_kernel_mask decoder_mask) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decoder_mask,
-                   error_code.data(),
-                   streams[s_idx++]);
-  };
-
   // launch string decoder for plain encoded flat columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {
     decode_data(decode_kernel_mask::STRING);
