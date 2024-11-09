@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import operator
-import pickle
 import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, Literal
@@ -96,34 +95,57 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def serialize(self):
         # TODO: See if self._data can be serialized outright
+        frames = []
         header = {
+            "column_label_dtype": None,
+            "dtype-is-cudf-serialized": False,
+        }
+        if (label_dtype := self._data.label_dtype) is not None:
+            try:
+                header["column_label_dtype"], frames = (
+                    label_dtype.device_serialize()
+                )
+                header["dtype-is-cudf-serialized"] = True
+            except AttributeError:
+                header["column_label_dtype"] = label_dtype.str
+
+        header["columns"], column_frames = serialize_columns(self._columns)
+        header |= {
             "column_names": self._column_names,
             "column_rangeindex": self._data.rangeindex,
             "column_multiindex": self._data.multiindex,
-            "column_label_dtype": pickle.dumps(self._data.label_dtype),
             "column_level_names": self._data._level_names,
         }
-        header["columns"], frames = serialize_columns(self._columns)
+        frames.extend(column_frames)
+
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
+        kwargs = {}
+        dtype_header = header["column_label_dtype"]
+        if header["dtype-is-cudf-serialized"]:
+            count = dtype_header["frame_count"]
+            kwargs["label_dtype"] = cls.device_deserialize(
+                header, frames[:count]
+            )
+            frames = frames[count:]
+        else:
+            kwargs["label_dtype"] = (
+                np.dtype(dtype_header) if dtype_header is not None else None
+            )
+
         column_names = header["column_names"]
         columns = deserialize_columns(header["columns"], frames)
-        kwargs = {}
         for metadata in [
             "rangeindex",
             "multiindex",
-            "label_dtype",
             "level_names",
         ]:
             key = f"column_{metadata}"
             if key in header:
-                if key == "column_label_dtype":
-                    kwargs[metadata] = pickle.loads(header[key])
-                else:
-                    kwargs[metadata] = header[key]
+                kwargs[metadata] = header[key]
         col_accessor = ColumnAccessor(
             data=dict(zip(column_names, columns)), **kwargs
         )

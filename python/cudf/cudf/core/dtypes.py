@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import decimal
 import operator
-import pickle
 import textwrap
 import warnings
 from functools import cached_property
@@ -656,7 +655,7 @@ class StructDtype(_BaseDtype):
                 )
                 frames.extend(dtype_frames)
             else:
-                fields[k] = pickle.dumps(dtype)
+                fields[k] = dtype.str
         header["fields"] = fields
         header["frame_count"] = len(frames)
         return header, frames
@@ -673,7 +672,7 @@ class StructDtype(_BaseDtype):
                     frames[start:stop],
                 )
             else:
-                fields[k] = pickle.loads(dtype)
+                fields[k] = np.dtype(dtype)
         return cls(fields)
 
     @cached_property
@@ -956,7 +955,7 @@ class IntervalDtype(StructDtype):
 
     def serialize(self) -> tuple[dict, list]:
         header = {
-            "fields": pickle.dumps((self.subtype, self.closed)),
+            "fields": (self.subtype.str, self.closed),
             "frame_count": 0,
         }
         return header, []
@@ -964,7 +963,8 @@ class IntervalDtype(StructDtype):
     @classmethod
     def deserialize(cls, header: dict, frames: list):
         header, frames = _decode_type(cls, header, frames)
-        subtype, closed = pickle.loads(header["fields"])
+        subtype, closed = header["fields"]
+        subtype = np.dtype(subtype)
         return cls(subtype, closed=closed)
 
 

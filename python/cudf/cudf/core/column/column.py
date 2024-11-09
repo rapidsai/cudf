@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -1228,7 +1227,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
-            header["dtype"] = pickle.dumps(self.dtype)
+            header["dtype"] = self.dtype.str
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
@@ -1264,7 +1263,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if header["dtype-is-cudf-serialized"]:
             dtype, frames = unpack(header["dtype"], frames)
         else:
-            dtype = pickle.loads(header["dtype"])
+            dtype = np.dtype(header["dtype"])
         if "data" in header:
             data, frames = unpack(header["data"], frames)
         else:
