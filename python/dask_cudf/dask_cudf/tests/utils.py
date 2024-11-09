@@ -19,7 +19,7 @@ else:
 
 
 def _make_random_frame(nelem, npartitions=2, include_na=False):
-    rng = np.random.default_rng(seed=None)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {"x": rng.random(size=nelem), "y": rng.random(size=nelem)}
     )

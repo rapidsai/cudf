@@ -14,11 +14,13 @@ import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
 
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.traversal import CachingVisitor
+from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
 from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from cudf_polars.typing import ExprTransformer
 
 # Can't merge these op-mapping dictionaries because scoped enum values
 # are exposed by cython with equality/hash based one their underlying
@@ -128,7 +130,14 @@ def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
 def _(node: expr.Col, self: Transformer) -> plc_expr.Expression:
     if self.state["for_parquet"]:
         return plc_expr.ColumnNameReference(node.name)
-    return plc_expr.ColumnReference(self.state["name_to_index"][node.name])
+    raise TypeError("Should always be wrapped in a ColRef node before translation")
+
+
+@_to_ast.register
+def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
+    if self.state["for_parquet"]:
+        raise TypeError("Not expecting ColRef node in parquet filter")
+    return plc_expr.ColumnReference(node.index, node.table_ref)
 
 
 @_to_ast.register
@@ -238,9 +247,7 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
         return None
 
 
-def to_ast(
-    node: expr.Expr, *, name_to_index: Mapping[str, int]
-) -> plc_expr.Expression | None:
+def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for compute_column.
 
@@ -248,18 +255,66 @@ def to_ast(
     ----------
     node
         Expression to convert.
-    name_to_index
-        Mapping from column names to their index in the table that
-        will be used for expression evaluation.
+
+    Notes
+    -----
+    `Col` nodes must always be wrapped in `TableRef` nodes when
+    converting to an ast expression so that their table reference and
+    index are provided.
 
     Returns
     -------
-    pylibcudf Expressoin if conversion is possible, otherwise None.
+    pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(
-        _to_ast, state={"for_parquet": False, "name_to_index": name_to_index}
-    )
+    mapper = CachingVisitor(_to_ast, state={"for_parquet": False})
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
         return None
+
+
+def _insert_colrefs(node: expr.Expr, rec: ExprTransformer) -> expr.Expr:
+    if isinstance(node, expr.Col):
+        return expr.ColRef(
+            node.dtype,
+            rec.state["name_to_index"][node.name],
+            rec.state["table_ref"],
+            node,
+        )
+    return reuse_if_unchanged(node, rec)
+
+
+def insert_colrefs(
+    node: expr.Expr,
+    *,
+    table_ref: plc.expressions.TableReference,
+    name_to_index: Mapping[str, int],
+) -> expr.Expr:
+    """
+    Insert column references into an expression before conversion to libcudf AST.
+
+    Parameters
+    ----------
+    node
+        Expression to insert references into.
+    table_ref
+        pylibcudf `TableReference` indicating whether column
+        references are coming from the left or right table.
+    name_to_index:
+        Mapping from column names to column indices in the table
+        eventually used for evaluation.
+
+    Notes
+    -----
+    All column references are wrapped in the same, singular, table
+    reference, so this function relies on the expression only
+    containing column references from a single table.
+
+    Returns
+    -------
+    New expression with column references inserted.
+    """
+    mapper = CachingVisitor(
+        _insert_colrefs, state={"table_ref": table_ref, "name_to_index": name_to_index}
+    )
+    return mapper(node)
