@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import operator
-import pickle
 import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
@@ -926,7 +925,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def deserialize(cls, header, frames):
         # Spoof the column names to construct the frame, then set manually.
         column_names = header["column_names"]
-        header["column_names"] = pickle.dumps(range(0, len(column_names)))
+        header["column_names"] = range(0, len(column_names))
         obj = super().deserialize(header, frames)
         return obj._set_names(column_names)
 

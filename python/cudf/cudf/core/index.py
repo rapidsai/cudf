@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import operator
-import pickle
 import warnings
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
@@ -496,7 +495,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         frames = []
 
         header["name"] = self.name
-        header["dtype"] = pickle.dumps(self.dtype)
+        header["dtype"] = self.dtype.str
         header["frame_count"] = 0
         return header, frames
 
@@ -508,7 +507,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
         start = h["start"]
         stop = h["stop"]
         step = h.get("step", 1)
-        return RangeIndex(start=start, stop=stop, step=step, name=name)
+        dtype = np.dtype(header["dtype"])
+        return RangeIndex(
+            start=start, stop=stop, step=step, dtype=dtype, name=name
+        )
 
     @property  # type: ignore
     @_performance_tracking
