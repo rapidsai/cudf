@@ -1215,12 +1215,13 @@ aggregate_reader_metadata::select_row_groups(
     }
   }
 
-  // FIXME: Provide the actual condition for this if
+  // FIXME: Provide the actual condition for this
   if (true /* equality predicate provided */) {
-    filtered_row_group_indices = apply_bloom_filter_to_row_groups(
+    auto const bloom_filtered_row_groups = apply_bloom_filter_to_row_groups(
       sources, row_group_indices, output_dtypes, output_column_schemas, stream);
-
-    if (filtered_row_group_indices.has_value()) {
+    // TODO: Can use a better logic here.
+    if (bloom_filtered_row_groups.has_value()) {
+      filtered_row_group_indices.value() = std::move(bloom_filtered_row_groups.value());
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
