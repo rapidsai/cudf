@@ -343,6 +343,7 @@ class aggregate_reader_metadata {
    * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
    * values based on the input row group list.
    *
+   * @param sources Lists of input datasources.
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
@@ -354,13 +355,35 @@ class aggregate_reader_metadata {
    *         starting row, and list of number of rows per source.
    */
   [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
-  select_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+  select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
+                    host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
                     std::optional<size_type> const& row_count,
                     host_span<data_type const> output_dtypes,
                     host_span<int const> output_column_schemas,
                     std::optional<std::reference_wrapper<ast::expression const>> filter,
                     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Filters the row groups using bloom filters
+   *
+   * @param sources Dataset sources
+   * @param bloom_filter_data Devicebuffers to hold bloom filter bitsets for each chunk
+   * @param begin_chunk Index of first column chunk to read
+   * @param end_chunk Index after the last column chunk to read
+   * @param bloom_filter_offsets Bloom filter offsets for all chunks
+   * @param bloom_filter_sizes Bloom filter sizes for all chunks
+   * @param chunk_source_map Association between each column chunk and its source
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices, if any is filtered.
+   */
+  std::optional<std::vector<std::vector<size_type>>> apply_bloom_filter_to_row_groups(
+    host_span<std::unique_ptr<datasource> const> sources,
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns

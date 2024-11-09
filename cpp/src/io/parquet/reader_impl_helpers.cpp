@@ -25,11 +25,16 @@
 
 #include <cudf/detail/utilities/logger.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <functional>
+#include <future>
 #include <numeric>
+#include <optional>
 #include <regex>
 
 namespace cudf::io::parquet::detail {
@@ -1028,8 +1033,169 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
+/**
+ * @brief Asynchronously reads bloom filters to device.
+ *
+ * @param sources Dataset sources
+ * @param bloom_filter_data Devicebuffers to hold bloom filter bitsets for each chunk
+ * @param chunks List of chunk indices to read
+ * @param bloom_filter_offsets Bloom filter offsets for all chunks
+ * @param bloom_filter_sizes Bloom filter sizes for all chunks
+ * @param chunk_source_map Association between each column chunk and its source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return A future object for reading synchronization
+ */
+std::future<void> read_bloom_filters_async(
+  host_span<std::unique_ptr<datasource> const> sources,
+  cudf::host_span<rmm::device_buffer> bloom_filter_data,
+  host_span<size_type const> chunks,
+  cudf::host_span<std::optional<int64_t>> bloom_filter_offsets,
+  cudf::host_span<std::optional<int32_t>> bloom_filter_sizes,
+  std::vector<size_type> const& chunk_source_map,
+  rmm::cuda_stream_view stream)
+{
+  // Transfer bloom filter data
+  std::vector<std::future<size_t>> read_tasks;
+
+  // FIXME: Do not read all chunks. Instead use a list of chunks to read.
+  for (auto chunk : chunks) {
+    // Read bloom filter if present
+    if (bloom_filter_offsets[chunk].has_value()) {
+      auto const bloom_filter_offset = bloom_filter_offsets[chunk].value();
+      // If Bloom filter size (header + bitset) is available, just read the entire thing.
+      // Else just read 256 bytes which will contain the entire header and may contain the
+      // entire bitset as well.
+      auto constexpr bloom_filter_header_size_guess = 256;
+      auto const initial_read_size =
+        bloom_filter_sizes[chunk].value_or(bloom_filter_header_size_guess);
+
+      // Read an initial buffer from source
+      auto& source = sources[chunk_source_map[chunk]];
+      auto buffer  = source->host_read(bloom_filter_offset, initial_read_size);
+
+      // Deserialize the Bloom filter header from the buffer.
+      BloomFilterHeader header;
+      CompactProtocolReader cp{buffer->data(), buffer->size()};
+      cp.read(&header);
+
+      // Bloom filter header size
+      auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
+      auto const bitset_size              = header.num_bytes;
+
+      // Check if we already read in the filter bitset in the initial read.
+      if (initial_read_size >= bloom_filter_header_size + bitset_size) {
+        bloom_filter_data[chunk] =
+          rmm::device_buffer(buffer->data() + bloom_filter_header_size, bitset_size, stream);
+      }
+      // Read the bitset from datasource.
+      else {
+        auto const bitset_offset = bloom_filter_offset + bloom_filter_header_size;
+        // Directly read to device if preferred
+        if (source->is_device_read_preferred(bitset_size)) {
+          bloom_filter_data[chunk] = rmm::device_buffer(bitset_size, stream);
+          auto future_read_size =
+            source->device_read_async(bitset_offset,
+                                      bitset_size,
+                                      static_cast<uint8_t*>(bloom_filter_data[chunk].data()),
+                                      stream);
+
+          read_tasks.emplace_back(std::move(future_read_size));
+        } else {
+          buffer                   = source->host_read(bitset_offset, bitset_size);
+          bloom_filter_data[chunk] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
+        }
+      }
+    }
+  }
+  auto sync_fn = [](decltype(read_tasks) read_tasks) {
+    for (auto& task : read_tasks) {
+      task.wait();
+    }
+  };
+  return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
+}
+
+std::optional<std::vector<std::vector<size_type>>>
+aggregate_reader_metadata::apply_bloom_filter_to_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
+  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
+  rmm::cuda_stream_view stream) const
+{
+  // Number of row groups after filter_row_groups().
+  auto const num_row_groups = std::accumulate(
+    row_group_indices.begin(), row_group_indices.end(), 0, [](auto& sum, auto const& rgis) {
+      return sum + rgis.size();
+    });
+  // Descriptors for all the chunks that make up the selected columns
+  auto const num_input_columns = output_dtypes.size();
+  auto const num_chunks        = num_row_groups * num_input_columns;
+
+  // Association between each column chunk and its source
+  std::vector<size_type> chunk_source_map(num_chunks);
+
+  // Keep track of column chunk file offsets
+  std::vector<std::optional<int64_t>> bloom_filter_offsets(num_chunks);
+  std::vector<std::optional<int32_t>> bloom_filter_sizes(num_chunks);
+
+  // List of chunks to read
+  std::vector<size_type> chunks_to_read{};
+  chunks_to_read.reserve(num_chunks);
+
+  size_type chunk_count = 0;
+
+  // FIXME: We don't need to read bloom filters for all chunks. Only the ones belonging to the
+  // columns of our interest (equality predicate).
+  // For all data sources
+  for (size_t rg_source_index = 0; rg_source_index < row_group_indices.size(); rg_source_index++) {
+    auto const& rg_index = row_group_indices[rg_source_index];
+    // For all row groups in a data source
+    for (auto const rgi : rg_index) {
+      // For all column chunks in a row group
+      for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
+        auto const schema_idx = output_column_schemas[col_idx];
+        auto& col_meta        = get_column_metadata(rgi, rg_source_index, schema_idx);
+
+        // Bloom filter offsets and sizes
+        bloom_filter_offsets[chunk_count] = col_meta.bloom_filter_offset;
+        bloom_filter_sizes[chunk_count]   = col_meta.bloom_filter_length;
+        chunks_to_read.emplace_back(chunk_count);
+
+        // Map each column chunk to its column index and its source index
+        chunk_source_map[chunk_count] = rg_source_index;
+        chunk_count++;
+      }
+    }
+  }
+
+  // Do we have any bloom filters
+  if (std::any_of(bloom_filter_offsets.cbegin(),
+                  bloom_filter_offsets.cend(),
+                  [](auto const offset) { return offset.has_value(); })) {
+    // Initialize the vector of bloom filter data buffers
+    std::vector<rmm::device_buffer> bloom_filter_data(num_chunks);
+
+    // Wait on bloom filter read tasks
+    read_bloom_filters_async(sources,
+                             bloom_filter_data,
+                             chunks_to_read,
+                             bloom_filter_offsets,
+                             bloom_filter_sizes,
+                             chunk_source_map,
+                             stream)
+      .wait();
+
+    // Apply bloom filter to row groups
+    // return apply_bloom_filters();
+  }
+  return {};
+}
+
 std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
 aggregate_reader_metadata::select_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
   std::optional<size_type> const& num_rows_opt,
@@ -1048,6 +1214,18 @@ aggregate_reader_metadata::select_row_groups(
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
   }
+
+  // FIXME: Provide the actual condition for this if
+  if (true /* equality predicate provided */) {
+    filtered_row_group_indices = apply_bloom_filter_to_row_groups(
+      sources, row_group_indices, output_dtypes, output_column_schemas, stream);
+
+    if (filtered_row_group_indices.has_value()) {
+      row_group_indices =
+        host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
+    }
+  }
+
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
