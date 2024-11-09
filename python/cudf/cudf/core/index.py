@@ -495,7 +495,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         header["index_column"]["step"] = self.step
         frames = []
 
-        header["name"] = pickle.dumps(self.name)
+        header["name"] = self.name
         header["dtype"] = pickle.dumps(self.dtype)
         header["frame_count"] = 0
         return header, frames
@@ -504,7 +504,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def deserialize(cls, header, frames):
         h = header["index_column"]
-        name = pickle.loads(header["name"])
+        name = header["name"]
         start = h["start"]
         stop = h["stop"]
         step = h.get("step", 1)
