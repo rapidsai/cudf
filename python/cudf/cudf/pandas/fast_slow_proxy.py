@@ -33,6 +33,17 @@ _CUDF_PANDAS_NVTX_COLORS = {
     "EXECUTE_SLOW": 0x0571B0,
 }
 
+# This is a dict of functions that are known to have arguments that
+# need to be transformed from fast to slow only. i.e., Some cudf functions
+# error on passing a device object but don't error on passing a host object.
+# for example: DataFrame.__setitem__(arg, value) errors on passing a device
+# object as arg but doesn't error on passing a host object.
+# Hence we need to transform the arg from fast to slow only. So, we need to
+# will arrive at a key-value pair mapping like:
+# {"DataFrame.__setitem__": {0}}
+# The keys are the names of the functions and the values are the indices of the
+# arguments that need to be transformed. The indices are 0-based.
+
 _SPECIAL_FUNCTIONS_ARGS_MAP = {
     "DataFrame.__setitem__": {0},
 }
