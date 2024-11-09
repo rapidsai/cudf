@@ -27,7 +27,6 @@ from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
-from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -41,12 +40,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     parquet_writer_options,
     write_parquet as parquet_writer,
 )
-from pylibcudf.libcudf.io.parquet_metadata cimport (
-    parquet_metadata,
-    read_parquet_metadata as parquet_metadata_reader,
-)
 from pylibcudf.libcudf.io.types cimport (
-    source_info,
     sink_info,
     column_in_metadata,
     table_input_metadata,
@@ -62,7 +56,6 @@ from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     add_df_col_struct_names,
     make_sinks_info,
-    make_source_info,
 )
 from cudf._lib.utils cimport table_view_from_table
 
@@ -373,7 +366,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                            nrows=nrows, skip_rows=skip_rows)
     return df
 
-cpdef read_parquet_metadata(filepaths_or_buffers):
+cpdef read_parquet_metadata(list filepaths_or_buffers):
     """
     Cython function to call into libcudf API, see `read_parquet_metadata`.
 
@@ -382,56 +375,40 @@ cpdef read_parquet_metadata(filepaths_or_buffers):
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
-    cdef source_info source = make_source_info(filepaths_or_buffers)
-
-    args = move(source)
-
-    cdef parquet_metadata c_result
-
-    # Read Parquet metadata
-    with nogil:
-        c_result = move(parquet_metadata_reader(args))
-
-    # access and return results
-    num_rows = c_result.num_rows()
-    num_rowgroups = c_result.num_rowgroups()
-
-    # extract row group metadata and sanitize keys
-    row_group_metadata = [{k.decode(): v for k, v in metadata}
-                          for metadata in c_result.rowgroup_metadata()]
+    parquet_metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        plc.io.SourceInfo(filepaths_or_buffers)
+    )
 
     # read all column names including index column, if any
-    col_names = [info.name().decode() for info in c_result.schema().root().children()]
+    col_names = [info.name() for info in parquet_metadata.schema().root().children()]
 
-    # access the Parquet file_footer to find the index
-    index_col = None
-    cdef unordered_map[string, string] file_footer = c_result.metadata()
-
-    # get index column name(s)
-    index_col_names = None
-    json_str = file_footer[b'pandas'].decode('utf-8')
-    meta = None
+    index_col_names = set()
+    json_str = parquet_metadata.metadata()['pandas']
     if json_str != "":
         meta = json.loads(json_str)
         file_is_range_index, index_col, _ = _parse_metadata(meta)
-        if not file_is_range_index and index_col is not None \
-                and index_col_names is None:
-            index_col_names = {}
+        if (
+            not file_is_range_index
+            and index_col is not None
+        ):
+            columns = meta['columns']
             for idx_col in index_col:
-                for c in meta['columns']:
+                for c in columns:
                     if c['field_name'] == idx_col:
-                        index_col_names[idx_col] = c['name']
+                        index_col_names.add(idx_col)
 
     # remove the index column from the list of column names
     # only if index_col_names is not None
-    if index_col_names is not None:
+    if len(index_col_names) >= 0:
         col_names = [name for name in col_names if name not in index_col_names]
 
-    # num_columns = length of list(col_names)
-    num_columns = len(col_names)
-
-    # return the metadata
-    return num_rows, num_rowgroups, col_names, num_columns, row_group_metadata
+    return (
+        parquet_metadata.num_rows(),
+        parquet_metadata.num_rowgroups(),
+        col_names,
+        len(col_names),
+        parquet_metadata.rowgroup_metadata()
+    )
 
 
 @acquire_spill_lock()
