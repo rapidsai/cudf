@@ -330,7 +330,7 @@ _python_cudf_function_map = {
 }
 
 
-class libcudfASTVisitor(ast.NodeVisitor):
+class ExpressionTransformer(ast.NodeVisitor):
     """A NodeVisitor specialized for constructing a libcudf expression tree.
 
     This visitor is designed to handle AST nodes that have libcudf equivalents.
@@ -338,31 +338,22 @@ class libcudfASTVisitor(ast.NodeVisitor):
     then builds up operations. The final result can be accessed using the
     `expression` property. The visitor must be kept in scope for as long as the
     expression is needed because all of the underlying libcudf expressions will
-    be destroyed when the libcudfASTVisitor is.
+    be destroyed when the ExpressionTransformer is.
 
     Parameters
     ----------
-    col_names : Tuple[str]
-        The column names used to map the names in an expression.
+    column_mapping : dict[str, ColumnNameReference]
+        Mapping of the names associated with each column.
     """
 
-    def __init__(self, tuple col_names):
-        self.stack = []
-        self.nodes = []
-        self.col_names = col_names
-
-    @property
-    def expression(self):
-        """Expression: The result of parsing an AST."""
-        assert len(self.stack) == 1
-        return self.stack[-1]
+    def __init__(self, dict column_mapping):
+        self.column_mapping = column_mapping
 
     def visit_Name(self, node):
         try:
-            col_id = self.col_names.index(node.id)
-        except ValueError:
+            return self.column_mapping[node.id]
+        except KeyError:
             raise ValueError(f"Unknown column name {node.id}")
-        self.stack.append(ColumnReference(col_id))
 
     def visit_Constant(self, node):
         if not isinstance(node.value, (float, int, str, complex)):
@@ -370,85 +361,51 @@ class libcudfASTVisitor(ast.NodeVisitor):
                 f"Unsupported literal {repr(node.value)} of type "
                 "{type(node.value).__name__}"
             )
-        self.stack.append(
-            Literal(from_arrow(pa.scalar(node.value)))
-        )
+        return Literal(from_arrow(pa.scalar(node.value)))
 
     def visit_UnaryOp(self, node):
-        self.visit(node.operand)
-        self.nodes.append(self.stack.pop())
+        operand = self.visit(node.operand)
         if isinstance(node.op, ast.USub):
             # TODO: Except for leaf nodes, we won't know the type of the
             # operand, so there's no way to know whether this should be a float
             # or an int. We should maybe see what Spark does, and this will
             # probably require casting.
-            self.nodes.append(Literal(from_arrow(pa.scalar(-1))))
-            op = ASTOperator.MUL
-            self.stack.append(Operation(op, self.nodes[-1], self.nodes[-2]))
+            minus_one = Literal(from_arrow(pa.scalar(-1)))
+            return Operation(ASTOperator.MUL, minus_one, operand)
         elif isinstance(node.op, ast.UAdd):
-            self.stack.append(self.nodes[-1])
+            return operand
         else:
             op = _python_cudf_operator_map[type(node.op)]
-            self.stack.append(Operation(op, self.nodes[-1]))
+            return Operation(op, operand)
 
     def visit_BinOp(self, node):
-        self.visit(node.left)
-        self.visit(node.right)
-        self.nodes.append(self.stack.pop())
-        self.nodes.append(self.stack.pop())
-
+        left = self.visit(node.left)
+        right = self.visit(node.right)
         op = _python_cudf_operator_map[type(node.op)]
-        self.stack.append(Operation(op, self.nodes[-1], self.nodes[-2]))
-
-    def _visit_BoolOp_Compare(self, operators, operands, has_multiple_ops):
-        # Helper function handling the common components of parsing BoolOp and
-        # Compare AST nodes. These two types of nodes both support chaining
-        # (e.g. `a > b > c` is equivalent to `a > b and b > c`, so this
-        # function helps standardize that.
-
-        # TODO: Whether And/Or and BitAnd/BitOr actually correspond to
-        # logical or bitwise operators depends on the data types that they
-        # are applied to. We'll need to add logic to map to that.
-        inner_ops = []
-        for op, (left, right) in zip(operators, operands):
-            # Note that this will lead to duplicate nodes, e.g. if
-            # the comparison is `a < b < c` that will be encoded as
-            # `a < b and b < c`. We could potentially optimize by caching
-            # expressions by name so that we only construct them once.
-            self.visit(left)
-            self.visit(right)
-
-            self.nodes.append(self.stack.pop())
-            self.nodes.append(self.stack.pop())
-
-            op = _python_cudf_operator_map[type(op)]
-            inner_ops.append(Operation(op, self.nodes[-1], self.nodes[-2]))
-
-        self.nodes.extend(inner_ops)
-
-        # If we have more than one comparator, we need to link them
-        # together with LOGICAL_AND operators.
-        if has_multiple_ops:
-            op = ASTOperator.LOGICAL_AND
-
-            def _combine_compare_ops(left, right):
-                self.nodes.append(Operation(op, left, right))
-                return self.nodes[-1]
-
-            functools.reduce(_combine_compare_ops, inner_ops)
-
-        self.stack.append(self.nodes[-1])
+        return Operation(op, left, right)
 
     def visit_BoolOp(self, node):
-        operators = [node.op] * (len(node.values) - 1)
-        operands = zip(node.values[:-1], node.values[1:])
-        self._visit_BoolOp_Compare(operators, operands, len(node.values) > 2)
+        return functools.reduce(
+            functools.partial(Operation, ASTOperator.LOGICAL_AND),
+            (
+                Operation(node.op, self.visit(left), self.visit(right))
+                for left, right in zip(
+                    node.values[:-1], node.values[1:], strict=True
+                )
+            )
+        )
 
     def visit_Compare(self, node):
-        operands = (node.left, *node.comparators)
-        has_multiple_ops = len(operands) > 2
-        operands = zip(operands[:-1], operands[1:])
-        self._visit_BoolOp_Compare(node.ops, operands, has_multiple_ops)
+        operands = [node.left, *node.comparators]
+        return functools.reduce(
+            functools.partial(Operation, ASTOperator.LOGICAL_AND),
+            (
+                Operation(op, self.visit(left), self.visit(right))
+                for op, left, right in zip(
+                    node.ops, operands[:-1], operands[1:], strict=True
+                )
+            )
+        )
 
     def visit_Call(self, node):
         try:
@@ -461,30 +418,30 @@ class libcudfASTVisitor(ast.NodeVisitor):
                 f"Function {node.func} only accepts one positional "
                 "argument."
             )
-        self.visit(node.args[0])
-
-        self.nodes.append(self.stack.pop())
-        self.stack.append(Operation(op, self.nodes[-1]))
+        return Operation(op, self.visit(node.args[0]))
 
 
 @functools.lru_cache(256)
-def compute_column_expression(str expr, tuple col_names):
+def to_expression(str expr, dict column_mapping):
     """
     Create an expression for `pylibcudf.transform.compute_column`.
 
     Parameters
     ----------
     expr : str
-        The expression to evaluate.
+        The expression to evaluate. In (restricted) Python syntax.
 
-    col_names : tuple[str]
-        The names associated with each column.
+    column_mapping : dict[str, ColumnNameReference]
+        Mapping of the names associated with each column.
+
+    Notes
+    -----
+    This function keeps a small cache of recently used expressions.
 
     Returns
     -------
     Expression
-        Cached Expression for the given expr and col_names
+        Expression for the given expr and col_names
     """
-    visitor = libcudfASTVisitor(col_names)
-    visitor.visit(ast.parse(expr))
-    return visitor.expression
+    visitor = ExpressionTransformer(column_mapping)
+    return visitor.visit(ast.parse(expr))

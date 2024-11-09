@@ -91,14 +91,14 @@ def one_hot_encode(Column input_column, Column categories):
 
 
 @acquire_spill_lock()
-def compute_column(list columns, tuple column_names, str expr):
+def compute_column(list columns, dict column_mapping, str expr):
     """Compute a new column by evaluating an expression on a set of columns.
 
     Parameters
     ----------
     columns : list
         The set of columns forming the table to evaluate the expression on.
-    column_names : tuple[str]
+    column_mapping : dict[str, pylibcudf.expression.ColumnNameReference]
         The names associated with each column. These names are necessary to map
         column names in the expression to indices in the provided list of
         columns, which are what will be used by libcudf to evaluate the
@@ -108,6 +108,6 @@ def compute_column(list columns, tuple column_names, str expr):
     """
     result = plc_transform.compute_column(
         plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
-        plc.expressions.compute_column_expression(expr, column_names),
+        plc.expressions.to_expression(expr, column_mapping),
     )
     return Column.from_pylibcudf(result)
