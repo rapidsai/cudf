@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import decimal
+import operator
 import pickle
 import textwrap
 import warnings
@@ -26,6 +27,8 @@ else:
     PANDAS_NUMPY_DTYPE = pd.core.dtypes.dtypes.PandasDtype
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
 
@@ -89,8 +92,10 @@ def dtype(arbitrary):
 
 
 def _decode_type(
+    cls: type,
     header: dict,
     frames: list,
+    is_valid_class: Callable[[type, type], bool] = operator.is_,
 ) -> tuple[dict, list]:
     """Decode metadata-encoded type and check validity
 
@@ -123,6 +128,10 @@ def _decode_type(
         f"Deserialization expected {header['frame_count']} frames, "
         f"but received {len(frames)}."
     )
+    assert is_valid_class(
+        klass := Serializable._name_type_map[header["type-serialized-name"]],
+        cls,
+    ), f"Header-encoded {klass=} does not match decoding {cls=}."
     return header, frames
 
 
@@ -311,7 +320,7 @@ class CategoricalDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header, frames):
-        header, frames = _decode_type(header, frames)
+        header, frames = _decode_type(cls, header, frames)
         ordered = header["ordered"]
         categories_header = header["categories"]
         categories_frames = frames
@@ -502,7 +511,7 @@ class ListDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(header, frames)
+        header, frames = _decode_type(cls, header, frames)
         if isinstance(header["element-type"], dict):
             element_type = Serializable.device_deserialize(
                 header["element-type"], frames
@@ -654,7 +663,7 @@ class StructDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(header, frames)
+        header, frames = _decode_type(cls, header, frames)
         fields = {}
         for k, dtype in header["fields"].items():
             if isinstance(dtype, tuple):
@@ -836,7 +845,9 @@ class DecimalDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(header, frames)
+        header, frames = _decode_type(
+            cls, header, frames, is_valid_class=issubclass
+        )
         return cls(header["precision"], header["scale"])
 
     def __eq__(self, other: Dtype) -> bool:
@@ -952,7 +963,7 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(header, frames)
+        header, frames = _decode_type(cls, header, frames)
         subtype, closed = pickle.loads(header["fields"])
         return cls(subtype, closed=closed)
 

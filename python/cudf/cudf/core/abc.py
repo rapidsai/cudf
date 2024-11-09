@@ -137,7 +137,7 @@ class Serializable:
         typ = cls._name_type_map[header["type-serialized-name"]]
         frames = [
             cudf.core.buffer.as_buffer(f) if c else memoryview(f)
-            for c, f in zip(header["is-cuda"], frames)
+            for c, f in zip(header["is-cuda"], frames, strict=True)
         ]
         return typ.deserialize(header, frames)
 
