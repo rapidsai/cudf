@@ -7,7 +7,6 @@ import inspect
 import itertools
 import numbers
 import os
-import pickle
 import re
 import sys
 import textwrap
@@ -42,7 +41,6 @@ from cudf.api.types import (
 )
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -579,7 +577,7 @@ class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
     pass
 
 
-class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
+class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     """
     A GPU Dataframe object.
 
@@ -1181,7 +1179,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self.index.serialize()
+        header["index"], index_frames = self.index.device_serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -1196,8 +1194,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             header, frames[header["index_frame_count"] :]
         )
 
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
         obj.index = index
 
         return obj

@@ -432,7 +432,6 @@ class Buffer(Serializable):
             second element is a list containing single frame.
         """
         header: dict[str, Any] = {}
-        header["type-serialized"] = pickle.dumps(type(self))
         header["owner-type-serialized"] = pickle.dumps(type(self._owner))
         header["frame_count"] = 1
         frames = [self]

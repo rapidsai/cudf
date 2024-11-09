@@ -497,7 +497,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
-        header["type-serialized"] = pickle.dumps(type(self))
         header["frame_count"] = 0
         return header, frames
 

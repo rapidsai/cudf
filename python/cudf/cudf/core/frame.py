@@ -22,6 +22,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
-class Frame(BinaryOperand, Scannable):
+class Frame(BinaryOperand, Scannable, Serializable):
     """A collection of Column objects with an optional index.
 
     Parameters
@@ -96,7 +97,6 @@ class Frame(BinaryOperand, Scannable):
     def serialize(self):
         # TODO: See if self._data can be serialized outright
         header = {
-            "type-serialized": pickle.dumps(type(self)),
             "column_names": pickle.dumps(self._column_names),
             "column_rangeindex": pickle.dumps(self._data.rangeindex),
             "column_multiindex": pickle.dumps(self._data.multiindex),
@@ -109,7 +109,6 @@ class Frame(BinaryOperand, Scannable):
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
-        cls_deserialize = pickle.loads(header["type-serialized"])
         column_names = pickle.loads(header["column_names"])
         columns = deserialize_columns(header["columns"], frames)
         kwargs = {}
@@ -125,7 +124,7 @@ class Frame(BinaryOperand, Scannable):
         col_accessor = ColumnAccessor(
             data=dict(zip(column_names, columns)), **kwargs
         )
-        return cls_deserialize._from_data(col_accessor)
+        return cls._from_data(col_accessor)
 
     @classmethod
     @_performance_tracking

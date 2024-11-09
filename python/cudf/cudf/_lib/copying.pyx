@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import pickle
-
 from libc.stdint cimport uint8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -400,7 +398,7 @@ cdef class _CPackedColumns:
 
         column_dtypes = {}
         for name, dtype in self.column_dtypes.items():
-            dtype_header, dtype_frames = dtype.serialize()
+            dtype_header, dtype_frames = dtype.device_serialize()
             column_dtypes[name] = (
                 dtype_header,
                 (len(frames), len(frames) + len(dtype_frames)),
@@ -436,9 +434,9 @@ cdef class _CPackedColumns:
         column_dtypes = {}
         for name, dtype in header["column-dtypes"].items():
             dtype_header, (start, stop) = dtype
-            column_dtypes[name] = pickle.loads(
-                dtype_header["type-serialized"]
-            ).deserialize(dtype_header, frames[start:stop])
+            column_dtypes[name] = Serializable.device_deserialize(
+                dtype_header, frames[start:stop]
+            )
         p.column_dtypes = column_dtypes
 
         return p
@@ -483,7 +481,6 @@ class PackedColumns(Serializable):
 
     def serialize(self):
         header, frames = self._data.serialize()
-        header["type-serialized"] = pickle.dumps(type(self))
 
         return header, frames
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import functools
 import inspect
-import pickle
 import textwrap
 import warnings
 from collections import abc
@@ -28,7 +27,6 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -415,7 +413,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indices
 
 
-class Series(SingleColumnFrame, IndexedFrame, Serializable):
+class Series(SingleColumnFrame, IndexedFrame):
     """
     One-dimensional GPU array (including time series).
 
@@ -900,7 +898,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self.index.serialize()
+        header["index"], index_frames = self.index.device_serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -916,8 +914,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             header, frames[header["index_frame_count"] :]
         )
 
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
         obj.index = index
 
         return obj

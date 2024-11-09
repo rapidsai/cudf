@@ -415,7 +415,6 @@ class SpillableBuffer(ExposureTrackedBuffer):
         header: dict[str, Any] = {}
         frames: list[Buffer | memoryview]
         with self._owner.lock:
-            header["type-serialized"] = pickle.dumps(self.__class__)
             header["owner-type-serialized"] = pickle.dumps(type(self._owner))
             header["frame_count"] = 1
             if self.is_spilled:
