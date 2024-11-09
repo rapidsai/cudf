@@ -20,7 +20,7 @@ python -m pytest \
        --cache-clear \
        -m "" \
        -p cudf_polars.testing.plugin \
-       -v \
+       -vvv \
        --tb=native \
        ${DESELECTED_TESTS} \
        "$@" \
