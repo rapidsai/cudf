@@ -97,11 +97,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def serialize(self):
         # TODO: See if self._data can be serialized outright
         header = {
-            "column_names": pickle.dumps(self._column_names),
-            "column_rangeindex": pickle.dumps(self._data.rangeindex),
-            "column_multiindex": pickle.dumps(self._data.multiindex),
+            "column_names": self._column_names,
+            "column_rangeindex": self._data.rangeindex,
+            "column_multiindex": self._data.multiindex,
             "column_label_dtype": pickle.dumps(self._data.label_dtype),
-            "column_level_names": pickle.dumps(self._data._level_names),
+            "column_level_names": self._data._level_names,
         }
         header["columns"], frames = serialize_columns(self._columns)
         return header, frames
@@ -109,7 +109,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
-        column_names = pickle.loads(header["column_names"])
+        column_names = header["column_names"]
         columns = deserialize_columns(header["columns"], frames)
         kwargs = {}
         for metadata in [
@@ -120,7 +120,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ]:
             key = f"column_{metadata}"
             if key in header:
-                kwargs[metadata] = pickle.loads(header[key])
+                if key == "column_label_dtype":
+                    kwargs[metadata] = pickle.loads(header[key])
+                else:
+                    kwargs[metadata] = header[key]
         col_accessor = ColumnAccessor(
             data=dict(zip(column_names, columns)), **kwargs
         )
