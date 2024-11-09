@@ -1055,7 +1055,6 @@ def _transform_arg(
                         original_kwargs,
                     )
                 )
-                # return res
             else:
                 return tuple(
                     _transform_arg(a, attribute_name, seen) for a in arg
