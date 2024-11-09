@@ -391,6 +391,7 @@ class user_datasource_wrapper : public datasource {
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
 };
 
+#ifdef CUDF_KVIKIO_REMOTE_IO
 /**
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
  */
@@ -470,7 +471,16 @@ class remote_file_source : public datasource {
  private:
   kvikio::RemoteHandle _kvikio_file;
 };
-
+#else
+/**
+ * @brief When KvikIO remote IO is disabled, `is_supported_remote_url()` return false always.
+ */
+class remote_file_source : public file_source {
+ public:
+  explicit remote_file_source(char const* filepath) : file_source(filepath) {}
+  static constexpr bool is_supported_remote_url(std::string const& url) { return false; }
+};
+#endif
 }  // namespace
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
