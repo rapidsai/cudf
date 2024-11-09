@@ -72,7 +72,6 @@ constexpr auto TT_SEC            = dfa_states::TT_SEC;
 constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
-template <typename SymbolT>
 auto get_sgid_lut(SymbolT delim)
 {
   // The i-th string representing all the characters of a symbol group
