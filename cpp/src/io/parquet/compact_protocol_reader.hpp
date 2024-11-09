@@ -108,6 +108,10 @@ class CompactProtocolReader {
   void read(IntType* t);
   void read(RowGroup* r);
   void read(ColumnChunk* c);
+  void read(BloomFilterAlgorithm* bf);
+  void read(BloomFilterHash* bf);
+  void read(BloomFilterCompression* bf);
+  void read(BloomFilterHeader* bf);
   void read(ColumnChunkMetaData* c);
   void read(PageHeader* p);
   void read(DataPageHeader* d);

@@ -1281,7 +1281,8 @@ void reader::impl::preprocess_file(read_mode mode)
            _file_itm_data.global_num_rows,
            _file_itm_data.row_groups,
            _file_itm_data.num_rows_per_source) =
-    _metadata->select_row_groups(_options.row_group_indices,
+    _metadata->select_row_groups(_sources,
+                                 _options.row_group_indices,
                                  _options.skip_rows,
                                  _options.num_rows,
                                  output_dtypes,

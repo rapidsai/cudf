@@ -382,10 +382,55 @@ struct ColumnChunkMetaData {
   // Set of all encodings used for pages in this column chunk. This information can be used to
   // determine if all data pages are dictionary encoded for example.
   std::optional<std::vector<PageEncodingStats>> encoding_stats;
+  // Byte offset from beginning of file to Bloom filter data.
+  std::optional<int64_t> bloom_filter_offset;
+  // Size of Bloom filter data including the serialized header, in bytes. Added in 2.10 so readers
+  // may not read this field from old files and it can be obtained after the BloomFilterHeader has
+  // been deserialized. Writers should write this field so readers can read the bloom filter in a
+  // single I/O.
+  std::optional<int32_t> bloom_filter_length;
   // Optional statistics to help estimate total memory when converted to in-memory representations.
   // The histograms contained in these statistics can also be useful in some cases for more
   // fine-grained nullability/list length filter pushdown.
   std::optional<SizeStatistics> size_statistics;
+};
+
+/**
+ * @brief The algorithm used in Bloom filter.
+ **/
+struct BloomFilterAlgorithm {
+  /** Block-based Bloom filter. **/
+  enum Algorithm { UNDEFINED, SPLIT_BLOCK };
+  Algorithm algorithm{Algorithm::SPLIT_BLOCK};
+};
+
+/**
+ * @brief The hash function used in Bloom filter. This function takes the hash of a column value
+ * using plain encoding.
+ **/
+struct BloomFilterHash {
+  /** xxHash Strategy. **/
+  enum Hash { UNDEFINED, XXHASH };
+  Hash hash{Hash::XXHASH};
+};
+
+/**
+ * @brief The compression used in the Bloom filter.
+ **/
+struct BloomFilterCompression {
+  enum Compression { UNDEFINED, UNCOMPRESSED };
+  Compression compression{Compression::UNCOMPRESSED};
+};
+
+struct BloomFilterHeader {
+  // The size of bitset in bytes
+  int32_t num_bytes;
+  // The algorithm for setting bits. *
+  BloomFilterAlgorithm algorithm;
+  // The hash function used for Bloom filter. *
+  BloomFilterHash hash;
+  // The compression used in the Bloom filter *
+  BloomFilterCompression compression;
 };
 
 /**
