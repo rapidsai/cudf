@@ -481,7 +481,7 @@ class remote_file_source : public datasource {
 class remote_file_source : public file_source {
  public:
   explicit remote_file_source(char const* filepath) : file_source(filepath) {}
-  static constexpr bool is_supported_remote_url(std::string const& url) { return false; }
+  static constexpr bool is_supported_remote_url(std::string const&) { return false; }
 };
 #endif
 }  // namespace
