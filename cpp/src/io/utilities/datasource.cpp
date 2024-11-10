@@ -26,7 +26,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <kvikio/file_handle.hpp>
-#include <kvikio/remote_handle.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -34,8 +33,13 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <regex>
 #include <vector>
+
+#ifdef CUDF_KVIKIO_REMOTE_IO
+#include <kvikio/remote_handle.hpp>
+
+#include <regex>
+#endif
 
 namespace cudf {
 namespace io {
