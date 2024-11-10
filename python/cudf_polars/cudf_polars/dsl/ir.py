@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
     from typing import Literal
 
+    from cudf_polars.dsl.nodebase import PartitionInfo
     from cudf_polars.typing import Schema
 
 
@@ -127,12 +128,13 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    __slots__ = ("schema", "_non_child_args")
+    __slots__ = ("schema", "_non_child_args", "_parts_info")
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     # Concrete classes should set this up with the arguments that will
     # be passed to do_evaluate.
     _non_child_args: tuple[Any, ...]
+    _parts_info: PartitionInfo
     schema: Schema
     """Mapping from column names to their data types."""
 
@@ -208,6 +210,17 @@ class IR(Node["IR"]):
             *self._non_child_args,
             *(child.evaluate(cache=cache) for child in self.children),
         )
+
+    @property
+    def parts(self) -> PartitionInfo:
+        """Return Partitioning information for this IR node."""
+        try:
+            return self._parts_info
+        except AttributeError:
+            from cudf_polars.experimental.parallel import ir_parts_info
+
+            self._parts_info = ir_parts_info(self)
+            return self._parts_info
 
 
 class PythonScan(IR):

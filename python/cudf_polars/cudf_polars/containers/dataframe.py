@@ -227,7 +227,7 @@ class DataFrame:
         return type(self).from_table(table, self.column_names).sorted_like(self)
 
     @classmethod
-    def concat(cls, dfs: list[Self]) -> Self:
+    def concat(cls, dfs: Sequence[Self]) -> Self:
         """Concatenate a list of dataframes."""
         assert len(dfs), "Cannot concatenate an empty list"
         if len(dfs) == 1:

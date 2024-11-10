@@ -5,19 +5,19 @@
 from __future__ import annotations
 
 import warnings
-from functools import singledispatch
+from functools import partial, singledispatch
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
-from cudf_polars.dsl.expr import Agg, Col, NamedExpr
+from cudf_polars.dsl.expr import Agg, BinOp, Col, NamedExpr
 from cudf_polars.dsl.ir import Scan, Select, broadcast
 from cudf_polars.dsl.nodebase import PartitionInfo
 from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping, Sequence
+    from collections.abc import Callable, Mapping, MutableMapping, Sequence
 
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
@@ -32,37 +32,40 @@ def get_key_name(node: Node | NamedExpr) -> str:
 
 
 @singledispatch
-def _ir_partition_info_dispatch(node: Node) -> PartitionInfo:
+def ir_parts_info(ir: IR) -> PartitionInfo:
+    """Return the partitioning info for an IR node."""
     count = 1
-    if node.children:
-        count = max(child.parts.count for child in node.children)
+    if ir.children:
+        count = max(child.parts.count for child in ir.children)
     if count > 1:
         warnings.warn(
-            f"Multi-partition support is not implemented for {type(node)}. "
+            f"Multi-partition support is not implemented for {type(ir)}. "
             f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=1,
+            stacklevel=2,
         )
     return PartitionInfo(count=1)
 
 
 @singledispatch
-def _expr_partition_info_dispatch(
-    expr: Expr | NamedExpr, child_ir: IR
-) -> PartitionInfo:
-    # The default partitioning of an Expr node depends
-    # on the child Expr nodes or the child IR node it
-    # is operating on (for leaf Exprs).
+def expr_parts_info(expr: Expr | NamedExpr, child_ir: IR) -> PartitionInfo:
+    """
+    Return the partitioning info for an Expr.
+
+    Since the partitioning of a leaf Expr depends on
+    the child IR node, a `child_ir` positional argument
+    is also required.
+    """
     if isinstance(expr, NamedExpr):
-        expr = expr.value
+        return expr_parts_info(expr.value, child_ir)
     if expr.children:
-        count = max([child.parts.count for child in expr.children])
+        count = max([expr_parts_info(child, child_ir).count for child in expr.children])
     else:
         count = child_ir.parts.count
     if count > 1:
         warnings.warn(
             f"Multi-partition support is not implemented for {type(expr)}. "
             f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=1,
+            stacklevel=2,
         )
     return PartitionInfo(count=1)
 
@@ -154,13 +157,44 @@ def evaluate_dask(ir: IR) -> DataFrame:
 
 
 ##
+## Node-specific Dispatch Logic
+##
+
+
+##
+## NamedExpr
+##
+
+
+def _rename_column(column: Column, name: str):
+    return column.rename(name)
+
+
+@generate_expr_tasks.register(NamedExpr)
+def _(expr: NamedExpr, child_ir: IR) -> MutableMapping[Any, Any]:
+    # Special case: The graph of a NamedExpr
+    # will simply rename the column returned
+    # by its value attribute.
+    graph = generate_expr_tasks(expr.value, child_ir)
+    named_expr_key_name = get_key_name(expr)
+    expr_key_name = get_key_name(expr.value)
+    for i in range(expr_parts_info(expr.value, child_ir).count):
+        graph[(named_expr_key_name, i)] = (
+            _rename_column,
+            graph.pop((expr_key_name, i)),
+            expr.name,
+        )
+    return graph
+
+
+##
 ## Scan
 ##
 
 _SCAN_SUPPORTED = ("parquet",)
 
 
-@_ir_partition_info_dispatch.register(Scan)
+@ir_parts_info.register(Scan)
 def _(ir: Scan) -> PartitionInfo:
     if ir.typ in _SCAN_SUPPORTED:
         return PartitionInfo(count=len(ir.paths))
@@ -203,19 +237,17 @@ def _(ir: Scan) -> MutableMapping[Any, Any]:
 ##
 
 
-@_ir_partition_info_dispatch.register(Select)
+@ir_parts_info.register(Select)
 def _(ir: Select) -> PartitionInfo:
     # Partitioning depends on the expression
     df = ir.children[0]
-    column_partition_counts = [
-        _expr_partition_info_dispatch(expr, df).count for expr in ir.exprs
-    ]
+    column_partition_counts = [expr_parts_info(expr, df).count for expr in ir.exprs]
     count = max(column_partition_counts)
     if count > 1:
         warnings.warn(
             f"Multi-partition support is not implemented for {type(ir)}. "
             f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=1,
+            stacklevel=2,
         )
     return PartitionInfo(count=1)
 
@@ -251,39 +283,11 @@ def _(ir: Select) -> MutableMapping[Any, Any]:
 
 
 ##
-## NamedExpr
-##
-
-
-@_expr_partition_info_dispatch.register(NamedExpr)
-def _(expr: NamedExpr, child_ir: IR) -> PartitionInfo:
-    return _expr_partition_info_dispatch(expr.value, child_ir)
-
-
-def _rename_column(column: Column, name: str):
-    return column.rename(name)
-
-
-@generate_expr_tasks.register(NamedExpr)
-def _(expr: NamedExpr, child_ir: IR) -> MutableMapping[Any, Any]:
-    graph = generate_expr_tasks(expr.value, child_ir)
-    named_expr_key_name = get_key_name(expr)
-    expr_key_name = get_key_name(expr.value)
-    for i in range(expr.value.parts.count):
-        graph[(named_expr_key_name, i)] = (
-            _rename_column,
-            graph.pop((expr_key_name, i)),
-            expr.name,
-        )
-    return graph
-
-
-##
 ## Col
 ##
 
 
-@_expr_partition_info_dispatch.register(Col)
+@expr_parts_info.register(Col)
 def _(expr: Col, child_ir: IR) -> PartitionInfo:
     assert not expr.children
     count = child_ir.parts.count
@@ -305,6 +309,57 @@ def _(expr: Col, child_ir: IR) -> MutableMapping[Any, Any]:
 
 
 ##
+## BinOp
+##
+
+
+@expr_parts_info.register(BinOp)
+def _(expr: BinOp, child_ir: IR) -> PartitionInfo:
+    counts = {expr_parts_info(child, child_ir).count for child in expr.children}
+    if len(counts) != 1:
+        raise NotImplementedError("Mismatched partition counts.")
+    count = counts.pop()
+    return PartitionInfo(count=count)
+
+
+def _binop(left: Column, right: Column, op: Callable, dtype: plc.DataType) -> Column:
+    lop = left.obj
+    rop = right.obj
+    if left.obj.size() != right.obj.size():
+        if left.is_scalar:
+            lop = left.obj_scalar
+        elif right.is_scalar:
+            rop = right.obj_scalar
+    return Column(
+        plc.binaryop.binary_operation(lop, rop, op, dtype),
+    )
+
+
+@generate_expr_tasks.register(BinOp)
+def _(expr: BinOp, child_ir: IR) -> MutableMapping[Any, Any]:
+    name = get_key_name(expr)
+    left = expr.children[0]
+    left_name = get_key_name(left)
+    left_graph = generate_expr_tasks(left, child_ir)
+    right = expr.children[1]
+    right_name = get_key_name(right)
+    right_graph = generate_expr_tasks(right, child_ir)
+    graph = {
+        (name, i): (
+            _binop,
+            left_graph.pop((left_name, i)),
+            right_graph.pop((right_name, i)),
+            expr.op,
+            expr.dtype,
+        )
+        for i in range(expr_parts_info(left, child_ir).count)
+    }
+    graph.update(left_graph)
+    graph.update(right_graph)
+    return graph
+
+
+##
 ## Agg
 ##
 
@@ -315,31 +370,65 @@ _AGG_SUPPORTED = (
     "last",
     "sum",
     "count",
+    "mean",
 )
 
 
-@_expr_partition_info_dispatch.register(Agg)
+@expr_parts_info.register(Agg)
 def _(expr: Agg, child_ir: IR) -> PartitionInfo:
     if expr.children:
-        count = max([child.parts.count for child in expr.children])
+        count = max([expr_parts_info(child, child_ir).count for child in expr.children])
     else:
         count = child_ir.parts.count
     if count > 1 and expr.name not in _AGG_SUPPORTED:
+        assert 0 == 1
         # Only support sum reductions for now.
         warnings.warn(
             f"Multi-partition support is not implemented for {type(expr)}. "
             f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=1,
+            stacklevel=2,
         )
     return PartitionInfo(count=1)
 
 
-def _apply_op(op: Callable, column: Column):
+def _tree_agg(
+    op: Callable,
+    input: Column | Sequence[Column],
+) -> Column:
+    if isinstance(input, Column):
+        column = input
+    elif len(input) == 1:
+        column = input[0]
+    else:
+        column = Column(plc.concatenate.concatenate([col.obj for col in input]))
     return op(column)
 
 
-def _agg_combine(columns: Sequence[Column]) -> Column:
-    return Column(plc.concatenate.concatenate([col.obj for col in columns]))
+def _tree_agg_multi(
+    ops: Mapping[str, Callable],
+    input: Column | Sequence[DataFrame],
+) -> DataFrame:
+    if isinstance(input, Column):
+        columns = [op(input).rename(name) for name, op in ops.items()]
+    else:
+        df = DataFrame.concat(input)
+        columns = [
+            op(df.select_columns({name})[0]).rename(name) for name, op in ops.items()
+        ]
+    return DataFrame(columns)
+
+
+def _finalize_mean(df: DataFrame, dtype: plc.DataType) -> Column:
+    _sum = df.select_columns({"sum"})[0]
+    _count = df.select_columns({"count"})[0]
+    return Column(
+        plc.binaryop.binary_operation(
+            _sum.obj,
+            _count.obj,
+            plc.binaryop.BinaryOperator.DIV,
+            dtype,
+        )
+    )
 
 
 @generate_expr_tasks.register(Agg)
@@ -348,10 +437,19 @@ def _(expr: Agg, child_ir: IR) -> MutableMapping[Any, Any]:
         raise NotImplementedError(f"Cannot generate tasks for {expr}.")
 
     child = expr.children[0]
-    npartitions_in = child.parts.count
+    npartitions_in = expr_parts_info(child, child_ir).count
     key = get_key_name(expr)
     child_key = get_key_name(child)
     child_dsk = generate_expr_tasks(child, child_ir)
+
+    # Single input-partition shortcut
+    if npartitions_in == 1:
+        return {
+            (key, 0): (
+                expr.op,
+                child_dsk.pop((child_key, 0)),
+            )
+        }
 
     # Check for simple case
     # TODO: Avoid generating entire child_dsk graph?
@@ -362,30 +460,66 @@ def _(expr: Agg, child_ir: IR) -> MutableMapping[Any, Any]:
             index = 0
         return {
             (key, 0): (
-                _apply_op,
+                _tree_agg,
                 expr.op,
                 # Fuse with child-expr task
-                child_dsk[(child_key, index)],
+                child_dsk.pop((child_key, index)),
             )
         }
 
+    # Tree func is different for "complex" aggs
+    # (Probably a better way to generalize this)
+    chunk_func: Callable
+    tree_func: Callable
+    finalize: Callable | None = None
+    chunk_op: Callable | MutableMapping[str, Callable]
+    tree_op: Callable | MutableMapping[str, Callable]
+    if expr.name == "mean":
+        chunk_func = tree_func = _tree_agg_multi
+        finalize = _finalize_mean
+        chunk_op = {
+            "sum": partial(expr._reduce, request=plc.aggregation.sum()),
+            "count": expr._count,
+        }
+        tree_op = {
+            "sum": partial(expr._reduce, request=plc.aggregation.sum()),
+            "count": partial(expr._reduce, request=plc.aggregation.sum()),
+        }
+    else:
+        chunk_func = tree_func = _tree_agg
+        if expr.name == "count":
+            # After the initial count operations,
+            # we just want to apply a sum aggregation
+            chunk_op = expr.op
+            tree_op = partial(expr._reduce, request=plc.aggregation.sum())
+        else:
+            chunk_op = expr.op
+            tree_op = expr.op
+
     # Simple all-to-one reduction
-    # TODO: Proper tree reduction
-    chunk_key = f"chunk-{key}"
-    combine_key = f"concat-{key}"
+    # TODO: Add proper tree reduction
+    tree_key: str = f"tree-{key}"
+    combine_key: str = f"combine-{key}"
     graph: MutableMapping[tuple[str, int], Any] = {
-        (chunk_key, i): (
-            _apply_op,
-            expr.op,
+        (tree_key, i): (
+            chunk_func,
+            chunk_op,
             # Fuse with child-expr task
-            child_dsk[(child_key, i)],
+            child_dsk.pop((child_key, i)),
         )
         for i in range(npartitions_in)
     }
-    graph[(combine_key, 0)] = (_agg_combine, list(graph.keys()))
-    graph[(key, 0)] = (
-        _apply_op,
-        expr.op,
-        (combine_key, 0),
+    graph[(combine_key, 0)] = (
+        tree_func,
+        tree_op,
+        list(graph.keys()),
     )
+    if finalize:
+        graph[(key, 0)] = (
+            finalize,
+            graph.pop((combine_key, 0)),
+            expr.dtype,
+        )
+    else:
+        graph[(key, 0)] = graph.pop((combine_key, 0))
     return graph
