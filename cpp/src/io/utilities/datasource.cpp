@@ -33,8 +33,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <vector>
 #include <regex>
+#include <vector>
 
 #ifdef CUDF_KVIKIO_REMOTE_IO
 #include <kvikio/remote_handle.hpp>
