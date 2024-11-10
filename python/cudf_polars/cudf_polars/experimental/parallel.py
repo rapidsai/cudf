@@ -12,8 +12,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.expr import Agg, BinOp, Col, NamedExpr
-from cudf_polars.dsl.ir import Scan, Select, broadcast
-from cudf_polars.dsl.nodebase import PartitionInfo
+from cudf_polars.dsl.ir import PartitionInfo, Scan, Select, broadcast
 from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
@@ -41,7 +40,7 @@ def ir_parts_info(ir: IR) -> PartitionInfo:
         warnings.warn(
             f"Multi-partition support is not implemented for {type(ir)}. "
             f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=2,
+            stacklevel=1,
         )
     return PartitionInfo(count=1)
 
@@ -63,9 +62,9 @@ def expr_parts_info(expr: Expr | NamedExpr, child_ir: IR) -> PartitionInfo:
         count = child_ir.parts.count
     if count > 1:
         warnings.warn(
-            f"Multi-partition support is not implemented for {type(expr)}. "
-            f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=2,
+            f"Multi-partition support is not implemented for {type(expr)} "
+            "Partitions will be concatenated. Expect poor performance.",
+            stacklevel=1,
         )
     return PartitionInfo(count=1)
 
@@ -243,13 +242,7 @@ def _(ir: Select) -> PartitionInfo:
     df = ir.children[0]
     column_partition_counts = [expr_parts_info(expr, df).count for expr in ir.exprs]
     count = max(column_partition_counts)
-    if count > 1:
-        warnings.warn(
-            f"Multi-partition support is not implemented for {type(ir)}. "
-            f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=2,
-        )
-    return PartitionInfo(count=1)
+    return PartitionInfo(count=count)
 
 
 def _select(columns: list[Column], should_broadcast: bool):  # noqa: FBT001
@@ -381,12 +374,12 @@ def _(expr: Agg, child_ir: IR) -> PartitionInfo:
     else:
         count = child_ir.parts.count
     if count > 1 and expr.name not in _AGG_SUPPORTED:
-        assert 0 == 1
         # Only support sum reductions for now.
         warnings.warn(
-            f"Multi-partition support is not implemented for {type(expr)}. "
-            f"Partitions will be concatenated. Expect poor performance.",
-            stacklevel=2,
+            f"Multi-partition support is not implemented for {type(expr)} "
+            f"with expr.name={expr.name}. Partitions will be concatenated. "
+            f"Expect poor performance.",
+            stacklevel=1,
         )
     return PartitionInfo(count=1)
 

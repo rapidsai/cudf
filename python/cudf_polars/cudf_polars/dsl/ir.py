@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
     from typing import Literal
 
-    from cudf_polars.dsl.nodebase import PartitionInfo
     from cudf_polars.typing import Schema
 
 
@@ -123,6 +122,19 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
         )
         for column in columns
     ]
+
+
+class PartitionInfo:
+    """
+    Partitioning information.
+
+    This class only tracks the partition count (for now).
+    """
+
+    __slots__ = ("count",)
+
+    def __init__(self, count: int):
+        self.count = count
 
 
 class IR(Node["IR"]):

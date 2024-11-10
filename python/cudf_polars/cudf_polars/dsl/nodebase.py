@@ -18,19 +18,6 @@ __all__: list[str] = ["Node"]
 T = TypeVar("T", bound="Node[Any]")
 
 
-class PartitionInfo:
-    """
-    Partitioning information.
-
-    This class only tracks the partition count (for now).
-    """
-
-    __slots__ = ("count",)
-
-    def __init__(self, count: int):
-        self.count = count
-
-
 class Node(Generic[T]):
     """
     An abstract node type.
