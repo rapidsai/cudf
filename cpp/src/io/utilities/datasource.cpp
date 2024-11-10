@@ -34,11 +34,10 @@
 #include <unistd.h>
 
 #include <vector>
+#include <regex>
 
 #ifdef CUDF_KVIKIO_REMOTE_IO
 #include <kvikio/remote_handle.hpp>
-
-#include <regex>
 #endif
 
 namespace cudf {
@@ -468,7 +467,7 @@ class remote_file_source : public datasource {
   static bool is_supported_remote_url(std::string const& url)
   {
     // Regular expression to match "s3://"
-    std::regex pattern{R"(^s3://)", std::regex_constants::icase};
+    static std::regex pattern{R"(^s3://)", std::regex_constants::icase};
     return std::regex_search(url, pattern);
   }
 
