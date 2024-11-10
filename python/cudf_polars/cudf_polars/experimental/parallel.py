@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
-from cudf_polars.dsl.expr import Agg, BinOp, Col, NamedExpr
+from cudf_polars.dsl.expr import Agg, BinOp, Col, Literal, NamedExpr
 from cudf_polars.dsl.ir import PartitionInfo, Scan, Select, broadcast
 from cudf_polars.dsl.traversal import traversal
 
@@ -350,6 +350,22 @@ def _(expr: BinOp, child_ir: IR) -> MutableMapping[Any, Any]:
     graph.update(left_graph)
     graph.update(right_graph)
     return graph
+
+
+##
+## Literal
+##
+
+
+@expr_parts_info.register(Literal)
+def _(expr: Literal, child_ir: IR) -> PartitionInfo:
+    return PartitionInfo(count=1)
+
+
+@generate_expr_tasks.register(Literal)
+def _(expr: Literal, child_ir: IR) -> MutableMapping[Any, Any]:
+    value = Column(plc.Column.from_scalar(plc.interop.from_arrow(expr.value), 1))
+    return {(get_key_name(expr), 0): value}
 
 
 ##
