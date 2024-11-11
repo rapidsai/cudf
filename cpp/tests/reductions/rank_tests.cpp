@@ -125,7 +125,7 @@ auto make_input_column()
 {
   if constexpr (std::is_same_v<TypeParam, cudf::string_view>) {
     return cudf::test::strings_column_wrapper{
-      {"0", "0", "4", "4", "4", "5", "7", "7", "7", "9", "9", "9"},
+      {"0", "0", "4", "4", "4", "", "7", "7", "7", "9", "9", "9"},
       cudf::test::iterators::null_at(5)};
   } else {
     using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;

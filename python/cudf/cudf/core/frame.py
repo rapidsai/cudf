@@ -16,6 +16,8 @@ import numpy as np
 import pyarrow as pa
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
@@ -789,15 +791,13 @@ class Frame(BinaryOperand, Scannable):
         column_order=(),
         null_precedence=(),
     ):
-        interpolation = libcudf.types.Interpolation[interpolation]
+        interpolation = plc.types.Interpolation[interpolation]
 
-        is_sorted = libcudf.types.Sorted["YES" if is_sorted else "NO"]
+        is_sorted = plc.types.Sorted["YES" if is_sorted else "NO"]
 
-        column_order = [libcudf.types.Order[key] for key in column_order]
+        column_order = [plc.types.Order[key] for key in column_order]
 
-        null_precedence = [
-            libcudf.types.NullOrder[key] for key in null_precedence
-        ]
+        null_precedence = [plc.types.NullOrder[key] for key in null_precedence]
 
         return self._from_columns_like_self(
             libcudf.quantiles.quantile_table(

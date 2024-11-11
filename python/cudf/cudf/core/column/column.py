@@ -580,8 +580,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if cudf.utils.utils.is_na_like(other):
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
-            # Try and maintain the dtype
-            other = other.dtype.type(other.item())
+            # Return numpy scalar
+            other = other[()]
         return self.normalize_binop_value(other)
 
     def _scatter_by_slice(

@@ -193,11 +193,6 @@ def parquet_file(request, tmp_path_factory, pdf):
     return fname
 
 
-@pytest.fixture(scope="module")
-def rdg_seed():
-    return int(os.environ.get("TEST_CUDF_RDG_SEED", "42"))
-
-
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
     test_pdf = pd.DataFrame(
         [list(range(ncolumns * i, ncolumns * (i + 1))) for i in range(nrows)],
@@ -405,14 +400,14 @@ def test_parquet_range_index_pandas_metadata(tmpdir, pandas_compat, as_bytes):
     assert_eq(expect, got)
 
 
-def test_parquet_read_metadata(tmpdir, pdf):
+def test_parquet_read_metadata(tmp_path, pdf):
     if len(pdf) > 100:
         pytest.skip("Skipping long setup test")
 
     def num_row_groups(rows, group_size):
         return max(1, (rows + (group_size - 1)) // group_size)
 
-    fname = tmpdir.join("metadata.parquet")
+    fname = tmp_path / "metadata.parquet"
     row_group_size = 5
     pdf.to_parquet(fname, compression="snappy", row_group_size=row_group_size)
 
@@ -431,7 +426,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
         assert a == b
 
 
-def test_parquet_read_filtered(tmpdir, rdg_seed):
+def test_parquet_read_filtered(tmpdir):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
     dg.generate(
@@ -455,13 +450,13 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
                 dg.ColumnParameters(
                     40,
                     0.2,
-                    lambda: np.random.default_rng(seed=None).integers(
+                    lambda: np.random.default_rng(seed=0).integers(
                         0, 100, size=40
                     ),
                     True,
                 ),
             ],
-            seed=rdg_seed,
+            seed=42,
         ),
         format={"name": "parquet", "row_group_size": 64},
     )
