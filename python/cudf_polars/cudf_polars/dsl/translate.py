@@ -91,7 +91,7 @@ class Translator:
             try:
                 schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
             except Exception as e:
-                self.errors.append(e)
+                self.errors.append(NotImplementedError(str(e)))
                 return ir.ErrorNode({}, str(e))
             try:
                 node = self.visitor.view_current_node()
