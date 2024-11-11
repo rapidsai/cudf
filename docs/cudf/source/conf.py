@@ -554,6 +554,8 @@ def on_missing_reference(app, env, node, contnode):
 
 
 nitpick_ignore = [
+    # Erroneously warned in ParquetColumnSchema.name
+    ("py:class", "unicode"),
     ("py:class", "SeriesOrIndex"),
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
