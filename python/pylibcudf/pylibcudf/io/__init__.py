@@ -24,6 +24,8 @@ __all__ = [
     "json",
     "orc",
     "parquet",
+    "parquet_metadata",
+    "text",
     "timezone",
     "types",
 ]

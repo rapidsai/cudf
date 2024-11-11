@@ -21,6 +21,7 @@ __all__ = [
     "is_integral_not_bool",
     "is_nested",
     "is_numeric",
+    "is_numeric_not_bool",
     "is_relationally_comparable",
     "is_timestamp",
     "is_unsigned",
