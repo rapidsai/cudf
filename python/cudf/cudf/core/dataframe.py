@@ -7890,10 +7890,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "contain an assignment."
             )
 
-        column_mapping = {
-            name: plc.expressions.ColumnNameReference(name)
-            for name in self._column_names
-        }
         if not includes_assignment:
             if inplace:
                 raise ValueError(
@@ -7901,7 +7897,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             return Series._from_column(
                 libcudf.transform.compute_column(
-                    [*self._columns], column_mapping, statements[0]
+                    [*self._columns], self._column_names, statements[0]
                 )
             )
 
@@ -7921,7 +7917,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         cols = (
             libcudf.transform.compute_column(
-                [*self._columns], column_mapping, e
+                [*self._columns], self._column_names, e
             )
             for e in exprs
         )

@@ -335,15 +335,14 @@ class ExpressionTransformer(ast.NodeVisitor):
 
     This visitor is designed to handle AST nodes that have libcudf equivalents.
     It constructs column references from names and literals from constants,
-    then builds up operations. The final result can be accessed using the
-    `expression` property. The visitor must be kept in scope for as long as the
-    expression is needed because all of the underlying libcudf expressions will
-    be destroyed when the ExpressionTransformer is.
+    then builds up operations. The resulting expression is returned by the 
+    `visit` method
 
     Parameters
     ----------
-    column_mapping : dict[str, ColumnNameReference]
-        Mapping of the names associated with each column.
+    column_mapping : dict[str, ColumnNameReference | ColumnReference]
+        Mapping from names to column references or column name references.
+        The former can be used for `compute_column` the latter in IO filters.
     """
 
     def __init__(self, dict column_mapping):
@@ -422,7 +421,7 @@ class ExpressionTransformer(ast.NodeVisitor):
 
 
 @functools.lru_cache(256)
-def to_expression(str expr, dict column_mapping):
+def to_expression(str expr, tuple column_names):
     """
     Create an expression for `pylibcudf.transform.compute_column`.
 
@@ -430,9 +429,10 @@ def to_expression(str expr, dict column_mapping):
     ----------
     expr : str
         The expression to evaluate. In (restricted) Python syntax.
-
-    column_mapping : dict[str, ColumnNameReference]
-        Mapping of the names associated with each column.
+    column_names : tuple[str]
+        Ordered tuple of names. When calling `compute_column` on the resulting
+        expression, the provided table must have columns in the same order
+        as given here.
 
     Notes
     -----
@@ -443,5 +443,7 @@ def to_expression(str expr, dict column_mapping):
     Expression
         Expression for the given expr and col_names
     """
-    visitor = ExpressionTransformer(column_mapping)
+    visitor = ExpressionTransformer(
+        {name: ColumnReference(i) for i, name in enumerate(column_names)}
+    )
     return visitor.visit(ast.parse(expr))
