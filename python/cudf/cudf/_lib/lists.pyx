@@ -4,7 +4,9 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-from pylibcudf.libcudf.types cimport nan_equality, null_order, order, size_type
+from pylibcudf.libcudf.types cimport (
+    nan_equality, null_equality, null_order, order, size_type
+)
 
 from cudf._lib.column cimport Column
 from cudf._lib.utils cimport columns_from_pylibcudf_table
