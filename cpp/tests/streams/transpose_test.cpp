@@ -25,67 +25,41 @@
 #include <random>
 #include <string>
 
-namespace {
-
-template <typename T, typename F>
-auto generate_vectors(size_t ncols, size_t nrows, F generator)
-{
-  std::vector<std::vector<T>> values(ncols);
-
-  std::for_each(values.begin(), values.end(), [generator, nrows](std::vector<T>& col) {
-    col.resize(nrows);
-    std::generate(col.begin(), col.end(), generator);
-  });
-
-  return values;
-}
-
-template <typename T, typename ColumnWrapper>
-auto make_columns(std::vector<std::vector<T>> const& values)
-{
-  std::vector<ColumnWrapper> columns;
-  columns.reserve(values.size());
-
-  for (auto const& value_col : values) {
-    columns.emplace_back(value_col.begin(), value_col.end());
-  }
-
-  return columns;
-}
-
-template <typename ColumnWrapper>
-auto make_table_view(std::vector<ColumnWrapper> const& cols)
-{
-  std::vector<cudf::column_view> views(cols.size());
-
-  std::transform(cols.begin(), cols.end(), views.begin(), [](auto const& col) {
-    return static_cast<cudf::column_view>(col);
-  });
-
-  return cudf::table_view(views);
-}
-
-}  // namespace
-
 class TransposeTest : public cudf::test::BaseFixture {};
 
 TEST_F(TransposeTest, StringTest)
 {
   using ColumnWrapper = cudf::test::strings_column_wrapper;
-
-  size_t ncols = 10;
-  size_t nrows = 10;
+  size_t ncols        = 10;
+  size_t nrows        = 10;
 
   std::mt19937 rng(1);
 
-  // Generate values as vector of vectors
-  auto const values =
-    generate_vectors<std::string>(ncols, nrows, [&rng]() { return std::to_string(rng()); });
+  auto const values = [&rng, nrows, ncols]() {
+    std::vector<std::vector<std::string>> values(ncols);
+    std::for_each(values.begin(), values.end(), [&rng, nrows](std::vector<std::string>& col) {
+      col.resize(nrows);
+      std::generate(col.begin(), col.end(), [&rng]() { return std::to_string(rng()); });
+    });
+    return values;
+  }();
 
-  auto input_cols = make_columns<std::string, ColumnWrapper>(values);
+  auto input_cols = [&values]() {
+    std::vector<ColumnWrapper> columns;
+    columns.reserve(values.size());
+    for (auto const& value_col : values) {
+      columns.emplace_back(value_col.begin(), value_col.end());
+    }
+    return columns;
+  }();
 
-  // Create table views from column wrappers
-  auto input_view = make_table_view(input_cols);
+  auto input_view = [&input_cols]() {
+    std::vector<cudf::column_view> views(input_cols.size());
+    std::transform(input_cols.begin(), input_cols.end(), views.begin(), [](auto const& col) {
+      return static_cast<cudf::column_view>(col);
+    });
+    return cudf::table_view(views);
+  }();
 
   auto result = transpose(input_view, cudf::test::get_default_stream());
 }
