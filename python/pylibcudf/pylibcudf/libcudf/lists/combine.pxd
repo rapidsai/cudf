@@ -1,5 +1,6 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -9,10 +10,9 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 cdef extern from "cudf/lists/combine.hpp" namespace \
         "cudf::lists" nogil:
 
-    ctypedef enum concatenate_null_policy:
-        IGNORE "cudf::lists::concatenate_null_policy::IGNORE"
-        NULLIFY_OUTPUT_ROW \
-            "cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW"
+    cpdef enum class concatenate_null_policy(int32_t):
+        IGNORE
+        NULLIFY_OUTPUT_ROW
 
     cdef unique_ptr[column] concatenate_rows(
         const table_view input_table

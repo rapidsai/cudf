@@ -1,11 +1,11 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-cimport pylibcudf.libcudf.io.types as cudf_io_types
 from libc.stdint cimport int64_t
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.io.types cimport source_info
 
 
 cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:
@@ -28,4 +28,4 @@ cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:
         unordered_map[string, string] metadata() except+
         vector[unordered_map[string, int64_t]] rowgroup_metadata() except+
 
-    cdef parquet_metadata read_parquet_metadata(cudf_io_types.source_info src) except+
+    cdef parquet_metadata read_parquet_metadata(source_info src_info) except+

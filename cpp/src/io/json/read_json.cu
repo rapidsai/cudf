@@ -248,7 +248,8 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_single_quotes()) {
-    normalize_single_quotes(bufview, stream, cudf::get_current_device_resource_ref());
+    normalize_single_quotes(
+      bufview, reader_opts.get_delimiter(), stream, cudf::get_current_device_resource_ref());
   }
 
   auto buffer =
