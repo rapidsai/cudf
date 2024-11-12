@@ -16,6 +16,7 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 )
 from pylibcudf.scalar cimport Scalar
 
+__all__ = ["BPEMergePairs", "byte_pair_encoding"]
 
 cdef class BPEMergePairs:
     """The table of merge pairs for the BPE encoder.
@@ -26,6 +27,8 @@ cdef class BPEMergePairs:
         cdef column_view c_pairs = merge_pairs.view()
         with nogil:
             self.c_obj = move(cpp_load_merge_pairs(c_pairs))
+
+    __hash__ = None
 
 cpdef Column byte_pair_encoding(
     Column input,
