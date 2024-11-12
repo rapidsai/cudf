@@ -9,6 +9,7 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from .column cimport Column
 from .table cimport Table
 
+__all__ = ["transpose"]
 
 cpdef Table transpose(Table input_table):
     """Transpose a Table.
