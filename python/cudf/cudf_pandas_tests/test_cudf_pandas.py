@@ -12,6 +12,7 @@ import pathlib
 import pickle
 import subprocess
 import tempfile
+import time
 import types
 from io import BytesIO, StringIO
 
@@ -1759,3 +1760,61 @@ def test_fallback_raises_error(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
         with pytest.raises(ProxyFallbackError):
             pd.Series(range(2)).astype(object)
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [
+        "_exceptions",
+        "version",
+        "_print_versions",
+        "capitalize_first_letter",
+        "_validators",
+        "_decorators",
+    ],
+)
+def test_cudf_pandas_util_version(attrs):
+    if not PANDAS_GE_220 and attrs == "capitalize_first_letter":
+        assert not hasattr(pd.util, attrs)
+    else:
+        assert hasattr(pd.util, attrs)
+
+
+def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
+    _, xdf = dataframe
+    xdf["b"] = xpd.IntervalIndex.from_arrays(xdf["a"], xdf["b"])
+    xdf["a"] = xpd.Series([1, 1, 1, 2, 3], dtype="category")
+    dtype_series = xdf.dtypes
+    assert all(is_proxy_object(x) for x in dtype_series)
+    assert isinstance(dtype_series.iloc[0], xpd.CategoricalDtype)
+    assert isinstance(dtype_series.iloc[1], xpd.IntervalDtype)
+
+
+def test_iter_doesnot_raise(monkeypatch):
+    s = xpd.Series([1, 2, 3])
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        for _ in s:
+            pass
+
+
+def test_dataframe_setitem_slowdown():
+    # We are explicitly testing the slowdown of the setitem operation
+    df = xpd.DataFrame(
+        {"a": [1, 2, 3] * 100000, "b": [1, 2, 3] * 100000}
+    ).astype("float64")
+    df = xpd.DataFrame({"a": df["a"].repeat(1000), "b": df["b"].repeat(1000)})
+    new_df = df + 1
+    start_time = time.time()
+    df[df.columns] = new_df
+    end_time = time.time()
+    delta = int(end_time - start_time)
+    if delta > 5:
+        pytest.fail(f"Test took too long to run, runtime: {delta}")
+
+
+def test_dataframe_setitem():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]}).astype("float64")
+    new_df = df + 1
+    df[df.columns] = new_df
+    tm.assert_equal(df, new_df)

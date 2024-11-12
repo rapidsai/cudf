@@ -23,8 +23,6 @@
 #include <cuco/static_set.cuh>
 
 namespace cudf::groupby::detail::hash {
-// TODO: similar to `contains_table`, using larger CG size like 2 or 4 for nested
-// types and `cg_size = 1`for flat data to improve performance
 /// Number of threads to handle each input element
 CUDF_HOST_DEVICE auto constexpr GROUPBY_CG_SIZE = 1;
 
@@ -53,15 +51,6 @@ using shmem_extent_t =
 /// Number of windows needed by each shared memory hash set
 CUDF_HOST_DEVICE auto constexpr window_extent =
   cuco::make_window_extent<GROUPBY_CG_SIZE, GROUPBY_WINDOW_SIZE>(shmem_extent_t{});
-
-/**
- * @brief Returns the smallest multiple of 8 that is greater than or equal to the given integer.
- */
-CUDF_HOST_DEVICE constexpr std::size_t round_to_multiple_of_8(std::size_t num)
-{
-  std::size_t constexpr base = 8;
-  return cudf::util::div_rounding_up_safe(num, base) * base;
-}
 
 using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
