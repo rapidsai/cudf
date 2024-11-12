@@ -21,15 +21,19 @@ def word_minhash_input_data(request):
 
 
 @pytest.mark.parametrize("width", [5, 12])
-def test_minhash(minhash_input_data, width):
+def test_minhash_permuted(minhash_input_data, width):
     input_arr, seeds, seed_type = minhash_input_data
     minhash_func = (
-        plc.nvtext.minhash.minhash
+        plc.nvtext.minhash.minhash_permuted
         if seed_type == pa.uint32()
-        else plc.nvtext.minhash.minhash64
+        else plc.nvtext.minhash.minhash64_permuted
     )
     result = minhash_func(
-        plc.interop.from_arrow(input_arr), plc.interop.from_arrow(seeds), width
+        plc.interop.from_arrow(input_arr),
+        0,
+        plc.interop.from_arrow(seeds),
+        plc.interop.from_arrow(seeds),
+        width,
     )
     pa_result = plc.interop.to_arrow(result)
     assert all(len(got) == len(seeds) for got, s in zip(pa_result, input_arr))
