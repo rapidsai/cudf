@@ -23,6 +23,7 @@
 #include <cudf/logger.hpp>
 
 #include <dlfcn.h>
+#include <sys/stat.h>
 
 #include <cerrno>
 #include <cstring>
