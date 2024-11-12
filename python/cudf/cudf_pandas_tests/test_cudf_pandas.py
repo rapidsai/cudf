@@ -12,6 +12,7 @@ import pathlib
 import pickle
 import subprocess
 import tempfile
+import time
 import types
 from io import BytesIO, StringIO
 
@@ -1795,3 +1796,25 @@ def test_iter_doesnot_raise(monkeypatch):
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
         for _ in s:
             pass
+
+
+def test_dataframe_setitem_slowdown():
+    # We are explicitly testing the slowdown of the setitem operation
+    df = xpd.DataFrame(
+        {"a": [1, 2, 3] * 100000, "b": [1, 2, 3] * 100000}
+    ).astype("float64")
+    df = xpd.DataFrame({"a": df["a"].repeat(1000), "b": df["b"].repeat(1000)})
+    new_df = df + 1
+    start_time = time.time()
+    df[df.columns] = new_df
+    end_time = time.time()
+    delta = int(end_time - start_time)
+    if delta > 5:
+        pytest.fail(f"Test took too long to run, runtime: {delta}")
+
+
+def test_dataframe_setitem():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]}).astype("float64")
+    new_df = df + 1
+    df[df.columns] = new_df
+    tm.assert_equal(df, new_df)
