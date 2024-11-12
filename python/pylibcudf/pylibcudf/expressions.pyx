@@ -345,7 +345,7 @@ class ExpressionTransformer(ast.NodeVisitor):
 
     This visitor is designed to handle AST nodes that have libcudf equivalents.
     It constructs column references from names and literals from constants,
-    then builds up operations. The resulting expression is returned by the 
+    then builds up operations. The resulting expression is returned by the
     `visit` method
 
     Parameters
