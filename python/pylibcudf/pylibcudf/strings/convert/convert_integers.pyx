@@ -9,6 +9,14 @@ from pylibcudf.libcudf.strings.convert cimport (
 )
 from pylibcudf.types cimport DataType
 
+__all__ = [
+    "from_integers",
+    "hex_to_integers",
+    "integers_to_hex",
+    "is_hex",
+    "is_integer",
+    "to_integers"
+]
 
 cpdef Column to_integers(Column input, DataType output_type):
     """
