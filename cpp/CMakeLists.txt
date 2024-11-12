@@ -899,7 +899,7 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 
 # Enable cuFile support
 if(TARGET CUDA::cuFile)
-  target_compile_definitions(cudf PRIVATE CUFILE_FOUND)
+  target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
 endif()
 
 # Compile stringified JIT sources first

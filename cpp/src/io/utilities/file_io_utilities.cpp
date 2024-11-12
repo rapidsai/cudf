@@ -82,7 +82,7 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-#ifdef CUFILE_FOUND
+#ifdef CUDF_CUFILE_FOUND
 
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
