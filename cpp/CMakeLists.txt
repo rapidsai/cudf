@@ -90,6 +90,12 @@ option(
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
 
+option(
+  CUDF_KVIKIO_REMOTE_IO
+  "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
+  ON
+)
+
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
@@ -109,6 +115,9 @@ message(
   "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler): ${CUDA_ENABLE_LINEINFO}"
 )
 message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
+message(VERBOSE
+        "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
+)
 
 # Set a default build type if none was specified
 rapids_cmake_build_type("Release")
@@ -889,6 +898,9 @@ target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL
 
 # Define spdlog level
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
+
+# Enable remote IO through KvikIO
+target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
