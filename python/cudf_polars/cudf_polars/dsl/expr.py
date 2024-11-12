@@ -20,6 +20,7 @@ from cudf_polars.dsl.expressions.base import (
     AggInfo,
     Col,
     ColRef,
+    ErrorExpr,
     Expr,
     NamedExpr,
 )
@@ -36,6 +37,7 @@ from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 
 __all__ = [
     "Expr",
+    "ErrorExpr",
     "NamedExpr",
     "Literal",
     "LiteralColumn",

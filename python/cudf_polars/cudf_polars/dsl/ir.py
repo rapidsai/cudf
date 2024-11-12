@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "IR",
+    "ErrorNode",
     "PythonScan",
     "Scan",
     "Cache",
@@ -217,6 +218,22 @@ class IR(Node["IR"]):
             *self._non_child_args,
             *(child.evaluate(cache=cache, config=config) for child in self.children),
         )
+
+
+class ErrorNode(IR):
+    """Represents an error translating the IR."""
+
+    __slots__ = ("error",)
+    _non_child = (
+        "schema",
+        "error",
+    )
+    error: str
+    """The error."""
+
+    def __init__(self, schema: Schema, error: str):
+        self.schema = schema
+        self.error = error
 
 
 class PythonScan(IR):
@@ -982,6 +999,7 @@ class ConditionalJoin(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         predicate: plc.expressions.Expression,
         zlice: tuple[int, int] | None,
         suffix: str,
@@ -1595,7 +1613,7 @@ class MapFunction(IR):
                 raise NotImplementedError(
                     "Unpivot cannot cast all input columns to "
                     f"{self.schema[value_name].id()}"
-                )
+                )  # pragma: no cover
             self.options = (
                 tuple(indices),
                 tuple(pivotees),
