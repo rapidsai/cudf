@@ -86,23 +86,23 @@ struct hasher_adapter {
 template <cudf::has_nested HasNested>
 struct distinct_hash_join {
  private:
-  using row_comparator = cudf::experimental::row::equality::device_row_comparator<
+  using row_comparator_t = cudf::experimental::row::equality::device_row_comparator<
     true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::type_identity_t>;
 
-  using row_comparator_no_nested = cudf::experimental::row::equality::device_row_comparator<
+  using row_comparator_no_nested_t = cudf::experimental::row::equality::device_row_comparator<
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
     cudf::experimental::dispatch_void_if_nested_t>;
 
-  using row_comparator_no_compound = cudf::experimental::row::equality::device_row_comparator<
+  using row_comparator_no_complex_t = cudf::experimental::row::equality::device_row_comparator<
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
-    cudf::experimental::dispatch_void_if_compound_t>;
+    cudf::experimental::dispatch_void_if_complex_t>;
 
   using hasher              = hasher_adapter<thrust::identity<hash_value_type>>;
   using probing_scheme_type = cuco::linear_probing<1, hasher>;
@@ -119,9 +119,9 @@ struct distinct_hash_join {
     probing_scheme_type,
     cudf::detail::cuco_allocator<char>,
     cuco_storage_type>;
-  using hash_table_type = std::variant<static_set_with_comparator<row_comparator>,
-                                       static_set_with_comparator<row_comparator_no_nested>,
-                                       static_set_with_comparator<row_comparator_no_compound>>;
+  using hash_table_type = std::variant<static_set_with_comparator<row_comparator_t>,
+                                       static_set_with_comparator<row_comparator_no_nested_t>,
+                                       static_set_with_comparator<row_comparator_no_complex_t>>;
 
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal

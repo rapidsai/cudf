@@ -120,11 +120,11 @@ using dispatch_void_if_nested_t =
                                       id_to_type<type_id::LIST>>::type<T>;
 
 /**
- * @brief Returns `void` if it's a compound type
+ * @brief Returns `void` if it's a complex (non-numeric) type
  *
  */
 template <typename T>
-using dispatch_void_if_compound_t =
+using dispatch_void_if_complex_t =
   dispatch_void_conditional_generator<id_to_type<type_id::STRUCT>,
                                       id_to_type<type_id::LIST>,
                                       id_to_type<type_id::DECIMAL128>,
@@ -1820,7 +1820,7 @@ class self_comparator {
       device_row_comparator<false,
                             Nullate,
                             PhysicalEqualityComparator,
-                            dispatch_void_if_compound_t>>;
+                            dispatch_void_if_complex_t>>;
 
     if (cudf::experimental::any_of({type_id::STRUCT, type_id::LIST}, column_types)) {
       return row_comparator_t{
@@ -1841,7 +1841,7 @@ class self_comparator {
       return row_comparator_t{device_row_comparator<false,
                                                     Nullate,
                                                     PhysicalEqualityComparator,
-                                                    dispatch_void_if_compound_t>{
+                                                    dispatch_void_if_complex_t>{
         nullate, *d_t, *d_t, nulls_are_equal, comparator}};
     }
   }
@@ -2003,7 +2003,7 @@ class two_table_comparator {
       strong_index_comparator_adapter<device_row_comparator<false,
                                                             Nullate,
                                                             PhysicalEqualityComparator,
-                                                            dispatch_void_if_compound_t>>>;
+                                                            dispatch_void_if_complex_t>>>;
 
     if (cudf::experimental::any_of({type_id::STRUCT, type_id::LIST}, column_types)) {
       return row_comparator_t{strong_index_comparator_adapter{
@@ -2026,7 +2026,7 @@ class two_table_comparator {
         strong_index_comparator_adapter{device_row_comparator<false,
                                                               Nullate,
                                                               PhysicalEqualityComparator,
-                                                              dispatch_void_if_compound_t>(
+                                                              dispatch_void_if_complex_t>(
           nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)}};
     }
   }
@@ -2323,7 +2323,7 @@ class row_hasher {
     using row_hasher_t =
       std::variant<DeviceRowHasher<hash_function, Nullate, type_identity_t>,
                    DeviceRowHasher<hash_function, Nullate, dispatch_void_if_nested_t>,
-                   DeviceRowHasher<hash_function, Nullate, dispatch_void_if_compound_t>>;
+                   DeviceRowHasher<hash_function, Nullate, dispatch_void_if_complex_t>>;
 
     if (cudf::experimental::any_of({type_id::STRUCT, type_id::LIST}, column_types)) {
       return row_hasher_t{
@@ -2338,7 +2338,7 @@ class row_hasher {
         DeviceRowHasher<hash_function, Nullate, dispatch_void_if_nested_t>(nullate, *d_t, seed)};
     } else {
       return row_hasher_t{
-        DeviceRowHasher<hash_function, Nullate, dispatch_void_if_compound_t>(nullate, *d_t, seed)};
+        DeviceRowHasher<hash_function, Nullate, dispatch_void_if_complex_t>(nullate, *d_t, seed)};
     }
   }
 

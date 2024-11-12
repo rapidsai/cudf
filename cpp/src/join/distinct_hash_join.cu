@@ -79,7 +79,7 @@ auto prepare_device_equal(
         false,
         nullate::DYNAMIC,
         cudf::experimental::row::equality::nan_equal_physical_equality_comparator,
-        cudf::experimental::dispatch_void_if_compound_t>>>>;
+        cudf::experimental::dispatch_void_if_complex_t>>>>;
 
   return std::visit(
     [&](auto& comparator) {
