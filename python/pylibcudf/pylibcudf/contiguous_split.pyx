@@ -20,6 +20,13 @@ from .table cimport Table
 from .utils cimport int_to_void_ptr
 
 
+__all__ = [
+    "PackedColumns",
+    "pack",
+    "unpack",
+    "unpack_from_memoryviews",
+]
+
 cdef class HostBuffer:
     """Owning host buffer that implements the buffer protocol"""
     cdef unique_ptr[vector[uint8_t]] c_obj
@@ -37,6 +44,8 @@ cdef class HostBuffer:
         out.shape[0] = out.nbytes
         out.strides[0] = 1
         return out
+
+    __hash__ = None
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
         buffer.buf = dereference(self.c_obj).data()
@@ -68,6 +77,8 @@ cdef class PackedColumns:
             "PackedColumns should not be constructed directly. "
             "Use one of the factories."
         )
+
+    __hash__ = None
 
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data):
