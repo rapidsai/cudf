@@ -64,6 +64,7 @@ __all__ = [
     "Literal",
     "Operation",
     "TableReference",
+    "to_expression"
 ]
 
 # Define this class just to have a docstring for it
