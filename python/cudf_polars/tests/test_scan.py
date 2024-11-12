@@ -323,6 +323,24 @@ def test_scan_parquet_only_row_index_raises(df, tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+@pytest.mark.parametrize("chunk_read_limit", [0, 1, 2, 4, 8, 16])
+@pytest.mark.parametrize("pass_read_limit", [0, 1, 2, 4, 8, 16])
+def test_scan_parquet_chunked(df, tmp_path, chunk_read_limit, pass_read_limit):
+    df = pl.concat([df] * 1000)  # makes something large enough to meaningfully chunk
+    make_source(df, tmp_path / "file", "parquet")
+    q = pl.scan_parquet(tmp_path / "file")
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            parquet_options={
+                "chunked": True,
+                "chunk_read_limit": chunk_read_limit,
+                "pass_read_limit": pass_read_limit,
+            }
+        ),
+    )
+
+
 def test_scan_hf_url_raises():
     q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
     assert_ir_translation_raises(q, NotImplementedError)
