@@ -227,6 +227,7 @@ class ErrorNode(IR):
     def __init__(self, schema: Schema, error: str):
         self.schema = schema
         self.error = error
+        self.children = ()
 
 
 class PythonScan(IR):
