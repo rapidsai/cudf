@@ -20,14 +20,13 @@ from cudf.core.buffer import acquire_spill_lock
 from libcpp cimport bool
 
 from cudf._lib.utils cimport data_from_pylibcudf_io
+from cudf._lib.utils import _dtype_to_names_list
 
 import pylibcudf as plc
 
 from cudf.api.types import is_hashable
 
 from pylibcudf.types cimport DataType
-
-from cudf._lib.json import _dtype_to_names_list
 
 CSV_HEX_TYPE_MAP = {
     "hex": np.dtype("int64"),
@@ -307,27 +306,48 @@ def write_csv(
     --------
     cudf.to_csv
     """
-    col_names = []
-    for name in table._column_names:
-        col_names.append((name, _dtype_to_names_list(table[name]._column)))
-    for i, t in enumerate(col_names):
-        if t[0] is None or pd.isnull(t[0]):
-            col_names[i] = (na_rep, t[1])
-    columns = [col.to_pylibcudf(mode="read") for col in table._columns]
+    columns=[]
+    index_and_not_empty = index is True and table.index is not None
+    if index_and_not_empty:
+        columns.extend(col.to_pylibcudf(mode="read") for col in table.index._columns)
+    columns.extend(col.to_pylibcudf(mode="read") for col in table._columns)
+    if header:
+        all_names = []
+        if index_and_not_empty:
+            all_names.extend(table.index.names)
+        all_names.extend(
+            na_rep if name is None or pd.isnull(name)
+            else name for name in table._column_names
+        )
+        col_names = [
+            '""' if (name in (None, '') and len(all_names) == 1)
+            else (str(name) if name not in (None, '') else '')
+            for name in all_names
+        ]
+    else:
+        col_names = []
+    num_index_columns = len(table._index.names) if index_and_not_empty else 0
+    col_names_and_child_col_names = [
+        (
+            name,
+            _dtype_to_names_list(
+                table[table._column_names[i - num_index_columns]]._column
+            ) if i >= num_index_columns else []
+        )
+        for i, name in enumerate(col_names)
+    ]
     try:
         plc.io.csv.write_csv(
             plc.io.SinkInfo([path_or_buf]),
             plc.io.TableWithMetadata(
                 plc.Table(columns),
-                col_names
+                col_names_and_child_col_names
             ),
-            path_or_buf=path_or_buf,
             sep=str(sep),
             na_rep=str(na_rep),
             header=header,
             lineterminator=str(lineterminator),
             rows_per_chunk=rows_per_chunk,
-            indices=table._index if index else None,
         )
     except OverflowError:
         raise OverflowError(

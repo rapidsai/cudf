@@ -16,6 +16,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport add_df_col_struct_names
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
+from cudf._lib.utils import _dtype_to_names_list
 
 import pylibcudf as plc
 
@@ -217,13 +218,3 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
             "supported in JSON reader"
         )
     return dtype_to_data_type(dtype)
-
-
-def _dtype_to_names_list(col):
-    if isinstance(col.dtype, cudf.StructDtype):
-        return [(name, _dtype_to_names_list(child))
-                for name, child in zip(col.dtype.fields, col.children)]
-    elif isinstance(col.dtype, cudf.ListDtype):
-        return [("", _dtype_to_names_list(child))
-                for child in col.children]
-    return []

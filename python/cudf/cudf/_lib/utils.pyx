@@ -398,3 +398,13 @@ cdef data_from_table_view(
         source_column_idx += 1
 
     return dict(zip(column_names, data_columns)), index
+
+
+def _dtype_to_names_list(col):
+    if isinstance(col.dtype, cudf.StructDtype):
+        return [(name, _dtype_to_names_list(child))
+                for name, child in zip(col.dtype.fields, col.children)]
+    elif isinstance(col.dtype, cudf.ListDtype):
+        return [("", _dtype_to_names_list(child))
+                for child in col.children]
+    return []

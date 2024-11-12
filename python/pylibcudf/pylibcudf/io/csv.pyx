@@ -269,17 +269,189 @@ def read_csv(
     return TableWithMetadata.from_libcudf(c_result)
 
 
+# TODO: Implement the remaining methods
+cdef class CsvWriterOptions:
+    """The settings to use for ``write_csv``
+
+    For details, see :cpp:class:`cudf::io::csv_writer_options`
+    """
+    @staticmethod
+    cdef CsvWriterOptionsBuilder builder(SinkInfo sink, Table table):
+        """Create a CsvWriterOptionsBuilder object
+
+        For details, see :cpp:func:`cudf::io::csv_writer_options::builder`
+
+        Parameters
+        ----------
+        sink : SinkInfo
+            The sink used for writer output
+        table : Table
+            Table to be written to output
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        cdef CsvWriterOptionsBuilder csv_builder = CsvWriterOptionsBuilder.__new__(
+            CsvWriterOptionsBuilder
+        )
+        csv_builder.c_obj = csv_writer_options.builder(sink.c_obj, table.view())
+        return csv_builder
+
+
+# TODO: Implement the remaining methods
+cdef class CsvWriterOptionsBuilder:
+    """Builder to build options for ``write_csv``
+
+    For details, see :cpp:class:`cudf::io::csv_writer_options_builder`
+    """
+    cpdef CsvWriterOptionsBuilder names(self, list names):
+        """Sets optional column names.
+
+        Parameters
+        ----------
+        names : list[str]
+            Column names
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.names([name.encode() for name in names])
+        return self
+
+    cpdef CsvWriterOptionsBuilder na_rep(self, str val):
+        """Sets string to used for null entries.
+
+        Parameters
+        ----------
+        val : str
+            String to represent null value
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.na_rep(val.encode())
+        return self
+
+    cpdef CsvWriterOptionsBuilder include_header(self, bool val):
+        """Enables/Disables headers being written to csv.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.include_header(val)
+        return self
+
+    cpdef CsvWriterOptionsBuilder rows_per_chunk(self, int val):
+        """Sets maximum number of rows to process for each file write.
+
+        Parameters
+        ----------
+        val : int
+            Number of rows per chunk
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.rows_per_chunk(val)
+        return self
+
+    cpdef CsvWriterOptionsBuilder line_terminator(self, str term):
+        """Sets character used for separating lines.
+
+        Parameters
+        ----------
+        term : str
+            Character to represent line termination
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.line_terminator(term.encode())
+        return self
+
+    cpdef CsvWriterOptionsBuilder inter_column_delimiter(self, str delim):
+        """Sets character used for separating column values.
+
+        Parameters
+        ----------
+        delim : str
+            Character to delimit column values
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.inter_column_delimiter(ord(delim))
+        return self
+
+    cpdef CsvWriterOptionsBuilder true_value(self, str val):
+        """Sets string used for values != 0
+
+        Parameters
+        ----------
+        val : str
+            String to represent values != 0
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.true_value(val.encode())
+        return self
+
+    cpdef CsvWriterOptionsBuilder false_value(self, str val):
+        """Sets string used for values == 0
+
+        Parameters
+        ----------
+        val : str
+            String to represent values == 0
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.false_value(val.encode())
+        return self
+
+    cpdef CsvWriterOptions build(self):
+        """Moves the CSV writer options builder"""
+        cdef CsvWriterOptions csv_options = CsvWriterOptions.__new__(
+            CsvWriterOptions
+        )
+        csv_options.c_obj = move(self.c_obj.build())
+        return csv_options
+
+
 def write_csv(
     SinkInfo sink_info,
     TableWithMetadata table,
     *,
-    object path_or_buf=None,
     str sep=",",
     str na_rep="",
     bool header=True,
     str lineterminator="\n",
-    int rows_per_chunk=8,
-    object indices=None,
+    int rows_per_chunk=8
 ):
     """
     Writes a :py:class:`~pylibcudf.io.types.TableWithMetadata` to CSV format.
@@ -292,11 +464,9 @@ def write_csv(
         The SinkInfo object to write to.
     table : TableWithMetadata
         The TableWithMetadata object containing the Table to write.
-    path_or_buf : object, default None
-        The source file-like object (eg. io.StringIO).
-    sep : str
+    sep : str, default ","
         Character to delimit column values.
-    na_rep : str
+    na_rep : str, default ""
         The string representation for null values.
     header : bool, default True
         Whether to write headers to csv. Includes the column names
@@ -305,59 +475,19 @@ def write_csv(
         The character used to determine the end of a line.
     rows_per_chunk: int, default 8
         The maximum number of rows to write at a time.
-    indices : object
-        The indices in the table.
     """
-    cdef bool include_header_c = header
-    cdef char delim_c = ord(sep)
-    cdef string line_term_c = lineterminator.encode()
-    cdef string na_c = na_rep.encode()
-    cdef int rows_per_chunk_c = rows_per_chunk
-    cdef vector[string] col_names
-    cdef string true_value_c = 'True'.encode()
-    cdef string false_value_c = 'False'.encode()
-
-    if header is True:
-        all_names = table.column_names()
-        if indices is not None:
-            all_names = indices.names + all_names
-        if len(all_names) > 0:
-            col_names.reserve(len(all_names))
-            if len(all_names) == 1:
-                if all_names[0] in (None, ''):
-                    col_names.push_back('""'.encode())
-                else:
-                    col_names.push_back(
-                        str(all_names[0]).encode()
-                    )
-            else:
-                for idx, col_name in enumerate(all_names):
-                    if col_name is None:
-                        col_names.push_back(''.encode())
-                    else:
-                        col_names.push_back(
-                            str(col_name).encode()
-                        )
-    cdef Table new_table = table.tbl
-    if indices is not None:
-        new_table = Table(
-            [col.to_pylibcudf(mode="read") for col in indices._columns] + table.columns
-        )
-    cdef csv_writer_options options = move(
-        csv_writer_options.builder(
-            sink_info.c_obj,
-            new_table.view()
-        )
-        .names(col_names)
-        .na_rep(na_c)
-        .include_header(include_header_c)
-        .rows_per_chunk(rows_per_chunk_c)
-        .line_terminator(line_term_c)
-        .inter_column_delimiter(delim_c)
-        .true_value(true_value_c)
-        .false_value(false_value_c)
+    options = (
+        CsvWriterOptions.builder(sink_info, table.tbl)
+        .names(table.column_names())
+        .na_rep(na_rep)
+        .include_header(header)
+        .rows_per_chunk(rows_per_chunk)
+        .line_terminator(lineterminator)
+        .inter_column_delimiter(sep)
+        .true_value("True")
+        .false_value("False")
         .build()
     )
 
     with nogil:
-        cpp_write_csv(options)
+        cpp_write_csv(move(options.c_obj))
