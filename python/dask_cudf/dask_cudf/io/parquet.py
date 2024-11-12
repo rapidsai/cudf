@@ -40,23 +40,39 @@ _DEVICE_SIZE_CACHE: int | None = None
 _STATS_CACHE: MutableMapping[str, Any] = {}
 
 
-def _normalize_blocksize(fraction: float = 0.03125):
-    global _DEVICE_SIZE_CACHE
-
+def _get_device_size():
     try:
-        # Plan A: Use PyNVML to set the blocksize
-        # (Default is 1/32 the total memory of device 0)
+        # Plan A: Use PyNVML to check device size
         import pynvml
 
-        if _DEVICE_SIZE_CACHE is None:
-            pynvml.nvmlInit()
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            _DEVICE_SIZE_CACHE = pynvml.nvmlDeviceGetMemoryInfo(handle).total
-
-        return int(_DEVICE_SIZE_CACHE * fraction)
+        pynvml.nvmlInit()
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
     except ImportError:
-        # Fall back to a 256MiB default
-        return "256MiB"
+        # Fall back to a conservative 8GiB default
+        return "8GiB"
+
+
+def _normalize_blocksize(fraction: float = 0.03125):
+    # Set the blocksize to fraction * <device-size>.
+    # We use the smallest worker device to set <device-size>.
+    # (Default blocksize is 1/32 * <device-size>)
+    global _DEVICE_SIZE_CACHE
+
+    if _DEVICE_SIZE_CACHE is None:
+        try:
+            # Check distributed workers (if a client exists)
+            from distributed import get_client
+
+            client = get_client()
+            # TODO: Check "GPU" worker resources only.
+            # Depends on (https://github.com/rapidsai/dask-cuda/pull/1401)
+            device_size = min(client.run(_get_device_size).values())
+        except (ImportError, ValueError):
+            device_size = _get_device_size()
+        _DEVICE_SIZE_CACHE = device_size
+
+    return int(_DEVICE_SIZE_CACHE * fraction)
 
 
 class NoOp(Elemwise):
