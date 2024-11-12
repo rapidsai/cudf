@@ -26,8 +26,6 @@ from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
 
-import pylibcudf as plc
-
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
