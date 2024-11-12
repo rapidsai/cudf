@@ -12,6 +12,18 @@ from pylibcudf.libcudf.types cimport null_order, null_policy, order
 from .column cimport Column
 from .table cimport Table
 
+__all__ = [
+    "is_sorted",
+    "rank",
+    "segmented_sort_by_key",
+    "sort",
+    "sort_by_key",
+    "sorted_order",
+    "stable_segmented_sort_by_key",
+    "stable_sort",
+    "stable_sort_by_key",
+    "stable_sorted_order",
+]
 
 cpdef Column sorted_order(Table source_table, list column_order, list null_precedence):
     """Computes the row indices required to sort the table.

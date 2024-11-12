@@ -10,6 +10,8 @@ from pylibcudf.libcudf.io.avro cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = ["read_avro"]
+
 
 cpdef TableWithMetadata read_avro(
     SourceInfo source_info,

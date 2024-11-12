@@ -517,7 +517,7 @@ class Scan(IR):
                 # Mask must have been applied.
                 return df
         elif typ == "ndjson":
-            json_schema: list[tuple[str, str, list]] = [
+            json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(

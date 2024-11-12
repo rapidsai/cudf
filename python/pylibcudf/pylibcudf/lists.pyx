@@ -42,10 +42,35 @@ from pylibcudf.libcudf.types cimport (
 )
 from pylibcudf.lists cimport ColumnOrScalar, ColumnOrSizeType
 
+from pylibcudf.libcudf.lists.combine import concatenate_null_policy as ConcatenateNullPolicy # no-cython-lint
+from pylibcudf.libcudf.lists.contains import duplicate_find_option as DuplicateFindOption # no-cython-lint
+
 from .column cimport Column, ListColumnView
 from .scalar cimport Scalar
 from .table cimport Table
 
+__all__ = [
+    "ConcatenateNullPolicy",
+    "DuplicateFindOption",
+    "apply_boolean_mask",
+    "concatenate_list_elements",
+    "concatenate_rows",
+    "contains",
+    "contains_nulls",
+    "count_elements",
+    "difference_distinct",
+    "distinct",
+    "explode_outer",
+    "extract_list_element",
+    "have_overlap",
+    "index_of",
+    "intersect_distinct",
+    "reverse",
+    "segmented_gather",
+    "sequences",
+    "sort_lists",
+    "union_distinct",
+]
 
 cpdef Table explode_outer(Table input, size_type explode_column_idx):
     """Explode a column of lists into rows.
@@ -97,7 +122,9 @@ cpdef Column concatenate_rows(Table input):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column concatenate_list_elements(Column input, bool dropna):
+cpdef Column concatenate_list_elements(
+    Column input, concatenate_null_policy null_policy
+):
     """Concatenate multiple lists on the same row into a single list.
 
     For details, see :cpp:func:`concatenate_list_elements`.
@@ -106,20 +133,14 @@ cpdef Column concatenate_list_elements(Column input, bool dropna):
     ----------
     input : Column
         The input column
-    dropna : bool
-        If true, null list elements will be ignored
-        from concatenation. Otherwise any input null values will result in
-        the corresponding output row being set to null.
+    null_policy : ConcatenateNullPolicy
+        How to treat null list elements.
 
     Returns
     -------
     Column
         A new Column of concatenated list elements
     """
-    cdef concatenate_null_policy null_policy = (
-        concatenate_null_policy.IGNORE if dropna
-        else concatenate_null_policy.NULLIFY_OUTPUT_ROW
-    )
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -191,7 +212,9 @@ cpdef Column contains_nulls(Column input):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_option):
+cpdef Column index_of(
+    Column input, ColumnOrScalar search_key, duplicate_find_option find_option
+):
     """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
 
@@ -207,9 +230,8 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
         The input column.
     search_key : Union[Column, Scalar]
         The search key.
-    find_first_option : bool
-        If true, index_of returns the first match.
-        Otherwise the last match is returned.
+    find_option : DuplicateFindOption
+        Which match to return if there are duplicates.
 
     Returns
     -------
@@ -220,11 +242,6 @@ cpdef Column index_of(Column input, ColumnOrScalar search_key, bool find_first_o
     """
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
-    cdef cpp_contains.duplicate_find_option find_option = (
-        cpp_contains.duplicate_find_option.FIND_FIRST if find_first_option
-        else cpp_contains.duplicate_find_option.FIND_LAST
-    )
-
     with nogil:
         c_result = cpp_contains.index_of(
             list_view.view(),
@@ -380,7 +397,7 @@ cpdef Column sequences(Column starts, Column sizes, Column steps = None):
 
 cpdef Column sort_lists(
     Column input,
-    bool ascending,
+    order sort_order,
     null_order na_position,
     bool stable = False
 ):
@@ -392,8 +409,8 @@ cpdef Column sort_lists(
     ----------
     input : Column
         The input column.
-    ascending : bool
-        If true, the sort order is ascending. Otherwise, the sort order is descending.
+    ascending : Order
+        Sort order in the list.
     na_position : NullOrder
         If na_position equals NullOrder.FIRST, then the null values in the output
         column are placed first. Otherwise, they are be placed after.
@@ -409,21 +426,17 @@ cpdef Column sort_lists(
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
 
-    cdef order c_sort_order = (
-        order.ASCENDING if ascending else order.DESCENDING
-    )
-
     with nogil:
         if stable:
             c_result = cpp_stable_sort_lists(
                     list_view.view(),
-                    c_sort_order,
+                    sort_order,
                     na_position,
             )
         else:
             c_result = cpp_sort_lists(
                     list_view.view(),
-                    c_sort_order,
+                    sort_order,
                     na_position,
             )
     return Column.from_libcudf(move(c_result))
@@ -432,8 +445,8 @@ cpdef Column sort_lists(
 cpdef Column difference_distinct(
     Column lhs,
     Column rhs,
-    bool nulls_equal=True,
-    bool nans_equal=True
+    null_equality nulls_equal=null_equality.EQUAL,
+    nan_equality nans_equal=nan_equality.ALL_EQUAL,
 ):
     """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
@@ -446,11 +459,10 @@ cpdef Column difference_distinct(
         The input lists column of elements that may be included.
     rhs : Column
         The input lists column of elements to exclude.
-    nulls_equal : bool, default True
-        If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool, default True
-        If true, libcudf will treat nan elements from {-nan, +nan}
-        as equal. Otherwise, unequal. Otherwise, unequal.
+    nulls_equal : NullEquality, default EQUAL
+        Are nulls considered equal.
+    nans_equal : NanEquality, default ALL_EQUAL
+        Are nans considered equal.
 
     Returns
     -------
@@ -461,19 +473,12 @@ cpdef Column difference_distinct(
     cdef ListColumnView lhs_view = lhs.list_view()
     cdef ListColumnView rhs_view = rhs.list_view()
 
-    cdef null_equality c_nulls_equal = (
-        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
-    )
-    cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_equal else nan_equality.UNEQUAL
-    )
-
     with nogil:
         c_result = cpp_set_operations.difference_distinct(
             lhs_view.view(),
             rhs_view.view(),
-            c_nulls_equal,
-            c_nans_equal,
+            nulls_equal,
+            nans_equal,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -481,8 +486,8 @@ cpdef Column difference_distinct(
 cpdef Column have_overlap(
     Column lhs,
     Column rhs,
-    bool nulls_equal=True,
-    bool nans_equal=True
+    null_equality nulls_equal=null_equality.EQUAL,
+    nan_equality nans_equal=nan_equality.ALL_EQUAL,
 ):
     """Check if lists at each row of the given lists columns overlap.
 
@@ -494,11 +499,10 @@ cpdef Column have_overlap(
         The input lists column for one side.
     rhs : Column
         The input lists column for the other side.
-    nulls_equal : bool, default True
-        If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool, default True
-        If true, libcudf will treat nan elements from {-nan, +nan}
-        as equal. Otherwise, unequal. Otherwise, unequal.
+    nulls_equal : NullEquality, default EQUAL
+        Are nulls considered equal.
+    nans_equal : NanEquality, default ALL_EQUAL
+        Are nans considered equal.
 
     Returns
     -------
@@ -509,19 +513,12 @@ cpdef Column have_overlap(
     cdef ListColumnView lhs_view = lhs.list_view()
     cdef ListColumnView rhs_view = rhs.list_view()
 
-    cdef null_equality c_nulls_equal = (
-        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
-    )
-    cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_equal else nan_equality.UNEQUAL
-    )
-
     with nogil:
         c_result = cpp_set_operations.have_overlap(
             lhs_view.view(),
             rhs_view.view(),
-            c_nulls_equal,
-            c_nans_equal,
+            nulls_equal,
+            nans_equal,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -529,8 +526,8 @@ cpdef Column have_overlap(
 cpdef Column intersect_distinct(
     Column lhs,
     Column rhs,
-    bool nulls_equal=True,
-    bool nans_equal=True
+    null_equality nulls_equal=null_equality.EQUAL,
+    nan_equality nans_equal=nan_equality.ALL_EQUAL,
 ):
     """Create a lists column of distinct elements common to two input lists columns.
 
@@ -542,11 +539,10 @@ cpdef Column intersect_distinct(
         The input lists column of elements that may be included.
     rhs : Column
         The input lists column of elements to exclude.
-    nulls_equal : bool, default True
-        If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool, default True
-        If true, libcudf will treat nan elements from {-nan, +nan}
-        as equal. Otherwise, unequal. Otherwise, unequal.
+    nulls_equal : NullEquality, default EQUAL
+        Are nulls considered equal.
+    nans_equal : NanEquality, default ALL_EQUAL
+        Are nans considered equal.
 
     Returns
     -------
@@ -557,19 +553,12 @@ cpdef Column intersect_distinct(
     cdef ListColumnView lhs_view = lhs.list_view()
     cdef ListColumnView rhs_view = rhs.list_view()
 
-    cdef null_equality c_nulls_equal = (
-        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
-    )
-    cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_equal else nan_equality.UNEQUAL
-    )
-
     with nogil:
         c_result = cpp_set_operations.intersect_distinct(
             lhs_view.view(),
             rhs_view.view(),
-            c_nulls_equal,
-            c_nans_equal,
+            nulls_equal,
+            nans_equal,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -577,8 +566,8 @@ cpdef Column intersect_distinct(
 cpdef Column union_distinct(
     Column lhs,
     Column rhs,
-    bool nulls_equal=True,
-    bool nans_equal=True
+    null_equality nulls_equal=null_equality.EQUAL,
+    nan_equality nans_equal=nan_equality.ALL_EQUAL,
 ):
     """Create a lists column of distinct elements found in
     either of two input lists columns.
@@ -591,11 +580,10 @@ cpdef Column union_distinct(
         The input lists column of elements that may be included.
     rhs : Column
         The input lists column of elements to exclude.
-    nulls_equal : bool, default True
-        If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool, default True
-        If true, libcudf will treat nan elements from {-nan, +nan}
-        as equal. Otherwise, unequal. Otherwise, unequal.
+    nulls_equal : NullEquality, default EQUAL
+        Are nulls considered equal.
+    nans_equal : NanEquality, default ALL_EQUAL
+        Are nans considered equal.
 
     Returns
     -------
@@ -606,19 +594,12 @@ cpdef Column union_distinct(
     cdef ListColumnView lhs_view = lhs.list_view()
     cdef ListColumnView rhs_view = rhs.list_view()
 
-    cdef null_equality c_nulls_equal = (
-        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
-    )
-    cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_equal else nan_equality.UNEQUAL
-    )
-
     with nogil:
         c_result = cpp_set_operations.union_distinct(
             lhs_view.view(),
             rhs_view.view(),
-            c_nulls_equal,
-            c_nans_equal,
+            nulls_equal,
+            nans_equal,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -651,7 +632,7 @@ cpdef Column apply_boolean_mask(Column input, Column boolean_mask):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column distinct(Column input, bool nulls_equal, bool nans_equal):
+cpdef Column distinct(Column input, null_equality nulls_equal, nan_equality nans_equal):
     """Create a new list column without duplicate elements in each list.
 
     For details, see :cpp:func:`distinct`.
@@ -660,11 +641,10 @@ cpdef Column distinct(Column input, bool nulls_equal, bool nans_equal):
     ----------
     input : Column
         The input column.
-    nulls_equal : bool
-        If true, null elements are considered equal. Otherwise, unequal.
-    nans_equal : bool
-        If true, libcudf will treat nan elements from {-nan, +nan}
-        as equal. Otherwise, unequal. Otherwise, unequal.
+    nulls_equal : NullEquality
+        Are nulls considered equal.
+    nans_equal : NanEquality
+        Are nans considered equal.
 
     Returns
     -------
@@ -674,17 +654,10 @@ cpdef Column distinct(Column input, bool nulls_equal, bool nans_equal):
     cdef unique_ptr[column] c_result
     cdef ListColumnView list_view = input.list_view()
 
-    cdef null_equality c_nulls_equal = (
-        null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
-    )
-    cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_equal else nan_equality.UNEQUAL
-    )
-
     with nogil:
         c_result = cpp_distinct(
             list_view.view(),
-            c_nulls_equal,
-            c_nans_equal,
+            nulls_equal,
+            nans_equal,
         )
     return Column.from_libcudf(move(c_result))

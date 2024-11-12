@@ -15,6 +15,24 @@ from .column cimport Column
 from .expressions cimport Expression
 from .table cimport Table
 
+__all__ = [
+    "conditional_full_join",
+    "conditional_inner_join",
+    "conditional_left_anti_join",
+    "conditional_left_join",
+    "conditional_left_semi_join",
+    "cross_join",
+    "full_join",
+    "inner_join",
+    "left_anti_join",
+    "left_join",
+    "left_semi_join",
+    "mixed_full_join",
+    "mixed_inner_join",
+    "mixed_left_anti_join",
+    "mixed_left_join",
+    "mixed_left_semi_join",
+]
 
 cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map):
     # helper to convert a gather map to a Column
