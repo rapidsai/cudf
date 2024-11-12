@@ -13,8 +13,8 @@ from pylibcudf.types import DataType
 
 @dataclass
 class ColumnMetadata:
-    name: str
-    children_meta: list[ColumnMetadata]
+    name: str = ...
+    children_meta: list[ColumnMetadata] = ...
 
 @overload
 def from_arrow(obj: pa.DataType) -> DataType: ...
