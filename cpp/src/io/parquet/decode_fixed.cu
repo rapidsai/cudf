@@ -848,6 +848,7 @@ inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, 
 {
   int pos              = s->dict_pos;
   int const target_pos = pos + to_decode;
+  __syncthreads();  // Make sure all threads have read dict_pos before it changes at the end. 
 
   while (pos < target_pos) {
     int const batch_len = min(target_pos - pos, decode_block_size_t);
