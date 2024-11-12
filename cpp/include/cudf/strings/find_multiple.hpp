@@ -31,7 +31,7 @@ namespace strings {
  * @brief Searches for the given target strings within each string in the provided column
  *
  * Each column in the result table corresponds to the result for the target string at the same
- * ordinal. i.e. 0th column is the BOOL8 column result for the 0th target string, 1th for 1th,
+ * ordinal. i.e. 0th column is the BOOL8 column result for the 0th target string, 1st for 1st,
  * etc.
  *
  * If the target is not found for a string, false is returned for that entry in the output column.
