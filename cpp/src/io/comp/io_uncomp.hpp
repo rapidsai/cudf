@@ -36,7 +36,8 @@ namespace io {
  *
  * @return Vector containing the Decompressed output
  */
-[[nodiscard]] std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t const> src);
+[[nodiscard]] std::vector<uint8_t> decompress(compression_type compression,
+                                              host_span<uint8_t const> src);
 
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
