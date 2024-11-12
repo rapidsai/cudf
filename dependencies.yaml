@@ -587,12 +587,7 @@ dependencies:
         packages:
           - clang==19.1.0
           - clang-tools==19.1.0
-          # TODO: These are build requirements for IWYU and can be replaced
-          # with IWYU itself once a conda package of IWYU supporting clang 19
-          # is available.
-          - clangdev==19.1.0
-          - llvm==19.1.0
-          - llvmdev==19.1.0
+          - include-what-you-use==0.23.0
   docs:
     common:
       - output_types: [conda]
