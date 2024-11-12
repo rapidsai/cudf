@@ -60,7 +60,19 @@ extend = "../../pyproject.toml"
 extend-select = [
   "TCH", # flake8-type-checking
   "TID", # flake8-tidy-imports
+  "PT", # flake8-pytest-style
 ]
+extend-ignore = [
+  "PT011", # pytest.raises(...) is too broad
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+# https://docs.astral.sh/ruff/settings/#lintflake8-pytest-style
+fixture-parentheses = false
+mark-parentheses = false
+parametrize-names-type = "csv"
+parametrize-values-type = "list"
+parametrize-values-row-type = "tuple"
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
