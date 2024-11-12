@@ -20,6 +20,7 @@ import codecs
 import errno
 import io
 import os
+import re
 
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
@@ -27,9 +28,21 @@ from pylibcudf.libcudf.io.types import (
     compression_type as CompressionType,  # no-cython-lint
     column_encoding as ColumnEncoding,  # no-cython-lint
     dictionary_policy as DictionaryPolicy,  # no-cython-lint
+    quote_style as QuoteStyle,  # no-cython-lint
     statistics_freq as StatisticsFreq, # no-cython-lint
 )
 
+__all__ = [
+    "ColumnEncoding",
+    "CompressionType",
+    "DictionaryPolicy",
+    "JSONRecoveryMode",
+    "QuoteStyle",
+    "SinkInfo",
+    "SourceInfo",
+    "StatisticsFreq",
+    "TableWithMetadata",
+]
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
@@ -52,6 +65,8 @@ cdef class TableWithMetadata:
         self.tbl = tbl
 
         self.metadata.schema_info = self._make_column_info(column_names)
+
+    __hash__ = None
 
     cdef vector[column_name_info] _make_column_info(self, list column_names):
         cdef vector[column_name_info] col_name_infos
@@ -147,6 +162,8 @@ cdef class SourceInfo:
 
         Mixing different types of sources will raise a `ValueError`.
     """
+    # Regular expression that match remote file paths supported by libcudf
+    _is_remote_file_pattern = re.compile(r"^s3://", re.IGNORECASE)
 
     def __init__(self, list sources):
         if not sources:
@@ -161,11 +178,10 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not os.path.isfile(src):
-                    raise FileNotFoundError(errno.ENOENT,
-                                            os.strerror(errno.ENOENT),
-                                            src)
-
+                if not (os.path.isfile(src) or self._is_remote_file_pattern.match(src)):
+                    raise FileNotFoundError(
+                        errno.ENOENT, os.strerror(errno.ENOENT), src
+                    )
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
@@ -216,6 +232,8 @@ cdef class SourceInfo:
             c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
 
         self.c_obj = source_info(c_host_buffers)
+
+    __hash__ = None
 
 
 # Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
@@ -299,3 +317,5 @@ cdef class SinkInfo:
         else:
             # we don't have sinks so we must have paths to sinks
             self.c_obj = sink_info(paths)
+
+    __hash__ = None

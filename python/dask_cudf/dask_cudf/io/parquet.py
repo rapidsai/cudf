@@ -19,6 +19,7 @@ from dask_expr.io.parquet import (
     ReadParquetPyarrowFS,
 )
 
+from dask._task_spec import Task
 from dask.dataframe.io.parquet.arrow import _filters_to_expression
 from dask.dataframe.io.parquet.core import ParquetFunctionWrapper
 from dask.tokenize import tokenize
@@ -337,14 +338,12 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         from dask.dataframe.io.utils import _is_local_fs
 
         # Use host for remote filesystem only
-        return _is_local_fs(self.fs)
-        # TODO: Use KvikIO-S3 support when available.
-        # or (
-        #     self.fs.type_name
-        #     == "s3"  # TODO: and cudf.get_option("kvikio_remote_io")
-        # )
+        # (Unless we are using kvikio-S3)
+        return _is_local_fs(self.fs) or (
+            self.fs.type_name == "s3" and cudf.get_option("kvikio_remote_io")
+        )
 
-    def _filtered_task(self, index: int):
+    def _filtered_task(self, name, index: int):
         columns = self.columns.copy()
         index_name = self.index.name
         if self.index is not None:
@@ -358,16 +357,21 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
         frag_to_table = self._fragment_to_table
         if self._use_device_io:
             frag_to_table = self._fragments_to_cudf_dataframe
-        return (
+
+        return Task(
+            name,
             self._table_to_pandas,
-            (
+            Task(
+                None,
                 frag_to_table,
-                FragmentWrapper(self.fragments[index], filesystem=self.fs),
-                self.filters,
-                columns,
-                schema,
+                fragment_wrapper=FragmentWrapper(
+                    self.fragments[index], filesystem=self.fs
+                ),
+                filters=self.filters,
+                columns=columns,
+                schema=schema,
             ),
-            index_name,
+            index_name=index_name,
         )
 
     @property
@@ -408,26 +412,29 @@ class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
 
 
 class CudfFusedIO(FusedIO):
-    def _task(self, index: int):
+    def _task(self, name, index: int):
         expr = self.operand("_expr")
         bucket = self._fusion_buckets[index]
-
-        io_func = expr._filtered_task(0)[0]
+        io_func = expr._filtered_task(name, 0).func
         if not isinstance(
             io_func, ParquetFunctionWrapper
         ) or io_func.common_kwargs.get("partitions", None):
             # Just use "simple" fusion if we have an unexpected
             # callable, or we are dealing with hive partitioning.
-            return (cudf.concat, [expr._filtered_task(i) for i in bucket])
+            return Task(
+                name,
+                cudf.concat,
+                [expr._filtered_task(name, i) for i in bucket],
+            )
 
         pieces = []
         for i in bucket:
-            piece = expr._filtered_task(i)[1]
+            piece = expr._filtered_task(name, i).args[0]
             if isinstance(piece, list):
                 pieces.extend(piece)
             else:
                 pieces.append(piece)
-        return (io_func, pieces)
+        return Task(name, io_func, pieces)
 
 
 class CudfFusedParquetIO(FusedParquetIO):
@@ -454,7 +461,7 @@ class CudfFusedParquetIO(FusedParquetIO):
         frag_filters,
         columns,
         schema,
-        *to_pandas_args,
+        **to_pandas_kwargs,
     ):
         frag_to_table = CudfReadParquetPyarrowFS._fragments_to_cudf_dataframe
         return CudfReadParquetPyarrowFS._table_to_pandas(
@@ -464,7 +471,7 @@ class CudfFusedParquetIO(FusedParquetIO):
                 columns,
                 schema,
             ),
-            *to_pandas_args,
+            **to_pandas_kwargs,
         )
 
 
@@ -475,7 +482,7 @@ class CudfFusedParquetIOHost(CudfFusedParquetIO):
         frag_filters,
         columns,
         schema,
-        *to_pandas_args,
+        **to_pandas_kwargs,
     ):
         import pyarrow as pa
 
@@ -503,7 +510,7 @@ class CudfFusedParquetIOHost(CudfFusedParquetIO):
 
         return CudfReadParquetPyarrowFS._table_to_pandas(
             get(dsk, name),
-            *to_pandas_args,
+            **to_pandas_kwargs,
         )
 
 
@@ -526,6 +533,7 @@ def read_parquet_expr(
     filesystem="fsspec",
     engine=None,
     arrow_to_pandas=None,
+    open_file_options=None,
     **kwargs,
 ):
     """
@@ -671,6 +679,11 @@ def read_parquet_expr(
     if args:
         raise ValueError(f"Unexpected positional arguments: {args}")
 
+    if open_file_options is not None:
+        raise ValueError(
+            "The open_file_options argument is no longer supported "
+            "by the 'cudf' backend."
+        )
     if dtype_backend is not None:
         raise NotImplementedError(
             "dtype_backend is not supported by the 'cudf' backend."

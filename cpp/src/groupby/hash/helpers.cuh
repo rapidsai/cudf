@@ -23,8 +23,6 @@
 #include <cuco/static_set.cuh>
 
 namespace cudf::groupby::detail::hash {
-// TODO: similar to `contains_table`, using larger CG size like 2 or 4 for nested
-// types and `cg_size = 1`for flat data to improve performance
 /// Number of threads to handle each input element
 CUDF_HOST_DEVICE auto constexpr GROUPBY_CG_SIZE = 1;
 
