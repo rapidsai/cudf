@@ -538,8 +538,7 @@ source_properties get_source_properties(compression_type compression, host_span<
 
 size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src)
 {
-  auto srcprops = get_source_properties(compression, src);
-  return srcprops.uncomp_len;
+  return get_source_properties(compression, src).uncomp_len;
 }
 
 size_t decompress(compression_type compression,
