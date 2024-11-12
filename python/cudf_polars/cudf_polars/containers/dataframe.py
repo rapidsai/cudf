@@ -226,15 +226,6 @@ class DataFrame:
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
         return type(self).from_table(table, self.column_names).sorted_like(self)
 
-    @classmethod
-    def concat(cls, dfs: Sequence[Self]) -> Self:
-        """Concatenate a list of dataframes."""
-        assert len(dfs), "Cannot concatenate an empty list"
-        if len(dfs) == 1:
-            return dfs[0]
-        table = plc.concatenate.concatenate([df.table for df in dfs])
-        return cls.from_table(table, dfs[0].column_names)
-
     def slice(self, zlice: tuple[int, int] | None) -> Self:
         """
         Slice a dataframe.

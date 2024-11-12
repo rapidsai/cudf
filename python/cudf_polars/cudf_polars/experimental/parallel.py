@@ -12,7 +12,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Literal, NamedExpr
-from cudf_polars.dsl.ir import PartitionInfo, Scan, Select, broadcast
+from cudf_polars.dsl.ir import PartitionInfo, Scan, Select, Union, broadcast
 from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
@@ -23,11 +23,31 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.nodebase import Node
 
 
+def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
+    # Concatenate a sequence of DataFrames vertically
+    return Union.do_evaluate(None, *dfs)
+
+
 def get_key_name(node: Node | NamedExpr) -> str:
     """Generate the key name for a Node."""
     if isinstance(node, NamedExpr):
         return f"named-{get_key_name(node.value)}"
     return f"{type(node).__name__.lower()}-{hash(node)}"
+
+
+@singledispatch
+def lower_ir_node(ir: IR, rec) -> IR:
+    """Rewrite an IR node with proper partitioning."""
+    # Return same node by default
+    return ir
+
+
+def lower_ir_graph(ir: IR) -> IR:
+    """Rewrite an IR graph with proper partitioning."""
+    from cudf_polars.dsl.traversal import CachingVisitor
+
+    mapper = CachingVisitor(lower_ir_node)
+    return mapper(ir)
 
 
 @singledispatch
@@ -82,7 +102,7 @@ def _default_generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
             if child.parts.count > 1:
                 child_names.append("concat-" + child_name_in)
                 graph[(child_names[-1], 0)] = (
-                    DataFrame.concat,
+                    _concat,
                     [(child_name_in, i) for i in range(child.parts.count)],
                 )
             else:
@@ -123,10 +143,9 @@ def generate_expr_tasks(
     raise NotImplementedError(f"Cannot generate tasks for {expr}.")
 
 
-def task_graph(ir: IR) -> tuple[MutableMapping[str, Any], str]:
+def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
     """Construct a Dask-compatible task graph."""
-    # NOTE: It may be necessary to add an optimization
-    # pass here to "rewrite" the single-partition IR graph.
+    ir: IR = lower_ir_graph(_ir)
 
     graph = {
         k: v
@@ -138,7 +157,7 @@ def task_graph(ir: IR) -> tuple[MutableMapping[str, Any], str]:
     key_name = get_key_name(ir)
     if ir.parts.count > 1:
         graph[key_name] = (
-            DataFrame.concat,
+            _concat,
             [(key_name, i) for i in range(ir.parts.count)],
         )
     else:
@@ -420,7 +439,7 @@ def _tree_agg_multi(
     if isinstance(input, Column):
         columns = [op(input).rename(name) for name, op in ops.items()]
     else:
-        df = DataFrame.concat(input)
+        df = _concat(input)
         columns = [
             op(df.select_columns({name})[0]).rename(name) for name, op in ops.items()
         ]
