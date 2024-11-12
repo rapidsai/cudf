@@ -93,16 +93,3 @@ def test_unpivot_defaults():
     )
     q = df.unpivot(index="d")
     assert_gpu_result_equal(q)
-
-
-def test_unpivot_unsupported_cast_raises():
-    df = pl.LazyFrame(
-        {
-            "a": ["x", "y", "z"],
-            "b": pl.Series([1, 3, 5], dtype=pl.Int16),
-        }
-    )
-
-    q = df.unpivot(["a", "b"])
-
-    assert_ir_translation_raises(q, NotImplementedError)

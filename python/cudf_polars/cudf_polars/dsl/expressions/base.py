@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import Column, DataFrame
 
-__all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext"]
+__all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext", "ColRef"]
 
 
 class AggInfo(NamedTuple):
@@ -155,6 +155,17 @@ class Expr(Node["Expr"]):
         )  # pragma: no cover; check_agg trips first
 
 
+class ErrorExpr(Expr):
+    __slots__ = ("error",)
+    _non_child = ("dtype", "error")
+    error: str
+
+    def __init__(self, dtype: plc.DataType, error: str) -> None:
+        self.dtype = dtype
+        self.error = error
+        self.children = ()
+
+
 class NamedExpr:
     # NamedExpr does not inherit from Expr since it does not appear
     # when evaluating expressions themselves, only when constructing
@@ -249,3 +260,36 @@ class Col(Expr):
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         return AggInfo([(self, plc.aggregation.collect_list(), self)])
+
+
+class ColRef(Expr):
+    __slots__ = ("index", "table_ref")
+    _non_child = ("dtype", "index", "table_ref")
+    index: int
+    table_ref: plc.expressions.TableReference
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        index: int,
+        table_ref: plc.expressions.TableReference,
+        column: Expr,
+    ) -> None:
+        if not isinstance(column, Col):
+            raise TypeError("Column reference should only apply to columns")
+        self.dtype = dtype
+        self.index = index
+        self.table_ref = table_ref
+        self.children = (column,)
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        raise NotImplementedError(
+            "Only expect this node as part of an expression translated to libcudf AST."
+        )
