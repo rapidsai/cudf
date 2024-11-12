@@ -19,6 +19,14 @@ from .scalar cimport Scalar
 from .table cimport Table
 
 
+__all__ = [
+    "fill",
+    "fill_in_place",
+    "repeat",
+    "sequence",
+    "calendrical_month_sequence",
+]
+
 cpdef Column fill(
     Column destination,
     size_type begin,

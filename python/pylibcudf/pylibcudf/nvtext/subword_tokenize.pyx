@@ -13,6 +13,7 @@ from pylibcudf.libcudf.nvtext.subword_tokenize cimport (
     tokenizer_result as cpp_tokenizer_result,
 )
 
+__all__ = ["HashedVocabulary", "subword_tokenize"]
 
 cdef class HashedVocabulary:
     """The vocabulary data for use with the subword_tokenize function.
@@ -23,6 +24,8 @@ cdef class HashedVocabulary:
         cdef string c_hash_file = <string>str(hash_file).encode()
         with nogil:
             self.c_obj = move(cpp_load_vocabulary_file(c_hash_file))
+
+    __hash__ = None
 
 cpdef tuple[Column, Column, Column] subword_tokenize(
     Column input,

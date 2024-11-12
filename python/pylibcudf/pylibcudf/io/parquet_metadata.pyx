@@ -4,6 +4,13 @@ from pylibcudf.io.types cimport SourceInfo
 from pylibcudf.libcudf.io cimport parquet_metadata as cpp_parquet_metadata
 
 
+__all__ = [
+    "ParquetColumnSchema",
+    "ParquetMetadata",
+    "ParquetSchema",
+    "read_parquet_metadata",
+]
+
 cdef class ParquetColumnSchema:
     """
     Schema of a parquet column, including the nested columns.
@@ -164,7 +171,7 @@ cdef class ParquetMetadata:
 
         Returns
         -------
-        dict[bytes, bytes]
+        dict[str, str]
             Key value metadata as a map.
         """
         return {key.decode(): val.decode() for key, val in self.meta.metadata()}
