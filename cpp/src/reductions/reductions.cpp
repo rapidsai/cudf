@@ -29,7 +29,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
-
+#include <cudf/detail/hyper_log_log_plus_plus/hyper_log_log_plus_plus.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 #include <utility>
@@ -143,6 +143,14 @@ struct reduce_dispatch_functor {
                      "Tdigest aggregations expect output type to be STRUCT");
         auto td_agg = static_cast<cudf::detail::merge_tdigest_aggregation const&>(agg);
         return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
+      }
+      case aggregation::HLLPP: {
+        auto hllpp_agg = static_cast<cudf::detail::hyper_log_log_aggregation const&>(agg);
+        return cudf::groupby::detail::reduce_hyper_log_log_plus_plus(col, hllpp_agg.precision, stream, mr);
+      }
+      case aggregation::MERGE_HLLPP: {
+        auto hllpp_agg = static_cast<cudf::detail::merge_hyper_log_log_aggregation const&>(agg);
+        return cudf::groupby::detail::reduce_merge_hyper_log_log_plus_plus(col, hllpp_agg.precision, stream, mr);
       }
       default: CUDF_FAIL("Unsupported reduction operator");
     }
