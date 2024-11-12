@@ -18,7 +18,7 @@ from polars.exceptions import ComputeError, PerformanceWarning
 import rmm
 from rmm._cuda import gpu
 
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -186,14 +186,30 @@ def execute_with_cudf(
         )
     try:
         with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
-            nt.set_udf(
-                partial(
-                    _callback,
-                    translate_ir(nt),
-                    device=device,
-                    memory_resource=memory_resource,
+            translator = Translator(nt)
+            ir = translator.translate_ir()
+            ir_translation_errors = translator.errors
+            if len(ir_translation_errors):
+                # TODO: Display these errors in user-friendly way.
+                # tracked in https://github.com/rapidsai/cudf/issues/17051
+                unique_errors = sorted(set(ir_translation_errors), key=str)
+                error_message = "Query contained unsupported operations"
+                verbose_error_message = (
+                    f"{error_message}\nThe errors were:\n{unique_errors}"
                 )
-            )
+                unsupported_ops_exception = NotImplementedError(
+                    error_message, unique_errors
+                )
+                if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+                    warnings.warn(verbose_error_message, UserWarning, stacklevel=2)
+                if raise_on_fail:
+                    raise unsupported_ops_exception
+            else:
+                nt.set_udf(
+                    partial(
+                        _callback, ir, device=device, memory_resource=memory_resource
+                    )
+                )
     except exception as e:
         if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
             warnings.warn(

@@ -587,6 +587,12 @@ dependencies:
         packages:
           - clang==19.1.0
           - clang-tools==19.1.0
+          # TODO: These are build requirements for IWYU and can be replaced
+          # with IWYU itself once a conda package of IWYU supporting clang 19
+          # is available.
+          - clangdev==19.1.0
+          - llvm==19.1.0
+          - llvmdev==19.1.0
   docs:
     common:
       - output_types: [conda]
@@ -669,7 +675,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.0.13
+          - &numba-cuda-dep numba-cuda>=0.0.13,<0.0.18
           - nvtx>=0.2.1
           - packaging
           - rich

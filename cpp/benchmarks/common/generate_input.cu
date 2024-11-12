@@ -23,11 +23,13 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -540,7 +542,7 @@ struct string_generator {
   // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   {
   }
-  __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
+  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
   {
     auto begin = thrust::get<0>(str_begin_end);
     auto end   = thrust::get<1>(str_begin_end);
@@ -569,6 +571,9 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     distribution_params<bool>{1. - profile.get_null_probability().value_or(0)});
   auto lengths   = len_dist(engine, num_rows + 1);
   auto null_mask = valid_dist(engine, num_rows + 1);
+  auto stream    = cudf::get_default_stream();
+  auto mr        = cudf::get_current_device_resource_ref();
+
   thrust::transform_if(
     thrust::device,
     lengths.begin(),
@@ -580,28 +585,26 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
-  rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
-  thrust::exclusive_scan(
-    thrust::device, valid_lengths, valid_lengths + lengths.size(), offsets.begin());
-  // offsets are ready.
-  auto chars_length = *thrust::device_pointer_cast(offsets.end() - 1);
+
+  // offsets are created as INT32 or INT64 as appropriate
+  auto [offsets, chars_length] = cudf::strings::detail::make_offsets_child_column(
+    valid_lengths, valid_lengths + num_rows, stream, mr);
+  // use the offsetalator to normalize the offset values for use by the string_generator
+  auto offsets_itr = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
-                     thrust::make_zip_iterator(offsets.begin(), offsets.begin() + 1),
+                     thrust::make_zip_iterator(offsets_itr, offsets_itr + 1),
                      num_rows,
                      string_generator{chars.data(), engine});
+
   auto [result_bitmask, null_count] =
-    cudf::detail::valid_if(null_mask.begin(),
-                           null_mask.end() - 1,
-                           thrust::identity<bool>{},
-                           cudf::get_default_stream(),
-                           cudf::get_current_device_resource_ref());
+    profile.get_null_probability().has_value()
+      ? cudf::detail::valid_if(
+          null_mask.begin(), null_mask.end() - 1, thrust::identity<bool>{}, stream, mr)
+      : std::pair{rmm::device_buffer{}, 0};
+
   return cudf::make_strings_column(
-    num_rows,
-    std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
-    chars.release(),
-    null_count,
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    num_rows, std::move(offsets), chars.release(), null_count, std::move(result_bitmask));
 }
 
 /**
