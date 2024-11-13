@@ -30,7 +30,8 @@ namespace io {
  * @brief Compresses a system memory buffer.
  *
  * @param compression Type of compression of the input data
- * @param src Decompressed host buffer
+ * @param src         Decompressed host buffer
+ * @param stream      CUDA stream used for device memory operations and kernel launches
  *
  * @return Vector containing the Compressed output
  */

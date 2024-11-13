@@ -39,12 +39,32 @@ namespace io {
 [[nodiscard]] std::vector<uint8_t> decompress(compression_type compression,
                                               host_span<uint8_t const> src);
 
+/**
+ * @brief Decompresses a system memory buffer.
+ *
+ * @param compression Type of compression of the input data
+ * @param src         Compressed host buffer
+ * @param dst         Destination host span to place decompressed buffer
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Size of decompressed output
+ */
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
                   host_span<uint8_t> dst,
                   rmm::cuda_stream_view stream);
 
+/**
+ * @brief Without actually decompressing the compressed input buffer passed, return the size of
+ * decompressed output. If the decompressed size cannot be extracted apriori, return zero.
+ *
+ * @param compression Type of compression of the input data
+ * @param src         Compressed host buffer
+ *
+ * @return Size of decompressed output
+ */
 size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
+
 /**
  * @brief GZIP header flags
  * See https://tools.ietf.org/html/rfc1952

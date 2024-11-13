@@ -25,9 +25,6 @@
 
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream.hpp>
-#include <rmm/cuda_stream_view.hpp>
-
 #include <fstream>
 #include <string>
 #include <vector>

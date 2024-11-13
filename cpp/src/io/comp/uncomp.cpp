@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "gpuinflate.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 #include "io_uncomp.hpp"
 #include "nvcomp_adapter.hpp"

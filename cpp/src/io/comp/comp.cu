@@ -15,7 +15,6 @@
  */
 
 #include "comp.hpp"
-#include "gpuinflate.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 #include "nvcomp_adapter.hpp"
 
@@ -27,8 +26,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <zlib.h>  // compress
-
-#include <cstring>  // memset
 
 namespace cudf {
 namespace io {
@@ -92,7 +89,6 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
   hd_status[0] = {};
   hd_status.host_to_device_async(stream);
 
-  // gpu_snap(inputs, outputs, hd_status, stream);
   nvcomp::batched_compress(nvcomp::compression_type::SNAPPY, inputs, outputs, hd_status, stream);
 
   stream.synchronize();
