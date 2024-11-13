@@ -11,6 +11,7 @@ from pylibcudf.libcudf.column.column cimport column
 
 from .column cimport Column
 
+__all__ = ["RoundingMethod", "round"]
 
 cpdef Column round(
     Column source,
