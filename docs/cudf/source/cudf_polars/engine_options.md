@@ -3,9 +3,11 @@
 The `polars.GPUEngine` object may be configured in several different ways.
 
 ## Parquet Reader Options
+Reading large parquet files incurs significant memory overhead, especially when the files are compressed. This may lead to out of memory errors for some workflows. To mitigate this, the "chunked" parquet reader may be selected. When enabled, parquet files are read in chunks with a limit on the amount of memory that is used, at the cost of a small drop in performance.
 
-Chunked reading is controlled by passing a dictionary of options to the `GPUEngine` object. Details may be found following the links to the underlying `libcudf` reader.
-- `chunked`, indicates if chunked parquet reading is to be used, default False.
+
+To configure the parquet reader, we provide a dictionary of options to the `parquet_options` keyword of the `GPUEngine` object. Valid keys and values are:
+- `chunked`, indicicates is chunked parquet reading is to be used, default True.
 - [`chunk_read_limit`](https://docs.rapids.ai/api/libcudf/legacy/classcudf_1_1io_1_1chunked__parquet__reader#aad118178b7536b7966e3325ae1143a1a) controls the maximum size per chunk, default unlimited.
 - [`pass_read_limit`](https://docs.rapids.ai/api/libcudf/legacy/classcudf_1_1io_1_1chunked__parquet__reader#aad118178b7536b7966e3325ae1143a1a) controls the maximum memory used for decompression, default 16GiB.
 
