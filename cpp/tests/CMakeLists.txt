@@ -326,6 +326,11 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
+  COMPRESSED_JSON_TEST io/json/compressed_json_test.cpp 
+  GPUS 1
+  PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
+)
+ConfigureTest(
   JSON_TEST io/json/json_test.cpp io/json/json_chunked_reader.cu
   GPUS 1
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}

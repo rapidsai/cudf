@@ -262,7 +262,7 @@ void cpu_inflate_vector(std::vector<uint8_t>& dst, uint8_t const* comp_data, siz
   strm.avail_out = dst.size();
   strm.total_out = 0;
   auto zerr      = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
-  CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream");
+  CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream: inflateInit2 failed");
   do {
     if (strm.avail_out == 0) {
       dst.resize(strm.total_out + (1 << 30));
@@ -274,7 +274,7 @@ void cpu_inflate_vector(std::vector<uint8_t>& dst, uint8_t const* comp_data, siz
            strm.total_out == dst.size());
   dst.resize(strm.total_out);
   inflateEnd(&strm);
-  CUDF_EXPECTS(zerr == Z_STREAM_END, "Error in DEFLATE stream");
+  CUDF_EXPECTS(zerr == Z_STREAM_END, "Error in DEFLATE stream: Z_STREAM_END not encountered");
 }
 
 /**
@@ -444,12 +444,12 @@ source_properties get_source_properties(compression_type compression, host_span<
     case compression_type::AUTO:
     case compression_type::GZIP: {
       gz_archive_s gz;
-      if (ParseGZArchive(&gz, raw, src.size())) {
-        compression = compression_type::GZIP;
-        comp_data   = gz.comp_data;
-        comp_len    = gz.comp_len;
-        uncomp_len  = gz.isize;
-      }
+      auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
+      CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header while fetching source properties");
+      compression = compression_type::GZIP;
+      comp_data   = gz.comp_data;
+      comp_len    = gz.comp_len;
+      uncomp_len  = gz.isize;
       if (compression != compression_type::AUTO) break;
       [[fallthrough]];
     }
@@ -573,7 +573,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   if (compression == compression_type::GZIP || compression == compression_type::ZIP) {
     // INFLATE
     std::vector<uint8_t> dst(srcprops.uncomp_len);
-    cpu_inflate_vector(dst, srcprops.comp_data, srcprops.comp_len);
+    decompress_gzip(src, dst);
     return dst;
   }
   if (compression == compression_type::BZIP2) {
