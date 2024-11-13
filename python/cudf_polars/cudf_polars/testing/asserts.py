@@ -84,7 +84,7 @@ def assert_gpu_result_equal(
     )
 
     expect = lazydf.collect(**final_polars_collect_kwargs)
-    engine = GPUEngine(raise_on_fail=True)
+    engine = GPUEngine(raise_on_fail=True, executor=executor)
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
     assert_frame_equal(
         expect,
