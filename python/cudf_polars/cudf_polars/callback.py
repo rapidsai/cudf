@@ -149,6 +149,30 @@ def _callback(
         return ir.evaluate(cache={}, config=config).to_polars()
 
 
+def validate_config_options(config: dict) -> None:
+    """
+    Validate the configuration options for the GPU engine.
+
+    Parameters
+    ----------
+    config
+        Configuration options to validate.
+
+    Raises
+    ------
+    ValueError
+        If the configuration contains unsupported options.
+    """
+    if unsupported := (config.keys() - {"raise_on_fail", "parquet_options"}):
+        raise ValueError(
+            f"Engine configuration contains unsupported settings {unsupported}"
+        )
+    if parquet_options := config.get("parquet_options", {}):
+        assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
+            parquet_options
+        )
+
+
 def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
@@ -175,10 +199,8 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    if unsupported := (config.config.keys() - {"raise_on_fail", "parquet_options"}):
-        raise ValueError(
-            f"Engine configuration contains unsupported settings {unsupported}"
-        )
+    validate_config_options(config.config)
+
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt)
         ir = translator.translate_ir()

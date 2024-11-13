@@ -19,13 +19,11 @@ if TYPE_CHECKING:
 
 __all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 
-DEFAULT_GPU_ENGINE: GPUEngine = GPUEngine(raise_on_fail=True)
-
 
 def assert_gpu_result_equal(
     lazydf: pl.LazyFrame,
     *,
-    engine: GPUEngine = DEFAULT_GPU_ENGINE,
+    engine: GPUEngine | None = None,
     collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
@@ -81,6 +79,9 @@ def assert_gpu_result_equal(
     NotImplementedError
         If GPU collection failed in some way.
     """
+    if engine is None:
+        engine = GPUEngine(raise_on_fail=True)
+
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
     )
