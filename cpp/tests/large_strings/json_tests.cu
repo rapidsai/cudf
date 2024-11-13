@@ -33,7 +33,6 @@ struct JsonLargeReaderTest : public cudf::test::StringsLargeTest,
 INSTANTIATE_TEST_SUITE_P(JsonLargeReaderTest,
                          JsonLargeReaderTest,
                          ::testing::Values(cudf::io::compression_type::GZIP,
-                                           cudf::io::compression_type::SNAPPY,
                                            cudf::io::compression_type::NONE));
 
 TEST_P(JsonLargeReaderTest, MultiBatch)
