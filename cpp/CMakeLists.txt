@@ -266,10 +266,12 @@ endif()
 # add third party dependencies using CPM
 rapids_cpm_init()
 
-# TODO: Replace with a rapids_cpm_find (or maybe just a FetchContent since we never expect to find
-# this.
+# Not using rapids-cmake since we never want to find, always download.
+CPMAddPackage(
+  NAME rapids_logger GITHUB_REPOSITORY vyasr/rmm GIT_SHALLOW TRUE SOURCE_SUBDIR rapids_logger
+  GIT_TAG feat/logger
+)
 option(LOGGING_COMPATIBILITY "Enable backwards compatible direct access to the spdlog logger" OFF)
-add_subdirectory(../../rmm/rapids_logger rapids_logger/)
 set(_logging_compat)
 if(LOGGING_COMPATIBILITY)
   set(_logging_compat "CUDF_BACKWARDS_COMPATIBILITY")
