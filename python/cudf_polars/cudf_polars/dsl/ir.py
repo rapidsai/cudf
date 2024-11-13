@@ -252,6 +252,7 @@ class ErrorNode(IR):
     def __init__(self, schema: Schema, error: str):
         self.schema = schema
         self.error = error
+        self.children = ()
 
 
 class PythonScan(IR):
@@ -571,7 +572,7 @@ class Scan(IR):
                 # shifts the row index.
                 # But prior to 1.13, polars had this wrong, so we match behaviour
                 # https://github.com/pola-rs/polars/issues/19607
-                offset += skip_rows  # pragma: no cover; polars 1.13 not yet released
+                offset += skip_rows
             dtype = schema[name]
             step = plc.interop.from_arrow(
                 pa.scalar(1, type=plc.interop.to_arrow(dtype))
