@@ -361,21 +361,14 @@ class PackedColumns(Serializable):
         }
 
     def serialize(self):
+        header = {}
+        frames = []
         gpu_data = as_buffer(
             data=self._data.gpu_data_ptr,
             size=self._data.gpu_data_size,
             owner=self,
             exposed=True
         )
-        # header, frames = self._data.serialize(
-        #     gpu_data,
-        #     self.column_names,
-        #     self.index_names,
-        #     self.column_dtypes,
-        # )
-
-        header = {}
-        frames = []
         data_header, data_frames = gpu_data.serialize()
         header["data"] = data_header
         frames.extend(data_frames)
