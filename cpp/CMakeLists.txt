@@ -214,7 +214,7 @@ function(enable_static_checkers target)
       # compile flags. To do this completely cleanly we should modify the flags on the target rather
       # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
       # the linters on real builds.
-      foreach(_flag -Wno-missing-braces -Wno-absolute-value -Wno-unneeded-internal-declaration)
+      foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
         list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
         if(_flag_index EQUAL -1)
           list(APPEND CUDF_CXX_FLAGS ${_flag})
