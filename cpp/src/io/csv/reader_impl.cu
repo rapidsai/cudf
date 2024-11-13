@@ -126,11 +126,10 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
                                           int header_row,
                                           std::string prefix)
 {
-  std::vector<std::string> col_names;
-
   // Empty row, return empty column names vector
-  if (row.empty() or (row.size() == 1 and row[0] == '\n')) { return col_names; }
+  if (row.empty()) { return {}; }
 
+  std::vector<std::string> col_names;
   bool quotation = false;
   for (size_t pos = 0, prev = 0; pos < row.size(); ++pos) {
     // Flip the quotation flag if current character is a quotechar

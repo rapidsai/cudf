@@ -2283,3 +2283,14 @@ def test_read_header_none_pandas_compat_column_type():
 def test_read_single_unterminated_row(buffer):
     gdf = cudf.read_csv(StringIO(buffer), header=None)
     assert_eq(gdf.shape, (1, 1))
+
+
+@pytest.mark.parametrize("buffer", ["\n", "\r\n"])
+def test_read_empty_only_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (0, 0))
+
+
+def test_read_empty_only_row_custom_terminator():
+    gdf = cudf.read_csv(StringIO("*"), header=None, lineterminator='*')
+    assert_eq(gdf.shape, (0, 0))
