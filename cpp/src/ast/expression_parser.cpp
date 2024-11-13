@@ -207,7 +207,7 @@ cudf::data_type expression_parser::output_type() const
 }
 
 std::vector<cudf::size_type> expression_parser::visit_operands(
-  std::vector<std::reference_wrapper<expression const>> operands)
+  cudf::host_span<std::reference_wrapper<expression const> const> operands)
 {
   auto operand_data_reference_indices = std::vector<cudf::size_type>();
   for (auto const& operand : operands) {

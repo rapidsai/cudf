@@ -9,6 +9,7 @@ from pylibcudf.libcudf.strings.convert cimport (
 )
 from pylibcudf.types cimport DataType
 
+__all__ = ["from_floats", "is_float", "to_floats"]
 
 cpdef Column to_floats(Column strings, DataType output_type):
     """
