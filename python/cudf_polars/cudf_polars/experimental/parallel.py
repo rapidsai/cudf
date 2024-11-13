@@ -45,9 +45,7 @@ def _default_ir_parts_info(ir: IR) -> PartitionInfo:
     # Single-partition default behavior.
     # This is used by `ir_parts_info` for
     # all unregistered IR sub-types.
-    count = 1
-    if ir.children:
-        count = max(child.parts.count for child in ir.children)
+    count = max((child.parts.count for child in ir.children), default=1)
     if count > 1:
         raise NotImplementedError(
             f"Class {type(ir)} does not support multiple partitions."
