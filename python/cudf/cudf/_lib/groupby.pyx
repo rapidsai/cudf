@@ -18,8 +18,6 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib.scalar import as_device_scalar
 
-from pylibcudf.libcudf.scalar.scalar cimport scalar
-
 import pylibcudf
 
 from cudf._lib.aggregation import make_aggregation
@@ -53,8 +51,6 @@ _DECIMAL_AGGS = {
     "NUNIQUE",
     "SUM",
 }
-# workaround for https://github.com/cython/cython/issues/3885
-ctypedef const scalar constscalar
 
 
 @singledispatch
