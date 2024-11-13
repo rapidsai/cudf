@@ -13,6 +13,8 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 
+NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
+
 
 @pytest.fixture(
     params=[(None, None), ("row-index", 0), ("index", 10)],
@@ -117,7 +119,7 @@ def test_scan(
         q = q.filter(mask)
     if columns is not None:
         q = q.select(*columns)
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
 
 def test_negative_slice_pushdown_raises(tmp_path):
@@ -153,7 +155,7 @@ def test_scan_row_index_projected_out(tmp_path):
 
     q = pl.scan_parquet(tmp_path / "df.pq").with_row_index().select(pl.col("a"))
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
 
 def test_scan_csv_column_renames_projection_schema(tmp_path):
@@ -332,11 +334,12 @@ def test_scan_parquet_chunked(df, tmp_path, chunk_read_limit, pass_read_limit):
     assert_gpu_result_equal(
         q,
         engine=pl.GPUEngine(
+            raise_on_fail=True,
             parquet_options={
                 "chunked": True,
                 "chunk_read_limit": chunk_read_limit,
                 "pass_read_limit": pass_read_limit,
-            }
+            },
         ),
     )
 
