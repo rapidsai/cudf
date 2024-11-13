@@ -120,6 +120,9 @@ endif()
 
 if(USE_GDS)
   message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
+  if(NOT TARGET CUDA::cuFile)
+    message(FATAL_ERROR "cuFile support not found")
+  endif()
 endif()
 
 # ##################################################################################################
