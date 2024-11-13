@@ -18,7 +18,6 @@ from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
 from .utils cimport int_to_void_ptr
-import pickle
 
 
 __all__ = [
@@ -64,6 +63,7 @@ cdef class HostBuffer:
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
 
+
 cdef class PackedColumns:
     """Column data in a serialized format.
 
@@ -104,67 +104,6 @@ cdef class PackedColumns:
         )
 
         return PackedColumns.from_libcudf(move(c_packed_columns))
-
-    def serialize(
-        self,
-        object cudf_buffer,
-        object column_names,
-        object index_names,
-        object column_dtypes
-    ):
-        header = {}
-        frames = []
-        data_header, data_frames = cudf_buffer.serialize()
-        header["data"] = data_header
-        frames.extend(data_frames)
-
-        header["column-names"] = column_names
-        header["index-names"] = index_names
-        if self.c_obj.get()[0].metadata.get()[0].data() != NULL:
-            header["metadata"] = list(
-                <uint8_t[:self.c_obj.get()[0].metadata.get()[0].size()]>
-                self.c_obj.get()[0].metadata.get()[0].data()
-            )
-        for name, dtype in column_dtypes.items():
-            dtype_header, dtype_frames = dtype.serialize()
-            column_dtypes[name] = (
-                dtype_header,
-                (len(frames), len(frames) + len(dtype_frames)),
-            )
-            frames.extend(dtype_frames)
-        header["column-dtypes"] = column_dtypes
-
-        return header, frames
-
-    @staticmethod
-    def deserialize(object gpu_data, object header, object frames):
-        """
-        Deserialize a PackedColumns instance from header and frames.
-        """
-        cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
-        dbuf = DeviceBuffer(
-            ptr=gpu_data.get_ptr(mode="write"),
-            size=gpu_data.nbytes
-        )
-
-        cdef packed_columns data
-        data.metadata = move(
-            make_unique[vector[uint8_t]](
-                move(<vector[uint8_t]>header.get("metadata", []))
-            )
-        )
-        data.gpu_data = move(dbuf.c_obj)
-
-        p.c_obj = move(make_unique[packed_columns](move(data)))
-
-        column_dtypes = {}
-        for name, dtype in header["column-dtypes"].items():
-            dtype_header, (start, stop) = dtype
-            column_dtypes[name] = pickle.loads(
-                dtype_header["type-serialized"]
-            ).deserialize(dtype_header, frames[start:stop])
-
-        return p, header["column-names"], header["index-names"], column_dtypes
 
     @property
     def gpu_data_ptr(self):

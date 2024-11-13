@@ -29,7 +29,11 @@ from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
 import pylibcudf as plc
-from pylibcudf.contiguous_split import PackedColumns as PlcPackedColumns
+from pylibcudf.contiguous_split cimport PackedColumns as PlcPackedColumns
+cimport pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
+from libcpp.vector cimport vector
+from libc.stdint cimport uint8_t
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -363,27 +367,68 @@ class PackedColumns(Serializable):
             owner=self,
             exposed=True
         )
-        header, frames = self._data.serialize(
-            gpu_data,
-            self.column_names,
-            self.index_names,
-            self.column_dtypes,
-        )
-        self.column_dtypes = header["column-dtypes"]
+        # header, frames = self._data.serialize(
+        #     gpu_data,
+        #     self.column_names,
+        #     self.index_names,
+        #     self.column_dtypes,
+        # )
+
+        header = {}
+        frames = []
+        data_header, data_frames = gpu_data.serialize()
+        header["data"] = data_header
+        frames.extend(data_frames)
+
+        header["column-names"] = self.column_names
+        header["index-names"] = self.index_names
+        cdef PlcPackedColumns p = self._data
+        if p.c_obj.get()[0].metadata.get()[0].data() != NULL:
+            header["metadata"] = list(
+                <uint8_t[:p.c_obj.get()[0].metadata.get()[0].size()]>
+                p.c_obj.get()[0].metadata.get()[0].data()
+            )
+        for name, dtype in self.column_dtypes.items():
+            dtype_header, dtype_frames = dtype.serialize()
+            self.column_dtypes[name] = (
+                dtype_header,
+                (len(frames), len(frames) + len(dtype_frames)),
+            )
+            frames.extend(dtype_frames)
+        header["column-dtypes"] = self.column_dtypes
         header["type-serialized"] = pickle.dumps(type(self))
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
         gpu_data = Buffer.deserialize(header["data"], frames)
-        p, col_names, index_names, col_dtypes = PlcPackedColumns.deserialize(
-            gpu_data, header, frames
+        cdef PlcPackedColumns p = PlcPackedColumns.__new__(PlcPackedColumns)
+        dbuf = DeviceBuffer(
+            ptr=gpu_data.get_ptr(mode="write"),
+            size=gpu_data.nbytes
         )
+        cdef cpp_contiguous_split.packed_columns data
+        data.metadata = move(
+            make_unique[vector[uint8_t]](
+                move(<vector[uint8_t]>header.get("metadata", []))
+            )
+        )
+        data.gpu_data = move(dbuf.c_obj)
+
+        p.c_obj = move(make_unique[cpp_contiguous_split.packed_columns](move(data)))
+
+        column_dtypes = {}
+        for name, dtype in header["column-dtypes"].items():
+            dtype_header, (start, stop) = dtype
+            column_dtypes[name] = pickle.loads(
+                dtype_header["type-serialized"]
+            ).deserialize(dtype_header, frames[start:stop])
+
         return cls(
             p,
-            col_names,
-            index_names,
-            col_dtypes,
+            header["column-names"],
+            header["index-names"],
+            column_dtypes,
         )
 
     @classmethod
@@ -417,9 +462,9 @@ class PackedColumns(Serializable):
                     ]
                 )
             ),
-            column_names=column_names,
-            index_names=index_names,
-            column_dtypes=column_dtypes,
+            column_names,
+            index_names,
+            column_dtypes,
         )
 
     def unpack(self):
@@ -428,7 +473,6 @@ class PackedColumns(Serializable):
             self.column_names,
             self.index_names
         ))
-        print("DTYPES", self.column_dtypes)
         for name, dtype in self.column_dtypes.items():
             output_table._data[name] = (
                 output_table._data[name]._with_type_metadata(dtype)
