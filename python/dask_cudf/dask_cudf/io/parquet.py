@@ -821,8 +821,9 @@ if QUERY_PLANNING_ON:
     read_parquet.__doc__ = read_parquet_expr.__doc__
 else:
     read_parquet = _deprecated_api(
-        "dask_cudf.io.parquet.read_parquet",
+        "The legacy dask_cudf.io.parquet.read_parquet API",
         new_api="dask_cudf.read_parquet",
+        rec="",
     )
 to_parquet = _deprecated_api(
     "dask_cudf.io.parquet.to_parquet",

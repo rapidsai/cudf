@@ -677,10 +677,17 @@ def test_deprecated_api_paths(tmpdir):
     with pytest.warns(match="dask_cudf.io.to_parquet is now deprecated"):
         dask_cudf.io.to_parquet(df, tmpdir)
 
-    # Allow internal read_parquet import
-    df2 = dask_cudf.io.read_parquet(tmpdir)
-    dd.assert_eq(df, df2, check_divisions=False)
-
     if dask_cudf.QUERY_PLANNING_ON:
+        df2 = dask_cudf.io.read_parquet(tmpdir)
+        dd.assert_eq(df, df2, check_divisions=False)
+
         df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
         dd.assert_eq(df, df2, check_divisions=False)
+    else:
+        with pytest.warns(match="legacy dask_cudf.io.read_parquet"):
+            df2 = dask_cudf.io.read_parquet(tmpdir)
+            dd.assert_eq(df, df2, check_divisions=False)
+
+        with pytest.warns(match="legacy dask_cudf.io.parquet.read_parquet"):
+            df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
+            dd.assert_eq(df, df2, check_divisions=False)
