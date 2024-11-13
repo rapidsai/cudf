@@ -370,7 +370,8 @@ def _process_dataset(
         paths = ioutils.stringify_pathlike(paths[0])
     elif (
         filters is None
-        and (dataset_kwargs or {}).get("partitioning", None) is None
+        and isinstance(dataset_kwargs, dict)
+        and dataset_kwargs.get("partitioning") is None
     ):
         # Skip dataset processing if we have no filters
         # or hive/directory partitioning to deal with.
