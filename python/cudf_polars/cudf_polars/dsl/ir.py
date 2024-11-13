@@ -301,8 +301,8 @@ class Scan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
-    PARQUET_DEFAULT_CHUNK_SIZE: int = 0
-    PARQUET_DEFAULT_PASS_LIMIT: int = 17179869184  # 16GiB
+    PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
+    PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
 
     def __init__(
         self,
