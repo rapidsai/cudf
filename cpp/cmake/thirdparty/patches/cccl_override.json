@@ -4,11 +4,6 @@
     "CCCL" : {
       "patches" : [
         {
-          "file" : "${current_json_dir}/thrust_disable_64bit_dispatching.diff",
-          "issue" : "Remove 64bit dispatching as not needed by libcudf and results in compiling twice as many kernels [https://github.com/rapidsai/cudf/pull/11437]",
-          "fixed_in" : ""
-        },
-        {
           "file" : "${current_json_dir}/thrust_faster_sort_compile_times.diff",
           "issue" : "Improve Thrust sort compile times by not unrolling loops for inlined comparators [https://github.com/rapidsai/cudf/pull/10577]",
           "fixed_in" : ""

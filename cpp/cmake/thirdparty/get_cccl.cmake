@@ -34,6 +34,9 @@ function(find_and_configure_cccl)
   )
 
   # Find or install CCCL with our custom set of patches
+  # TODO: Does this work correctly? Is there a better way to set this? Should
+  # CCCL be setting THRUST_DISPATCH_TYPE with "FORCE"?
+  set(THRUST_DISPATCH_TYPE "Force32bit" STRING "Thrust offset type dispatch")
   rapids_cpm_cccl(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 
 endfunction()
