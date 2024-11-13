@@ -510,7 +510,7 @@ class Scan(IR):
             )
         elif typ == "parquet":
             parquet_options = config.config.get("parquet_options", {})
-            if parquet_options.get("chunked", False):
+            if parquet_options.get("chunked", True):
                 reader = plc.io.parquet.ChunkedParquetReader(
                     plc.io.SourceInfo(paths),
                     columns=with_columns,
