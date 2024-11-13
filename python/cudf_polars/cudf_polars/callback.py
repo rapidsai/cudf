@@ -135,6 +135,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
+    executor: str | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -145,13 +146,14 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if os.environ.get("CUDF_POLARS_DASK", "OFF").upper() == "ON":
-            # Use experimental Dask executor
+        if executor is None or executor == "cudf":
+            return ir.evaluate(cache={}).to_polars()
+        elif executor == "dask":
             from cudf_polars.experimental.parallel import evaluate_dask
 
             return evaluate_dask(ir).to_polars()
-
-        return ir.evaluate(cache={}).to_polars()
+        else:
+            raise ValueError(f"Unknown executor '{executor}'")
 
 
 def execute_with_cudf(
@@ -180,7 +182,8 @@ def execute_with_cudf(
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    if unsupported := (config.config.keys() - {"raise_on_fail"}):
+    executor = config.config.get("executor", None)
+    if unsupported := (config.config.keys() - {"raise_on_fail", "executor"}):
         raise ValueError(
             f"Engine configuration contains unsupported settings {unsupported}"
         )
@@ -207,7 +210,11 @@ def execute_with_cudf(
             else:
                 nt.set_udf(
                     partial(
-                        _callback, ir, device=device, memory_resource=memory_resource
+                        _callback,
+                        ir,
+                        device=device,
+                        memory_resource=memory_resource,
+                        executor=executor,
                     )
                 )
     except exception as e:
