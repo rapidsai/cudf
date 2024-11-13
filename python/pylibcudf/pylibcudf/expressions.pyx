@@ -398,7 +398,11 @@ class ExpressionTransformer(ast.NodeVisitor):
         return functools.reduce(
             functools.partial(Operation, ASTOperator.LOGICAL_AND),
             (
-                Operation(node.op, self.visit(left), self.visit(right))
+                Operation(
+                    _python_cudf_operator_map[type(node.op)], 
+                    self.visit(left), 
+                    self.visit(right,
+                )
                 for left, right in zip(
                     node.values[:-1], node.values[1:], strict=True
                 )
@@ -410,7 +414,11 @@ class ExpressionTransformer(ast.NodeVisitor):
         return functools.reduce(
             functools.partial(Operation, ASTOperator.LOGICAL_AND),
             (
-                Operation(op, self.visit(left), self.visit(right))
+                Operation(
+                    _python_cudf_operator_map[type(op)], 
+                    self.visit(left), 
+                    self.visit(right),
+                )
                 for op, left, right in zip(
                     node.ops, operands[:-1], operands[1:], strict=True
                 )
