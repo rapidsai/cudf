@@ -29,8 +29,9 @@ import pylibcudf as plc
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
-from cudf_polars.dsl.to_ast import to_parquet_filter
+from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.versions import POLARS_VERSION_GT_112
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "IR",
+    "ErrorNode",
     "PythonScan",
     "Scan",
     "Cache",
@@ -48,6 +50,7 @@ __all__ = [
     "Select",
     "GroupBy",
     "Join",
+    "ConditionalJoin",
     "HStack",
     "Distinct",
     "Sort",
@@ -208,6 +211,23 @@ class IR(Node["IR"]):
             *self._non_child_args,
             *(child.evaluate(cache=cache) for child in self.children),
         )
+
+
+class ErrorNode(IR):
+    """Represents an error translating the IR."""
+
+    __slots__ = ("error",)
+    _non_child = (
+        "schema",
+        "error",
+    )
+    error: str
+    """The error."""
+
+    def __init__(self, schema: Schema, error: str):
+        self.schema = schema
+        self.error = error
+        self.children = ()
 
 
 class PythonScan(IR):
@@ -498,7 +518,7 @@ class Scan(IR):
                 # Mask must have been applied.
                 return df
         elif typ == "ndjson":
-            json_schema: list[tuple[str, str, list]] = [
+            json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
@@ -522,6 +542,12 @@ class Scan(IR):
             )  # pragma: no cover; post init trips first
         if row_index is not None:
             name, offset = row_index
+            if POLARS_VERSION_GT_112:
+                # If we sliced away some data from the start, that
+                # shifts the row index.
+                # But prior to 1.13, polars had this wrong, so we match behaviour
+                # https://github.com/pola-rs/polars/issues/19607
+                offset += skip_rows
             dtype = schema[name]
             step = plc.interop.from_arrow(
                 pa.scalar(1, type=plc.interop.to_arrow(dtype))
@@ -888,6 +914,66 @@ class GroupBy(IR):
                 )
             ]
         return DataFrame(broadcasted).slice(options.slice)
+
+
+class ConditionalJoin(IR):
+    """A conditional inner join of two dataframes on a predicate."""
+
+    __slots__ = ("predicate", "options", "ast_predicate")
+    _non_child = ("schema", "predicate", "options")
+    predicate: expr.Expr
+    options: tuple
+
+    def __init__(
+        self, schema: Schema, predicate: expr.Expr, options: tuple, left: IR, right: IR
+    ) -> None:
+        self.schema = schema
+        self.predicate = predicate
+        self.options = options
+        self.children = (left, right)
+        self.ast_predicate = to_ast(predicate)
+        _, join_nulls, zlice, suffix, coalesce = self.options
+        # Preconditions from polars
+        assert not join_nulls
+        assert not coalesce
+        if self.ast_predicate is None:
+            raise NotImplementedError(
+                f"Conditional join with predicate {predicate}"
+            )  # pragma: no cover; polars never delivers expressions we can't handle
+        self._non_child_args = (self.ast_predicate, zlice, suffix)
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        predicate: plc.expressions.Expression,
+        zlice: tuple[int, int] | None,
+        suffix: str,
+        left: DataFrame,
+        right: DataFrame,
+    ) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        lg, rg = plc.join.conditional_inner_join(left.table, right.table, predicate)
+        left = DataFrame.from_table(
+            plc.copying.gather(
+                left.table, lg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+            ),
+            left.column_names,
+        )
+        right = DataFrame.from_table(
+            plc.copying.gather(
+                right.table, rg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+            ),
+            right.column_names,
+        )
+        right = right.rename_columns(
+            {
+                name: f"{name}{suffix}"
+                for name in right.column_names
+                if name in left.column_names_set
+            }
+        )
+        result = left.with_columns(right.columns)
+        return result.slice(zlice)
 
 
 class Join(IR):
@@ -1464,7 +1550,7 @@ class MapFunction(IR):
                 raise NotImplementedError(
                     "Unpivot cannot cast all input columns to "
                     f"{self.schema[value_name].id()}"
-                )
+                )  # pragma: no cover
             self.options = (
                 tuple(indices),
                 tuple(pivotees),

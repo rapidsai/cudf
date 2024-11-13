@@ -104,7 +104,7 @@ cpdef read_json(object filepaths_or_buffers,
         )
         df = cudf.DataFrame._from_data(
             *_data_from_columns(
-                columns=[Column.from_pylibcudf(plc) for plc in res_cols],
+                columns=[Column.from_pylibcudf(col) for col in res_cols],
                 column_names=res_col_names,
                 index_names=None
                )

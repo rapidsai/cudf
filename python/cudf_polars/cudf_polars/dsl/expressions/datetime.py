@@ -27,7 +27,9 @@ __all__ = ["TemporalFunction"]
 
 class TemporalFunction(Expr):
     __slots__ = ("name", "options")
-    _COMPONENT_MAP: ClassVar[dict[pl_expr.TemporalFunction, str]] = {
+    _COMPONENT_MAP: ClassVar[
+        dict[pl_expr.TemporalFunction, plc.datetime.DatetimeComponent]
+    ] = {
         pl_expr.TemporalFunction.Year: plc.datetime.DatetimeComponent.YEAR,
         pl_expr.TemporalFunction.Month: plc.datetime.DatetimeComponent.MONTH,
         pl_expr.TemporalFunction.Day: plc.datetime.DatetimeComponent.DAY,

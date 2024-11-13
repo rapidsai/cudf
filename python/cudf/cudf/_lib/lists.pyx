@@ -4,7 +4,9 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-from pylibcudf.libcudf.types cimport null_order, size_type
+from pylibcudf.libcudf.types cimport (
+    nan_equality, null_equality, null_order, order, size_type
+)
 
 from cudf._lib.column cimport Column
 from cudf._lib.utils cimport columns_from_pylibcudf_table
@@ -37,8 +39,8 @@ def distinct(Column col, bool nulls_equal, bool nans_all_equal):
     return Column.from_pylibcudf(
         plc.lists.distinct(
             col.to_pylibcudf(mode="read"),
-            nulls_equal,
-            nans_all_equal,
+            null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL,
+            nan_equality.ALL_EQUAL if nans_all_equal else nan_equality.UNEQUAL,
         )
     )
 
@@ -48,7 +50,7 @@ def sort_lists(Column col, bool ascending, str na_position):
     return Column.from_pylibcudf(
         plc.lists.sort_lists(
             col.to_pylibcudf(mode="read"),
-            ascending,
+            order.ASCENDING if ascending else order.DESCENDING,
             null_order.BEFORE if na_position == "first" else null_order.AFTER,
             False,
         )
@@ -91,7 +93,7 @@ def index_of_scalar(Column col, object py_search_key):
         plc.lists.index_of(
             col.to_pylibcudf(mode="read"),
             <Scalar> py_search_key.device_value.c_value,
-            True,
+            plc.lists.DuplicateFindOption.FIND_FIRST,
         )
     )
 
@@ -102,7 +104,7 @@ def index_of_column(Column col, Column search_keys):
         plc.lists.index_of(
             col.to_pylibcudf(mode="read"),
             search_keys.to_pylibcudf(mode="read"),
-            True,
+            plc.lists.DuplicateFindOption.FIND_FIRST,
         )
     )
 
@@ -123,7 +125,9 @@ def concatenate_list_elements(Column input_column, dropna=False):
     return Column.from_pylibcudf(
         plc.lists.concatenate_list_elements(
             input_column.to_pylibcudf(mode="read"),
-            dropna,
+            plc.lists.ConcatenateNullPolicy.IGNORE
+            if dropna
+            else plc.lists.ConcatenateNullPolicy.NULLIFY_OUTPUT_ROW,
         )
     )
 

@@ -83,7 +83,6 @@ function(ConfigureTest CMAKE_TEST_NAME)
         "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
     )
   endif()
-  enable_clang_tidy(${CMAKE_TEST_NAME})
 endfunction()
 
 # ##################################################################################################
@@ -611,6 +610,7 @@ ConfigureTest(
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
+  text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
   text/normalize_tests.cpp
@@ -712,6 +712,7 @@ ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_PARTITIONING_TEST streams/partitioning_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
+ConfigureTest(STREAM_QUANTILE_TEST streams/quantile_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REDUCTION_TEST streams/reduction_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
@@ -749,6 +750,7 @@ ConfigureTest(
   testing
 )
 ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_TRANSPOSE_TEST streams/transpose_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################

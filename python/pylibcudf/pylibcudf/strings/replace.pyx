@@ -16,6 +16,7 @@ from pylibcudf.libcudf.strings.replace cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
+__all__ = ["replace", "replace_multiple", "replace_slice"]
 
 cpdef Column replace(
     Column input,
