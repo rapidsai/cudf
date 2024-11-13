@@ -16,6 +16,11 @@ from cudf_polars.testing.asserts import (
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
 
+@pytest.fixture(params=[True, False], ids=["chunked", "no-chunked"])
+def chunked(request):
+    return request.param
+
+
 @pytest.fixture(
     params=[(None, None), ("row-index", 0), ("index", 10)],
     ids=["no-row-index", "zero-offset-row-index", "offset-row-index"],
@@ -97,7 +102,17 @@ def make_source(df, path, format):
     ],
 )
 def test_scan(
-    tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, slice, request
+    tmp_path,
+    df,
+    format,
+    scan_fn,
+    row_index,
+    n_rows,
+    columns,
+    mask,
+    slice,
+    chunked,
+    request,
 ):
     name, offset = row_index
     make_source(df, tmp_path / "file", format)
@@ -115,11 +130,23 @@ def test_scan(
     )
     if slice is not None:
         q = q.slice(*slice)
-    if mask is not None:
-        q = q.filter(mask)
-    if columns is not None:
-        q = q.select(*columns)
-    assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
+        if scan_fn is pl.scan_parquet and slice[0] != 0:
+            # slicing a scan optimizes to a skip_rows which
+            # the chunked reader does not yet support
+            assert_ir_translation_raises(q, NotImplementedError)
+        else:
+            assert_gpu_result_equal(q)
+    else:
+        if mask is not None:
+            q = q.filter(mask)
+        if columns is not None:
+            q = q.select(*columns)
+        assert_gpu_result_equal(
+            q,
+            engine=pl.GPUEngine(
+                raise_on_fail=True, parquet_options={"chunked": chunked}
+            ),
+        )
 
 
 def test_negative_slice_pushdown_raises(tmp_path):

@@ -349,10 +349,10 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if self.typ == "csv" and self.skip_rows != 0:  # pragma: no cover
+        if self.typ in {"csv", "parquet"} and self.skip_rows != 0:  # pragma: no cover
             # This comes from slice pushdown, but that
             # optimization doesn't happen right now
-            raise NotImplementedError("skipping rows in CSV reader")
+            raise NotImplementedError("skipping rows in CSV or Parquet reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
