@@ -2,7 +2,14 @@
 
 from typing import Any
 
-from pylibcudf.io.types import SourceInfo, TableWithMetadata
+from pylibcudf.io.types import (
+    CompressionType,
+    SinkInfo,
+    SourceInfo,
+    StatisticsFreq,
+    TableWithMetadata,
+)
+from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
 def read_orc(
@@ -39,3 +46,22 @@ class ParsedOrcStatistics:
 def read_parsed_orc_statistics(
     source_info: SourceInfo,
 ) -> ParsedOrcStatistics: ...
+
+class OrcWriterOptions:
+    def __init__(self): ...
+    @staticmethod
+    def builder(sink: SinkInfo, table: Table) -> OrcWriterOptionsBuilder: ...
+
+class OrcWriterOptionsBuilder:
+    def __init__(self): ...
+    def compression(
+        self, comp: CompressionType
+    ) -> OrcWriterOptionsBuilder: ...
+    def enable_statistics(
+        self, val: StatisticsFreq
+    ) -> OrcWriterOptionsBuilder: ...
+    def key_value_metadata(self, kvm: object) -> OrcWriterOptionsBuilder: ...
+    def metadata(self, meta: TableWithMetadata) -> OrcWriterOptionsBuilder: ...
+    def build(self) -> OrcWriterOptions: ...
+
+def write_orc(options: OrcWriterOptions) -> None: ...

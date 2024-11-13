@@ -4,11 +4,20 @@ from libcpp cimport bool
 from libcpp.optional cimport optional
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
+from pylibcudf.io.types cimport (
+    SourceInfo,
+    TableWithMetadata,
+    CompressionType,
+    StatisticsFreq,
+)
 from pylibcudf.libcudf.io.orc_metadata cimport (
     column_statistics,
     parsed_orc_statistics,
     statistics_type,
+)
+from pylibcudf.libcudf.io.orc cimport (
+    orc_writer_options,
+    orc_writer_options_builder,
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.types cimport DataType
@@ -48,3 +57,19 @@ cdef class ParsedOrcStatistics:
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
     SourceInfo source_info
 )
+
+
+cdef class OrcWriterOptions:
+    cdef orc_writer_options c_obj
+
+    @staticmethod
+    cdef OrcWriterOptionsBuilder builder(SinkInfo sink, Table table)
+
+
+cdef class OrcWriterOptionsBuilder:
+    cdef orc_writer_options_builder c_obj
+    cpdef OrcWriterOptionsBuilder compression(self, CompressionType comp)
+    cpdef OrcWriterOptionsBuilder enable_statistics(self, StatisticsFreq val)
+    cpdef OrcWriterOptionsBuilder key_value_metadata(self, object kvm)
+    cpdef OrcWriterOptionsBuilder metadata(self, TableWithMetadata meta)
+    cpdef OrcWriterOptions build(self)
