@@ -16,6 +16,8 @@ from typing import Any, Literal
 
 import numpy as np
 
+from rmm import RMMError
+
 from ..options import _env_get_bool
 from ..testing import assert_eq
 from .annotation import nvtx
@@ -899,10 +901,50 @@ def _assert_fast_slow_eq(left, right):
         assert_eq(left, right)
 
 
-class ProxyFallbackError(Exception):
-    """Raised when fallback occurs"""
+class FallbackError(Exception):
+    """Raises when fallback occurs"""
 
     pass
+
+
+class OOMFallbackError(FallbackError):
+    """Raises when cuDF produces a MemoryError or an rmm.RMMError"""
+
+    pass
+
+
+class NotImplementedFallbackError(FallbackError):
+    """Raises cuDF produces a NotImplementedError"""
+
+    pass
+
+
+class AttributeFallbackError(FallbackError):
+    """Raises when cuDF produces an AttributeError"""
+
+    pass
+
+
+class TypeFallbackError(FallbackError):
+    """Raises when cuDF produces a TypeError"""
+
+    pass
+
+
+def _raise_fallback_error(err, name):
+    """Raises a fallback error."""
+    err_message = f"Falling back to the slow path. The exception was {err}. \
+        The function called was {name}."
+    exception_map = {
+        (RMMError, MemoryError): OOMFallbackError,
+        NotImplementedError: NotImplementedFallbackError,
+        AttributeError: AttributeFallbackError,
+        TypeError: TypeFallbackError,
+    }
+    for err_type, fallback_err_type in exception_map.items():
+        if isinstance(err, err_type):
+            raise fallback_err_type(err_message) from err
+    raise FallbackError(err_message) from err
 
 
 def _fast_function_call():
@@ -981,16 +1023,14 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
-        if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
-            raise ProxyFallbackError(
-                f"The operation failed with cuDF, the reason was {type(err)}: {err}"
-            ) from err
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+                _raise_fallback_error(err, slow_args[0].__name__)
             if _env_get_bool("LOG_FAST_FALLBACK", False):
                 from ._logger import log_fallback
 

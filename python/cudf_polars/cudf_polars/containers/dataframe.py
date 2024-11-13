@@ -61,7 +61,7 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table: pa.Table = plc.interop.to_arrow(
+        table = plc.interop.to_arrow(
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )

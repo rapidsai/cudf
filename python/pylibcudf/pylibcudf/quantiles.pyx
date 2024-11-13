@@ -17,6 +17,7 @@ from .column cimport Column
 from .table cimport Table
 from .types cimport interpolation
 
+__all__ = ["quantile", "quantiles"]
 
 cpdef Column quantile(
     Column input,

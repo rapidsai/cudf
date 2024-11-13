@@ -12,6 +12,7 @@ from pylibcudf.scalar cimport Scalar
 
 from cython.operator import dereference
 
+__all__ = ["from_booleans", "to_booleans"]
 
 cpdef Column to_booleans(Column input, Scalar true_string):
     """

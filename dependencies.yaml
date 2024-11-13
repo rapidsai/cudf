@@ -753,7 +753,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.11,<1.13
+          - polars>=1.11,<1.14
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
