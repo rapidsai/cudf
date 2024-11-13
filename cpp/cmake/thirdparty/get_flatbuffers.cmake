@@ -22,6 +22,7 @@ function(find_and_configure_flatbuffers VERSION)
     GIT_REPOSITORY https://github.com/google/flatbuffers.git
     GIT_TAG v${VERSION}
     GIT_SHALLOW TRUE
+    EXCLUDE_FROM_ALL TRUE
   )
 
   rapids_export_find_package_root(
