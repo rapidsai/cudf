@@ -120,7 +120,6 @@ endif()
 
 if(USE_GDS)
   message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
-  find_package(cuFile REQUIRED)
 endif()
 
 # ##################################################################################################
@@ -228,8 +227,7 @@ if(USE_GDS)
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
-  target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
-  target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
+  target_link_libraries(cufilejni PRIVATE cudfjni CUDA::cuFile)
 endif()
 
 # ##################################################################################################
