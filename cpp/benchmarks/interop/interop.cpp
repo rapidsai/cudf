@@ -17,7 +17,6 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/common/table_utilities.hpp>
 
-#include <cudf/detail/interop.hpp>
 #include <cudf/interop.hpp>
 
 #include <nanoarrow/nanoarrow.hpp>
