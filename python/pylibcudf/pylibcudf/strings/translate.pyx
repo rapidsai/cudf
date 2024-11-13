@@ -14,6 +14,7 @@ from cython.operator import dereference
 from pylibcudf.libcudf.strings.translate import \
     filter_type as FilterType  # no-cython-lint
 
+__all__ = ["FilterType", "filter_characters", "translate"]
 
 cdef vector[pair[char_utf8, char_utf8]] _table_to_c_table(dict table):
     """

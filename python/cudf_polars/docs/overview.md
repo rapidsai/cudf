@@ -458,12 +458,12 @@ translate it to our intermediate representation (IR), and then execute
 and convert back to polars:
 
 ```python
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
 
 q = ...
 
 # Convert to our IR
-ir = translate_ir(q._ldf.visit())
+ir = Translator(q._ldf.visit()).translate_ir()
 
 # DataFrame living on the device
 result = ir.evaluate(cache={})

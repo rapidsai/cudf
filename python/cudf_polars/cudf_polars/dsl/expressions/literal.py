@@ -58,7 +58,7 @@ class Literal(Expr):
 class LiteralColumn(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Array[Any, Any]
+    value: pa.Array[Any]
 
     def __init__(self, dtype: plc.DataType, value: pl.Series) -> None:
         self.dtype = dtype

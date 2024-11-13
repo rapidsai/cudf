@@ -15,12 +15,14 @@
  */
 #pragma once
 
-#include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/aggregation/device_aggregators.cuh>
-#include <cudf/groupby.hpp>
-#include <cudf/utilities/bit.hpp>
+#include "helpers.cuh"
 
-#include <cuco/static_set_ref.cuh>
+#include <cudf/detail/aggregation/device_aggregators.cuh>
+#include <cudf/detail/utilities/assert.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/utilities/traits.cuh>
+
+#include <cuda/std/cstddef>
 
 namespace cudf::groupby::detail::hash {
 // TODO: TO BE REMOVED issue tracked via #17171
@@ -101,6 +103,114 @@ struct initialize_shmem {
                              cudf::size_type idx) const noexcept
   {
     initialize_target_element<Target, k>{}(target, target_mask, idx);
+  }
+};
+
+template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
+struct initialize_target_element_gmem {
+  __device__ void operator()(cudf::mutable_column_device_view, cudf::size_type) const noexcept
+  {
+    CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
+  }
+};
+
+template <typename Target, cudf::aggregation::Kind k>
+struct initialize_target_element_gmem<
+  Target,
+  k,
+  std::enable_if_t<is_supported<Target, k>() && cudf::is_fixed_width<Target>() &&
+                   !cudf::is_fixed_point<Target>()>> {
+  __device__ void operator()(cudf::mutable_column_device_view target,
+                             cudf::size_type target_index) const noexcept
+  {
+    using DeviceType                     = cudf::device_storage_type_t<Target>;
+    target.element<Target>(target_index) = get_identity<DeviceType, k>();
+  }
+};
+
+template <typename Target, cudf::aggregation::Kind k>
+struct initialize_target_element_gmem<
+  Target,
+  k,
+  std::enable_if_t<is_supported<Target, k>() && cudf::is_fixed_point<Target>()>> {
+  __device__ void operator()(cudf::mutable_column_device_view target,
+                             cudf::size_type target_index) const noexcept
+  {
+    using DeviceType                         = cudf::device_storage_type_t<Target>;
+    target.element<DeviceType>(target_index) = get_identity<DeviceType, k>();
+  }
+};
+
+struct initialize_gmem {
+  template <typename Target, cudf::aggregation::Kind k>
+  __device__ void operator()(cudf::mutable_column_device_view target,
+                             cudf::size_type target_index) const noexcept
+  {
+    initialize_target_element_gmem<Target, k>{}(target, target_index);
+  }
+};
+
+struct initialize_sparse_table {
+  cudf::size_type const* row_indices;
+  cudf::mutable_table_device_view sparse_table;
+  cudf::aggregation::Kind const* __restrict__ aggs;
+  initialize_sparse_table(cudf::size_type const* row_indices,
+                          cudf::mutable_table_device_view sparse_table,
+                          cudf::aggregation::Kind const* aggs)
+    : row_indices(row_indices), sparse_table(sparse_table), aggs(aggs)
+  {
+  }
+  __device__ void operator()(cudf::size_type i)
+  {
+    auto key_idx = row_indices[i];
+    for (auto col_idx = 0; col_idx < sparse_table.num_columns(); col_idx++) {
+      cudf::detail::dispatch_type_and_aggregation(sparse_table.column(col_idx).type(),
+                                                  aggs[col_idx],
+                                                  initialize_gmem{},
+                                                  sparse_table.column(col_idx),
+                                                  key_idx);
+    }
+  }
+};
+
+template <typename SetType>
+struct global_memory_fallback_fn {
+  SetType set;
+  cudf::table_device_view input_values;
+  cudf::mutable_table_device_view output_values;
+  cudf::aggregation::Kind const* __restrict__ aggs;
+  cudf::size_type* block_cardinality;
+  cudf::size_type stride;
+  bitmask_type const* __restrict__ row_bitmask;
+  bool skip_rows_with_nulls;
+
+  global_memory_fallback_fn(SetType set,
+                            cudf::table_device_view input_values,
+                            cudf::mutable_table_device_view output_values,
+                            cudf::aggregation::Kind const* aggs,
+                            cudf::size_type* block_cardinality,
+                            cudf::size_type stride,
+                            bitmask_type const* row_bitmask,
+                            bool skip_rows_with_nulls)
+    : set(set),
+      input_values(input_values),
+      output_values(output_values),
+      aggs(aggs),
+      block_cardinality(block_cardinality),
+      stride(stride),
+      row_bitmask(row_bitmask),
+      skip_rows_with_nulls(skip_rows_with_nulls)
+  {
+  }
+
+  __device__ void operator()(cudf::size_type i)
+  {
+    auto const block_id = (i % stride) / GROUPBY_BLOCK_SIZE;
+    if (block_cardinality[block_id] >= GROUPBY_CARDINALITY_THRESHOLD and
+        (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i))) {
+      auto const result = set.insert_and_find(i);
+      cudf::detail::aggregate_row(output_values, *result.first, input_values, i, aggs);
+    }
   }
 };
 
