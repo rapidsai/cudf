@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 __all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 
-DEFAULT_GPU_ENGINE: GPUEngine = GPUEngine()
+DEFAULT_GPU_ENGINE: GPUEngine = GPUEngine(raise_on_fail=True)
 
 
 def assert_gpu_result_equal(
