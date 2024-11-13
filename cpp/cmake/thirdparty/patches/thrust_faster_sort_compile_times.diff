@@ -1,20 +1,20 @@
 diff --git a/cub/cub/block/block_merge_sort.cuh b/cub/cub/block/block_merge_sort.cuh
-index eb76ebb0b..c6c529a50 100644
+index 29510db5e..cf57e5786 100644
 --- a/cub/cub/block/block_merge_sort.cuh
 +++ b/cub/cub/block/block_merge_sort.cuh
 @@ -95,7 +95,7 @@ _CCCL_DEVICE _CCCL_FORCEINLINE void SerialMerge(
    KeyT key1 = keys_shared[keys1_beg];
    KeyT key2 = keys_shared[keys2_beg];
- 
+
 -#pragma unroll
 +#pragma unroll 1
    for (int item = 0; item < ITEMS_PER_THREAD; ++item)
    {
-     bool p = (keys2_beg < keys2_end) && ((keys1_beg >= keys1_end) || compare_op(key2, key1));
-@@ -376,7 +376,7 @@ public:
+     const bool p  = (keys2_beg < keys2_end) && ((keys1_beg >= keys1_end) || compare_op(key2, key1));
+@@ -374,7 +374,7 @@ public:
        //
        KeyT max_key = oob_default;
- 
+
 -#pragma unroll
 +#pragma unroll 1
        for (int item = 1; item < ITEMS_PER_THREAD; ++item)
@@ -27,7 +27,7 @@ index 7d9e8622f..da5627306 100644
 @@ -87,10 +87,10 @@ StableOddEvenSort(KeyT (&keys)[ITEMS_PER_THREAD], ValueT (&items)[ITEMS_PER_THRE
  {
    constexpr bool KEYS_ONLY = ::cuda::std::is_same<ValueT, NullType>::value;
- 
+
 -#pragma unroll
 +#pragma unroll 1
    for (int i = 0; i < ITEMS_PER_THREAD; ++i)
