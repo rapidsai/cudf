@@ -79,7 +79,7 @@ cudf::test::TempDirTestEnvironment* const temp_env =
  * @brief Test fixture for parametrized JSON reader tests
  */
 struct JsonCompressedIOTest : public cudf::test::BaseFixture,
-                                  public testing::WithParamInterface<cudf::io::compression_type> {};
+                              public testing::WithParamInterface<cudf::io::compression_type> {};
 
 // Parametrize qualifying JSON tests for multiple compression types
 INSTANTIATE_TEST_SUITE_P(JsonCompressedIOTest,
@@ -126,21 +126,26 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
     {{{"0", "1"}, {"1", "1.1"}}, {{"0", "2"}, {"1", "2.2"}}, {{"0", "3"}, {"1", "3.3"}}}, "\n");
 
   std::vector<std::uint8_t> cdata;
-  if(comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::compress(comptype, cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()), stream_view);
-    auto decomp_out_buffer = cudf::io::decompress(comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
+  if (comptype != cudf::io::compression_type::NONE) {
+    cdata = cudf::io::compress(
+      comptype,
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()),
+      stream_view);
+    auto decomp_out_buffer =
+      cudf::io::decompress(comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
     std::string const expected = R"({"0":1, "1":1.1}
 {"0":2, "1":2.2}
 {"0":3, "1":3.3})";
     EXPECT_EQ(
       expected,
       std::string(reinterpret_cast<char*>(decomp_out_buffer.data()), decomp_out_buffer.size()));
-  }
-  else 
-    cdata = std::vector<uint8_t>(reinterpret_cast<uint8_t*>(data.data()), reinterpret_cast<uint8_t*>(data.data()) + data.size());
+  } else
+    cdata = std::vector<uint8_t>(reinterpret_cast<uint8_t*>(data.data()),
+                                 reinterpret_cast<uint8_t*>(data.data()) + data.size());
 
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{cudf::host_span<uint8_t>(cdata.data(), cdata.size())})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<uint8_t>(cdata.data(), cdata.size())})
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<double>()})
       .compression(comptype)
       .lines(true);

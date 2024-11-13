@@ -39,4 +39,4 @@ std::vector<uint8_t> compress(compression_type compression,
                               rmm::cuda_stream_view stream);
 
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
