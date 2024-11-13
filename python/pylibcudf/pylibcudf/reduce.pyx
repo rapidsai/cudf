@@ -16,6 +16,7 @@ from .types cimport DataType
 
 from pylibcudf.libcudf.reduce import scan_type as ScanType  # no-cython-lint
 
+__all__ = ["ScanType", "minmax", "reduce", "scan"]
 
 cpdef Scalar reduce(Column col, Aggregation agg, DataType data_type):
     """Perform a reduction on a column

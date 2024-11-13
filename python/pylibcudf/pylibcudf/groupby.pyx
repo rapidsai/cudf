@@ -25,6 +25,8 @@ from .types cimport null_order, null_policy, order, sorted
 from .utils cimport _as_vector
 
 
+__all__ = ["GroupBy", "GroupByRequest"]
+
 cdef class GroupByRequest:
     """A request for a groupby aggregation or scan.
 
@@ -44,6 +46,8 @@ cdef class GroupByRequest:
     def __init__(self, Column values, list aggregations):
         self._values = values
         self._aggregations = aggregations
+
+    __hash__ = None
 
     cdef aggregation_request _to_libcudf_agg_request(self) except *:
         """Convert to a libcudf aggregation_request object.
@@ -126,6 +130,8 @@ cdef class GroupBy:
         # keep a reference to the keys table so it doesn't get
         # deallocated from under us:
         self._keys = keys
+
+    __hash__ = None
 
     @staticmethod
     cdef tuple _parse_outputs(

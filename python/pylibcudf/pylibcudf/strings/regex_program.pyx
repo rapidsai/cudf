@@ -11,6 +11,7 @@ from pylibcudf.strings.regex_flags import RegexFlags
 
 from pylibcudf.strings.regex_flags cimport regex_flags
 
+__all__ = ["RegexProgram"]
 
 cdef class RegexProgram:
     """Regex program class.
@@ -23,6 +24,8 @@ cdef class RegexProgram:
     """
     def __init__(self, *args, **kwargs):
         raise ValueError("Do not instantiate RegexProgram directly, use create")
+
+    __hash__ = None
 
     @staticmethod
     def create(str pattern, int flags):

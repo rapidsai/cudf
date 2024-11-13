@@ -42,7 +42,7 @@ class file_sink : public data_sink {
     if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
 
     if (cufile_integration::is_kvikio_enabled()) {
-      cufile_integration::set_thread_pool_nthreads_from_env();
+      cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath, "w");
       CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");
@@ -72,8 +72,12 @@ class file_sink : public data_sink {
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    if (size < _gds_write_preferred_threshold) { return false; }
-    return supports_device_write();
+    if (!supports_device_write()) { return false; }
+
+    // Always prefer device writes if kvikio is enabled
+    if (!_kvikio_file.closed()) { return true; }
+
+    return size >= _gds_write_preferred_threshold;
   }
 
   std::future<void> device_write_async(void const* gpu_data,

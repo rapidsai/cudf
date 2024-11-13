@@ -9,10 +9,6 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-cimport pylibcudf.libcudf.io.types as cudf_io_types
-from pylibcudf.io.types cimport compression_type
-from pylibcudf.libcudf.io.json cimport json_recovery_mode_t
-from pylibcudf.libcudf.io.types cimport compression_type
 from pylibcudf.libcudf.types cimport data_type, type_id
 from pylibcudf.types cimport DataType
 
@@ -24,15 +20,6 @@ from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
 import pylibcudf as plc
 
 
-cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
-    if on_bad_lines.lower() == "error":
-        return json_recovery_mode_t.FAIL
-    elif on_bad_lines.lower() == "recover":
-        return json_recovery_mode_t.RECOVER_WITH_NULL
-    else:
-        raise TypeError(f"Invalid parameter for {on_bad_lines=}")
-
-
 cpdef read_json(object filepaths_or_buffers,
                 object dtype,
                 bool lines,
@@ -41,7 +28,7 @@ cpdef read_json(object filepaths_or_buffers,
                 bool keep_quotes,
                 bool mixed_types_as_string,
                 bool prune_columns,
-                object on_bad_lines):
+                str on_bad_lines):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -64,19 +51,24 @@ cpdef read_json(object filepaths_or_buffers,
             filepaths_or_buffers[idx] = filepaths_or_buffers[idx].encode()
 
     # Setup arguments
-    cdef cudf_io_types.compression_type c_compression
-
     if compression is not None:
         if compression == 'gzip':
-            c_compression = cudf_io_types.compression_type.GZIP
+            c_compression = plc.io.types.CompressionType.GZIP
         elif compression == 'bz2':
-            c_compression = cudf_io_types.compression_type.BZIP2
+            c_compression = plc.io.types.CompressionType.BZIP2
         elif compression == 'zip':
-            c_compression = cudf_io_types.compression_type.ZIP
+            c_compression = plc.io.types.CompressionType.ZIP
         else:
-            c_compression = cudf_io_types.compression_type.AUTO
+            c_compression = plc.io.types.CompressionType.AUTO
     else:
-        c_compression = cudf_io_types.compression_type.NONE
+        c_compression = plc.io.types.CompressionType.NONE
+
+    if on_bad_lines.lower() == "error":
+        c_on_bad_lines = plc.io.types.JSONRecoveryMode.FAIL
+    elif on_bad_lines.lower() == "recover":
+        c_on_bad_lines = plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL
+    else:
+        raise TypeError(f"Invalid parameter for {on_bad_lines=}")
 
     processed_dtypes = None
 
@@ -108,11 +100,11 @@ cpdef read_json(object filepaths_or_buffers,
             keep_quotes = keep_quotes,
             mixed_types_as_string = mixed_types_as_string,
             prune_columns = prune_columns,
-            recovery_mode = _get_json_recovery_mode(on_bad_lines)
+            recovery_mode = c_on_bad_lines
         )
         df = cudf.DataFrame._from_data(
             *_data_from_columns(
-                columns=[Column.from_pylibcudf(plc) for plc in res_cols],
+                columns=[Column.from_pylibcudf(col) for col in res_cols],
                 column_names=res_col_names,
                 index_names=None
                )
@@ -130,7 +122,7 @@ cpdef read_json(object filepaths_or_buffers,
             keep_quotes = keep_quotes,
             mixed_types_as_string = mixed_types_as_string,
             prune_columns = prune_columns,
-            recovery_mode = _get_json_recovery_mode(on_bad_lines)
+            recovery_mode = c_on_bad_lines
         )
 
         df = cudf.DataFrame._from_data(

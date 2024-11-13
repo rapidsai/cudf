@@ -47,11 +47,21 @@ rapids = ["rmm", "cudf", "dask_cudf"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
 
+[tool.pydistcheck]
+select = [
+    "distro-too-large-compressed",
+]
+
+# PyPI limit is 100 MiB, fail CI before we get too close to that
+max_allowed_size_compressed = '75M'
+
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"
 empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
-  "error"
+  "error",
+  # https://github.com/rapidsai/build-planning/issues/116
+  "ignore:.*cuda..* module is deprecated.*:DeprecationWarning",
 ]
 xfail_strict = true
 
