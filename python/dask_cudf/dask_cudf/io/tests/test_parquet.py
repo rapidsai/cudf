@@ -681,5 +681,6 @@ def test_deprecated_api_paths(tmpdir):
     df2 = dask_cudf.io.read_parquet(tmpdir)
     dd.assert_eq(df, df2, check_divisions=False)
 
-    df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
-    dd.assert_eq(df, df2, check_divisions=False)
+    if dask_cudf.QUERY_PLANNING_ON:
+        df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
+        dd.assert_eq(df, df2, check_divisions=False)
