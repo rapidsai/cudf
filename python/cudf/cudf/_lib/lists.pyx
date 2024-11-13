@@ -4,9 +4,7 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-from pylibcudf.libcudf.types cimport (
-    nan_equality, null_equality, null_order, order, size_type
-)
+from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
 from cudf._lib.utils cimport columns_from_pylibcudf_table
@@ -39,8 +37,16 @@ def distinct(Column col, bool nulls_equal, bool nans_all_equal):
     return Column.from_pylibcudf(
         plc.lists.distinct(
             col.to_pylibcudf(mode="read"),
-            null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL,
-            nan_equality.ALL_EQUAL if nans_all_equal else nan_equality.UNEQUAL,
+            (
+                plc.types.NullEquality.EQUAL
+                if nulls_equal
+                else plc.types.NullEquality.UNEQUAL
+            ),
+            (
+                plc.types.NanEquality.ALL_EQUAL
+                if nans_all_equal
+                else plc.types.NanEquality.UNEQUAL
+            ),
         )
     )
 
@@ -50,8 +56,12 @@ def sort_lists(Column col, bool ascending, str na_position):
     return Column.from_pylibcudf(
         plc.lists.sort_lists(
             col.to_pylibcudf(mode="read"),
-            order.ASCENDING if ascending else order.DESCENDING,
-            null_order.BEFORE if na_position == "first" else null_order.AFTER,
+            plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING,
+            (
+                plc.types.NullOrder.BEFORE
+                if na_position == "first"
+                else plc.types.NullOrder.AFTER
+            ),
             False,
         )
     )
