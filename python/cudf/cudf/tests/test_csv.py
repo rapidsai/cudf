@@ -2292,5 +2292,5 @@ def test_read_empty_only_row(buffer):
 
 
 def test_read_empty_only_row_custom_terminator():
-    gdf = cudf.read_csv(StringIO("*"), header=None, lineterminator='*')
+    gdf = cudf.read_csv(StringIO("*"), header=None, lineterminator="*")
     assert_eq(gdf.shape, (0, 0))
