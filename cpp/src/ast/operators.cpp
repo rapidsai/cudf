@@ -29,10 +29,10 @@ namespace {
 
 struct arity_functor {
   template <ast_operator op>
-  cudf::size_type operator()()
+  void operator()(cudf::size_type& result)
   {
     // Arity is not dependent on null handling, so just use the false implementation here.
-    return operator_functor<op, false>::arity;
+    result = operator_functor<op, false>::arity;
   }
 };
 
@@ -46,7 +46,7 @@ struct return_type_functor {
    * @tparam OperatorFunctor Operator functor to perform.
    * @tparam LHS Left input type.
    * @tparam RHS Right input type.
-   * @returns Result data type.
+   * @param result Pointer whose value is assigned to the result data type.
    */
   template <typename OperatorFunctor,
             typename LHS,
@@ -77,7 +77,7 @@ struct return_type_functor {
    *
    * @tparam OperatorFunctor Operator functor to perform.
    * @tparam T Input type.
-   * @returns Result data type.
+   * @param result Pointer whose value is assigned to the result data type.
    */
   template <typename OperatorFunctor,
             typename T,
@@ -117,16 +117,16 @@ struct single_dispatch_binary_operator_types {
             typename F,
             typename... Ts,
             std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
-  inline decltype(auto) operator()(F&& f, Ts&&... args)
+  inline void operator()(F&& f, Ts&&... args)
   {
-    return f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
+    f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
   }
 
   template <typename LHS,
             typename F,
             typename... Ts,
             std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
-  inline decltype(auto) operator()(F&& f, Ts&&... args)
+  inline void operator()(F&& f, Ts&&... args)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
@@ -155,13 +155,10 @@ struct type_dispatch_binary_op {
    * @param args Forwarded arguments to `operator()` of `f`.
    */
   template <ast_operator op, typename F, typename... Ts>
-  inline decltype(auto) operator()(cudf::data_type lhs_type,
-                                   cudf::data_type rhs_type,
-                                   F&& f,
-                                   Ts&&... args)
+  inline void operator()(cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
   {
     // Single dispatch (assume lhs_type == rhs_type)
-    return type_dispatcher(
+    type_dispatcher(
       lhs_type,
       // Always dispatch to the non-null operator for the purpose of type determination.
       detail::single_dispatch_binary_operator_types<operator_functor<op, false>>{},
@@ -181,15 +178,15 @@ struct type_dispatch_binary_op {
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
-inline constexpr decltype(auto) binary_operator_dispatcher(
+inline constexpr void binary_operator_dispatcher(
   ast_operator op, cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
 {
-  return ast_operator_dispatcher(op,
-                                 detail::type_dispatch_binary_op{},
-                                 lhs_type,
-                                 rhs_type,
-                                 std::forward<F>(f),
-                                 std::forward<Ts>(args)...);
+  ast_operator_dispatcher(op,
+                          detail::type_dispatch_binary_op{},
+                          lhs_type,
+                          rhs_type,
+                          std::forward<F>(f),
+                          std::forward<Ts>(args)...);
 }
 
 /**
@@ -206,16 +203,16 @@ struct dispatch_unary_operator_types {
             typename F,
             typename... Ts,
             std::enable_if_t<is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
-  inline decltype(auto) operator()(F&& f, Ts&&... args)
+  inline void operator()(F&& f, Ts&&... args)
   {
-    return f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
+    f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
   }
 
   template <typename InputT,
             typename F,
             typename... Ts,
             std::enable_if_t<!is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
-  inline decltype(auto) operator()(F&& f, Ts&&... args)
+  inline void operator()(F&& f, Ts&&... args)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation.");
@@ -230,9 +227,9 @@ struct dispatch_unary_operator_types {
  */
 struct type_dispatch_unary_op {
   template <ast_operator op, typename F, typename... Ts>
-  inline decltype(auto) operator()(cudf::data_type input_type, F&& f, Ts&&... args)
+  inline void operator()(cudf::data_type input_type, F&& f, Ts&&... args)
   {
-    return type_dispatcher(
+    type_dispatcher(
       input_type,
       // Always dispatch to the non-null operator for the purpose of type determination.
       detail::dispatch_unary_operator_types<operator_functor<op, false>>{},
@@ -251,16 +248,16 @@ struct type_dispatch_unary_op {
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
-inline constexpr decltype(auto) unary_operator_dispatcher(ast_operator op,
-                                                          cudf::data_type input_type,
-                                                          F&& f,
-                                                          Ts&&... args)
+inline constexpr void unary_operator_dispatcher(ast_operator op,
+                                                cudf::data_type input_type,
+                                                F&& f,
+                                                Ts&&... args)
 {
-  return ast_operator_dispatcher(op,
-                                 detail::type_dispatch_unary_op{},
-                                 input_type,
-                                 std::forward<F>(f),
-                                 std::forward<Ts>(args)...);
+  ast_operator_dispatcher(op,
+                          detail::type_dispatch_unary_op{},
+                          input_type,
+                          std::forward<F>(f),
+                          std::forward<Ts>(args)...);
 }
 
 }  // namespace
@@ -270,10 +267,13 @@ cudf::data_type ast_operator_return_type(ast_operator op,
 {
   cudf::data_type result{cudf::type_id::EMPTY};
   switch (operand_types.size()) {
-    case 1: unary_operator_dispatcher(op, operand_types[0], detail::return_type_functor{}, result);
+    case 1:
+      unary_operator_dispatcher(op, operand_types[0], detail::return_type_functor{}, result);
+      break;
     case 2:
       binary_operator_dispatcher(
         op, operand_types[0], operand_types[1], detail::return_type_functor{}, result);
+      break;
     default: CUDF_FAIL("Unsupported operator return type."); break;
   }
   return result;
@@ -281,7 +281,9 @@ cudf::data_type ast_operator_return_type(ast_operator op,
 
 cudf::size_type ast_operator_arity(ast_operator op)
 {
-  return ast_operator_dispatcher(op, arity_functor{});
+  cudf::size_type result{};
+  ast_operator_dispatcher(op, arity_functor{}, result);
+  return result;
 }
 
 }  // namespace detail
