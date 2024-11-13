@@ -258,9 +258,7 @@ dependencies:
           - numpy
           - scipy
           - scikit-learn
-          - pip
-          - pip:
-            - catboost
+          - catboost
   test_cuml:
     common:
       - output_types: conda
