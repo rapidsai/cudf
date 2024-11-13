@@ -300,6 +300,17 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
 }
 
 /**
+ * @brief GZIP host decompressor (includes header)
+ */
+size_t decompress_zip(host_span<uint8_t const> src, host_span<uint8_t> dst)
+{
+  gz_archive_s gz;
+  auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
+  CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header");
+  return decompress_zlib({gz.comp_data, gz.comp_len}, dst);
+}
+
+/**
  * @brief SNAPPY host decompressor
  */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
@@ -570,10 +581,15 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
                                      // ~4:1 compression for initial size
   }
 
-  if (compression == compression_type::GZIP || compression == compression_type::ZIP) {
+  if (compression == compression_type::GZIP) {
     // INFLATE
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     decompress_gzip(src, dst);
+    return dst;
+  }
+  if (compression == compression_type::ZIP) {
+    std::vector<uint8_t> dst(srcprops.uncomp_len);
+    cpu_inflate_vector(dst, srcprops.comp_data, srcprops.comp_len);
     return dst;
   }
   if (compression == compression_type::BZIP2) {
