@@ -9,6 +9,7 @@ from pylibcudf.libcudf.nvtext.edit_distance cimport (
     edit_distance_matrix as cpp_edit_distance_matrix,
 )
 
+__all__ = ["edit_distance", "edit_distance_matrix"]
 
 cpdef Column edit_distance(Column input, Column targets):
     """

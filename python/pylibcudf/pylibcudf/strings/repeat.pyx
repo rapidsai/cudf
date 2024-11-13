@@ -6,6 +6,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport repeat as cpp_repeat
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = ["repeat_strings"]
 
 cpdef Column repeat_strings(Column input, ColumnorSizeType repeat_times):
     """
