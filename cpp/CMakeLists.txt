@@ -215,9 +215,9 @@ function(enable_static_checkers target)
       # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
       # the linters on real builds.
       foreach(_flag -Wno-missing-braces -Wno-absolute-value -Wunneeded-internal-declaration)
-        list(FIND CUDF_CXX_FLAGS "${flag}" _flag_index)
+        list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
         if(_flag_index EQUAL -1)
-          list(APPEND CUDF_CXX_FLAGS ${flag})
+          list(APPEND CUDF_CXX_FLAGS ${_flag})
         endif()
       endforeach()
       set(CUDF_CXX_FLAGS
