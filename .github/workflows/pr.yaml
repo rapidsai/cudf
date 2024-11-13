@@ -44,8 +44,9 @@ jobs:
       needs: ${{ toJSON(needs) }}
   changed-files:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-24.12
+    uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@force-ci-run
     with:
+      force_ci_run_label: "nonexistent label"
       files_yaml: |
         test_cpp:
           - '**'
