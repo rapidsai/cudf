@@ -33,6 +33,20 @@ _CUDF_PANDAS_NVTX_COLORS = {
     "EXECUTE_SLOW": 0x0571B0,
 }
 
+# This is a dict of functions that are known to have arguments that
+# need to be transformed from fast to slow only. i.e., Some cudf functions
+# error on passing a device object but don't error on passing a host object.
+# For example: DataFrame.__setitem__(arg, value) errors on passing a
+# cudf.Index object but doesn't error on passing a pd.Index object.
+# Hence we need to transform the arg from fast to slow only. So, we use
+# a dictionary like:
+# {"DataFrame.__setitem__": {0}}
+# where the keys are the function names and the values are the indices
+# (0-based) of the arguments that need to be transformed.
+
+_SPECIAL_FUNCTIONS_ARGS_MAP = {
+    "DataFrame.__setitem__": {0},
+}
 
 _WRAPPER_ASSIGNMENTS = tuple(
     attr
@@ -875,6 +889,10 @@ class _MethodProxy(_FunctionProxy):
             pass
         setattr(self._fsproxy_slow, "__name__", value)
 
+    @property
+    def _customqualname(self):
+        return self._fsproxy_slow.__qualname__
+
 
 def _assert_fast_slow_eq(left, right):
     if _is_final_type(type(left)) or type(left) in NUMPY_TYPES:
@@ -1011,7 +1029,36 @@ def _transform_arg(
         # use __reduce_ex__ instead...
         if type(arg) is tuple:
             # Must come first to avoid infinite recursion
-            return tuple(_transform_arg(a, attribute_name, seen) for a in arg)
+            if (
+                len(arg) > 0
+                and isinstance(arg[0], _MethodProxy)
+                and arg[0]._customqualname in _SPECIAL_FUNCTIONS_ARGS_MAP
+            ):
+                indices_map = _SPECIAL_FUNCTIONS_ARGS_MAP[
+                    arg[0]._customqualname
+                ]
+                method_proxy, original_args, original_kwargs = arg
+
+                original_args = tuple(
+                    _transform_arg(a, "_fsproxy_slow", seen)
+                    if i - 1 in indices_map
+                    else _transform_arg(a, attribute_name, seen)
+                    for i, a in enumerate(original_args)
+                )
+                original_kwargs = _transform_arg(
+                    original_kwargs, attribute_name, seen
+                )
+                return tuple(
+                    (
+                        _transform_arg(method_proxy, attribute_name, seen),
+                        original_args,
+                        original_kwargs,
+                    )
+                )
+            else:
+                return tuple(
+                    _transform_arg(a, attribute_name, seen) for a in arg
+                )
         elif hasattr(arg, "__getnewargs_ex__"):
             # Partial implementation of to reconstruct with
             # transformed pieces
