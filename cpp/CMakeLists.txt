@@ -1128,6 +1128,9 @@ install(
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
 )
+install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
+)
 
 set(_components_export_string)
 if(TARGET cudftestutil)
