@@ -20,9 +20,9 @@ function(find_and_configure_nanoarrow)
   rapids_cpm_package_override("${cudf_patch_dir}/nanoarrow_override.json")
 
   if (NOT BUILD_SHARED_LIBS)
-    set(_exclude_from_all "EXCLUDE_FROM_ALL OFF")
+    set(_exclude_from_all "EXCLUDE_FROM_ALL FALSE")
   else()
-    set(_exclude_from_all "EXCLUDE_FROM_ALL ON")
+    set(_exclude_from_all "EXCLUDE_FROM_ALL TRUE")
   endif()
 
   # Currently we need to always build nanoarrow so we don't pickup a previous installed version
