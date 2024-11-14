@@ -24,7 +24,7 @@ dependencies = [
     "cupy-cuda11x>=12.0.0",
     "fsspec>=0.6.0",
     "libcudf==24.12.*,>=0.0.0a0",
-    "numba-cuda>=0.0.13",
+    "numba-cuda>=0.0.13,<0.0.18",
     "numpy>=1.23,<3.0a0",
     "nvtx>=0.2.1",
     "packaging",
@@ -82,6 +82,14 @@ cudf-pandas-tests = [
 [project.urls]
 Homepage = "https://github.com/rapidsai/cudf"
 Documentation = "https://docs.rapids.ai/api/cudf/stable/"
+
+[tool.pydistcheck]
+select = [
+    "distro-too-large-compressed",
+]
+
+# PyPI limit is 100 MiB, fail CI before we get too close to that
+max_allowed_size_compressed = '75M'
 
 [tool.pytest.ini_options]
 addopts = "--tb=native --strict-config --strict-markers"

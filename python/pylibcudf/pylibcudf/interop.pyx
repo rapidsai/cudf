@@ -38,6 +38,14 @@ from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType, type_id
 
+__all__ = [
+    "ColumnMetadata",
+    "from_arrow",
+    "from_dlpack",
+    "to_arrow",
+    "to_dlpack",
+]
+
 ARROW_TO_PYLIBCUDF_TYPES = {
     pa.int8(): type_id.INT8,
     pa.int16(): type_id.INT16,

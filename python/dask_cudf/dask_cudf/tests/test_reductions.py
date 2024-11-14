@@ -1,7 +1,5 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-import numpy as np
-import pandas as pd
 import pytest
 
 import dask
@@ -10,20 +8,7 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-
-
-def _make_random_frame(nelem, npartitions=2):
-    rng = np.random.default_rng(seed=0)
-    df = pd.DataFrame(
-        {
-            "x": rng.integers(0, 5, size=nelem),
-            "y": rng.normal(loc=1.0, scale=1.0, size=nelem),
-        }
-    )
-    gdf = cudf.DataFrame.from_pandas(df)
-    dgf = dask_cudf.from_cudf(gdf, npartitions=npartitions)
-    return df, dgf
-
+from dask_cudf.tests.utils import _make_random_frame
 
 _reducers = ["sum", "count", "mean", "var", "std", "min", "max"]
 

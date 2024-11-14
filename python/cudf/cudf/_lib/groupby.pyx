@@ -18,9 +18,6 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib.scalar import as_device_scalar
 
-from pylibcudf.libcudf.replace cimport replace_policy
-from pylibcudf.libcudf.scalar.scalar cimport scalar
-
 import pylibcudf
 
 from cudf._lib.aggregation import make_aggregation
@@ -54,8 +51,6 @@ _DECIMAL_AGGS = {
     "NUNIQUE",
     "SUM",
 }
-# workaround for https://github.com/cython/cython/issues/3885
-ctypedef const scalar constscalar
 
 
 @singledispatch
@@ -244,13 +239,11 @@ cdef class GroupBy:
         return columns_from_pylibcudf_table(shifts), columns_from_pylibcudf_table(keys)
 
     def replace_nulls(self, list values, object method):
-        # TODO: This is using an enum (replace_policy) that has not been exposed in
-        # pylibcudf yet. We'll want to fix that import once it is in pylibcudf.
         _, replaced = self._groupby.replace_nulls(
             pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values]),
             [
-                replace_policy.PRECEDING
-                if method == 'ffill' else replace_policy.FOLLOWING
+                pylibcudf.replace.ReplacePolicy.PRECEDING
+                if method == 'ffill' else pylibcudf.replace.ReplacePolicy.FOLLOWING
             ] * len(values),
         )
 

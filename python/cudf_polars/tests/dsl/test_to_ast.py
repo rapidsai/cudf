@@ -13,7 +13,7 @@ import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr_nodes
 import cudf_polars.dsl.ir as ir_nodes
-from cudf_polars import translate_ir
+from cudf_polars import Translator
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
 from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
 
@@ -60,7 +60,7 @@ def df():
 )
 def test_compute_column(expr, df):
     q = df.select(expr)
-    ir = translate_ir(q._ldf.visit())
+    ir = Translator(q._ldf.visit()).translate_ir()
 
     assert isinstance(ir, ir_nodes.Select)
     table = ir.children[0].evaluate(cache={})
