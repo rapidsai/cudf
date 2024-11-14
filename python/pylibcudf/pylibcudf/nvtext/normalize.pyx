@@ -10,6 +10,7 @@ from pylibcudf.libcudf.nvtext.normalize cimport (
     normalize_spaces as cpp_normalize_spaces,
 )
 
+__all__ = ["normalize_characters", "normalize_spaces"]
 
 cpdef Column normalize_spaces(Column input):
     """

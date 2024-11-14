@@ -4,13 +4,7 @@ import warnings
 
 from cudf.core.buffer import acquire_spill_lock
 
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
 cimport pylibcudf.libcudf.datetime as libcudf_datetime
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.filling cimport calendrical_month_sequence
-from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.datetime import DatetimeComponent, RoundingFrequency
 
@@ -143,20 +137,17 @@ def is_leap_year(Column col):
 
 @acquire_spill_lock()
 def date_range(DeviceScalar start, size_type n, offset):
-    cdef unique_ptr[column] c_result
     cdef size_type months = (
         offset.kwds.get("years", 0) * 12
         + offset.kwds.get("months", 0)
     )
-
-    cdef const scalar* c_start = start.get_raw_ptr()
-    with nogil:
-        c_result = move(calendrical_month_sequence(
+    return Column.from_pylibcudf(
+        plc.filling.calendrical_month_sequence(
             n,
-            c_start[0],
-            months
-        ))
-    return Column.from_unique_ptr(move(c_result))
+            start.c_value,
+            months,
+        )
+    )
 
 
 @acquire_spill_lock()

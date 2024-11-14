@@ -90,8 +90,8 @@ repos:
         entry: |
           # Check for usage of default_rng without seeding
           default_rng\(\)|
-          # Check for usage of np.random.seed
-          np.random.seed\(
+          # Check for usage of np.random.seed (NPY002 only disallows this being called)
+          np.random.seed
         language: pygrep
         types: [python]
       - id: cmake-format

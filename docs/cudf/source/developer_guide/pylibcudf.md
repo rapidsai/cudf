@@ -15,7 +15,8 @@ To satisfy the goals of pylibcudf, we impose the following set of design princip
 - All typing in code should be written using Cython syntax, not PEP 484 Python typing syntax. Not only does this ensure compatibility with Cython < 3, but even with Cython 3 PEP 484 support remains incomplete as of this writing.
 - All cudf code should interact only with pylibcudf, never with libcudf directly. This is not currently the case, but is the direction that the library is moving towards.
 - Ideally, pylibcudf should depend on no RAPIDS component other than rmm, and should in general have minimal runtime dependencies.
-
+- Type stubs are provided and generated manually. When adding new
+  functionality, ensure that the matching type stub is appropriately updated.
 
 ## Relationship to libcudf
 
@@ -249,3 +250,73 @@ In the event that libcudf provides multiple overloads for the same function with
 and set arguments not shared between overloads to `None`. If a user tries to pass in an unsupported argument for a specific overload type, you should raise `ValueError`.
 
 Finally, consider making an libcudf issue if you think this inconsistency can be addressed on the libcudf side.
+
+### Type stubs
+
+Since static type checkers like `mypy` and `pyright` cannot parse
+Cython code, we provide type stubs for the pylibcudf package. These
+are currently maintained manually, alongside the matching pylibcudf
+files.
+
+Every `pyx` file should have a matching `pyi` file that provides the
+type stubs. Most functions can be exposed straightforwardly. Some
+guiding principles:
+
+- For typed integer arguments in libcudf, use `int` as a type
+  annotation.
+- For functions which are annotated as a `list` in Cython, but the
+  function body does more detailed checking, try and encode the
+  detailed information in the type.
+- For Cython fused types there are two options:
+    1. If the fused type appears only once in the function signature,
+       use a `Union` type;
+    2. If the fused type appears more than once (or as both an input
+       and output type), use a `TypeVar` with
+       the variants in the fused type provided as constraints.
+
+
+As an example, `pylibcudf.copying.split` is typed in Cython as:
+
+```cython
+ctypedef fused ColumnOrTable:
+    Table
+    Column
+
+cpdef list split(ColumnOrTable input, list splits): ...
+```
+
+Here we only have a single use of the fused type, and the `list`
+arguments do not specify their values. Here, if we provide a `Column`
+as input, we receive a `list[Column]` as output, and if we provide a
+`Table` we receive `list[Table]` as output.
+
+In the type stub, we can encode this with a `TypeVar`, we can also
+provide typing for the `splits` argument that indicates that the split
+values must be integers:
+
+```python
+ColumnOrTable = TypeVar("ColumnOrTable", Column, Table)
+
+def split(input: ColumnOrTable, splits: list[int]) -> list[ColumnOrTable]: ...
+```
+
+Conversely, `pylibcudf.copying.scatter` uses a fused type only once in
+its input:
+
+```cython
+ctypedef fused TableOrListOfScalars:
+    Table
+    list
+
+cpdef Table scatter(
+    TableOrListOfScalars source, Column scatter_map, Table target
+)
+```
+
+In the type stub, we can use a normal union in this case
+
+```python
+def scatter(
+    source: Table | list[Scalar], scatter_map: Column, target: Table
+) -> Table: ...
+```

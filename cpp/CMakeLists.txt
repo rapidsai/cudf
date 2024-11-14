@@ -36,6 +36,8 @@ if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERS
   )
 endif()
 
+rapids_cmake_write_version_file(include/cudf/version_config.hpp)
+
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
 # `Threads::Threads` is the same value in first run and subsequent runs.
@@ -90,6 +92,12 @@ option(
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
 
+option(
+  CUDF_KVIKIO_REMOTE_IO
+  "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
+  ON
+)
+
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
@@ -109,6 +117,9 @@ message(
   "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler): ${CUDA_ENABLE_LINEINFO}"
 )
 message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
+message(VERBOSE
+        "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
+)
 
 # Set a default build type if none was specified
 rapids_cmake_build_type("Release")
@@ -205,10 +216,10 @@ function(enable_static_checkers target)
       # compile flags. To do this completely cleanly we should modify the flags on the target rather
       # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
       # the linters on real builds.
-      foreach(_flag -Wno-missing-braces -Wno-absolute-value -Wunneeded-internal-declaration)
-        list(FIND CUDF_CXX_FLAGS "${flag}" _flag_index)
+      foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
+        list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
         if(_flag_index EQUAL -1)
-          list(APPEND CUDF_CXX_FLAGS ${flag})
+          list(APPEND CUDF_CXX_FLAGS ${_flag})
         endif()
       endforeach()
       set(CUDF_CXX_FLAGS
@@ -275,8 +286,6 @@ if(CUDF_BUILD_TESTUTIL)
 endif()
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
-# find cuFile
-include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 # find fmt
@@ -293,9 +302,6 @@ if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
   list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
-  if(TARGET cufile::cuFile_interface)
-    list(APPEND dependencies cuFile)
-  endif()
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -394,11 +400,14 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/compute_aggregations.cu
+  src/groupby/hash/compute_aggregations_null.cu
+  src/groupby/hash/compute_global_memory_aggs.cu
+  src/groupby/hash/compute_global_memory_aggs_null.cu
   src/groupby/hash/compute_groupby.cu
   src/groupby/hash/compute_mapping_indices.cu
   src/groupby/hash/compute_mapping_indices_null.cu
   src/groupby/hash/compute_shared_memory_aggs.cu
-  src/groupby/hash/compute_single_pass_aggs.cu
   src/groupby/hash/create_sparse_results_table.cu
   src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
@@ -693,6 +702,7 @@ add_library(
   src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
+  src/strings/search/contains_multiple.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -887,6 +897,14 @@ target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL
 # Define spdlog level
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
 
+# Enable remote IO through KvikIO
+target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
+
+# Enable cuFile support
+if(TARGET CUDA::cuFile)
+  target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
+endif()
+
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
@@ -895,7 +913,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
@@ -1109,6 +1127,9 @@ install(
   TARGETS cudf
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
+)
+install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
 )
 
 set(_components_export_string)
