@@ -148,7 +148,7 @@ def _callback(
     ):
         if executor is None or executor == "cudf":
             return ir.evaluate(cache={}).to_polars()
-        elif executor == "dask":
+        elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask
 
             return evaluate_dask(ir).to_polars()

@@ -41,7 +41,7 @@ def test_can_convert_lists():
         }
     )
 
-    assert_gpu_result_equal(df, executor="dask")
+    assert_gpu_result_equal(df, executor="dask-experimental")
 
 
 def test_scan_csv_comment_char(tmp_path):
@@ -50,4 +50,4 @@ def test_scan_csv_comment_char(tmp_path):
 
     q = pl.scan_csv(tmp_path / "test.csv", comment_prefix="#")
 
-    assert_gpu_result_equal(q, executor="dask")
+    assert_gpu_result_equal(q, executor="dask-experimental")
