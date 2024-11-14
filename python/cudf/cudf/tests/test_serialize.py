@@ -7,6 +7,7 @@ import msgpack
 import numpy as np
 import pandas as pd
 import pytest
+from packaging import version
 
 import cudf
 from cudf.testing import _utils as utils, assert_eq
@@ -388,6 +389,10 @@ def test_serialize_string_check_buffer_sizes():
     assert expect == got
 
 
+@pytest.mark.skipif(
+    version.parse(np.__version__) < version.parse("2.0.0"),
+    reason="The serialization of numpy 2.0 types is incompatible with numpy 1.x",
+)
 def test_deserialize_cudf_23_12(datadir):
     fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_23.12.pkl"
 
