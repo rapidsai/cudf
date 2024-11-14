@@ -94,7 +94,8 @@ TEST_F(GroupbyTest, Shift)
   cudf::test::fixed_width_column_wrapper<int32_t> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::fixed_width_column_wrapper<int32_t> val{3, 4, 5, 6, 7, 8, 9};
   cudf::size_type offset = 2;
-  auto slr               = cudf::make_default_constructed_scalar(cudf::column_view(val).type());
+  auto slr               = cudf::make_default_constructed_scalar(cudf::column_view(val).type(),
+                                                   cudf::test::get_default_stream());
 
   cudf::groupby::groupby gb_obj(cudf::table_view({key}));
   std::vector<cudf::size_type> offsets{offset};
