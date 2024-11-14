@@ -3940,7 +3940,6 @@ class IndexedFrame(Frame):
             else col.copy(deep=True)
             for name, col in self._column_labels_and_values
         )
-
         return self._from_data_like_self(
             self._data._from_columns_like_self(cols)
         )
