@@ -3772,14 +3772,25 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(
 @pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
 @pytest.mark.parametrize("use_pandas_metadata", [True, False])
 @pytest.mark.parametrize("row_groups", [[[0]], None, [[0, 1]]])
+@pytest.mark.parametrize("num_rows", [5000, 10000, None])
 def test_parquet_chunked_reader(
-    chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
+    chunk_read_limit,
+    pass_read_limit,
+    use_pandas_metadata,
+    row_groups,
+    num_rows,
 ):
     df = pd.DataFrame(
-        {"a": [1, 2, 3, 4] * 1000000, "b": ["av", "qw", "hi", "xyz"] * 1000000}
+        {
+            "a": [1, 2, 3, None] * 10000,
+            "b": ["av", "qw", None, "xyz"] * 10000,
+            "list": list([[1, 2], [3, 5], None, [6, None]] * 10000),
+        }
     )
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    # Write 4 Parquet row groups
+    df.to_parquet(buffer, row_group_size=10000)
+    # Check with row_groups specified
     actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
@@ -3789,6 +3800,72 @@ def test_parquet_chunked_reader(
     )
     expected = cudf.read_parquet(
         buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
+    )
+    assert_eq(expected, actual)
+
+    # Check with num_rows specified
+    actual = read_parquet_chunked(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        use_pandas_metadata=use_pandas_metadata,
+        nrows=num_rows if num_rows is not None else len(df),
+    )
+    expected = cudf.read_parquet(
+        buffer,
+        use_pandas_metadata=use_pandas_metadata,
+        nrows=num_rows if num_rows is not None else len(df),
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("use_pandas_metadata", [True, False])
+@pytest.mark.parametrize("num_rows", [1000, 3000, None])
+def test_parquet_chunked_reader_structs(
+    chunk_read_limit,
+    pass_read_limit,
+    use_pandas_metadata,
+    num_rows,
+):
+    data = [
+        {
+            "a": "g",
+            "b": {
+                "b_a": 10,
+                "b_b": {"b_b_b": None, "b_b_a": 2},
+            },
+            "c": None,
+        },
+        {"a": None, "b": {"b_a": None, "b_b": None}, "c": [15, 16]},
+        {"a": "j", "b": None, "c": [8, 10]},
+        {"a": None, "b": {"b_a": None, "b_b": None}, "c": None},
+        None,
+        {
+            "a": None,
+            "b": {"b_a": None, "b_b": {"b_b_b": 1}},
+            "c": [18, 19],
+        },
+        {"a": None, "b": None, "c": None},
+    ] * 1000
+
+    pa_struct = pa.Table.from_pydict({"struct": data})
+    df = cudf.DataFrame.from_arrow(pa_struct)
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+
+    actual = read_parquet_chunked(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        use_pandas_metadata=use_pandas_metadata,
+        nrows=num_rows if num_rows is not None else len(df),
+    )
+    expected = cudf.read_parquet(
+        buffer,
+        use_pandas_metadata=use_pandas_metadata,
+        nrows=num_rows if num_rows is not None else len(df),
     )
     assert_eq(expected, actual)
 
