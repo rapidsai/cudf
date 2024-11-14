@@ -43,6 +43,7 @@ option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
+option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
@@ -120,7 +121,10 @@ endif()
 
 if(USE_GDS)
   message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
-  if(NOT TARGET CUDA::cuFile)
+  if(CUDA_STATIC_CUFILE)
+    set(_cufile_suffix _static)
+  endif()
+  if(NOT TARGET CUDA::cuFile${_cufile_suffix})
     message(FATAL_ERROR "cuFile support not found")
   endif()
 endif()
@@ -230,7 +234,7 @@ if(USE_GDS)
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
-  target_link_libraries(cufilejni PRIVATE cudfjni CUDA::cuFile)
+  target_link_libraries(cufilejni PRIVATE cudfjni CUDA::cuFile${_cufile_suffix})
 endif()
 
 # ##################################################################################################
