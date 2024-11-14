@@ -19,20 +19,23 @@
 
 #include <cudf/interop.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
 #include <nanoarrow_utils.hpp>
 #include <nvbench/nvbench.cuh>
 
 #include <algorithm>
+#include <iterator>
 #include <vector>
 
 template <cudf::type_id data_type>
 void BM_to_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
-  auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  int32_t const num_columns = 1;
-  auto const num_elements   = static_cast<int64_t>(num_rows) * num_columns;
+  auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_columns  = static_cast<int32_t>(state.get_int64("num_columns"));
+  auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
   std::vector<cudf::type_id> types;
 
@@ -53,9 +56,9 @@ void BM_to_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_
 template <cudf::type_id data_type>
 void BM_to_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
-  auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  int32_t const num_columns = 1;
-  auto const num_elements   = static_cast<int64_t>(num_rows) * num_columns;
+  auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_columns  = static_cast<int32_t>(state.get_int64("num_columns"));
+  auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
   std::vector<cudf::type_id> types;
 
@@ -77,7 +80,7 @@ template <cudf::type_id data_type>
 void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_columns  = 1;
+  auto const num_columns  = static_cast<int32_t>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
   std::vector<cudf::type_id> types;
@@ -92,14 +95,20 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
   cudf::table_view table_view = table->view();
   int64_t const size_bytes    = estimate_size(table_view);
 
-  cudf::column_metadata column_metadata{""};
-  std::vector<cudf::column_metadata> children_metadata;
-  std::fill_n(std::back_inserter(children_metadata),
-              table->get_column(0).num_children(),
-              cudf::column_metadata{""});
-  column_metadata.children_meta = children_metadata;
   std::vector<cudf::column_metadata> table_metadata;
-  table_metadata.push_back(column_metadata);
+
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(num_columns),
+                 std::back_inserter(table_metadata),
+                 [&](auto const column) {
+                   cudf::column_metadata column_metadata{""};
+                   std::vector<cudf::column_metadata> children_metadata;
+                   std::fill_n(std::back_inserter(children_metadata),
+                               table->get_column(column).num_children(),
+                               cudf::column_metadata{""});
+                   column_metadata.children_meta = children_metadata;
+                   return column_metadata;
+                 });
 
   cudf::unique_schema_t schema      = cudf::to_arrow_schema(table_view, table_metadata);
   cudf::unique_device_array_t input = cudf::to_arrow_device(table_view);
@@ -118,7 +127,7 @@ template <cudf::type_id data_type>
 void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_columns  = 1;
+  auto const num_columns  = static_cast<int32_t>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
   std::vector<cudf::type_id> types;
@@ -133,14 +142,20 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
   cudf::table_view table_view = table->view();
   int64_t const size_bytes    = estimate_size(table_view);
 
-  cudf::column_metadata column_metadata{""};
-  std::vector<cudf::column_metadata> children_metadata;
-  std::fill_n(std::back_inserter(children_metadata),
-              table->get_column(0).num_children(),
-              cudf::column_metadata{""});
-  column_metadata.children_meta = children_metadata;
   std::vector<cudf::column_metadata> table_metadata;
-  table_metadata.push_back(column_metadata);
+
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(num_columns),
+                 std::back_inserter(table_metadata),
+                 [&](auto const column) {
+                   cudf::column_metadata column_metadata{""};
+                   std::vector<cudf::column_metadata> children_metadata;
+                   std::fill_n(std::back_inserter(children_metadata),
+                               table->get_column(column).num_children(),
+                               cudf::column_metadata{""});
+                   column_metadata.children_meta = children_metadata;
+                   return column_metadata;
+                 });
 
   cudf::unique_schema_t schema      = cudf::to_arrow_schema(table_view, table_metadata);
   cudf::unique_device_array_t input = cudf::to_arrow_host(table_view);
@@ -177,6 +192,8 @@ using data_types = nvbench::enum_type_list<cudf::type_id::INT8,
                                            //  cudf::type_id::DICTIONARY32,
                                            cudf::type_id::STRING,
                                            cudf::type_id::LIST,
+                                           cudf::type_id::DECIMAL32,
+                                           cudf::type_id::DECIMAL64,
                                            cudf::type_id::DECIMAL128,
                                            cudf::type_id::STRUCT>;
 
@@ -220,19 +237,23 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(cudf::type_id, stringify_type, stringify_type)
 NVBENCH_BENCH_TYPES(BM_to_arrow_host, NVBENCH_TYPE_AXES(data_types))
   .set_type_axes_names({"data_type"})
   .set_name("to_arrow_host")
-  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("num_columns", {1});
 
 NVBENCH_BENCH_TYPES(BM_to_arrow_device, NVBENCH_TYPE_AXES(data_types))
   .set_type_axes_names({"data_type"})
   .set_name("to_arrow_device")
-  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("num_columns", {1});
 
 NVBENCH_BENCH_TYPES(BM_from_arrow_host, NVBENCH_TYPE_AXES(data_types))
   .set_type_axes_names({"data_type"})
   .set_name("from_arrow_host")
-  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("num_columns", {1});
 
 NVBENCH_BENCH_TYPES(BM_from_arrow_device, NVBENCH_TYPE_AXES(data_types))
   .set_type_axes_names({"data_type"})
   .set_name("from_arrow_device")
-  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000});
+  .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("num_columns", {1});
