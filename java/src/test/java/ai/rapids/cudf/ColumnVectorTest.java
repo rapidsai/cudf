@@ -3830,26 +3830,26 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testStringContainsMulti() {
-      ColumnVector[] results = null;
-      try (ColumnVector haystack = ColumnVector.fromStrings("All the leaves are brown",
-          "And the sky is grey",
-          "I've been for a walk",
-          "On a winter's day",
-          null,
-          "");
-          ColumnVector targets = ColumnVector.fromStrings("the", "a");
-           ColumnVector expected0 = ColumnVector.fromBoxedBooleans(true, true, false, false, null, false);
-           ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true, false, true, true, null, false)) {
-        results = haystack.stringContains(targets);
-        assertColumnsAreEqual(results[0], expected0);
-        assertColumnsAreEqual(results[1], expected1);
-      } finally {
-        if (results != null) {
-          for (ColumnVector c : results) {
-            c.close();
-          }
+    ColumnVector[] results = null;
+    try (ColumnVector haystack = ColumnVector.fromStrings("tést strings",
+        "Héllo cd",
+        "1 43 42 7",
+        "scala spark 42 other",
+        null,
+        "");
+        ColumnVector targets = ColumnVector.fromStrings("é", "42");
+        ColumnVector expected0 = ColumnVector.fromBoxedBooleans(true, true, false, false, null, false);
+        ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, false, true, true, null, false)) {
+      results = haystack.stringContains(targets);
+      assertColumnsAreEqual(results[0], expected0);
+      assertColumnsAreEqual(results[1], expected1);
+    } finally {
+      if (results != null) {
+        for (ColumnVector c : results) {
+          c.close();
         }
       }
+    }
   }
 
   @Test

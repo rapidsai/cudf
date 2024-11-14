@@ -3332,14 +3332,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
   }
 
-  private static long[] toPrimitive(Long[] longs) {
-    long[] ret = new long[longs.length];
-    for (int i = 0; i < longs.length; ++i) {
-      ret[i] = longs[i];
-    }
-    return ret;
-  }
-
   /**
    * @brief Searches for the given target strings within each string in the provided column
    *
@@ -3364,7 +3356,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector[] stringContains(ColumnView targets) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert targets.getType().equals(DType.STRING) : "targets type must be a string";
-    assert targets.getNullCount() == 0 : "targets must not be null";
+    assert targets.getNullCount() == 0 : "targets must not contain nulls";
     assert targets.getRowCount() > 0 : "targets must not be empty";
     long[] resultPointers = stringContainsMulti(getNativeView(), targets.getNativeView());
     return Arrays.stream(resultPointers).mapToObj(ColumnVector::new).toArray(ColumnVector[]::new);
@@ -4478,9 +4470,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Native method for searching for the given target strings within each string in the provided column.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
-   * @param targets handle of the column containing the string being searched for.
+   * @param targetViewHandle handle of the column view containing the strings being searched for.
    */
-  private static native long[] stringContainsMulti(long cudfViewHandle, long targets) throws CudfException;
+  private static native long[] stringContainsMulti(long cudfViewHandle, long targetViewHandle) throws CudfException;
 
   /**
    * Native method for extracting results from a regex program pattern. Returns a table handle.

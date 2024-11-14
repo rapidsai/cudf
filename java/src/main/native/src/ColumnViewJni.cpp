@@ -2832,15 +2832,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_toHex(JNIEnv* env, jclass
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsMulti(JNIEnv* env,
                                                                                 jobject j_object,
                                                                                 jlong j_view_handle,
-                                                                                jlong comp_strings)
+                                                                                jlong j_target_view_handle)
 {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
-  JNI_NULL_CHECK(env, comp_strings, "targets is null", 0);
+  JNI_NULL_CHECK(env, j_target_view_handle, "targets is null", 0);
 
   try {
     cudf::jni::auto_set_device(env);
     auto* column_view         = reinterpret_cast<cudf::column_view*>(j_view_handle);
-    auto* targets_view        = reinterpret_cast<cudf::column_view*>(comp_strings);
+    auto* targets_view        = reinterpret_cast<cudf::column_view*>(j_target_view_handle);
     auto const strings_column = cudf::strings_column_view(*column_view);
     auto const targets_column = cudf::strings_column_view(*targets_view);
     auto contains_results     = cudf::strings::contains_multiple(strings_column, targets_column);
