@@ -29,7 +29,7 @@ register()
         pa.table({"a": [1, 2, None], "b": [None, 3, 4]}),
     ],
 )
-@pytest.mark.parametrize("protocol", ["cuda", "dask-experimental"])
+@pytest.mark.parametrize("protocol", ["cuda", "dask"])
 def test_dask_serialization_roundtrip(arrow_tbl, protocol):
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
