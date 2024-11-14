@@ -17,8 +17,8 @@ def label_bins(Column input, Column left_edges, cbool left_inclusive,
     plc_column = plc.labeling.label_bins(
         input.to_pylibcudf(mode="read"),
         left_edges.to_pylibcudf(mode="read"),
-        left_inclusive,
+        plc.labeling.Inclusive.YES if left_inclusive else plc.labeling.Inclusive.NO,
         right_edges.to_pylibcudf(mode="read"),
-        right_inclusive
+        plc.labeling.Inclusive.YES if right_inclusive else plc.labeling.Inclusive.NO,
     )
     return Column.from_pylibcudf(plc_column)

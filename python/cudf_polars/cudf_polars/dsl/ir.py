@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "IR",
+    "ErrorNode",
     "PythonScan",
     "Scan",
     "Cache",
@@ -210,6 +211,23 @@ class IR(Node["IR"]):
             *self._non_child_args,
             *(child.evaluate(cache=cache) for child in self.children),
         )
+
+
+class ErrorNode(IR):
+    """Represents an error translating the IR."""
+
+    __slots__ = ("error",)
+    _non_child = (
+        "schema",
+        "error",
+    )
+    error: str
+    """The error."""
+
+    def __init__(self, schema: Schema, error: str):
+        self.schema = schema
+        self.error = error
+        self.children = ()
 
 
 class PythonScan(IR):
@@ -500,7 +518,7 @@ class Scan(IR):
                 # Mask must have been applied.
                 return df
         elif typ == "ndjson":
-            json_schema: list[tuple[str, str, list]] = [
+            json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
@@ -529,7 +547,7 @@ class Scan(IR):
                 # shifts the row index.
                 # But prior to 1.13, polars had this wrong, so we match behaviour
                 # https://github.com/pola-rs/polars/issues/19607
-                offset += skip_rows  # pragma: no cover; polars 1.13 not yet released
+                offset += skip_rows
             dtype = schema[name]
             step = plc.interop.from_arrow(
                 pa.scalar(1, type=plc.interop.to_arrow(dtype))
@@ -1532,7 +1550,7 @@ class MapFunction(IR):
                 raise NotImplementedError(
                     "Unpivot cannot cast all input columns to "
                     f"{self.schema[value_name].id()}"
-                )
+                )  # pragma: no cover
             self.options = (
                 tuple(indices),
                 tuple(pivotees),

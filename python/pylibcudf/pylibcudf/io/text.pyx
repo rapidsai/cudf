@@ -10,6 +10,15 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
 
+__all__ = [
+    "DataChunkSource",
+    "ParseOptions",
+    "make_source",
+    "make_source_from_bgzip_file",
+    "make_source_from_file",
+    "multibyte_split",
+]
+
 cdef class ParseOptions:
     """
     Parsing options for `multibyte_split`

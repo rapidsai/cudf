@@ -5350,11 +5350,65 @@ class StringMethods(ColumnMethods):
             libstrings.minhash(self._column, seeds_column, width)
         )
 
+    def minhash_permuted(
+        self, seed: np.uint32, a: ColumnLike, b: ColumnLike, width: int
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a strings column.
+
+        This uses the MurmurHash3_x86_32 algorithm for the hash function.
+
+        Calculation uses the formula (hv * a + b) % mersenne_prime
+        where hv is the hash of a substring of width characters,
+        a and b are provided values and mersenne_prime is 2^61-1.
+
+        Parameters
+        ----------
+        seed : uint32
+            The seed used for the hash algorithm.
+        a : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint32.
+        b : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint32.
+        width : int
+            The width of the substring to hash.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> s = cudf.Series(['this is my', 'favorite book'])
+        >>> a = cudf.Series([1, 2, 3], dtype=np.uint32)
+        >>> b = cudf.Series([4, 5, 6], dtype=np.uint32)
+        >>> s.str.minhash_permuted(0, a=a, b=b, width=5)
+        0    [1305480171, 462824409, 74608232]
+        1       [32665388, 65330773, 97996158]
+        dtype: list
+        """
+        a_column = column.as_column(a)
+        if a_column.dtype != np.uint32:
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(a)}"
+            )
+        b_column = column.as_column(b)
+        if b_column.dtype != np.uint32:
+            raise ValueError(
+                f"Expecting a Series with dtype uint32, got {type(b)}"
+            )
+        return self._return_or_inplace(
+            libstrings.minhash_permuted(
+                self._column, seed, a_column, b_column, width
+            )
+        )
+
     def minhash64(
         self, seeds: ColumnLike | None = None, width: int = 4
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
+
         This uses the MurmurHash3_x64_128 algorithm for the hash function.
         This function generates 2 uint64 values but only the first
         uint64 value is used.
@@ -5388,6 +5442,59 @@ class StringMethods(ColumnMethods):
                 )
         return self._return_or_inplace(
             libstrings.minhash64(self._column, seeds_column, width)
+        )
+
+    def minhash64_permuted(
+        self, seed: np.uint64, a: ColumnLike, b: ColumnLike, width: int
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a strings column.
+        This uses the MurmurHash3_x64_128 algorithm for the hash function.
+
+        Calculation uses the formula (hv * a + b) % mersenne_prime
+        where hv is the hash of a substring of width characters,
+        a and b are provided values and mersenne_prime is 2^61-1.
+
+        Parameters
+        ----------
+        seed : uint64
+            The seed used for the hash algorithm.
+        a : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint64.
+        b : ColumnLike
+            Values for minhash calculation.
+            Must be of type uint64.
+        width : int
+            The width of the substring to hash.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> s = cudf.Series(['this is my', 'favorite book', 'to read'])
+        >>> a = cudf.Series([2, 3], dtype=np.uint64)
+        >>> b = cudf.Series([5, 6], dtype=np.uint64)
+        >>> s.str.minhash64_permuted(0, a=a, b=b, width=5)
+        0    [172452388517576012, 316595762085180527]
+        1      [71427536958126239, 58787297728258215]
+        2    [423885828176437114, 1140588505926961370]
+        dtype: list
+        """
+        a_column = column.as_column(a)
+        if a_column.dtype != np.uint64:
+            raise ValueError(
+                f"Expecting a Series with dtype uint64, got {type(a)}"
+            )
+        b_column = column.as_column(b)
+        if b_column.dtype != np.uint64:
+            raise ValueError(
+                f"Expecting a Series with dtype uint64, got {type(b)}"
+            )
+        return self._return_or_inplace(
+            libstrings.minhash64_permuted(
+                self._column, seed, a_column, b_column, width
+            )
         )
 
     def word_minhash(self, seeds: ColumnLike | None = None) -> SeriesOrIndex:
