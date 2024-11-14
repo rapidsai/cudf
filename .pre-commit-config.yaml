@@ -105,6 +105,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: cmake-lint
         name: cmake-lint
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -116,6 +120,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: doxygen-check
         name: doxygen-check
         entry: ./ci/checks/doxygen.sh
