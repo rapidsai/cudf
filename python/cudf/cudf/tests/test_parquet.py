@@ -3772,7 +3772,7 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(
 @pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
 @pytest.mark.parametrize("use_pandas_metadata", [True, False])
 @pytest.mark.parametrize("row_groups", [[[0]], None, [[0, 1]]])
-@pytest.mark.parametrize("num_rows", [5000, 10000, None])
+@pytest.mark.parametrize("num_rows", [4997, 9997, None])
 def test_parquet_chunked_reader(
     chunk_read_limit,
     pass_read_limit,
@@ -3822,7 +3822,7 @@ def test_parquet_chunked_reader(
 @pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
 @pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
 @pytest.mark.parametrize("use_pandas_metadata", [True, False])
-@pytest.mark.parametrize("num_rows", [1000, 3000, None])
+@pytest.mark.parametrize("num_rows", [997, 2997, None])
 def test_parquet_chunked_reader_structs(
     chunk_read_limit,
     pass_read_limit,
