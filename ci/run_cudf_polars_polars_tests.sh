@@ -16,7 +16,7 @@ DESELECTED_TESTS=(
 
 # The binary used for TPC-H generation is compiled for x86_64, not aarch64.
 if [[ $(arch) == "aarch64" ]]; then
-    DESELECTED_TESTS+=("py-polars/tests/benchmark/test_pdsh.py::test_pdsh")
+    DESELECTED_TESTS+=("tests/benchmark/test_pdsh.py::test_pdsh")
 fi
 
 DESELECTED_TESTS=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
