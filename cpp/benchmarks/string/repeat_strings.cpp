@@ -51,9 +51,11 @@ static void bench_repeat(nvbench::state& state)
                [&](nvbench::launch& launch) { cudf::strings::repeat_strings(input, max_repeat); });
   } else if (api == "column") {
     auto repeats = table->view().column(1);
-    auto result  = cudf::strings::repeat_strings(input, repeats);
-    auto output  = cudf::strings_column_view(result->view());
-    state.add_global_memory_writes<nvbench::int8_t>(output.chars_size(stream));
+    {
+      auto result = cudf::strings::repeat_strings(input, repeats);
+      auto output = cudf::strings_column_view(result->view());
+      state.add_global_memory_writes<nvbench::int8_t>(output.chars_size(stream));
+    }
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::repeat_strings(input, repeats); });
   }
