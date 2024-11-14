@@ -25,4 +25,6 @@ python -m auditwheel repair \
     -w ${package_dir}/final_dist \
     ${package_dir}/dist/*
 
+./ci/validate_wheel.sh ${package_dir} final_dist
+
 RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-upload-wheels-to-s3 python ${package_dir}/final_dist

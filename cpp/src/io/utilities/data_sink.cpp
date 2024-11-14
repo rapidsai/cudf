@@ -72,8 +72,12 @@ class file_sink : public data_sink {
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    if (size < _gds_write_preferred_threshold) { return false; }
-    return supports_device_write();
+    if (!supports_device_write()) { return false; }
+
+    // Always prefer device writes if kvikio is enabled
+    if (!_kvikio_file.closed()) { return true; }
+
+    return size >= _gds_write_preferred_threshold;
   }
 
   std::future<void> device_write_async(void const* gpu_data,

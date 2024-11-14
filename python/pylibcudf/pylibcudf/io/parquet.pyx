@@ -32,6 +32,8 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 
+__all__ = ["ChunkedParquetReader", "read_parquet"]
+
 
 cdef parquet_reader_options _setup_parquet_reader_options(
     SourceInfo source_info,
@@ -138,6 +140,8 @@ cdef class ChunkedParquetReader:
                     opts
                 )
             )
+
+    __hash__ = None
 
     cpdef bool has_next(self):
         """

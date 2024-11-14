@@ -13,6 +13,7 @@ from pylibcudf.libcudf.types cimport size_type
 from .column cimport Column
 from .table cimport Table
 
+__all__ = ["interleave_columns", "tile"]
 
 cpdef Column interleave_columns(Table source_table):
     """Interleave columns of a table into a single column.
