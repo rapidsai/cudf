@@ -431,13 +431,35 @@ public class TimestampColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testDaysInMonth() {
+    Integer[] DAYS = new Integer[] {
+        0, // Jan 1, 1970
+        31, // Feb 1, 1970
+        59, // Mar 1, 1970
+        90, // Apr 1, 1970
+        120, // May 1, 1970
+        151, // June 1, 1970
+        181, // July 1, 1970
+        212, // Aug 1, 1970
+        243, // Sep 1, 1970
+        273, // OCt 1, 1970
+        304, // Nov 1, 1970
+        334 // Dec 1 1970
+    };
     short[] EXPECTED = new short[]{
-        31,   //'1965-10-26 14:01:12.238' Tuesday
-        31,   //'2018-07-04 12:00:00.115' Wednesday
-        31,   //'2023-01-25 07:32:12.929' Wednesday
-        31,   //'1965-10-26 14:01:12.238' Tuesday
-        31};  //'2018-07-04 12:00:00.115' Wednesday
-    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+        31, // Jan 1970
+        28, // Feb 1970
+        31, // Mar 1970
+        30, // Apr 1970
+        31, // May 1970
+        30, // June 1970
+        31, // July 1970
+        31, // Aug 1970
+        30, // Sep 1970
+        31, // Oct 1970
+        30, // Nov 1970
+        31 // Dec 1970
+    };
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampDaysFromBoxedInts(DAYS);
          ColumnVector result = timestampColumnVector.daysInMonth();
          ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
       assertColumnsAreEqual(expected, result);
