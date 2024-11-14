@@ -8,10 +8,11 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import NamedExpr
+from cudf_polars.dsl.ir import GroupBy, Union
 from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
@@ -75,6 +76,12 @@ def _default_ir_parts_info(ir: IR) -> PartitionInfo:
     return PartitionInfo(count=count)
 
 
+def _partitionwise_ir_parts_info(ir: IR) -> PartitionInfo:
+    # Simple partitionwise behavior.
+    count = max((ir_parts_info(child).count for child in ir.children), default=1)
+    return PartitionInfo(count=count)
+
+
 @singledispatch
 def _ir_parts_info(ir: IR) -> PartitionInfo:
     """IR partitioning-info dispatch."""
@@ -117,6 +124,30 @@ def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     }
 
 
+def _partitionwise_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
+    # Simple partitionwise behavior.
+    child_names = []
+    counts = []
+    for child in ir.children:
+        child_names.append(get_key_name(child))
+        counts.append(ir_parts_info(child).count)
+    counts = counts or [1]
+    if len(set(counts)) > 1:
+        raise NotImplementedError(
+            f"Mismatched partition counts not supported: {counts}"
+        )
+
+    key_name = get_key_name(ir)
+    return {
+        (key_name, i): (
+            ir.do_evaluate,
+            *ir._non_child_args,
+            *((child_name, i) for child_name in child_names),
+        )
+        for i in range(counts[0])
+    }
+
+
 @singledispatch
 def generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     """
@@ -150,3 +181,20 @@ def evaluate_dask(ir: IR) -> DataFrame:
 
     graph, key = task_graph(ir)
     return get(graph, key)
+
+
+def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
+    # Concatenate a sequence of DataFrames vertically
+    return Union.do_evaluate(None, *dfs)
+
+
+##
+## GroupBy
+##
+
+
+@lower_ir_node.register(GroupBy)
+def _(ir: GroupBy, rec) -> IR:
+    import cudf_polars.experimental.groupby as _groupby
+
+    return _groupby.lower_groupby_node(ir, rec)
