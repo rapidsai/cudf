@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   telemetry-setup:
+    continue-on-error: true
     runs-on: ubuntu-latest
     env:
       OTEL_SERVICE_NAME: 'pr-cudf'
