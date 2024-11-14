@@ -16,9 +16,9 @@
 function(find_and_configure_flatbuffers VERSION)
 
   if (NOT BUILD_SHARED_LIBS)
-  set(_exclude_from_all "EXCLUDE_FROM_ALL OFF")
+    set(_exclude_from_all "EXCLUDE_FROM_ALL OFF")
   else()
-  set(_exclude_from_all "EXCLUDE_FROM_ALL ON")
+    set(_exclude_from_all "EXCLUDE_FROM_ALL ON")
   endif()
 
   rapids_cpm_find(
