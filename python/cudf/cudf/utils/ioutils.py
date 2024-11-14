@@ -210,6 +210,11 @@ Notes
 -----
 {remote_data_sources}
 
+- Setting the cudf option `io.parquet.low_memory=True` will result in the chunked
+  low memory parquet reader being used. This can make it easier to read large
+  parquet datasets on systems with limited GPU memory. See all `available options
+  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
+
 Examples
 --------
 >>> import cudf
@@ -758,9 +763,14 @@ result : Series or DataFrame, depending on the value of `typ`.
 
 Notes
 -----
-When `engine='auto'`, and `line=False`, the `pandas` json
-reader will be used. To override the selection, please
-use `engine='cudf'`.
+- When `engine='auto'`, and `line=False`, the `pandas` json
+  reader will be used. To override the selection, please
+  use `engine='cudf'`.
+
+- Setting the cudf option `io.json.low_memory=True` will result in the chunked
+  low memory json reader being used. This can make it easier to read large
+  json datasets on systems with limited GPU memory. See all `available options
+  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
 
 See Also
 --------
