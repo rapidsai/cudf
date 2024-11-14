@@ -182,6 +182,8 @@ cdef class SourceInfo:
                     raise FileNotFoundError(
                         errno.ENOENT, os.strerror(errno.ENOENT), src
                     )
+                # TODO: Keep the sources alive (self.byte_sources = sources)
+                # for str data (e.g. read_json)?
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
