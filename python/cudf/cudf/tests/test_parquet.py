@@ -3773,21 +3773,13 @@ def test_parquet_writer_roundtrip_structs_with_arrow_schema(
 @pytest.mark.parametrize("use_pandas_metadata", [True, False])
 @pytest.mark.parametrize("row_groups", [[[0]], None, [[0, 1]]])
 def test_parquet_chunked_reader(
-    chunk_read_limit,
-    pass_read_limit,
-    use_pandas_metadata,
-    row_groups,
+    chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
 ):
     df = pd.DataFrame(
-        {
-            "a": [1, 2, 3, None] * 10000,
-            "b": ["av", "qw", None, "xyz"] * 10000,
-        }
+        {"a": [1, 2, 3, None] * 10000, "b": ["av", "qw", None, "xyz"] * 10000}
     )
     buffer = BytesIO()
-    # Write 4 Parquet row groups
     df.to_parquet(buffer, row_group_size=10000)
-    # Check with row_groups specified
     actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
