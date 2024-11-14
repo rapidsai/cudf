@@ -1050,7 +1050,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Add the specified number of months to the timestamp.
-   * @param months must be a INT16 column indicating the number of months to add. A negative number
+   * @param months must be a INT16 scalar indicating the number of months to add. A negative number
    *               of months works too.
    * @return the updated timestamp
    */
@@ -1068,7 +1068,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Extract the number of days in the month
-   * @return INT16 column of the number of days in the correspond month
+   * @return INT16 column of the number of days in the corresponding month
    */
   public final ColumnVector daysInMonth() {
     assert type.isTimestampType();
