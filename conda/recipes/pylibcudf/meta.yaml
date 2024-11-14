@@ -83,9 +83,9 @@ requirements:
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
     {% if cuda_major == "11" %}
-    - cuda-python >=11.7.1,<12.0a0,<=11.8.3
+    - cuda-python >=11.7.1,<12.0a0
     {% else %}
-    - cuda-python >=12.0,<13.0a0,<=12.6.0
+    - cuda-python >=12.0,<13.0a0
     {% endif %}
     - nvtx >=0.2.1
     - packaging
