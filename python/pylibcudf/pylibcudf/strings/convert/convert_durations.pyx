@@ -11,6 +11,7 @@ from pylibcudf.libcudf.strings.convert cimport (
 
 from pylibcudf.types import DataType
 
+__all__ = ["from_durations", "to_durations"]
 
 cpdef Column to_durations(
     Column input,

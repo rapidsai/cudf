@@ -155,6 +155,17 @@ class Expr(Node["Expr"]):
         )  # pragma: no cover; check_agg trips first
 
 
+class ErrorExpr(Expr):
+    __slots__ = ("error",)
+    _non_child = ("dtype", "error")
+    error: str
+
+    def __init__(self, dtype: plc.DataType, error: str) -> None:
+        self.dtype = dtype
+        self.error = error
+        self.children = ()
+
+
 class NamedExpr:
     # NamedExpr does not inherit from Expr since it does not appear
     # when evaluating expressions themselves, only when constructing
