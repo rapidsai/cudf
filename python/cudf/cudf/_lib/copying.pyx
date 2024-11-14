@@ -22,16 +22,12 @@ from libcpp.memory cimport make_unique
 
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
 import pylibcudf as plc
 from libc.stdint cimport uintptr_t
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-
-# workaround for https://github.com/cython/cython/issues/3885
-ctypedef const scalar constscalar
 
 
 def _gather_map_is_valid(
