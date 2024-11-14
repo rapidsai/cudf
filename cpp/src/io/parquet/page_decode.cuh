@@ -149,13 +149,15 @@ inline __device__ bool is_bounds_page(page_state_s* const s,
   size_t const begin      = start_row;
   size_t const end        = start_row + num_rows;
 
-  // For non-nested schemas, rows cannot span pages, so use a more restrictive test except for
-  // the page_end. This is because we may have adjusted the `num_rows` for the last page in
-  // `generate_list_column_row_count_estimates()` to compensate for the list row size estimates
-  // in case of chunked read mode.
+  // For non-nested schemas, rows cannot span pages, so use a more restrictive test. Make sure to
+  // relax the predicate for page_end if we adjusted the `num_rows` for the last page to compensate
+  // for list row size estimates in `generate_list_column_row_count_estimates()` when chunked read
+  // mode.
   return has_repetition
            ? ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end))
-           : ((page_begin < begin && page_end > begin) || (page_begin < end && page_end >= end));
+           : ((page_begin < begin && page_end > begin) ||
+              (page_begin < end &&
+               (s->page.is_num_rows_adjusted ? (page_end >= end) : (page_end > end))));
 }
 
 /**

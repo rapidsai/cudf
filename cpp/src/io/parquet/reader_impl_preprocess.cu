@@ -730,6 +730,7 @@ struct set_final_row_count {
     size_t const page_start_row = chunk.start_row + page.chunk_row;
     size_t const chunk_last_row = chunk.start_row + chunk.num_rows;
     page.num_rows               = chunk_last_row - page_start_row;
+    page.is_num_rows_adjusted   = true;
   }
 };
 
