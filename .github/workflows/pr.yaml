@@ -325,4 +325,4 @@ jobs:
       - name: Telemetry summarize
         uses: rapidsai/shared-actions/telemetry-dispatch-write-summary@main
         with:
-          cert_concat: join(fromJSON('["${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }}", "${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }}", "${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}"]'), ';')
+          cert_concat: "${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}"
