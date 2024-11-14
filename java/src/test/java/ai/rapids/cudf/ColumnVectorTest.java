@@ -3829,6 +3829,30 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringContainsMulti() {
+    ColumnVector[] results = null;
+    try (ColumnVector haystack = ColumnVector.fromStrings("tést strings",
+        "Héllo cd",
+        "1 43 42 7",
+        "scala spark 42 other",
+        null,
+        "");
+        ColumnVector targets = ColumnVector.fromStrings("é", "42");
+        ColumnVector expected0 = ColumnVector.fromBoxedBooleans(true, true, false, false, null, false);
+        ColumnVector expected1 = ColumnVector.fromBoxedBooleans(false, false, true, true, null, false)) {
+      results = haystack.stringContains(targets);
+      assertColumnsAreEqual(results[0], expected0);
+      assertColumnsAreEqual(results[1], expected1);
+    } finally {
+      if (results != null) {
+        for (ColumnVector c : results) {
+          c.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testStringFindOperations() {
     try (ColumnVector testStrings = ColumnVector.fromStrings("", null, "abCD", "1a\"\u0100B1", "a\"\u0100B1", "1a\"\u0100B",
                                       "1a\"\u0100B1\n\t\'", "1a\"\u0100B1\u0453\u1322\u5112", "1a\"\u0100B1Fg26",

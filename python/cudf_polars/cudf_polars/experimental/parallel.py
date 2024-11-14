@@ -8,8 +8,7 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import NamedExpr
-from cudf_polars.dsl.ir import PartitionInfo
-from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -17,6 +16,30 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
+
+
+class PartitionInfo:
+    """
+    Partitioning information.
+
+    This class only tracks the partition count (for now).
+    """
+
+    __slots__ = ("count",)
+
+    def __init__(self, count: int):
+        self.count = count
+
+
+# The hash of an IR object must always map to a
+# unique PartitionInfo object, and we can cache
+# this mapping until evaluation is complete.
+_IR_PARTS_CACHE: MutableMapping[int, PartitionInfo] = {}
+
+
+def _clear_parts_info_cache() -> None:
+    """Clear cached partitioning information."""
+    _IR_PARTS_CACHE.clear()
 
 
 def get_key_name(node: Node | NamedExpr) -> str:
@@ -30,7 +53,7 @@ def get_key_name(node: Node | NamedExpr) -> str:
 def lower_ir_node(ir: IR, rec) -> IR:
     """Rewrite an IR node with proper partitioning."""
     # Return same node by default
-    return ir
+    return reuse_if_unchanged(ir, rec)
 
 
 def lower_ir_graph(ir: IR) -> IR:
@@ -43,9 +66,8 @@ def lower_ir_graph(ir: IR) -> IR:
 
 def _default_ir_parts_info(ir: IR) -> PartitionInfo:
     # Single-partition default behavior.
-    # This is used by `ir_parts_info` for
-    # all unregistered IR sub-types.
-    count = max((child.parts.count for child in ir.children), default=1)
+    # This is used by `_ir_parts_info` for all unregistered IR sub-types.
+    count = max((ir_parts_info(child).count for child in ir.children), default=1)
     if count > 1:
         raise NotImplementedError(
             f"Class {type(ir)} does not support multiple partitions."
@@ -54,22 +76,31 @@ def _default_ir_parts_info(ir: IR) -> PartitionInfo:
 
 
 @singledispatch
+def _ir_parts_info(ir: IR) -> PartitionInfo:
+    """IR partitioning-info dispatch."""
+    return _default_ir_parts_info(ir)
+
+
 def ir_parts_info(ir: IR) -> PartitionInfo:
     """Return the partitioning info for an IR node."""
-    return _default_ir_parts_info(ir)
+    key = hash(ir)
+    try:
+        return _IR_PARTS_CACHE[key]
+    except KeyError:
+        _IR_PARTS_CACHE[key] = _ir_parts_info(ir)
+        return _IR_PARTS_CACHE[key]
 
 
 def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     # Single-partition default behavior.
-    # This is used by `generate_ir_tasks` for
-    # all unregistered IR sub-types.
-    if ir.parts.count > 1:
+    # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
+    if ir_parts_info(ir).count > 1:
         raise NotImplementedError(f"Failed to generate tasks for {ir}.")
 
     child_names = []
     for child in ir.children:
         child_names.append(get_key_name(child))
-        if child.parts.count > 1:
+        if ir_parts_info(child).count > 1:
             raise NotImplementedError(
                 f"Failed to generate tasks for {ir} with child {child}."
             )
@@ -107,6 +138,7 @@ def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
     key_name = get_key_name(ir)
     graph[key_name] = (key_name, 0)
 
+    _clear_parts_info_cache()
     return graph, key_name
 
 
