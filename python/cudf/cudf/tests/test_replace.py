@@ -1432,3 +1432,14 @@ def test_replace_timedelta_series():
     )
 
     assert_eq(pd_result, cudf_result)
+
+
+def test_replace_multiple_rows(datadir):
+    path = datadir / "parquet" / "replace_multiple_rows.parquet"
+    pdf = pd.read_parquet(path)
+    gdf = cudf.read_parquet(path)
+
+    pdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+    gdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    assert_eq(pdf, gdf, check_dtype=False)
