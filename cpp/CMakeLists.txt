@@ -460,6 +460,7 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
+  src/io/comp/comp.cu
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
