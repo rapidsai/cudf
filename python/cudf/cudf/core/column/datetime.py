@@ -630,6 +630,38 @@ class DatetimeColumn(column.ColumnBase):
             )
         return result.astype(self.dtype)
 
+    def find_and_replace(
+        self,
+        to_replace: ColumnBase,
+        replacement: ColumnBase,
+        all_nan: bool = False,
+    ) -> DatetimeColumn:
+        if not isinstance(to_replace, DatetimeColumn):
+            to_replace = cudf.core.column.as_column(to_replace)
+            if to_replace.can_cast_safely(self.dtype):
+                to_replace = to_replace.astype(self.dtype)
+        if not isinstance(replacement, DatetimeColumn):
+            replacement = cudf.core.column.as_column(replacement)
+            if replacement.can_cast_safely(self.dtype):
+                replacement = replacement.astype(self.dtype)
+        if isinstance(to_replace, DatetimeColumn):
+            to_replace = to_replace.as_numerical_column(
+                dtype=np.dtype("int64")
+            )
+        if isinstance(replacement, DatetimeColumn):
+            replacement = replacement.as_numerical_column(
+                dtype=np.dtype("int64")
+            )
+        try:
+            result_col = (
+                self.as_numerical_column(dtype=np.dtype("int64"))
+                .find_and_replace(to_replace, replacement, all_nan)
+                .astype(self.dtype)
+            )
+        except TypeError:
+            result_col = self.copy(deep=True)
+        return cast(DatetimeColumn, result_col)
+
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)

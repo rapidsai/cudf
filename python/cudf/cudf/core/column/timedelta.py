@@ -95,7 +95,7 @@ class TimeDeltaColumn(ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         if len(children) != 0:
-            raise ValueError("TimedeltaColumn must have no children.")
+            raise ValueError("TimeDeltaColumn must have no children.")
         super().__init__(
             data=data,
             size=size,
@@ -305,6 +305,39 @@ class TimeDeltaColumn(ColumnBase):
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
+
+    def find_and_replace(
+        self,
+        to_replace: ColumnBase,
+        replacement: ColumnBase,
+        all_nan: bool = False,
+    ) -> TimeDeltaColumn:
+        if not isinstance(to_replace, TimeDeltaColumn):
+            to_replace = cudf.core.column.as_column(to_replace)
+            if to_replace.can_cast_safely(self.dtype):
+                to_replace = to_replace.astype(self.dtype)
+        if not isinstance(replacement, TimeDeltaColumn):
+            replacement = cudf.core.column.as_column(replacement)
+            if replacement.can_cast_safely(self.dtype):
+                replacement = replacement.astype(self.dtype)
+
+        if isinstance(to_replace, TimeDeltaColumn):
+            to_replace = to_replace.as_numerical_column(
+                dtype=np.dtype("int64")
+            )
+        if isinstance(replacement, TimeDeltaColumn):
+            replacement = replacement.as_numerical_column(
+                dtype=np.dtype("int64")
+            )
+        try:
+            result_col = (
+                self.as_numerical_column(dtype=np.dtype("int64"))
+                .find_and_replace(to_replace, replacement, all_nan)
+                .astype(self.dtype)
+            )
+        except TypeError:
+            result_col = self.copy(deep=True)
+        return cast(TimeDeltaColumn, result_col)
 
     def mean(self, skipna=None) -> pd.Timedelta:
         return pd.Timedelta(

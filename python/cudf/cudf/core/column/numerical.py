@@ -511,24 +511,41 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             return self.copy()
 
-        to_replace_col = _normalize_find_and_replace_input(
-            self.dtype, to_replace
-        )
+        try:
+            to_replace_col = _normalize_find_and_replace_input(
+                self.dtype, to_replace
+            )
+        except TypeError:
+            # if `to_replace` cannot be normalized to the current dtype,
+            # that means no value of `to_replace` is present in self,
+            # Hence there is no point of proceeding further.
+            return self.copy()
+
         if all_nan:
             replacement_col = column.as_column(replacement, dtype=self.dtype)
         else:
-            replacement_col = _normalize_find_and_replace_input(
-                self.dtype, replacement
-            )
-        if len(replacement_col) == 1 and len(to_replace_col) > 1:
-            replacement_col = column.as_column(
-                replacement[0], length=len(to_replace_col), dtype=self.dtype
-            )
-        elif len(replacement_col) == 1 and len(to_replace_col) == 0:
-            return self.copy()
+            try:
+                replacement_col = _normalize_find_and_replace_input(
+                    self.dtype, replacement
+                )
+            except TypeError:
+                # Some floating values can never be converted into singed or unsigned integers
+                # for those cases, we just need a column of `replacement` constructed
+                # with it's own-type for the final type determination below at `find_common_type`
+                # call.
+                replacement_col = column.as_column(
+                    replacement,
+                    dtype=self.dtype if len(replacement) <= 0 else None,
+                )
         common_type = find_common_type(
             (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
+        if len(replacement_col) == 1 and len(to_replace_col) > 1:
+            replacement_col = column.as_column(
+                replacement[0], length=len(to_replace_col), dtype=common_type
+            )
+        elif len(replacement_col) == 1 and len(to_replace_col) == 0:
+            return self.copy()
         replaced = self.astype(common_type)
         df = cudf.DataFrame._from_data(
             {
@@ -718,6 +735,8 @@ def _normalize_find_and_replace_input(
     if isinstance(col_to_normalize, list):
         if normalized_column.null_count == len(normalized_column):
             normalized_column = normalized_column.astype(input_column_dtype)
+        if normalized_column.can_cast_safely(input_column_dtype):
+            return normalized_column.astype(input_column_dtype)
         col_to_normalize_dtype = min_column_type(
             normalized_column, input_column_dtype
         )
@@ -728,7 +747,7 @@ def _normalize_find_and_replace_input(
             if np.isinf(col_to_normalize[0]):
                 return normalized_column
             col_to_normalize_casted = np.array(col_to_normalize[0]).astype(
-                input_column_dtype
+                col_to_normalize_dtype
             )
 
             if not np.isnan(col_to_normalize_casted) and (
@@ -739,8 +758,8 @@ def _normalize_find_and_replace_input(
                     f"{col_to_normalize[0]} "
                     f"to {input_column_dtype.name}"
                 )
-            else:
-                col_to_normalize_dtype = input_column_dtype
+        if normalized_column.can_cast_safely(col_to_normalize_dtype):
+            return normalized_column.astype(col_to_normalize_dtype)
     elif hasattr(col_to_normalize, "dtype"):
         col_to_normalize_dtype = col_to_normalize.dtype
     else:
@@ -755,6 +774,8 @@ def _normalize_find_and_replace_input(
             f"{col_to_normalize_dtype.name} "
             f"to {input_column_dtype.name}"
         )
+    if not normalized_column.can_cast_safely(input_column_dtype):
+        return normalized_column
     return normalized_column.astype(input_column_dtype)
 
 
