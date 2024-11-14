@@ -2829,10 +2829,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_toHex(JNIEnv* env, jclass
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsMulti(JNIEnv* env,
-                                                                                jobject j_object,
-                                                                                jlong j_view_handle,
-                                                                                jlong j_target_view_handle)
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringContainsMulti(
+  JNIEnv* env, jobject j_object, jlong j_view_handle, jlong j_target_view_handle)
 {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
   JNI_NULL_CHECK(env, j_target_view_handle, "targets is null", 0);
