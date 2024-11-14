@@ -26,8 +26,6 @@ from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
 import pylibcudf as plc
-from libc.stdint cimport uintptr_t
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 
 def _gather_map_is_valid(
@@ -348,10 +346,9 @@ class PackedColumns(Serializable):
     def serialize(self):
         header = {}
         frames = []
-        cdef DeviceBuffer dbuf = self._gpu_data.obj
         gpu_data = as_buffer(
-            data = int(<uintptr_t>dbuf.c_obj.get()[0].data()),
-            size = int(<uintptr_t>dbuf.c_obj.get()[0].size()),
+            data = self._gpu_data.obj.ptr,
+            size = self._gpu_data.obj.size,
             owner=self,
             exposed=True
         )
