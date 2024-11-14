@@ -88,23 +88,6 @@ cdef class PackedColumns:
         out.c_obj = move(data)
         return out
 
-    @staticmethod
-    def from_plc_table(Table input):
-        """
-        Construct a ``PackedColumns`` object from a ``pylibcudf.Table``.
-        """
-        cdef unique_ptr[packed_columns] c_packed_columns = move(
-            make_unique[packed_columns](
-                move(
-                    cpp_pack(
-                        input.view()
-                    )
-                )
-            )
-        )
-
-        return PackedColumns.from_libcudf(move(c_packed_columns))
-
     @property
     def gpu_data_ptr(self):
         if self.c_obj.get() != NULL:
