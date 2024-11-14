@@ -21,7 +21,7 @@ import os
 # namespace. This allows libraries that express a dependency on
 # this library to be loaded later and successfully satisfy this dependency
 # without polluting the global symbol table with symbols from
-# libcuspatial that could conflict with symbols from other DSOs.
+# libcudf that could conflict with symbols from other DSOs.
 PREFERRED_LOAD_FLAG = ctypes.RTLD_LOCAL
 
 
