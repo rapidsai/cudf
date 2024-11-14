@@ -15,6 +15,7 @@
  */
 
 #include "comp.hpp"
+
 #include "io/utilities/hostdevice_vector.hpp"
 #include "nvcomp_adapter.hpp"
 
