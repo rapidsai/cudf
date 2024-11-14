@@ -16,9 +16,12 @@
 import ctypes
 import os
 
-# RTLD_LOCAL is here for safety... using it loads symbols into the library-specific
-# table maintained by the loader, but not into the global namespace where they
-# may conflict with symbols from other loaded DSOs.
+# Loading with RTLD_LOCAL adds the library itself to the loader's
+# loaded library cache without loading any symbols into the global
+# namespace. This allows libraries that express a dependency on
+# this library to be loaded later and successfully satisfy this dependency
+# without polluting the global symbol table with symbols from
+# libcuspatial that could conflict with symbols from other DSOs.
 PREFERRED_LOAD_FLAG = ctypes.RTLD_LOCAL
 
 
@@ -34,14 +37,11 @@ def _load_wheel_installation(soname: str):
 
     Returns ``None`` if the library cannot be loaded.
     """
-    out = None
-    for lib_dir in ("lib", "lib64"):
-        if os.path.isfile(
-            lib := os.path.join(os.path.dirname(__file__), lib_dir, soname)
-        ):
-            out = ctypes.CDLL(lib, PREFERRED_LOAD_FLAG)
-            break
-    return out
+    if os.path.isfile(
+        lib := os.path.join(os.path.dirname(__file__), "lib64", soname)
+    ):
+        return ctypes.CDLL(lib, PREFERRED_LOAD_FLAG)
+    return None
 
 
 def load_library():
