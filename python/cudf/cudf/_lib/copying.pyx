@@ -28,6 +28,8 @@ from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
 import pylibcudf as plc
+from libc.stdint cimport uintptr_t
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -336,7 +338,7 @@ class PackedColumns:
     """
 
     def __init__(self, data, column_names=None, index_names=None, column_dtypes=None):
-        self._data = data
+        self._metadata, self._gpu_data = data.release()
         self.column_names=column_names
         self.index_names=index_names
         self.column_dtypes=column_dtypes
@@ -346,20 +348,15 @@ class PackedColumns:
 
     @property
     def __cuda_array_interface__(self):
-        return {
-            "data": (self._data.gpu_data_ptr, False),
-            "shape": (self._data.gpu_data_size,),
-            "strides": None,
-            "typestr": "|u1",
-            "version": 0
-        }
+        return self._gpu_data.__cuda_array_interface__
 
     def serialize(self):
         header = {}
         frames = []
+        cdef DeviceBuffer dbuf = self._gpu_data.obj
         gpu_data = as_buffer(
-            data=self._data.gpu_data_ptr,
-            size=self._data.gpu_data_size,
+            data = int(<uintptr_t>dbuf.c_obj.get()[0].data()),
+            size = int(<uintptr_t>dbuf.c_obj.get()[0].size()),
             owner=self,
             exposed=True
         )
@@ -378,7 +375,7 @@ class PackedColumns:
             frames.extend(dtype_frames)
         header["column-dtypes"] = self.column_dtypes
         header["type-serialized"] = pickle.dumps(type(self))
-        return header, (self._data.release(), frames)
+        return header, ((self._metadata, self._gpu_data), frames)
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -438,7 +435,10 @@ class PackedColumns:
 
     def unpack(self):
         output_table = cudf.DataFrame._from_data(*data_from_pylibcudf_table(
-            plc.contiguous_split.unpack(self._data),
+            plc.contiguous_split.unpack_from_memoryviews(
+                self._metadata,
+                self._gpu_data
+            ),
             self.column_names,
             self.index_names
         ))

@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libc.stdint cimport uint8_t, uintptr_t
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -87,16 +87,6 @@ cdef class PackedColumns:
         cdef PackedColumns out = PackedColumns.__new__(PackedColumns)
         out.c_obj = move(data)
         return out
-
-    @property
-    def gpu_data_ptr(self):
-        if self.c_obj.get() != NULL:
-            return int(<uintptr_t>self.c_obj.get()[0].gpu_data.get()[0].data())
-
-    @property
-    def gpu_data_size(self):
-        if self.c_obj.get() != NULL:
-            return int(<size_t>self.c_obj.get()[0].gpu_data.get()[0].size())
 
     cpdef release(self):
         """Releases and returns the underlying serialized metadata and gpu data.
