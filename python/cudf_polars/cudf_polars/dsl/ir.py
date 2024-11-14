@@ -349,10 +349,10 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if self.typ in {"csv", "parquet"} and self.skip_rows != 0:  # pragma: no cover
+        if self.typ in {"csv"} and self.skip_rows != 0:  # pragma: no cover
             # This comes from slice pushdown, but that
             # optimization doesn't happen right now
-            raise NotImplementedError("skipping rows in CSV or Parquet reader")
+            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
@@ -514,8 +514,14 @@ class Scan(IR):
                 reader = plc.io.parquet.ChunkedParquetReader(
                     plc.io.SourceInfo(paths),
                     columns=with_columns,
-                    nrows=n_rows,
-                    skip_rows=skip_rows,
+                    # We handle skip_rows != 0 by reading from the
+                    # up to n_rows + skip_rows and slicing off the
+                    # first skip_rows entries.
+                    # TODO: Remove this workaround once
+                    # https://github.com/rapidsai/cudf/issues/16186
+                    # is fixed
+                    nrows=n_rows + skip_rows,
+                    skip_rows=0,
                     chunk_read_limit=parquet_options.get(
                         "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
                     ),
@@ -524,11 +530,23 @@ class Scan(IR):
                     ),
                 )
                 chk = reader.read_chunk()
-                tbl = chk.tbl
-                names = chk.column_names()
+                rows_left_to_skip = skip_rows
+
+                def slice_skip(tbl: plc.Table):
+                    nonlocal rows_left_to_skip
+                    if rows_left_to_skip > 0:
+                        table_rows = tbl.num_rows()
+                        chunk_skip = min(rows_left_to_skip, table_rows)
+                        (tbl,) = plc.copying.slice(tbl, [chunk_skip, table_rows])
+                        rows_left_to_skip -= chunk_skip
+                    return tbl
+
+                tbl = slice_skip(chk.tbl)
+                # TODO: Nested column names
+                names = chk.column_names(include_children=False)
                 concatenated_columns = tbl.columns()
                 while reader.has_next():
-                    tbl = reader.read_chunk().tbl
+                    tbl = slice_skip(reader.read_chunk().tbl)
 
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
