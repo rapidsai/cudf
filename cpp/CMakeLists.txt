@@ -36,6 +36,8 @@ if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERS
   )
 endif()
 
+rapids_cmake_write_version_file(include/cudf/version_config.hpp)
+
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
 # `Threads::Threads` is the same value in first run and subsequent runs.
@@ -1125,6 +1127,9 @@ install(
   TARGETS cudf
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
+)
+install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
 )
 
 set(_components_export_string)
