@@ -9,7 +9,7 @@ from libcpp.utility cimport move
 import pylibcudf
 
 import cudf
-from cudf.core.buffer import Buffer, acquire_spill_lock, as_buffer
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 
 from cudf._lib.column cimport Column
 
@@ -18,7 +18,6 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 from cudf._lib.reduce import minmax
-from cudf.core.abc import Serializable
 
 from libcpp.memory cimport make_unique
 
@@ -29,11 +28,6 @@ from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
 import pylibcudf as plc
-from pylibcudf.contiguous_split cimport PackedColumns as PlcPackedColumns
-cimport pylibcudf.libcudf.contiguous_split as cpp_contiguous_split
-from libcpp.vector cimport vector
-from libc.stdint cimport uint8_t
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
@@ -335,7 +329,7 @@ def get_element(Column input_column, size_type index):
     )
 
 
-class PackedColumns(Serializable):
+class PackedColumns:
     """
     A packed representation of a Frame, with all columns residing
     in a single GPU memory buffer.
@@ -375,12 +369,6 @@ class PackedColumns(Serializable):
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        cdef PlcPackedColumns p = self._data
-        if p.c_obj.get()[0].metadata.get()[0].data() != NULL:
-            header["metadata"] = list(
-                <uint8_t[:p.c_obj.get()[0].metadata.get()[0].size()]>
-                p.c_obj.get()[0].metadata.get()[0].data()
-            )
         for name, dtype in self.column_dtypes.items():
             dtype_header, dtype_frames = dtype.serialize()
             self.column_dtypes[name] = (
@@ -390,35 +378,23 @@ class PackedColumns(Serializable):
             frames.extend(dtype_frames)
         header["column-dtypes"] = self.column_dtypes
         header["type-serialized"] = pickle.dumps(type(self))
-        return header, frames
+        return header, (self._data.release(), frames)
 
     @classmethod
     def deserialize(cls, header, frames):
-        gpu_data = Buffer.deserialize(header["data"], frames)
-        cdef PlcPackedColumns p = PlcPackedColumns.__new__(PlcPackedColumns)
-        dbuf = DeviceBuffer(
-            ptr=gpu_data.get_ptr(mode="write"),
-            size=gpu_data.nbytes
-        )
-        cdef cpp_contiguous_split.packed_columns data
-        data.metadata = move(
-            make_unique[vector[uint8_t]](
-                move(<vector[uint8_t]>header.get("metadata", []))
-            )
-        )
-        data.gpu_data = move(dbuf.c_obj)
-
-        p.c_obj = move(make_unique[cpp_contiguous_split.packed_columns](move(data)))
-
         column_dtypes = {}
         for name, dtype in header["column-dtypes"].items():
             dtype_header, (start, stop) = dtype
             column_dtypes[name] = pickle.loads(
                 dtype_header["type-serialized"]
-            ).deserialize(dtype_header, frames[start:stop])
-
+            ).deserialize(dtype_header, frames[1][start:stop])
+        packed_metadata, packed_gpu_data = frames[0]
         return cls(
-            p,
+            plc.contiguous_split.pack(
+                plc.contiguous_split.unpack_from_memoryviews(
+                    packed_metadata, packed_gpu_data
+                )
+            ),
             header["column-names"],
             header["index-names"],
             column_dtypes,
@@ -448,7 +424,7 @@ class PackedColumns(Serializable):
                 column_dtypes[name] = col.dtype
 
         return cls(
-            plc.contiguous_split.PackedColumns.from_plc_table(
+            plc.contiguous_split.pack(
                 plc.Table(
                     [
                         col.to_pylibcudf(mode="read") for col in columns

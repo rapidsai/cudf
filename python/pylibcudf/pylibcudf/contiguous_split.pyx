@@ -115,7 +115,7 @@ cdef class PackedColumns:
         if self.c_obj.get() != NULL:
             return int(<size_t>self.c_obj.get()[0].gpu_data.get()[0].size())
 
-    def release(self):
+    cpdef release(self):
         """Releases and returns the underlying serialized metadata and gpu data.
 
         The ownership of the memory are transferred to the returned buffers. After
