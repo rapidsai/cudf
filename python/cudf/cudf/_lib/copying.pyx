@@ -5,12 +5,11 @@ import pickle
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-
 import pylibcudf
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock, as_buffer
-
+from cudf.core.abc import Serializable
 from cudf._lib.column cimport Column
 
 from cudf._lib.scalar import as_device_scalar
@@ -331,7 +330,7 @@ def get_element(Column input_column, size_type index):
     )
 
 
-class PackedColumns:
+class PackedColumns(Serializable):
     """
     A packed representation of a Frame, with all columns residing
     in a single GPU memory buffer.
@@ -366,6 +365,7 @@ class PackedColumns:
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
+        header["metadata"] = self._metadata.obj
         for name, dtype in self.column_dtypes.items():
             dtype_header, dtype_frames = dtype.serialize()
             self.column_dtypes[name] = (
@@ -375,7 +375,7 @@ class PackedColumns:
             frames.extend(dtype_frames)
         header["column-dtypes"] = self.column_dtypes
         header["type-serialized"] = pickle.dumps(type(self))
-        return header, ((self._metadata, self._gpu_data), frames)
+        return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -384,12 +384,12 @@ class PackedColumns:
             dtype_header, (start, stop) = dtype
             column_dtypes[name] = pickle.loads(
                 dtype_header["type-serialized"]
-            ).deserialize(dtype_header, frames[1][start:stop])
-        packed_metadata, packed_gpu_data = frames[0]
+            ).deserialize(dtype_header, frames[start:stop])
         return cls(
             plc.contiguous_split.pack(
                 plc.contiguous_split.unpack_from_memoryviews(
-                    packed_metadata, packed_gpu_data
+                    memoryview(header["metadata"]),
+                    plc.gpumemoryview(frames[0]),
                 )
             ),
             header["column-names"],

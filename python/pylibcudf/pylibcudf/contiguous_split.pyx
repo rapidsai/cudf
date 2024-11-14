@@ -63,6 +63,22 @@ cdef class HostBuffer:
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
 
+    def __getstate__(self):
+        return memoryview(self)[:].tobytes()
+
+    def __setstate__(self, state):
+        cdef unique_ptr[vector[uint8_t]] new_c_obj = unique_ptr[vector[uint8_t]](
+            new vector[uint8_t]()
+        )
+        new_c_obj.get().reserve(len(state))
+        for byte in state:
+            new_c_obj.get().push_back(<uint8_t>byte)
+
+        self.c_obj = move(new_c_obj)
+        self.nbytes = dereference(self.c_obj).size()
+        self.shape[0] = self.nbytes
+        self.strides[0] = 1
+
 
 cdef class PackedColumns:
     """Column data in a serialized format.
