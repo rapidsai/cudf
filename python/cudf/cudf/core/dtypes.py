@@ -114,8 +114,7 @@ def _decode_type(
     Returns
     -------
     tuple
-        Tuple of validated headers, frames, and the decoded class
-        constructor.
+        Tuple of validated headers and frames.
 
     Raises
     ------
