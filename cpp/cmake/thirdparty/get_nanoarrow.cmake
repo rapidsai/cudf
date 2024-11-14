@@ -19,6 +19,12 @@ function(find_and_configure_nanoarrow)
   set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
   rapids_cpm_package_override("${cudf_patch_dir}/nanoarrow_override.json")
 
+  if (NOT BUILD_SHARED_LIBS)
+    set(_exclude_from_all "EXCLUDE_FROM_ALL OFF")
+  else()
+    set(_exclude_from_all "EXCLUDE_FROM_ALL ON")
+  endif()
+
   # Currently we need to always build nanoarrow so we don't pickup a previous installed version
   set(CPM_DOWNLOAD_nanoarrow ON)
   rapids_cpm_find(
@@ -26,7 +32,7 @@ function(find_and_configure_nanoarrow)
     GLOBAL_TARGETS nanoarrow
     CPM_ARGS
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
-    EXCLUDE_FROM_ALL TRUE
+    ${_exclude_from_all}
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
   rapids_export_find_package_root(BUILD nanoarrow "${nanoarrow_BINARY_DIR}" EXPORT_SET cudf-exports)
