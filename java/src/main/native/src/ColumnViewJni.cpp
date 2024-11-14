@@ -127,7 +127,8 @@ std::size_t calc_device_memory_size(cudf::column_view const& view, bool const pa
                          });
 }
 
-cudf::datetime::rounding_frequency as_rounding_freq(jint freq) {
+cudf::datetime::rounding_frequency as_rounding_freq(jint freq)
+{
   switch (freq) {
     case 0: return cudf::datetime::rounding_frequency::DAY;
     case 1: return cudf::datetime::rounding_frequency::HOUR;
@@ -1112,8 +1113,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_round(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractDateTimeComponent(
-  JNIEnv* env, jclass, jlong input_ptr, jint component)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractDateTimeComponent(JNIEnv* env,
+                                                                                jclass,
+                                                                                jlong input_ptr,
+                                                                                jint component)
 {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
@@ -1131,8 +1134,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractDateTimeComponent(
       case 7: comp = cudf::datetime::datetime_component::MILLISECOND; break;
       case 8: comp = cudf::datetime::datetime_component::MICROSECOND; break;
       case 9: comp = cudf::datetime::datetime_component::NANOSECOND; break;
-      default:
-        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid component", 0);
+      default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid component", 0);
     }
     return release_as_jlong(cudf::datetime::extract_datetime_component(*input, comp));
   }
@@ -1195,16 +1197,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_addCalendricalMonths(JNIE
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_addScalarCalendricalMonths(JNIEnv* env,
-                                                                            jclass,
-                                                                            jlong ts_ptr,
-                                                                            jlong months_ptr)
+                                                                                  jclass,
+                                                                                  jlong ts_ptr,
+                                                                                  jlong months_ptr)
 {
   JNI_NULL_CHECK(env, ts_ptr, "ts is null", 0);
   JNI_NULL_CHECK(env, months_ptr, "months is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view const* ts     = reinterpret_cast<cudf::column_view*>(ts_ptr);
-    cudf::scalar const* months = reinterpret_cast<cudf::scalar*>(months_ptr);
+    cudf::column_view const* ts = reinterpret_cast<cudf::column_view*>(ts_ptr);
+    cudf::scalar const* months  = reinterpret_cast<cudf::scalar*>(months_ptr);
     return release_as_jlong(cudf::datetime::add_calendrical_months(*ts, *months));
   }
   CATCH_STD(env, 0);
@@ -1224,8 +1226,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isLeapYear(JNIEnv* env,
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_daysInMonth(JNIEnv* env,
-                                                                  jclass,
-                                                                  jlong input_ptr)
+                                                                   jclass,
+                                                                   jlong input_ptr)
 {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
@@ -1236,39 +1238,45 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_daysInMonth(JNIEnv* env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeCeil(
-  JNIEnv* env, jclass, jlong input_ptr, jint freq)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeCeil(JNIEnv* env,
+                                                                    jclass,
+                                                                    jlong input_ptr,
+                                                                    jint freq)
 {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
+    cudf::column_view const* input            = reinterpret_cast<cudf::column_view*>(input_ptr);
     cudf::datetime::rounding_frequency n_freq = as_rounding_freq(freq);
     return release_as_jlong(cudf::datetime::ceil_datetimes(*input, n_freq));
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeFloor(
-  JNIEnv* env, jclass, jlong input_ptr, jint freq)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeFloor(JNIEnv* env,
+                                                                     jclass,
+                                                                     jlong input_ptr,
+                                                                     jint freq)
 {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
+    cudf::column_view const* input            = reinterpret_cast<cudf::column_view*>(input_ptr);
     cudf::datetime::rounding_frequency n_freq = as_rounding_freq(freq);
     return release_as_jlong(cudf::datetime::floor_datetimes(*input, n_freq));
   }
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeRound(
-  JNIEnv* env, jclass, jlong input_ptr, jint freq)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dateTimeRound(JNIEnv* env,
+                                                                     jclass,
+                                                                     jlong input_ptr,
+                                                                     jint freq)
 {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view const* input = reinterpret_cast<cudf::column_view*>(input_ptr);
+    cudf::column_view const* input            = reinterpret_cast<cudf::column_view*>(input_ptr);
     cudf::datetime::rounding_frequency n_freq = as_rounding_freq(freq);
     return release_as_jlong(cudf::datetime::round_datetimes(*input, n_freq));
   }
