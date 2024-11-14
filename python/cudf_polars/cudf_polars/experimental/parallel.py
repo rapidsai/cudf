@@ -45,7 +45,7 @@ def _clear_parts_info_cache() -> None:
 def get_key_name(node: Node | NamedExpr) -> str:
     """Generate the key name for a Node."""
     if isinstance(node, NamedExpr):
-        return f"named-{get_key_name(node.value)}"
+        return f"named-{get_key_name(node.value)}"  # pragma: no cover
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
@@ -71,7 +71,7 @@ def _default_ir_parts_info(ir: IR) -> PartitionInfo:
     if count > 1:
         raise NotImplementedError(
             f"Class {type(ir)} does not support multiple partitions."
-        )
+        )  # pragma: no cover
     return PartitionInfo(count=count)
 
 
@@ -95,7 +95,9 @@ def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     # Single-partition default behavior.
     # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
     if ir_parts_info(ir).count > 1:
-        raise NotImplementedError(f"Failed to generate tasks for {ir}.")
+        raise NotImplementedError(
+            f"Failed to generate multiple output tasks for {ir}."
+        )  # pragma: no cover
 
     child_names = []
     for child in ir.children:
@@ -103,7 +105,7 @@ def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
         if ir_parts_info(child).count > 1:
             raise NotImplementedError(
                 f"Failed to generate tasks for {ir} with child {child}."
-            )
+            )  # pragma: no cover
 
     key_name = get_key_name(ir)
     return {
