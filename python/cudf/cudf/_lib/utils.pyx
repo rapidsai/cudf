@@ -316,7 +316,7 @@ cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
         index_names
     )
 
-cdef data_from_pylibcudf_io(tbl_with_meta, column_names=None, index_names=None):
+cpdef data_from_pylibcudf_io(tbl_with_meta, column_names=None, index_names=None):
     """
     Unpacks the TableWithMetadata from libcudf I/O
     into a dict of columns and an Index (cuDF format)
