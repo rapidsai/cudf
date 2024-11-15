@@ -194,4 +194,4 @@ def test_write_parquet(
         options.set_max_dictionary_size(max_dictionary_size)
 
     result = plc.io.parquet.write_parquet(options)
-    assert isinstance(result, plc.contiguous_split.HostBuffer)
+    assert isinstance(result, memoryview)
