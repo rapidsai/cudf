@@ -49,6 +49,8 @@ cpdef read_parquet(
 
 cdef class ParquetWriterOptions:
     cdef parquet_writer_options c_obj
+    cdef Table table_ref
+    cdef SinkInfo sink_ref
 
     cpdef void set_partitions(self, list partitions)
 
@@ -66,6 +68,8 @@ cdef class ParquetWriterOptions:
 
 cdef class ParquetWriterOptionsBuilder:
     cdef parquet_writer_options_builder c_obj
+    cdef Table table_ref
+    cdef SinkInfo sink_ref
 
     cpdef ParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 

@@ -269,6 +269,8 @@ cdef class ParquetWriterOptions:
             ParquetWriterOptionsBuilder
         )
         bldr.c_obj = parquet_writer_options.builder(sink.c_obj, table.view())
+        bldr.table_ref = table
+        bldr.sink_ref = sink
         return bldr
 
     cpdef void set_partitions(self, list partitions):
@@ -547,6 +549,8 @@ cdef class ParquetWriterOptionsBuilder:
             ParquetWriterOptions
         )
         parquet_options.c_obj = move(self.c_obj.build())
+        parquet_options.table_ref = self.table_ref
+        parquet_options.sink_ref = self.sink_ref
         return parquet_options
 
 
