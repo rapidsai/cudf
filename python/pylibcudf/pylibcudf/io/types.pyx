@@ -61,7 +61,7 @@ cdef class PartitionInfo:
     num_rows : int
         The number of rows in the partition.
     """
-    def __init__(int start_row, int num_rows):
+    def __init__(self, int start_row, int num_rows):
         self.c_obj = partition_info(start_row, num_rows)
 
 
@@ -265,10 +265,6 @@ cdef class TableInputMetadata:
     """
     def __init__(self, Table table):
         self.c_obj = table_input_metadata(table.view())
-        self.column_metadata = [
-            ColumnInMetadata.from_metadata(metadata)
-            for metadata in self.c_obj.column_metadata
-        ]
 
 
 cdef class TableWithMetadata:

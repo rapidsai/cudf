@@ -25,9 +25,6 @@ from pylibcudf.table cimport Table
 cdef class PartitionInfo:
     cdef partition_info c_obj
 
-    @staticmethod
-    cdef PartitionInfo from_start_and_num(int start_row, int num_rows)
-
 cdef class ColumnInMetadata:
     cdef column_in_metadata c_obj
 
@@ -59,7 +56,6 @@ cdef class ColumnInMetadata:
     cpdef str get_name(self)
 
 cdef class TableInputMetadata:
-    cdef public Table table
     cdef table_input_metadata c_obj
 
 cdef class TableWithMetadata:

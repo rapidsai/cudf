@@ -249,7 +249,7 @@ cpdef read_parquet(
 cdef class ParquetWriterOptions:
 
     @staticmethod
-    cdef ParquetWriterOptionsBuilder builder(SinkInfo sink, Table table):
+    def builder(SinkInfo sink, Table table):
         """
         Create builder to create ParquetWriterOptionsBuilder.
 
@@ -287,9 +287,9 @@ cdef class ParquetWriterOptions:
         cdef vector[partition_info] c_partions
         cdef PartitionInfo partition
 
-        c_obj.reserve(len(partitions))
+        c_partions.reserve(len(partitions))
         for partition in partitions:
-            c_obj.push_back(partition.c_obj)
+            c_partions.push_back(partition.c_obj)
 
         self.c_obj.set_partitions(c_partions)
 

@@ -29,10 +29,6 @@ __all__ = [
 
 cdef class HostBuffer:
     """Owning host buffer that implements the buffer protocol"""
-    cdef unique_ptr[vector[uint8_t]] c_obj
-    cdef size_t nbytes
-    cdef Py_ssize_t[1] shape
-    cdef Py_ssize_t[1] strides
 
     @staticmethod
     cdef HostBuffer from_unique_ptr(

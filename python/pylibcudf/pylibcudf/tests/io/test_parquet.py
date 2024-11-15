@@ -125,7 +125,6 @@ def test_read_parquet_filters(
         plc.io.types.StatisticsFreq.STATISTICS_COLUMN,
     ],
 )
-@pytest.mark.parametrize("int96_timestamps", [True, False])
 @pytest.mark.parametrize("write_v2_headers", [True, False])
 @pytest.mark.parametrize(
     "dictionary_policy",
@@ -150,7 +149,6 @@ def test_write_parquet(
     table_data,
     compression,
     stats_level,
-    int96_timestamps,
     write_v2_headers,
     dictionary_policy,
     utc_timestamps,
@@ -174,7 +172,6 @@ def test_write_parquet(
         .key_value_metadata(user_data)
         .compression(compression)
         .stats_level(stats_level)
-        .int96_timestamps(int96_timestamps)
         .write_v2_headers(write_v2_headers)
         .dictionary_policy(dictionary_policy)
         .utc_timestamps(utc_timestamps)
@@ -197,4 +194,4 @@ def test_write_parquet(
         options.set_max_dictionary_size(max_dictionary_size)
 
     result = plc.io.parquet.write_parquet(options)
-    assert isinstance(result, plc.io.parquet.BufferArrayFromVector)
+    assert isinstance(result, plc.contiguous_split.HostBuffer)

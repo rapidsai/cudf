@@ -50,9 +50,6 @@ cpdef read_parquet(
 cdef class ParquetWriterOptions:
     cdef parquet_writer_options c_obj
 
-    @staticmethod
-    cdef ParquetWriterOptionsBuilder builder(SinkInfo sink, Table table)
-
     cpdef void set_partitions(self, list partitions)
 
     cpdef void set_column_chunks_file_paths(self, list file_paths)
