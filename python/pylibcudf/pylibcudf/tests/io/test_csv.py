@@ -307,13 +307,9 @@ def post_process_str_result(
     return str_result
 
 
-# @pytest.mark.parametrize("sep", [",", "*"])
-# @pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
-# @pytest.mark.parametrize("header", [True, False])
-# @pytest.mark.parametrize("rows_per_chunk", [8, 100])
-@pytest.mark.parametrize("sep", [","])
-@pytest.mark.parametrize("lineterminator", ["\n"])
-@pytest.mark.parametrize("header", [True])
+@pytest.mark.parametrize("sep", [",", "*"])
+@pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
+@pytest.mark.parametrize("header", [True, False])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 def test_write_csv(
     table_data, source_or_sink, sep, lineterminator, header, rows_per_chunk
