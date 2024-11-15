@@ -3,22 +3,6 @@
 
 set -eou pipefail
 
-# We will only fail these tests if the PR touches code in pylibcudf
-# or cudf_polars itself.
-# Note, the three dots mean we are doing diff between the merge-base
-# of upstream and HEAD. So this is asking, "does _this branch_ touch
-# files in cudf_polars/pylibcudf", rather than "are there changes
-# between upstream and this branch which touch cudf_polars/pylibcudf"
-# TODO: is the target branch exposed anywhere in an environment variable?
-if [ -n "$(git diff --name-only origin/branch-24.12...HEAD -- python/cudf_polars/ python/cudf/cudf/_lib/pylibcudf/)" ];
-then
-    HAS_CHANGES=1
-    rapids-logger "PR has changes in cudf-polars/pylibcudf, test fails treated as failure"
-else
-    HAS_CHANGES=0
-    rapids-logger "PR does not have changes in cudf-polars/pylibcudf, test fails NOT treated as failure"
-fi
-
 rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
@@ -63,9 +47,4 @@ if [ ${EXITCODE} != 0 ]; then
 else
     rapids-logger "Running polars test suite PASSED"
 fi
-
-if [ ${HAS_CHANGES} == 1 ]; then
-    exit ${EXITCODE}
-else
-    exit 0
-fi
+exit ${EXITCODE}
