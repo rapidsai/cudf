@@ -52,28 +52,17 @@ __all__ = [
 cdef class PartitionInfo:
     """
     Information used while writing partitioned datasets.
+
+    Parameters
+    ----------
+    start_row : int
+        The start row of the partition.
+
+    num_rows : int
+        The number of rows in the partition.
     """
-
-    @staticmethod
-    def from_start_and_rows(int start_row, int num_rows):
-        return PartitionInfo.from_start_and_num(start_row, num_rows)
-
-    @staticmethod
-    cdef PartitionInfo from_start_and_num(int start_row, int num_rows):
-        """
-        Construct a PartitionInfo.
-
-        Parameters
-        ----------
-        start_row : int
-            The start row of the partition.
-
-        num_rows : int
-            The number of rows in the partition.
-        """
-        cdef PartitionInfo parition_info = PartitionInfo.__new__(PartitionInfo)
-        parition_info.c_obj = partition_info(start_row, num_rows)
-        return parition_info
+    def __init__(int start_row, int num_rows):
+        self.c_obj = partition_info(start_row, num_rows)
 
 
 cdef class ColumnInMetadata:

@@ -4,6 +4,7 @@ from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from pylibcudf.contiguous_split cimport HostBuffer
 from pylibcudf.expressions cimport Expression
 from pylibcudf.io.types cimport (
     compression_type,
@@ -47,7 +48,7 @@ cpdef read_parquet(
 )
 
 cdef class ParquetWriterOptions:
-    cdef parquet_writer_options options
+    cdef parquet_writer_options c_obj
 
     @staticmethod
     cdef ParquetWriterOptionsBuilder builder(SinkInfo sink, Table table)
@@ -67,7 +68,7 @@ cdef class ParquetWriterOptions:
     cpdef void set_max_dictionary_size(self, int size_rows)
 
 cdef class ParquetWriterOptionsBuilder:
-    cdef parquet_writer_options_builder builder
+    cdef parquet_writer_options_builder c_obj
 
     cpdef ParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
@@ -89,18 +90,4 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptions build(self)
 
-
-cdef class BufferArrayFromVector:
-    cdef Py_ssize_t length
-    cdef unique_ptr[vector[uint8_t]] in_vec
-
-    # these two things declare part of the buffer interface
-    cdef Py_ssize_t shape[1]
-    cdef Py_ssize_t strides[1]
-
-    @staticmethod
-    cdef BufferArrayFromVector from_unique_ptr(
-        unique_ptr[vector[uint8_t]] in_vec
-    )
-
-cpdef BufferArrayFromVector write_parquet(ParquetWriterOptions options)
+cpdef HostBuffer write_parquet(ParquetWriterOptions options)

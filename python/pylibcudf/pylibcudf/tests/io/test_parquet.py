@@ -138,7 +138,7 @@ def test_read_parquet_filters(
 @pytest.mark.parametrize("write_arrow_schema", [True, False])
 @pytest.mark.parametrize(
     "partitions",
-    [None, [plc.io.types.PartitionInfo.from_start_and_rows(0, 10)]],
+    [None, [plc.io.types.PartitionInfo(0, 10)]],
 )
 @pytest.mark.parametrize("column_chunks_file_paths", [None, ["tmp.parquet"]])
 @pytest.mark.parametrize("row_group_size_bytes", [None, 100])
