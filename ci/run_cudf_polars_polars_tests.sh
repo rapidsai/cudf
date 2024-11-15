@@ -23,6 +23,13 @@ if [[ $(arch) == "aarch64" ]]; then
     DESELECTED_TESTS+=("tests/unit/io/test_parquet.py::test_parametric_small_page_mask_filtering")
     DESELECTED_TESTS+=("tests/unit/testing/test_assert_series_equal.py::test_assert_series_equal_parametric")
     DESELECTED_TESTS+=("tests/unit/operations/test_join.py::test_join_4_columns_with_validity")
+else
+    # Ensure that we don't run dbgen when it uses newer symbols than supported by the glibc version in the CI image.
+    glibc_minor_version=$(ldd --version | head -1 | grep -o "[0-9]\.[0-9]\+" | tail -1 | cut -d '.' -f2)
+    latest_glibc_symbol_found=$(nm py-polars/tests/benchmark/data/pdsh/dbgen/dbgen | grep GLIBC | grep -o "[0-9]\.[0-9]\+" | sort --version-sort | tail -1 | cut -d "." -f 2)
+    if [[ ${glibc_minor_version} -lt ${latest_glibc_symbol_found} ]]; then
+        DESELECTED_TESTS+=("tests/benchmark/test_pdsh.py::test_pdsh")
+    fi
 fi
 
 DESELECTED_TESTS=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
