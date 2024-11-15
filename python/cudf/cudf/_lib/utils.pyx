@@ -229,7 +229,7 @@ cdef columns_from_unique_ptr(
     return columns
 
 
-cdef columns_from_pylibcudf_table(tbl):
+cpdef columns_from_pylibcudf_table(tbl):
     """Convert a pylibcudf table into list of columns.
 
     Parameters

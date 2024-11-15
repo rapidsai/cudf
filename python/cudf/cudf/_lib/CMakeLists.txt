@@ -33,7 +33,6 @@ set(cython_sources
     orc.pyx
     parquet.pyx
     partitioning.pyx
-    quantiles.pyx
     reduce.pyx
     replace.pyx
     reshape.pyx

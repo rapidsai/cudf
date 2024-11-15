@@ -20,7 +20,6 @@ from . import (
     orc,
     parquet,
     partitioning,
-    quantiles,
     reduce,
     replace,
     reshape,
