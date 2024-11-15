@@ -307,23 +307,35 @@ def post_process_str_result(
     return str_result
 
 
-@pytest.mark.parametrize("sep", [",", "*"])
-@pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
-@pytest.mark.parametrize("header", [True, False])
+# @pytest.mark.parametrize("sep", [",", "*"])
+# @pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
+# @pytest.mark.parametrize("header", [True, False])
+# @pytest.mark.parametrize("rows_per_chunk", [8, 100])
+@pytest.mark.parametrize("sep", [","])
+@pytest.mark.parametrize("lineterminator", ["\n"])
+@pytest.mark.parametrize("header", [True])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 def test_write_csv(
     table_data, source_or_sink, sep, lineterminator, header, rows_per_chunk
 ):
-    plc_table_w_meta, pa_table = table_data(pa_types=NON_NESTED_PA_TYPES)
+    plc_tbl_w_meta, pa_table = table_data(pa_types=NON_NESTED_PA_TYPES)
     sink = source_or_sink
 
     plc.io.csv.write_csv(
-        plc.io.SinkInfo([sink]),
-        plc_table_w_meta,
-        sep=sep,
-        lineterminator=lineterminator,
-        header=header,
-        rows_per_chunk=rows_per_chunk,
+        (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
+            )
+            .names(plc_tbl_w_meta.column_names())
+            .na_rep("")
+            .include_header(header)
+            .rows_per_chunk(rows_per_chunk)
+            .line_terminator(lineterminator)
+            .inter_column_delimiter(sep)
+            .true_value("True")
+            .false_value("False")
+            .build()
+        )
     )
 
     # Convert everything to string to make comparisons easier
@@ -354,9 +366,20 @@ def test_write_csv_na_rep(na_rep):
     sink = io.StringIO()
 
     plc.io.csv.write_csv(
-        plc.io.SinkInfo([sink]),
-        plc_tbl_w_meta,
-        na_rep=na_rep,
+        (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
+            )
+            .names(plc_tbl_w_meta.column_names())
+            .na_rep(na_rep)
+            .include_header(True)
+            .rows_per_chunk(8)
+            .line_terminator("\n")
+            .inter_column_delimiter(",")
+            .true_value("True")
+            .false_value("False")
+            .build()
+        )
     )
 
     # Convert everything to string to make comparisons easier

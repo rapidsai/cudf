@@ -278,7 +278,7 @@ cdef class CsvWriterOptions:
     For details, see :cpp:class:`cudf::io::csv_writer_options`
     """
     @staticmethod
-    cdef CsvWriterOptionsBuilder builder(SinkInfo sink, Table table):
+    def builder(SinkInfo sink, Table table):
         """Create a CsvWriterOptionsBuilder object
 
         For details, see :cpp:func:`cudf::io::csv_writer_options::builder`
@@ -446,14 +446,7 @@ cdef class CsvWriterOptionsBuilder:
 
 
 def write_csv(
-    SinkInfo sink_info,
-    TableWithMetadata table,
-    *,
-    str sep=",",
-    str na_rep="",
-    bool header=True,
-    str lineterminator="\n",
-    int rows_per_chunk=8
+    CsvWriterOptions options
 ):
     """
     Writes a :py:class:`~pylibcudf.io.types.TableWithMetadata` to CSV format.
@@ -462,34 +455,9 @@ def write_csv(
 
     Parameters
     ----------
-    sink_info: SinkInfo
-        The SinkInfo object to write to.
-    table : TableWithMetadata
-        The TableWithMetadata object containing the Table to write.
-    sep : str, default ","
-        Character to delimit column values.
-    na_rep : str, default ""
-        The string representation for null values.
-    header : bool, default True
-        Whether to write headers to csv. Includes the column names
-        and optionally, the index names (see ``index`` argument).
-    lineterminator : str, default '\\n'
-        The character used to determine the end of a line.
-    rows_per_chunk: int, default 8
-        The maximum number of rows to write at a time.
+    options: CsvWriterOptions
+        Settings for controlling writing behavior
     """
-    options = (
-        CsvWriterOptions.builder(sink_info, table.tbl)
-        .names(table.column_names())
-        .na_rep(na_rep)
-        .include_header(header)
-        .rows_per_chunk(rows_per_chunk)
-        .line_terminator(lineterminator)
-        .inter_column_delimiter(sep)
-        .true_value("True")
-        .false_value("False")
-        .build()
-    )
 
     with nogil:
         cpp_write_csv(move(options.c_obj))

@@ -23,6 +23,7 @@ from cudf._lib.utils cimport data_from_pylibcudf_io
 from cudf._lib.utils import _dtype_to_names_list
 
 import pylibcudf as plc
+from pylibcudf.io.csv cimport CsvWriterOptions
 
 from cudf.api.types import is_hashable
 
@@ -336,18 +337,26 @@ def write_csv(
         )
         for i, name in enumerate(col_names)
     ]
+    tbl_w_meta = plc.io.TableWithMetadata(
+        plc.Table(columns),
+        col_names_and_child_col_names
+    )
     try:
         plc.io.csv.write_csv(
-            plc.io.SinkInfo([path_or_buf]),
-            plc.io.TableWithMetadata(
-                plc.Table(columns),
-                col_names_and_child_col_names
-            ),
-            sep=str(sep),
-            na_rep=str(na_rep),
-            header=header,
-            lineterminator=str(lineterminator),
-            rows_per_chunk=rows_per_chunk,
+            <CsvWriterOptions> (
+                <CsvWriterOptions> (plc.io.csv.CsvWriterOptions.builder(
+                    plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl)
+                )
+                .names(tbl_w_meta.column_names())
+                .na_rep(na_rep)
+                .include_header(header)
+                .rows_per_chunk(rows_per_chunk)
+                .line_terminator(lineterminator)
+                .inter_column_delimiter(sep)
+                .true_value("True")
+                .false_value("False")
+                .build()
+            )
         )
     except OverflowError:
         raise OverflowError(

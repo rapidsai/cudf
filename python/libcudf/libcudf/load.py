@@ -78,7 +78,13 @@ def load_library():
         # packaging the wheel), look for a system installation.
         libcudf_lib = _load_wheel_installation(soname)
         if libcudf_lib is None:
-            libcudf_lib = _load_system_installation(soname)
+            # libcudf_lib = _load_system_installation(soname)
+            # libcudf_lib = _load_system_installation(soname)
+            try:
+                libcudf_lib = _load_system_installation(soname)
+            except OSError:
+                # Hope it's baked into the rpath
+                return None
 
     # The caller almost never needs to do anything with this library, but no
     # harm in offering the option since this object at least provides a handle

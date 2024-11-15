@@ -14,9 +14,6 @@ from pylibcudf cimport Table
 cdef class CsvWriterOptions:
     cdef csv_writer_options c_obj
 
-    @staticmethod
-    cdef CsvWriterOptionsBuilder builder(SinkInfo sink, Table table)
-
 
 cdef class CsvWriterOptionsBuilder:
     cdef csv_writer_options_builder c_obj
