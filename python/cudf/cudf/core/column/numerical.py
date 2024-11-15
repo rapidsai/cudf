@@ -529,9 +529,9 @@ class NumericalColumn(NumericalBaseColumn):
                     self.dtype, replacement
                 )
             except TypeError:
-                # Some floating values can never be converted into singed or unsigned integers
+                # Some floating values can never be converted into signed or unsigned integers
                 # for those cases, we just need a column of `replacement` constructed
-                # with it's own-type for the final type determination below at `find_common_type`
+                # with its own type for the final type determination below at `find_common_type`
                 # call.
                 replacement_col = column.as_column(
                     replacement,
