@@ -609,7 +609,7 @@ std::unique_ptr<column> contains(strings_column_view const& input,
 
   auto tomato   = rmm::device_uvector<size_type>(target.size() * vals_in_char, stream);
   auto d_tomato = tomato.data();
-  init_kmp_tomato<<<1, vals_in_char>>>(d_target, d_tomato);
+  init_kmp_tomato<<<1, vals_in_char, 0, stream.value()>>>(d_target, d_tomato);
 
   thrust::transform(
     rmm::exec_policy(stream),
