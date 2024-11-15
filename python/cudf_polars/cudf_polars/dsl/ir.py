@@ -537,6 +537,9 @@ class Scan(IR):
                     if rows_left_to_skip > 0:
                         table_rows = tbl.num_rows()
                         chunk_skip = min(rows_left_to_skip, table_rows)
+                        # TODO: Check performance impact of skipping this
+                        # call and creating an empty table manually when the
+                        # slice would be empty (chunk_skip == table_rows).
                         (tbl,) = plc.copying.slice(tbl, [chunk_skip, table_rows])
                         rows_left_to_skip -= chunk_skip
                     return tbl

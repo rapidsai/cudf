@@ -165,12 +165,11 @@ def validate_config_options(config: dict) -> None:
     """
     if unsupported := (config.keys() - {"raise_on_fail", "parquet_options"}):
         raise ValueError(
-            f"Engine configuration contains unsupported settings {unsupported}"
+            f"Engine configuration contains unsupported settings: {unsupported}"
         )
-    if parquet_options := config.get("parquet_options", {}):
-        assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
-            parquet_options
-        )
+    assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
+        config.get("parquet_options", {})
+    )
 
 
 def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
