@@ -128,16 +128,6 @@ def test_scan(
         request.applymarker(
             pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/17311")
         )
-    #     if (
-    #         (mask is None and n_rows is not None)
-    #         or (n_rows is not None and mask is not None and slice is None)
-    #         or (n_rows is None and mask is None and slice is not None)
-    #     ):
-    #         request.applymarker(
-    #             pytest.mark.xfail(
-    #                 reason="https://github.com/rapidsai/cudf/issues/17311"
-    #             )
-    #         )
     if slice is not None:
         q = q.slice(*slice)
     if mask is not None:
