@@ -355,7 +355,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
-  STRINGS_BENCH string/factory.cu string/repeat_strings.cpp string/replace.cpp string/translate.cpp
+  STRINGS_BENCH string/repeat_strings.cpp string/replace.cpp string/translate.cpp
   string/url_decode.cu
 )
 
@@ -374,6 +374,7 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/factory.cpp
   string/filter.cpp
   string/find.cpp
   string/find_multiple.cpp

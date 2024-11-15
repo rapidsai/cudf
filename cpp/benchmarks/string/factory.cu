@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "string_bench_args.hpp"
 
 #include <benchmarks/common/generate_input.hpp>
@@ -22,6 +21,8 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -34,15 +35,16 @@
 
 #include <limits>
 
-namespace {
-using string_pair = thrust::pair<char const*, cudf::size_type>;
-struct string_view_to_pair {
-  __device__ string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
-  {
-    return (p.second) ? string_pair{p.first.data(), p.first.size_bytes()} : string_pair{nullptr, 0};
-  }
-};
-}  // namespace
+// namespace {
+// using string_pair = thrust::pair<char const*, cudf::size_type>;
+// struct string_view_to_pair {
+//   string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
+//   {
+//     return (p.second) ? string_pair{p.first.data(), p.first.size_bytes()} : string_pair{nullptr,
+//     0};
+//   }
+// };
+// }  // namespace
 
 class StringsFactory : public cudf::benchmark {};
 
@@ -54,16 +56,23 @@ static void BM_factory(benchmark::State& state)
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
   auto d_column     = cudf::column_device_view::create(column->view());
-  rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
-  thrust::transform(thrust::device,
-                    d_column->pair_begin<cudf::string_view, true>(),
-                    d_column->pair_end<cudf::string_view, true>(),
-                    pairs.data(),
-                    string_view_to_pair{});
 
+  auto stream    = cudf::get_default_stream();
+  auto mr        = cudf::get_current_device_resource_ref();
+  auto d_strings = cudf::strings::detail::create_string_vector_from_column(
+    cudf::strings_column_view(column->view()), stream, mr);
+
+  // rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
+  // thrust::transform(thrust::device,
+  //                   d_column->pair_begin<cudf::string_view, true>(),
+  //                   d_column->pair_end<cudf::string_view, true>(),
+  //                   pairs.data(),
+  //                   string_view_to_pair{});
+  //
   for (auto _ : state) {
     cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::make_strings_column(pairs, cudf::get_default_stream());
+    // cudf::make_strings_column(pairs, cudf::get_default_stream());
+    cudf::make_strings_column(d_strings, cudf::string_view{nullptr, 0});
   }
 
   cudf::strings_column_view input(column->view());
