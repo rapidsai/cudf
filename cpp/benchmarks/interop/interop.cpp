@@ -57,7 +57,7 @@ template <cudf::type_id data_type>
 void BM_to_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_columns  = static_cast<int32_t>(state.get_int64("num_columns"));
+  auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
   std::vector<cudf::type_id> types;
@@ -80,7 +80,7 @@ template <cudf::type_id data_type>
 void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_columns  = static_cast<int32_t>(state.get_int64("num_columns"));
+  auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
   std::vector<cudf::type_id> types;
@@ -127,7 +127,7 @@ template <cudf::type_id data_type>
 void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_type<data_type>>)
 {
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_columns  = static_cast<int32_t>(state.get_int64("num_columns"));
+  auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
   std::vector<cudf::type_id> types;
