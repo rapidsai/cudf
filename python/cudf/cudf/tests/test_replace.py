@@ -13,6 +13,7 @@ import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_GE_220,
+    PANDAS_GT_214,
     PANDAS_VERSION,
 )
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
@@ -974,7 +975,8 @@ def test_series_multiple_times_with_nulls():
 def test_numeric_series_replace_dtype(request, series_dtype, replacement):
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
+            condition=PANDAS_GT_214
+            and (
                 (
                     series_dtype == "int8"
                     and replacement in {128, 128.0, 32769, 32769.0}
