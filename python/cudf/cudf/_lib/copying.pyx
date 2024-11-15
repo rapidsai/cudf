@@ -26,6 +26,7 @@ from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
 import pylibcudf as plc
+from pylibcudf.contiguous_split cimport PackedColumns as PlcPackedColumns
 
 
 def _gather_map_is_valid(
@@ -330,7 +331,13 @@ class PackedColumns(Serializable):
     in a single GPU memory buffer.
     """
 
-    def __init__(self, data, column_names=None, index_names=None, column_dtypes=None):
+    def __init__(
+        self,
+        PlcPackedColumns data,
+        object column_names = None,
+        object index_names = None,
+        object column_dtypes = None
+    ):
         self._metadata, self._gpu_data = data.release()
         self.column_names=column_names
         self.index_names=index_names
@@ -358,7 +365,7 @@ class PackedColumns(Serializable):
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
-        header["metadata"] = self._metadata.obj
+        header["metadata"] = self._metadata.tobytes()
         for name, dtype in self.column_dtypes.items():
             dtype_header, dtype_frames = dtype.serialize()
             self.column_dtypes[name] = (
