@@ -22,7 +22,7 @@ _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 def test_read_parquet_basic(
     table_data, binary_source_or_sink, nrows_skiprows, columns
 ):
-    _, pa_table = table_data()
+    _, pa_table = table_data
     nrows, skiprows = nrows_skiprows
 
     source = make_source(
@@ -87,7 +87,7 @@ def test_read_parquet_basic(
 def test_read_parquet_filters(
     table_data, binary_source_or_sink, pa_filters, plc_filters
 ):
-    _, pa_table = table_data()
+    _, pa_table = table_data
 
     source = make_source(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS

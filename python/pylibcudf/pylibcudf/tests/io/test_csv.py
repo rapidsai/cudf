@@ -7,7 +7,6 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from utils import (
-    NON_NESTED_PA_TYPES,
     _convert_types,
     assert_table_and_meta_eq,
     make_source,
@@ -32,7 +31,7 @@ def csv_table_data(table_data):
     since the CSV reader can't handle that
     uint64 is also dropped since it can get confused with int64
     """
-    _, pa_table = table_data()
+    _, pa_table = table_data
     pa_table = pa_table.drop_columns(
         [
             "col_uint64",
@@ -99,7 +98,7 @@ def test_read_csv_basic(
 # infers correctly
 @pytest.mark.parametrize("chunk_size", [1000, 5999])
 def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
-    _, pa_table = table_data()
+    _, pa_table = table_data
     if len(pa_table) == 0:
         # pandas writes nothing when we have empty table
         # and header=None
@@ -312,9 +311,14 @@ def post_process_str_result(
 @pytest.mark.parametrize("header", [True, False])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 def test_write_csv(
-    table_data, source_or_sink, sep, lineterminator, header, rows_per_chunk
+    table_data_with_non_nested_pa_types,
+    source_or_sink,
+    sep,
+    lineterminator,
+    header,
+    rows_per_chunk,
 ):
-    plc_tbl_w_meta, pa_table = table_data(pa_types=NON_NESTED_PA_TYPES)
+    plc_tbl_w_meta, pa_table = table_data_with_non_nested_pa_types
     sink = source_or_sink
 
     plc.io.csv.write_csv(

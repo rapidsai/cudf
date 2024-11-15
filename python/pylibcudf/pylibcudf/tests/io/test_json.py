@@ -21,7 +21,7 @@ _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
 def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
-    plc_table_w_meta, pa_table = table_data()
+    plc_table_w_meta, pa_table = table_data
     sink = source_or_sink
 
     plc.io.json.write_json(
@@ -136,7 +136,7 @@ def test_read_json_basic(
     if isinstance(source_or_sink, io.StringIO):
         compression_type = CompressionType.NONE
 
-    _, pa_table = table_data()
+    _, pa_table = table_data
 
     source = make_source(
         source_or_sink,
@@ -186,7 +186,7 @@ def test_read_json_basic(
 def test_read_json_dtypes(table_data, source_or_sink):
     # Simple test for dtypes where we read in
     # all numeric data as floats
-    _, pa_table = table_data()
+    _, pa_table = table_data
     source = make_source(
         source_or_sink,
         pa_table,
