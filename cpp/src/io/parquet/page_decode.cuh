@@ -149,15 +149,21 @@ inline __device__ bool is_bounds_page(page_state_s* const s,
   size_t const begin      = start_row;
   size_t const end        = start_row + num_rows;
 
+  // Test for nested schemas.
+  auto const is_bounds_page_nested =
+    ((page_begin <= begin and page_end >= begin) or (page_begin <= end and page_end >= end));
+
   // For non-nested schemas, rows cannot span pages, so use a more restrictive test. Make sure to
-  // relax the predicate for page_end if we adjusted the `num_rows` for the last page to compensate
-  // for list row size estimates in `generate_list_column_row_count_estimates()` when chunked read
-  // mode.
-  return has_repetition
-           ? ((page_begin <= begin && page_end >= begin) || (page_begin <= end && page_end >= end))
-           : ((page_begin < begin && page_end > begin) ||
-              (page_begin < end &&
-               (s->page.is_num_rows_adjusted ? (page_end >= end) : (page_end > end))));
+  // relax the test for `page_end` if we adjusted the `num_rows` for the last page to compensate
+  // for list row size estimates in `generate_list_column_row_count_estimates()` when chunked
+  // read mode.
+  auto const test_page_end_unnested =
+    s->page.is_num_rows_adjusted ? page_end >= end : page_end > end;
+
+  auto const is_bounds_page_unnested =
+    (page_begin < begin and page_end > begin) or (page_begin < end and test_page_end_unnested);
+
+  return has_repetition ? is_bounds_page_nested : is_bounds_page_unnested;
 }
 
 /**

@@ -3822,15 +3822,18 @@ def test_parquet_chunked_reader_structs(
     buffer = BytesIO()
     df.to_parquet(buffer)
 
+    # Number of rows to read
+    nrows = num_rows if num_rows is not None else len(df)
+
     actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
-        nrows=num_rows if num_rows is not None else len(df),
+        nrows=nrows,
     )
     expected = cudf.read_parquet(
         buffer,
-        nrows=num_rows if num_rows is not None else len(df),
+        nrows=nrows,
     )
     assert_eq(expected, actual)
 
@@ -3869,16 +3872,20 @@ def test_parquet_chunked_reader_string_decoders(
         use_dictionary=False,
         column_encoding={"str": str_encoding},
     )
+
+    # Number of rows to read
+    nrows = num_rows if num_rows is not None else len(df)
+
     # Check with num_rows specified
     actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
-        nrows=num_rows if num_rows is not None else len(df),
+        nrows=nrows,
     )
     expected = cudf.read_parquet(
         buffer,
-        nrows=num_rows if num_rows is not None else len(df),
+        nrows=nrows,
     )
     assert_eq(expected, actual)
 
