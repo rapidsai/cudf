@@ -28,7 +28,10 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
-from cudf.utils.utils import _all_bools_with_nulls
+from cudf.utils.utils import (
+    _all_bools_with_nulls,
+    _datetime_timedelta_find_and_replace,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -636,31 +639,15 @@ class DatetimeColumn(column.ColumnBase):
         replacement: ColumnBase,
         all_nan: bool = False,
     ) -> DatetimeColumn:
-        if not isinstance(to_replace, DatetimeColumn):
-            to_replace = cudf.core.column.as_column(to_replace)
-            if to_replace.can_cast_safely(self.dtype):
-                to_replace = to_replace.astype(self.dtype)
-        if not isinstance(replacement, DatetimeColumn):
-            replacement = cudf.core.column.as_column(replacement)
-            if replacement.can_cast_safely(self.dtype):
-                replacement = replacement.astype(self.dtype)
-        if isinstance(to_replace, DatetimeColumn):
-            to_replace = to_replace.as_numerical_column(
-                dtype=np.dtype("int64")
-            )
-        if isinstance(replacement, DatetimeColumn):
-            replacement = replacement.as_numerical_column(
-                dtype=np.dtype("int64")
-            )
-        try:
-            result_col = (
-                self.as_numerical_column(dtype=np.dtype("int64"))
-                .find_and_replace(to_replace, replacement, all_nan)
-                .astype(self.dtype)
-            )
-        except TypeError:
-            result_col = self.copy(deep=True)
-        return cast(DatetimeColumn, result_col)
+        return cast(
+            DatetimeColumn,
+            _datetime_timedelta_find_and_replace(
+                original_column=self,
+                to_replace=to_replace,
+                replacement=replacement,
+                all_nan=all_nan,
+            ),
+        )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)

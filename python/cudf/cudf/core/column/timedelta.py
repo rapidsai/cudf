@@ -16,7 +16,10 @@ from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
-from cudf.utils.utils import _all_bools_with_nulls
+from cudf.utils.utils import (
+    _all_bools_with_nulls,
+    _datetime_timedelta_find_and_replace,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -312,32 +315,45 @@ class TimeDeltaColumn(ColumnBase):
         replacement: ColumnBase,
         all_nan: bool = False,
     ) -> TimeDeltaColumn:
-        if not isinstance(to_replace, TimeDeltaColumn):
-            to_replace = cudf.core.column.as_column(to_replace)
-            if to_replace.can_cast_safely(self.dtype):
-                to_replace = to_replace.astype(self.dtype)
-        if not isinstance(replacement, TimeDeltaColumn):
-            replacement = cudf.core.column.as_column(replacement)
-            if replacement.can_cast_safely(self.dtype):
-                replacement = replacement.astype(self.dtype)
+        return cast(
+            TimeDeltaColumn,
+            _datetime_timedelta_find_and_replace(
+                original_column=self,
+                to_replace=to_replace,
+                replacement=replacement,
+                all_nan=all_nan,
+            ),
+        )
 
-        if isinstance(to_replace, TimeDeltaColumn):
-            to_replace = to_replace.as_numerical_column(
-                dtype=np.dtype("int64")
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+        if to_dtype.kind == "m":  # type: ignore[union-attr]
+            to_res, _ = np.datetime_data(to_dtype)
+            self_res, _ = np.datetime_data(self.dtype)
+
+            max_int = np.iinfo(np.int64).max
+
+            max_dist = np.timedelta64(
+                self.max().astype(np.int64, copy=False), self_res
             )
-        if isinstance(replacement, TimeDeltaColumn):
-            replacement = replacement.as_numerical_column(
-                dtype=np.dtype("int64")
+            min_dist = np.timedelta64(
+                self.min().astype(np.int64, copy=False), self_res
             )
-        try:
-            result_col = (
-                self.as_numerical_column(dtype=np.dtype("int64"))
-                .find_and_replace(to_replace, replacement, all_nan)
-                .astype(self.dtype)
-            )
-        except TypeError:
-            result_col = self.copy(deep=True)
-        return cast(TimeDeltaColumn, result_col)
+
+            self_delta_dtype = np.timedelta64(0, self_res).dtype
+
+            if max_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ) and min_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ):
+                return True
+            else:
+                return False
+        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
+            # can safely cast to representation, or string
+            return True
+        else:
+            return False
 
     def mean(self, skipna=None) -> pd.Timedelta:
         return pd.Timedelta(
