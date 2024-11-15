@@ -26,6 +26,8 @@ from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
+    from polars import GPUEngine
+
     from cudf_polars.typing import NodeTraverser
 
 __all__ = ["Translator", "translate_named_expr"]
@@ -41,8 +43,9 @@ class Translator:
         Polars NodeTraverser object
     """
 
-    def __init__(self, visitor: NodeTraverser):
+    def __init__(self, visitor: NodeTraverser, config: GPUEngine):
         self.visitor = visitor
+        self.config = config
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
@@ -223,11 +226,17 @@ def _(
         skip_rows, n_rows = n_rows
 
     row_index = file_options.row_index
+    config_options = (
+        {"parquet_options": translator.config.config.get("parquet_options", {})}
+        if typ == "parquet"
+        else {}
+    )
     return ir.Scan(
         schema,
         typ,
         reader_options,
         cloud_options,
+        config_options,
         node.paths,
         with_columns,
         skip_rows,

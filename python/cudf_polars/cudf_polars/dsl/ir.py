@@ -37,8 +37,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
     from typing import Literal
 
-    from polars import GPUEngine
-
     from cudf_polars.typing import Schema
 
 
@@ -182,9 +180,7 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(
-        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
-    ) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -193,8 +189,6 @@ class IR(Node["IR"]):
         cache
             Mapping from cached node ids to constructed DataFrames.
             Used to implement evaluation of the `Cache` node.
-        config
-            GPU engine configuration.
 
         Notes
         -----
@@ -214,9 +208,8 @@ class IR(Node["IR"]):
             translation phase should fail earlier.
         """
         return self.do_evaluate(
-            config,
             *self._non_child_args,
-            *(child.evaluate(cache=cache, config=config) for child in self.children),
+            *(child.evaluate(cache=cache) for child in self.children),
         )
 
 
@@ -263,6 +256,7 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
+        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -275,6 +269,7 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
+        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -288,6 +283,8 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
+    config_options: dict[str, Any]
+    """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
     with_columns: list[str] | None
@@ -310,6 +307,7 @@ class Scan(IR):
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
+        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -321,6 +319,7 @@ class Scan(IR):
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
+        self.config_options = config_options
         self.paths = paths
         self.with_columns = with_columns
         self.skip_rows = skip_rows
@@ -331,6 +330,7 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
+            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -423,10 +423,10 @@ class Scan(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
+        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -509,7 +509,7 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
-            parquet_options = config.config.get("parquet_options", {})
+            parquet_options = config_options.get("parquet_options", {})
             if parquet_options.get("chunked", True):
                 reader = plc.io.parquet.ChunkedParquetReader(
                     plc.io.SourceInfo(paths),
@@ -657,16 +657,14 @@ class Cache(IR):
 
     @classmethod
     def do_evaluate(
-        cls, config: GPUEngine, key: int, df: DataFrame
+        cls, key: int, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
         # return it.
         return df
 
-    def evaluate(
-        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
-    ) -> DataFrame:
+    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
@@ -674,9 +672,7 @@ class Cache(IR):
             return cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(
-                self.key, value.evaluate(cache=cache, config=config)
-            )
+            return cache.setdefault(self.key, value.evaluate(cache=cache))
 
 
 class DataFrameScan(IR):
@@ -722,7 +718,6 @@ class DataFrameScan(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         schema: Schema,
         df: Any,
         projection: tuple[str, ...] | None,
@@ -770,7 +765,6 @@ class Select(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         exprs: tuple[expr.NamedExpr, ...],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
@@ -806,7 +800,6 @@ class Reduce(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         exprs: tuple[expr.NamedExpr, ...],
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
@@ -899,7 +892,6 @@ class GroupBy(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
@@ -1021,7 +1013,6 @@ class ConditionalJoin(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         predicate: plc.expressions.Expression,
         zlice: tuple[int, int] | None,
         suffix: str,
@@ -1194,7 +1185,6 @@ class Join(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         left_on_exprs: Sequence[expr.NamedExpr],
         right_on_exprs: Sequence[expr.NamedExpr],
         options: tuple[
@@ -1318,7 +1308,6 @@ class HStack(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         exprs: Sequence[expr.NamedExpr],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
@@ -1381,7 +1370,6 @@ class Distinct(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
         zlice: tuple[int, int] | None,
@@ -1471,7 +1459,6 @@ class Sort(IR):
     @classmethod
     def do_evaluate(
         cls,
-        config: GPUEngine,
         by: Sequence[expr.NamedExpr],
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
@@ -1527,9 +1514,7 @@ class Slice(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(
-        cls, config: GPUEngine, offset: int, length: int, df: DataFrame
-    ) -> DataFrame:
+    def do_evaluate(cls, offset: int, length: int, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         return df.slice((offset, length))
 
@@ -1549,9 +1534,7 @@ class Filter(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(
-        cls, config: GPUEngine, mask_expr: expr.NamedExpr, df: DataFrame
-    ) -> DataFrame:
+    def do_evaluate(cls, mask_expr: expr.NamedExpr, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         (mask,) = broadcast(mask_expr.evaluate(df), target_length=df.num_rows)
         return df.filter(mask)
@@ -1569,7 +1552,7 @@ class Projection(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(cls, config: GPUEngine, schema: Schema, df: DataFrame) -> DataFrame:
+    def do_evaluate(cls, schema: Schema, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # This can reorder things.
         columns = broadcast(
@@ -1645,9 +1628,7 @@ class MapFunction(IR):
         self._non_child_args = (name, self.options)
 
     @classmethod
-    def do_evaluate(
-        cls, config: GPUEngine, name: str, options: Any, df: DataFrame
-    ) -> DataFrame:
+    def do_evaluate(cls, name: str, options: Any, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         if name == "rechunk":
             # No-op in our data model
@@ -1726,9 +1707,7 @@ class Union(IR):
             raise NotImplementedError("Schema mismatch")
 
     @classmethod
-    def do_evaluate(
-        cls, config: GPUEngine, zlice: tuple[int, int] | None, *dfs: DataFrame
-    ) -> DataFrame:
+    def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
@@ -1777,7 +1756,7 @@ class HConcat(IR):
         )
 
     @classmethod
-    def do_evaluate(cls, config: GPUEngine, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(cls, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         max_rows = max(df.num_rows for df in dfs)
         # Horizontal concatenation extends shorter tables with nulls
