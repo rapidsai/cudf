@@ -12,6 +12,7 @@ DESELECTED_TESTS=(
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort[True]" # relies on polars built in debug mode
     "tests/unit/test_cpu_check.py::test_check_cpu_flags_skipped_no_flags" # Mock library error
     "tests/docs/test_user_guide.py" # No dot binary in CI image
+    "tests/benchmark/test_pdsh.py" # Relies on dbgen binary in polars repo that might not match CI glibc version
 )
 
 DESELECTED_TESTS=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
