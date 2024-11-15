@@ -266,6 +266,8 @@ jobs:
       build_command: |
         sccache -z;
         build-all -DBUILD_BENCHMARKS=ON --verbose;
+        python -c "import cudf; print(cudf.__version__)";
+        python -c "import pylibcudf; print(cudf.__version__)";
         sccache -s;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]
