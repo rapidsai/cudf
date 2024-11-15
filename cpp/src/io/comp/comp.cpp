@@ -102,7 +102,7 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
   return dst;
 }
 
-}
+}  // namespace
 
 std::vector<std::uint8_t> compress(compression_type compression,
                                    host_span<uint8_t const> src,

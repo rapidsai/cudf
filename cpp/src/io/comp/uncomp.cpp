@@ -534,7 +534,7 @@ source_properties get_source_properties(compression_type compression, host_span<
   return source_properties{compression, comp_data, comp_len, uncomp_len};
 }
 
-}
+}  // namespace
 
 size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src)
 {
