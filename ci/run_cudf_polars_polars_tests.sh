@@ -14,9 +14,15 @@ DESELECTED_TESTS=(
     "tests/docs/test_user_guide.py" # No dot binary in CI image
 )
 
-# The binary used for TPC-H generation is compiled for x86_64, not aarch64.
 if [[ $(arch) == "aarch64" ]]; then
+    # The binary used for TPC-H generation is compiled for x86_64, not aarch64.
     DESELECTED_TESTS+=("tests/benchmark/test_pdsh.py::test_pdsh")
+    # The connectorx package is not available on arm
+    DESELECTED_TESTS+=("ests/unit/io/database/test_read.py::test_read_database")
+    # The necessary timezone information cannot be found in our CI image.
+    DESELECTED_TESTS+=("ests/unit/io/test_parquet.py::test_parametric_small_page_mask_filtering")
+    DESELECTED_TESTS+=("ests/unit/testing/test_assert_series_equal.py::test_assert_series_equal_parametric")
+    DESELECTED_TESTS+=("y-polars/tests/unit/operations/test_join.py::test_join_4_columns_with_validity")
 fi
 
 DESELECTED_TESTS=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
