@@ -28,8 +28,9 @@
 
 #include <zlib.h>  // compress
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
+
+namespace {
 
 /**
  * @brief GZIP host compressor (includes header)
@@ -75,7 +76,7 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
                                           rmm::cuda_stream_view stream)
 {
   auto const d_src =
-    detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
   rmm::device_uvector<uint8_t> d_dst(src.size(), stream);
 
   cudf::detail::hostdevice_vector<device_span<uint8_t const>> inputs(1, stream);
@@ -101,6 +102,8 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
   return dst;
 }
 
+}
+
 std::vector<std::uint8_t> compress(compression_type compression,
                                    host_span<uint8_t const> src,
                                    rmm::cuda_stream_view stream)
@@ -113,5 +116,4 @@ std::vector<std::uint8_t> compress(compression_type compression,
   }
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

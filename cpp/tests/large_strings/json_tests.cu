@@ -60,7 +60,7 @@ TEST_P(JsonLargeReaderTest, MultiBatch)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::compress(
+    cdata = cudf::io::detail::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()),

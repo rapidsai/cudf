@@ -58,7 +58,7 @@ TEST_P(JsonReaderTest, ByteRange_SingleSource)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::compress(
+    cdata = cudf::io::detail::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()),
@@ -120,7 +120,7 @@ TEST_P(JsonReaderTest, ReadCompleteFiles)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::compress(
+    cdata = cudf::io::detail::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()),
@@ -180,7 +180,7 @@ TEST_P(JsonReaderTest, ByteRange_MultiSource)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::compress(
+    cdata = cudf::io::detail::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()),

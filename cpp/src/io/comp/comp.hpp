@@ -24,7 +24,7 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace io {
+namespace io::detail {
 
 /**
  * @brief Compresses a system memory buffer.

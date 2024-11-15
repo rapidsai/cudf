@@ -26,7 +26,7 @@
 using cudf::host_span;
 
 namespace CUDF_EXPORT cudf {
-namespace io {
+namespace io::detail {
 
 /**
  * @brief Decompresses a system memory buffer.
