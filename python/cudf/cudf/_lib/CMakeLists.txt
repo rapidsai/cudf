@@ -22,7 +22,6 @@ set(cython_sources
     datetime.pyx
     filling.pyx
     groupby.pyx
-    hash.pyx
     interop.pyx
     join.pyx
     json.pyx
