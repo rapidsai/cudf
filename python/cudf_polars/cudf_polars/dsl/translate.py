@@ -41,6 +41,8 @@ class Translator:
     ----------
     visitor
         Polars NodeTraverser object
+    config
+        GPU engine configuration.
     """
 
     def __init__(self, visitor: NodeTraverser, config: GPUEngine):
