@@ -359,6 +359,23 @@ class ExpressionTransformer(ast.NodeVisitor):
     def __init__(self, dict column_mapping):
         self.column_mapping = column_mapping
 
+    def generic_visit(self, node):
+        raise ValueError(
+            f"Not expecting expression to have node of type {node.__class__.__name__}"
+        )
+
+    def visit_Module(self, node):
+        try:
+            expr, = node.body
+        except ValueError:
+            raise ValueError(
+                f"Expecting exactly one expression, not {len(node.body)}"
+            )
+        return self.visit(expr)
+
+    def visit_Expr(self, node):
+        return self.visit(node.value)
+
     def visit_Name(self, node):
         try:
             return self.column_mapping[node.id]
@@ -399,9 +416,9 @@ class ExpressionTransformer(ast.NodeVisitor):
             functools.partial(Operation, ASTOperator.LOGICAL_AND),
             (
                 Operation(
-                    _python_cudf_operator_map[type(node.op)], 
-                    self.visit(left), 
-                    self.visit(right,
+                    _python_cudf_operator_map[type(node.op)],
+                    self.visit(left),
+                    self.visit(right),
                 )
                 for left, right in zip(
                     node.values[:-1], node.values[1:], strict=True
@@ -415,8 +432,8 @@ class ExpressionTransformer(ast.NodeVisitor):
             functools.partial(Operation, ASTOperator.LOGICAL_AND),
             (
                 Operation(
-                    _python_cudf_operator_map[type(op)], 
-                    self.visit(left), 
+                    _python_cudf_operator_map[type(op)],
+                    self.visit(left),
                     self.visit(right),
                 )
                 for op, left, right in zip(
