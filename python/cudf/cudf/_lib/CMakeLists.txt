@@ -14,7 +14,6 @@
 
 set(cython_sources
     aggregation.pyx
-    avro.pyx
     binaryop.pyx
     column.pyx
     concat.pyx

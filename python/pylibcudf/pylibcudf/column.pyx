@@ -17,6 +17,7 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 import functools
 
+__all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -60,6 +61,8 @@ cdef class Column:
         self._offset = offset
         self._children = children
         self._num_children = len(children)
+
+    __hash__ = None
 
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.
@@ -383,6 +386,8 @@ cdef class ListColumnView:
         if col.type().id() != type_id.LIST:
             raise TypeError("Column is not a list type")
         self._column = col
+
+    __hash__ = None
 
     cpdef child(self):
         """The data column of the underlying list column."""

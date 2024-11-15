@@ -13,3 +13,19 @@ from . import (
     types,
 )
 from .types import SinkInfo, SourceInfo, TableWithMetadata
+
+__all__ = [
+    "SinkInfo",
+    "SourceInfo",
+    "TableWithMetadata",
+    "avro",
+    "csv",
+    "datasource",
+    "json",
+    "orc",
+    "parquet",
+    "parquet_metadata",
+    "text",
+    "timezone",
+    "types",
+]

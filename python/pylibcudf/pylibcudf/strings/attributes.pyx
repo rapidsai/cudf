@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport attributes as cpp_attributes
 
+__all__ = ["code_points", "count_bytes", "count_characters"]
 
 cpdef Column count_characters(Column source_strings):
     """

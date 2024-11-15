@@ -55,7 +55,7 @@ jobs:
       # primary static consumers (Spark) are not in conda anyway.
       container_image: "rapidsai/ci-wheel:latest"
       run_script: "ci/configure_cpp_static.sh"
-  clang-tidy:
+  cpp-linters:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
     with:
@@ -149,3 +149,25 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
+  wheel-tests-cudf-polars:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_wheel_cudf_polars.sh"
+  cudf-polars-polars-tests:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.12
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_cudf_polars_polars_tests.sh"

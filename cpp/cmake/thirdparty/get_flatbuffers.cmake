@@ -15,13 +15,19 @@
 # Use CPM to find or clone flatbuffers
 function(find_and_configure_flatbuffers VERSION)
 
+  if(NOT BUILD_SHARED_LIBS)
+    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
+  else()
+    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
+  endif()
+
   rapids_cpm_find(
     flatbuffers ${VERSION}
     GLOBAL_TARGETS flatbuffers
     CPM_ARGS
     GIT_REPOSITORY https://github.com/google/flatbuffers.git
     GIT_TAG v${VERSION}
-    GIT_SHALLOW TRUE
+    GIT_SHALLOW TRUE ${_exclude_from_all}
   )
 
   rapids_export_find_package_root(
