@@ -23,7 +23,6 @@ from cudf._lib.utils cimport data_from_pylibcudf_io
 from cudf._lib.utils import _dtype_to_names_list
 
 import pylibcudf as plc
-from pylibcudf.io.csv cimport CsvWriterOptions
 
 from cudf.api.types import is_hashable
 
@@ -343,9 +342,9 @@ def write_csv(
     )
     try:
         plc.io.csv.write_csv(
-            <CsvWriterOptions> (
-                <CsvWriterOptions> (plc.io.csv.CsvWriterOptions.builder(
-                    plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl)
+            (
+                plc.io.csv.CsvWriterOptions.builder(
+                    plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
                 )
                 .names(tbl_w_meta.column_names())
                 .na_rep(na_rep)
