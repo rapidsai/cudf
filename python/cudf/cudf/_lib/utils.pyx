@@ -309,7 +309,7 @@ cdef data_from_unique_ptr(
     )
 
 
-cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
+cpdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
     return _data_from_columns(
         columns_from_pylibcudf_table(tbl),
         column_names,

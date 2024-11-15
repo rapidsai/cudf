@@ -26,6 +26,8 @@ from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
 
+import pylibcudf as plc
+
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
@@ -43,6 +45,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -1784,11 +1787,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Concatenate the Tables
-        out = cls._from_data(
-            *libcudf.concat.concat_tables(
-                tables, ignore_index=ignore_index or are_all_range_index
+        ignore = ignore_index or are_all_range_index
+        with acquire_spill_lock():
+            plc_tables = []
+            for table in tables:
+                cols = table._columns
+                if not ignore:
+                    cols = table._index._columns + cols
+                plc_tables.append(
+                    plc.Table([c.to_pylibcudf(mode="read") for c in cols])
+                )
+
+            concatted = libcudf.utils.data_from_pylibcudf_table(
+                plc.concatenate.concatenate(plc_tables),
+                column_names=tables[0]._column_names,
+                index_names=None if ignore else tables[0]._index_names,
             )
-        )
+        out = cls._from_data(*concatted)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
