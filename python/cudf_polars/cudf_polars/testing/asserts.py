@@ -38,6 +38,7 @@ def assert_gpu_result_equal(
     rtol: float = 1e-05,
     atol: float = 1e-08,
     categorical_as_str: bool = False,
+    executor: str | None = None,
 ) -> None:
     """
     Assert that collection of a lazyframe on GPU produces correct results.
@@ -73,6 +74,9 @@ def assert_gpu_result_equal(
         Absolute tolerance for float comparisons
     categorical_as_str
         Decat categoricals to strings before comparing
+    executor
+        The executor configuration to pass to `GPUEngine`. If not specified
+        uses the module level `Executor` attribute.
 
     Raises
     ------
@@ -86,7 +90,7 @@ def assert_gpu_result_equal(
     )
 
     expect = lazydf.collect(**final_polars_collect_kwargs)
-    engine = GPUEngine(raise_on_fail=True, executor=Executor)
+    engine = GPUEngine(raise_on_fail=True, executor=executor or Executor)
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
     assert_frame_equal(
         expect,
