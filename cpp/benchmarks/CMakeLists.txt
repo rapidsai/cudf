@@ -354,15 +354,15 @@ ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binary
 ConfigureBench(TEXT_BENCH text/subword.cpp)
 
 ConfigureNVBench(
-  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/ngrams.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
+  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
+  text/ngrams.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
 )
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
-  STRINGS_BENCH string/factory.cu string/filter.cpp string/repeat_strings.cpp string/replace.cpp
-  string/translate.cpp string/url_decode.cu
+  STRINGS_BENCH string/factory.cu string/repeat_strings.cpp string/replace.cpp string/translate.cpp
+  string/url_decode.cu
 )
 
 ConfigureNVBench(
@@ -380,7 +380,9 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/filter.cpp
   string/find.cpp
+  string/find_multiple.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp

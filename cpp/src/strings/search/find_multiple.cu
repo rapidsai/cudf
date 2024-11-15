@@ -42,8 +42,9 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
 {
   auto const strings_count = input.size();
   auto const targets_count = targets.size();
-  CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
-  CUDF_EXPECTS(!targets.has_nulls(), "Search targets cannot contain null strings");
+  CUDF_EXPECTS(targets_count > 0, "Must include at least one search target", std::invalid_argument);
+  CUDF_EXPECTS(
+    !targets.has_nulls(), "Search targets cannot contain null strings", std::invalid_argument);
 
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;

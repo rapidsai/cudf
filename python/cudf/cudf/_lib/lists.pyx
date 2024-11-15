@@ -11,8 +11,6 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 import pylibcudf as plc
 
-from pylibcudf cimport Scalar
-
 
 @acquire_spill_lock()
 def count_elements(Column col):
@@ -37,8 +35,16 @@ def distinct(Column col, bool nulls_equal, bool nans_all_equal):
     return Column.from_pylibcudf(
         plc.lists.distinct(
             col.to_pylibcudf(mode="read"),
-            nulls_equal,
-            nans_all_equal,
+            (
+                plc.types.NullEquality.EQUAL
+                if nulls_equal
+                else plc.types.NullEquality.UNEQUAL
+            ),
+            (
+                plc.types.NanEquality.ALL_EQUAL
+                if nans_all_equal
+                else plc.types.NanEquality.UNEQUAL
+            ),
         )
     )
 
@@ -48,7 +54,7 @@ def sort_lists(Column col, bool ascending, str na_position):
     return Column.from_pylibcudf(
         plc.lists.sort_lists(
             col.to_pylibcudf(mode="read"),
-            ascending,
+            plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING,
             (
                 plc.types.NullOrder.BEFORE
                 if na_position == "first"
@@ -84,7 +90,7 @@ def contains_scalar(Column col, py_search_key):
     return Column.from_pylibcudf(
         plc.lists.contains(
             col.to_pylibcudf(mode="read"),
-            <Scalar> py_search_key.device_value.c_value,
+            py_search_key.device_value.c_value,
         )
     )
 
@@ -94,8 +100,8 @@ def index_of_scalar(Column col, object py_search_key):
     return Column.from_pylibcudf(
         plc.lists.index_of(
             col.to_pylibcudf(mode="read"),
-            <Scalar> py_search_key.device_value.c_value,
-            True,
+            py_search_key.device_value.c_value,
+            plc.lists.DuplicateFindOption.FIND_FIRST,
         )
     )
 
@@ -106,7 +112,7 @@ def index_of_column(Column col, Column search_keys):
         plc.lists.index_of(
             col.to_pylibcudf(mode="read"),
             search_keys.to_pylibcudf(mode="read"),
-            True,
+            plc.lists.DuplicateFindOption.FIND_FIRST,
         )
     )
 
@@ -127,7 +133,9 @@ def concatenate_list_elements(Column input_column, dropna=False):
     return Column.from_pylibcudf(
         plc.lists.concatenate_list_elements(
             input_column.to_pylibcudf(mode="read"),
-            dropna,
+            plc.lists.ConcatenateNullPolicy.IGNORE
+            if dropna
+            else plc.lists.ConcatenateNullPolicy.NULLIFY_OUTPUT_ROW,
         )
     )
 
