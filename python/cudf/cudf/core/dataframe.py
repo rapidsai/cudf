@@ -1788,20 +1788,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Concatenate the Tables
         ignore = ignore_index or are_all_range_index
+        index_names = None if ignore else tables[0]._index_names
+        column_names = tables[0]._column_names
         with acquire_spill_lock():
-            plc_tables = []
-            for table in tables:
-                cols = table._columns
-                if not ignore:
-                    cols = table._index._columns + cols
-                plc_tables.append(
-                    plc.Table([c.to_pylibcudf(mode="read") for c in cols])
+            plc_tables = [
+                plc.Table(
+                    [
+                        c.to_pylibcudf(mode="read")
+                        for c in (
+                            table._columns
+                            if ignore
+                            else itertools.chain(
+                                table._index._columns, table._columns
+                            )
+                        )
+                    ]
                 )
+                for table in tables
+            ]
 
             concatted = libcudf.utils.data_from_pylibcudf_table(
                 plc.concatenate.concatenate(plc_tables),
-                column_names=tables[0]._column_names,
-                index_names=None if ignore else tables[0]._index_names,
+                column_names=column_names,
+                index_names=index_names,
             )
         out = cls._from_data(*concatted)
 
