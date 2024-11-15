@@ -561,7 +561,6 @@ std::unique_ptr<column> contains(strings_column_view const& input,
 
   // benchmark measurements showed this to be faster for smaller strings
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    // return d_string.find(d_target) != string_view::npos;
     bool result = false;
     for (size_type i = 0; !result && (i <= (d_string.size_bytes() - d_target.size_bytes())); ++i) {
       result = d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0;
@@ -577,7 +576,6 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
                                  rmm::device_async_resource_ref mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    // return d_string.find(d_target) != string_view::npos;
     bool result = false;
     for (size_type i = 0; !result && (i <= (d_string.size_bytes() - d_target.size_bytes())); ++i) {
       result = d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0;
