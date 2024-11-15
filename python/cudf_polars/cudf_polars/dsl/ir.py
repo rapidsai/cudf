@@ -37,6 +37,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
     from typing import Literal
 
+    from polars import GPUEngine
+
     from cudf_polars.typing import Schema
 
 
@@ -180,7 +182,9 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -189,6 +193,8 @@ class IR(Node["IR"]):
         cache
             Mapping from cached node ids to constructed DataFrames.
             Used to implement evaluation of the `Cache` node.
+        config
+            GPU engine configuration.
 
         Notes
         -----
@@ -208,8 +214,9 @@ class IR(Node["IR"]):
             translation phase should fail earlier.
         """
         return self.do_evaluate(
+            config,
             *self._non_child_args,
-            *(child.evaluate(cache=cache) for child in self.children),
+            *(child.evaluate(cache=cache, config=config) for child in self.children),
         )
 
 
@@ -294,6 +301,9 @@ class Scan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
+    PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
+    PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
+
     def __init__(
         self,
         schema: Schema,
@@ -339,7 +349,7 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if self.typ == "csv" and self.skip_rows != 0:  # pragma: no cover
+        if self.typ in {"csv"} and self.skip_rows != 0:  # pragma: no cover
             # This comes from slice pushdown, but that
             # optimization doesn't happen right now
             raise NotImplementedError("skipping rows in CSV reader")
@@ -413,6 +423,7 @@ class Scan(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
@@ -498,25 +509,80 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
-            filters = None
-            if predicate is not None and row_index is None:
-                # Can't apply filters during read if we have a row index.
-                filters = to_parquet_filter(predicate.value)
-            tbl_w_meta = plc.io.parquet.read_parquet(
-                plc.io.SourceInfo(paths),
-                columns=with_columns,
-                filters=filters,
-                nrows=n_rows,
-                skip_rows=skip_rows,
-            )
-            df = DataFrame.from_table(
-                tbl_w_meta.tbl,
-                # TODO: consider nested column names?
-                tbl_w_meta.column_names(include_children=False),
-            )
-            if filters is not None:
-                # Mask must have been applied.
-                return df
+            parquet_options = config.config.get("parquet_options", {})
+            if parquet_options.get("chunked", True):
+                reader = plc.io.parquet.ChunkedParquetReader(
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    # We handle skip_rows != 0 by reading from the
+                    # up to n_rows + skip_rows and slicing off the
+                    # first skip_rows entries.
+                    # TODO: Remove this workaround once
+                    # https://github.com/rapidsai/cudf/issues/16186
+                    # is fixed
+                    nrows=n_rows + skip_rows,
+                    skip_rows=0,
+                    chunk_read_limit=parquet_options.get(
+                        "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
+                    ),
+                    pass_read_limit=parquet_options.get(
+                        "pass_read_limit", cls.PARQUET_DEFAULT_PASS_LIMIT
+                    ),
+                )
+                chk = reader.read_chunk()
+                rows_left_to_skip = skip_rows
+
+                def slice_skip(tbl: plc.Table):
+                    nonlocal rows_left_to_skip
+                    if rows_left_to_skip > 0:
+                        table_rows = tbl.num_rows()
+                        chunk_skip = min(rows_left_to_skip, table_rows)
+                        # TODO: Check performance impact of skipping this
+                        # call and creating an empty table manually when the
+                        # slice would be empty (chunk_skip == table_rows).
+                        (tbl,) = plc.copying.slice(tbl, [chunk_skip, table_rows])
+                        rows_left_to_skip -= chunk_skip
+                    return tbl
+
+                tbl = slice_skip(chk.tbl)
+                # TODO: Nested column names
+                names = chk.column_names(include_children=False)
+                concatenated_columns = tbl.columns()
+                while reader.has_next():
+                    tbl = slice_skip(reader.read_chunk().tbl)
+
+                    for i in range(tbl.num_columns()):
+                        concatenated_columns[i] = plc.concatenate.concatenate(
+                            [concatenated_columns[i], tbl._columns[i]]
+                        )
+                        # Drop residual columns to save memory
+                        tbl._columns[i] = None
+
+                df = DataFrame.from_table(
+                    plc.Table(concatenated_columns),
+                    names=names,
+                )
+            else:
+                filters = None
+                if predicate is not None and row_index is None:
+                    # Can't apply filters during read if we have a row index.
+                    filters = to_parquet_filter(predicate.value)
+                tbl_w_meta = plc.io.parquet.read_parquet(
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    filters=filters,
+                    nrows=n_rows,
+                    skip_rows=skip_rows,
+                )
+                df = DataFrame.from_table(
+                    tbl_w_meta.tbl,
+                    # TODO: consider nested column names?
+                    tbl_w_meta.column_names(include_children=False),
+                )
+                if filters is not None:
+                    # Mask must have been applied.
+                    return df
+
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
@@ -591,14 +657,16 @@ class Cache(IR):
 
     @classmethod
     def do_evaluate(
-        cls, key: int, df: DataFrame
+        cls, config: GPUEngine, key: int, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
         # return it.
         return df
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
@@ -606,7 +674,9 @@ class Cache(IR):
             return cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache))
+            return cache.setdefault(
+                self.key, value.evaluate(cache=cache, config=config)
+            )
 
 
 class DataFrameScan(IR):
@@ -652,6 +722,7 @@ class DataFrameScan(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         schema: Schema,
         df: Any,
         projection: tuple[str, ...] | None,
@@ -699,6 +770,7 @@ class Select(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         exprs: tuple[expr.NamedExpr, ...],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
@@ -733,7 +805,10 @@ class Reduce(IR):
 
     @classmethod
     def do_evaluate(
-        cls, exprs: tuple[expr.NamedExpr, ...], df: DataFrame
+        cls,
+        config: GPUEngine,
+        exprs: tuple[expr.NamedExpr, ...],
+        df: DataFrame,
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
         columns = broadcast(*(e.evaluate(df) for e in exprs))
@@ -824,6 +899,7 @@ class GroupBy(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
@@ -945,6 +1021,7 @@ class ConditionalJoin(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         predicate: plc.expressions.Expression,
         zlice: tuple[int, int] | None,
         suffix: str,
@@ -1117,6 +1194,7 @@ class Join(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         left_on_exprs: Sequence[expr.NamedExpr],
         right_on_exprs: Sequence[expr.NamedExpr],
         options: tuple[
@@ -1240,6 +1318,7 @@ class HStack(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         exprs: Sequence[expr.NamedExpr],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
@@ -1302,6 +1381,7 @@ class Distinct(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
         zlice: tuple[int, int] | None,
@@ -1391,6 +1471,7 @@ class Sort(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         by: Sequence[expr.NamedExpr],
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
@@ -1446,7 +1527,9 @@ class Slice(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(cls, offset: int, length: int, df: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, config: GPUEngine, offset: int, length: int, df: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         return df.slice((offset, length))
 
@@ -1466,7 +1549,9 @@ class Filter(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(cls, mask_expr: expr.NamedExpr, df: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, config: GPUEngine, mask_expr: expr.NamedExpr, df: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (mask,) = broadcast(mask_expr.evaluate(df), target_length=df.num_rows)
         return df.filter(mask)
@@ -1484,7 +1569,7 @@ class Projection(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(cls, schema: Schema, df: DataFrame) -> DataFrame:
+    def do_evaluate(cls, config: GPUEngine, schema: Schema, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # This can reorder things.
         columns = broadcast(
@@ -1559,14 +1644,14 @@ class MapFunction(IR):
             )
         self._non_child_args = (schema, name, self.options)
 
-    def get_hashable(self) -> Hashable:
+    def get_hashable(self) -> Hashable:  # pragma: no cover; Needed by experimental
         """Hashable representation of the node."""
         schema_hash = tuple(self.schema.items())
         return (type(self), schema_hash, self.name, str(self.options), *self.children)
 
     @classmethod
     def do_evaluate(
-        cls, schema: Schema, name: str, options: Any, df: DataFrame
+        cls, config: GPUEngine, schema: Schema, name: str, options: Any, df: DataFrame
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if name == "rechunk":
@@ -1649,7 +1734,9 @@ class Union(IR):
             raise NotImplementedError("Schema mismatch")
 
     @classmethod
-    def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, config: GPUEngine, zlice: tuple[int, int] | None, *dfs: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
@@ -1698,7 +1785,7 @@ class HConcat(IR):
         )
 
     @classmethod
-    def do_evaluate(cls, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(cls, config: GPUEngine, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         max_rows = max(df.num_rows for df in dfs)
         # Horizontal concatenation extends shorter tables with nulls
