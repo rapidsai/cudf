@@ -214,9 +214,9 @@ TEST_P(JsonCompressedWriterTest, PlainTable)
                              reinterpret_cast<uint8_t*>(out_buffer.data()), out_buffer.size()));
     std::string const expected =
       R"([{"col1":"a","col2":"d","col3":1,"col4":1.5,"col5":null},{"col1":"b","col2":"e","col3":2,"col4":2.5,"col5":2},{"col1":"c","col2":"f","col3":3,"col4":3.5,"col5":null}])";
-    EXPECT_EQ(
-      expected,
-      std::string(reinterpret_cast<char*>(decomp_out_buffer.data()), decomp_out_buffer.size()));
+    EXPECT_EQ(expected,
+              std::string_view(reinterpret_cast<char*>(decomp_out_buffer.data()),
+                               decomp_out_buffer.size()));
   }
 
   cudf::io::json_reader_options json_parser_options =
