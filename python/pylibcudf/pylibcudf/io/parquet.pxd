@@ -4,7 +4,6 @@ from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from pylibcudf.contiguous_split cimport HostBuffer
 from pylibcudf.expressions cimport Expression
 from pylibcudf.io.types cimport (
     compression_type,
@@ -91,4 +90,4 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptions build(self)
 
-cpdef HostBuffer write_parquet(ParquetWriterOptions options)
+cpdef memoryview write_parquet(ParquetWriterOptions options)

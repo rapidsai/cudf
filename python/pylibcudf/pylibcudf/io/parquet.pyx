@@ -554,7 +554,7 @@ cdef class ParquetWriterOptionsBuilder:
         return parquet_options
 
 
-cpdef HostBuffer write_parquet(ParquetWriterOptions options):
+cpdef memoryview write_parquet(ParquetWriterOptions options):
     """
     Writes a set of columns to parquet format.
 
@@ -565,7 +565,7 @@ cpdef HostBuffer write_parquet(ParquetWriterOptions options):
 
     Returns
     -------
-    pylibcudf.contiguous_split.HostBuffer
+    memoryview
         A blob that contains the file metadata
         (parquet FileMetadata thrift message) if requested in
         parquet_writer_options (empty blob otherwise).
@@ -576,4 +576,4 @@ cpdef HostBuffer write_parquet(ParquetWriterOptions options):
     with nogil:
         c_result = cpp_write_parquet(c_options)
 
-    return HostBuffer.from_unique_ptr(move(c_result))
+    return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
