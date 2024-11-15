@@ -299,6 +299,7 @@ cdef class CsvWriterOptions:
             CsvWriterOptionsBuilder
         )
         csv_builder.c_obj = csv_writer_options.builder(sink.c_obj, table.view())
+        csv_builder.table = table
         return csv_builder
 
 
@@ -442,6 +443,7 @@ cdef class CsvWriterOptionsBuilder:
             CsvWriterOptions
         )
         csv_options.c_obj = move(self.c_obj.build())
+        csv_options.table = self.table
         return csv_options
 
 

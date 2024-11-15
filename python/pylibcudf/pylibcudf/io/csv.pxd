@@ -9,14 +9,16 @@ from pylibcudf.libcudf.io.csv cimport (
 )
 from pylibcudf.libcudf.io.types cimport quote_style
 from pylibcudf.io.types cimport SinkInfo
-from pylibcudf cimport Table
+from pylibcudf.table cimport Table
 
 cdef class CsvWriterOptions:
     cdef csv_writer_options c_obj
+    cdef Table table
 
 
 cdef class CsvWriterOptionsBuilder:
     cdef csv_writer_options_builder c_obj
+    cdef Table table
     cpdef CsvWriterOptionsBuilder names(self, list names)
     cpdef CsvWriterOptionsBuilder na_rep(self, str val)
     cpdef CsvWriterOptionsBuilder include_header(self, bool val)
