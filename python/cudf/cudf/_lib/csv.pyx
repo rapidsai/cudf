@@ -20,7 +20,6 @@ from cudf.core.buffer import acquire_spill_lock
 from libcpp cimport bool
 
 from cudf._lib.utils cimport data_from_pylibcudf_io
-from cudf._lib.utils import _dtype_to_names_list
 
 import pylibcudf as plc
 
@@ -306,7 +305,8 @@ def write_csv(
     --------
     cudf.to_csv
     """
-    columns=[]
+    columns = []
+    col_names = []
     index_and_not_empty = index is True and table.index is not None
     if index_and_not_empty:
         columns.extend(col.to_pylibcudf(mode="read") for col in table.index._columns)
@@ -324,34 +324,18 @@ def write_csv(
             else (str(name) if name not in (None, '') else '')
             for name in all_names
         ]
-    else:
-        col_names = []
-    num_index_columns = len(table._index.names) if index_and_not_empty else 0
-    col_names_and_child_col_names = [
-        (
-            name,
-            _dtype_to_names_list(
-                table[table._column_names[i - num_index_columns]]._column
-            ) if i >= num_index_columns else []
-        )
-        for i, name in enumerate(col_names)
-    ]
-    tbl_w_meta = plc.io.TableWithMetadata(
-        plc.Table(columns),
-        col_names_and_child_col_names
-    )
     try:
         plc.io.csv.write_csv(
             (
                 plc.io.csv.CsvWriterOptions.builder(
-                    plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+                    plc.io.SinkInfo([path_or_buf]), plc.Table(columns)
                 )
-                .names(tbl_w_meta.column_names())
+                .names(col_names)
                 .na_rep(na_rep)
                 .include_header(header)
                 .rows_per_chunk(rows_per_chunk)
-                .line_terminator(lineterminator)
-                .inter_column_delimiter(sep)
+                .line_terminator(str(lineterminator))
+                .inter_column_delimiter(str(sep))
                 .true_value("True")
                 .false_value("False")
                 .build()

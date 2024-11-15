@@ -9,6 +9,7 @@ from pylibcudf.io.types import (
     SourceInfo,
     TableWithMetadata,
 )
+from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
 def read_csv(
@@ -66,7 +67,8 @@ def write_csv(
 
 class CsvWriterOptions:
     def __init__(self): ...
-    def build(self) -> CsvWriterOptions: ...
+    @staticmethod
+    def builder(sink: SinkInfo, table: Table) -> CsvWriterOptionsBuilder: ...
 
 class CsvWriterOptionsBuilder:
     def __init__(self): ...
