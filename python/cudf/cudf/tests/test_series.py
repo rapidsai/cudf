@@ -14,9 +14,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.dtypes import Decimal32Dtype
-from cudf.core.dtypes import Decimal64Dtype
-
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
