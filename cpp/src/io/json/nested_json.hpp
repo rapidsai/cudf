@@ -430,6 +430,18 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Create empty column of a given nested schema
+ *
+ * @param schema The schema of the column to create
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr resource with which to allocate
+ * @return The empty column
+ */
+std::unique_ptr<column> make_empty_column(schema_element const& schema,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
+
+/**
  * @brief Create all null column of a given nested schema
  *
  * @param schema The schema of the column to create
