@@ -775,14 +775,12 @@ def test_round_nan_as_null_false(series, decimal):
 @pytest.mark.parametrize(
     "data, dtype, decimals, expected_half_up, expected_half_even",
     [
-        # Decimal32Dtype Test Cases
-        ([1.234, 2.345, 3.456], Decimal32Dtype(precision=5, scale=3), 2, [1.23, 2.35, 3.46], [1.23, 2.34, 3.46]),
-        ([1.234, 2.345, 3.456], Decimal32Dtype(precision=5, scale=3), 0, [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]),
-        ([1.234, 2.345, 3.456], Decimal32Dtype(precision=5, scale=3), 3, [1.234, 2.345, 3.456], [1.234, 2.345, 3.456]),
-        # Decimal64Dtype Test Cases
-        ([1.234567, 2.345678, 3.456789], Decimal64Dtype(precision=10, scale=6), 4, [1.2346, 2.3457, 3.4568], [1.2346, 2.3457, 3.4568]),
-        ([1.234567, 2.345678, 3.456789], Decimal64Dtype(precision=10, scale=6), 2, [1.23, 2.35, 3.46], [1.23, 2.35, 3.46]),
-        ([1.234567, 2.345678, 3.456789], Decimal64Dtype(precision=10, scale=6), 6, [1.234567, 2.345678, 3.456789], [1.234567, 2.345678, 3.456789]),
+        ([1.234, 2.345, 3.456], cudf.Decimal32Dtype(precision=5, scale=3), 2, [1.23, 2.35, 3.46], [1.23, 2.34, 3.46]),
+        ([1.234, 2.345, 3.456], cudf.Decimal32Dtype(precision=5, scale=3), 0, [1.0, 2.0, 3.0], [1.0, 2.0, 3.0]),
+        ([1.234, 2.345, 3.456], cudf.Decimal32Dtype(precision=5, scale=3), 3, [1.234, 2.345, 3.456], [1.234, 2.345, 3.456]),
+        ([1.234567, 2.345678, 3.456789], cudf.Decimal64Dtype(precision=10, scale=6), 4, [1.2346, 2.3457, 3.4568], [1.2346, 2.3457, 3.4568]),
+        ([1.234567, 2.345678, 3.456789], cudf.Decimal64Dtype(precision=10, scale=6), 2, [1.23, 2.35, 3.46], [1.23, 2.35, 3.46]),
+        ([1.234567, 2.345678, 3.456789], cudf.Decimal64Dtype(precision=10, scale=6), 6, [1.234567, 2.345678, 3.456789], [1.234567, 2.345678, 3.456789]),
     ],
 )
 def test_series_round_decimal(data, dtype, decimals, expected_half_up, expected_half_even):
