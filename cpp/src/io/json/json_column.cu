@@ -464,26 +464,37 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       column_names.emplace_back(
         json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
-      // Note: json_col modified here, reuse the memory
-      auto offsets_column = std::make_unique<column>(data_type{type_id::INT32},
-                                                     num_rows + 1,
-                                                     json_col.child_offsets.release(),
-                                                     rmm::device_buffer{},
-                                                     0);
+      // if child is not present, set the null mask correctly, but offsets are zero, and children
+      // are empty Note: json_col modified here, reuse the memory
+      auto offsets_column =
+        json_col.child_columns.empty()
+          ? std::make_unique<column>(
+              cudf::detail::make_zeroed_device_uvector_async<size_type>(num_rows + 1, stream, mr),
+              rmm::device_buffer{},
+              0)
+          : std::make_unique<column>(data_type{type_id::INT32},
+                                     num_rows + 1,
+                                     json_col.child_offsets.release(),
+                                     rmm::device_buffer{},
+                                     0);
       // Create children column
-      auto child_schema_element =
-        json_col.child_columns.empty() ? std::optional<schema_element>{} : get_list_child_schema();
+      auto child_schema_element = get_list_child_schema();
       auto [child_column, names] =
         json_col.child_columns.empty() or (prune_columns and !child_schema_element.has_value())
           ? std::pair<std::unique_ptr<column>,
                       // EMPTY type could not used because gather throws exception on EMPTY type.
-                      std::vector<column_name_info>>{std::make_unique<column>(
-                                                       data_type{type_id::INT8},
-                                                       0,
-                                                       rmm::device_buffer{},
-                                                       rmm::device_buffer{},
-                                                       0),
-                                                     std::vector<column_name_info>{}}
+                      std::vector<column_name_info>>{make_empty_column(
+                                                       child_schema_element.value_or(
+                                                         schema_element{data_type{type_id::INT8}}),
+                                                       stream,
+                                                       mr),
+                                                     std::vector<column_name_info>{
+                                                       make_column_name_info(
+                                                         child_schema_element.value_or(
+                                                           schema_element{
+                                                             data_type{type_id::INT8}}),
+                                                         list_child_name)
+                                                         .children}}
           : device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
                                               d_input,
                                               options,
