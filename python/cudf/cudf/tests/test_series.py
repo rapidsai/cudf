@@ -786,21 +786,12 @@ def test_round_nan_as_null_false(series, decimal):
 def test_series_round_decimal(data, dtype, decimals, expected_half_up, expected_half_even):
     ser = cudf.Series(data).astype(dtype)
 
-    # Half-up rounding
     result_half_up = ser.round(decimals=decimals, how="half_up").astype(dtype)
-    # print("Rounded Series (half_up):", result_half_up)
-
     expected_ser_half_up = cudf.Series(expected_half_up).astype(dtype)
-    # print("Expected Series (half_up):", expected_ser_half_up)
-
     assert_eq(result_half_up, expected_ser_half_up)
 
-    # Half-even rounding
     result_half_even = ser.round(decimals=decimals, how="half_even").astype(dtype)
-    # print("Rounded Series (half_even):", result_half_even)
-
     expected_ser_half_even = cudf.Series(expected_half_even).astype(dtype)
-    # print("Expected Series (half_even):", expected_ser_half_even)
     assert_eq(result_half_even, expected_ser_half_even)     
 
 
