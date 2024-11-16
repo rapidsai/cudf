@@ -25,16 +25,11 @@
 
 #include <cudf/detail/utilities/logger.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <functional>
-#include <future>
 #include <numeric>
-#include <optional>
 #include <regex>
 
 namespace cudf::io::parquet::detail {
