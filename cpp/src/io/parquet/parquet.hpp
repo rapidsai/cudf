@@ -396,40 +396,45 @@ struct ColumnChunkMetaData {
 };
 
 /**
- * @brief The algorithm used in Bloom filter.
- **/
+ * @brief The algorithm used in bloom filter
+ */
 struct BloomFilterAlgorithm {
-  /** Block-based Bloom filter. **/
+  // Block-based Bloom filter.
   enum Algorithm { UNDEFINED, SPLIT_BLOCK };
   Algorithm algorithm{Algorithm::SPLIT_BLOCK};
 };
 
 /**
- * @brief The hash function used in Bloom filter. This function takes the hash of a column value
- * using plain encoding.
- **/
+ * @brief The hash function used in Bloom filter
+ */
 struct BloomFilterHash {
-  /** xxHash Strategy. **/
+  // xxHash_64
   enum Hash { UNDEFINED, XXHASH };
   Hash hash{Hash::XXHASH};
 };
 
 /**
- * @brief The compression used in the Bloom filter.
- **/
+ * @brief The compression used in the bloom filter
+ */
 struct BloomFilterCompression {
   enum Compression { UNDEFINED, UNCOMPRESSED };
   Compression compression{Compression::UNCOMPRESSED};
 };
 
+/**
+ * @brief Bloom filter header struct
+ *
+ * The bloom filter data of a column chunk stores this header at the beginning
+ * following by the filter bitset.
+ */
 struct BloomFilterHeader {
   // The size of bitset in bytes
   int32_t num_bytes;
-  // The algorithm for setting bits. *
+  // The algorithm for setting bits
   BloomFilterAlgorithm algorithm;
-  // The hash function used for Bloom filter. *
+  // The hash function used for bloom filter
   BloomFilterHash hash;
-  // The compression used in the Bloom filter *
+  // The compression used in the bloom filter
   BloomFilterCompression compression;
 };
 
