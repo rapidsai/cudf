@@ -391,6 +391,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 }  // namespace
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -491,6 +492,19 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     }
     filtered_row_group_indices.push_back(std::move(filtered_row_groups));
   }
+
+  // If equality predicate
+  if (true /* is_equality_predicate */) {
+    filtered_row_group_indices =
+      apply_bloom_filter_to_row_groups(
+        sources,
+        filtered_row_group_indices.empty() ? input_row_group_indices : filtered_row_group_indices,
+        output_dtypes,
+        output_column_schemas,
+        stream)
+        .value();
+  }
+
   return {std::move(filtered_row_group_indices)};
 }
 

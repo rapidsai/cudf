@@ -1079,6 +1079,20 @@ std::future<void> read_bloom_filters_async(
       CompactProtocolReader cp{buffer->data(), buffer->size()};
       cp.read(&header);
 
+      // Test if header is valid.
+      auto const is_header_valid =
+        (header.num_bytes % 32) == 0 and
+        header.compression.compression == BloomFilterCompression::Compression::UNCOMPRESSED and
+        header.algorithm.algorithm == BloomFilterAlgorithm::Algorithm::SPLIT_BLOCK and
+        header.hash.hash == BloomFilterHash::Hash::XXHASH;
+
+      if (not is_header_valid) {
+        // Simply use an empty device buffer and move on.
+        bloom_filter_data[chunk] = rmm::device_buffer{};
+        CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
+        continue;
+      }
+
       // Bloom filter header size
       auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
       auto const bitset_size              = header.num_bytes;
@@ -1106,6 +1120,9 @@ std::future<void> read_bloom_filters_async(
           bloom_filter_data[chunk] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
         }
       }
+    } else {
+      // Simply use an empty device buffer.
+      bloom_filter_data[chunk] = rmm::device_buffer{};
     }
   }
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
@@ -1124,11 +1141,16 @@ aggregate_reader_metadata::apply_bloom_filter_to_row_groups(
   host_span<int const> output_column_schemas,
   rmm::cuda_stream_view stream) const
 {
-  // Number of row groups after filter_row_groups().
-  auto const num_row_groups = std::accumulate(
-    row_group_indices.begin(), row_group_indices.end(), 0, [](auto& sum, auto const& rgis) {
-      return sum + rgis.size();
-    });
+  // Create row group indices.
+  // std::vector<std::vector<size_type>> filtered_row_group_indices;
+  // Number of total row groups to process.
+  auto const num_row_groups = std::accumulate(row_group_indices.begin(),
+                                              row_group_indices.end(),
+                                              0,
+                                              [](size_type sum, auto const& per_file_row_groups) {
+                                                return sum + per_file_row_groups.size();
+                                              });
+
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = output_dtypes.size();
   auto const num_chunks        = num_row_groups * num_input_columns;
@@ -1210,18 +1232,6 @@ aggregate_reader_metadata::select_row_groups(
     filtered_row_group_indices = filter_row_groups(
       row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
-      row_group_indices =
-        host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
-    }
-  }
-
-  // FIXME: Provide the actual condition for this
-  if (true /* equality predicate provided */) {
-    auto const bloom_filtered_row_groups = apply_bloom_filter_to_row_groups(
-      sources, row_group_indices, output_dtypes, output_column_schemas, stream);
-    // TODO: Can use a better logic here.
-    if (bloom_filtered_row_groups.has_value()) {
-      filtered_row_group_indices.value() = std::move(bloom_filtered_row_groups.value());
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }

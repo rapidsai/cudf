@@ -323,6 +323,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters the row groups based on predicate filter
    *
+   * @param sources Lists of input datasources.
    * @param row_group_indices Lists of row groups to read, one per source
    * @param output_dtypes Datatypes of of output columns
    * @param output_column_schemas schema indices of output columns
@@ -331,6 +332,7 @@ class aggregate_reader_metadata {
    * @return Filtered row group indices, if any is filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
+    host_span<std::unique_ptr<datasource> const> sources,
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
