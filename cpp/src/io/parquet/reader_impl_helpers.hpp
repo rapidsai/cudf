@@ -367,24 +367,21 @@ class aggregate_reader_metadata {
                     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Filters the row groups using bloom filters
+   * @brief Reads bloom filter bitsets for the specified columns from the given lists of row
+   * groups.
    *
    * @param sources Dataset sources
-   * @param bloom_filter_data Devicebuffers to hold bloom filter bitsets for each chunk
-   * @param begin_chunk Index of first column chunk to read
-   * @param end_chunk Index after the last column chunk to read
-   * @param bloom_filter_offsets Bloom filter offsets for all chunks
-   * @param bloom_filter_sizes Bloom filter sizes for all chunks
-   * @param chunk_source_map Association between each column chunk and its source
+   * @param row_group_indices Lists of row groups to read bloom filters from, one per source
+   * @param column_schemas Schema indices of columns whose bloom filters will be read
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Filtered row group indices, if any is filtered.
+   * @return A list of bloom filter bitset device buffers flattened over column schemas over lists
+   * of row group indices
    */
-  std::optional<std::vector<std::vector<size_type>>> apply_bloom_filter_to_row_groups(
+  std::vector<rmm::device_buffer> read_bloom_filters(
     host_span<std::unique_ptr<datasource> const> sources,
     host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
+    host_span<int const> column_schemas,
     rmm::cuda_stream_view stream) const;
 
   /**
