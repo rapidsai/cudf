@@ -464,8 +464,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       column_names.emplace_back(
         json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
-      // if child is not present, set the null mask correctly, but offsets are zero, and children
-      // are empty Note: json_col modified here, reuse the memory
+      // If child is not present, set the null mask correctly, but offsets are zero, and children are empty.
+      // Note: json_col modified here, reuse the memory
       auto offsets_column =
         json_col.child_columns.empty()
           ? std::make_unique<column>(
