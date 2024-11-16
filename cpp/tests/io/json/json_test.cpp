@@ -3250,6 +3250,62 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), *wrapped);
     }
   }
+
+  // test list (all-null) of struct (empty) of string (empty)
+  {
+    std::string json_stringl = R"(
+    {"a" : [1], "c2": [1, 2]}
+    {}
+    )";
+    auto lines               = true;
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_stringl.data(), json_stringl.size()})
+        .prune_columns(true)
+        .lines(lines);
+
+    cudf::io::schema_element dtype_schema{
+      data_type{cudf::type_id::STRUCT},
+      {
+        {"a", {data_type{cudf::type_id::LIST}, {{"element", {dtype<int64_t>()}}}}},
+        {"c2",
+         {data_type{cudf::type_id::LIST},
+          {{"element",
+            {data_type{cudf::type_id::STRUCT},
+             {
+               {"d", {data_type{cudf::type_id::STRING}}},
+             },
+             {{"d"}}}}}}},
+      },
+      {{"a", "c2"}}};
+    in_options.set_dtypes(dtype_schema);
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    // Make sure we have column "a":[float]
+    ASSERT_EQ(result.tbl->num_columns(), 2);
+    ASSERT_EQ(result.metadata.schema_info.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    ASSERT_EQ(result.metadata.schema_info[0].children.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "offsets");
+    EXPECT_EQ(result.metadata.schema_info[0].children[1].name, "element");
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::LIST);
+    EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::INT32);
+    EXPECT_EQ(result.tbl->get_column(0).child(1).type().id(), cudf::type_id::INT64);
+    EXPECT_EQ(result.tbl->get_column(0).size(), 2);
+    // Make sure we have all null list "c2": [{"d": ""}]
+    EXPECT_EQ(result.metadata.schema_info[1].name, "c2");
+    ASSERT_EQ(result.metadata.schema_info[1].children.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[1].children[0].name, "offsets");
+    EXPECT_EQ(result.metadata.schema_info[1].children[1].name, "element");
+    ASSERT_EQ(result.metadata.schema_info[1].children[1].children.size(), 1);
+    EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "d");
+    EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::LIST);
+    EXPECT_EQ(result.tbl->get_column(1).child(0).type().id(), cudf::type_id::INT32);
+    EXPECT_EQ(result.tbl->get_column(1).child(1).type().id(), cudf::type_id::STRUCT);
+    EXPECT_EQ(result.tbl->get_column(1).child(1).child(0).type().id(), cudf::type_id::STRING);
+    EXPECT_EQ(result.tbl->get_column(1).size(), 2);
+    EXPECT_EQ(result.tbl->get_column(1).child(1).size(), 0);
+    EXPECT_EQ(result.tbl->get_column(1).child(1).child(0).size(), 0);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
