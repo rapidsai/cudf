@@ -943,6 +943,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     def tolist(self):  # noqa: D102
+        """
+        cuDF does not support conversion to host memory 
+        via the `tolist()` method. Consider using 
+        `.to_arrow().to_pylist()` to construct a Python list.
+        """
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
