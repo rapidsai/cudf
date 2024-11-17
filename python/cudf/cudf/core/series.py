@@ -5327,6 +5327,29 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     5    False
     dtype: bool
     """
+    warnings.warn(
+        "`cudf.close` is deprecated and will be removed in a future version of cudf. "
+        ''' 
+        import cupy as cp
+        import pandas as pd
+        from cudf.core.column import (
+            as_column,
+        )
+
+        a = pd.array([1.0, 2.0, None])
+        b = pd.array([1.0, 2.1, None])
+
+        a_col = as_column(a)
+        a_array = cupy.asarray(a_col.data_array_view(mode="read"))
+
+        b_col = as_column(b)
+        b_array = cupy.asarray(b_col.data_array_view(mode="read"))
+
+        result = cp.isclose(a, b, equal_nan=True)
+        print(result)  # Output: [ True False  True]
+        ''',
+        FutureWarning
+    )
 
     if not can_convert_to_column(a):
         raise TypeError(
