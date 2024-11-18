@@ -6,7 +6,6 @@ include(../set_cuda_architecture.cmake)
 
 # initialize cuda architecture
 rapids_cuda_init_architectures(orc_io)
-rapids_cuda_set_architectures(RAPIDS)
 
 project(
   orc_io
