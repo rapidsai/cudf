@@ -13,6 +13,7 @@ import pyarrow as pa
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
+from cudf.core._internals import unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -307,7 +308,7 @@ class TimeDeltaColumn(ColumnBase):
     def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype=dtype)
+        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
 
     def find_and_replace(
         self,
