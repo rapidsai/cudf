@@ -40,7 +40,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line(
         "filterwarnings",
-        "ignore:.*Query execution with GPU not supported",
+        "ignore:.*Query execution with GPU not possible",
     )
 
 
