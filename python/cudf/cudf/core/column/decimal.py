@@ -17,6 +17,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf.api.types import is_scalar
+from cudf.core._internals import unary
 from cudf.core.buffer import as_buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
@@ -85,7 +86,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype)
+        return unary.cast(self, dtype)  # type: ignore[return-value]
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
@@ -232,7 +233,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def as_numerical_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
-        return libcudf.unary.cast(self, dtype)
+        return unary.cast(self, dtype)  # type: ignore[return-value]
 
 
 class Decimal32Column(DecimalBaseColumn):

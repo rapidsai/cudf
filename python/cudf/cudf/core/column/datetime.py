@@ -19,6 +19,7 @@ from cudf import _lib as libcudf
 from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
 from cudf.core._compat import PANDAS_GE_220
+from cudf.core._internals import unary
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
     get_compatible_timezone,
@@ -490,7 +491,7 @@ class DatetimeColumn(column.ColumnBase):
                 "Cannot use .astype to convert from timezone-naive dtype to timezone-aware dtype. "
                 "Use tz_localize instead."
             )
-        return libcudf.unary.cast(self, dtype=dtype)
+        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
