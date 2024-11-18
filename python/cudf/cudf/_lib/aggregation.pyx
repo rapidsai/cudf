@@ -7,7 +7,6 @@ import pylibcudf
 
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
-from cudf.utils import cudautils
 
 _agg_name_map = {
     "COUNT_VALID": "COUNT",
@@ -196,7 +195,7 @@ class Aggregation:
         # Handling UDF type
         nb_type = numpy_support.from_dtype(kwargs['dtype'])
         type_signature = (nb_type[:],)
-        ptx_code, output_dtype = cudautils.compile_udf(op, type_signature)
+        ptx_code, output_dtype = cudf.utils.cudautils.compile_udf(op, type_signature)
         output_np_dtype = cudf.dtype(output_dtype)
         if output_np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Result of window function has unsupported dtype {op[1]}")
