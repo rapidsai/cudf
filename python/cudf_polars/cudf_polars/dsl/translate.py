@@ -228,17 +228,12 @@ def _(
         skip_rows, n_rows = n_rows
 
     row_index = file_options.row_index
-    config_options = (
-        {"parquet_options": translator.config.config.get("parquet_options", {})}
-        if typ == "parquet"
-        else {}
-    )
     return ir.Scan(
         schema,
         typ,
         reader_options,
         cloud_options,
-        config_options,
+        translator.config.config.copy(),
         node.paths,
         with_columns,
         skip_rows,

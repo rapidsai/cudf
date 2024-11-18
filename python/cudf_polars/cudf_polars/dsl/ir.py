@@ -412,6 +412,7 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
+            json.dumps(self.config_options),
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
