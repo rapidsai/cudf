@@ -53,6 +53,7 @@ using int16_wrapper        = wrapper<int16_t>;
 using int64_wrapper        = wrapper<int64_t>;
 using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>;
 using bool_wrapper         = wrapper<bool>;
+using size_type_wrapper    = wrapper<cudf::size_type>;
 
 using cudf::data_type;
 using cudf::type_id;
@@ -3287,10 +3288,6 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
     ASSERT_EQ(result.metadata.schema_info[0].children.size(), 2);
     EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "offsets");
     EXPECT_EQ(result.metadata.schema_info[0].children[1].name, "element");
-    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::LIST);
-    EXPECT_EQ(result.tbl->get_column(0).child(0).type().id(), cudf::type_id::INT32);
-    EXPECT_EQ(result.tbl->get_column(0).child(1).type().id(), cudf::type_id::INT64);
-    EXPECT_EQ(result.tbl->get_column(0).size(), 2);
     // Make sure we have all null list "c2": [{"d": ""}]
     EXPECT_EQ(result.metadata.schema_info[1].name, "c2");
     ASSERT_EQ(result.metadata.schema_info[1].children.size(), 2);
@@ -3298,13 +3295,39 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
     EXPECT_EQ(result.metadata.schema_info[1].children[1].name, "element");
     ASSERT_EQ(result.metadata.schema_info[1].children[1].children.size(), 1);
     EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "d");
-    EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::LIST);
-    EXPECT_EQ(result.tbl->get_column(1).child(0).type().id(), cudf::type_id::INT32);
-    EXPECT_EQ(result.tbl->get_column(1).child(1).type().id(), cudf::type_id::STRUCT);
-    EXPECT_EQ(result.tbl->get_column(1).child(1).child(0).type().id(), cudf::type_id::STRING);
-    EXPECT_EQ(result.tbl->get_column(1).size(), 2);
-    EXPECT_EQ(result.tbl->get_column(1).child(1).size(), 0);
-    EXPECT_EQ(result.tbl->get_column(1).child(1).child(0).size(), 0);
+
+    auto const expected0 = [&] {
+      auto const get_structs = [] {
+        auto child = cudf::test::fixed_width_column_wrapper<int64_t>{1};
+        return cudf::test::structs_column_wrapper{{child}};
+      };
+      auto const valids = std::vector<bool>{1, 0};
+      auto [null_mask, null_count] =
+        cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+      return cudf::make_lists_column(2,
+                                     size_type_wrapper{0, 1, 1}.release(),
+                                     get_structs().release(),
+                                     null_count,
+                                     std::move(null_mask));
+    }();
+
+    auto const expected1 = [&] {
+      auto const get_structs = [] {
+        auto child = cudf::test::strings_column_wrapper{};
+        return cudf::test::structs_column_wrapper{{child}};
+      };
+      auto const valids = std::vector<bool>{0, 0};
+      auto [null_mask, null_count] =
+        cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+      return cudf::make_lists_column(2,
+                                     size_type_wrapper{0, 0, 0}.release(),
+                                     get_structs().release(),
+                                     null_count,
+                                     std::move(null_mask));
+    }();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected0, result.tbl->get_column(0).view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected1, result.tbl->get_column(1).view());
   }
 }
 
