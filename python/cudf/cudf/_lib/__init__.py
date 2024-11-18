@@ -9,7 +9,6 @@ from . import (
     filling,
     groupby,
     interop,
-    join,
     json,
     merge,
     null_mask,
