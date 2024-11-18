@@ -53,5 +53,6 @@ def test_read_orc_basic(
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
 
+
 def test_write_orc():
     pass
