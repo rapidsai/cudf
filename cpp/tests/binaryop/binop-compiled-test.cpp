@@ -824,7 +824,7 @@ TEST_F(BinaryOperationCompiledTest_NullOpsString, NullMin_Vector_Vector)
 
 TEST(BinaryOperationCompiledTest, LargeColumnNoOverflow)
 {
-  cudf::size_type num_rows{1799989091};
+  cudf::size_type num_rows{1'799'989'091};
   auto big = cudf::make_column_from_scalar(
     cudf::numeric_scalar<cudf::id_to_type<cudf::type_id::INT8>>{10, true}, num_rows);
   auto small = cudf::make_column_from_scalar(
