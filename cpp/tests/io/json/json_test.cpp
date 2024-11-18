@@ -3284,7 +3284,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
       {{"a", "c2"}}};
     in_options.set_dtypes(dtype_schema);
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-    // Make sure we have column "a":[float]
+    // Make sure we have column "a":[int64_t]
     ASSERT_EQ(result.tbl->num_columns(), 2);
     ASSERT_EQ(result.metadata.schema_info.size(), 2);
     EXPECT_EQ(result.metadata.schema_info[0].name, "a");
@@ -3300,16 +3300,12 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
     EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "d");
 
     auto const expected0 = [&] {
-      auto const get_structs = [] {
-        auto child = cudf::test::fixed_width_column_wrapper<int64_t>{1};
-        return cudf::test::structs_column_wrapper{{child}};
-      };
       auto const valids = std::vector<bool>{1, 0};
       auto [null_mask, null_count] =
         cudf::test::detail::make_null_mask(valids.begin(), valids.end());
       return cudf::make_lists_column(2,
                                      size_type_wrapper{0, 1, 1}.release(),
-                                     get_structs().release(),
+                                     int64_wrapper{1}.release(),
                                      null_count,
                                      std::move(null_mask));
     }();
