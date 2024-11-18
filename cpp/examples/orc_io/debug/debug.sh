@@ -16,7 +16,7 @@ write_page_stats=yes
 
 export LIBCUDF_LOGGING_LEVEL=INFO
 
-cuda-gdb -ex start --args $example_bin $input_file $output_file $encoding_type $compression_type
+cuda-gdb -ex start --ex 'source breakpoints.txt' --args $example_bin $input_file $output_file $encoding_type $compression_type
 
 # $example_bin $input_file $output_file $encoding_type $compression_type $write_page_stats
 
