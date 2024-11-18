@@ -33,7 +33,6 @@ from . import (
     strings,
     strings_udf,
     text,
-    timezone,
     transpose,
     unary,
 )
