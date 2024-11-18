@@ -47,6 +47,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
+from cudf.core._internals import unary
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -713,12 +714,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             return as_column(False, length=len(self))
 
-        result = libcudf.unary.is_null(self)
+        result = unary.is_null(self)
 
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of a float column
-            result = result | libcudf.unary.is_nan(self)
+            result = result | unary.is_nan(self)
 
         return result
 
@@ -727,12 +728,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             return as_column(True, length=len(self))
 
-        result = libcudf.unary.is_valid(self)
+        result = unary.is_valid(self)
 
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of a float column
-            result = result & libcudf.unary.is_non_nan(self)
+            result = result & unary.is_non_nan(self)
 
         return result
 

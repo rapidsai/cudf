@@ -9,7 +9,6 @@ from . import (
     datetime,
     filling,
     groupby,
-    hash,
     interop,
     join,
     json,
@@ -35,7 +34,6 @@ from . import (
     text,
     timezone,
     transpose,
-    unary,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

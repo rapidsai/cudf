@@ -22,7 +22,6 @@ set(cython_sources
     datetime.pyx
     filling.pyx
     groupby.pyx
-    hash.pyx
     interop.pyx
     join.pyx
     json.pyx
@@ -50,7 +49,6 @@ set(cython_sources
     transform.pyx
     transpose.pyx
     types.pyx
-    unary.pyx
     utils.pyx
 )
 set(linked_libraries cudf::cudf)
