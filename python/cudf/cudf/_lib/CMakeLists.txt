@@ -16,7 +16,6 @@ set(cython_sources
     aggregation.pyx
     binaryop.pyx
     column.pyx
-    concat.pyx
     copying.pyx
     csv.pyx
     datetime.pyx
@@ -25,14 +24,12 @@ set(cython_sources
     interop.pyx
     join.pyx
     json.pyx
-    labeling.pyx
     lists.pyx
     merge.pyx
     null_mask.pyx
     orc.pyx
     parquet.pyx
     partitioning.pyx
-    quantiles.pyx
     reduce.pyx
     replace.pyx
     reshape.pyx

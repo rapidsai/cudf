@@ -3,7 +3,6 @@ import numpy as np
 
 from . import (
     binaryop,
-    concat,
     copying,
     csv,
     datetime,
@@ -12,14 +11,12 @@ from . import (
     interop,
     join,
     json,
-    labeling,
     merge,
     null_mask,
     nvtext,
     orc,
     parquet,
     partitioning,
-    quantiles,
     reduce,
     replace,
     reshape,
