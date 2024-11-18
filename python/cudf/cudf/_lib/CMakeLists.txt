@@ -50,7 +50,6 @@ set(cython_sources
     transform.pyx
     transpose.pyx
     types.pyx
-    unary.pyx
     utils.pyx
 )
 set(linked_libraries cudf::cudf)
