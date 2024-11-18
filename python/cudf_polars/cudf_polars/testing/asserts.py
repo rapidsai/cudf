@@ -89,14 +89,13 @@ def assert_gpu_result_equal(
         If GPU collection failed in some way.
     """
     if engine is None:
-        engine = GPUEngine(raise_on_fail=True, executor=Executor)
+        engine = GPUEngine(raise_on_fail=True, executor=executor or Executor)
 
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
     )
 
     expect = lazydf.collect(**final_polars_collect_kwargs)
-    engine = GPUEngine(raise_on_fail=True, executor=executor or Executor)
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
     assert_frame_equal(
         expect,
