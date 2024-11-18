@@ -463,6 +463,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       column_names.emplace_back("offsets");
       column_names.emplace_back(
         json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
+      auto child_schema_element = get_list_child_schema();
+      if (json_col.child_columns.empty() and prune_columns and child_schema_element.has_value()) {
+        column_names.back()  = make_column_name_info(child_schema_element.value(), list_child_name);
+        auto all_null_column = make_all_nulls_column(
+          schema.value_or(schema_element{data_type{type_id::LIST}}), num_rows, stream, mr);
+        return {std::move(all_null_column), std::move(column_names)};
+      }
 
       // If child is not present, set the null mask correctly, but offsets are zero, and children
       // are empty. Note: json_col modified here, reuse the memory
@@ -478,30 +485,28 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                      rmm::device_buffer{},
                                      0);
       // Create children column
-      auto child_schema_element = get_list_child_schema();
-      auto [child_column, names] =
-        json_col.child_columns.empty() or (prune_columns and !child_schema_element.has_value())
-          ? std::pair<std::unique_ptr<column>,
-                      // EMPTY type could not used because gather throws exception on EMPTY type.
-                      std::vector<column_name_info>>{make_empty_column(
-                                                       child_schema_element.value_or(
-                                                         schema_element{data_type{type_id::INT8}}),
-                                                       stream,
-                                                       mr),
-                                                     std::vector<column_name_info>{
-                                                       make_column_name_info(
-                                                         child_schema_element.value_or(
-                                                           schema_element{
-                                                             data_type{type_id::INT8}}),
-                                                         list_child_name)
-                                                         .children}}
-          : device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
-                                              d_input,
-                                              options,
-                                              prune_columns,
-                                              child_schema_element,
-                                              stream,
-                                              mr);
+      auto [child_column, names] = [&]() {
+        if (json_col.child_columns.empty()) {
+          // EMPTY type could not used because gather throws exception on EMPTY type.
+          auto empty_col = make_empty_column(
+            child_schema_element.value_or(schema_element{data_type{type_id::INT8}}), stream, mr);
+          auto children_metadata = std::vector<column_name_info>{
+            make_column_name_info(
+              child_schema_element.value_or(schema_element{data_type{type_id::INT8}}),
+              list_child_name)
+              .children};
+
+          return std::pair<std::unique_ptr<column>, std::vector<column_name_info>>{
+            std::move(empty_col), children_metadata};
+        }
+        return device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
+                                                 d_input,
+                                                 options,
+                                                 prune_columns,
+                                                 child_schema_element,
+                                                 stream,
+                                                 mr);
+      }();
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       auto ret_col                      = make_lists_column(num_rows,
