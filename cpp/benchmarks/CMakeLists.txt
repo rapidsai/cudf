@@ -354,9 +354,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
-ConfigureBench(
-  STRINGS_BENCH string/repeat_strings.cpp string/replace.cpp string/url_decode.cu
-)
+ConfigureBench(STRINGS_BENCH string/repeat_strings.cpp string/replace.cpp string/url_decode.cu)
 
 ConfigureNVBench(
   STRINGS_NVBENCH
