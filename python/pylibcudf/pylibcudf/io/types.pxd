@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp cimport bool
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.types cimport (
     column_encoding,
@@ -45,3 +46,38 @@ cdef class SinkInfo:
     # This vector just exists to keep the unique_ptrs to the sinks alive
     cdef vector[unique_ptr[data_sink]] sink_storage
     cdef sink_info c_obj
+
+cdef class ColumnInMetadata:
+    cdef column_in_metadata c_obj
+
+    cpdef ColumnInMetadata set_name(self, str name)
+
+    cpdef ColumnInMetadata set_name(self, str name)
+
+    cpdef ColumnInMetadata set_nullability(self, bool nullable)
+
+    cpdef ColumnInMetadata set_list_column_as_map(self)
+
+    cpdef ColumnInMetadata set_int96_timestamps(self, bool req)
+
+    cpdef ColumnInMetadata set_decimal_precision(self, int req)
+
+    cpdef ColumnInMetadata child(self, int i)
+
+    cpdef ColumnInMetadata set_output_as_binary(self, bool binary)
+
+    cpdef ColumnInMetadata set_type_length(self, int type_length)
+
+    cpdef ColumnInMetadata set_skip_compression(self, bool skip)
+
+    cpdef ColumnInMetadata set_encoding(self, column_encoding encoding)
+
+    cpdef str get_name(self)
+
+    @staticmethod
+    cdef ColumnInMetadata from_libcudf(column_in_metadata data)
+
+cdef class TableInputMetadata:
+    cdef public Table table
+    cdef table_input_metadata c_obj
+    cdef list column_metadata

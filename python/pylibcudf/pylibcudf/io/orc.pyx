@@ -6,10 +6,11 @@ from libcpp.vector cimport vector
 
 import datetime
 
-from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
+from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
 from pylibcudf.libcudf.io.orc cimport (
     orc_reader_options,
     read_orc as cpp_read_orc,
+    write_orc as cpp_write_orc,
 )
 from pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
@@ -29,12 +30,22 @@ from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.variant cimport get_if, holds_alternative
+from pylibcudf.libcudf.io.types cimport (
+    compression_type,
+    statistics_freq,
+)
+from pylibcudf.libcudf.io.orc cimport (
+    orc_chunked_writer,
+    orc_writer_options,
+    chunked_orc_writer_options,
+)
 
 __all__ = [
     "OrcColumnStatistics",
     "ParsedOrcStatistics",
     "read_orc",
     "read_parsed_orc_statistics",
+    "write_orc",
 ]
 
 cdef class OrcColumnStatistics:
@@ -310,3 +321,124 @@ cpdef ParsedOrcStatistics read_parsed_orc_statistics(
         cpp_read_parsed_orc_statistics(source_info.c_obj)
     )
     return ParsedOrcStatistics.from_libcudf(parsed)
+
+
+cdef class OrcWriterOptions:
+    cpdef void set_stripe_size_bytes(self, size_t size_bytes):
+        self.c_obj.set_stripe_size_bytes(size_bytes)
+
+    cpdef void set_stripe_size_rows(self, size_t size_rows):
+        self.c_obj.set_stripe_size_rows(size_rows)
+
+    cpdef void set_row_index_stride(self, size_t stride):
+        self.c_obj.set_row_index_stride(stride)
+
+    @staticmethod
+    def builder(SinkInfo sink, Table table):
+        cdef OrcWriterOptionsBuilder orc_builder = OrcWriterOptionsBuilder.__new__(
+            OrcWriterOptionsBuilder
+        )
+        orc_builder.c_obj = orc_writer_options.builder(sink.c_obj, table.view())
+        orc_builder.table = table
+        orc_builder.sink = sink
+        return orc_builder
+
+
+cdef class OrcWriterOptionsBuilder:
+    cpdef OrcWriterOptionsBuilder compression(self, compression_type comp):
+        self.c_obj.compression(comp)
+        return self
+
+    cpdef OrcWriterOptionsBuilder enable_statistics(self, statistics_freq val):
+        self.c_obj.enable_statistics(val)
+        return self
+
+    cpdef OrcWriterOptionsBuilder key_value_metadata(self, map[string, string] kvm):
+        self.c_obj.key_value_metadata(kvm)
+        return self
+
+    cpdef OrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):
+        self.c_obj.metadata(meta.c_obj)
+        return self
+
+    cpdef OrcWriterOptions build(self):
+        cdef OrcWriterOptions orc_options = OrcWriterOptions.__new__(
+            OrcWriterOptions
+        )
+        orc_options.c_obj = move(self.c_obj.build())
+        orc_options.table = self.table
+        orc_options.sink = self.sink
+        return orc_options
+
+
+cpdef void write_orc(OrcWriterOptions options):
+    with nogil:
+        cpp_write_orc(move(options.c_obj))
+
+
+cdef class OrcChunkedWriter:
+    cpdef void close(self):
+        with nogil:
+            self.c_obj.get()[0].close()
+
+    cpdef write(self, Table table):
+        with nogil:
+            self.c_obj.get()[0].write(table.view())
+
+    @staticmethod
+    def from_options(ChunkedOrcWriterOptions options):
+        cdef OrcChunkedWriter orc_writer = OrcChunkedWriter.__new__(
+            OrcChunkedWriter
+        )
+        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj))
+        return orc_writer
+
+
+cdef class ChunkedOrcWriterOptions:
+    cpdef void set_stripe_size_bytes(self, size_t size_bytes):
+        self.c_obj.set_stripe_size_bytes(size_bytes)
+
+    cpdef void set_stripe_size_rows(self, size_t size_rows):
+        self.c_obj.set_stripe_size_rows(size_rows)
+
+    cpdef void set_row_index_stride(self, size_t stride):
+        self.c_obj.set_row_index_stride(stride)
+
+    @staticmethod
+    def builder(SinkInfo sink):
+        cdef ChunkedOrcWriterOptionsBuilder orc_builder = \
+            ChunkedOrcWriterOptionsBuilder.__new__(
+                ChunkedOrcWriterOptionsBuilder
+            )
+        orc_builder.c_obj = chunked_orc_writer_options.builder(sink.c_obj)
+        orc_builder.sink = sink
+        return orc_builder
+
+
+cdef class ChunkedOrcWriterOptionsBuilder:
+    cpdef ChunkedOrcWriterOptionsBuilder compression(self, compression_type comp):
+        self.c_obj.compression(comp)
+        return self
+
+    cpdef ChunkedOrcWriterOptionsBuilder enable_statistics(self, statistics_freq val):
+        self.c_obj.enable_statistics(val)
+        return self
+
+    cpdef ChunkedOrcWriterOptionsBuilder key_value_metadata(
+        self,
+        map[string, string] kvm
+    ):
+        self.c_obj.key_value_metadata(kvm)
+        return self
+
+    cpdef ChunkedOrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):
+        self.c_obj.metadata(meta.c_obj)
+        return self
+
+    cpdef ChunkedOrcWriterOptions build(self):
+        cdef ChunkedOrcWriterOptions orc_options = ChunkedOrcWriterOptions.__new__(
+            ChunkedOrcWriterOptions
+        )
+        orc_options.c_obj = move(self.c_obj.build())
+        orc_options.sink = self.sink
+        return orc_options

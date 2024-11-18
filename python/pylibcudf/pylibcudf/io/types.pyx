@@ -14,6 +14,8 @@ from pylibcudf.libcudf.io.types cimport (
     host_buffer,
     source_info,
     table_with_metadata,
+    column_in_metadata,
+    table_input_metadata,
 )
 
 import codecs
@@ -287,25 +289,30 @@ cdef class SinkInfo:
 
         cdef object initial_sink_cls = type(sinks[0])
 
-        if not all(isinstance(s, initial_sink_cls) for s in sinks):
+        if not all(isinstance(s, initial_sink_cls) or
+                   (isinstance(sinks[0], io.IOBase) and isinstance(s, io.IOBase))
+                   for s in sinks):
             raise ValueError("All sinks must be of the same type!")
 
-        if initial_sink_cls in {io.StringIO, io.BytesIO, io.TextIOBase}:
+        if isinstance(sinks[0], io.IOBase):
             data_sinks.reserve(len(sinks))
-            if isinstance(sinks[0], (io.StringIO, io.BytesIO)):
-                for s in sinks:
+            for s in sinks:
+                if isinstance(s, (io.StringIO, io.BytesIO)):
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s))
                     )
-            elif isinstance(sinks[0], io.TextIOBase):
-                for s in sinks:
-                    if codecs.lookup(s).name not in ('utf-8', 'ascii'):
+                elif isinstance(s, io.TextIOBase):
+                    if codecs.lookup(s.encoding).name not in ('utf-8', 'ascii'):
                         raise NotImplementedError(f"Unsupported encoding {s.encoding}")
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s.buffer))
                     )
-            data_sinks.push_back(self.sink_storage.back().get())
-        elif initial_sink_cls is str:
+                else:
+                    self.sink_storage.push_back(
+                        unique_ptr[data_sink](new iobase_data_sink(s))
+                    )
+                data_sinks.push_back(self.sink_storage.back().get())
+        elif isinstance(sinks[0], str):
             paths.reserve(len(sinks))
             for s in sinks:
                 paths.push_back(<string> s.encode())
@@ -321,3 +328,189 @@ cdef class SinkInfo:
             self.c_obj = sink_info(paths)
 
     __hash__ = None
+
+
+cdef class ColumnInMetadata:
+    """
+    Metadata for a column
+    Parameters
+    ----------
+    metadata : column_in_metadata
+    """
+
+    def __init__(self):
+        raise ValueError(
+            "ColumnInMetadata should not be constructed directly. "
+            "Use one of the factories."
+        )
+
+    @staticmethod
+    cdef ColumnInMetadata from_libcudf(column_in_metadata data):
+        """Create a Python ColumnInMetadata from a libcudf column_in_metadata."""
+        cdef ColumnInMetadata out = ColumnInMetadata.__new__(ColumnInMetadata)
+        out.c_obj = move(data)
+        return out
+
+    cpdef ColumnInMetadata set_name(self, str name):
+        """
+        Set the name of this column.
+        Parameters
+        ----------
+        name : str
+            Name of the column
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_name(name.encode())
+        return self
+
+    cpdef ColumnInMetadata set_nullability(self, bool nullable):
+        """
+        Set the nullability of this column.
+        Parameters
+        ----------
+        nullable : bool
+            Whether this column is nullable
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_nullability(nullable)
+        return self
+
+    cpdef ColumnInMetadata set_list_column_as_map(self):
+        """
+        Specify that this list column should be encoded as a map in the
+        written file.
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_list_column_as_map()
+        return self
+
+    cpdef ColumnInMetadata set_int96_timestamps(self, bool req):
+        """
+        Specifies whether this timestamp column should be encoded using
+        the deprecated int96.
+        Parameters
+        ----------
+        req : bool
+            True = use int96 physical type. False = use int64 physical type.
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_int96_timestamps(req)
+        return self
+
+    cpdef ColumnInMetadata set_decimal_precision(self, int precision):
+        """
+        Set the decimal precision of this column.
+        Only valid if this column is a decimal (fixed-point) type.
+        Parameters
+        ----------
+        precision : int
+            The integer precision to set for this decimal column
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_decimal_precision(precision)
+        return self
+
+    cpdef ColumnInMetadata child(self, int i):
+        """
+        Get reference to a child of this column.
+        Parameters
+        ----------
+        i : int
+            Index of the child to get.
+        Returns
+        -------
+        ColumnInMetadata
+        """
+        return ColumnInMetadata.from_libcudf(
+            move(self.c_obj.child(i))
+        )
+
+    cpdef ColumnInMetadata set_output_as_binary(self, bool binary):
+        """
+        Specifies whether this column should be written as binary or string data.
+        Parameters
+        ----------
+        binary : bool
+            True = use binary data type. False = use string data type
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_output_as_binary(binary)
+        return self
+
+    cpdef ColumnInMetadata set_type_length(self, int type_length):
+        """
+        Sets the length of fixed length data.
+        Parameters
+        ----------
+        type_length : int
+            Size of the data type in bytes
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_type_length(type_length)
+        return self
+
+    cpdef ColumnInMetadata set_skip_compression(self, bool skip):
+        """
+        Specifies whether this column should not be compressed
+        regardless of the compression.
+        Parameters
+        ----------
+        skip : bool
+            If `true` do not compress this column
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_skip_compression(skip)
+        return self
+
+    cpdef ColumnInMetadata set_encoding(self, column_encoding encoding):
+        """
+        Specifies whether this column should not be compressed
+        regardless of the compression.
+        Parameters
+        ----------
+        encoding : ColumnEncoding
+            The encoding to use
+        Returns
+        -------
+        ColumnInMetadata
+        """
+        self.c_obj.set_encoding(encoding)
+        return self
+
+    cpdef str get_name(self):
+        """
+        Get the name of this column.
+        Returns
+        -------
+        str
+            The name of this column
+        """
+        return self.c_obj.get_name().decode()
+
+
+cdef class TableInputMetadata:
+    """
+    Metadata for a table
+    Parameters
+    ----------
+    table : Table
+        The Table to construct metadata for
+    """
+    def __cinit__(self, Table table):
+        self.c_obj = table_input_metadata(table.view())
