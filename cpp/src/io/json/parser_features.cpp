@@ -91,6 +91,8 @@ struct empty_column_functor {
     std::vector<std::unique_ptr<column>> child_columns;
     child_columns.push_back(std::move(offsets));
     child_columns.push_back(std::move(child));
+    // Do not use `cudf::make_lists_column` since we do not need to call `purge_nonempty_nulls` on
+    // the child column as it does not have non-empty nulls. Look issue #17356
     return std::make_unique<column>(cudf::data_type{type_id::LIST},
                                     0,
                                     rmm::device_buffer{},
@@ -107,6 +109,8 @@ struct empty_column_functor {
       child_columns.push_back(cudf::type_dispatcher(
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name)));
     }
+    // Do not use `cudf::make_structs_column` since we do not need to call `superimpose_nulls` on
+    // the children columns. Look issue #17356
     return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
                                     0,
                                     rmm::device_buffer{},
@@ -177,7 +181,8 @@ struct allnull_column_functor {
     std::vector<std::unique_ptr<column>> child_columns;
     child_columns.push_back(std::move(offsets));
     child_columns.push_back(std::move(child));
-    // not using factories on nested type to avoid null purge calls.
+    // Do not use `cudf::make_lists_column` since we do not need to call `purge_nonempty_nulls` on
+    // the child column as it does not have non-empty nulls. Look issue #17356
     return std::make_unique<column>(cudf::data_type{type_id::LIST},
                                     size,
                                     rmm::device_buffer{},
@@ -195,7 +200,8 @@ struct allnull_column_functor {
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name), size));
     }
     auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
-    // all children are already all null, so no need to sanitize.
+    // Do not use `cudf::make_structs_column` since we do not need to call `superimpose_nulls` on
+    // the children columns. Look issue #17356
     return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
                                     size,
                                     rmm::device_buffer{},
