@@ -32,7 +32,6 @@ set(cython_sources
     partitioning.pyx
     reduce.pyx
     replace.pyx
-    reshape.pyx
     rolling.pyx
     round.pyx
     scalar.pyx

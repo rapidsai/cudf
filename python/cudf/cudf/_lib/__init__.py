@@ -19,7 +19,6 @@ from . import (
     partitioning,
     reduce,
     replace,
-    reshape,
     rolling,
     round,
     search,
