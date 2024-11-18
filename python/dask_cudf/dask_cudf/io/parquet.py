@@ -39,17 +39,22 @@ if TYPE_CHECKING:
 _DEVICE_SIZE_CACHE: int | None = None
 
 
-def _get_device_size():
+def _get_min_device_size():
     try:
-        # Plan A: Use PyNVML to check device size
+        # Use PyNVML to find minimum device size
+        # on the same node as this worker.
+        # (Assume this is representative of the cluster)
         import pynvml
 
         pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
-    except ImportError:
+        device_sizes = []
+        for i in range(pynvml.nvmlDeviceGetCount()):
+            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+            device_sizes.append(pynvml.nvmlDeviceGetMemoryInfo(handle).total)
+        return min(device_sizes)
+    except (ImportError, ValueError):
         # Fall back to a conservative 8GiB default
-        return "8GiB"
+        return 8 * 1024**3
 
 
 def _normalize_blocksize(fraction: float = 0.03125):
@@ -66,9 +71,9 @@ def _normalize_blocksize(fraction: float = 0.03125):
             client = get_client()
             # TODO: Check "GPU" worker resources only.
             # Depends on (https://github.com/rapidsai/dask-cuda/pull/1401)
-            device_size = min(client.run(_get_device_size).values())
+            device_size = client.submit(_get_min_device_size).result()
         except (ImportError, ValueError):
-            device_size = _get_device_size()
+            device_size = _get_min_device_size()
         _DEVICE_SIZE_CACHE = device_size
 
     return int(_DEVICE_SIZE_CACHE * fraction)
