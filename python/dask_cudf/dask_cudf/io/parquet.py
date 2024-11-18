@@ -37,7 +37,6 @@ if TYPE_CHECKING:
 
 
 _DEVICE_SIZE_CACHE: int | None = None
-_STATS_CACHE: MutableMapping[str, Any] = {}
 
 
 def _get_device_size():
@@ -90,13 +89,13 @@ class NoOp(Elemwise):
 
 
 class CudfReadParquetFSSpec(ReadParquetFSSpec):
+    _STATS_CACHE: MutableMapping[str, Any] = {}
+
     def approx_statistics(self):
         # Use a few files to approximate column-size statistics
-        global _STATS_CACHE
-
         key = tokenize(self._dataset_info["ds"].files[:10], self.filters)
         try:
-            return _STATS_CACHE[key]
+            return self._STATS_CACHE[key]
 
         except KeyError:
             # Account for filters
@@ -125,7 +124,7 @@ class CudfReadParquetFSSpec(ReadParquetFSSpec):
                     break
 
             # Reorganize stats to look like arrow-fs version
-            _STATS_CACHE[key] = {
+            self._STATS_CACHE[key] = {
                 "columns": [
                     {
                         "path_in_schema": name,
@@ -134,7 +133,7 @@ class CudfReadParquetFSSpec(ReadParquetFSSpec):
                     for name, sizes in column_sizes.items()
                 ]
             }
-            return _STATS_CACHE[key]
+            return self._STATS_CACHE[key]
 
     @functools.cached_property
     def _fusion_compression_factor(self):
