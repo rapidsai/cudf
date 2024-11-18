@@ -798,19 +798,19 @@ set_source_files_properties(
 )
 
 set_property(
-  SOURCE src/io/orc/reader_impl.cu
+  SOURCE
+  src/io/orc/dict_enc.cu
+  src/io/orc/reader_impl.cu
   src/io/orc/reader_impl_chunking.cu
   src/io/orc/reader_impl_decode.cu
-  src/io/orc/reader_impl_helpers.cpp
-  src/io/orc/aggregate_orc_metadata.cpp
+  src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
+  src/io/orc/stripe_enc.cu
   src/io/orc/stripe_init.cu
-  src/datetime/timzeone.cpp
+  src/io/orc/writer_impl.cu
   APPEND
-  PROPERTY COMPILE_FLAGS " -g -O0"
+  PROPERTY COMPILE_FLAGS " -g -G"
 )
-
-
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu

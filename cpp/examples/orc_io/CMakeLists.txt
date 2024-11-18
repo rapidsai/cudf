@@ -22,6 +22,6 @@ target_link_libraries(orc_io_utils PRIVATE cudf::cudf)
 
 # Build and install orc_io
 add_executable(orc_io orc_io.cpp)
-target_link_libraries(orc_io PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:orc_io_utils>)
+target_link_libraries(orc_io PRIVATE cudf::cudf $<TARGET_OBJECTS:orc_io_utils>)
 target_compile_features(orc_io PRIVATE cxx_std_17)
 install(TARGETS orc_io DESTINATION bin/examples/libcudf)

@@ -1383,13 +1383,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   orcdec_state_s* const s = &state_g;
   uint32_t chunk_id;
-  int t                 = threadIdx.x;
-  auto num_rowgroups    = row_groups.size().first;
-  bool const print_cond = !t and blockIdx.y == 63;
+  int t              = threadIdx.x;
+  auto num_rowgroups = row_groups.size().first;
 
-  if (!t and !blockIdx.x and !blockIdx.y) {
-    printf("gridDim.x=%d, gridDim.y=%d\n", gridDim.x, gridDim.y);
-  }
   if (num_rowgroups > 0) {
     if (t == 0) { s->top.data.index = row_groups[blockIdx.y][blockIdx.x]; }
     __syncthreads();
@@ -1427,10 +1423,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       rowgroup_rowofs = min(static_cast<uint64_t>(rowgroup_rowofs), s->chunk.num_rows);
       s->chunk.start_row += rowgroup_rowofs;
       s->chunk.num_rows -= rowgroup_rowofs;
-      if (print_cond) {
-        printf(
-          "chunk: id=%u, start=%ld, num=%ld\n", blockIdx.y, s->chunk.start_row, s->chunk.num_rows);
-      }
     }
     s->is_string               = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY ||
                     s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR);
@@ -1489,10 +1481,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             if (t == 0) { s->top.data.buffered_count = 0; }
           }
         }
-        if (print_cond) {
-          printf("numvals=s->top.data.max_vals=%u\n", numvals);
-          printf("is_RLEv1.x=%d\n", is_rlev1(s->chunk.encoding_kind));
-        }
         if (numvals > ofs) {
           if (is_rlev1(s->chunk.encoding_kind)) {
             if (s->chunk.type_kind == TIMESTAMP)
@@ -1510,7 +1498,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
           __syncthreads();
           if (numvals <= ofs && t >= ofs && t < s->top.data.max_vals) { s->vals.u32[t] = 0; }
         }
-        if (print_cond) printf("numvals=ofs+Integer_RLEv2=%u\n", numvals);
         // If we're using an index, we may have to drop values from the initial run
         if (num_rowgroups > 0) {
           int cid          = is_dictionary(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2;
@@ -1532,26 +1519,12 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                 s->vals.u32[t] = secondary_val;
             }
           }
-          if (print_cond) {
-            printf(
-              "cid=%d, run_pos=%u, numvals-=run_pos=%u, sec_val=s->vals.u64[vals_skipped+t]=%lu\n",
-              cid,
-              run_pos,
-              numvals,
-              secondary_val);
-          }
         }
         __syncthreads();
-        if (print_cond) {
-          printf("is_dict=%d, type_kind=%d\n",
-                 is_dictionary(s->chunk.encoding_kind),
-                 s->chunk.type_kind);
-        }
         // For strings with direct encoding, we need to convert the lengths into an offset
         if (!is_dictionary(s->chunk.encoding_kind)) {
           if (t < numvals)
             secondary_val = (s->chunk.type_kind == TIMESTAMP) ? s->vals.u64[t] : s->vals.u32[t];
-          if (print_cond) { printf("sec_val=s->vals.u64[t]=%lu\n", secondary_val); }
           if (s->chunk.type_kind != TIMESTAMP) {
             lengths_to_positions(s->vals.u32, numvals, t);
             __syncthreads();
@@ -1841,11 +1814,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     }
     __syncthreads();
     if (t == 0) {
-      if (pred) {
-        printf("s->top.data.cur_row=%ld, s->top.data.nrows=%u\n",
-               s->top.data.cur_row,
-               s->top.data.nrows);
-      }
       s->top.data.cur_row += s->top.data.nrows;
       if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         s->num_child_rows += list_child_elements;
