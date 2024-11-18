@@ -3,7 +3,6 @@ import numpy as np
 
 from . import (
     binaryop,
-    concat,
     copying,
     csv,
     datetime,

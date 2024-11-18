@@ -1204,9 +1204,7 @@ class CategoricalColumn(column.ColumnBase):
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype, masked=True)
         else:
-            # Filter out inputs that have 0 length, then concatenate.
-            codes = [o for o in codes if len(o)]
-            codes_col = libcudf.concat.concat_columns(objs)
+            codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 
         codes_col = as_unsigned_codes(
             len(cats),

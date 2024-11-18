@@ -16,7 +16,6 @@ set(cython_sources
     aggregation.pyx
     binaryop.pyx
     column.pyx
-    concat.pyx
     copying.pyx
     csv.pyx
     datetime.pyx
