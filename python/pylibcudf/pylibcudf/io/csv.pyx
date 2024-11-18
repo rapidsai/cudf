@@ -23,7 +23,12 @@ from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.table cimport Table
 
-__all__ = ["read_csv", "write_csv"]
+__all__ = [
+    "read_csv",
+    "write_csv",
+    "CsvWriterOptions",
+    "CsvWriterOptionsBuilder",
+]
 
 cdef tuple _process_parse_dates_hex(list cols):
     cdef vector[string] str_cols
