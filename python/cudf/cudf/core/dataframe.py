@@ -7208,13 +7208,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should tile itself by len(df) times
-        tiled_index = libcudf.reshape.tile(
-            [
-                as_column(unique_named_levels.get_level_values(i))
-                for i in range(unique_named_levels.nlevels)
-            ],
-            self.shape[0],
-        )
+        with acquire_spill_lock():
+            plc_table = plc.reshape.tile(
+                plc.Table(
+                    [
+                        as_column(
+                            unique_named_levels.get_level_values(i)
+                        ).to_pylibcudf(mode="read")
+                        for i in range(unique_named_levels.nlevels)
+                    ]
+                ),
+                self.shape[0],
+            )
+            tiled_index = [
+                libcudf.column.Column.from_pylibcudf(plc)
+                for plc in plc_table.columns()
+            ]
 
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
