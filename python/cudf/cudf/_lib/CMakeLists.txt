@@ -24,7 +24,6 @@ set(cython_sources
     interop.pyx
     join.pyx
     json.pyx
-    labeling.pyx
     lists.pyx
     merge.pyx
     null_mask.pyx
