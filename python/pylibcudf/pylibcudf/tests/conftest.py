@@ -84,8 +84,62 @@ def _get_vals_of_type(pa_type, length, seed):
         )
 
 
-# TODO: Consider adding another fixture/adapting this
-# fixture to consider nullability
+# TODO: Consider adapting this helper function
+# to consider nullability
+def _generate_table_data(types, nrows, seed=42):
+    table_dict = {}
+    colnames = []
+
+    for typ in types:
+        child_colnames = []
+
+        def _generate_nested_data(typ):
+            child_colnames = []
+
+            # recurse to get vals for children
+            rand_arrs = []
+            for i in range(typ.num_fields):
+                rand_arr, grandchild_colnames = _generate_nested_data(
+                    typ.field(i).type
+                )
+                rand_arrs.append(rand_arr)
+                child_colnames.append((typ.field(i).name, grandchild_colnames))
+
+            if isinstance(typ, pa.StructType):
+                pa_array = pa.StructArray.from_arrays(
+                    [rand_arr for rand_arr in rand_arrs],
+                    names=[typ.field(i).name for i in range(typ.num_fields)],
+                )
+            elif isinstance(typ, pa.ListType):
+                pa_array = pa.array(
+                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
+                    type=typ,
+                )
+                child_colnames.append(("", grandchild_colnames))
+            else:
+                # typ is scalar type
+                pa_array = pa.array(
+                    _get_vals_of_type(typ, nrows, seed=seed), type=typ
+                )
+            return pa_array, child_colnames
+
+        if isinstance(typ, (pa.ListType, pa.StructType)):
+            rand_arr, child_colnames = _generate_nested_data(typ)
+        else:
+            rand_arr = pa.array(
+                _get_vals_of_type(typ, nrows, seed=seed), type=typ
+            )
+
+        table_dict[f"col_{typ}"] = rand_arr
+        colnames.append((f"col_{typ}", child_colnames))
+
+    pa_table = pa.Table.from_pydict(table_dict)
+
+    return plc.io.TableWithMetadata(
+        plc.interop.from_arrow(pa_table), column_names=colnames
+    ), pa_table
+
+
 @pytest.fixture(scope="session", params=[0, 100])
 def table_data(request):
     """
@@ -98,62 +152,7 @@ def table_data(request):
     of dtypes.
     """
     nrows = request.param
-
-    table_dict = {}
-    # Colnames in the format expected by
-    # plc.io.TableWithMetadata
-    colnames = []
-
-    seed = 42
-
-    for typ in ALL_PA_TYPES:
-        child_colnames = []
-
-        def _generate_nested_data(typ):
-            child_colnames = []
-
-            # recurse to get vals for children
-            rand_arrs = []
-            for i in range(typ.num_fields):
-                rand_arr, grandchild_colnames = _generate_nested_data(
-                    typ.field(i).type
-                )
-                rand_arrs.append(rand_arr)
-                child_colnames.append((typ.field(i).name, grandchild_colnames))
-
-            if isinstance(typ, pa.StructType):
-                pa_array = pa.StructArray.from_arrays(
-                    [rand_arr for rand_arr in rand_arrs],
-                    names=[typ.field(i).name for i in range(typ.num_fields)],
-                )
-            elif isinstance(typ, pa.ListType):
-                pa_array = pa.array(
-                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
-                    type=typ,
-                )
-                child_colnames.append(("", grandchild_colnames))
-            else:
-                # typ is scalar type
-                pa_array = pa.array(
-                    _get_vals_of_type(typ, nrows, seed=seed), type=typ
-                )
-            return pa_array, child_colnames
-
-        if isinstance(typ, (pa.ListType, pa.StructType)):
-            rand_arr, child_colnames = _generate_nested_data(typ)
-        else:
-            rand_arr = pa.array(
-                _get_vals_of_type(typ, nrows, seed=seed), type=typ
-            )
-
-        table_dict[f"col_{typ}"] = rand_arr
-        colnames.append((f"col_{typ}", child_colnames))
-
-    pa_table = pa.Table.from_pydict(table_dict)
-
-    return plc.io.TableWithMetadata(
-        plc.interop.from_arrow(pa_table), column_names=colnames
-    ), pa_table
+    return _generate_table_data(ALL_PA_TYPES, nrows)
 
 
 @pytest.fixture(scope="session", params=[0, 100])
@@ -161,69 +160,10 @@ def table_data_with_non_nested_pa_types(request):
     """
     Returns (TableWithMetadata, pa_table).
 
-    This is the default fixture you should be using for testing
-    pylibcudf I/O writers.
-
-    Contains one of each category (e.g. int, bool, list, struct)
-    of dtypes.
+    This fixture is for testing with non-nested PyArrow types.
     """
     nrows = request.param
-
-    table_dict = {}
-    # Colnames in the format expected by
-    # plc.io.TableWithMetadata
-    colnames = []
-
-    seed = 42
-
-    for typ in NON_NESTED_PA_TYPES:
-        child_colnames = []
-
-        def _generate_nested_data(typ):
-            child_colnames = []
-
-            # recurse to get vals for children
-            rand_arrs = []
-            for i in range(typ.num_fields):
-                rand_arr, grandchild_colnames = _generate_nested_data(
-                    typ.field(i).type
-                )
-                rand_arrs.append(rand_arr)
-                child_colnames.append((typ.field(i).name, grandchild_colnames))
-
-            if isinstance(typ, pa.StructType):
-                pa_array = pa.StructArray.from_arrays(
-                    [rand_arr for rand_arr in rand_arrs],
-                    names=[typ.field(i).name for i in range(typ.num_fields)],
-                )
-            elif isinstance(typ, pa.ListType):
-                pa_array = pa.array(
-                    [list(row_vals) for row_vals in zip(rand_arrs[0])],
-                    type=typ,
-                )
-                child_colnames.append(("", grandchild_colnames))
-            else:
-                # typ is scalar type
-                pa_array = pa.array(
-                    _get_vals_of_type(typ, nrows, seed=seed), type=typ
-                )
-            return pa_array, child_colnames
-
-        if isinstance(typ, (pa.ListType, pa.StructType)):
-            rand_arr, child_colnames = _generate_nested_data(typ)
-        else:
-            rand_arr = pa.array(
-                _get_vals_of_type(typ, nrows, seed=seed), type=typ
-            )
-
-        table_dict[f"col_{typ}"] = rand_arr
-        colnames.append((f"col_{typ}", child_colnames))
-
-    pa_table = pa.Table.from_pydict(table_dict)
-
-    return plc.io.TableWithMetadata(
-        plc.interop.from_arrow(pa_table), column_names=colnames
-    ), pa_table
+    return _generate_table_data(NON_NESTED_PA_TYPES, nrows)
 
 
 @pytest.fixture(params=[(0, 0), ("half", 0), (-1, "half")])
