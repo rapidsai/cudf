@@ -26,7 +26,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <zlib.h>  // compress
+#include <zlib.h>  // GZIP compression
 
 namespace cudf {
 namespace io {
@@ -76,12 +76,12 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
 {
   auto const d_src =
     detail::make_device_uvector_async(src, stream, cudf::get_current_device_resource_ref());
-  rmm::device_uvector<uint8_t> d_dst(src.size(), stream);
-
   cudf::detail::hostdevice_vector<device_span<uint8_t const>> inputs(1, stream);
   inputs[0] = d_src;
   inputs.host_to_device_async(stream);
 
+  auto dst_size = compress_max_output_chunk_size(nvcomp::compression_type::SNAPPY, src.size());
+  rmm::device_uvector<uint8_t> d_dst(dst_size, stream);
   cudf::detail::hostdevice_vector<device_span<uint8_t>> outputs(1, stream);
   outputs[0] = d_dst;
   outputs.host_to_device_async(stream);
@@ -92,13 +92,10 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
 
   nvcomp::batched_compress(nvcomp::compression_type::SNAPPY, inputs, outputs, hd_status, stream);
 
-  stream.synchronize();
   hd_status.device_to_host_sync(stream);
   CUDF_EXPECTS(hd_status[0].status == cudf::io::compression_status::SUCCESS,
                "snappy compression failed");
-  std::vector<uint8_t> dst(d_dst.size());
-  cudf::detail::cuda_memcpy(host_span<uint8_t>{dst}, device_span<uint8_t const>{d_dst}, stream);
-  return dst;
+  return cudf::detail::make_std_vector_sync<uint8_t>(d_dst, stream);
 }
 
 std::vector<std::uint8_t> compress(compression_type compression,
