@@ -33,7 +33,7 @@ RUN dnf --enablerepo=powertools install -y  scl-utils gcc-toolset-${TOOLSET_VERS
 RUN mkdir /usr/local/rapids /rapids && chmod 777 /usr/local/rapids /rapids
 
 # 3.22.3+: CUDA architecture 'native' support + flexible CMAKE_<LANG>_*_LAUNCHER for ccache
-ARG CMAKE_VERSION=3.26.4
+ARG CMAKE_VERSION=3.28.6
 # default x86_64 from x86 build, aarch64 cmake for arm build
 ARG CMAKE_ARCH=x86_64
 RUN cd /usr/local && wget --quiet https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${CMAKE_ARCH}.tar.gz && \
