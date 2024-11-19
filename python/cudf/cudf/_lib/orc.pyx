@@ -240,20 +240,10 @@ def write_orc(
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
-        if table._index is not None:
-            plc_table = plc.Table(
-                [
-                    col.to_pylibcudf(mode="read")
-                    for col in itertools.chain(table.index._columns, table._columns)
-                ]
-            )
-        else:
-            plc_table = plc.Table(
-                [
-                    col.to_pylibcudf(mode="read")
-                    for col in table._columns
-                ]
-            )
+        columns = table._columns if table._index is None else [
+            *table.index._columns, *table._columns
+        ]
+        plc_table = plc.Table([col.to_pylibcudf(mode="read") for col in columns])
         tbl_meta = TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.c_obj.column_metadata[level].set_name(
@@ -370,9 +360,7 @@ cdef class ORCWriter:
         else:
             columns = [col.to_pylibcudf(mode="read") for col in table._columns]
 
-        self.writer.write(
-            plc.Table(columns)
-        )
+        self.writer.write(plc.Table(columns))
 
     def close(self):
         if not self.initialized:

@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-import io
 
+import pandas as pd
 import pyarrow as pa
 import pytest
 from utils import _convert_types, assert_table_and_meta_eq, make_source
@@ -73,22 +73,25 @@ def test_read_orc_basic(
 @pytest.mark.parametrize("stripe_size_bytes", [None, 65536])
 @pytest.mark.parametrize("stripe_size_rows", [None, 512])
 @pytest.mark.parametrize("row_index_stride", [None, 512])
-def test_write_orc(
+def test_roundtrip_pd_dataframe(
     compression,
     statistics,
     stripe_size_bytes,
     stripe_size_rows,
     row_index_stride,
+    tmp_path,
 ):
-    names = ["a", "b"]
-    pa_table = pa.Table.from_arrays(
-        [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
-        names=names,
-    )
+    pdf = pd.DataFrame({"a": [1.0, 2.0, None], "b": [True, None, False]})
+
+    pa_table = pa.Table.from_pandas(pdf)
     plc_table = plc.interop.from_arrow(pa_table)
+
+    tmpfile_name = tmp_path / "test.orc"
+
+    sink = plc.io.SinkInfo([str(tmpfile_name)])
+
     tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-    sink = plc.io.SinkInfo([io.BytesIO()])
-    user_data = {"foo": "{'bar': 'baz'}"}
+    user_data = {"a": "", "b": ""}
     options = (
         plc.io.orc.OrcWriterOptions.builder(sink, plc_table)
         .metadata(tbl_meta)
@@ -106,4 +109,12 @@ def test_write_orc(
 
     plc.io.orc.write_orc(options)
 
-    # pd.read_orc(...)
+    expected_pdf = pd.read_orc(tmpfile_name)
+    expected_pdf.columns = pdf.columns
+
+    res = plc.io.types.TableWithMetadata(
+        plc.interop.from_arrow(pa.Table.from_pandas(expected_pdf)),
+        [(name, []) for name in pdf.columns],
+    )
+
+    assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
