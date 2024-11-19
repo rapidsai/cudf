@@ -33,9 +33,10 @@ cdef class HostBuffer:
     cdef HostBuffer from_unique_ptr(
         unique_ptr[vector[uint8_t]] vec
     ):
-        cdef HostBuffer out = HostBuffer()
+        cdef HostBuffer out = HostBuffer.__new__(HostBuffer)
+        # Allow construction from nullptr
+        out.nbytes = 0 if vec.get() == NULL else dereference(vec).size()
         out.c_obj = move(vec)
-        out.nbytes = dereference(out.c_obj).size()
         out.shape[0] = out.nbytes
         out.strides[0] = 1
         return out
@@ -43,7 +44,8 @@ cdef class HostBuffer:
     __hash__ = None
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
-        buffer.buf = dereference(self.c_obj).data()
+        # Empty vec produces empty buffer
+        buffer.buf = NULL if self.nbytes == 0 else dereference(self.c_obj).data()
         buffer.format = NULL  # byte
         buffer.internal = NULL
         buffer.itemsize = 1
