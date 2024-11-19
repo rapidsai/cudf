@@ -809,22 +809,7 @@ set_property(
   src/io/orc/stripe_init.cu
   src/io/orc/writer_impl.cu
   APPEND
-  PROPERTY CMAKE_CUDA_FLAGS "-g -G"
-)
-
-set_property(
-  SOURCE
-  src/io/orc/dict_enc.cu
-  src/io/orc/reader_impl.cu
-  src/io/orc/reader_impl_chunking.cu
-  src/io/orc/reader_impl_decode.cu
-  src/io/orc/stats_enc.cu
-  src/io/orc/stripe_data.cu
-  src/io/orc/stripe_enc.cu
-  src/io/orc/stripe_init.cu
-  src/io/orc/writer_impl.cu
-  APPEND
-  PROPERTY CUDA_NVCC_FLAGS "-g -G"
+  PROPERTY COMPILE_OPTIONS "-g;-G"
 )
 
 set_property(
