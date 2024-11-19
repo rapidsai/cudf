@@ -10,10 +10,11 @@ from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 
 from polars.exceptions import InvalidOperationError
 from polars.polars import _expr_nodes as pl_expr
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
@@ -28,9 +29,8 @@ __all__ = ["StringFunction"]
 
 
 class StringFunction(Expr):
-    __slots__ = ("name", "options", "children", "_regex_program")
+    __slots__ = ("name", "options", "_regex_program")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     def __init__(
         self,
@@ -39,7 +39,7 @@ class StringFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children

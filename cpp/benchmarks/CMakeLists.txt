@@ -49,7 +49,7 @@ target_compile_options(
 
 target_link_libraries(
   ndsh_data_generator
-  PUBLIC cudf GTest::gmock GTest::gtest cudf::cudftestutil nvtx3::nvtx3-cpp
+  PUBLIC cudf cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -345,42 +345,37 @@ ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binary
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
+ConfigureBench(TEXT_BENCH text/subword.cpp)
 
 ConfigureNVBench(
   TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp text/word_minhash.cpp
+  text/ngrams.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
 )
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
 ConfigureBench(
-  STRINGS_BENCH
-  string/combine.cpp
-  string/convert_datetime.cpp
-  string/convert_durations.cpp
-  string/convert_fixed_point.cpp
-  string/convert_numerics.cpp
-  string/copy.cu
-  string/factory.cu
-  string/filter.cpp
-  string/repeat_strings.cpp
-  string/replace.cpp
-  string/translate.cpp
-  string/url_decode.cu
+  STRINGS_BENCH string/factory.cu string/filter.cpp string/repeat_strings.cpp string/replace.cpp
+  string/translate.cpp string/url_decode.cu
 )
 
 ConfigureNVBench(
   STRINGS_NVBENCH
   string/case.cpp
   string/char_types.cpp
+  string/combine.cpp
   string/contains.cpp
+  string/convert_datetime.cpp
+  string/convert_durations.cpp
+  string/convert_fixed_point.cpp
+  string/convert_numerics.cpp
+  string/copy.cpp
   string/copy_if_else.cpp
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
   string/find.cpp
-  string/gather.cpp
+  string/find_multiple.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp

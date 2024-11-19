@@ -10,7 +10,7 @@ from polars.testing.asserts import assert_frame_equal
 
 import rmm
 
-from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -18,10 +18,10 @@ from cudf_polars.testing.asserts import (
 
 
 def test_polars_verbose_warns(monkeypatch):
-    def raise_unimplemented(self):
+    def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
 
-    monkeypatch.setattr(IR, "__post_init__", raise_unimplemented)
+    monkeypatch.setattr(DataFrameScan, "__init__", raise_unimplemented)
     q = pl.LazyFrame({})
     # Ensure that things raise
     assert_ir_translation_raises(q, NotImplementedError)
@@ -30,7 +30,7 @@ def test_polars_verbose_warns(monkeypatch):
         pytest.raises(pl.exceptions.ComputeError),
         pytest.warns(
             pl.exceptions.PerformanceWarning,
-            match="Query execution with GPU not supported",
+            match="Query execution with GPU not possible",
         ),
     ):
         # And ensure that collecting issues the correct warning.

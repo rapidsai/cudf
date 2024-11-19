@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import functools
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,8 @@ from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _all_bools_with_nulls
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 
 _unit_to_nanoseconds_conversion = {

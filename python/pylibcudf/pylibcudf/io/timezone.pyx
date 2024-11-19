@@ -11,6 +11,7 @@ from pylibcudf.libcudf.table.table cimport table
 
 from ..table cimport Table
 
+__all__ = ["make_timezone_transition_table"]
 
 cpdef Table make_timezone_transition_table(str tzif_dir, str timezone_name):
     """

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
 
 if TYPE_CHECKING:
     import polars as pl
@@ -117,12 +117,14 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     AssertionError
        If the specified exceptions were not raised.
     """
-    try:
-        _ = translate_ir(q._ldf.visit())
-    except exceptions:
+    translator = Translator(q._ldf.visit())
+    translator.translate_ir()
+    if errors := translator.errors:
+        for err in errors:
+            assert any(
+                isinstance(err, err_type) for err_type in exceptions
+            ), f"Translation DID NOT RAISE {exceptions}"
         return
-    except Exception as e:
-        raise AssertionError(f"Translation DID NOT RAISE {exceptions}") from e
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
 
@@ -151,7 +153,7 @@ def assert_collect_raises(
     collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
-):
+) -> None:
     """
     Assert that collecting the result of a query raises the expected exceptions.
 

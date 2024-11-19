@@ -6,7 +6,7 @@ import operator
 import pickle
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
@@ -15,6 +15,8 @@ import numpy
 import numpy as np
 import pyarrow as pa
 from typing_extensions import Self
+
+import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
@@ -36,6 +38,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
     from types import ModuleType
 
     from cudf._typing import Dtype, ScalarLike
@@ -788,15 +791,13 @@ class Frame(BinaryOperand, Scannable):
         column_order=(),
         null_precedence=(),
     ):
-        interpolation = libcudf.types.Interpolation[interpolation]
+        interpolation = plc.types.Interpolation[interpolation]
 
-        is_sorted = libcudf.types.Sorted["YES" if is_sorted else "NO"]
+        is_sorted = plc.types.Sorted["YES" if is_sorted else "NO"]
 
-        column_order = [libcudf.types.Order[key] for key in column_order]
+        column_order = [plc.types.Order[key] for key in column_order]
 
-        null_precedence = [
-            libcudf.types.NullOrder[key] for key in null_precedence
-        ]
+        null_precedence = [plc.types.NullOrder[key] for key in null_precedence]
 
         return self._from_columns_like_self(
             libcudf.quantiles.quantile_table(

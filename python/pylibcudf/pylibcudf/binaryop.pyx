@@ -16,6 +16,7 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
 
+__all__ = ["BinaryOperator", "binary_operation", "is_supported_operation"]
 
 cpdef Column binary_operation(
     LeftBinaryOperand lhs,
@@ -100,6 +101,7 @@ cpdef bool is_supported_operation(
         The right hand side data type.
     op : BinaryOperator
         The operation to check.
+
     Returns
     -------
     bool

@@ -22,6 +22,14 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const size_type width,
     ) except +libcudf_exception_handler
 
+    cdef unique_ptr[column] minhash_permuted(
+        const column_view &strings,
+        const uint32_t seed,
+        const column_view &a,
+        const column_view &b,
+        const size_type width,
+    ) except +
+
     cdef unique_ptr[column] minhash64(
         const column_view &strings,
         const column_view &seeds,
@@ -33,6 +41,14 @@ cdef extern from "nvtext/minhash.hpp" namespace "nvtext" nogil:
         const numeric_scalar[uint64_t] seed,
         const size_type width,
     ) except +libcudf_exception_handler
+
+    cdef unique_ptr[column] minhash64_permuted(
+        const column_view &strings,
+        const uint64_t seed,
+        const column_view &a,
+        const column_view &b,
+        const size_type width,
+    ) except +
 
     cdef unique_ptr[column] word_minhash(
         const column_view &input,

@@ -18,6 +18,7 @@
 #include "getenv_or.hpp"
 
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/datasource.hpp>
@@ -32,8 +33,12 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include <unordered_map>
+#include <regex>
 #include <vector>
+
+#ifdef CUDF_KVIKIO_REMOTE_IO
+#include <kvikio/remote_handle.hpp>
+#endif
 
 namespace cudf {
 namespace io {
@@ -48,6 +53,7 @@ class file_source : public datasource {
   {
     detail::force_init_cuda_context();
     if (cufile_integration::is_kvikio_enabled()) {
+      cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");
@@ -89,8 +95,12 @@ class file_source : public datasource {
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    if (size < _gds_read_preferred_threshold) { return false; }
-    return supports_device_read();
+    if (!supports_device_read()) { return false; }
+
+    // Always prefer device reads if kvikio is enabled
+    if (!_kvikio_file.closed()) { return true; }
+
+    return size >= _gds_read_preferred_threshold;
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -246,17 +256,18 @@ class device_buffer_source final : public datasource {
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
     auto const count  = std::min(size, this->size() - offset);
-    auto const stream = cudf::get_default_stream();
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(dst, _d_buffer.data() + offset, count, cudaMemcpyDefault, stream.value()));
-    stream.synchronize();
+    auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
+    cudf::detail::cuda_memcpy(host_span<uint8_t>{dst, count},
+                              device_span<uint8_t const>{
+                                reinterpret_cast<uint8_t const*>(_d_buffer.data() + offset), count},
+                              stream);
     return count;
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
     auto const count  = std::min(size, this->size() - offset);
-    auto const stream = cudf::get_default_stream();
+    auto const stream = cudf::detail::global_cuda_stream_pool().get_stream();
     auto h_data       = cudf::detail::make_host_vector_async(
       cudf::device_span<std::byte const>{_d_buffer.data() + offset, count}, stream);
     stream.synchronize();
@@ -387,6 +398,96 @@ class user_datasource_wrapper : public datasource {
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource
 };
 
+#ifdef CUDF_KVIKIO_REMOTE_IO
+/**
+ * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
+ */
+class remote_file_source : public datasource {
+  static std::unique_ptr<kvikio::S3Endpoint> create_s3_endpoint(char const* filepath)
+  {
+    auto [bucket_name, bucket_object] = kvikio::S3Endpoint::parse_s3_url(filepath);
+    return std::make_unique<kvikio::S3Endpoint>(bucket_name, bucket_object);
+  }
+
+ public:
+  explicit remote_file_source(char const* filepath) : _kvikio_file{create_s3_endpoint(filepath)} {}
+
+  ~remote_file_source() override = default;
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
+
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override { return true; }
+
+  [[nodiscard]] size_t size() const override { return _kvikio_file.nbytes(); }
+
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
+  {
+    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
+
+    auto const read_size = std::min(size, this->size() - offset);
+    return _kvikio_file.pread(dst, read_size, offset);
+  }
+
+  size_t device_read(size_t offset,
+                     size_t size,
+                     uint8_t* dst,
+                     rmm::cuda_stream_view stream) override
+  {
+    return device_read_async(offset, size, dst, stream).get();
+  }
+
+  std::unique_ptr<datasource::buffer> device_read(size_t offset,
+                                                  size_t size,
+                                                  rmm::cuda_stream_view stream) override
+  {
+    rmm::device_buffer out_data(size, stream);
+    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    out_data.resize(read, stream);
+    return datasource::buffer::create(std::move(out_data));
+  }
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const read_size = std::min(size, this->size() - offset);
+    return _kvikio_file.pread(dst, read_size, offset).get();
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    std::vector<uint8_t> h_data(count);
+    this->host_read(offset, count, h_data.data());
+    return datasource::buffer::create(std::move(h_data));
+  }
+
+  /**
+   * @brief Is `url` referring to a remote file supported by KvikIO?
+   *
+   * For now, only S3 urls (urls starting with "s3://") are supported.
+   */
+  static bool is_supported_remote_url(std::string const& url)
+  {
+    // Regular expression to match "s3://"
+    static std::regex pattern{R"(^s3://)", std::regex_constants::icase};
+    return std::regex_search(url, pattern);
+  }
+
+ private:
+  kvikio::RemoteHandle _kvikio_file;
+};
+#else
+/**
+ * @brief When KvikIO remote IO is disabled, `is_supported_remote_url()` return false always.
+ */
+class remote_file_source : public file_source {
+ public:
+  explicit remote_file_source(char const* filepath) : file_source(filepath) {}
+  static constexpr bool is_supported_remote_url(std::string const&) { return false; }
+};
+#endif
 }  // namespace
 
 std::unique_ptr<datasource> datasource::create(std::string const& filepath,
@@ -401,8 +502,9 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
 
     CUDF_FAIL("Invalid LIBCUDF_MMAP_ENABLED value: " + policy);
   }();
-
-  if (use_memory_mapping) {
+  if (remote_file_source::is_supported_remote_url(filepath)) {
+    return std::make_unique<remote_file_source>(filepath.c_str());
+  } else if (use_memory_mapping) {
     return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, max_size_estimate);
   } else {
     // `file_source` reads the file directly, without memory mapping

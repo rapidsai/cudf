@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-from libc.stdint cimport uint8_t
+
+from libc.stdint cimport int32_t, uint8_t
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -55,14 +56,14 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
         datetime_component component
     ) except +libcudf_exception_handler
 
-    ctypedef enum rounding_frequency "cudf::datetime::rounding_frequency":
-        DAY "cudf::datetime::rounding_frequency::DAY"
-        HOUR "cudf::datetime::rounding_frequency::HOUR"
-        MINUTE "cudf::datetime::rounding_frequency::MINUTE"
-        SECOND "cudf::datetime::rounding_frequency::SECOND"
-        MILLISECOND "cudf::datetime::rounding_frequency::MILLISECOND"
-        MICROSECOND "cudf::datetime::rounding_frequency::MICROSECOND"
-        NANOSECOND "cudf::datetime::rounding_frequency::NANOSECOND"
+    cpdef enum class rounding_frequency(int32_t):
+        DAY
+        HOUR
+        MINUTE
+        SECOND
+        MILLISECOND
+        MICROSECOND
+        NANOSECOND
 
     cdef unique_ptr[column] ceil_datetimes(
         const column_view& column, rounding_frequency freq
@@ -77,6 +78,10 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     cdef unique_ptr[column] add_calendrical_months(
         const column_view& timestamps,
         const column_view& months
+    ) except +libcudf_exception_handler
+    cdef unique_ptr[column] add_calendrical_months(
+        const column_view& timestamps,
+        const scalar& months
     ) except +libcudf_exception_handler
     cdef unique_ptr[column] day_of_year(
         const column_view& column

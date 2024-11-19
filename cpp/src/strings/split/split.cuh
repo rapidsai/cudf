@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
@@ -361,7 +362,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
   // count the number of delimiters in the entire column
-  rmm::device_scalar<int64_t> d_count(0, stream);
+  cudf::detail::device_scalar<int64_t> d_count(0, stream);
   if (chars_bytes > 0) {
     constexpr int64_t block_size         = 512;
     constexpr size_type bytes_per_thread = 4;

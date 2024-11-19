@@ -9,9 +9,10 @@ from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
 import pyarrow as pa
-import pylibcudf as plc
 
 import polars as pl
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.utils import dtypes
@@ -59,7 +60,7 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table: pa.Table = plc.interop.to_arrow(
+        table = plc.interop.to_arrow(
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )

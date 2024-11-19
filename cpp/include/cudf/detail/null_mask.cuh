@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -25,7 +26,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/block/block_reduce.cuh>
@@ -165,17 +165,10 @@ size_type inplace_bitmask_binop(Binop op,
                "Mask pointer cannot be null");
 
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
-  rmm::device_scalar<size_type> d_counter{0, stream, mr};
-  rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
-  rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
+  cudf::detail::device_scalar<size_type> d_counter{0, stream, mr};
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyDefault, stream.value()));
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
-                                masks_begin_bits.data(),
-                                masks_begin_bits.size_bytes(),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  auto d_masks      = cudf::detail::make_device_uvector_async(masks, stream, mr);
+  auto d_begin_bits = cudf::detail::make_device_uvector_async(masks_begin_bits, stream, mr);
 
   auto constexpr block_size = 256;
   cudf::detail::grid_1d config(dest_mask.size(), block_size);

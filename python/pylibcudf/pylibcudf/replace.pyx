@@ -15,6 +15,14 @@ from pylibcudf.libcudf.replace import \
 from .column cimport Column
 from .scalar cimport Scalar
 
+__all__ = [
+    "ReplacePolicy",
+    "clamp",
+    "find_and_replace_all",
+    "normalize_nans_and_zeros",
+    "replace_nulls",
+]
+
 
 cpdef Column replace_nulls(Column source_column, ReplacementType replacement):
     """Replace nulls in source_column.

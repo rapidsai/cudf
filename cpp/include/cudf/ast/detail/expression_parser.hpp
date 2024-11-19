@@ -17,10 +17,10 @@
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <thrust/scan.h>
 
@@ -300,7 +300,7 @@ class expression_parser {
    * @return The indices of the operands stored in the data references.
    */
   std::vector<cudf::size_type> visit_operands(
-    std::vector<std::reference_wrapper<expression const>> operands);
+    cudf::host_span<std::reference_wrapper<cudf::ast::expression const> const> operands);
 
   /**
    * @brief Add a data reference to the internal list.

@@ -10,9 +10,10 @@ from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
-import pylibcudf as plc
 
 from polars.polars import _expr_nodes as pl_expr
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import (
@@ -31,9 +32,8 @@ __all__ = ["BooleanFunction"]
 
 
 class BooleanFunction(Expr):
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     def __init__(
         self,
@@ -42,7 +42,7 @@ class BooleanFunction(Expr):
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.options = options
         self.name = name
         self.children = children

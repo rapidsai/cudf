@@ -27,7 +27,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cooperative_groups.h>

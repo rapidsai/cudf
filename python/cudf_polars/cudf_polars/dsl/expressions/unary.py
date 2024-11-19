@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -26,16 +27,15 @@ __all__ = ["Cast", "UnaryFunction", "Len"]
 class Cast(Expr):
     """Class representing a cast of an expression."""
 
-    __slots__ = ("children",)
+    __slots__ = ()
     _non_child = ("dtype",)
-    children: tuple[Expr]
 
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.children = (value,)
         if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
-                f"Can't cast {self.dtype.id().name} to {value.dtype.id().name}"
+                f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
             )
 
     def do_evaluate(
@@ -48,7 +48,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context, mapping=mapping)
-        return Column(plc.unary.cast(column.obj, self.dtype)).sorted_like(column)
+        return column.astype(self.dtype)
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -60,7 +60,9 @@ class Cast(Expr):
 class Len(Expr):
     """Class representing the length of an expression."""
 
-    children: tuple[()]
+    def __init__(self, dtype: plc.DataType) -> None:
+        self.dtype = dtype
+        self.children = ()
 
     def do_evaluate(
         self,
@@ -90,9 +92,8 @@ class Len(Expr):
 class UnaryFunction(Expr):
     """Class representing unary functions of an expression."""
 
-    __slots__ = ("name", "options", "children")
+    __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
-    children: tuple[Expr, ...]
 
     # Note: log, and pow are handled via translation to binops
     _OP_MAPPING: ClassVar[dict[str, plc.unary.UnaryOperator]] = {
@@ -142,7 +143,7 @@ class UnaryFunction(Expr):
     def __init__(
         self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
-        super().__init__(dtype)
+        self.dtype = dtype
         self.name = name
         self.options = options
         self.children = children

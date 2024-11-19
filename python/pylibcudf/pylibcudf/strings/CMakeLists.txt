@@ -28,6 +28,7 @@ set(cython_sources
     regex_program.pyx
     repeat.pyx
     replace.pyx
+    replace_re.pyx
     side_type.pyx
     slice.pyx
     strip.pyx

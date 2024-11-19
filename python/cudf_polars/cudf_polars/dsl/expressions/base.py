@@ -13,13 +13,14 @@ from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
+from cudf_polars.dsl.nodebase import Node
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     from cudf_polars.containers import Column, DataFrame
 
-__all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext"]
+__all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext", "ColRef"]
 
 
 class AggInfo(NamedTuple):
@@ -32,99 +33,15 @@ class ExecutionContext(IntEnum):
     ROLLING = enum.auto()
 
 
-class Expr:
-    """
-    An abstract expression object.
+class Expr(Node["Expr"]):
+    """An abstract expression object."""
 
-    This contains a (potentially empty) tuple of child expressions,
-    along with non-child data. For uniform reconstruction and
-    implementation of hashing and equality schemes, child classes need
-    to provide a certain amount of metadata when they are defined.
-    Specifically, the ``_non_child`` attribute must list, in-order,
-    the names of the slots that are passed to the constructor. The
-    constructor must take arguments in the order ``(*_non_child,
-    *children).``
-    """
-
-    __slots__ = ("dtype", "_hash_value", "_repr_value")
+    __slots__ = ("dtype",)
     dtype: plc.DataType
     """Data type of the expression."""
-    _hash_value: int
-    """Caching slot for the hash of the expression."""
-    _repr_value: str
-    """Caching slot for repr of the expression."""
-    children: tuple[Expr, ...] = ()
-    """Children of the expression."""
+    # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     """Names of non-child data (not Exprs) for reconstruction."""
-
-    # Constructor must take arguments in order (*_non_child, *children)
-    def __init__(self, dtype: plc.DataType) -> None:
-        self.dtype = dtype
-
-    def _ctor_arguments(self, children: Sequence[Expr]) -> Sequence:
-        return (*(getattr(self, attr) for attr in self._non_child), *children)
-
-    def get_hash(self) -> int:
-        """
-        Return the hash of this expr.
-
-        Override this in subclasses, rather than __hash__.
-
-        Returns
-        -------
-        The integer hash value.
-        """
-        return hash((type(self), self._ctor_arguments(self.children)))
-
-    def __hash__(self) -> int:
-        """Hash of an expression with caching."""
-        try:
-            return self._hash_value
-        except AttributeError:
-            self._hash_value = self.get_hash()
-            return self._hash_value
-
-    def is_equal(self, other: Any) -> bool:
-        """
-        Equality of two expressions.
-
-        Override this in subclasses, rather than __eq__.
-
-        Parameter
-        ---------
-        other
-            object to compare to
-
-        Returns
-        -------
-        True if the two expressions are equal, false otherwise.
-        """
-        if type(self) is not type(other):
-            return False  # pragma: no cover; __eq__ trips first
-        return self._ctor_arguments(self.children) == other._ctor_arguments(
-            other.children
-        )
-
-    def __eq__(self, other: Any) -> bool:
-        """Equality of expressions."""
-        if type(self) is not type(other) or hash(self) != hash(other):
-            return False
-        else:
-            return self.is_equal(other)
-
-    def __ne__(self, other: Any) -> bool:
-        """Inequality of expressions."""
-        return not self.__eq__(other)
-
-    def __repr__(self) -> str:
-        """String representation of an expression with caching."""
-        try:
-            return self._repr_value
-        except AttributeError:
-            args = ", ".join(f"{arg!r}" for arg in self._ctor_arguments(self.children))
-            self._repr_value = f"{type(self).__name__}({args})"
-            return self._repr_value
 
     def do_evaluate(
         self,
@@ -238,6 +155,17 @@ class Expr:
         )  # pragma: no cover; check_agg trips first
 
 
+class ErrorExpr(Expr):
+    __slots__ = ("error",)
+    _non_child = ("dtype", "error")
+    error: str
+
+    def __init__(self, dtype: plc.DataType, error: str) -> None:
+        self.dtype = dtype
+        self.error = error
+        self.children = ()
+
+
 class NamedExpr:
     # NamedExpr does not inherit from Expr since it does not appear
     # when evaluating expressions themselves, only when constructing
@@ -311,11 +239,11 @@ class Col(Expr):
     __slots__ = ("name",)
     _non_child = ("dtype", "name")
     name: str
-    children: tuple[()]
 
     def __init__(self, dtype: plc.DataType, name: str) -> None:
         self.dtype = dtype
         self.name = name
+        self.children = ()
 
     def do_evaluate(
         self,
@@ -332,3 +260,36 @@ class Col(Expr):
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         return AggInfo([(self, plc.aggregation.collect_list(), self)])
+
+
+class ColRef(Expr):
+    __slots__ = ("index", "table_ref")
+    _non_child = ("dtype", "index", "table_ref")
+    index: int
+    table_ref: plc.expressions.TableReference
+
+    def __init__(
+        self,
+        dtype: plc.DataType,
+        index: int,
+        table_ref: plc.expressions.TableReference,
+        column: Expr,
+    ) -> None:
+        if not isinstance(column, Col):
+            raise TypeError("Column reference should only apply to columns")
+        self.dtype = dtype
+        self.index = index
+        self.table_ref = table_ref
+        self.children = (column,)
+
+    def do_evaluate(
+        self,
+        df: DataFrame,
+        *,
+        context: ExecutionContext = ExecutionContext.FRAME,
+        mapping: Mapping[Expr, Column] | None = None,
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        raise NotImplementedError(
+            "Only expect this node as part of an expression translated to libcudf AST."
+        )

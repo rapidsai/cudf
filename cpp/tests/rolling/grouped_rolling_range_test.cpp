@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,16 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/bit.hpp>
 
-#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>

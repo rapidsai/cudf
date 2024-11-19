@@ -29,6 +29,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
+#include <src/io/parquet/parquet_gpu.hpp>
+
 #include <array>
 
 TEST_F(ParquetReaderTest, UserBounds)
@@ -2725,7 +2727,9 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result_table);
 }
 
-TEST_F(ParquetReaderTest, ListsWideTable)
+// The test below requires several minutes to complete with memcheck, thus it is disabled by
+// default.
+TEST_F(ParquetReaderTest, DISABLED_ListsWideTable)
 {
   auto constexpr num_rows = 2;
   auto constexpr num_cols = 26'755;  // for slightly over 2B keys

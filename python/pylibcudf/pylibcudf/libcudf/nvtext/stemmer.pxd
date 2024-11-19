@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
@@ -8,9 +9,9 @@ from pylibcudf.libcudf.types cimport size_type
 
 
 cdef extern from "nvtext/stemmer.hpp" namespace "nvtext" nogil:
-    ctypedef enum letter_type:
-        CONSONANT 'nvtext::letter_type::CONSONANT'
-        VOWEL 'nvtext::letter_type::VOWEL'
+    cpdef enum class letter_type:
+        CONSONANT
+        VOWEL
 
     cdef unique_ptr[column] porter_stemmer_measure(
         const column_view & strings

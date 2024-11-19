@@ -18,7 +18,6 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/ast/expressions.hpp>
@@ -26,14 +25,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
-#include <cudf/types.hpp>
-
-#include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -41,7 +34,6 @@
 #include <limits>
 #include <list>
 #include <random>
-#include <type_traits>
 #include <vector>
 
 template <typename T>
@@ -368,7 +360,7 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
   constexpr int64_t right_depth_level = 75;
 
   auto generate_ast_expr = [](int64_t depth_level,
-                              cudf::ast::column_reference col_ref,
+                              cudf::ast::column_reference const& col_ref,
                               cudf::ast::ast_operator root_operator,
                               cudf::ast::ast_operator arithmetic_operator,
                               bool nested_left_tree) {
@@ -538,9 +530,10 @@ TEST_F(TransformTest, UnaryTrigonometry)
 TEST_F(TransformTest, ArityCheckFailure)
 {
   auto col_ref_0 = cudf::ast::column_reference(0);
-  EXPECT_THROW(cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0), cudf::logic_error);
+  EXPECT_THROW(cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0),
+               std::invalid_argument);
   EXPECT_THROW(cudf::ast::operation(cudf::ast::ast_operator::ABS, col_ref_0, col_ref_0),
-               cudf::logic_error);
+               std::invalid_argument);
 }
 
 TEST_F(TransformTest, StringComparison)

@@ -10,11 +10,13 @@ import operator
 import pickle
 import types
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from enum import IntEnum
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 import numpy as np
+
+from rmm import RMMError
 
 from ..options import _env_get_bool
 from ..testing import assert_eq
@@ -33,6 +35,20 @@ _CUDF_PANDAS_NVTX_COLORS = {
     "EXECUTE_SLOW": 0x0571B0,
 }
 
+# This is a dict of functions that are known to have arguments that
+# need to be transformed from fast to slow only. i.e., Some cudf functions
+# error on passing a device object but don't error on passing a host object.
+# For example: DataFrame.__setitem__(arg, value) errors on passing a
+# cudf.Index object but doesn't error on passing a pd.Index object.
+# Hence we need to transform the arg from fast to slow only. So, we use
+# a dictionary like:
+# {"DataFrame.__setitem__": {0}}
+# where the keys are the function names and the values are the indices
+# (0-based) of the arguments that need to be transformed.
+
+_SPECIAL_FUNCTIONS_ARGS_MAP = {
+    "DataFrame.__setitem__": {0},
+}
 
 _WRAPPER_ASSIGNMENTS = tuple(
     attr
@@ -875,16 +891,60 @@ class _MethodProxy(_FunctionProxy):
             pass
         setattr(self._fsproxy_slow, "__name__", value)
 
+    @property
+    def _customqualname(self):
+        return self._fsproxy_slow.__qualname__
+
 
 def _assert_fast_slow_eq(left, right):
     if _is_final_type(type(left)) or type(left) in NUMPY_TYPES:
         assert_eq(left, right)
 
 
-class ProxyFallbackError(Exception):
-    """Raised when fallback occurs"""
+class FallbackError(Exception):
+    """Raises when fallback occurs"""
 
     pass
+
+
+class OOMFallbackError(FallbackError):
+    """Raises when cuDF produces a MemoryError or an rmm.RMMError"""
+
+    pass
+
+
+class NotImplementedFallbackError(FallbackError):
+    """Raises cuDF produces a NotImplementedError"""
+
+    pass
+
+
+class AttributeFallbackError(FallbackError):
+    """Raises when cuDF produces an AttributeError"""
+
+    pass
+
+
+class TypeFallbackError(FallbackError):
+    """Raises when cuDF produces a TypeError"""
+
+    pass
+
+
+def _raise_fallback_error(err, name):
+    """Raises a fallback error."""
+    err_message = f"Falling back to the slow path. The exception was {err}. \
+        The function called was {name}."
+    exception_map = {
+        (RMMError, MemoryError): OOMFallbackError,
+        NotImplementedError: NotImplementedFallbackError,
+        AttributeError: AttributeFallbackError,
+        TypeError: TypeFallbackError,
+    }
+    for err_type, fallback_err_type in exception_map.items():
+        if isinstance(err, err_type):
+            raise fallback_err_type(err_message) from err
+    raise FallbackError(err_message) from err
 
 
 def _fast_function_call():
@@ -963,16 +1023,14 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
-        if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
-            raise ProxyFallbackError(
-                f"The operation failed with cuDF, the reason was {type(err)}: {err}"
-            ) from err
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+                _raise_fallback_error(err, slow_args[0].__name__)
             if _env_get_bool("LOG_FAST_FALLBACK", False):
                 from ._logger import log_fallback
 
@@ -1011,7 +1069,36 @@ def _transform_arg(
         # use __reduce_ex__ instead...
         if type(arg) is tuple:
             # Must come first to avoid infinite recursion
-            return tuple(_transform_arg(a, attribute_name, seen) for a in arg)
+            if (
+                len(arg) > 0
+                and isinstance(arg[0], _MethodProxy)
+                and arg[0]._customqualname in _SPECIAL_FUNCTIONS_ARGS_MAP
+            ):
+                indices_map = _SPECIAL_FUNCTIONS_ARGS_MAP[
+                    arg[0]._customqualname
+                ]
+                method_proxy, original_args, original_kwargs = arg
+
+                original_args = tuple(
+                    _transform_arg(a, "_fsproxy_slow", seen)
+                    if i - 1 in indices_map
+                    else _transform_arg(a, attribute_name, seen)
+                    for i, a in enumerate(original_args)
+                )
+                original_kwargs = _transform_arg(
+                    original_kwargs, attribute_name, seen
+                )
+                return tuple(
+                    (
+                        _transform_arg(method_proxy, attribute_name, seen),
+                        original_args,
+                        original_kwargs,
+                    )
+                )
+            else:
+                return tuple(
+                    _transform_arg(a, attribute_name, seen) for a in arg
+                )
         elif hasattr(arg, "__getnewargs_ex__"):
             # Partial implementation of to reconstruct with
             # transformed pieces
@@ -1099,7 +1186,9 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
     """
     Wraps "result" in a fast-slow proxy if is a "proxiable" object.
     """
-    if _is_final_type(result):
+    if isinstance(result, (int, str, float, bool, type(None))):
+        return result
+    elif _is_final_type(result):
         typ = get_final_type_map()[type(result)]
         return typ._fsproxy_wrap(result, func)
     elif _is_intermediate_type(result):
