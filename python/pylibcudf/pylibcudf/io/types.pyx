@@ -42,10 +42,12 @@ __all__ = [
     "CompressionType",
     "DictionaryPolicy",
     "JSONRecoveryMode",
+    "PartitionInfo",
     "QuoteStyle",
     "SinkInfo",
     "SourceInfo",
     "StatisticsFreq",
+    "TableInputMetadata",
     "TableWithMetadata",
 ]
 
