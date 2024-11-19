@@ -261,18 +261,24 @@ cdef cppclass iobase_data_sink(data_sink):
 
 
 cdef class SinkInfo:
-    """A class containing details on a source to read from.
+    """
+    A class containing details about destinations (sinks) to write data to.
 
-    For details, see :cpp:class:`cudf::io::sink_info`.
+    For more details, see :cpp:class:`cudf::io::sink_info`.
 
     Parameters
     ----------
-    sinks : list of str, PathLike, BytesIO, StringIO
+    sinks : list of str, PathLike, or io.IOBase instances
+        A list of sinks to write data to. Each sink can be:
 
-        A homogeneous list of sinks (this can be a string filename,
-        bytes, or one of the Python I/O classes) to read from.
+        - A string representing a filename.
+        - A PathLike object.
+        - An instance of a Python I/O class that is a subclass of io.IOBase
+          (eg., io.BytesIO, io.StringIO).
 
-        Mixing different types of sinks will raise a `ValueError`.
+        The list must be homogeneous in type unless all sinks are instances
+        of subclasses of io.IOBase. Mixing different types of sinks
+        (that are not all io.IOBase instances) will raise a ValueError.
     """
 
     def __init__(self, list sinks):
@@ -280,17 +286,22 @@ cdef class SinkInfo:
         cdef vector[string] paths
 
         if not sinks:
-            raise ValueError("Need to pass at least one sink")
+            raise ValueError("At least one sink must be provided.")
 
         if isinstance(sinks[0], os.PathLike):
             sinks = [os.path.expanduser(s) for s in sinks]
 
         cdef object initial_sink_cls = type(sinks[0])
 
-        if not all(isinstance(s, initial_sink_cls) or
-                   (isinstance(sinks[0], io.IOBase) and isinstance(s, io.IOBase))
-                   for s in sinks):
-            raise ValueError("All sinks must be of the same type!")
+        if not all(
+            isinstance(s, initial_sink_cls) or (
+                isinstance(sinks[0], io.IOBase) and isinstance(s, io.IOBase)
+            ) for s in sinks
+        ):
+            raise ValueError(
+                "All sinks must be of the same type unless they are all instances "
+                "of subclasses of io.IOBase."
+            )
 
         if isinstance(sinks[0], io.IOBase):
             data_sinks.reserve(len(sinks))

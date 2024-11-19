@@ -54,16 +54,7 @@ def read_csv(
     # detect_whitespace_around_quotes: bool = False,
     # timestamp_type: DataType = DataType(type_id.EMPTY),
 ) -> TableWithMetadata: ...
-def write_csv(
-    sink_info: SinkInfo,
-    table: TableWithMetadata,
-    *,
-    sep: str = ",",
-    na_rep: str = "",
-    header: bool = True,
-    lineterminator: str = "\n",
-    rows_per_chunk: int = 8,
-) -> None: ...
+def write_csv(options: CsvWriterOptionsBuilder) -> None: ...
 
 class CsvWriterOptions:
     def __init__(self): ...
