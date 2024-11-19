@@ -10,11 +10,11 @@ configure-cudf-cpp -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=native -j
 # Rebuild libcudf
 # In nvcc, compiler options -E and -MD cannot be used together. However:
 # - Adding the device debug symbol (-G) for a selected set of .cu files
-#   appears to cause -MD to be added as a compiler option. Meanwhile,
+#   appears to cause -MD to be added as a compiler option.
 # - sccache always forces -E to be appended even when export CCACHE_DISABLE=1
 #   is used.
-# Given this conundrum, the hacky solution is to manually remove the use of
-# sccache from the build.ninja file, before building libcudf with the device
+# Given this conundrum, the hacky solution is to remove the use of sccache
+# from the build.ninja file, before building libcudf with the device
 # debug symbol added.
 cd ~/cudf/cpp/build/pip/cuda-12.5/debug
 sed -i 's|LAUNCHER = /usr/bin/sccache|LAUNCHER =|g' build.ninja
