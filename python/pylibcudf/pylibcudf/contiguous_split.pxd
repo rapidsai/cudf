@@ -25,6 +25,7 @@ cdef class PackedColumns:
 
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data)
+    cpdef tuple release(self)
 
 cpdef PackedColumns pack(Table input)
 
