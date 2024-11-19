@@ -1,3 +1,2 @@
-break /home/coder/cudf/cpp/examples/orc_io/build/_deps/cudf-src/cpp/src/io/orc/stripe_data.cu:1891
-break /home/coder/cudf/cpp/examples/orc_io/build/_deps/cudf-src/cpp/src/io/orc/stripe_data.cu:1384
+break gpuDecodeOrcColumnData
 
