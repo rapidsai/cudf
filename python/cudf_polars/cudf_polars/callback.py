@@ -18,7 +18,7 @@ from polars.exceptions import ComputeError, PerformanceWarning
 import rmm
 from rmm._cuda import gpu
 
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -129,6 +129,7 @@ def set_device(device: int | None) -> Generator[int, None, None]:
 
 def _callback(
     ir: IR,
+    config: GPUEngine,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
@@ -145,15 +146,33 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        return ir.evaluate(cache={}).to_polars()
+        return ir.evaluate(cache={}, config=config).to_polars()
 
 
-def execute_with_cudf(
-    nt: NodeTraverser,
-    *,
-    config: GPUEngine,
-    exception: type[Exception] | tuple[type[Exception], ...] = Exception,
-) -> None:
+def validate_config_options(config: dict) -> None:
+    """
+    Validate the configuration options for the GPU engine.
+
+    Parameters
+    ----------
+    config
+        Configuration options to validate.
+
+    Raises
+    ------
+    ValueError
+        If the configuration contains unsupported options.
+    """
+    if unsupported := (config.keys() - {"raise_on_fail", "parquet_options"}):
+        raise ValueError(
+            f"Engine configuration contains unsupported settings: {unsupported}"
+        )
+    assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
+        config.get("parquet_options", {})
+    )
+
+
+def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
 
@@ -165,35 +184,49 @@ def execute_with_cudf(
     config
         GPUEngine configuration object
 
-    exception
-        Optional exception, or tuple of exceptions, to catch during
-        translation. Defaults to ``Exception``.
+    Raises
+    ------
+    ValueError
+        If the config contains unsupported keys.
+    NotImplementedError
+        If translation of the plan is unsupported.
 
+    Notes
+    -----
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    if unsupported := (config.config.keys() - {"raise_on_fail"}):
-        raise ValueError(
-            f"Engine configuration contains unsupported settings {unsupported}"
-        )
-    try:
-        with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+    validate_config_options(config.config)
+
+    with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+        translator = Translator(nt)
+        ir = translator.translate_ir()
+        ir_translation_errors = translator.errors
+        if len(ir_translation_errors):
+            # TODO: Display these errors in user-friendly way.
+            # tracked in https://github.com/rapidsai/cudf/issues/17051
+            unique_errors = sorted(set(ir_translation_errors), key=str)
+            formatted_errors = "\n".join(
+                f"- {e.__class__.__name__}: {e}" for e in unique_errors
+            )
+            error_message = (
+                "Query execution with GPU not possible: unsupported operations."
+                f"\nThe errors were:\n{formatted_errors}"
+            )
+            exception = NotImplementedError(error_message, unique_errors)
+            if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+                warnings.warn(error_message, PerformanceWarning, stacklevel=2)
+            if raise_on_fail:
+                raise exception
+        else:
             nt.set_udf(
                 partial(
                     _callback,
-                    translate_ir(nt),
+                    ir,
+                    config,
                     device=device,
                     memory_resource=memory_resource,
                 )
             )
-    except exception as e:
-        if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
-            warnings.warn(
-                f"Query execution with GPU not supported, reason: {type(e)}: {e}",
-                PerformanceWarning,
-                stacklevel=2,
-            )
-        if raise_on_fail:
-            raise

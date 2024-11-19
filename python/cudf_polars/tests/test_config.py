@@ -30,7 +30,7 @@ def test_polars_verbose_warns(monkeypatch):
         pytest.raises(pl.exceptions.ComputeError),
         pytest.warns(
             pl.exceptions.PerformanceWarning,
-            match="Query execution with GPU not supported",
+            match="Query execution with GPU not possible",
         ),
     ):
         # And ensure that collecting issues the correct warning.

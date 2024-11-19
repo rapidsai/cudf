@@ -23,7 +23,7 @@ on:
 
 jobs:
     get-project-id:
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@branch-24.12
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@branch-25.02
       if: github.event.pull_request.state == 'open'
       secrets: inherit
       permissions:
@@ -34,7 +34,7 @@ jobs:
 
     update-status:
       # This job sets the PR and its linked issues to "In Progress" status
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@branch-24.12
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@branch-25.02
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       with:
@@ -50,7 +50,7 @@ jobs:
 
     update-sprint:
       # This job sets the PR and its linked issues to the current "Weekly Sprint"
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-iteration-field.yaml@branch-24.12
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-iteration-field.yaml@branch-25.02
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       with:
@@ -79,7 +79,7 @@ jobs:
 
     update-release:
       # This job sets the PR and its linked issues to the release they are targeting
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@branch-24.12
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@branch-25.02
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: [get-project-id, process-branch-name]
       with:

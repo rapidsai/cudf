@@ -10,6 +10,7 @@ from pylibcudf.libcudf.nvtext.jaccard cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = ["jaccard_index"]
 
 cpdef Column jaccard_index(Column input1, Column input2, size_type width):
     """

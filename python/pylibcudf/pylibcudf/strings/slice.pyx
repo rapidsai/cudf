@@ -14,6 +14,7 @@ from pylibcudf.scalar cimport Scalar
 
 from cython.operator import dereference
 
+__all__ = ["slice_strings"]
 
 cpdef Column slice_strings(
     Column input,

@@ -10,7 +10,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars import translate_ir
+from cudf_polars import Translator
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -68,7 +68,11 @@ def test_setsorted(descending, nulls_last, with_nulls):
 
     assert_gpu_result_equal(q)
 
-    df = translate_ir(q._ldf.visit()).evaluate(cache={})
+    df = (
+        Translator(q._ldf.visit())
+        .translate_ir()
+        .evaluate(cache={}, config=pl.GPUEngine())
+    )
 
     a = df.column_map["a"]
 

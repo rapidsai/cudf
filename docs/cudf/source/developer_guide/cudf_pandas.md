@@ -11,7 +11,8 @@ In the rest of this document, to maintain a concrete pair of libraries in mind, 
 For example, future support could include pairs such as CuPy (as the "fast" library) and NumPy (as the "slow" library).
 
 ```{note}
-We currently do not wrap the entire NumPy library because it exposes a C API. But we do wrap NumPy's `numpy.ndarray` and CuPy's `cupy.ndarray` in a proxy type.
+1. We currently do not wrap the entire NumPy library because it exposes a C API. But we do wrap NumPy's `numpy.ndarray` and CuPy's `cupy.ndarray` in a proxy type.
+2. There is a `custom_iter` method defined to always utilize slow objects `iter` method, that way we don't move the objects to GPU and trigger an error and again move the object to CPU to execute the iteration successfully.
 ```
 
 ### Types:
