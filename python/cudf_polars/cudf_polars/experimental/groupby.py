@@ -48,9 +48,9 @@ def lower_groupby_node(ir: GroupBy, rec) -> IR:
     """Rewrite a GroupBy node with proper partitioning."""
     # Lower children first
     children = [rec(child) for child in ir.children]
-
-    # TODO: Skip lowering for single-partition child
-    # (Still want to test this case for now)
+    if ir_parts_info(children[0]).count == 1:
+        # Single partition
+        return ir.reconstruct(children)
 
     # Check that we are groupbing on element-wise
     # keys (is this already guaranteed?)
