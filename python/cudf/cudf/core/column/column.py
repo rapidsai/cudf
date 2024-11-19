@@ -19,6 +19,7 @@ from numba import cuda
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
+import pylibcudf as plc
 import rmm
 
 import cudf
@@ -2300,4 +2301,10 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         return column_empty(0, head.dtype, masked=True)
 
     # Filter out inputs that have 0 length, then concatenate.
-    return libcudf.concat.concat_columns([o for o in objs if len(o)])
+    objs_with_len = [o for o in objs if len(o)]
+    with acquire_spill_lock():
+        return Column.from_pylibcudf(
+            plc.concatenate.concatenate(
+                [col.to_pylibcudf(mode="read") for col in objs_with_len]
+            )
+        )

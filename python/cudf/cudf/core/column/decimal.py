@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 
@@ -216,19 +215,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 other, dtype=self.dtype.__class__(precision, scale)
             )
         return NotImplemented
-
-    def _decimal_quantile(
-        self, q: float | Sequence[float], interpolation: str, exact: bool
-    ) -> ColumnBase:
-        quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
-        # get sorted indices and exclude nulls
-        indices = libcudf.sort.order_by(
-            [self], [True], "first", stable=True
-        ).slice(self.null_count, len(self))
-        result = libcudf.quantiles.quantile(
-            self, quant, interpolation, indices, exact
-        )
-        return result._with_type_metadata(self.dtype)
 
     def as_numerical_column(
         self, dtype: Dtype
