@@ -47,7 +47,7 @@ def _get_device_size():
 
         pynvml.nvmlInit()
         index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-        if not index.isnumeric():
+        if index and not index.isnumeric():
             # This means index is UUID. This works for both MIG and non-MIG device UUIDs.
             handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
         else:
