@@ -162,6 +162,8 @@ def test_write_parquet(
     max_dictionary_size,
 ):
     _, pa_table = table_data
+    if len(pa_table) == 0 and partitions is not None:
+        pytest.skip("https://github.com/rapidsai/cudf/issues/17361")
     plc_table = plc.interop.from_arrow(pa_table)
     table_meta = plc.io.types.TableInputMetadata(plc_table)
     sink = plc.io.SinkInfo([io.BytesIO()])
