@@ -13,9 +13,6 @@ from pylibcudf.libcudf.io.types cimport (
 from cudf._lib.column cimport Column
 
 
-cdef sink_info make_sinks_info(
-    list src, vector[unique_ptr[data_sink]] & data) except*
-cdef sink_info make_sink_info(src, unique_ptr[data_sink] & data) except*
 cdef add_df_col_struct_names(
     df,
     child_names_dict
@@ -26,7 +23,8 @@ cdef update_col_struct_field_names(
 )
 cdef update_struct_field_names(
     table,
-    vector[column_name_info]& schema_info)
+    vector[column_name_info]& schema_info
+)
 cdef Column update_column_struct_field_names(
     Column col,
     column_name_info& info
