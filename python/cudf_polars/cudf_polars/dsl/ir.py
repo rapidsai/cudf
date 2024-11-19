@@ -706,7 +706,12 @@ class DataFrameScan(IR):
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
-        self._non_child_args = (schema, df, self.projection, predicate)
+        self._non_child_args = (
+            schema,
+            pl.DataFrame._from_pydf(df),
+            self.projection,
+            predicate,
+        )
         self.children = ()
 
     def get_hashable(self) -> Hashable:
@@ -729,10 +734,9 @@ class DataFrameScan(IR):
         predicate: expr.NamedExpr | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        pdf = pl.DataFrame._from_pydf(df)
+        df = DataFrame.from_polars(df)
         if projection is not None:
-            pdf = pdf.select(projection)
-        df = DataFrame.from_polars(pdf)
+            df = df.select(projection)
         assert all(
             c.obj.type() == dtype
             for c, dtype in zip(df.columns, schema.values(), strict=True)
