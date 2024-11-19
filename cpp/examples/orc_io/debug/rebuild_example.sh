@@ -5,7 +5,7 @@ pushd $(pwd)
 # Reconfigure libcudf to use debug build
 cd ~
 clean-all
-configure-cudf-cpp -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=86 -j 16
+configure-cudf-cpp -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=native -j 16
 
 # Rebuild libcudf
 # In nvcc, compiler options -E and -MD cannot be used together. However:
