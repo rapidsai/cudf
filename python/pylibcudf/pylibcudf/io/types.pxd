@@ -48,7 +48,7 @@ cdef class SinkInfo:
     cdef sink_info c_obj
 
 cdef class ColumnInMetadata:
-    cdef column_in_metadata c_obj
+    cdef column_in_metadata* c_obj
 
     cpdef ColumnInMetadata set_name(self, str name)
 
@@ -75,7 +75,7 @@ cdef class ColumnInMetadata:
     cpdef str get_name(self)
 
     @staticmethod
-    cdef ColumnInMetadata from_libcudf(column_in_metadata data)
+    cdef ColumnInMetadata from_libcudf(column_in_metadata* data)
 
 cdef class TableInputMetadata:
     cdef public Table table

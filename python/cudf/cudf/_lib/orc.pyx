@@ -14,9 +14,6 @@ except ImportError:
     import json
 
 cimport pylibcudf.libcudf.lists.lists_column_view as cpp_lists_column_view
-from pylibcudf.libcudf.io.types cimport (
-    column_in_metadata,
-)
 
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport update_col_struct_field_names
@@ -28,7 +25,7 @@ import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from cudf.core.buffer import acquire_spill_lock
-from pylibcudf.io.types cimport TableInputMetadata, SinkInfo
+from pylibcudf.io.types cimport TableInputMetadata, SinkInfo, ColumnInMetadata
 from pylibcudf.io.orc cimport OrcChunkedWriter
 
 # TODO: Consider inlining this function since it seems to only be used in one place.
@@ -246,8 +243,8 @@ def write_orc(
         plc_table = plc.Table([col.to_pylibcudf(mode="read") for col in columns])
         tbl_meta = TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table._index.names):
-            tbl_meta.c_obj.column_metadata[level].set_name(
-                str.encode(_index_level_name(idx_name, level, table._column_names))
+            tbl_meta.column_metadata[level].set_name(
+                _index_level_name(idx_name, level, table._column_names)
             )
         num_index_cols_meta = len(table._index.names)
     else:
@@ -261,10 +258,10 @@ def write_orc(
         cols_as_map_type = set(cols_as_map_type)
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
-        tbl_meta.c_obj.column_metadata[i].set_name(name.encode())
+        tbl_meta.column_metadata[i].set_name(name)
         _set_col_children_metadata(
             table[name]._column,
-            tbl_meta.c_obj.column_metadata[i],
+            tbl_meta.column_metadata[i],
             (cols_as_map_type is not None)
             and (name in cols_as_map_type),
         )
@@ -394,8 +391,8 @@ cdef class ORCWriter:
                 )
                 self.tbl_meta = TableInputMetadata(plc_table)
                 for level, idx_name in enumerate(table._index.names):
-                    self.tbl_meta.c_obj.column_metadata[level].set_name(
-                        str.encode(idx_name)
+                    self.tbl_meta.column_metadata[level].set_name(
+                        idx_name
                     )
                 num_index_cols_meta = len(table._index.names)
             else:
@@ -409,16 +406,16 @@ cdef class ORCWriter:
                         ]
                     )
                     self.tbl_meta = TableInputMetadata(plc_table)
-                    self.tbl_meta.c_obj.column_metadata[0].set_name(
-                        str.encode(table._index.name)
+                    self.tbl_meta.column_metadata[0].set_name(
+                        table._index.name
                     )
                     num_index_cols_meta = 1
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
-            self.tbl_meta.c_obj.column_metadata[i].set_name(name.encode())
+            self.tbl_meta.column_metadata[i].set_name(name)
             _set_col_children_metadata(
                 table[name]._column,
-                self.tbl_meta.c_obj.column_metadata[i],
+                self.tbl_meta.column_metadata[i],
                 (self.cols_as_map_type is not None)
                 and (name in self.cols_as_map_type),
             )
@@ -447,13 +444,13 @@ cdef class ORCWriter:
         self.initialized = True
 
 cdef _set_col_children_metadata(Column col,
-                                column_in_metadata& col_meta,
+                                ColumnInMetadata col_meta,
                                 list_column_as_map=False):
     if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
-            col_meta.child(i).set_name(name.encode())
+            col_meta.child(i).set_name(name)
             _set_col_children_metadata(
                 child_col, col_meta.child(i), list_column_as_map
             )
