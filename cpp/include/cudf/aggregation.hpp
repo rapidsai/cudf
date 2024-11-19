@@ -658,7 +658,7 @@ struct host_udf_base {
    * @return The computed cudf column as the result of UDF aggregation
    */
   [[nodiscard]] virtual output_type operator()(
-    std::unordered_map<input_kind, input_data> const& agg_data,
+    std::unordered_map<input_kind, input_data> const& input,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) = 0;
 
