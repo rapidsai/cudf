@@ -8,7 +8,7 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import NamedExpr
-from cudf_polars.dsl.ir import GroupBy, Union
+from cudf_polars.dsl.ir import GroupBy, Scan, Union
 from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 
 if TYPE_CHECKING:
@@ -127,7 +127,7 @@ def _default_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
     }
 
 
-def _partitionwise_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
+def _partitionwise_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
     # Simple partitionwise behavior.
     child_names = []
     counts = []
@@ -144,6 +144,7 @@ def _partitionwise_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     return {
         (key_name, i): (
             ir.do_evaluate,
+            config,
             *ir._non_child_args,
             *((child_name, i) for child_name in child_names),
         )
@@ -172,7 +173,11 @@ def task_graph(_ir: IR, config: GPUEngine) -> tuple[MutableMapping[str, Any], st
         for k, v in layer.items()
     }
     key_name = get_key_name(ir)
-    graph[key_name] = (key_name, 0)
+    partition_count = ir_parts_info(ir).count
+    if partition_count:
+        graph[key_name] = (_concat, [(key_name, i) for i in range(partition_count)])
+    else:
+        graph[key_name] = (key_name, 0)
 
     _clear_parts_info_cache()
     return graph, key_name
@@ -188,7 +193,19 @@ def evaluate_dask(ir: IR, config: GPUEngine) -> DataFrame:
 
 def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
-    return Union.do_evaluate(None, *dfs)
+    return Union.do_evaluate(None, None, *dfs)
+
+
+##
+## Scan
+##
+
+
+@lower_ir_node.register(Scan)
+def _(ir: Scan, rec) -> IR:
+    import cudf_polars.experimental.io as _io
+
+    return _io.lower_scan_node(ir, rec)
 
 
 ##

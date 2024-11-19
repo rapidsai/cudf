@@ -24,6 +24,8 @@ from cudf_polars.experimental.parallel import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from polars import GPUEngine
+
     from cudf_polars.dsl.ir import IR
 
 
@@ -154,8 +156,8 @@ def _(ir: GroupByPart) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(GroupByPart)
-def _(ir: GroupByPart) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir)
+def _(ir: GroupByPart, config: GPUEngine) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir, config)
 
 
 @_ir_parts_info.register(GroupByTree)
@@ -164,7 +166,7 @@ def _(ir: GroupByTree) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(GroupByTree)
-def _(ir: GroupByTree) -> MutableMapping[Any, Any]:
+def _(ir: GroupByTree, config: GPUEngine) -> MutableMapping[Any, Any]:
     child = ir.children[0]
     child_count = ir_parts_info(child).count
     child_name = get_key_name(child)
@@ -175,6 +177,7 @@ def _(ir: GroupByTree) -> MutableMapping[Any, Any]:
     return {
         (name, 0): (
             ir.do_evaluate,
+            config,
             *ir._non_child_args,
             (
                 _concat,
@@ -190,6 +193,6 @@ def _(ir: GroupByFinalize) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(GroupByFinalize)
-def _(ir: GroupByFinalize) -> MutableMapping[Any, Any]:
+def _(ir: GroupByFinalize, config: GPUEngine) -> MutableMapping[Any, Any]:
     # TODO: Fuse with GroupByTree child task?
-    return _partitionwise_ir_tasks(ir)
+    return _partitionwise_ir_tasks(ir, config)
