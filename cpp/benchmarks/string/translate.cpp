@@ -14,13 +14,7 @@
  * limitations under the License.
  */
 
-#include "string_bench_args.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
@@ -28,20 +22,24 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <algorithm>
+#include <nvbench/nvbench.cuh>
 
-class StringTranslate : public cudf::benchmark {};
+#include <algorithm>
+#include <vector>
 
 using entry_type = std::pair<cudf::char_utf8, cudf::char_utf8>;
 
-static void BM_translate(benchmark::State& state, int entry_count)
+static void bench_translate(nvbench::state& state)
 {
-  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
-  cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
+  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const min_width   = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width   = static_cast<cudf::size_type>(state.get_int64("max_width"));
+  auto const entry_count = static_cast<cudf::size_type>(state.get_int64("entries"));
+
   data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
-  cudf::strings_column_view input(column->view());
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
+  auto const input  = cudf::strings_column_view(column->view());
 
   std::vector<entry_type> entries(entry_count);
   std::transform(thrust::counting_iterator<int>(0),
@@ -51,33 +49,19 @@ static void BM_translate(benchmark::State& state, int entry_count)
                    return entry_type{'!' + idx, '~' - idx};
                  });
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::strings::translate(input, entries);
-  }
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto chars_size = input.chars_size(stream);
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { cudf::strings::translate(input, entries); });
 }
 
-static void generate_bench_args(benchmark::internal::Benchmark* b)
-{
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
-  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
-}
-
-#define STRINGS_BENCHMARK_DEFINE(name, entries)            \
-  BENCHMARK_DEFINE_F(StringTranslate, name)                \
-  (::benchmark::State & st) { BM_translate(st, entries); } \
-  BENCHMARK_REGISTER_F(StringTranslate, name)              \
-    ->Apply(generate_bench_args)                           \
-    ->UseManualTime()                                      \
-    ->Unit(benchmark::kMillisecond);
-
-STRINGS_BENCHMARK_DEFINE(translate_small, 5)
-STRINGS_BENCHMARK_DEFINE(translate_medium, 25)
-STRINGS_BENCHMARK_DEFINE(translate_large, 50)
+NVBENCH_BENCH(bench_translate)
+  .set_name("translate")
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("entries", {5, 25, 50});
