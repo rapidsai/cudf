@@ -479,7 +479,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
                   is_row_group_required.cend(),
                   [](auto i) { return bool(i); }) or
       predicate.null_count() == predicate.size()) {
-    return std::nullopt;
+    // Call with input_row_group_indices
+    return apply_bloom_filters(
+      sources, input_row_group_indices, output_dtypes, output_column_schemas, filter, stream);
   }
   size_type is_required_idx = 0;
   for (auto const& input_row_group_index : input_row_group_indices) {
@@ -492,6 +494,10 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     }
     filtered_row_group_indices.push_back(std::move(filtered_row_groups));
   }
+
+  // Call with filtered_row_group_indices
+  return apply_bloom_filters(
+    sources, filtered_row_group_indices, output_dtypes, output_column_schemas, filter, stream);
 
   return {std::move(filtered_row_group_indices)};
 }
