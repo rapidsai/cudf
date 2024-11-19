@@ -298,17 +298,6 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
 }
 
 /**
- * @brief GZIP host decompressor (includes header)
- */
-size_t decompress_zip(host_span<uint8_t const> src, host_span<uint8_t> dst)
-{
-  gz_archive_s gz;
-  auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
-  CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header");
-  return decompress_zlib({gz.comp_data, gz.comp_len}, dst);
-}
-
-/**
  * @brief SNAPPY host decompressor
  */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
