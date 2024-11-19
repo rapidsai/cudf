@@ -23,14 +23,15 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
 
 /**
  * @brief Compresses a system memory buffer.
  *
  * @param compression Type of compression of the input data
- * @param src Decompressed host buffer
+ * @param src         Decompressed host buffer
+ * @param stream      CUDA stream used for device memory operations and kernel launches
  *
  * @return Vector containing the Compressed output
  */
@@ -38,5 +39,5 @@ std::vector<uint8_t> compress(compression_type compression,
                               host_span<uint8_t const> src,
                               rmm::cuda_stream_view stream);
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace io::detail
+}  // namespace CUDF_EXPORT cudf

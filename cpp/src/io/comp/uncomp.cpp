@@ -29,12 +29,11 @@
 
 #include <cstring>  // memset
 
-using cudf::host_span;
-
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
 
 #pragma pack(push, 1)
+
+namespace {
 
 struct gz_file_header_s {
   uint8_t id1;        // 0x1f
@@ -262,7 +261,7 @@ void cpu_inflate_vector(std::vector<uint8_t>& dst, uint8_t const* comp_data, siz
   strm.avail_out = dst.size();
   strm.total_out = 0;
   auto zerr      = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
-  CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream");
+  CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream: inflateInit2 failed");
   do {
     if (strm.avail_out == 0) {
       dst.resize(strm.total_out + (1 << 30));
@@ -274,7 +273,7 @@ void cpu_inflate_vector(std::vector<uint8_t>& dst, uint8_t const* comp_data, siz
            strm.total_out == dst.size());
   dst.resize(strm.total_out);
   inflateEnd(&strm);
-  CUDF_EXPECTS(zerr == Z_STREAM_END, "Error in DEFLATE stream");
+  CUDF_EXPECTS(zerr == Z_STREAM_END, "Error in DEFLATE stream: Z_STREAM_END not encountered");
 }
 
 /**
@@ -488,12 +487,12 @@ source_properties get_source_properties(compression_type compression, host_span<
     case compression_type::AUTO:
     case compression_type::GZIP: {
       gz_archive_s gz;
-      if (ParseGZArchive(&gz, raw, src.size())) {
-        compression = compression_type::GZIP;
-        comp_data   = gz.comp_data;
-        comp_len    = gz.comp_len;
-        uncomp_len  = gz.isize;
-      }
+      auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
+      CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header while fetching source properties");
+      compression = compression_type::GZIP;
+      comp_data   = gz.comp_data;
+      comp_len    = gz.comp_len;
+      uncomp_len  = gz.isize;
       if (compression != compression_type::AUTO) break;
       [[fallthrough]];
     }
@@ -580,10 +579,11 @@ source_properties get_source_properties(compression_type compression, host_span<
   return source_properties{compression, comp_data, comp_len, uncomp_len};
 }
 
-size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src)
+}  // namespace
+
+size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src)
 {
-  auto srcprops = get_source_properties(compression, src);
-  return srcprops.uncomp_len;
+  return get_source_properties(compression, src).uncomp_len;
 }
 
 size_t decompress(compression_type compression,
@@ -615,8 +615,13 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
                                      // ~4:1 compression for initial size
   }
 
-  if (compression == compression_type::GZIP || compression == compression_type::ZIP) {
+  if (compression == compression_type::GZIP) {
     // INFLATE
+    std::vector<uint8_t> dst(srcprops.uncomp_len);
+    decompress_gzip(src, dst);
+    return dst;
+  }
+  if (compression == compression_type::ZIP) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
     cpu_inflate_vector(dst, srcprops.comp_data, srcprops.comp_len);
     return dst;
@@ -647,12 +652,11 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   }
   if (compression == compression_type::SNAPPY) {
     std::vector<uint8_t> dst(srcprops.uncomp_len);
-    decompress_snappy(src, dst, cudf::get_default_stream());
+    decompress_snappy(src, dst);
     return dst;
   }
 
   CUDF_FAIL("Unsupported compressed stream type");
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail
