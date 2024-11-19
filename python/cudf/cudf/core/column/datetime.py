@@ -14,21 +14,26 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.labeling import label_bins
 from cudf._lib.search import search_sorted
 from cudf.core._compat import PANDAS_GE_220
+from cudf.core._internals import unary
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
     get_compatible_timezone,
     get_tz_data,
 )
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
-from cudf.utils.utils import _all_bools_with_nulls
+from cudf.utils.utils import (
+    _all_bools_with_nulls,
+    _datetime_timedelta_find_and_replace,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -487,7 +492,7 @@ class DatetimeColumn(column.ColumnBase):
                 "Cannot use .astype to convert from timezone-naive dtype to timezone-aware dtype. "
                 "Use tz_localize instead."
             )
-        return libcudf.unary.cast(self, dtype=dtype)
+        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: Dtype) -> None:  # type: ignore[override]
         raise TypeError(
@@ -629,6 +634,22 @@ class DatetimeColumn(column.ColumnBase):
                 self.time_unit
             )
         return result.astype(self.dtype)
+
+    def find_and_replace(
+        self,
+        to_replace: ColumnBase,
+        replacement: ColumnBase,
+        all_nan: bool = False,
+    ) -> DatetimeColumn:
+        return cast(
+            DatetimeColumn,
+            _datetime_timedelta_find_and_replace(
+                original_column=self,
+                to_replace=to_replace,
+                replacement=replacement,
+                all_nan=all_nan,
+            ),
+        )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
@@ -799,13 +820,16 @@ class DatetimeColumn(column.ColumnBase):
         # The end of an ambiguous time period is what Clock 2 reads at
         # the moment of transition:
         ambiguous_end = clock_2.apply_boolean_mask(cond)
-        ambiguous = label_bins(
-            self,
-            left_edges=ambiguous_begin,
-            left_inclusive=True,
-            right_edges=ambiguous_end,
-            right_inclusive=False,
-        ).notnull()
+        with acquire_spill_lock():
+            plc_column = plc.labeling.label_bins(
+                self.to_pylibcudf(mode="read"),
+                ambiguous_begin.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES,
+                ambiguous_end.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.NO,
+            )
+            ambiguous = libcudf.column.Column.from_pylibcudf(plc_column)
+        ambiguous = ambiguous.notnull()
 
         # At the start of a non-existent time period, Clock 2 reads less
         # than Clock 1 (which has been turned forward):
@@ -815,13 +839,16 @@ class DatetimeColumn(column.ColumnBase):
         # The end of the non-existent time period is what Clock 1 reads
         # at the moment of transition:
         nonexistent_end = clock_1.apply_boolean_mask(cond)
-        nonexistent = label_bins(
-            self,
-            left_edges=nonexistent_begin,
-            left_inclusive=True,
-            right_edges=nonexistent_end,
-            right_inclusive=False,
-        ).notnull()
+        with acquire_spill_lock():
+            plc_column = plc.labeling.label_bins(
+                self.to_pylibcudf(mode="read"),
+                nonexistent_begin.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES,
+                nonexistent_end.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.NO,
+            )
+            nonexistent = libcudf.column.Column.from_pylibcudf(plc_column)
+        nonexistent = nonexistent.notnull()
 
         return ambiguous, nonexistent
 

@@ -28,12 +28,11 @@
 
 #include <cstring>  // memset
 
-using cudf::host_span;
-
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
 
 #pragma pack(push, 1)
+
+namespace {
 
 struct gz_file_header_s {
   uint8_t id1;        // 0x1f
@@ -546,6 +545,8 @@ source_properties get_source_properties(compression_type compression, host_span<
   return source_properties{compression, comp_data, comp_len, uncomp_len};
 }
 
+}  // namespace
+
 size_t get_uncompressed_size(compression_type compression, host_span<uint8_t const> src)
 {
   return get_source_properties(compression, src).uncomp_len;
@@ -624,5 +625,4 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   CUDF_FAIL("Unsupported compressed stream type");
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

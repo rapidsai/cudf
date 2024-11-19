@@ -26,7 +26,7 @@
 using cudf::host_span;
 
 namespace CUDF_EXPORT cudf {
-namespace io {
+namespace io::detail {
 
 /**
  * @brief Decompresses a system memory buffer.
@@ -77,5 +77,5 @@ constexpr uint8_t fname    = 0x08;  // Original file name present
 constexpr uint8_t fcomment = 0x10;  // Comment present
 };                                  // namespace GZIPHeaderFlag
 
-}  // namespace io
+}  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf
