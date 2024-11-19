@@ -63,6 +63,7 @@ cdef class HostBuffer:
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
 
+
 cdef class PackedColumns:
     """Column data in a serialized format.
 
@@ -87,7 +88,7 @@ cdef class PackedColumns:
         out.c_obj = move(data)
         return out
 
-    def release(self):
+    cpdef tuple release(self):
         """Releases and returns the underlying serialized metadata and gpu data.
 
         The ownership of the memory are transferred to the returned buffers. After
