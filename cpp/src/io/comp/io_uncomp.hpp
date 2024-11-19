@@ -54,7 +54,6 @@ size_t decompress(compression_type compression,
                   host_span<uint8_t> dst,
                   rmm::cuda_stream_view stream);
 
-size_t estimate_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
 /**
  * @brief Without actually decompressing the compressed input buffer passed, return the size of
  * decompressed output. If the decompressed size cannot be extracted apriori, return zero.
