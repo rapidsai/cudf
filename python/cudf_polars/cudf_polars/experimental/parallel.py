@@ -8,7 +8,7 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import NamedExpr
-from cudf_polars.dsl.ir import GroupBy, Scan, Union
+from cudf_polars.dsl.ir import GroupBy, Join, Scan, Union
 from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 
 if TYPE_CHECKING:
@@ -218,3 +218,15 @@ def _(ir: GroupBy, rec) -> IR:
     import cudf_polars.experimental.groupby as _groupby
 
     return _groupby.lower_groupby_node(ir, rec)
+
+
+##
+## Join
+##
+
+
+@lower_ir_node.register(Join)
+def _(ir: Join, rec) -> IR:
+    import cudf_polars.experimental.join as _join
+
+    return _join.lower_join_node(ir, rec)

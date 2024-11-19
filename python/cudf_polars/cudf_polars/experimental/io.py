@@ -27,7 +27,7 @@ class ParFileScan(Scan):
 
 
 def lower_scan_node(ir: Scan, rec) -> IR:
-    """Rewrite a GroupBy node with proper partitioning."""
+    """Rewrite a Scan node with proper partitioning."""
     if (
         len(ir.paths) > 1
         and ir.typ in ("csv", "parquet", "ndjson")
