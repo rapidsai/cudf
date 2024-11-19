@@ -115,7 +115,7 @@ def test_read_parquet_filters(
     "compression",
     [
         plc.io.types.CompressionType.NONE,
-        plc.io.types.CompressionType.GZIP,
+        plc.io.types.CompressionType.SNAPPY,
     ],
 )
 @pytest.mark.parametrize(
