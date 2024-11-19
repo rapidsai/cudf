@@ -30,3 +30,6 @@ cdef class CsvWriterOptionsBuilder:
     cpdef CsvWriterOptionsBuilder true_value(self, str val)
     cpdef CsvWriterOptionsBuilder false_value(self, str val)
     cpdef CsvWriterOptions build(self)
+
+
+cpdef void write_csv(CsvWriterOptions options)

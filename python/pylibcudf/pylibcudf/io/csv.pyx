@@ -454,7 +454,7 @@ cdef class CsvWriterOptionsBuilder:
         return csv_options
 
 
-def write_csv(
+cpdef void write_csv(
     CsvWriterOptions options
 ):
     """
