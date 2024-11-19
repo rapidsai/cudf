@@ -14,11 +14,8 @@
  * limitations under the License.
  */
 
-#include "string_bench_args.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -27,59 +24,51 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <limits>
-
-class StringReplace : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
 enum replace_type { scalar, slice, multi };
 
-static void BM_replace(benchmark::State& state, replace_type rt)
+static void bench_replace(nvbench::state& state)
 {
-  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
-  cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
+  auto const api       = state.get_string("api");
+
   data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
+
   cudf::strings_column_view input(column->view());
-  cudf::string_scalar target("+");
-  cudf::string_scalar repl("");
-  cudf::test::strings_column_wrapper targets({"+", "-"});
-  cudf::test::strings_column_wrapper repls({"", ""});
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    switch (rt) {
-      case scalar: cudf::strings::replace(input, target, repl); break;
-      case slice: cudf::strings::replace_slice(input, repl, 1, 10); break;
-      case multi:
-        cudf::strings::replace_multiple(
-          input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
-        break;
-    }
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto const chars_size = input.chars_size(stream);
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+
+  if (api == "scalar") {
+    cudf::string_scalar target("+");
+    cudf::string_scalar repl("-");
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::replace(input, target, repl); });
+  } else if (api == "multi") {
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::test::strings_column_wrapper targets({"+", " "});
+      cudf::test::strings_column_wrapper repls({"-", "_"});
+      cudf::strings::replace_multiple(
+        input, cudf::strings_column_view(targets), cudf::strings_column_view(repls));
+    });
+  } else if (api == "slice") {
+    cudf::string_scalar repl("0123456789");
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::replace_slice(input, repl, 1, 10); });
   }
-
-  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
-static void generate_bench_args(benchmark::internal::Benchmark* b)
-{
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 2;
-  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
-}
-
-#define STRINGS_BENCHMARK_DEFINE(name)                              \
-  BENCHMARK_DEFINE_F(StringReplace, name)                           \
-  (::benchmark::State & st) { BM_replace(st, replace_type::name); } \
-  BENCHMARK_REGISTER_F(StringReplace, name)                         \
-    ->Apply(generate_bench_args)                                    \
-    ->UseManualTime()                                               \
-    ->Unit(benchmark::kMillisecond);
-
-STRINGS_BENCHMARK_DEFINE(scalar)
-STRINGS_BENCHMARK_DEFINE(slice)
-STRINGS_BENCHMARK_DEFINE(multi)
+NVBENCH_BENCH(bench_replace)
+  .set_name("replace")
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_string_axis("api", {"scalar", "multi", "slice"});
