@@ -149,7 +149,13 @@ def task_graph(_ir: IR, config: GPUEngine) -> tuple[MutableMapping[str, Any], st
 
 def evaluate_dask(ir: IR, config: GPUEngine) -> DataFrame:
     """Evaluate an IR graph with Dask."""
-    from dask import get
+    from dask import get as _get
+    from distributed import get_client
+
+    try:
+        get = get_client().get
+    except ValueError:
+        get = _get
 
     graph, key = task_graph(ir, config)
     return get(graph, key)
