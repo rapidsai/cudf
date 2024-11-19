@@ -26,8 +26,8 @@ include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 CPMFindPackage(
   NAME cudf
   FIND_PACKAGE_ARGUMENTS "PATHS ${cudf_ROOT} ${cudf_ROOT}/latest" GIT_REPOSITORY
-                         https://github.com/rapidsai/cudf
-  GIT_TAG ${CUDF_TAG}
+                         https://github.com/kingcrimsontianyu/cudf
+  GIT_TAG "orc-debug"
   GIT_SHALLOW
     TRUE
     SOURCE_SUBDIR
