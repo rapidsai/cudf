@@ -26,14 +26,14 @@
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-// constexpr size_t data_size         = 512 << 20;
+constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 void json_read_common(cuio_source_sink_pair& source_sink,
                       cudf::size_type num_rows_to_read,
                       nvbench::state& state,
                       cudf::io::compression_type comptype = cudf::io::compression_type::NONE,
-                      size_t datasize                     = 512 << 20)
+                      size_t datasize                     = data_size)
 {
   cudf::io::json_reader_options read_opts =
     cudf::io::json_reader_options::builder(source_sink.make_source_info()).compression(comptype);
@@ -63,7 +63,7 @@ cudf::size_type json_write_bm_data(
   cudf::io::sink_info sink,
   std::vector<cudf::type_id> const& dtypes,
   cudf::io::compression_type comptype = cudf::io::compression_type::NONE,
-  size_t datasize                     = 512 << 20)
+  size_t datasize                     = data_size)
 {
   auto const tbl = create_random_table(
     cycle_dtypes(dtypes, num_cols), table_size_bytes{datasize}, data_profile_builder());
@@ -99,7 +99,7 @@ template <cudf::io::compression_type comptype, io_type IO>
 void BM_json_read_compressed_io(
   nvbench::state& state, nvbench::type_list<nvbench::enum_type<comptype>, nvbench::enum_type<IO>>)
 {
-  size_t const datasize = state.get_int64("data_size");
+  size_t const data_size = state.get_int64("data_size");
   cuio_source_sink_pair source_sink(IO);
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
@@ -110,7 +110,7 @@ void BM_json_read_compressed_io(
                                          static_cast<int32_t>(data_type::LIST),
                                          static_cast<int32_t>(data_type::STRUCT)});
   auto const num_rows =
-    json_write_bm_data(source_sink.make_sink_info(), d_type, comptype, datasize);
+    json_write_bm_data(source_sink.make_sink_info(), d_type, comptype, data_size);
 
   json_read_common(source_sink, num_rows, state, comptype);
 }
