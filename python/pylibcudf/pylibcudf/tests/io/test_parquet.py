@@ -140,9 +140,9 @@ def test_read_parquet_filters(
     [None, [plc.io.types.PartitionInfo(0, 10)]],
 )
 @pytest.mark.parametrize("column_chunks_file_paths", [None, ["tmp.parquet"]])
-@pytest.mark.parametrize("row_group_size_bytes", [None, 100])
+@pytest.mark.parametrize("row_group_size_bytes", [None, 1024])
 @pytest.mark.parametrize("row_group_size_rows", [None, 1])
-@pytest.mark.parametrize("max_page_size_bytes", [None, 100])
+@pytest.mark.parametrize("max_page_size_bytes", [None, 1024])
 @pytest.mark.parametrize("max_page_size_rows", [None, 1])
 @pytest.mark.parametrize("max_dictionary_size", [None, 100])
 def test_write_parquet(
