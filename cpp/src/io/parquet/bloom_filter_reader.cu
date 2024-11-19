@@ -18,14 +18,30 @@
 #include "io/parquet/parquet.hpp"
 #include "reader_impl_helpers.hpp"
 
+#include <cudf/ast/detail/expression_transformer.hpp>
+#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/expressions.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
+#include <cuco/bloom_filter_policy.cuh>
+#include <cuco/bloom_filter_ref.cuh>
+#include <cuco/hash_functions.cuh>
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
 
 #include <future>
+#include <iterator>
 #include <numeric>
 #include <optional>
 
@@ -102,6 +118,37 @@ std::future<void> read_bloom_filters_async(
         if (initial_read_size >= bloom_filter_header_size + bitset_size) {
           bloom_filter_data[chunk] =
             rmm::device_buffer(buffer->data() + bloom_filter_header_size, bitset_size, stream);
+
+          /* MH: Remove this
+          using word_type = uint32_t;
+
+          thrust::for_each(rmm::exec_policy(stream),
+                           thrust::make_counting_iterator(0),
+                           thrust::make_counting_iterator(1),
+                           [words = reinterpret_cast<word_type*>(bloom_filter_data[chunk].data()),
+                            num_blocks = bloom_filter_data[chunk].size() / sizeof(uint32_t),
+                            chunk      = chunk,
+                            stream     = stream] __device__(auto idx) {
+                             using key_type = cuda::std::string;
+                             using policy_type =
+                               cuco::bloom_filter_policy<cuco::xxhash_64<key_type>, std::uint32_t,
+          8>;
+                             // using arrow_policy_type = cuco::arrow_filter_policy<key_type>;
+                             cuco::bloom_filter_ref<key_type,
+                                                    cuco::extent<std::size_t>,
+                                                    cuco::thread_scope_device,
+                                                    policy_type>
+                               filter{words, size_t{num_blocks}, {}, {8}};
+                             // cuda::std::string key{"third-136666"};
+                             // filter.add("third-136666");
+
+                             cuco::xxhash_64<key_type> hasher{};
+                             cuda::std::array<char, 13> val{"third-136666"};
+                             auto hash =
+          hasher.compute_hash(reinterpret_cast<std::byte*>(val.data()), val.size()); if
+          (filter.contains(hash)) { printf("Filter chunk: %lu contains key: third-136666\n", chunk);
+                             }
+                           });*/
         }
         // Read the bitset from datasource.
         else {
@@ -123,15 +170,157 @@ std::future<void> read_bloom_filters_async(
         }
       }
     });
+
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
     for (auto& task : read_tasks) {
       task.wait();
     }
   };
+
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
 }
 
+/**
+ * @brief Collects column indices with an equality predicate in the AST expression.
+ * This is used in row group filtering based on bloom filters.
+ */
+class equality_predicate_converter : public ast::detail::expression_transformer {
+ public:
+  equality_predicate_converter(ast::expression const& expr, size_type const& num_columns)
+    : _num_columns{num_columns}
+  {
+    expr.accept(*this);
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
+  {
+    _equality_expr = std::reference_wrapper<ast::expression const>(expr);
+    return expr;
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
+  {
+    CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
+                 "Equality AST supports only left table");
+    CUDF_EXPECTS(expr.get_column_index() < _num_columns,
+                 "Column index cannot be more than number of columns in the table");
+    _equality_expr = std::reference_wrapper<ast::expression const>(expr);
+    return expr;
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override
+  {
+    CUDF_FAIL("Column name reference is not supported in equality AST");
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
+  {
+    using cudf::ast::ast_operator;
+    auto const operands = expr.get_operands();
+    auto const op       = expr.get_operator();
+
+    if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
+      // First operand should be column reference, second should be literal.
+      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
+                   "Only binary operations are supported on column reference");
+      CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+                   "Second operand of binary operation with column reference must be a literal");
+      v->accept(*this);
+      if (op == ast_operator::EQUAL) { equality_col_idx.emplace_back(v->get_column_index()); }
+    } else {
+      auto new_operands = visit_operands(operands);
+      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
+        _operators.emplace_back(op, new_operands.front(), new_operands.back());
+      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
+        _operators.emplace_back(op, new_operands.front());
+      }
+    }
+    _equality_expr = std::reference_wrapper<ast::expression const>(_operators.back());
+    return std::reference_wrapper<ast::expression const>(_operators.back());
+  }
+
+  /**
+   * @brief Returns a list of column indices with an equality predicate in the AST expression.
+   *
+   * @return List of column indices
+   */
+  [[nodiscard]] std::vector<cudf::size_type> get_equality_col_idx() const
+  {
+    return equality_col_idx;
+  }
+
+ private:
+  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
+  {
+    std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
+    for (auto const& operand : operands) {
+      auto const new_operand = operand.get().accept(*this);
+      transformed_operands.push_back(new_operand);
+    }
+    return transformed_operands;
+  }
+  std::optional<std::reference_wrapper<ast::expression const>> _equality_expr;
+  std::vector<cudf::size_type> equality_col_idx;
+  size_type _num_columns;
+  std::list<ast::column_reference> _col_ref;
+  std::list<ast::operation> _operators;
+};
+
 }  // namespace
+
+std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
+  host_span<std::unique_ptr<datasource> const> sources,
+  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
+  std::reference_wrapper<ast::expression const> filter,
+  rmm::cuda_stream_view stream) const
+{
+  auto const num_cols = output_dtypes.size();
+  CUDF_EXPECTS(output_dtypes.size() == output_column_schemas.size(),
+               "Mismatched size between lists of output column dtypes and output column schema");
+  auto mr = cudf::get_current_device_resource_ref();
+  std::vector<std::unique_ptr<column>> cols;
+  // MH: How do I test for nested or non-comparable columns here?
+  cols.emplace_back(cudf::make_numeric_column(
+    data_type{cudf::type_id::INT32}, num_cols, rmm::device_buffer{}, 0, stream, mr));
+
+  auto mutable_col_idx = cols.back()->mutable_view();
+
+  thrust::sequence(rmm::exec_policy(stream),
+                   mutable_col_idx.begin<size_type>(),
+                   mutable_col_idx.end<size_type>(),
+                   0);
+
+  auto equality_table = cudf::table(std::move(cols));
+
+  // Converts AST to EqualityAST with reference to min, max columns in above `stats_table`.
+  equality_predicate_converter equality_expr{filter.get(), static_cast<size_type>(num_cols)};
+  auto equality_col_schemas = equality_expr.get_equality_col_idx();
+
+  // Convert column indices to column schema indices
+  std::for_each(equality_col_schemas.begin(), equality_col_schemas.end(), [&](auto& col_idx) {
+    col_idx = output_column_schemas[col_idx];
+  });
+
+  std::ignore = read_bloom_filters(sources, row_group_indices, equality_col_schemas, stream);
+
+  return std::nullopt;
+}
 
 std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   host_span<std::unique_ptr<datasource> const> sources,

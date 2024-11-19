@@ -340,6 +340,26 @@ class aggregate_reader_metadata {
     rmm::cuda_stream_view stream) const;
 
   /**
+   * @brief Filters the row groups using bloom filters
+   *
+   * @param sources Dataset sources
+   * @param row_group_indices Lists of row groups to read, one per source
+   * @param output_dtypes Datatypes of of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter AST expression to filter row groups based on Column chunk statistics
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices, if any is filtered.
+   */
+  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
+    host_span<std::unique_ptr<datasource> const> sources,
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
+
+  /**
    * @brief Filters and reduces down to a selection of row groups
    *
    * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
