@@ -458,7 +458,10 @@ def write_csv(
     CsvWriterOptions options
 ):
     """
-    Writes a :py:class:`~pylibcudf.io.types.TableWithMetadata` to CSV format.
+    Write to CSV format.
+
+    The table to write, output paths, and options are encapsulated
+    by the `options` object.
 
     For details, see :cpp:func:`write_csv`.
 
