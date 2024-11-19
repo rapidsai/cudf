@@ -12,6 +12,7 @@ DESELECTED_TESTS=(
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort[True]" # relies on polars built in debug mode
     "tests/unit/test_cpu_check.py::test_check_cpu_flags_skipped_no_flags" # Mock library error
     "tests/docs/test_user_guide.py" # No dot binary in CI image
+    "tests/unit/test_polars_import.py::test_fork_safety" # test started to hang in polars-1.14
 )
 
 if [[ $(arch) == "aarch64" ]]; then
