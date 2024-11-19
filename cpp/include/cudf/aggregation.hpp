@@ -24,6 +24,9 @@
 
 #include <functional>
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <variant>
 #include <vector>
 
 /**
@@ -87,44 +90,44 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,              ///< sum reduction
-    PRODUCT,          ///< product reduction
-    MIN,              ///< min reduction
-    MAX,              ///< max reduction
-    COUNT_VALID,      ///< count number of valid elements
-    COUNT_ALL,        ///< count number of elements
-    ANY,              ///< any reduction
-    ALL,              ///< all reduction
-    SUM_OF_SQUARES,   ///< sum of squares reduction
-    MEAN,             ///< arithmetic mean reduction
-    M2,               ///< sum of squares of differences from the mean
-    VARIANCE,         ///< variance
-    STD,              ///< standard deviation
-    MEDIAN,           ///< median reduction
-    QUANTILE,         ///< compute specified quantile(s)
-    ARGMAX,           ///< Index of max element
-    ARGMIN,           ///< Index of min element
-    NUNIQUE,          ///< count number of unique elements
-    NTH_ELEMENT,      ///< get the nth element
-    ROW_NUMBER,       ///< get row-number of current index (relative to rolling window)
-    EWMA,             ///< get exponential weighted moving average at current index
-    RANK,             ///< get rank of current index
-    COLLECT_LIST,     ///< collect values into a list
-    COLLECT_SET,      ///< collect values into a list without duplicate entries
-    LEAD,             ///< window function, accesses row at specified offset following current row
-    LAG,              ///< window function, accesses row at specified offset preceding current row
-    PTX,              ///< PTX  UDF based reduction
-    CUDA,             ///< CUDA UDF based reduction
-    MERGE_LISTS,      ///< merge multiple lists values into one list
-    MERGE_SETS,       ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,         ///< merge partial values of M2 aggregation,
-    COVARIANCE,       ///< covariance between two sets of elements
-    CORRELATION,      ///< correlation between two sets of elements
-    TDIGEST,          ///< create a tdigest from a set of input values
-    MERGE_TDIGEST,    ///< create a tdigest by merging multiple tdigests together
-    HISTOGRAM,        ///< compute frequency of each element
-    MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation
-    HOST_UDF          ///< host side UDF aggregation
+    SUM,             ///< sum reduction
+    PRODUCT,         ///< product reduction
+    MIN,             ///< min reduction
+    MAX,             ///< max reduction
+    COUNT_VALID,     ///< count number of valid elements
+    COUNT_ALL,       ///< count number of elements
+    ANY,             ///< any reduction
+    ALL,             ///< all reduction
+    SUM_OF_SQUARES,  ///< sum of squares reduction
+    MEAN,            ///< arithmetic mean reduction
+    M2,              ///< sum of squares of differences from the mean
+    VARIANCE,        ///< variance
+    STD,             ///< standard deviation
+    MEDIAN,          ///< median reduction
+    QUANTILE,        ///< compute specified quantile(s)
+    ARGMAX,          ///< Index of max element
+    ARGMIN,          ///< Index of min element
+    NUNIQUE,         ///< count number of unique elements
+    NTH_ELEMENT,     ///< get the nth element
+    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    EWMA,            ///< get exponential weighted moving average at current index
+    RANK,            ///< get rank of current index
+    COLLECT_LIST,    ///< collect values into a list
+    COLLECT_SET,     ///< collect values into a list without duplicate entries
+    LEAD,            ///< window function, accesses row at specified offset following current row
+    LAG,             ///< window function, accesses row at specified offset preceding current row
+    PTX,             ///< PTX  based UDF aggregation
+    CUDA,            ///< CUDA based UDF aggregation
+    HOST_UDF,        ///< host based UDF aggregation
+    MERGE_LISTS,     ///< merge multiple lists values into one list
+    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2,        ///< merge partial values of M2 aggregation,
+    COVARIANCE,      ///< covariance between two sets of elements
+    CORRELATION,     ///< correlation between two sets of elements
+    TDIGEST,         ///< create a tdigest from a set of input values
+    MERGE_TDIGEST,   ///< create a tdigest by merging multiple tdigests together
+    HISTOGRAM,       ///< compute frequency of each element
+    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation
   };
 
   aggregation() = delete;
@@ -604,6 +607,97 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            data_type output_type);
 
 /**
+ * @brief The base class for HOST_UDF implementation.
+ *
+ * The users need to derive from this base class, defining their own implementation for a UDF
+ * function as well as all the required data from libcudf to perform its operations.
+ */
+struct host_udf_base {
+  host_udf_base()          = default;
+  virtual ~host_udf_base() = default;
+
+  /**
+   * @brief Define the data that may be needed for computing the aggregation.
+   *
+   * Each derived HOST_UDF class may need a different set of intermediate aggregation data (such as
+   * sorted values, sorted keys, group offsets etc). It is inefficient to evaluate and pass down all
+   * these data at once. As such, the derived HOST_UDF class will define a set of data that it
+   * needs, and only such requested data will be evaluated.
+   */
+  // TODO: add more
+  enum class input_kind { OUTPUT_DTYPE, GROUPED_VALUES, GROUPED_OFFSETS, GROUPED_LABELS };
+
+  /**
+   * @brief Return a set of data kind that is needed for computing the aggregation on the derived
+   * HOST_UDF class.
+   *
+   * This set is used by libcudf to determine which data need to be evaluated and pass down to the
+   * instance of the derived HOST_UDF class at runtime.
+   *
+   * @return A set of `input_kind` enum.
+   */
+  [[nodiscard]] virtual std::unordered_set<input_kind> get_required_data() const = 0;
+
+  /**
+   * Aggregation data that is needed for performing UDF computation.
+   */
+  using input_data = std::variant<column_view, device_span<size_type const>, size_type, data_type>;
+
+  /**
+   * Output type of the UDF class. It can be either a scalar (for reduction) or a column
+   * (for groupby) aggregations.
+   */
+  using output_type = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
+
+  /**
+   * @brief Perform UDF aggregation computation.
+   *
+   * @param agg_data The aggregation data needed for performing all computation
+   * @param stream The CUDA stream to use for any kernel launches
+   * @param mr Device memory resource to use for any allocations
+   * @return The computed cudf column as the result of UDF aggregation
+   */
+  [[nodiscard]] virtual output_type operator()(
+    std::unordered_map<input_kind, input_data> const& agg_data,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) = 0;
+
+  /**
+   * @brief Compares two HOST_UDF objects for equality.
+   *
+   * @param other The other HOST_UDF object to compare with
+   * @return True if the two object are equal
+   */
+  [[nodiscard]] virtual bool is_equal(host_udf_base const& other) const = 0;
+
+  /**
+   * @brief Computes the hash value of the HOST_UDF object.
+   *
+   * @return The hash value of the object
+   */
+  [[nodiscard]] virtual size_t do_hash() const = 0;
+
+  /**
+   * @pure @brief Clones the HOST_UDF object.
+   *
+   * A class derived from `host_udf_base` should not store too much data such that its instances
+   * remain lightweight for efficient cloning.
+   *
+   * @return A copy of the HOST_UDF object
+   */
+  [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
+};
+
+/**
+ * @brief Factory to create a HOST_UDF aggregation
+ *
+ * @param host_udf An instance of a class derived from `host_udf_base` to perform UDF aggregation
+ * @return A HOST_UDF aggregation object
+ */
+template <typename Base>
+std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base> host_udf);
+
+/**
  * @brief Factory to create a MERGE_LISTS aggregation.
  *
  * Given a lists column, this aggregation merges all the lists corresponding to the same key value
@@ -773,29 +867,6 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
  */
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
-
-// We should pass as many parameters as possible to this function pointer,
-// thus the UDF can have anything it needs to perform its operations.
-// Currently (modify if needed):
-//     column_view const& input,
-//     cudf::device_span<size_type const> group_offsets,
-//     cudf::device_span<size_type const> group_labels,
-//     size_type num_groups,
-//     int max_centroids,
-//     rmm::cuda_stream_view stream,
-//     rmm::device_async_resource_ref mr
-using host_udf_func_type = std::function<std::unique_ptr<column>(column_view const&,
-                                                                 device_span<size_type const>,
-                                                                 device_span<size_type const>,
-                                                                 size_type,
-                                                                 rmm::cuda_stream_view,
-                                                                 rmm::device_async_resource_ref)>;
-/**
- * @brief make_host_udf_aggregation
- * @return
- */
-template <typename Base>
-std::unique_ptr<Base> make_host_udf_aggregation(host_udf_func_type udf_func_);
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
