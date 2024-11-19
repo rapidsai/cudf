@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
-from cudf.core.buffer import Buffer
+from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
@@ -145,9 +147,15 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             indices = libcudf.sort.order_by(
                 [self], [True], "first", stable=True
             ).slice(self.null_count, len(self))
-            result = libcudf.quantiles.quantile(
-                self, q, interpolation, indices, exact
-            )
+            with acquire_spill_lock():
+                plc_column = plc.quantiles.quantile(
+                    self.to_pylibcudf(mode="read"),
+                    q,
+                    plc.types.Interpolation[interpolation.upper()],
+                    indices.to_pylibcudf(mode="read"),
+                    exact,
+                )
+                result = type(self).from_pylibcudf(plc_column)  # type: ignore[assignment]
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:

@@ -364,13 +364,19 @@ def min_column_type(x, expected_type):
     if x.null_count == len(x):
         return x.dtype
 
-    if x.dtype.kind == "f":
-        return get_min_float_dtype(x)
-
-    elif cudf.dtype(expected_type).kind in "iu":
-        max_bound_dtype = np.min_scalar_type(x.max())
-        min_bound_dtype = np.min_scalar_type(x.min())
+    min_value, max_value = x.min(), x.max()
+    either_is_inf = np.isinf(min_value) or np.isinf(max_value)
+    expected_type = cudf.dtype(expected_type)
+    if not either_is_inf and expected_type.kind in "i":
+        max_bound_dtype = min_signed_type(max_value)
+        min_bound_dtype = min_signed_type(min_value)
         result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+    elif not either_is_inf and expected_type.kind in "u":
+        max_bound_dtype = min_unsigned_type(max_value)
+        min_bound_dtype = min_unsigned_type(min_value)
+        result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+    elif x.dtype.kind == "f":
+        return get_min_float_dtype(x)
     else:
         result_type = x.dtype
 
