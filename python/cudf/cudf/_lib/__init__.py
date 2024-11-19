@@ -5,7 +5,6 @@ from . import (
     binaryop,
     copying,
     csv,
-    datetime,
     filling,
     groupby,
     interop,
