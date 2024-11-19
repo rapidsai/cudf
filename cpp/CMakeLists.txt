@@ -809,7 +809,7 @@ set_property(
   src/io/orc/stripe_init.cu
   src/io/orc/writer_impl.cu
   APPEND
-  PROPERTY COMPILE_OPTIONS "-g;-G"
+  PROPERTY COMPILE_OPTIONS "-g;-G;-E"
 )
 
 set_property(
