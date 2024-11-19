@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Parallelism control
-PARALLEL_LEVEL=${PARALLEL_LEVEL:-8}
+PARALLEL_LEVEL=${PARALLEL_LEVEL:-16}
 # Installation disabled by default
 INSTALL_EXAMPLES=false
 
