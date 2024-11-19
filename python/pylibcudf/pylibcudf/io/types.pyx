@@ -512,5 +512,5 @@ cdef class TableInputMetadata:
     table : Table
         The Table to construct metadata for
     """
-    def __cinit__(self, Table table):
+    def __init__(self, Table table):
         self.c_obj = table_input_metadata(table.view())

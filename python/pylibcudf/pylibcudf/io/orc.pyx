@@ -353,8 +353,10 @@ cdef class OrcWriterOptionsBuilder:
         self.c_obj.enable_statistics(val)
         return self
 
-    cpdef OrcWriterOptionsBuilder key_value_metadata(self, map[string, string] kvm):
-        self.c_obj.key_value_metadata(kvm)
+    cpdef OrcWriterOptionsBuilder key_value_metadata(self, dict kvm):
+        self.c_obj.key_value_metadata(
+            {key.encode(): value.encode() for key, value in kvm.items()}
+        )
         return self
 
     cpdef OrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):
@@ -426,9 +428,11 @@ cdef class ChunkedOrcWriterOptionsBuilder:
 
     cpdef ChunkedOrcWriterOptionsBuilder key_value_metadata(
         self,
-        map[string, string] kvm
+        dict kvm
     ):
-        self.c_obj.key_value_metadata(kvm)
+        self.c_obj.key_value_metadata(
+            {key.encode(): value.encode() for key, value in kvm.items()}
+        )
         return self
 
     cpdef ChunkedOrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):

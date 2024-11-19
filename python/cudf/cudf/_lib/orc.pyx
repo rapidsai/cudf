@@ -4,7 +4,6 @@ from libc.stdint cimport int64_t
 from libcpp cimport bool, int
 from libcpp.map cimport map
 from libcpp.string cimport string
-from libcpp.utility cimport move
 from libcpp.vector cimport vector
 import itertools
 from collections import OrderedDict
@@ -236,10 +235,8 @@ def write_orc(
     --------
     cudf.read_orc
     """
-    cdef map[string, string] user_data
-    user_data[str.encode("pandas")] = str.encode(generate_pandas_metadata(
-        table, index)
-    )
+    user_data = {}
+    user_data["pandas"] = generate_pandas_metadata(table, index)
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
@@ -287,7 +284,7 @@ def write_orc(
             plc.io.SinkInfo([path_or_buf]), plc_table
         )
         .metadata(tbl_meta)
-        .key_value_metadata(move(user_data))
+        .key_value_metadata(user_data)
         .compression(_get_comp_type(compression))
         .enable_statistics(_get_orc_stat_freq(statistics))
         .build()
@@ -438,14 +435,14 @@ cdef class ORCWriter:
                 and (name in self.cols_as_map_type),
             )
 
-        cdef map[string, string] user_data
+        user_data = {}
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+        user_data["pandas"] = pandas_metadata
 
         options = (
             plc.io.orc.ChunkedOrcWriterOptions.builder(self.sink)
             .metadata(self.tbl_meta)
-            .key_value_metadata(move(user_data))
+            .key_value_metadata(user_data)
             .compression(_get_comp_type(self.compression))
             .enable_statistics(_get_orc_stat_freq(self.statistics))
             .build()
