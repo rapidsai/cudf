@@ -398,6 +398,7 @@ ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
+ConfigureNVBench(COMP_DECOMP_JSON_NVBENCH io/comp/comp-decomp.cpp)
 ConfigureNVBench(MULTIBYTE_SPLIT_NVBENCH io/text/multibyte_split.cpp)
 target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
 
