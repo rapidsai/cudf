@@ -2,7 +2,6 @@
 import numpy as np
 
 from . import (
-    avro,
     binaryop,
     concat,
     copying,

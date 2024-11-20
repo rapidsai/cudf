@@ -6,6 +6,7 @@ import functools
 import os
 import traceback
 import warnings
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -403,3 +404,40 @@ def _all_bools_with_nulls(lhs, rhs, bool_fill_value):
     if result_mask is not None:
         result_col = result_col.set_mask(result_mask.as_mask())
     return result_col
+
+
+def _datetime_timedelta_find_and_replace(
+    original_column: "cudf.core.column.DatetimeColumn"
+    | "cudf.core.column.TimeDeltaColumn",
+    to_replace: Any,
+    replacement: Any,
+    all_nan: bool = False,
+) -> "cudf.core.column.DatetimeColumn" | "cudf.core.column.TimeDeltaColumn":
+    """
+    This is an internal utility to find and replace values in a datetime or
+    timedelta column. It is used by the `find_and_replace` method of
+    `DatetimeColumn` and `TimeDeltaColumn`. Centralizing the code in a single
+    as opposed to duplicating it in both classes.
+    """
+    original_col_class = type(original_column)
+    if not isinstance(to_replace, original_col_class):
+        to_replace = cudf.core.column.as_column(to_replace)
+        if to_replace.can_cast_safely(original_column.dtype):
+            to_replace = to_replace.astype(original_column.dtype)
+    if not isinstance(replacement, original_col_class):
+        replacement = cudf.core.column.as_column(replacement)
+        if replacement.can_cast_safely(original_column.dtype):
+            replacement = replacement.astype(original_column.dtype)
+    if isinstance(to_replace, original_col_class):
+        to_replace = to_replace.as_numerical_column(dtype=np.dtype("int64"))
+    if isinstance(replacement, original_col_class):
+        replacement = replacement.as_numerical_column(dtype=np.dtype("int64"))
+    try:
+        result_col = (
+            original_column.as_numerical_column(dtype=np.dtype("int64"))
+            .find_and_replace(to_replace, replacement, all_nan)
+            .astype(original_column.dtype)
+        )
+    except TypeError:
+        result_col = original_column.copy(deep=True)
+    return result_col  # type: ignore
