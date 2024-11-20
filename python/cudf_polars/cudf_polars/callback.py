@@ -176,7 +176,7 @@ def validate_config_options(config: dict) -> None:
         raise ValueError(
             f"Engine configuration contains unsupported settings: {unsupported}"
         )
-    assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
+    assert {"blocksize", "chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
         config.get("parquet_options", {})
     )
 
