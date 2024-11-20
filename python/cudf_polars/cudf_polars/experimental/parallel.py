@@ -8,7 +8,16 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import NamedExpr
-from cudf_polars.dsl.ir import GroupBy, HStack, Join, Scan, Select, Union
+from cudf_polars.dsl.ir import (
+    Filter,
+    GroupBy,
+    HStack,
+    Join,
+    Projection,
+    Scan,
+    Select,
+    Union,
+)
 from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 
 if TYPE_CHECKING:
@@ -225,11 +234,47 @@ def _(ir: Select, rec) -> IR:
 ##
 
 
-@lower_ir_node.register(HStack)
-def _(ir: HStack, rec) -> IR:
-    import cudf_polars.experimental.select as _select
+@_ir_parts_info.register(HStack)
+def _(ir: HStack) -> PartitionInfo:
+    return _partitionwise_ir_parts_info(ir)
 
-    return _select.lower_hstack_node(ir, rec)
+
+@generate_ir_tasks.register(HStack)
+def _(ir: HStack, config: GPUEngine) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir, config)
+
+
+##
+## Filter
+##
+
+
+## TODO: Can filter expressions include aggregations?
+
+
+@_ir_parts_info.register(Filter)
+def _(ir: Filter) -> PartitionInfo:
+    return _partitionwise_ir_parts_info(ir)
+
+
+@generate_ir_tasks.register(Filter)
+def _(ir: Filter, config: GPUEngine) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir, config)
+
+
+##
+## Projection
+##
+
+
+@_ir_parts_info.register(Projection)
+def _(ir: Projection) -> PartitionInfo:
+    return _partitionwise_ir_parts_info(ir)
+
+
+@generate_ir_tasks.register(Projection)
+def _(ir: Projection, config: GPUEngine) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir, config)
 
 
 ##

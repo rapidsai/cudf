@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.ir import HStack, Select
+from cudf_polars.dsl.ir import Select
 from cudf_polars.experimental.parallel import (
     _ir_parts_info,
     _partitionwise_ir_parts_info,
@@ -37,31 +37,6 @@ _PARTWISE = (
     "BinOp",
     "UnaryFunction",
 )
-
-
-class PartwiseHStack(HStack):
-    """Partitionwise HStack operation."""
-
-
-def lower_hstack_node(ir: HStack, rec) -> IR:
-    """Rewrite an HStack node with proper partitioning."""
-    children = [rec(child) for child in ir.children]
-    return PartwiseHStack(
-        ir.schema,
-        ir.columns,
-        ir.should_broadcast,
-        *children,
-    )
-
-
-@_ir_parts_info.register(PartwiseHStack)
-def _(ir: PartwiseHStack) -> PartitionInfo:
-    return _partitionwise_ir_parts_info(ir)
-
-
-@generate_ir_tasks.register(PartwiseHStack)
-def _(ir: PartwiseHStack, config: GPUEngine) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir, config)
 
 
 class PartwiseSelect(Select):

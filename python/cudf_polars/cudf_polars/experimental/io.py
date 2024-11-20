@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import Scan
@@ -24,6 +25,11 @@ if TYPE_CHECKING:
 
 class ParFileScan(Scan):
     """Parallel scan over files."""
+
+    @property
+    def _stride(self) -> int:
+        # TODO: Use file statistics
+        return 1
 
 
 def lower_scan_node(ir: Scan, rec) -> IR:
@@ -52,12 +58,15 @@ def lower_scan_node(ir: Scan, rec) -> IR:
 
 @_ir_parts_info.register(ParFileScan)
 def _(ir: ParFileScan) -> PartitionInfo:
-    return PartitionInfo(count=len(ir.paths))
+    count = math.ceil(len(ir.paths) / ir._stride)
+    return PartitionInfo(count=count)
 
 
 @generate_ir_tasks.register(ParFileScan)
 def _(ir: ParFileScan, config: GPUEngine) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
+    stride = ir._stride
+    paths = list(ir.paths)
     return {
         (key_name, i): (
             ir.do_evaluate,
@@ -65,12 +74,12 @@ def _(ir: ParFileScan, config: GPUEngine) -> MutableMapping[Any, Any]:
             ir.schema,
             ir.typ,
             ir.reader_options,
-            [path],
+            paths[j : j + stride],
             ir.with_columns,
             ir.skip_rows,
             ir.n_rows,
             ir.row_index,
             ir.predicate,
         )
-        for i, path in enumerate(ir.paths)
+        for i, j in enumerate(range(0, len(paths), stride))
     }
