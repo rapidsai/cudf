@@ -39,3 +39,9 @@ Launch on Google Colab
    :target: https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb
 
    Try out the GPU engine for Polars in a free GPU notebook environment. Sign in with your Google account and `launch the demo on Colab <https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb>`__.
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Engine Config Options:
+
+   engine_options
