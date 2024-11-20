@@ -89,7 +89,7 @@ struct expression_device_view {
   device_span<detail::device_data_reference const> data_references;
   device_span<generic_scalar_device_view const> literals;
   device_span<ast_operator const> operators;
-  device_span<int8_t const> operator_arities;
+  device_span<cudf::size_type const> operator_arities;
   device_span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
 };
@@ -284,8 +284,8 @@ class expression_parser {
     device_expression_data.operators = device_span<ast_operator const>(
       reinterpret_cast<ast_operator const*>(device_data_buffer_ptr + buffer_offsets[2]),
       _operators.size());
-    device_expression_data.operator_arities = device_span<int8_t const>(
-      reinterpret_cast<int8_t const*>(device_data_buffer_ptr + buffer_offsets[3]),
+    device_expression_data.operator_arities = device_span<cudf::size_type const>(
+      reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
       _operators.size());
     device_expression_data.operator_source_indices = device_span<cudf::size_type const>(
       reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[4]),
@@ -332,7 +332,7 @@ class expression_parser {
   bool _has_nulls;
   std::vector<detail::device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
-  std::vector<int8_t> _operator_arities;
+  std::vector<cudf::size_type> _operator_arities;
   std::vector<cudf::size_type> _operator_source_indices;
   std::vector<generic_scalar_device_view> _literals;
 };
