@@ -24,16 +24,16 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
-// run on most GPUs, but large enough to allow highest throughput
-constexpr size_t data_size         = 512 << 20;
+// Default size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks
+// to run on most GPUs, but large enough to allow highest throughput
+constexpr size_t default_data_size = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 void json_read_common(cuio_source_sink_pair& source_sink,
                       cudf::size_type num_rows_to_read,
                       nvbench::state& state,
                       cudf::io::compression_type comptype = cudf::io::compression_type::NONE,
-                      size_t datasize                     = data_size)
+                      size_t data_size                    = default_data_size)
 {
   cudf::io::json_reader_options read_opts =
     cudf::io::json_reader_options::builder(source_sink.make_source_info()).compression(comptype);
@@ -53,7 +53,7 @@ void json_read_common(cuio_source_sink_pair& source_sink,
     });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(datasize) / time, "bytes_per_second");
+  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
@@ -63,10 +63,10 @@ cudf::size_type json_write_bm_data(
   cudf::io::sink_info sink,
   std::vector<cudf::type_id> const& dtypes,
   cudf::io::compression_type comptype = cudf::io::compression_type::NONE,
-  size_t datasize                     = data_size)
+  size_t data_size                    = default_data_size)
 {
   auto const tbl = create_random_table(
-    cycle_dtypes(dtypes, num_cols), table_size_bytes{datasize}, data_profile_builder());
+    cycle_dtypes(dtypes, num_cols), table_size_bytes{data_size}, data_profile_builder());
   auto const view = tbl->view();
 
   cudf::io::json_writer_options const write_opts =
@@ -112,7 +112,7 @@ void BM_json_read_compressed_io(
   auto const num_rows =
     json_write_bm_data(source_sink.make_sink_info(), d_type, comptype, data_size);
 
-  json_read_common(source_sink, num_rows, state, comptype);
+  json_read_common(source_sink, num_rows, state, comptype, data_size);
 }
 
 template <data_type DataType, io_type IO>
