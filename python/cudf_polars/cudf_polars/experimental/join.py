@@ -18,8 +18,6 @@ from cudf_polars.experimental.parallel import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from polars import GPUEngine
-
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import PartitionInfo
 
@@ -83,7 +81,7 @@ def _(ir: RightBroadcastJoin) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(BroadcastJoin)
-def _(ir: BroadcastJoin, config: GPUEngine) -> MutableMapping[Any, Any]:
+def _(ir: BroadcastJoin) -> MutableMapping[Any, Any]:
     left, right = ir.children
     bcast_side = "right" if isinstance(ir, RightBroadcastJoin) else "left"
     left_name = get_key_name(left)
@@ -109,7 +107,6 @@ def _(ir: BroadcastJoin, config: GPUEngine) -> MutableMapping[Any, Any]:
                 key = sub_names[-1]
             graph[key] = (
                 ir.do_evaluate,
-                config,
                 ir.left_on,
                 ir.right_on,
                 ir.options,

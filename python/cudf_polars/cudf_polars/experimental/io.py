@@ -21,8 +21,6 @@ from cudf_polars.experimental.parallel import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from polars import GPUEngine
-
     from cudf_polars.dsl.ir import IR
 
 
@@ -96,6 +94,7 @@ def lower_scan_node(ir: Scan, rec) -> IR:
             ir.typ,
             ir.reader_options,
             ir.cloud_options,
+            ir.config_options,
             ir.paths,
             ir.with_columns,
             ir.skip_rows,
@@ -120,10 +119,10 @@ def _split_read(
     do_evaluate,
     split_index,
     total_splits,
-    config,
     schema,
     typ,
     reader_options,
+    config_options,
     paths,
     with_columns,
     skip_rows,
@@ -159,10 +158,10 @@ def _split_read(
         )
 
     return do_evaluate(
-        config,
         schema,
         typ,
         reader_options,
+        config_options,
         paths,
         with_columns,
         skip_rows,
@@ -173,7 +172,7 @@ def _split_read(
 
 
 @generate_ir_tasks.register(ParFileScan)
-def _(ir: ParFileScan, config: GPUEngine) -> MutableMapping[Any, Any]:
+def _(ir: ParFileScan) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
     split, stride = ir._plan
     paths = list(ir.paths)
@@ -187,10 +186,10 @@ def _(ir: ParFileScan, config: GPUEngine) -> MutableMapping[Any, Any]:
                     ir.do_evaluate,
                     sindex,
                     split,
-                    config,
                     ir.schema,
                     ir.typ,
                     ir.reader_options,
+                    ir.config_options,
                     [path],
                     ir.with_columns,
                     ir.skip_rows,
@@ -204,10 +203,10 @@ def _(ir: ParFileScan, config: GPUEngine) -> MutableMapping[Any, Any]:
         return {
             (key_name, i): (
                 ir.do_evaluate,
-                config,
                 ir.schema,
                 ir.typ,
                 ir.reader_options,
+                ir.config_options,
                 paths[j : j + stride],
                 ir.with_columns,
                 ir.skip_rows,

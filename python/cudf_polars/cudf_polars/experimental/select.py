@@ -17,8 +17,6 @@ from cudf_polars.experimental.parallel import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from polars import GPUEngine
-
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import PartitionInfo
 
@@ -71,5 +69,5 @@ def _(ir: PartwiseSelect) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(PartwiseSelect)
-def _(ir: PartwiseSelect, config: GPUEngine) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir, config)
+def _(ir: PartwiseSelect) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir)

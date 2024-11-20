@@ -133,7 +133,7 @@ def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     }
 
 
-def _partitionwise_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
+def _partitionwise_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     # Simple partitionwise behavior.
     child_names = []
     counts = []
@@ -150,7 +150,6 @@ def _partitionwise_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, An
     return {
         (key_name, i): (
             ir.do_evaluate,
-            config,
             *ir._non_child_args,
             *((child_name, i) for child_name in child_names),
         )
@@ -199,7 +198,7 @@ def evaluate_dask(ir: IR) -> DataFrame:
 
 def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
-    return Union.do_evaluate(None, None, *dfs)
+    return Union.do_evaluate(None, *dfs)
 
 
 ##
@@ -237,8 +236,8 @@ def _(ir: HStack) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(HStack)
-def _(ir: HStack, config: GPUEngine) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir, config)
+def _(ir: HStack) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir)
 
 
 ##
@@ -255,8 +254,8 @@ def _(ir: Filter) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(Filter)
-def _(ir: Filter, config: GPUEngine) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir, config)
+def _(ir: Filter) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir)
 
 
 ##
@@ -270,8 +269,8 @@ def _(ir: Projection) -> PartitionInfo:
 
 
 @generate_ir_tasks.register(Projection)
-def _(ir: Projection, config: GPUEngine) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir, config)
+def _(ir: Projection) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir)
 
 
 ##
