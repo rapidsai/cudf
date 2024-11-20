@@ -149,6 +149,7 @@ def set_memory_resource(
     at entry. If a memory resource is provided, it must be valid to
     use with the currently active device.
     """
+    previous = rmm.mr.get_current_device_resource()
     if mr is None:
         device: int = gpu.getDevice()
         rmm_mode = os.getenv("CUDF_POLARS_RMM_MODE", "managed_pool")
@@ -156,13 +157,11 @@ def set_memory_resource(
             managed_memory_is_supported = (
                 pylibcudf.utils._is_concurrent_managed_access_supported()
             )
-            previous = rmm.mr.get_current_device_resource()
             mr = enable_uvm(device)
             rmm.mr.set_current_device_resource(mr)
             _enable_managed_prefetching(rmm_mode, managed_memory_is_supported)
         else:
             mr = default_memory_resource(device)
-            previous = rmm.mr.get_current_device_resource()
             rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
