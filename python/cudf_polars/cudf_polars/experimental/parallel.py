@@ -13,8 +13,6 @@ from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from polars import GPUEngine
-
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
@@ -93,7 +91,7 @@ def ir_parts_info(ir: IR) -> PartitionInfo:
         return _IR_PARTS_CACHE[key]
 
 
-def _default_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
+def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     # Single-partition default behavior.
     # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
     if ir_parts_info(ir).count > 1:
@@ -113,7 +111,6 @@ def _default_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
     return {
         (key_name, 0): (
             ir.do_evaluate,
-            config,
             *ir._non_child_args,
             *((child_name, 0) for child_name in child_names),
         )
@@ -121,23 +118,23 @@ def _default_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
 
 
 @singledispatch
-def generate_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
+def generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     """
     Generate tasks for an IR node.
 
     An IR node only needs to generate the graph for
     the current IR logic (not including child IRs).
     """
-    return _default_ir_tasks(ir, config)
+    return _default_ir_tasks(ir)
 
 
-def task_graph(_ir: IR, config: GPUEngine) -> tuple[MutableMapping[str, Any], str]:
+def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
     """Construct a Dask-compatible task graph."""
     ir: IR = lower_ir_graph(_ir)
 
     graph = {
         k: v
-        for layer in [generate_ir_tasks(n, config) for n in traversal(ir)]
+        for layer in [generate_ir_tasks(n) for n in traversal(ir)]
         for k, v in layer.items()
     }
     key_name = get_key_name(ir)
@@ -147,9 +144,9 @@ def task_graph(_ir: IR, config: GPUEngine) -> tuple[MutableMapping[str, Any], st
     return graph, key_name
 
 
-def evaluate_dask(ir: IR, config: GPUEngine) -> DataFrame:
+def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
     from dask import get
 
-    graph, key = task_graph(ir, config)
+    graph, key = task_graph(ir)
     return get(graph, key)

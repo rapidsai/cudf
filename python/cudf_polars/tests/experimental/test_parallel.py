@@ -15,9 +15,10 @@ from cudf_polars.testing.asserts import Executor
 def test_evaluate_dask():
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5], "c": [5, 6, 7], "d": [7, 9, 8]})
     q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
-    qir = Translator(q._ldf.visit()).translate_ir()
 
     config = GPUEngine(raise_on_fail=True, executor=Executor)
-    expected = qir.evaluate(cache={}, config=config).to_polars()
-    got = evaluate_dask(qir, config).to_polars()
+    qir = Translator(q._ldf.visit(), config).translate_ir()
+
+    expected = qir.evaluate(cache={}).to_polars()
+    got = evaluate_dask(qir).to_polars()
     assert_frame_equal(expected, got)
