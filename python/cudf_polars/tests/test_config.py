@@ -59,7 +59,7 @@ def test_invalid_memory_resource_raises(mr):
 
 
 @pytest.mark.parametrize("disable_uvm", [True, False])
-def test_explicit_device_zero1(monkeypatch, disable_uvm):
+def test_cudf_polars_enable_disable_uvm(monkeypatch, disable_uvm):
     q = pl.LazyFrame({"a": [1, 2, 3]})
 
     with monkeypatch.context() as monkeycontext:
