@@ -1,11 +1,12 @@
 # Usage
 
-There are three ways to enable `cudf.pandas`:
-1. In Jupyter notebooks
-2. When calling a Python script from the command line
-3. From a script or from the Python interpreter, via an explicit import
+There are three ways to enable `cudf.pandas`. Here is a summary:
 
-See the instructions below for each method.
+1. With Jupyter/IPython magics: `%load_ext cudf.pandas`
+2. When executing a Python script from the command line: `python -m cudf.pandas script.py`
+3. From a script or from the Python interpreter: `import cudf.pandas; cudf.pandas.install()`
+
+See the instructions below for more information about each method.
 
 ## Jupyter Notebook or IPython Usage
 
@@ -39,7 +40,8 @@ This will make `import pandas` use `cudf.pandas` acceleration with zero code cha
 Another way to enable `cudf.pandas` is via explicit import. If you are running
 a script where you cannot control the command line flags, this is another
 option that enables `cudf.pandas` with minimal code changes. Be sure that
-`cudf.pandas.install()` is called _before_ importing `pandas`.
+`cudf.pandas.install()` is called _before_ importing `pandas`. This also works
+in Jupyter notebook or IPython environments.
 
 ```python
 import cudf.pandas
@@ -73,7 +75,7 @@ with Pool(4) as pool:
     ...
 ```
 
-## Profiling `cudf.pandas` Performance
+## Profiling `cudf.pandas`
 
 `cudf.pandas` will attempt to use the GPU whenever possible and fall
 back to CPU for certain operations. Running your code with the
