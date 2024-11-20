@@ -64,8 +64,9 @@ class ParFileScan(Scan):
         split, stride = 1, 1
         if self.typ == "parquet":
             file_size: float = 0
-            # TODO: Choose blocksize wisely, and make it configurable
-            blocksize = 2 * 1024**3
+            # TODO: Use system info to set default blocksize
+            parquet_options = self.config_options.get("parquet_options", {})
+            blocksize: int = parquet_options.get("blocksize", 2 * 1024**3)
             stats = self._sample_pq_statistics()
             columns: list = self.with_columns or list(stats.keys())
             for name in columns:
