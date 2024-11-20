@@ -173,18 +173,25 @@ def _(ir: GroupByTree) -> MutableMapping[Any, Any]:
     child_name = get_key_name(child)
     name = get_key_name(ir)
 
-    # Simple all-to-one reduction.
-    # TODO: Use proper tree reduction
-    return {
-        (name, 0): (
-            ir.do_evaluate,
-            *ir._non_child_args,
-            (
-                _concat,
-                [(child_name, i) for i in range(child_count)],
-            ),
-        )
-    }
+    # Simple tree reduction.
+    j = 0
+    graph: MutableMapping[Any, Any] = {}
+    split_every = 32
+    keys: list[Any] = [(child_name, i) for i in range(child_count)]
+    while len(keys) > split_every:
+        new_keys: list[Any] = []
+        for i, k in enumerate(range(0, len(keys), split_every)):
+            batch = keys[k : k + split_every]
+            graph[(name, j, i)] = (
+                ir.do_evaluate,
+                *ir._non_child_args,
+                (_concat, batch),
+            )
+            new_keys.append((name, j, i))
+        j += 1
+        keys = new_keys
+    graph[(name, 0)] = (ir.do_evaluate, *ir._non_child_args, (_concat, keys))
+    return graph
 
 
 @_ir_parts_info.register(GroupByFinalize)
