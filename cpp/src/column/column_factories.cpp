@@ -178,7 +178,7 @@ std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
   CUDF_EXPECTS(s.is_valid(stream), "cannot create a dictionary with a null key");
   return make_dictionary_column(
     make_column_from_scalar(s, 1, stream, mr),
-    make_column_from_scalar(numeric_scalar<uint32_t>(0, true, stream), size, stream, mr),
+    make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size, stream, mr),
     rmm::device_buffer{0, stream, mr},
     0);
 }

@@ -63,7 +63,6 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   auto validity_generator = []() { return rand() % 7 != 0; };
   std::generate(
     list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
-  // cudf::size_type n = 0;
   std::generate(
     list_offsets.begin(), list_offsets.end(), [length_of_individual_list, n = 0]() mutable {
       return (n++) * length_of_individual_list;
@@ -87,7 +86,6 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
       .release());
   auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(
     int64_data.begin(), int64_data.end(), validity.begin());
-  auto dict_col = cudf::dictionary::encode(col4);
   columns.emplace_back(cudf::dictionary::encode(col4));
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          bool_data.begin(), bool_data.end(), bool_validity.begin())
@@ -120,11 +118,12 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   auto int64array = get_arrow_array<int64_t>(int64_data, validity);
 
   auto string_array = get_arrow_array<cudf::string_view>(string_data, validity);
+  auto dict_col     = cudf::dictionary::encode(col4);
   cudf::dictionary_column_view view(dict_col->view());
   auto keys       = cudf::test::to_host<int64_t>(view.keys()).first;
-  auto indices    = cudf::test::to_host<uint32_t>(view.indices()).first;
+  auto indices    = cudf::test::to_host<int32_t>(view.indices()).first;
   auto dict_array = get_arrow_dict_array(std::vector<int64_t>(keys.begin(), keys.end()),
-                                         std::vector<uint32_t>(indices.begin(), indices.end()),
+                                         std::vector<int32_t>(indices.begin(), indices.end()),
                                          validity);
   auto boolarray  = get_arrow_array<bool>(bool_data, bool_validity);
   auto list_array = get_arrow_list_array<int64_t>(

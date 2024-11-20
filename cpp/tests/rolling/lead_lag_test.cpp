@@ -1098,7 +1098,7 @@ TEST_F(LeadLagNonFixedWidthTest, Dictionary)
 
     auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
     auto expected_values =
-      cudf::test::fixed_width_column_wrapper<uint32_t>{
+      cudf::test::fixed_width_column_wrapper<int32_t>{
         {2, 3, 4, 5, 0, 0, 7, 8, 9, 10, 0, 0},
         cudf::test::iterators::nulls_at(std::vector{4, 5, 10, 11})}
         .release();
@@ -1118,7 +1118,7 @@ TEST_F(LeadLagNonFixedWidthTest, Dictionary)
 
     auto expected_keys = cudf::test::strings_column_wrapper{input_strings}.release();
     auto expected_values =
-      cudf::test::fixed_width_column_wrapper<uint32_t>{
+      cudf::test::fixed_width_column_wrapper<int32_t>{
         {0, 0, 1, 2, 3, 4, 0, 6, 0, 7, 8, 9}, cudf::test::iterators::nulls_at(std::vector{0, 6})}
         .release();
     auto expected_output =

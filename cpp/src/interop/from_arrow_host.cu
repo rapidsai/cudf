@@ -273,13 +273,13 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::dictiona
     // to modify the buffers.
     switch (schema->storage_type) {
       case NANOARROW_TYPE_INT8:
-      case NANOARROW_TYPE_UINT8: return data_type(type_id::UINT8);
+      case NANOARROW_TYPE_UINT8: return data_type(type_id::INT8);
       case NANOARROW_TYPE_INT16:
-      case NANOARROW_TYPE_UINT16: return data_type(type_id::UINT16);
+      case NANOARROW_TYPE_UINT16: return data_type(type_id::INT16);
       case NANOARROW_TYPE_INT32:
-      case NANOARROW_TYPE_UINT32: return data_type(type_id::UINT32);
+      case NANOARROW_TYPE_UINT32: return data_type(type_id::INT32);
       case NANOARROW_TYPE_INT64:
-      case NANOARROW_TYPE_UINT64: return data_type(type_id::UINT64);
+      case NANOARROW_TYPE_UINT64: return data_type(type_id::INT64);
       default: CUDF_FAIL("Unsupported type_id for dictionary indices", cudf::data_type_error);
     }
   }();

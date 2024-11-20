@@ -29,7 +29,7 @@ class DictionaryTest : public cudf::test::BaseFixture {};
 TEST_F(DictionaryTest, FactoryColumnViews)
 {
   cudf::test::strings_column_wrapper keys({"aaa", "ccc", "ddd", "www"});
-  cudf::test::fixed_width_column_wrapper<uint8_t> values{2, 0, 3, 1, 2, 2, 2, 3, 0};
+  cudf::test::fixed_width_column_wrapper<int8_t> values{2, 0, 3, 1, 2, 2, 2, 3, 0};
 
   auto dictionary = cudf::make_dictionary_column(keys, values, cudf::test::get_default_stream());
   cudf::dictionary_column_view view(dictionary->view());
@@ -42,15 +42,15 @@ TEST_F(DictionaryTest, FactoryColumns)
 {
   std::vector<std::string> h_keys{"aaa", "ccc", "ddd", "www"};
   cudf::test::strings_column_wrapper keys(h_keys.begin(), h_keys.end());
-  std::vector<uint8_t> h_values{2, 0, 3, 1, 2, 2, 2, 3, 0};
-  cudf::test::fixed_width_column_wrapper<uint8_t> values(h_values.begin(), h_values.end());
+  std::vector<int8_t> h_values{2, 0, 3, 1, 2, 2, 2, 3, 0};
+  cudf::test::fixed_width_column_wrapper<int8_t> values(h_values.begin(), h_values.end());
 
   auto dictionary = cudf::make_dictionary_column(
     keys.release(), values.release(), cudf::test::get_default_stream());
   cudf::dictionary_column_view view(dictionary->view());
 
   cudf::test::strings_column_wrapper keys_expected(h_keys.begin(), h_keys.end());
-  cudf::test::fixed_width_column_wrapper<uint8_t> values_expected(h_values.begin(), h_values.end());
+  cudf::test::fixed_width_column_wrapper<int8_t> values_expected(h_values.begin(), h_values.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values_expected);
 }
@@ -59,15 +59,15 @@ TEST_F(DictionaryTest, FactoryColumnsNullMaskCount)
 {
   std::vector<std::string> h_keys{"aaa", "ccc", "ddd", "www"};
   cudf::test::strings_column_wrapper keys(h_keys.begin(), h_keys.end());
-  std::vector<uint8_t> h_values{2, 0, 3, 1, 2, 2, 2, 3, 0};
-  cudf::test::fixed_width_column_wrapper<uint8_t> values(h_values.begin(), h_values.end());
+  std::vector<int8_t> h_values{2, 0, 3, 1, 2, 2, 2, 3, 0};
+  cudf::test::fixed_width_column_wrapper<int8_t> values(h_values.begin(), h_values.end());
 
   auto dictionary = cudf::make_dictionary_column(
     keys.release(), values.release(), rmm::device_buffer{}, 0, cudf::test::get_default_stream());
   cudf::dictionary_column_view view(dictionary->view());
 
   cudf::test::strings_column_wrapper keys_expected(h_keys.begin(), h_keys.end());
-  cudf::test::fixed_width_column_wrapper<uint8_t> values_expected(h_values.begin(), h_values.end());
+  cudf::test::fixed_width_column_wrapper<int8_t> values_expected(h_values.begin(), h_values.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values_expected);
 }
@@ -75,7 +75,7 @@ TEST_F(DictionaryTest, FactoryColumnsNullMaskCount)
 TEST_F(DictionaryTest, Encode)
 {
   cudf::test::fixed_width_column_wrapper<int> col({1, 2, 3, 4, 5});
-  cudf::data_type int32_type(cudf::type_id::UINT32);
+  cudf::data_type int32_type(cudf::type_id::INT32);
   cudf::column_view col_view = col;
   cudf::dictionary::encode(col_view, int32_type, cudf::test::get_default_stream());
 }
