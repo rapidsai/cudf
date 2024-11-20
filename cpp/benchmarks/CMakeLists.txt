@@ -287,6 +287,12 @@ ConfigureBench(HASHING_BENCH hashing/partition.cpp)
 ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
 # ##################################################################################################
+# * interop benchmark ------------------------------------------------------------------------------
+ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp)
+target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
+target_include_directories(INTEROP_NVBENCH PRIVATE ${CMAKE_SOURCE_DIR}/tests/interop)
+
+# ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
 ConfigureNVBench(
@@ -354,10 +360,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
-ConfigureBench(
-  STRINGS_BENCH string/factory.cu string/filter.cpp string/repeat_strings.cpp string/replace.cpp
-  string/translate.cpp string/url_decode.cu
-)
+ConfigureBench(STRINGS_BENCH string/factory.cu string/repeat_strings.cpp string/url_decode.cu)
 
 ConfigureNVBench(
   STRINGS_NVBENCH
@@ -374,17 +377,20 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/filter.cpp
   string/find.cpp
   string/find_multiple.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp
   string/make_strings_column.cu
+  string/replace.cpp
   string/replace_re.cpp
   string/reverse.cpp
   string/slice.cpp
   string/split.cpp
   string/split_re.cpp
+  string/translate.cpp
 )
 
 # ##################################################################################################

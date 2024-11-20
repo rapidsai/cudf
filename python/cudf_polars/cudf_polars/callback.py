@@ -129,6 +129,7 @@ def set_device(device: int | None) -> Generator[int, None, None]:
 
 def _callback(
     ir: IR,
+    config: GPUEngine,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
@@ -145,7 +146,30 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        return ir.evaluate(cache={}).to_polars()
+        return ir.evaluate(cache={}, config=config).to_polars()
+
+
+def validate_config_options(config: dict) -> None:
+    """
+    Validate the configuration options for the GPU engine.
+
+    Parameters
+    ----------
+    config
+        Configuration options to validate.
+
+    Raises
+    ------
+    ValueError
+        If the configuration contains unsupported options.
+    """
+    if unsupported := (config.keys() - {"raise_on_fail", "parquet_options"}):
+        raise ValueError(
+            f"Engine configuration contains unsupported settings: {unsupported}"
+        )
+    assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
+        config.get("parquet_options", {})
+    )
 
 
 def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
@@ -174,10 +198,8 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    if unsupported := (config.config.keys() - {"raise_on_fail"}):
-        raise ValueError(
-            f"Engine configuration contains unsupported settings {unsupported}"
-        )
+    validate_config_options(config.config)
+
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt)
         ir = translator.translate_ir()
@@ -200,5 +222,11 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
                 raise exception
         else:
             nt.set_udf(
-                partial(_callback, ir, device=device, memory_resource=memory_resource)
+                partial(
+                    _callback,
+                    ir,
+                    config,
+                    device=device,
+                    memory_resource=memory_resource,
+                )
             )
