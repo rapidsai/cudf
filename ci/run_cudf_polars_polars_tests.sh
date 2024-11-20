@@ -12,6 +12,9 @@ DESELECTED_TESTS=(
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort[True]" # relies on polars built in debug mode
     "tests/unit/test_cpu_check.py::test_check_cpu_flags_skipped_no_flags" # Mock library error
     "tests/docs/test_user_guide.py" # No dot binary in CI image
+    "tests/unit/test_polars_import.py::test_fork_safety" # test started to hang in polars-1.14
+    "tests/unit/operations/test_join.py::test_join_4_columns_with_validity" # fails in some systems, see https://github.com/pola-rs/polars/issues/19870
+    "tests/unit/io/test_csv.py::test_read_web_file" # fails in rockylinux8 due to SSL CA issues
 )
 
 if [[ $(arch) == "aarch64" ]]; then
