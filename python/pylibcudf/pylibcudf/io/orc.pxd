@@ -72,8 +72,8 @@ cdef class OrcWriterOptions:
     cdef Table table
     cdef SinkInfo sink
     cpdef void set_stripe_size_bytes(self, size_t size_bytes)
-    cpdef void set_stripe_size_rows(self, size_t size_rows)
-    cpdef void set_row_index_stride(self, size_t stride)
+    cpdef void set_stripe_size_rows(self, size_type size_rows)
+    cpdef void set_row_index_stride(self, size_type stride)
 
 cdef class OrcWriterOptionsBuilder:
     cdef orc_writer_options_builder c_obj
@@ -90,14 +90,14 @@ cpdef void write_orc(OrcWriterOptions options)
 cdef class OrcChunkedWriter:
     cdef unique_ptr[orc_chunked_writer] c_obj
     cpdef void close(self)
-    cpdef write(self, Table table)
+    cpdef void write(self, Table table)
 
 cdef class ChunkedOrcWriterOptions:
     cdef chunked_orc_writer_options c_obj
     cdef SinkInfo sink
     cpdef void set_stripe_size_bytes(self, size_t size_bytes)
-    cpdef void set_stripe_size_rows(self, size_t size_rows)
-    cpdef void set_row_index_stride(self, size_t stride)
+    cpdef void set_stripe_size_rows(self, size_type size_rows)
+    cpdef void set_row_index_stride(self, size_type stride)
 
 cdef class ChunkedOrcWriterOptionsBuilder:
     cdef chunked_orc_writer_options_builder c_obj

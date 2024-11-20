@@ -330,16 +330,79 @@ cpdef ParsedOrcStatistics read_parsed_orc_statistics(
 
 cdef class OrcWriterOptions:
     cpdef void set_stripe_size_bytes(self, size_t size_bytes):
+        """
+        Sets the maximum stripe size, in bytes.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::set_stripe_size_bytes`
+
+        Parameters
+        ----------
+        size_bytes: size_t
+            Sets the maximum stripe size, in bytes.
+
+        Returns
+        -------
+        None
+        """
         self.c_obj.set_stripe_size_bytes(size_bytes)
 
-    cpdef void set_stripe_size_rows(self, size_t size_rows):
+    cpdef void set_stripe_size_rows(self, size_type size_rows):
+        """
+        Sets the maximum stripe size, in rows.
+
+        If the stripe size is smaller that the row group size,
+        row group size will be reduced to math the stripe size.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::set_stripe_size_rows`
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
         self.c_obj.set_stripe_size_rows(size_rows)
 
-    cpdef void set_row_index_stride(self, size_t stride):
+    cpdef void set_row_index_stride(self, size_type stride):
+        """
+        Sets the row index stride.
+
+        Rounded down to a multiple of 8.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::set_row_index_stride`
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
         self.c_obj.set_row_index_stride(stride)
 
     @staticmethod
     def builder(SinkInfo sink, Table table):
+        """
+        Create builder to create OrcWriterOptions.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::builder`
+
+        Parameters
+        ----------
+        sink: SinkInfo
+            The sink used for writer output
+        table: Table
+            Table to be written to output
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
         cdef OrcWriterOptionsBuilder orc_builder = OrcWriterOptionsBuilder.__new__(
             OrcWriterOptionsBuilder
         )
@@ -351,24 +414,79 @@ cdef class OrcWriterOptions:
 
 cdef class OrcWriterOptionsBuilder:
     cpdef OrcWriterOptionsBuilder compression(self, compression_type comp):
+        """
+        Sets compression type.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options_builder::compression`
+
+        Parameters
+        ----------
+        comp: CompressionType
+            The compression type to use
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
         self.c_obj.compression(comp)
         return self
 
     cpdef OrcWriterOptionsBuilder enable_statistics(self, statistics_freq val):
+        """
+        Choose granularity of column statistics to be written.
+
+        For details, see :cpp:func:`enable_statistics`
+
+        Parameters
+        ----------
+        val: StatisticsFreq
+            Level of statistics collection
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
         self.c_obj.enable_statistics(val)
         return self
 
     cpdef OrcWriterOptionsBuilder key_value_metadata(self, dict kvm):
+        """
+        Sets Key-Value footer metadata.
+
+        Parameters
+        ----------
+        kvm: dict
+            Key-Value footer metadata
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
         self.c_obj.key_value_metadata(
             {key.encode(): value.encode() for key, value in kvm.items()}
         )
         return self
 
     cpdef OrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):
+        """
+        Sets associated metadata.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options_builder::metadata`
+
+        Parameters
+        ----------
+        meta: TableInputMetadata
+            Associated metadata
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
         self.c_obj.metadata(meta.c_obj)
         return self
 
     cpdef OrcWriterOptions build(self):
+        """Moves the ORC writer options builder"""
         cdef OrcWriterOptions orc_options = OrcWriterOptions.__new__(
             OrcWriterOptions
         )
@@ -379,21 +497,69 @@ cdef class OrcWriterOptionsBuilder:
 
 
 cpdef void write_orc(OrcWriterOptions options):
+    """
+    Write to ORC format.
+
+    The table to write, output paths, and options are encapsulated
+    by the `options` object.
+
+    For details, see :cpp:func:`write_csv`.
+
+    Parameters
+    ----------
+    options: OrcWriterOptions
+        Settings for controlling writing behavior
+
+    Returns
+    -------
+    None
+    """
     with nogil:
         cpp_write_orc(move(options.c_obj))
 
 
 cdef class OrcChunkedWriter:
     cpdef void close(self):
+        """
+        Closes the chunked ORC writer.
+
+        Returns
+        -------
+        None
+        """
         with nogil:
             self.c_obj.get()[0].close()
 
-    cpdef write(self, Table table):
+    cpdef void write(self, Table table):
+        """
+        Writes table to output.
+
+        Parameters
+        ----------
+        table: Table
+            able that needs to be written
+
+        Returns
+        -------
+        None
+        """
         with nogil:
             self.c_obj.get()[0].write(table.view())
 
     @staticmethod
     def from_options(ChunkedOrcWriterOptions options):
+        """
+        Creates a chunked ORC writer from options
+
+        Parameters
+        ----------
+        options: ChunkedOrcWriterOptions
+            Settings for controlling writing behavior
+
+        Returns
+        -------
+        OrcChunkedWriter
+        """
         cdef OrcChunkedWriter orc_writer = OrcChunkedWriter.__new__(
             OrcChunkedWriter
         )
@@ -403,16 +569,71 @@ cdef class OrcChunkedWriter:
 
 cdef class ChunkedOrcWriterOptions:
     cpdef void set_stripe_size_bytes(self, size_t size_bytes):
+        """
+        Sets the maximum stripe size, in bytes.
+
+        Parameters
+        ----------
+        size_bytes: size_t
+            Sets the maximum stripe size, in bytes.
+
+        Returns
+        -------
+        None
+        """
         self.c_obj.set_stripe_size_bytes(size_bytes)
 
-    cpdef void set_stripe_size_rows(self, size_t size_rows):
+    cpdef void set_stripe_size_rows(self, size_type size_rows):
+        """
+        Sets the maximum stripe size, in rows.
+
+        If the stripe size is smaller that the row group size,
+        row group size will be reduced to math the stripe size.
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
         self.c_obj.set_stripe_size_rows(size_rows)
 
-    cpdef void set_row_index_stride(self, size_t stride):
+    cpdef void set_row_index_stride(self, size_type stride):
+        """
+        Sets the row index stride.
+
+        Rounded down to a multiple of 8.
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
         self.c_obj.set_row_index_stride(stride)
 
     @staticmethod
     def builder(SinkInfo sink):
+        """
+        Create builder to create ChunkedOrcWriterOptions.
+
+        Parameters
+        ----------
+        sink: SinkInfo
+            The sink used for writer output
+        table: Table
+            Table to be written to output
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
         cdef ChunkedOrcWriterOptionsBuilder orc_builder = \
             ChunkedOrcWriterOptionsBuilder.__new__(
                 ChunkedOrcWriterOptionsBuilder
@@ -424,10 +645,34 @@ cdef class ChunkedOrcWriterOptions:
 
 cdef class ChunkedOrcWriterOptionsBuilder:
     cpdef ChunkedOrcWriterOptionsBuilder compression(self, compression_type comp):
+        """
+        Sets compression type.
+
+        Parameters
+        ----------
+        comp: CompressionType
+            The compression type to use
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
         self.c_obj.compression(comp)
         return self
 
     cpdef ChunkedOrcWriterOptionsBuilder enable_statistics(self, statistics_freq val):
+        """
+        Choose granularity of column statistics to be written.
+
+        Parameters
+        ----------
+        val: StatisticsFreq
+            Level of statistics collection
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
         self.c_obj.enable_statistics(val)
         return self
 
@@ -435,16 +680,41 @@ cdef class ChunkedOrcWriterOptionsBuilder:
         self,
         dict kvm
     ):
+        """
+        Sets Key-Value footer metadata.
+
+        Parameters
+        ----------
+        kvm: dict
+            Key-Value footer metadata
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
         self.c_obj.key_value_metadata(
             {key.encode(): value.encode() for key, value in kvm.items()}
         )
         return self
 
     cpdef ChunkedOrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):
+        """
+        Sets associated metadata.
+
+        Parameters
+        ----------
+        meta: TableInputMetadata
+            Associated metadata
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
         self.c_obj.metadata(meta.c_obj)
         return self
 
     cpdef ChunkedOrcWriterOptions build(self):
+        """Moves the chunked ORC writer options builder"""
         cdef ChunkedOrcWriterOptions orc_options = ChunkedOrcWriterOptions.__new__(
             ChunkedOrcWriterOptions
         )
