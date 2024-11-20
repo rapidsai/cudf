@@ -310,8 +310,10 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;  // starting row of this page relative to the start of the chunk
-  int32_t num_rows;   // number of rows in this page
+  int32_t chunk_row;          // starting row of this page relative to the start of the chunk
+  int32_t num_rows;           // number of rows in this page
+  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
+                              // adjusted to compensate for the list row size estimates.
   // the next four are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
