@@ -13,8 +13,8 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
+from collections.abc import Callable, Iterator, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
 import numba
@@ -25,6 +25,8 @@ from nvtx import annotate
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
+
+import pylibcudf as plc
 
 import cudf
 import cudf.core.common
@@ -43,6 +45,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -781,8 +784,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
-                "Use cudf.Series._from_data for constructing a Series from "
+                "Use cudf.DataFrame._from_data for constructing a DataFrame from "
                 "ColumnAccessor"
+            )
+        elif isinstance(data, ColumnBase):
+            raise TypeError(
+                "Use cudf.DataFrame._from_arrays for constructing a DataFrame from "
+                "ColumnBase or Use cudf.DataFrame._from_data by passing a dict "
+                "of column name and column as key-value pair."
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
@@ -1778,11 +1787,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Concatenate the Tables
-        out = cls._from_data(
-            *libcudf.concat.concat_tables(
-                tables, ignore_index=ignore_index or are_all_range_index
+        ignore = ignore_index or are_all_range_index
+        index_names = None if ignore else tables[0]._index_names
+        column_names = tables[0]._column_names
+        with acquire_spill_lock():
+            plc_tables = [
+                plc.Table(
+                    [
+                        c.to_pylibcudf(mode="read")
+                        for c in (
+                            table._columns
+                            if ignore
+                            else itertools.chain(
+                                table._index._columns, table._columns
+                            )
+                        )
+                    ]
+                )
+                for table in tables
+            ]
+
+            concatted = libcudf.utils.data_from_pylibcudf_table(
+                plc.concatenate.concatenate(plc_tables),
+                column_names=column_names,
+                index_names=index_names,
             )
-        )
+        out = cls._from_data(*concatted)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
@@ -4954,7 +4984,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def partition_by_hash(self, columns, nparts, keep_index=True):
+    def partition_by_hash(
+        self, columns, nparts: int, keep_index: bool = True
+    ) -> list[DataFrame]:
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -4978,13 +5010,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             cols = [*self._columns]
 
-        output_columns, offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts
-        )
+        with acquire_spill_lock():
+            plc_table, offsets = plc.partitioning.hash_partition(
+                plc.Table([col.to_pylibcudf(mode="read") for col in cols]),
+                key_indices,
+                nparts,
+            )
+            output_columns = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
+
         outdf = self._from_columns_like_self(
             output_columns,
             self._column_names,
-            self._index_names if keep_index else None,
+            self._index_names if keep_index else None,  # type: ignore[arg-type]
         )
         # Slice into partitions. Notice, `hash_partition` returns the start
         # offset of each partition thus we skip the first offset
@@ -5116,11 +5156,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         useful for big DataFrames and fine-tune memory optimization:
 
         >>> import numpy as np
-        >>> random_strings_array = np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        >>> rng = np.random.default_rng(seed=0)
+        >>> random_strings_array = rng.choice(['a', 'b', 'c'], 10 ** 6)
         >>> df = cudf.DataFrame({
-        ...     'column_1': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_2': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_3': np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        ...     'column_1': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_2': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_3': rng.choice(['a', 'b', 'c'], 10 ** 6)
         ... })
         >>> df.info(memory_usage='deep')
         <class 'cudf.core.dataframe.DataFrame'>
@@ -5881,7 +5922,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"records dimension expected 1 or 2 but found: {array_data.ndim}"
             )
 
-        if data.ndim == 2:
+        if array_data.ndim == 2:
             num_cols = array_data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
@@ -6285,14 +6326,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if not skipna and any(col.nullable for col in filtered._columns):
-            mask = DataFrame(
+            length = filtered._data.nrows
+            ca = ColumnAccessor(
                 {
-                    name: filtered._data[name]._get_mask_as_column()
-                    if filtered._data[name].nullable
-                    else as_column(True, length=len(filtered._data[name]))
-                    for name in filtered._column_names
-                }
+                    name: col._get_mask_as_column()
+                    if col.nullable
+                    else as_column(True, length=length)
+                    for name, col in filtered._data.items()
+                },
+                verify=False,
             )
+            mask = DataFrame._from_data(ca)
             mask = mask.all(axis=1)
         else:
             mask = None
@@ -6677,18 +6721,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
             return Series._from_column(result, index=self.index)
         else:
-            result_df = DataFrame(result).set_index(self.index)
+            result_df = DataFrame(result, index=self.index)
             result_df._set_columns_like(prepared._data)
             return result_df
-
-    @_performance_tracking
-    def _columns_view(self, columns):
-        """
-        Return a subset of the DataFrame's columns as a view.
-        """
-        return DataFrame(
-            {col: self._data[col] for col in columns}, index=self.index
-        )
 
     @_performance_tracking
     def select_dtypes(self, include=None, exclude=None):
@@ -6761,8 +6796,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        df = DataFrame(index=self.index)
-
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
@@ -6818,12 +6851,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # remove all exclude types
         inclusion = inclusion - exclude_subtypes
 
-        for k, col in self._column_labels_and_values:
-            infered_type = cudf_dtype_from_pydata_dtype(col.dtype)
-            if infered_type in inclusion:
-                df._insert(len(df._data), k, col)
-
-        return df
+        to_select = [
+            label
+            for label, dtype in self._dtypes
+            if cudf_dtype_from_pydata_dtype(dtype) in inclusion
+        ]
+        return self.loc[:, to_select]
 
     @ioutils.doc_to_parquet()
     def to_parquet(
@@ -7329,7 +7362,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
         cols = self._data.to_pandas_index()
-        df = DataFrame(cupy.asfortranarray(cov)).set_index(cols)
+        df = DataFrame(cupy.asfortranarray(cov), index=cols)
         df._set_columns_like(self._data)
         return df
 
@@ -7372,7 +7405,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         corr = cupy.corrcoef(values, rowvar=False)
         cols = self._data.to_pandas_index()
-        df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
+        df = DataFrame(cupy.asfortranarray(corr), index=cols)
         df._set_columns_like(self._data)
         return df
 

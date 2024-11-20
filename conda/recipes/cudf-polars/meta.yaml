@@ -1,0 +1,61 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.
+
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
+{% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set py_version = environ['CONDA_PY'] %}
+{% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
+{% set cuda_major = cuda_version.split('.')[0] %}
+{% set date_string = environ['RAPIDS_DATE_STRING'] %}
+
+package:
+  name: cudf-polars
+  version: {{ version }}
+
+source:
+  path: ../../..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  script_env:
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+    - AWS_SESSION_TOKEN
+    - CMAKE_C_COMPILER_LAUNCHER
+    - CMAKE_CUDA_COMPILER_LAUNCHER
+    - CMAKE_CXX_COMPILER_LAUNCHER
+    - CMAKE_GENERATOR
+    - PARALLEL_LEVEL
+    - SCCACHE_BUCKET
+    - SCCACHE_IDLE_TIMEOUT
+    - SCCACHE_REGION
+    - SCCACHE_S3_KEY_PREFIX=cudf-polars-aarch64 # [aarch64]
+    - SCCACHE_S3_KEY_PREFIX=cudf-polars-linux64 # [linux64]
+    - SCCACHE_S3_USE_SSL
+    - SCCACHE_S3_NO_CREDENTIALS
+
+requirements:
+  host:
+    - python
+    - rapids-build-backend >=0.3.0,<0.4.0.dev0
+    - setuptools
+    - cuda-version ={{ cuda_version }}
+  run:
+    - python
+    - pylibcudf ={{ version }}
+    - polars >=1.11,<1.15
+    - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
+
+test:
+  requires:
+    - cuda-version ={{ cuda_version }}
+  imports:
+    - cudf_polars
+
+
+about:
+  home: https://rapids.ai/
+  license: Apache-2.0
+  license_family: APACHE
+  license_file: LICENSE
+  summary: cudf-polars library

@@ -107,7 +107,7 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
-  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+  std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.
   bool has_compressed_data{false};
@@ -129,6 +129,9 @@ struct pass_intermediate_data {
 
   rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
   rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
+
+  // cumulative strings column sizes.
+  std::vector<size_t> cumulative_col_string_sizes{};
 
   int level_type_size{0};
 

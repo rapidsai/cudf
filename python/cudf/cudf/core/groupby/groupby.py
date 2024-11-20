@@ -8,7 +8,7 @@ import textwrap
 import warnings
 from collections import abc
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Iterable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy as cp
 import numpy as np
@@ -27,6 +27,7 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.copy_types import GatherMap
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
@@ -35,6 +36,8 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from cudf._typing import (
         AggType,
         DataFrameOrSeries,
@@ -478,6 +481,11 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
+        if is_list_like(self._by):
+            if isinstance(name, tuple) and len(name) == 1:
+                name = name[0]
+            else:
+                raise KeyError(name)
         return obj.iloc[self.indices[name]]
 
     @_performance_tracking
@@ -754,17 +762,33 @@ class GroupBy(Serializable, Reducible, Scannable):
                 left_cols = list(self.grouping.keys.drop_duplicates()._columns)
                 right_cols = list(result_index._columns)
                 join_keys = [
-                    _match_join_keys(lcol, rcol, "left")
+                    _match_join_keys(lcol, rcol, "inner")
                     for lcol, rcol in zip(left_cols, right_cols)
                 ]
                 # TODO: In future, see if we can centralize
                 # logic else where that has similar patterns.
                 join_keys = map(list, zip(*join_keys))
-                _, indices = libcudf.join.join(
-                    *join_keys,
-                    how="left",
+                # By construction, left and right keys are related by
+                # a permutation, so we can use an inner join.
+                left_order, right_order = libcudf.join.join(
+                    *join_keys, how="inner"
                 )
-                result = result.take(indices)
+                # left order is some permutation of the ordering we
+                # want, and right order is a matching gather map for
+                # the result table. Get the correct order by sorting
+                # the right gather map.
+                (right_order,) = libcudf.sort.sort_by_key(
+                    [right_order],
+                    [left_order],
+                    [True],
+                    ["first"],
+                    stable=False,
+                )
+                result = result._gather(
+                    GatherMap.from_column_unchecked(
+                        right_order, len(result), nullify=False
+                    )
+                )
 
         if not self._as_index:
             result = result.reset_index()
@@ -2229,6 +2253,22 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         def func(x):
             return getattr(x, "var")(ddof=ddof)
+
+        return self.agg(func)
+
+    @_performance_tracking
+    def nunique(self, dropna: bool = True):
+        """
+        Return number of unique elements in the group.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't include NaN in the counts.
+        """
+
+        def func(x):
+            return getattr(x, "nunique")(dropna=dropna)
 
         return self.agg(func)
 

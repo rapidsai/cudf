@@ -12,6 +12,7 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
 from pylibcudf.libcudf.strings cimport contains as cpp_contains
 from pylibcudf.strings.regex_program cimport RegexProgram
 
+__all__ = ["contains_re", "count_re", "like", "matches_re"]
 
 cpdef Column contains_re(
     Column input,
@@ -38,10 +39,10 @@ cpdef Column contains_re(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_contains.contains_re(
+        result = cpp_contains.contains_re(
             input.view(),
             prog.c_obj.get()[0]
-        ))
+        )
 
     return Column.from_libcudf(move(result))
 
@@ -71,10 +72,10 @@ cpdef Column count_re(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_contains.count_re(
+        result = cpp_contains.count_re(
             input.view(),
             prog.c_obj.get()[0]
-        ))
+        )
 
     return Column.from_libcudf(move(result))
 
@@ -105,10 +106,10 @@ cpdef Column matches_re(
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_contains.matches_re(
+        result = cpp_contains.matches_re(
             input.view(),
             prog.c_obj.get()[0]
-        ))
+        )
 
     return Column.from_libcudf(move(result))
 
@@ -149,19 +150,19 @@ cpdef Column like(Column input, ColumnOrScalar pattern, Scalar escape_character=
 
     if ColumnOrScalar is Column:
         with nogil:
-            result = move(cpp_contains.like(
+            result = cpp_contains.like(
                 input.view(),
                 pattern.view(),
                 dereference(c_escape_character)
-            ))
+            )
     elif ColumnOrScalar is Scalar:
         c_pattern = <const string_scalar*>(pattern.c_obj.get())
         with nogil:
-            result = move(cpp_contains.like(
+            result = cpp_contains.like(
                 input.view(),
                 dereference(c_pattern),
                 dereference(c_escape_character)
-            ))
+            )
     else:
         raise ValueError("pattern must be a Column or a Scalar")
 

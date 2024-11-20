@@ -1764,13 +1764,13 @@ def test_csv_writer_multiindex(tmpdir):
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
 
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 5, 20),
-            "b": np.random.randint(0, 5, 20),
+            "a": rng.integers(0, 5, 20),
+            "b": rng.integers(0, 5, 20),
             "c": range(20),
-            "d": np.random.random(20),
+            "d": rng.random(20),
         }
     )
     gdg = gdf.groupby(["a", "b"]).mean()
@@ -2277,3 +2277,20 @@ def test_read_header_none_pandas_compat_column_type():
         result = cudf.read_csv(StringIO(data), header=None).columns
     expected = pd.read_csv(StringIO(data), header=None).columns
     pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize("buffer", ["1", '"one"'])
+def test_read_single_unterminated_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (1, 1))
+
+
+@pytest.mark.parametrize("buffer", ["\n", "\r\n"])
+def test_read_empty_only_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (0, 0))
+
+
+def test_read_empty_only_row_custom_terminator():
+    gdf = cudf.read_csv(StringIO("*"), header=None, lineterminator="*")
+    assert_eq(gdf.shape, (0, 0))

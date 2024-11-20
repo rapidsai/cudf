@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import functools
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -13,12 +13,18 @@ import pyarrow as pa
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
+from cudf.core._internals import unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
-from cudf.utils.utils import _all_bools_with_nulls
+from cudf.utils.utils import (
+    _all_bools_with_nulls,
+    _datetime_timedelta_find_and_replace,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 
 _unit_to_nanoseconds_conversion = {
@@ -93,7 +99,7 @@ class TimeDeltaColumn(ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         if len(children) != 0:
-            raise ValueError("TimedeltaColumn must have no children.")
+            raise ValueError("TimeDeltaColumn must have no children.")
         super().__init__(
             data=data,
             size=size,
@@ -302,7 +308,53 @@ class TimeDeltaColumn(ColumnBase):
     def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype=dtype)
+        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
+
+    def find_and_replace(
+        self,
+        to_replace: ColumnBase,
+        replacement: ColumnBase,
+        all_nan: bool = False,
+    ) -> TimeDeltaColumn:
+        return cast(
+            TimeDeltaColumn,
+            _datetime_timedelta_find_and_replace(
+                original_column=self,
+                to_replace=to_replace,
+                replacement=replacement,
+                all_nan=all_nan,
+            ),
+        )
+
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+        if to_dtype.kind == "m":  # type: ignore[union-attr]
+            to_res, _ = np.datetime_data(to_dtype)
+            self_res, _ = np.datetime_data(self.dtype)
+
+            max_int = np.iinfo(np.int64).max
+
+            max_dist = np.timedelta64(
+                self.max().astype(np.int64, copy=False), self_res
+            )
+            min_dist = np.timedelta64(
+                self.min().astype(np.int64, copy=False), self_res
+            )
+
+            self_delta_dtype = np.timedelta64(0, self_res).dtype
+
+            if max_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ) and min_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ):
+                return True
+            else:
+                return False
+        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
+            # can safely cast to representation, or string
+            return True
+        else:
+            return False
 
     def mean(self, skipna=None) -> pd.Timedelta:
         return pd.Timedelta(

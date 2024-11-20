@@ -23,6 +23,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 
+__all__ = ["chunked_read_json", "read_json", "write_json"]
 
 cdef map[string, schema_element] _generate_schema_map(list dtypes):
     cdef map[string, schema_element] schema_map
@@ -59,7 +60,7 @@ cdef json_reader_options _setup_json_reader_options(
         json_recovery_mode_t recovery_mode):
 
     cdef vector[data_type] types_vec
-    cdef json_reader_options opts = move(
+    cdef json_reader_options opts = (
         json_reader_options.builder(source_info.c_obj)
         .compression(compression)
         .lines(lines)

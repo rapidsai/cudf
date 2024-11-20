@@ -6,6 +6,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport repeat as cpp_repeat
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = ["repeat_strings"]
 
 cpdef Column repeat_strings(Column input, ColumnorSizeType repeat_times):
     """
@@ -31,19 +32,15 @@ cpdef Column repeat_strings(Column input, ColumnorSizeType repeat_times):
 
     if ColumnorSizeType is Column:
         with nogil:
-            c_result = move(
-                cpp_repeat.repeat_strings(
-                    input.view(),
-                    repeat_times.view()
-                )
+            c_result = cpp_repeat.repeat_strings(
+                input.view(),
+                repeat_times.view()
             )
     elif ColumnorSizeType is size_type:
         with nogil:
-            c_result = move(
-                cpp_repeat.repeat_strings(
-                    input.view(),
-                    repeat_times
-                )
+            c_result = cpp_repeat.repeat_strings(
+                input.view(),
+                repeat_times
             )
     else:
         raise ValueError("repeat_times must be size_type or integer")

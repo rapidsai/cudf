@@ -10,6 +10,7 @@ from pylibcudf.libcudf.types cimport null_order, order, size_type
 
 from .table cimport Table
 
+__all__ = ["merge"]
 
 cpdef Table merge (
     list tables_to_merge,
@@ -18,6 +19,8 @@ cpdef Table merge (
     list null_precedence,
 ):
     """Merge a set of sorted tables.
+
+    For details see :cpp:func:`merge`.
 
     Parameters
     ----------
@@ -45,12 +48,10 @@ cpdef Table merge (
 
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(
-            cpp_merge.merge(
-                c_tables_to_merge,
-                c_key_cols,
-                c_column_order,
-                c_null_precedence,
-            )
+        c_result = cpp_merge.merge(
+            c_tables_to_merge,
+            c_key_cols,
+            c_column_order,
+            c_null_precedence,
         )
     return Table.from_libcudf(move(c_result))

@@ -21,9 +21,23 @@ from pylibcudf.libcudf.stream_compaction import \
 from .column cimport Column
 from .table cimport Table
 
+__all__ = [
+    "DuplicateKeepOption",
+    "apply_boolean_mask",
+    "distinct",
+    "distinct_count",
+    "distinct_indices",
+    "drop_nans",
+    "drop_nulls",
+    "stable_distinct",
+    "unique",
+    "unique_count",
+]
 
 cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
     """Filters out rows from the input table based on the presence of nulls.
+
+    For details, see :cpp:func:`drop_nulls`.
 
     Parameters
     ----------
@@ -42,16 +56,16 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.drop_nulls(
-                source_table.view(), c_keys, keep_threshold
-            )
+        c_result = cpp_stream_compaction.drop_nulls(
+            source_table.view(), c_keys, keep_threshold
         )
     return Table.from_libcudf(move(c_result))
 
 
 cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
     """Filters out rows from the input table based on the presence of NaNs.
+
+    For details, see :cpp:func:`drop_nans`.
 
     Parameters
     ----------
@@ -70,16 +84,16 @@ cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.drop_nulls(
-                source_table.view(), c_keys, keep_threshold
-            )
+        c_result = cpp_stream_compaction.drop_nulls(
+            source_table.view(), c_keys, keep_threshold
         )
     return Table.from_libcudf(move(c_result))
 
 
 cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
     """Filters out rows from the input table based on a boolean mask.
+
+    For details, see :cpp:func:`apply_boolean_mask`.
 
     Parameters
     ----------
@@ -95,10 +109,8 @@ cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
     """
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.apply_boolean_mask(
-                source_table.view(), boolean_mask.view()
-            )
+        c_result = cpp_stream_compaction.apply_boolean_mask(
+            source_table.view(), boolean_mask.view()
         )
     return Table.from_libcudf(move(c_result))
 
@@ -110,6 +122,8 @@ cpdef Table unique(
     null_equality nulls_equal,
 ):
     """Filter duplicate consecutive rows from the input table.
+
+    For details, see :cpp:func:`unique`.
 
     Parameters
     ----------
@@ -136,10 +150,8 @@ cpdef Table unique(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.unique(
-                input.view(), c_keys, keep, nulls_equal
-            )
+        c_result = cpp_stream_compaction.unique(
+            input.view(), c_keys, keep, nulls_equal
         )
     return Table.from_libcudf(move(c_result))
 
@@ -152,6 +164,8 @@ cpdef Table distinct(
     nan_equality nans_equal,
 ):
     """Get the distinct rows from the input table.
+
+    For details, see :cpp:func:`distinct`.
 
     Parameters
     ----------
@@ -175,10 +189,8 @@ cpdef Table distinct(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.distinct(
-                input.view(), c_keys, keep, nulls_equal, nans_equal
-            )
+        c_result = cpp_stream_compaction.distinct(
+            input.view(), c_keys, keep, nulls_equal, nans_equal
         )
     return Table.from_libcudf(move(c_result))
 
@@ -190,6 +202,8 @@ cpdef Column distinct_indices(
     nan_equality nans_equal,
 ):
     """Get the indices of the distinct rows from the input table.
+
+    For details, see :cpp:func:`distinct_indices`.
 
     Parameters
     ----------
@@ -209,10 +223,8 @@ cpdef Column distinct_indices(
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.distinct_indices(
-                input.view(), keep, nulls_equal, nans_equal
-            )
+        c_result = cpp_stream_compaction.distinct_indices(
+            input.view(), keep, nulls_equal, nans_equal
         )
     return Column.from_libcudf(move(c_result))
 
@@ -225,6 +237,8 @@ cpdef Table stable_distinct(
     nan_equality nans_equal,
 ):
     """Get the distinct rows from the input table, preserving input order.
+
+    For details, see :cpp:func:`stable_distinct`.
 
     Parameters
     ----------
@@ -248,10 +262,8 @@ cpdef Table stable_distinct(
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
-        c_result = move(
-            cpp_stream_compaction.stable_distinct(
-                input.view(), c_keys, keep, nulls_equal, nans_equal
-            )
+        c_result = cpp_stream_compaction.stable_distinct(
+            input.view(), c_keys, keep, nulls_equal, nans_equal
         )
     return Table.from_libcudf(move(c_result))
 
@@ -262,6 +274,8 @@ cpdef size_type unique_count(
     nan_policy nan_handling
 ):
     """Returns the number of unique consecutive elements in the input column.
+
+    For details, see :cpp:func:`unique_count`.
 
     Parameters
     ----------
@@ -293,6 +307,8 @@ cpdef size_type distinct_count(
     nan_policy nan_handling
 ):
     """Returns the number of distinct elements in the input column.
+
+    For details, see :cpp:func:`distinct_count`.
 
     Parameters
     ----------

@@ -27,14 +27,15 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
 #include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
 
 #include <cstddef>
@@ -80,14 +81,9 @@ class build_keys_fn {
 
 /**
  * @brief Device output transform functor to construct `size_type` with `cuco::pair<hash_value_type,
- * lhs_index_type>` or `cuco::pair<hash_value_type, rhs_index_type>`
+ * rhs_index_type>`
  */
 struct output_fn {
-  __device__ constexpr cudf::size_type operator()(
-    cuco::pair<hash_value_type, lhs_index_type> const& x) const
-  {
-    return static_cast<cudf::size_type>(x.second);
-  }
   __device__ constexpr cudf::size_type operator()(
     cuco::pair<hash_value_type, rhs_index_type> const& x) const
   {
@@ -177,15 +173,33 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
   auto const iter           = cudf::detail::make_counting_transform_iterator(
     0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
-  auto const build_indices_begin =
-    thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
-  auto const probe_indices_begin =
-    thrust::make_transform_output_iterator(probe_indices->begin(), output_fn{});
+  auto found_indices = rmm::device_uvector<size_type>(probe_table_num_rows, stream);
+  auto const found_begin =
+    thrust::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
-  auto const [probe_indices_end, _] = this->_hash_table.retrieve(
-    iter, iter + probe_table_num_rows, probe_indices_begin, build_indices_begin, {stream.value()});
+  // TODO conditional find for nulls once `cuco::static_set::find_if` is added
+  // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not equal
+  // to `JoinNoneValue`, then `idx` has a match in the hash set.
+  this->_hash_table.find_async(iter, iter + probe_table_num_rows, found_begin, stream.value());
 
-  auto const actual_size = std::distance(probe_indices_begin, probe_indices_end);
+  auto const tuple_iter = cudf::detail::make_counting_transform_iterator(
+    0,
+    cuda::proclaim_return_type<thrust::tuple<size_type, size_type>>(
+      [found_iter = found_indices.begin()] __device__(size_type idx) {
+        return thrust::tuple{*(found_iter + idx), idx};
+      }));
+  auto const output_begin =
+    thrust::make_zip_iterator(build_indices->begin(), probe_indices->begin());
+  auto const output_end =
+    thrust::copy_if(rmm::exec_policy_nosync(stream),
+                    tuple_iter,
+                    tuple_iter + probe_table_num_rows,
+                    found_indices.begin(),
+                    output_begin,
+                    cuda::proclaim_return_type<bool>(
+                      [] __device__(size_type idx) { return idx != JoinNoneValue; }));
+  auto const actual_size = std::distance(output_begin, output_end);
+
   build_indices->resize(actual_size, stream);
   probe_indices->resize(actual_size, stream);
 

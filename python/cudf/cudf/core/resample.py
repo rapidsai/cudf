@@ -22,9 +22,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
-import cudf._lib.labeling
-import cudf.core.index
+from cudf._lib.column import Column
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
@@ -48,7 +50,7 @@ class _Resampler(GroupBy):
             func, *args, engine=engine, engine_kwargs=engine_kwargs, **kwargs
         )
         if len(self.grouping.bin_labels) != len(result):
-            index = cudf.core.index.Index(
+            index = cudf.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]
             )
             return result._align_to_index(
@@ -125,7 +127,7 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-    bin_labels: cudf.core.index.Index
+    bin_labels: cudf.Index
 
     def __init__(self, obj, by=None, level=None):
         self._freq = getattr(by, "freq", None)
@@ -170,7 +172,7 @@ class _ResampleGrouping(_Grouping):
         out.names = names
         out._named_columns = _named_columns
         out._key_columns = key_columns
-        out.bin_labels = cudf.core.index.Index.deserialize(
+        out.bin_labels = cudf.Index.deserialize(
             header["__bin_labels"], frames[-header["__bin_labels_count"] :]
         )
         out._freq = header["_freq"]
@@ -268,13 +270,19 @@ class _ResampleGrouping(_Grouping):
             cast_bin_labels = bin_labels.astype(result_type)
 
         # bin the key column:
-        bin_numbers = cudf._lib.labeling.label_bins(
-            cast_key_column,
-            left_edges=cast_bin_labels[:-1]._column,
-            left_inclusive=(closed == "left"),
-            right_edges=cast_bin_labels[1:]._column,
-            right_inclusive=(closed == "right"),
-        )
+        with acquire_spill_lock():
+            plc_column = plc.labeling.label_bins(
+                cast_key_column.to_pylibcudf(mode="read"),
+                cast_bin_labels[:-1]._column.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES
+                if closed == "left"
+                else plc.labeling.Inclusive.NO,
+                cast_bin_labels[1:]._column.to_pylibcudf(mode="read"),
+                plc.labeling.Inclusive.YES
+                if closed == "right"
+                else plc.labeling.Inclusive.NO,
+            )
+            bin_numbers = Column.from_pylibcudf(plc_column)
 
         if label == "right":
             cast_bin_labels = cast_bin_labels[1:]

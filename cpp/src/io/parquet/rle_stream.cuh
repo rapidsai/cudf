@@ -19,6 +19,7 @@
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace cudf::io::parquet::detail {
 
@@ -151,7 +152,6 @@ __device__ inline void decode(level_t* const output,
 }
 
 // a single rle run. may be broken up into multiple rle_batches
-template <typename level_t>
 struct rle_run {
   int size;        // total size of the run
   int output_pos;  // absolute position of this run w.r.t output
@@ -182,14 +182,14 @@ struct rle_stream {
 
   level_t* output;
 
-  rle_run<level_t>* runs;
+  rle_run* runs;
 
   int output_pos;
 
   int fill_index;
   int decode_index;
 
-  __device__ rle_stream(rle_run<level_t>* _runs) : runs(_runs) {}
+  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
@@ -216,6 +216,26 @@ struct rle_stream {
     decode_index = -1;  // signals the first iteration. Nothing to decode.
   }
 
+  __device__ inline int get_rle_run_info(rle_run& run)
+  {
+    run.start     = cur;
+    run.level_run = get_vlq32(run.start, end);
+
+    // run_bytes includes the header size
+    int run_bytes = run.start - cur;
+    if (is_literal_run(run.level_run)) {
+      // from the parquet spec: literal runs always come in multiples of 8 values.
+      run.size = (run.level_run >> 1) * 8;
+      run_bytes += util::div_rounding_up_unsafe(run.size * level_bits, 8);
+    } else {
+      // repeated value run
+      run.size = (run.level_run >> 1);
+      run_bytes += util::div_rounding_up_unsafe(level_bits, 8);
+    }
+
+    return run_bytes;
+  }
+
   __device__ inline void fill_run_batch()
   {
     // decode_index == -1 means we are on the very first decode iteration for this stream.
@@ -226,31 +246,14 @@ struct rle_stream {
     while (((decode_index == -1 && fill_index < num_rle_stream_decode_warps) ||
             fill_index < decode_index + run_buffer_size) &&
            cur < end) {
-      auto& run = runs[rolling_index<run_buffer_size>(fill_index)];
-
       // Encoding::RLE
+      // Pass by reference to fill the runs shared memory with the run data
+      auto& run           = runs[rolling_index<run_buffer_size>(fill_index)];
+      int const run_bytes = get_rle_run_info(run);
 
-      // bytes for the varint header
-      uint8_t const* _cur = cur;
-      int const level_run = get_vlq32(_cur, end);
-      // run_bytes includes the header size
-      int run_bytes = _cur - cur;
-
-      // literal run
-      if (is_literal_run(level_run)) {
-        // from the parquet spec: literal runs always come in multiples of 8 values.
-        run.size = (level_run >> 1) * 8;
-        run_bytes += ((run.size * level_bits) + 7) >> 3;
-      }
-      // repeated value run
-      else {
-        run.size = (level_run >> 1);
-        run_bytes += ((level_bits) + 7) >> 3;
-      }
-      run.output_pos = output_pos;
-      run.start      = _cur;
-      run.level_run  = level_run;
       run.remaining  = run.size;
+      run.output_pos = output_pos;
+
       cur += run_bytes;
       output_pos += run.size;
       fill_index++;
@@ -370,6 +373,39 @@ struct rle_stream {
 
     // valid for every thread
     return values_processed_shared;
+  }
+
+  __device__ inline int skip_runs(int target_count)
+  {
+    // we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip
+    // amount so threads spin like crazy on fill_run_batch(), skipping writing unnecessary run info.
+    // then when it hits the one that matters, we don't process it at all and bail as if we never
+    // started basically we're setting up the rle_stream vars necessary to start fill_run_batch for
+    // the first time
+    while (cur < end) {
+      rle_run run;
+      int run_bytes = get_rle_run_info(run);
+
+      if ((output_pos + run.size) > target_count) {
+        return output_pos;  // bail! we've reached the starting run
+      }
+
+      // skip this run
+      output_pos += run.size;
+      cur += run_bytes;
+    }
+
+    return output_pos;  // we skipped everything
+  }
+
+  __device__ inline int skip_decode(int t, int count)
+  {
+    int const output_count = min(count, total_values - cur_values);
+
+    // if level_bits == 0, there's nothing to do
+    // a very common case: columns with no nulls, especially if they are non-nested
+    cur_values = (level_bits == 0) ? output_count : skip_runs(output_count);
+    return cur_values;
   }
 
   __device__ inline int decode_next(int t) { return decode_next(t, max_output_values); }

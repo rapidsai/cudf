@@ -8,14 +8,25 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING
 
+from polars.exceptions import InvalidOperationError
+
 import pylibcudf as plc
+from pylibcudf.strings.convert.convert_floats import from_floats, is_float, to_floats
+from pylibcudf.strings.convert.convert_integers import (
+    from_integers,
+    is_integer,
+    to_integers,
+)
+from pylibcudf.traits import is_floating_point
+
+from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     import polars as pl
 
-__all__: list[str] = ["Column", "NamedColumn"]
+__all__: list[str] = ["Column"]
 
 
 class Column:
@@ -26,6 +37,9 @@ class Column:
     order: plc.types.Order
     null_order: plc.types.NullOrder
     is_scalar: bool
+    # Optional name, only ever set by evaluation of NamedExpr nodes
+    # The internal evaluation should not care about the name.
+    name: str | None
 
     def __init__(
         self,
@@ -34,14 +48,12 @@ class Column:
         is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
         order: plc.types.Order = plc.types.Order.ASCENDING,
         null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
+        name: str | None = None,
     ):
         self.obj = column
         self.is_scalar = self.obj.size() == 1
-        if self.obj.size() <= 1:
-            is_sorted = plc.types.Sorted.YES
-        self.is_sorted = is_sorted
-        self.order = order
-        self.null_order = null_order
+        self.name = name
+        self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
 
     @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:
@@ -63,9 +75,26 @@ class Column:
             )
         return plc.copying.get_element(self.obj, 0)
 
+    def rename(self, name: str | None, /) -> Self:
+        """
+        Return a shallow copy with a new name.
+
+        Parameters
+        ----------
+        name
+            New name
+
+        Returns
+        -------
+        Shallow copy of self with new name set.
+        """
+        new = self.copy()
+        new.name = name
+        return new
+
     def sorted_like(self, like: Column, /) -> Self:
         """
-        Copy sortedness properties from a column onto self.
+        Return a shallow copy with sortedness from like.
 
         Parameters
         ----------
@@ -74,20 +103,23 @@ class Column:
 
         Returns
         -------
-        Self with metadata set.
+        Shallow copy of self with metadata set.
 
         See Also
         --------
         set_sorted, copy_metadata
         """
-        return self.set_sorted(
-            is_sorted=like.is_sorted, order=like.order, null_order=like.null_order
+        return type(self)(
+            self.obj,
+            name=self.name,
+            is_sorted=like.is_sorted,
+            order=like.order,
+            null_order=like.null_order,
         )
 
-    # TODO: Return Column once #16272 is fixed.
-    def astype(self, dtype: plc.DataType) -> plc.Column:
+    def astype(self, dtype: plc.DataType) -> Column:
         """
-        Return the backing column as the requested dtype.
+        Cast the column to as the requested dtype.
 
         Parameters
         ----------
@@ -108,9 +140,46 @@ class Column:
         This only produces a copy if the requested dtype doesn't match
         the current one.
         """
-        if self.obj.type() != dtype:
-            return plc.unary.cast(self.obj, dtype)
-        return self.obj
+        if self.obj.type() == dtype:
+            return self
+
+        if dtype.id() == plc.TypeId.STRING or self.obj.type().id() == plc.TypeId.STRING:
+            return Column(self._handle_string_cast(dtype))
+        else:
+            result = Column(plc.unary.cast(self.obj, dtype))
+            if is_order_preserving_cast(self.obj.type(), dtype):
+                return result.sorted_like(self)
+            return result
+
+    def _handle_string_cast(self, dtype: plc.DataType) -> plc.Column:
+        if dtype.id() == plc.TypeId.STRING:
+            if is_floating_point(self.obj.type()):
+                return from_floats(self.obj)
+            else:
+                return from_integers(self.obj)
+        else:
+            if is_floating_point(dtype):
+                floats = is_float(self.obj)
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        floats,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("Conversion from `str` failed.")
+                return to_floats(self.obj, dtype)
+            else:
+                integers = is_integer(self.obj)
+                if not plc.interop.to_arrow(
+                    plc.reduce.reduce(
+                        integers,
+                        plc.aggregation.all(),
+                        plc.DataType(plc.TypeId.BOOL8),
+                    )
+                ).as_py():
+                    raise InvalidOperationError("Conversion from `str` failed.")
+                return to_integers(self.obj, dtype)
 
     def copy_metadata(self, from_: pl.Series, /) -> Self:
         """
@@ -129,6 +198,7 @@ class Column:
         --------
         set_sorted, sorted_like
         """
+        self.name = from_.name
         if len(from_) <= 1:
             return self
         ascending = from_.flags["SORTED_ASC"]
@@ -192,6 +262,7 @@ class Column:
             is_sorted=self.is_sorted,
             order=self.order,
             null_order=self.null_order,
+            name=self.name,
         )
 
     def mask_nans(self) -> Self:
@@ -217,58 +288,3 @@ class Column:
                 )
             ).as_py()
         return 0
-
-
-class NamedColumn(Column):
-    """A column with a name."""
-
-    name: str
-
-    def __init__(
-        self,
-        column: plc.Column,
-        name: str,
-        *,
-        is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
-        order: plc.types.Order = plc.types.Order.ASCENDING,
-        null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
-    ) -> None:
-        super().__init__(
-            column, is_sorted=is_sorted, order=order, null_order=null_order
-        )
-        self.name = name
-
-    def copy(self, *, new_name: str | None = None) -> Self:
-        """
-        A shallow copy of the column.
-
-        Parameters
-        ----------
-        new_name
-            Optional new name for the copied column.
-
-        Returns
-        -------
-        New column sharing data with self.
-        """
-        return type(self)(
-            self.obj,
-            self.name if new_name is None else new_name,
-            is_sorted=self.is_sorted,
-            order=self.order,
-            null_order=self.null_order,
-        )
-
-    def mask_nans(self) -> Self:
-        """Return a shallow copy of self with nans masked out."""
-        # Annoying, the inheritance is not right (can't call the
-        # super-type mask_nans), but will sort that by refactoring
-        # later.
-        if plc.traits.is_floating_point(self.obj.type()):
-            old_count = self.obj.null_count()
-            mask, new_count = plc.transform.nans_to_nulls(self.obj)
-            result = type(self)(self.obj.with_mask(mask, new_count), self.name)
-            if old_count == new_count:
-                return result.sorted_like(self)
-            return result
-        return self.copy()

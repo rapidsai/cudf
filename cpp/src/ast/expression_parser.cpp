@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,6 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -210,7 +207,7 @@ cudf::data_type expression_parser::output_type() const
 }
 
 std::vector<cudf::size_type> expression_parser::visit_operands(
-  std::vector<std::reference_wrapper<expression const>> operands)
+  cudf::host_span<std::reference_wrapper<expression const> const> operands)
 {
   auto operand_data_reference_indices = std::vector<cudf::size_type>();
   for (auto const& operand : operands) {

@@ -26,16 +26,18 @@ import sys
 import tempfile
 import warnings
 import xml.etree.ElementTree as ET
-
-from docutils.nodes import Text
-from packaging.version import Version
-from sphinx.addnodes import pending_xref
-from sphinx.highlighting import lexers
-from sphinx.ext import intersphinx
-from pygments.lexer import RegexLexer
-from pygments.token import Text as PText
+from enum import IntEnum
+from typing import Any
 
 import cudf
+from docutils.nodes import Text
+from packaging.version import Version
+from pygments.lexer import RegexLexer
+from pygments.token import Text as PText
+from sphinx.addnodes import pending_xref
+from sphinx.ext import intersphinx
+from sphinx.ext.autodoc import ClassDocumenter, bool_option
+from sphinx.highlighting import lexers
 
 
 class PseudoLexer(RegexLexer):
@@ -342,7 +344,10 @@ _reftarget_aliases = {
     "cudf.Series": ("cudf.core.series.Series", "cudf.Series"),
     "cudf.Index": ("cudf.core.index.Index", "cudf.Index"),
     "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
-    "DeviceBuffer": ("rmm._lib.device_buffer.DeviceBuffer", "rmm.DeviceBuffer"),
+    "DeviceBuffer": (
+        "rmm.pylibrmm.device_buffer.DeviceBuffer",
+        "rmm.DeviceBuffer",
+    ),
 }
 
 
@@ -373,7 +378,14 @@ def _generate_namespaces(namespaces):
 _all_namespaces = _generate_namespaces(
     {
         # Note that io::datasource is actually a nested class
-        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression", "io::text"},
+        "cudf": {
+            "io",
+            "io::datasource",
+            "strings",
+            "ast",
+            "ast::expression",
+            "io::text",
+        },
         "numeric": {},
         "nvtext": {},
     }
@@ -554,6 +566,8 @@ def on_missing_reference(app, env, node, contnode):
 
 
 nitpick_ignore = [
+    # Erroneously warned in ParquetColumnSchema.name
+    ("py:class", "unicode"),
     ("py:class", "SeriesOrIndex"),
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
@@ -640,8 +654,53 @@ def linkcode_resolve(domain, info) -> str | None:
         f"branch-{version}/python/cudf/cudf/{fn}{linespec}"
     )
 
+
 # Needed for avoid build warning for PandasCompat extension
 suppress_warnings = ["myst.domains"]
+
+
+class PLCIntEnumDocumenter(ClassDocumenter):
+    objtype = "enum"
+    directivetype = "attribute"
+    priority = 10 + ClassDocumenter.priority
+
+    option_spec = dict(ClassDocumenter.option_spec)
+
+    @classmethod
+    def can_document_member(
+        cls, member: Any, membername: str, isattr: bool, parent: Any
+    ) -> bool:
+        try:
+            return issubclass(
+                member, IntEnum
+            ) and member.__module__.startswith("pylibcudf")
+        except TypeError:
+            return False
+
+    def add_directive_header(self, sig: str) -> None:
+        self.directivetype = "attribute"
+        super().add_directive_header(sig)
+
+    def add_content(self, more_content) -> None:
+        doc_as_attr = self.doc_as_attr
+        self.doc_as_attr = False
+        super().add_content(more_content)
+        self.doc_as_attr = doc_as_attr
+        source_name = self.get_sourcename()
+        enum_object: IntEnum = self.object
+
+        if self.object.__name__ != "Kind":
+            self.add_line(f"See also :cpp:enum:`cudf::{self.object.__name__}`.", source_name)
+        self.add_line("", source_name)
+        self.add_line("Enum members", source_name)
+        self.add_line("", source_name)
+
+        for the_member_name in enum_object.__members__:  # type: ignore[attr-defined]
+            self.add_line(
+                f"* ``{the_member_name}``", source_name
+            )
+            self.add_line("", source_name)
+
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
@@ -650,3 +709,5 @@ def setup(app):
     )
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", on_missing_reference)
+    app.setup_extension("sphinx.ext.autodoc")
+    app.add_autodocumenter(PLCIntEnumDocumenter)

@@ -1,35 +1,262 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
+
+from __future__ import annotations
+
+import functools
 import itertools
+import math
+import os
 import warnings
-from functools import partial
-from io import BufferedWriter, BytesIO, IOBase
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
-from pyarrow import dataset as pa_ds, parquet as pq
+from dask_expr._expr import Elemwise
+from dask_expr._util import _convert_to_list
+from dask_expr.io.io import FusedIO, FusedParquetIO
+from dask_expr.io.parquet import (
+    FragmentWrapper,
+    ReadParquetFSSpec,
+    ReadParquetPyarrowFS,
+)
 
-from dask import dataframe as dd
-from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
-
-try:
-    from dask.dataframe.io.parquet import (
-        create_metadata_file as create_metadata_file_dd,
-    )
-except ImportError:
-    create_metadata_file_dd = None
+from dask._task_spec import Task
+from dask.dataframe.io.parquet.arrow import _filters_to_expression
+from dask.dataframe.io.parquet.core import ParquetFunctionWrapper
+from dask.tokenize import tokenize
+from dask.utils import parse_bytes
 
 import cudf
-from cudf.core.column import CategoricalColumn, as_column
-from cudf.io import write_to_dataset
-from cudf.io.parquet import _apply_post_filters, _normalize_filters
-from cudf.utils.dtypes import cudf_dtype_from_pa_type
+
+from dask_cudf import QUERY_PLANNING_ON, _deprecated_api
+
+# Dask-expr imports CudfEngine from this module
+from dask_cudf._legacy.io.parquet import CudfEngine  # noqa: F401
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 
-class CudfEngine(ArrowDatasetEngine):
-    @classmethod
-    def _create_dd_meta(cls, dataset_info, **kwargs):
-        # Start with pandas-version of meta
-        meta_pd = super()._create_dd_meta(dataset_info, **kwargs)
+_DEVICE_SIZE_CACHE: int | None = None
+
+
+def _get_device_size():
+    try:
+        # Use PyNVML to find the worker device size.
+        import pynvml
+
+        pynvml.nvmlInit()
+        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+        if index and not index.isnumeric():
+            # This means index is UUID. This works for both MIG and non-MIG device UUIDs.
+            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+        else:
+            # This is a device index
+            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
+
+    except (ImportError, ValueError):
+        # Fall back to a conservative 8GiB default
+        return 8 * 1024**3
+
+
+def _normalize_blocksize(fraction: float = 0.03125):
+    # Set the blocksize to fraction * <device-size>.
+    # We use the smallest worker device to set <device-size>.
+    # (Default blocksize is 1/32 * <device-size>)
+    global _DEVICE_SIZE_CACHE
+
+    if _DEVICE_SIZE_CACHE is None:
+        try:
+            # Check distributed workers (if a client exists)
+            from distributed import get_client
+
+            client = get_client()
+            # TODO: Check "GPU" worker resources only.
+            # Depends on (https://github.com/rapidsai/dask-cuda/pull/1401)
+            device_size = min(client.run(_get_device_size).values())
+        except (ImportError, ValueError):
+            device_size = _get_device_size()
+        _DEVICE_SIZE_CACHE = device_size
+
+    return int(_DEVICE_SIZE_CACHE * fraction)
+
+
+class NoOp(Elemwise):
+    # Workaround - Always wrap read_parquet operations
+    # in a NoOp to trigger tune_up optimizations.
+    _parameters = ["frame"]
+    _is_length_preserving = True
+    _projection_passthrough = True
+    _filter_passthrough = True
+    _preserves_partitioning_information = True
+
+    @staticmethod
+    def operation(x):
+        return x
+
+
+class CudfReadParquetFSSpec(ReadParquetFSSpec):
+    _STATS_CACHE: MutableMapping[str, Any] = {}
+
+    def approx_statistics(self):
+        # Use a few files to approximate column-size statistics
+        key = tokenize(self._dataset_info["ds"].files[:10], self.filters)
+        try:
+            return self._STATS_CACHE[key]
+
+        except KeyError:
+            # Account for filters
+            ds_filters = None
+            if self.filters is not None:
+                ds_filters = _filters_to_expression(self.filters)
+
+            # Use average total_uncompressed_size of three files
+            n_sample = 3
+            column_sizes = {}
+            for i, frag in enumerate(
+                self._dataset_info["ds"].get_fragments(ds_filters)
+            ):
+                md = frag.metadata
+                for rg in range(md.num_row_groups):
+                    row_group = md.row_group(rg)
+                    for col in range(row_group.num_columns):
+                        column = row_group.column(col)
+                        name = column.path_in_schema
+                        if name not in column_sizes:
+                            column_sizes[name] = np.zeros(
+                                n_sample, dtype="int64"
+                            )
+                        column_sizes[name][i] += column.total_uncompressed_size
+                if (i + 1) >= n_sample:
+                    break
+
+            # Reorganize stats to look like arrow-fs version
+            self._STATS_CACHE[key] = {
+                "columns": [
+                    {
+                        "path_in_schema": name,
+                        "total_uncompressed_size": np.mean(sizes),
+                    }
+                    for name, sizes in column_sizes.items()
+                ]
+            }
+            return self._STATS_CACHE[key]
+
+    @functools.cached_property
+    def _fusion_compression_factor(self):
+        # Disable fusion when blocksize=None
+        if self.blocksize is None:
+            return 1
+
+        # At this point, we *may* have used `blockwise`
+        # already to split or aggregate files. We don't
+        # *know* if the current partitions correspond to
+        # individual/full files, multiple/aggregated files
+        # or partial/split files.
+        #
+        # Therefore, we need to use the statistics from
+        # a few files to estimate the current partition
+        # size. This size should be similar to `blocksize`
+        # *if* aggregate_files is True or if the files
+        # are *smaller* than `blocksize`.
+
+        # Step 1: Sample statistics
+        approx_stats = self.approx_statistics()
+        projected_size, original_size = 0, 0
+        col_op = self.operand("columns") or self.columns
+        for col in approx_stats["columns"]:
+            original_size += col["total_uncompressed_size"]
+            if col["path_in_schema"] in col_op or (
+                (split_name := col["path_in_schema"].split("."))
+                and split_name[0] in col_op
+            ):
+                projected_size += col["total_uncompressed_size"]
+        if original_size < 1 or projected_size < 1:
+            return 1
+
+        # Step 2: Estimate the correction factor
+        # (Correct for possible pre-optimization fusion/splitting)
+        blocksize = parse_bytes(self.blocksize)
+        if original_size > blocksize:
+            # Input files are bigger than blocksize
+            # and we already split these large files.
+            # (correction_factor > 1)
+            correction_factor = original_size / blocksize
+        elif self.aggregate_files:
+            # Input files are smaller than blocksize
+            # and we already aggregate small files.
+            # (correction_factor == 1)
+            correction_factor = 1
+        else:
+            # Input files are smaller than blocksize
+            # but we haven't aggregate small files yet.
+            # (correction_factor < 1)
+            correction_factor = original_size / blocksize
+
+        # Step 3. Estimate column-projection factor
+        if self.operand("columns") is None:
+            projection_factor = 1
+        else:
+            projection_factor = projected_size / original_size
+
+        return max(projection_factor * correction_factor, 0.001)
+
+    def _tune_up(self, parent):
+        if self._fusion_compression_factor >= 1:
+            return
+        if isinstance(parent, FusedIO):
+            return
+        return parent.substitute(self, CudfFusedIO(self))
+
+
+class CudfReadParquetPyarrowFS(ReadParquetPyarrowFS):
+    _parameters = [
+        "path",
+        "columns",
+        "filters",
+        "categories",
+        "index",
+        "storage_options",
+        "filesystem",
+        "blocksize",
+        "ignore_metadata_file",
+        "calculate_divisions",
+        "arrow_to_pandas",
+        "pyarrow_strings_enabled",
+        "kwargs",
+        "_partitions",
+        "_series",
+        "_dataset_info_cache",
+    ]
+    _defaults = {
+        "columns": None,
+        "filters": None,
+        "categories": None,
+        "index": None,
+        "storage_options": None,
+        "filesystem": None,
+        "blocksize": "256 MiB",
+        "ignore_metadata_file": True,
+        "calculate_divisions": False,
+        "arrow_to_pandas": None,
+        "pyarrow_strings_enabled": True,
+        "kwargs": None,
+        "_partitions": None,
+        "_series": False,
+        "_dataset_info_cache": None,
+    }
+
+    @functools.cached_property
+    def _dataset_info(self):
+        from dask_cudf._legacy.io.parquet import (
+            set_object_dtypes_from_pa_schema,
+        )
+
+        dataset_info = super()._dataset_info
+        meta_pd = dataset_info["base_meta"]
+        if isinstance(meta_pd, cudf.DataFrame):
+            return dataset_info
 
         # Convert to cudf
         # (drop unsupported timezone information)
@@ -45,37 +272,56 @@ class CudfEngine(ArrowDatasetEngine):
             kwargs.get("schema", None),
         )
 
-        return meta_cudf
+        dataset_info["base_meta"] = meta_cudf
+        self.operands[type(self)._parameters.index("_dataset_info_cache")] = (
+            dataset_info
+        )
+        return dataset_info
 
-    @classmethod
-    def multi_support(cls):
-        # Assert that this class is CudfEngine
-        # and that multi-part reading is supported
-        return cls == CudfEngine
+    @staticmethod
+    def _table_to_pandas(table, index_name):
+        if isinstance(table, cudf.DataFrame):
+            df = table
+        else:
+            df = cudf.DataFrame.from_arrow(table)
+            if index_name is not None:
+                return df.set_index(index_name)
+        return df
 
-    @classmethod
-    def _read_paths(
-        cls,
-        paths,
-        fs,
-        columns=None,
-        row_groups=None,
-        filters=None,
-        partitions=None,
-        partitioning=None,
-        partition_keys=None,
-        open_file_options=None,
-        dataset_kwargs=None,
-        **kwargs,
+    @staticmethod
+    def _fragments_to_cudf_dataframe(
+        fragment_wrappers,
+        filters,
+        columns,
+        schema,
     ):
-        # Simplify row_groups if all None
-        if row_groups == [None for path in paths]:
-            row_groups = None
+        from dask.dataframe.io.utils import _is_local_fs
 
-        # Make sure we read in the columns needed for row-wise
-        # filtering after IO. This means that one or more columns
-        # will be dropped almost immediately after IO. However,
-        # we do NEED these columns for accurate filtering.
+        from cudf.io.parquet import _apply_post_filters, _normalize_filters
+
+        if not isinstance(fragment_wrappers, list):
+            fragment_wrappers = [fragment_wrappers]
+
+        filesystem = None
+        paths, row_groups = [], []
+        for fw in fragment_wrappers:
+            frag = fw.fragment if isinstance(fw, FragmentWrapper) else fw
+            paths.append(frag.path)
+            row_groups.append(
+                [rg.id for rg in frag.row_groups] if frag.row_groups else None
+            )
+            if filesystem is None:
+                filesystem = frag.filesystem
+
+        if _is_local_fs(filesystem):
+            filesystem = None
+        else:
+            from fsspec.implementations.arrow import ArrowFSWrapper
+
+            filesystem = ArrowFSWrapper(filesystem)
+            protocol = filesystem.protocol
+            paths = [f"{protocol}://{path}" for path in paths]
+
         filters = _normalize_filters(filters)
         projected_columns = None
         if columns and filters:
@@ -85,46 +331,19 @@ class CudfEngine(ArrowDatasetEngine):
                 | set(projected_columns)
             )
 
-        dataset_kwargs = dataset_kwargs or {}
-        dataset_kwargs["partitioning"] = partitioning or "hive"
+        if row_groups == [None for path in paths]:
+            row_groups = None
 
-        # Use cudf to read in data
-        try:
-            df = cudf.read_parquet(
-                paths,
-                engine="cudf",
-                columns=columns,
-                row_groups=row_groups if row_groups else None,
-                dataset_kwargs=dataset_kwargs,
-                categorical_partitions=False,
-                filesystem=fs,
-                **kwargs,
-            )
-        except RuntimeError as err:
-            # TODO: Remove try/except after null-schema issue is resolved
-            # (See: https://github.com/rapidsai/cudf/issues/12702)
-            if len(paths) > 1:
-                df = cudf.concat(
-                    [
-                        cudf.read_parquet(
-                            path,
-                            engine="cudf",
-                            columns=columns,
-                            row_groups=row_groups[i] if row_groups else None,
-                            dataset_kwargs=dataset_kwargs,
-                            categorical_partitions=False,
-                            filesystem=fs,
-                            **kwargs,
-                        )
-                        for i, path in enumerate(paths)
-                    ]
-                )
-            else:
-                raise err
+        df = cudf.read_parquet(
+            paths,
+            columns=columns,
+            filters=filters,
+            row_groups=row_groups,
+            dataset_kwargs={"schema": schema},
+        )
 
         # Apply filters (if any are defined)
         df = _apply_post_filters(df, filters)
-
         if projected_columns:
             # Elements of `projected_columns` may now be in the index.
             # We must filter these names from our projection
@@ -133,375 +352,493 @@ class CudfEngine(ArrowDatasetEngine):
             ]
             df = df[projected_columns]
 
-        if partitions and partition_keys is None:
-            # Use `HivePartitioning` by default
-            ds = pa_ds.dataset(
-                paths,
-                filesystem=fs,
-                **dataset_kwargs,
-            )
-            frag = next(ds.get_fragments())
-            if frag:
-                # Extract hive-partition keys, and make sure they
-                # are ordered the same as they are in `partitions`
-                raw_keys = pa_ds._get_partition_keys(frag.partition_expression)
-                partition_keys = [
-                    (hive_part.name, raw_keys[hive_part.name])
-                    for hive_part in partitions
-                ]
-
-        if partition_keys:
-            if partitions is None:
-                raise ValueError("Must pass partition sets")
-
-            for i, (name, index2) in enumerate(partition_keys):
-                if len(partitions[i].keys):
-                    # Build a categorical column from `codes` directly
-                    # (since the category is often a larger dtype)
-                    codes = as_column(
-                        partitions[i].keys.get_loc(index2),
-                        length=len(df),
-                    )
-                    df[name] = CategoricalColumn(
-                        data=None,
-                        size=codes.size,
-                        dtype=cudf.CategoricalDtype(
-                            categories=partitions[i].keys, ordered=False
-                        ),
-                        offset=codes.offset,
-                        children=(codes,),
-                    )
-                elif name not in df.columns:
-                    # Add non-categorical partition column
-                    df[name] = as_column(index2, length=len(df))
-
+        # TODO: Deal with hive partitioning.
+        # Note that ReadParquetPyarrowFS does NOT support this yet anyway.
         return df
 
-    @classmethod
-    def read_partition(
-        cls,
-        fs,
-        pieces,
-        columns,
-        index,
-        categories=(),
-        partitions=(),
-        filters=None,
-        partitioning=None,
-        schema=None,
-        open_file_options=None,
-        **kwargs,
-    ):
-        if columns is not None:
-            columns = [c for c in columns]
-        if isinstance(index, list):
-            columns += index
+    @functools.cached_property
+    def _use_device_io(self):
+        from dask.dataframe.io.utils import _is_local_fs
 
-        dataset_kwargs = kwargs.get("dataset", {})
-        partitioning = partitioning or dataset_kwargs.get("partitioning", None)
-        if isinstance(partitioning, dict):
-            partitioning = pa_ds.partitioning(**partitioning)
-
-        # Check if we are actually selecting any columns
-        read_columns = columns
-        if schema and columns:
-            ignored = set(schema.names) - set(columns)
-            if not ignored:
-                read_columns = None
-
-        if not isinstance(pieces, list):
-            pieces = [pieces]
-
-        # Extract supported kwargs from `kwargs`
-        read_kwargs = kwargs.get("read", {})
-        read_kwargs.update(open_file_options or {})
-        check_file_size = read_kwargs.pop("check_file_size", None)
-
-        # Wrap reading logic in a `try` block so that we can
-        # inform the user that the `read_parquet` partition
-        # size is too large for the available memory
-        try:
-            # Assume multi-piece read
-            paths = []
-            rgs = []
-            last_partition_keys = None
-            dfs = []
-
-            for i, piece in enumerate(pieces):
-                (path, row_group, partition_keys) = piece
-                row_group = None if row_group == [None] else row_group
-
-                # File-size check to help "protect" users from change
-                # to up-stream `split_row_groups` default. We only
-                # check the file size if this partition corresponds
-                # to a full file, and `check_file_size` is defined
-                if check_file_size and len(pieces) == 1 and row_group is None:
-                    file_size = fs.size(path)
-                    if file_size > check_file_size:
-                        warnings.warn(
-                            f"A large parquet file ({file_size}B) is being "
-                            f"used to create a DataFrame partition in "
-                            f"read_parquet. This may cause out of memory "
-                            f"exceptions in operations downstream. See the "
-                            f"notes on split_row_groups in the read_parquet "
-                            f"documentation. Setting split_row_groups "
-                            f"explicitly will silence this warning."
-                        )
-
-                if i > 0 and partition_keys != last_partition_keys:
-                    dfs.append(
-                        cls._read_paths(
-                            paths,
-                            fs,
-                            columns=read_columns,
-                            row_groups=rgs if rgs else None,
-                            filters=filters,
-                            partitions=partitions,
-                            partitioning=partitioning,
-                            partition_keys=last_partition_keys,
-                            dataset_kwargs=dataset_kwargs,
-                            **read_kwargs,
-                        )
-                    )
-                    paths = []
-                    rgs = []
-                    last_partition_keys = None
-                paths.append(path)
-                rgs.append(
-                    [row_group]
-                    if not isinstance(row_group, list)
-                    and row_group is not None
-                    else row_group
-                )
-                last_partition_keys = partition_keys
-
-            dfs.append(
-                cls._read_paths(
-                    paths,
-                    fs,
-                    columns=read_columns,
-                    row_groups=rgs if rgs else None,
-                    filters=filters,
-                    partitions=partitions,
-                    partitioning=partitioning,
-                    partition_keys=last_partition_keys,
-                    dataset_kwargs=dataset_kwargs,
-                    **read_kwargs,
-                )
-            )
-            df = cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
-
-            # Re-set "object" dtypes align with pa schema
-            set_object_dtypes_from_pa_schema(df, schema)
-
-            if index and (index[0] in df.columns):
-                df = df.set_index(index[0])
-            elif index is False and df.index.names != [None]:
-                # If index=False, we shouldn't have a named index
-                df.reset_index(inplace=True)
-
-        except MemoryError as err:
-            raise MemoryError(
-                "Parquet data was larger than the available GPU memory!\n\n"
-                "See the notes on split_row_groups in the read_parquet "
-                "documentation.\n\n"
-                "Original Error: " + str(err)
-            )
-            raise err
-
-        return df
-
-    @staticmethod
-    def write_partition(
-        df,
-        path,
-        fs,
-        filename,
-        partition_on,
-        return_metadata,
-        fmd=None,
-        compression="snappy",
-        index_cols=None,
-        **kwargs,
-    ):
-        preserve_index = False
-        if len(index_cols) and set(index_cols).issubset(set(df.columns)):
-            df.set_index(index_cols, drop=True, inplace=True)
-            preserve_index = True
-        if partition_on:
-            md = write_to_dataset(
-                df=df,
-                root_path=path,
-                compression=compression,
-                filename=filename,
-                partition_cols=partition_on,
-                fs=fs,
-                preserve_index=preserve_index,
-                return_metadata=return_metadata,
-                statistics=kwargs.get("statistics", "ROWGROUP"),
-                int96_timestamps=kwargs.get("int96_timestamps", False),
-                row_group_size_bytes=kwargs.get("row_group_size_bytes", None),
-                row_group_size_rows=kwargs.get("row_group_size_rows", None),
-                max_page_size_bytes=kwargs.get("max_page_size_bytes", None),
-                max_page_size_rows=kwargs.get("max_page_size_rows", None),
-                storage_options=kwargs.get("storage_options", None),
-            )
-        else:
-            with fs.open(fs.sep.join([path, filename]), mode="wb") as out_file:
-                if not isinstance(out_file, IOBase):
-                    out_file = BufferedWriter(out_file)
-                md = df.to_parquet(
-                    path=out_file,
-                    engine=kwargs.get("engine", "cudf"),
-                    index=kwargs.get("index", None),
-                    partition_cols=kwargs.get("partition_cols", None),
-                    partition_file_name=kwargs.get(
-                        "partition_file_name", None
-                    ),
-                    partition_offsets=kwargs.get("partition_offsets", None),
-                    statistics=kwargs.get("statistics", "ROWGROUP"),
-                    int96_timestamps=kwargs.get("int96_timestamps", False),
-                    row_group_size_bytes=kwargs.get(
-                        "row_group_size_bytes", None
-                    ),
-                    row_group_size_rows=kwargs.get(
-                        "row_group_size_rows", None
-                    ),
-                    storage_options=kwargs.get("storage_options", None),
-                    metadata_file_path=filename if return_metadata else None,
-                )
-        # Return the schema needed to write the metadata
-        if return_metadata:
-            return [{"meta": md}]
-        else:
-            return []
-
-    @staticmethod
-    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
-        if parts:
-            # Aggregate metadata and write to _metadata file
-            metadata_path = fs.sep.join([path, "_metadata"])
-            _meta = []
-            if append and fmd is not None:
-                _meta = [fmd]
-            _meta.extend([parts[i][0]["meta"] for i in range(len(parts))])
-            _meta = (
-                cudf.io.merge_parquet_filemetadata(_meta)
-                if len(_meta) > 1
-                else _meta[0]
-            )
-            with fs.open(metadata_path, "wb") as fil:
-                fil.write(memoryview(_meta))
-
-    @classmethod
-    def collect_file_metadata(cls, path, fs, file_path):
-        with fs.open(path, "rb") as f:
-            meta = pq.ParquetFile(f).metadata
-        if file_path:
-            meta.set_file_path(file_path)
-        with BytesIO() as myio:
-            meta.write_metadata_file(myio)
-            myio.seek(0)
-            meta = np.frombuffer(myio.read(), dtype="uint8")
-        return meta
-
-    @classmethod
-    def aggregate_metadata(cls, meta_list, fs, out_path):
-        meta = (
-            cudf.io.merge_parquet_filemetadata(meta_list)
-            if len(meta_list) > 1
-            else meta_list[0]
+        # Use host for remote filesystem only
+        # (Unless we are using kvikio-S3)
+        return _is_local_fs(self.fs) or (
+            self.fs.type_name == "s3" and cudf.get_option("kvikio_remote_io")
         )
-        if out_path:
-            metadata_path = fs.sep.join([out_path, "_metadata"])
-            with fs.open(metadata_path, "wb") as fil:
-                fil.write(memoryview(meta))
-            return None
-        else:
-            return meta
 
+    def _filtered_task(self, name, index: int):
+        columns = self.columns.copy()
+        index_name = self.index.name
+        if self.index is not None:
+            index_name = self.index.name
+        schema = self._dataset_info["schema"].remove_metadata()
+        if index_name:
+            if columns is None:
+                columns = list(schema.names)
+            columns.append(index_name)
 
-def set_object_dtypes_from_pa_schema(df, schema):
-    # Simple utility to modify cudf DataFrame
-    # "object" dtypes to agree with a specific
-    # pyarrow schema.
-    if schema:
-        for col_name, col in df._data.items():
-            if col_name is None:
-                # Pyarrow cannot handle `None` as a field name.
-                # However, this should be a simple range index that
-                # we can ignore anyway
-                continue
-            typ = cudf_dtype_from_pa_type(schema.field(col_name).type)
-            if (
-                col_name in schema.names
-                and not isinstance(typ, (cudf.ListDtype, cudf.StructDtype))
-                and isinstance(col, cudf.core.column.StringColumn)
+        frag_to_table = self._fragment_to_table
+        if self._use_device_io:
+            frag_to_table = self._fragments_to_cudf_dataframe
+
+        return Task(
+            name,
+            self._table_to_pandas,
+            Task(
+                None,
+                frag_to_table,
+                fragment_wrapper=FragmentWrapper(
+                    self.fragments[index], filesystem=self.fs
+                ),
+                filters=self.filters,
+                columns=columns,
+                schema=schema,
+            ),
+            index_name=index_name,
+        )
+
+    @property
+    def _fusion_compression_factor(self):
+        blocksize = self.blocksize
+        if blocksize is None:
+            return 1
+        elif blocksize == "default":
+            blocksize = "256MiB"
+
+        projected_size = 0
+        approx_stats = self.approx_statistics()
+        col_op = self.operand("columns") or self.columns
+        for col in approx_stats["columns"]:
+            if col["path_in_schema"] in col_op or (
+                (split_name := col["path_in_schema"].split("."))
+                and split_name[0] in col_op
             ):
-                df._data[col_name] = col.astype(typ)
+                projected_size += col["total_uncompressed_size"]
+
+        if projected_size < 1:
+            return 1
+
+        aggregate_files = max(1, int(parse_bytes(blocksize) / projected_size))
+        return max(1 / aggregate_files, 0.001)
+
+    def _tune_up(self, parent):
+        if self._fusion_compression_factor >= 1:
+            return
+        fused_cls = (
+            CudfFusedParquetIO
+            if self._use_device_io
+            else CudfFusedParquetIOHost
+        )
+        if isinstance(parent, fused_cls):
+            return
+        return parent.substitute(self, fused_cls(self))
 
 
-def read_parquet(path, columns=None, **kwargs):
-    """
-    Read parquet files into a :class:`.DataFrame`.
+class CudfFusedIO(FusedIO):
+    def _task(self, name, index: int):
+        expr = self.operand("_expr")
+        bucket = self._fusion_buckets[index]
+        io_func = expr._filtered_task(name, 0).func
+        if not isinstance(
+            io_func, ParquetFunctionWrapper
+        ) or io_func.common_kwargs.get("partitions", None):
+            # Just use "simple" fusion if we have an unexpected
+            # callable, or we are dealing with hive partitioning.
+            return Task(
+                name,
+                cudf.concat,
+                [expr._filtered_task(name, i) for i in bucket],
+            )
 
-    Calls :func:`dask.dataframe.read_parquet` with ``engine=CudfEngine``
-    to coordinate the execution of :func:`cudf.read_parquet`, and to
-    ultimately create a :class:`.DataFrame` collection.
+        pieces = []
+        for i in bucket:
+            piece = expr._filtered_task(name, i).args[0]
+            if isinstance(piece, list):
+                pieces.extend(piece)
+            else:
+                pieces.append(piece)
+        return Task(name, io_func, pieces)
 
-    See the :func:`dask.dataframe.read_parquet` documentation for
-    all available options.
 
-    Examples
-    --------
-    >>> from dask_cudf import read_parquet
-    >>> df = read_parquet("/path/to/dataset/")  # doctest: +SKIP
+class CudfFusedParquetIO(FusedParquetIO):
+    @functools.cached_property
+    def _fusion_buckets(self):
+        partitions = self.operand("_expr")._partitions
+        npartitions = len(partitions)
 
-    When dealing with one or more large parquet files having an
-    in-memory footprint >15% device memory, the ``split_row_groups``
-    argument should be used to map Parquet **row-groups** to DataFrame
-    partitions (instead of **files** to partitions). For example, the
-    following code will map each row-group to a distinct partition:
+        step = math.ceil(1 / self.operand("_expr")._fusion_compression_factor)
 
-    >>> df = read_parquet(..., split_row_groups=True)  # doctest: +SKIP
+        # TODO: Heuristic to limit fusion should probably
+        # account for the number of workers. For now, just
+        # limiting fusion to 100 partitions at once.
+        step = min(step, 100)
 
-    To map **multiple** row-groups to each partition, an integer can be
-    passed to ``split_row_groups`` to specify the **maximum** number of
-    row-groups allowed in each output partition:
+        buckets = [
+            partitions[i : i + step] for i in range(0, npartitions, step)
+        ]
+        return buckets
 
-    >>> df = read_parquet(..., split_row_groups=10)  # doctest: +SKIP
-
-    See Also
-    --------
-    cudf.read_parquet
-    dask.dataframe.read_parquet
-    """
-    if isinstance(columns, str):
-        columns = [columns]
-
-    # Set "check_file_size" option to determine whether we
-    # should check the parquet-file size. This check is meant
-    # to "protect" users from `split_row_groups` default changes
-    check_file_size = kwargs.pop("check_file_size", 500_000_000)
-    if (
-        check_file_size
-        and ("split_row_groups" not in kwargs)
-        and ("chunksize" not in kwargs)
+    @classmethod
+    def _load_multiple_files(
+        cls,
+        frag_filters,
+        columns,
+        schema,
+        **to_pandas_kwargs,
     ):
-        # User is not specifying `split_row_groups` or `chunksize`,
-        # so we should warn them if/when a file is ~>0.5GB on disk.
-        # They can set `split_row_groups` explicitly to silence/skip
-        # this check
-        if "read" not in kwargs:
-            kwargs["read"] = {}
-        kwargs["read"]["check_file_size"] = check_file_size
+        frag_to_table = CudfReadParquetPyarrowFS._fragments_to_cudf_dataframe
+        return CudfReadParquetPyarrowFS._table_to_pandas(
+            frag_to_table(
+                [frag[0] for frag in frag_filters],
+                frag_filters[0][1],  # TODO: Check for consistent filters?
+                columns,
+                schema,
+            ),
+            **to_pandas_kwargs,
+        )
 
-    return dd.read_parquet(path, columns=columns, engine=CudfEngine, **kwargs)
+
+class CudfFusedParquetIOHost(CudfFusedParquetIO):
+    @classmethod
+    def _load_multiple_files(
+        cls,
+        frag_filters,
+        columns,
+        schema,
+        **to_pandas_kwargs,
+    ):
+        import pyarrow as pa
+
+        from dask.base import apply, tokenize
+        from dask.threaded import get
+
+        token = tokenize(frag_filters, columns, schema)
+        name = f"pq-file-{token}"
+        dsk = {
+            (name, i): (
+                CudfReadParquetPyarrowFS._fragment_to_table,
+                frag,
+                filter,
+                columns,
+                schema,
+            )
+            for i, (frag, filter) in enumerate(frag_filters)
+        }
+        dsk[name] = (
+            apply,
+            pa.concat_tables,
+            [list(dsk.keys())],
+            {"promote_options": "permissive"},
+        )
+
+        return CudfReadParquetPyarrowFS._table_to_pandas(
+            get(dsk, name),
+            **to_pandas_kwargs,
+        )
 
 
-to_parquet = partial(dd.to_parquet, engine=CudfEngine)
+def read_parquet_expr(
+    path,
+    *args,
+    columns=None,
+    filters=None,
+    categories=None,
+    index=None,
+    storage_options=None,
+    dtype_backend=None,
+    calculate_divisions=False,
+    ignore_metadata_file=False,
+    metadata_task_size=None,
+    split_row_groups="infer",
+    blocksize="default",
+    aggregate_files=None,
+    parquet_file_extension=(".parq", ".parquet", ".pq"),
+    filesystem="fsspec",
+    engine=None,
+    arrow_to_pandas=None,
+    open_file_options=None,
+    **kwargs,
+):
+    """
+    Read a Parquet file into a Dask-cuDF DataFrame.
 
-if create_metadata_file_dd is None:
-    create_metadata_file = create_metadata_file_dd
+    This reads a directory of Parquet data into a DataFrame collection.
+    Partitioning behavior mostly depends on the ``blocksize`` argument.
+
+    .. note::
+        Dask may automatically resize partitions at optimization time.
+        Please set ``blocksize=None`` to disable this behavior in Dask cuDF.
+        (NOTE: This will not disable fusion for the "pandas" backend)
+
+    .. note::
+        Specifying ``filesystem="arrow"`` leverages a complete reimplementation of
+        the Parquet reader that is solely based on PyArrow. It is faster than the
+        legacy implementation in some cases, but doesn't yet support all features.
+
+    Parameters
+    ----------
+    path : str or list
+        Source directory for data, or path(s) to individual parquet files.
+        Prefix with a protocol like ``s3://`` to read from alternative
+        filesystems. To read from multiple files you can pass a globstring or a
+        list of paths, with the caveat that they must all have the same
+        protocol.
+    columns : str or list, default None
+        Field name(s) to read in as columns in the output. By default all
+        non-index fields will be read (as determined by the pandas parquet
+        metadata, if present). Provide a single field name instead of a list to
+        read in the data as a Series.
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
+        List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
+        Using this argument will result in row-wise filtering of the final partitions.
+
+        Predicates can be expressed in disjunctive normal form (DNF). This means that
+        the inner-most tuple describes a single column predicate. These inner predicates
+        are combined with an AND conjunction into a larger predicate. The outer-most
+        list then combines all of the combined filters with an OR disjunction.
+
+        Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
+        as an AND conjunction. To express OR in predicates, one must use the
+        (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
+    index : str, list or False, default None
+        Field name(s) to use as the output frame index. By default will be
+        inferred from the pandas parquet file metadata, if present. Use ``False``
+        to read all fields as columns.
+    categories : list or dict, default None
+        For any fields listed here, if the parquet encoding is Dictionary,
+        the column will be created with dtype category. Use only if it is
+        guaranteed that the column is encoded as dictionary in all row-groups.
+        If a list, assumes up to 2**16-1 labels; if a dict, specify the number
+        of labels expected; if None, will load categories automatically for
+        data written by dask, not otherwise.
+    storage_options : dict, default None
+        Key/value pairs to be passed on to the file-system backend, if any.
+        Note that the default file-system backend can be configured with the
+        ``filesystem`` argument, described below.
+    calculate_divisions : bool, default False
+        Whether to use min/max statistics from the footer metadata (or global
+        ``_metadata`` file) to calculate divisions for the output DataFrame
+        collection. Divisions will not be calculated if statistics are missing.
+        This option will be ignored if ``index`` is not specified and there is
+        no physical index column specified in the custom "pandas" Parquet
+        metadata. Note that ``calculate_divisions=True`` may be extremely slow
+        when no global ``_metadata`` file is present, especially when reading
+        from remote storage. Set this to ``True`` only when known divisions
+        are needed for your workload (see :ref:`dataframe-design-partitions`).
+    ignore_metadata_file : bool, default False
+        Whether to ignore the global ``_metadata`` file (when one is present).
+        If ``True``, or if the global ``_metadata`` file is missing, the parquet
+        metadata may be gathered and processed in parallel. Parallel metadata
+        processing is currently supported for ``ArrowDatasetEngine`` only.
+    metadata_task_size : int, default configurable
+        If parquet metadata is processed in parallel (see ``ignore_metadata_file``
+        description above), this argument can be used to specify the number of
+        dataset files to be processed by each task in the Dask graph.  If this
+        argument is set to ``0``, parallel metadata processing will be disabled.
+        The default values for local and remote filesystems can be specified
+        with the "metadata-task-size-local" and "metadata-task-size-remote"
+        config fields, respectively (see "dataframe.parquet").
+    split_row_groups : 'infer', 'adaptive', bool, or int, default 'infer'
+        WARNING: The ``split_row_groups`` argument is now deprecated, please use
+        ``blocksize`` instead.
+
+    blocksize : int, float or str, default 'default'
+        The desired size of each output ``DataFrame`` partition in terms of total
+        (uncompressed) parquet storage space. This argument may be used to split
+        large files or aggregate small files into the same partition. Use ``None``
+        for a simple 1:1 mapping between files and partitions. Use a float value
+        less than 1.0 to specify the fractional size of the partitions with
+        respect to the total memory of the first NVIDIA GPU on your machine.
+        Default is 1/32 the total memory of a single GPU.
+    aggregate_files : bool or str, default None
+        WARNING: The behavior of ``aggregate_files=True`` is now obsolete
+        when query-planning is enabled (the default). Small files are now
+        aggregated automatically according to the ``blocksize`` setting.
+        Please expect this argument to be deprecated in a future release.
+
+        WARNING: Passing a string argument to ``aggregate_files`` will result
+        in experimental behavior that may be removed at any time.
+
+    parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
+        A file extension or an iterable of extensions to use when discovering
+        parquet files in a directory. Files that don't match these extensions
+        will be ignored. This argument only applies when ``paths`` corresponds
+        to a directory and no ``_metadata`` file is present (or
+        ``ignore_metadata_file=True``). Passing in ``parquet_file_extension=None``
+        will treat all files in the directory as parquet files.
+
+        The purpose of this argument is to ensure that the engine will ignore
+        unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
+        It may be necessary to change this argument if the data files in your
+        parquet dataset do not end in ".parq", ".parquet", or ".pq".
+    filesystem: "fsspec", "arrow", or fsspec.AbstractFileSystem backend to use.
+    dataset: dict, default None
+        Dictionary of options to use when creating a ``pyarrow.dataset.Dataset`` object.
+        These options may include a "filesystem" key to configure the desired
+        file-system backend. However, the top-level ``filesystem`` argument will always
+        take precedence.
+
+        **Note**: The ``dataset`` options may include a "partitioning" key.
+        However, since ``pyarrow.dataset.Partitioning``
+        objects cannot be serialized, the value can be a dict of key-word
+        arguments for the ``pyarrow.dataset.partitioning`` API
+        (e.g. ``dataset={"partitioning": {"flavor": "hive", "schema": ...}}``).
+        Note that partitioned columns will not be converted to categorical
+        dtypes when a custom partitioning schema is specified in this way.
+    read: dict, default None
+        Dictionary of options to pass through to ``CudfEngine.read_partitions``
+        using the ``read`` key-word argument.
+    """
+
+    import dask_expr as dx
+    from fsspec.utils import stringify_path
+    from pyarrow import fs as pa_fs
+
+    from dask.core import flatten
+    from dask.dataframe.utils import pyarrow_strings_enabled
+
+    from dask_cudf.backends import PYARROW_GE_15
+
+    if args:
+        raise ValueError(f"Unexpected positional arguments: {args}")
+
+    if open_file_options is not None:
+        raise ValueError(
+            "The open_file_options argument is no longer supported "
+            "by the 'cudf' backend."
+        )
+    if dtype_backend is not None:
+        raise NotImplementedError(
+            "dtype_backend is not supported by the 'cudf' backend."
+        )
+    if arrow_to_pandas is not None:
+        raise NotImplementedError(
+            "arrow_to_pandas is not supported by the 'cudf' backend."
+        )
+    if engine not in (None, "cudf", CudfEngine):
+        raise NotImplementedError(
+            "engine={engine} is not supported by the 'cudf' backend."
+        )
+
+    if not isinstance(path, str):
+        path = stringify_path(path)
+
+    kwargs["dtype_backend"] = None
+    if arrow_to_pandas:
+        kwargs["arrow_to_pandas"] = None
+
+    if filters is not None:
+        for filter in flatten(filters, container=list):
+            _, op, val = filter
+            if op == "in" and not isinstance(val, (set, list, tuple)):
+                raise TypeError(
+                    "Value of 'in' filter must be a list, set or tuple."
+                )
+
+    # Normalize blocksize input
+    if blocksize == "default":
+        blocksize = _normalize_blocksize()
+    elif isinstance(blocksize, float) and blocksize < 1:
+        blocksize = _normalize_blocksize(blocksize)
+
+    if (
+        isinstance(filesystem, pa_fs.FileSystem)
+        or isinstance(filesystem, str)
+        and filesystem.lower() in ("arrow", "pyarrow")
+    ):
+        # EXPERIMENTAL filesystem="arrow" support.
+        # This code path may use PyArrow for remote IO.
+
+        # CudfReadParquetPyarrowFS requires import of distributed beforehand
+        # (See: https://github.com/dask/dask/issues/11352)
+        import distributed  # noqa: F401
+
+        if not PYARROW_GE_15:
+            raise ValueError(
+                "pyarrow>=15.0.0 is required to use the pyarrow filesystem."
+            )
+        if metadata_task_size is not None:
+            warnings.warn(
+                "metadata_task_size is not supported when using the pyarrow filesystem."
+                " This argument will be ignored!"
+            )
+        if aggregate_files is not None:
+            warnings.warn(
+                "aggregate_files is not supported when using the pyarrow filesystem."
+                " This argument will be ignored!"
+            )
+        if split_row_groups != "infer":
+            warnings.warn(
+                "split_row_groups is not supported when using the pyarrow filesystem."
+                " This argument will be ignored!"
+            )
+        if parquet_file_extension != (".parq", ".parquet", ".pq"):
+            raise NotImplementedError(
+                "parquet_file_extension is not supported when using the pyarrow filesystem."
+            )
+
+        return dx.new_collection(
+            NoOp(
+                CudfReadParquetPyarrowFS(
+                    path,
+                    columns=_convert_to_list(columns),
+                    filters=filters,
+                    categories=categories,
+                    index=index,
+                    calculate_divisions=calculate_divisions,
+                    storage_options=storage_options,
+                    filesystem=filesystem,
+                    blocksize=blocksize,
+                    ignore_metadata_file=ignore_metadata_file,
+                    arrow_to_pandas=None,
+                    pyarrow_strings_enabled=pyarrow_strings_enabled(),
+                    kwargs=kwargs,
+                    _series=isinstance(columns, str),
+                ),
+            )
+        )
+
+    return dx.new_collection(
+        NoOp(
+            CudfReadParquetFSSpec(
+                path,
+                columns=_convert_to_list(columns),
+                filters=filters,
+                categories=categories,
+                index=index,
+                blocksize=blocksize,
+                storage_options=storage_options,
+                calculate_divisions=calculate_divisions,
+                ignore_metadata_file=ignore_metadata_file,
+                metadata_task_size=metadata_task_size,
+                split_row_groups=split_row_groups,
+                aggregate_files=aggregate_files,
+                parquet_file_extension=parquet_file_extension,
+                filesystem=filesystem,
+                engine=CudfEngine,
+                kwargs=kwargs,
+                _series=isinstance(columns, str),
+            ),
+        )
+    )
+
+
+if QUERY_PLANNING_ON:
+    read_parquet = read_parquet_expr
+    read_parquet.__doc__ = read_parquet_expr.__doc__
 else:
-    create_metadata_file = partial(create_metadata_file_dd, engine=CudfEngine)
+    read_parquet = _deprecated_api(
+        "The legacy dask_cudf.io.parquet.read_parquet API",
+        new_api="dask_cudf.read_parquet",
+        rec="",
+    )
+to_parquet = _deprecated_api(
+    "dask_cudf.io.parquet.to_parquet",
+    new_api="dask_cudf._legacy.io.parquet.to_parquet",
+    rec="Please use the DataFrame.to_parquet method instead.",
+)
+create_metadata_file = _deprecated_api(
+    "dask_cudf.io.parquet.create_metadata_file",
+    new_api="dask_cudf._legacy.io.parquet.create_metadata_file",
+    rec="Please raise an issue if this feature is needed.",
+)

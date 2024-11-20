@@ -16,6 +16,7 @@
 
 #include "io/fst/lookup_tables.cuh"
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -24,7 +25,6 @@
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -58,7 +58,7 @@ enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
   SINGLE_QUOTE_CHAR,  ///< Quote character SG: '
   ESCAPE_CHAR,        ///< Escape character SG: '\'
-  NEWLINE_CHAR,       ///< Newline character SG: '\n'
+  DELIM_CHAR,         ///< Delimiter character SG
   OTHER_SYMBOLS,      ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS   ///< Total number of symbol groups
 };
@@ -72,13 +72,17 @@ constexpr auto TT_SEC            = dfa_states::TT_SEC;
 constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
-// The i-th string representing all the characters of a symbol group
-std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const qna_sgs{
-  {{'\"'}, {'\''}, {'\\'}, {'\n'}}};
+auto get_sgid_lut(SymbolT delim)
+{
+  // The i-th string representing all the characters of a symbol group
+  std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> symbol_groups{
+    {{'\"'}, {'\''}, {'\\'}, {delim}}};
+  return symbol_groups;
+}
 
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const qna_state_tt{{
-  /* IN_STATE      "       '       \       \n    OTHER  */
+  /* IN_STATE      "       '       \     <delim>    OTHER  */
   /* TT_OOS */ {{TT_DQS, TT_SQS, TT_OOS, TT_OOS, TT_OOS}},
   /* TT_DQS */ {{TT_OOS, TT_DQS, TT_DEC, TT_OOS, TT_DQS}},
   /* TT_SQS */ {{TT_SQS, TT_OOS, TT_SEC, TT_OOS, TT_SQS}},
@@ -199,28 +203,26 @@ struct TransduceToNormalizedQuotes {
 
 namespace normalize_whitespace {
 
+// We do not need a symbol group for the delimiter character since whitespace normalization
+// now occurs after tokenization.
 enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,   ///< Quote character SG: "
   ESCAPE_CHAR,         ///< Escape character SG: '\\'
-  NEWLINE_CHAR,        ///< Newline character SG: '\n'
   WHITESPACE_SYMBOLS,  ///< Whitespace characters SG: '\t' or ' '
   OTHER_SYMBOLS,       ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS    ///< Total number of symbol groups
 };
 // Alias for readability of symbol group ids
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
-// The i-th string representing all the characters of a symbol group
-std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
-  {{'"'}, {'\\'}, {'\n'}, {' ', '\t'}}};
+
+std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{{{'"'}, {'\\'}, {' ', '\t'}}};
 
 /**
  * -------- FST states ---------
  * -----------------------------
  * TT_OOS | Out-of-string state handling whitespace and non-whitespace chars outside double
- *        |   quotes as well as any other character not enclosed by a string. Also handles
- *        |   newline character present within a string
- * TT_DQS | Double-quoted string state handling all characters within double quotes except
- *        |   newline character
+ *        |   quotes as well as any other character not enclosed by a string.
+ * TT_DQS | Double-quoted string state handling all characters within double quotes
  * TT_DEC | State handling escaped characters inside double-quoted string. Note that this
  *        |   state is necessary to process escaped double-quote characters. Without this
  *        |   state, whitespaces following escaped double quotes inside strings may be removed.
@@ -235,10 +237,10 @@ constexpr auto TT_NUM_STATES = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_state_tt{
-  {/* IN_STATE      "       \       \n    <SPC>   OTHER  */
-   /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_OOS, TT_OOS}},
-   /* TT_DQS */ {{TT_OOS, TT_DEC, TT_OOS, TT_DQS, TT_DQS}},
-   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS}}}};
+  {/* IN_STATE      "       \     <SPC>   OTHER  */
+   /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_OOS}},
+   /* TT_DQS */ {{TT_OOS, TT_DEC, TT_DQS, TT_DQS}},
+   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS}}}};
 
 // The DFA's starting state
 constexpr StateT start_state = static_cast<StateT>(TT_OOS);
@@ -302,21 +304,22 @@ struct TransduceToNormalizedWS {
 namespace detail {
 
 void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& indata,
+                             char delimiter,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   static constexpr std::int32_t min_out = 0;
   static constexpr std::int32_t max_out = 2;
-  auto parser =
-    fst::detail::make_fst(fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
-                          fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
-                          fst::detail::make_translation_functor<SymbolT, min_out, max_out>(
-                            normalize_quotes::TransduceToNormalizedQuotes{}),
-                          stream);
+  auto parser                           = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(normalize_quotes::get_sgid_lut(delimiter)),
+    fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
+    fst::detail::make_translation_functor<SymbolT, min_out, max_out>(
+      normalize_quotes::TransduceToNormalizedQuotes{}),
+    stream);
 
   rmm::device_buffer outbuf(indata.size() * 2, stream, mr);
-  rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
+  cudf::detail::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
   parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
                    static_cast<SymbolOffsetT>(indata.size()),
                    static_cast<SymbolT*>(outbuf.data()),
@@ -401,7 +404,7 @@ std::
                           stream);
 
   rmm::device_uvector<size_type> outbuf_indices(inbuf.size(), stream, mr);
-  rmm::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
+  cudf::detail::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
   parser.Transduce(inbuf.data(),
                    static_cast<SymbolOffsetT>(inbuf.size()),
                    thrust::make_discard_iterator(),

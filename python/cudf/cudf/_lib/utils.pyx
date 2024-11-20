@@ -229,7 +229,7 @@ cdef columns_from_unique_ptr(
     return columns
 
 
-cdef columns_from_pylibcudf_table(tbl):
+cpdef columns_from_pylibcudf_table(tbl):
     """Convert a pylibcudf table into list of columns.
 
     Parameters
@@ -309,22 +309,24 @@ cdef data_from_unique_ptr(
     )
 
 
-cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
+cpdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
     return _data_from_columns(
         columns_from_pylibcudf_table(tbl),
         column_names,
         index_names
     )
 
-cdef data_from_pylibcudf_io(tbl_with_meta):
+cpdef data_from_pylibcudf_io(tbl_with_meta, column_names=None, index_names=None):
     """
     Unpacks the TableWithMetadata from libcudf I/O
     into a dict of columns and an Index (cuDF format)
     """
+    if column_names is None:
+        column_names = tbl_with_meta.column_names(include_children=False)
     return _data_from_columns(
         columns=[Column.from_pylibcudf(plc) for plc in tbl_with_meta.columns],
-        column_names=tbl_with_meta.column_names(include_children=False),
-        index_names=None
+        column_names=column_names,
+        index_names=index_names
     )
 
 cdef columns_from_table_view(

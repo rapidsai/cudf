@@ -17,21 +17,14 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/rolling.hpp>
-
-#include <rmm/device_buffer.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-
-#include <gtest/gtest-typed-test.h>
 
 #include <memory>
 #include <optional>
@@ -83,7 +76,7 @@ class rolling_exec {
     return *this;
   }
 
-  std::unique_ptr<cudf::column> test_grouped_nth_element(
+  [[nodiscard]] std::unique_ptr<cudf::column> test_grouped_nth_element(
     cudf::size_type n, std::optional<cudf::null_policy> null_handling = std::nullopt) const
   {
     return cudf::grouped_rolling_window(
@@ -96,7 +89,7 @@ class rolling_exec {
         n, null_handling.value_or(_null_handling)));
   }
 
-  std::unique_ptr<cudf::column> test_nth_element(
+  [[nodiscard]] std::unique_ptr<cudf::column> test_nth_element(
     cudf::size_type n, std::optional<cudf::null_policy> null_handling = std::nullopt) const
   {
     return cudf::rolling_window(_input,

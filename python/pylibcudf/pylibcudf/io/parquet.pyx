@@ -16,6 +16,8 @@ from pylibcudf.libcudf.io.parquet cimport (
 from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
 
+__all__ = ["ChunkedParquetReader", "read_parquet"]
+
 
 cdef parquet_reader_options _setup_parquet_reader_options(
     SourceInfo source_info,
@@ -58,6 +60,8 @@ cdef parquet_reader_options _setup_parquet_reader_options(
 cdef class ChunkedParquetReader:
     """
     Reads chunks of a Parquet file into a :py:class:`~.types.TableWithMetadata`.
+
+    For details, see :cpp:class:`chunked_parquet_reader`.
 
     Parameters
     ----------
@@ -121,6 +125,8 @@ cdef class ChunkedParquetReader:
                 )
             )
 
+    __hash__ = None
+
     cpdef bool has_next(self):
         """
         Returns True if there is another chunk in the Parquet file
@@ -166,6 +172,8 @@ cpdef read_parquet(
     # DataType timestamp_type = DataType(type_id.EMPTY)
 ):
     """Reads an Parquet file into a :py:class:`~.types.TableWithMetadata`.
+
+    For details, see :cpp:func:`read_parquet`.
 
     Parameters
     ----------

@@ -8,6 +8,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from packaging.version import Version
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
@@ -45,11 +46,15 @@ import cudf
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
-from .core import DataFrame, Index, Series
+from ._legacy.core import DataFrame, Index, Series
 
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
+
+
+# Required for Arrow filesystem support in read_parquet
+PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
 
 
 @meta_nonempty.register(cudf.BaseIndex)
@@ -569,7 +574,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     >>> with dask.config.set({"dataframe.backend": "cudf"}):
     ...     ddf = dd.from_dict({"a": range(10)})
     >>> type(ddf)
-    <class 'dask_cudf.core.DataFrame'>
+    <class 'dask_cudf._legacy.core.DataFrame'>
     """
 
     @classmethod
@@ -605,7 +610,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_parquet(*args, engine=None, **kwargs):
-        from dask_cudf.io.parquet import CudfEngine
+        from dask_cudf._legacy.io.parquet import CudfEngine
 
         _raise_unsupported_parquet_kwargs(**kwargs)
         return _default_backend(
@@ -617,19 +622,19 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_json(*args, **kwargs):
-        from dask_cudf.io.json import read_json
+        from dask_cudf._legacy.io.json import read_json
 
         return read_json(*args, **kwargs)
 
     @staticmethod
     def read_orc(*args, **kwargs):
-        from dask_cudf.io import read_orc
+        from dask_cudf._legacy.io import read_orc
 
         return read_orc(*args, **kwargs)
 
     @staticmethod
     def read_csv(*args, **kwargs):
-        from dask_cudf.io import read_csv
+        from dask_cudf._legacy.io import read_csv
 
         return read_csv(*args, **kwargs)
 
@@ -669,7 +674,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     def to_backend(data, **kwargs):
         import dask_expr as dx
 
-        from dask_cudf.expr._expr import ToCudfBackend
+        from dask_cudf._expr.expr import ToCudfBackend
 
         return dx.new_collection(ToCudfBackend(data, kwargs))
 
@@ -695,15 +700,10 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
     @staticmethod
-    def read_parquet(*args, engine=None, **kwargs):
-        import dask_expr as dx
+    def read_parquet(*args, **kwargs):
+        from dask_cudf.io.parquet import read_parquet as read_parquet_expr
 
-        from dask_cudf.io.parquet import CudfEngine
-
-        _raise_unsupported_parquet_kwargs(**kwargs)
-        return _default_backend(
-            dx.read_parquet, *args, engine=CudfEngine, **kwargs
-        )
+        return read_parquet_expr(*args, **kwargs)
 
     @staticmethod
     def read_csv(
@@ -732,7 +732,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_json(*args, **kwargs):
-        from dask_cudf.io.json import read_json as read_json_impl
+        from dask_cudf._legacy.io.json import read_json as read_json_impl
 
         return read_json_impl(*args, **kwargs)
 
@@ -740,14 +740,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     def read_orc(*args, **kwargs):
         from dask_expr import from_legacy_dataframe
 
-        from dask_cudf.io.orc import read_orc as legacy_read_orc
+        from dask_cudf._legacy.io.orc import read_orc as legacy_read_orc
 
         ddf = legacy_read_orc(*args, **kwargs)
         return from_legacy_dataframe(ddf)
-
-
-# Import/register cudf-specific classes for dask-expr
-try:
-    import dask_cudf.expr  # noqa: F401
-except ImportError:
-    pass

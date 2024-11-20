@@ -11,7 +11,8 @@ In the rest of this document, to maintain a concrete pair of libraries in mind, 
 For example, future support could include pairs such as CuPy (as the "fast" library) and NumPy (as the "slow" library).
 
 ```{note}
-We currently do not wrap the entire NumPy library because it exposes a C API. But we do wrap NumPy's `numpy.ndarray` and CuPy's `cupy.ndarray` in a proxy type.
+1. We currently do not wrap the entire NumPy library because it exposes a C API. But we do wrap NumPy's `numpy.ndarray` and CuPy's `cupy.ndarray` in a proxy type.
+2. There is a `custom_iter` method defined to always utilize slow objects `iter` method, that way we don't move the objects to GPU and trigger an error and again move the object to CPU to execute the iteration successfully.
 ```
 
 ### Types:
@@ -135,4 +136,22 @@ UserWarning: The results from cudf and pandas were different. The exception was
 Arrays are not almost equal to 7 decimals
  ACTUAL: 1.0
  DESIRED: 2.0.
+```
+
+Setting the environment variable `CUDF_PANDAS_FAIL_ON_FALLBACK` causes `cudf.pandas` to fail when falling back from cuDF to Pandas.
+For example,
+```python
+import cudf.pandas
+cudf.pandas.install()
+import pandas as pd
+import numpy as np
+
+df = pd.DataFrame({
+    'complex_col': [1 + 2j, 3 + 4j, 5 + 6j]
+})
+
+print(df)
+```
+```
+ProxyFallbackError: The operation failed with cuDF, the reason was <class 'NotImplementedError'>: Series with Complex128DType is not supported.
 ```

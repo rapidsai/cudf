@@ -5,43 +5,52 @@
 
 from __future__ import annotations
 
-import itertools
+import pickle
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
-import pylibcudf as plc
 
 import polars as pl
 
-from cudf_polars.containers.column import NamedColumn
+import pylibcudf as plc
+
+from cudf_polars.containers import Column
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence, Set
+    from collections.abc import Iterable, Mapping, Sequence, Set
 
     from typing_extensions import Self
-
-    from cudf_polars.containers import Column
 
 
 __all__: list[str] = ["DataFrame"]
 
 
+# Pacify the type checker. DataFrame init asserts that all the columns
+# have a string name, so let's narrow the type.
+class NamedColumn(Column):
+    name: str
+
+
 class DataFrame:
     """A representation of a dataframe."""
 
-    columns: list[NamedColumn]
+    column_map: dict[str, Column]
     table: plc.Table
+    columns: list[NamedColumn]
 
-    def __init__(self, columns: Sequence[NamedColumn]) -> None:
-        self.columns = list(columns)
-        self._column_map = {c.name: c for c in self.columns}
-        self.table = plc.Table([c.obj for c in columns])
+    def __init__(self, columns: Iterable[Column]) -> None:
+        columns = list(columns)
+        if any(c.name is None for c in columns):
+            raise ValueError("All columns must have a name")
+        self.columns = [cast(NamedColumn, c) for c in columns]
+        self.column_map = {c.name: c for c in self.columns}
+        self.table = plc.Table([c.obj for c in self.columns])
 
     def copy(self) -> Self:
         """Return a shallow copy of self."""
-        return type(self)([c.copy() for c in self.columns])
+        return type(self)(c.copy() for c in self.columns)
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
@@ -51,42 +60,38 @@ class DataFrame:
         # https://github.com/pola-rs/polars/issues/11632
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
-        name_map = {f"column_{i}": c.name for i, c in enumerate(self.columns)}
-        table: pa.Table = plc.interop.to_arrow(
+        name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
+        table = plc.interop.to_arrow(
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )
         df: pl.DataFrame = pl.from_arrow(table)
         return df.rename(name_map).with_columns(
-            *(
-                pl.col(c.name).set_sorted(
-                    descending=c.order == plc.types.Order.DESCENDING
-                )
-                if c.is_sorted
-                else pl.col(c.name)
-                for c in self.columns
-            )
+            pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
+            if c.is_sorted
+            else pl.col(c.name)
+            for c in self.columns
         )
 
     @cached_property
     def column_names_set(self) -> frozenset[str]:
         """Return the column names as a set."""
-        return frozenset(c.name for c in self.columns)
+        return frozenset(self.column_map)
 
     @cached_property
     def column_names(self) -> list[str]:
         """Return a list of the column names."""
-        return [c.name for c in self.columns]
+        return list(self.column_map)
 
     @cached_property
     def num_columns(self) -> int:
         """Number of columns."""
-        return len(self.columns)
+        return len(self.column_map)
 
     @cached_property
     def num_rows(self) -> int:
         """Number of rows."""
-        return 0 if len(self.columns) == 0 else self.table.num_rows()
+        return self.table.num_rows() if self.column_map else 0
 
     @classmethod
     def from_polars(cls, df: pl.DataFrame) -> Self:
@@ -111,12 +116,8 @@ class DataFrame:
         # No-op if the schema is unchanged.
         d_table = plc.interop.from_arrow(table.cast(schema))
         return cls(
-            [
-                NamedColumn(column, h_col.name).copy_metadata(h_col)
-                for column, h_col in zip(
-                    d_table.columns(), df.iter_columns(), strict=True
-                )
-            ]
+            Column(column).copy_metadata(h_col)
+            for column, h_col in zip(d_table.columns(), df.iter_columns(), strict=True)
         )
 
     @classmethod
@@ -144,17 +145,83 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            [
-                NamedColumn(c, name)
-                for c, name in zip(table.columns(), names, strict=True)
-            ]
+            Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
         )
+
+    @classmethod
+    def deserialize(
+        cls, header: Mapping[str, Any], frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> Self:
+        """
+        Create a DataFrame from a serialized representation returned by `.serialize()`.
+
+        Parameters
+        ----------
+        header
+            The (unpickled) metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames (a memoryview and a gpumemoryview).
+
+        Returns
+        -------
+        DataFrame
+            The deserialized DataFrame.
+        """
+        packed_metadata, packed_gpu_data = frames
+        table = plc.contiguous_split.unpack_from_memoryviews(
+            packed_metadata, packed_gpu_data
+        )
+        return cls(
+            Column(c, **kw)
+            for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
+        )
+
+    def serialize(
+        self,
+    ) -> tuple[Mapping[str, Any], tuple[memoryview, plc.gpumemoryview]]:
+        """
+        Serialize the table into header and frames.
+
+        Follows the Dask serialization scheme with a picklable header (dict) and
+        a tuple of frames (in this case a contiguous host and device buffer).
+
+        To enable dask support, dask serializers must be registered
+
+        >>> from cudf_polars.experimental.dask_serialize import register
+        >>> register()
+
+        Returns
+        -------
+        header
+            A dict containing any picklable metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames suitable for passing to `unpack_from_memoryviews`
+        """
+        packed = plc.contiguous_split.pack(self.table)
+
+        # Keyword arguments for `Column.__init__`.
+        columns_kwargs = [
+            {
+                "is_sorted": col.is_sorted,
+                "order": col.order,
+                "null_order": col.null_order,
+                "name": col.name,
+            }
+            for col in self.columns
+        ]
+        header = {
+            "columns_kwargs": columns_kwargs,
+            # Dask Distributed uses "type-serialized" to dispatch deserialization
+            "type-serialized": pickle.dumps(type(self)),
+            "frame_count": 2,
+        }
+        return header, packed.release()
 
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None
     ) -> Self:
         """
-        Copy sortedness from a dataframe onto self.
+        Return a shallow copy with sortedness copied from like.
 
         Parameters
         ----------
@@ -165,7 +232,7 @@ class DataFrame:
 
         Returns
         -------
-        Self with metadata set.
+        Shallow copy of self with metadata set.
 
         Raises
         ------
@@ -175,13 +242,12 @@ class DataFrame:
         if like.column_names != self.column_names:
             raise ValueError("Can only copy from identically named frame")
         subset = self.column_names_set if subset is None else subset
-        self.columns = [
+        return type(self)(
             c.sorted_like(other) if c.name in subset else c
             for c, other in zip(self.columns, like.columns, strict=True)
-        ]
-        return self
+        )
 
-    def with_columns(self, columns: Sequence[NamedColumn]) -> Self:
+    def with_columns(self, columns: Iterable[Column], *, replace_only=False) -> Self:
         """
         Return a new dataframe with extra columns.
 
@@ -189,6 +255,8 @@ class DataFrame:
         ----------
         columns
             Columns to add
+        replace_only
+            If true, then only replacements are allowed (matching by name).
 
         Returns
         -------
@@ -196,36 +264,30 @@ class DataFrame:
 
         Notes
         -----
-        If column names overlap, newer names replace older ones.
+        If column names overlap, newer names replace older ones, and
+        appear in the same order as the original frame.
         """
-        columns = list(
-            {c.name: c for c in itertools.chain(self.columns, columns)}.values()
-        )
-        return type(self)(columns)
+        new = {c.name: c for c in columns}
+        if replace_only and not self.column_names_set.issuperset(new.keys()):
+            raise ValueError("Cannot replace with non-existing names")
+        return type(self)((self.column_map | new).values())
 
     def discard_columns(self, names: Set[str]) -> Self:
         """Drop columns by name."""
-        return type(self)([c for c in self.columns if c.name not in names])
+        return type(self)(column for column in self.columns if column.name not in names)
 
     def select(self, names: Sequence[str]) -> Self:
         """Select columns by name returning DataFrame."""
-        want = set(names)
-        if not want.issubset(self.column_names_set):
-            raise ValueError("Can't select missing names")
-        return type(self)([self._column_map[name] for name in names])
-
-    def replace_columns(self, *columns: NamedColumn) -> Self:
-        """Return a new dataframe with columns replaced by name."""
-        new = {c.name: c for c in columns}
-        if not set(new).issubset(self.column_names_set):
-            raise ValueError("Cannot replace with non-existing names")
-        return type(self)([new.get(c.name, c) for c in self.columns])
+        try:
+            return type(self)(self.column_map[name] for name in names)
+        except KeyError as e:
+            raise ValueError("Can't select missing names") from e
 
     def rename_columns(self, mapping: Mapping[str, str]) -> Self:
         """Rename some columns."""
-        return type(self)([c.copy(new_name=mapping.get(c.name)) for c in self.columns])
+        return type(self)(c.rename(mapping.get(c.name, c.name)) for c in self.columns)
 
-    def select_columns(self, names: Set[str]) -> list[NamedColumn]:
+    def select_columns(self, names: Set[str]) -> list[Column]:
         """Select columns by name."""
         return [c for c in self.columns if c.name in names]
 

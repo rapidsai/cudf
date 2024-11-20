@@ -10,6 +10,7 @@ from pylibcudf.libcudf.types cimport null_order, order
 from .column cimport Column
 from .table cimport Table
 
+__all__ = ["contains", "lower_bound", "upper_bound"]
 
 cpdef Column lower_bound(
     Table haystack,
@@ -18,6 +19,8 @@ cpdef Column lower_bound(
     list null_precedence,
 ):
     """Find smallest indices in haystack where needles may be inserted to retain order.
+
+    For details, see :cpp:func:`lower_bound`.
 
     Parameters
     ----------
@@ -39,13 +42,11 @@ cpdef Column lower_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_search.lower_bound(
-                haystack.view(),
-                needles.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_search.lower_bound(
+            haystack.view(),
+            needles.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Column.from_libcudf(move(c_result))
 
@@ -58,6 +59,8 @@ cpdef Column upper_bound(
 ):
     """Find largest indices in haystack where needles may be inserted to retain order.
 
+    For details, see :cpp:func:`upper_bound`.
+
     Parameters
     ----------
     haystack : Table
@@ -78,19 +81,19 @@ cpdef Column upper_bound(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_search.upper_bound(
-                haystack.view(),
-                needles.view(),
-                c_orders,
-                c_null_precedence,
-            )
+        c_result = cpp_search.upper_bound(
+            haystack.view(),
+            needles.view(),
+            c_orders,
+            c_null_precedence,
         )
     return Column.from_libcudf(move(c_result))
 
 
 cpdef Column contains(Column haystack, Column needles):
     """Check whether needles are present in haystack.
+
+    For details, see :cpp:func:`contains`.
 
     Parameters
     ----------
@@ -106,10 +109,8 @@ cpdef Column contains(Column haystack, Column needles):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_search.contains(
-                haystack.view(),
-                needles.view(),
-            )
+        c_result = cpp_search.contains(
+            haystack.view(),
+            needles.view(),
         )
     return Column.from_libcudf(move(c_result))

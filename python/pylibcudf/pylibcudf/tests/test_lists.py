@@ -3,9 +3,10 @@
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture
@@ -61,12 +62,12 @@ def test_concatenate_rows(test_data):
     [
         (
             [[[1, 2], [3, 4], [5]], [[6], None, [7, 8, 9]]],
-            False,
+            plc.lists.ConcatenateNullPolicy.NULLIFY_OUTPUT_ROW,
             [[1, 2, 3, 4, 5], None],
         ),
         (
             [[[1, 2], [3, 4], [5, None]], [[6], [None], [7, 8, 9]]],
-            True,
+            plc.lists.ConcatenateNullPolicy.IGNORE,
             [[1, 2, 3, 4, 5, None], [6, None, 7, 8, 9]],
         ),
     ],
@@ -137,7 +138,9 @@ def test_index_of_scalar(list_column, scalar):
 
     plc_column = plc.interop.from_arrow(arr)
     plc_scalar = plc.interop.from_arrow(scalar)
-    res = plc.lists.index_of(plc_column, plc_scalar, True)
+    res = plc.lists.index_of(
+        plc_column, plc_scalar, plc.lists.DuplicateFindOption.FIND_FIRST
+    )
 
     expect = pa.array([1, -1, -1, -1], type=pa.int32())
 
@@ -149,7 +152,9 @@ def test_index_of_list_column(list_column, search_key_column):
     arr2, expect = search_key_column
     plc_column1 = plc.interop.from_arrow(arr1)
     plc_column2 = plc.interop.from_arrow(arr2)
-    res = plc.lists.index_of(plc_column1, plc_column2, True)
+    res = plc.lists.index_of(
+        plc_column1, plc_column2, plc.lists.DuplicateFindOption.FIND_FIRST
+    )
 
     expect = pa.array(search_key_column[1], type=pa.int32())
 
@@ -226,39 +231,34 @@ def test_sequences():
 
 
 @pytest.mark.parametrize(
-    "ascending,na_position,expected",
+    "order,na_position,expected",
     [
         (
-            True,
+            plc.types.Order.ASCENDING,
             plc.types.NullOrder.BEFORE,
             [[1, 2, 3, 4], [None, 1, 2, 4], [-10, 0, 10, 10]],
         ),
         (
-            True,
+            plc.types.Order.ASCENDING,
             plc.types.NullOrder.AFTER,
             [[1, 2, 3, 4], [1, 2, 4, None], [-10, 0, 10, 10]],
         ),
         (
-            False,
+            plc.types.Order.DESCENDING,
             plc.types.NullOrder.BEFORE,
             [[4, 3, 2, 1], [4, 2, 1, None], [10, 10, 0, -10]],
         ),
         (
-            False,
-            plc.types.NullOrder.AFTER,
-            [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
-        ),
-        (
-            False,
+            plc.types.Order.DESCENDING,
             plc.types.NullOrder.AFTER,
             [[4, 3, 2, 1], [None, 4, 2, 1], [10, 10, 0, -10]],
         ),
     ],
 )
-def test_sort_lists(lists_column, ascending, na_position, expected):
+def test_sort_lists(lists_column, order, na_position, expected):
     plc_column = plc.interop.from_arrow(pa.array(lists_column))
-    res = plc.lists.sort_lists(plc_column, ascending, na_position, False)
-    res_stable = plc.lists.sort_lists(plc_column, ascending, na_position, True)
+    res = plc.lists.sort_lists(plc_column, order, na_position, False)
+    res_stable = plc.lists.sort_lists(plc_column, order, na_position, True)
 
     expect = pa.array(expected)
 
@@ -271,44 +271,44 @@ def test_sort_lists(lists_column, ascending, na_position, expected):
     [
         (
             plc.lists.difference_distinct,
-            True,
-            True,
+            plc.types.NanEquality.ALL_EQUAL,
+            plc.types.NullEquality.EQUAL,
             [[], [1, 2, 3], None, [4, 5]],
         ),
         (
             plc.lists.difference_distinct,
-            False,
-            True,
+            plc.types.NanEquality.UNEQUAL,
+            plc.types.NullEquality.EQUAL,
             [[], [1, 2, 3], None, [4, None, 5]],
         ),
         (
             plc.lists.have_overlap,
-            True,
-            True,
+            plc.types.NanEquality.ALL_EQUAL,
+            plc.types.NullEquality.EQUAL,
             [True, False, None, True],
         ),
         (
             plc.lists.have_overlap,
-            False,
-            False,
+            plc.types.NanEquality.UNEQUAL,
+            plc.types.NullEquality.UNEQUAL,
             [True, False, None, False],
         ),
         (
             plc.lists.intersect_distinct,
-            True,
-            True,
+            plc.types.NanEquality.ALL_EQUAL,
+            plc.types.NullEquality.EQUAL,
             [[np.nan, 1, 2], [], None, [None]],
         ),
         (
             plc.lists.intersect_distinct,
-            True,
-            False,
+            plc.types.NanEquality.ALL_EQUAL,
+            plc.types.NullEquality.UNEQUAL,
             [[1, 2], [], None, [None]],
         ),
         (
             plc.lists.union_distinct,
-            False,
-            True,
+            plc.types.NanEquality.UNEQUAL,
+            plc.types.NullEquality.EQUAL,
             [
                 [np.nan, 2, 1, 3],
                 [1, 2, 3, 4, 5],
@@ -318,8 +318,8 @@ def test_sort_lists(lists_column, ascending, na_position, expected):
         ),
         (
             plc.lists.union_distinct,
-            False,
-            False,
+            plc.types.NanEquality.UNEQUAL,
+            plc.types.NullEquality.UNEQUAL,
             [
                 [np.nan, np.nan, 2, 1, np.nan, 3],
                 [1, 2, 3, 4, 5],
@@ -351,20 +351,24 @@ def test_set_operations(
 @pytest.mark.parametrize(
     "nans_equal,nulls_equal,expected",
     [
-        (True, True, [[np.nan, 0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]]),
         (
-            False,
-            True,
+            plc.types.NanEquality.ALL_EQUAL,
+            plc.types.NullEquality.EQUAL,
+            [[np.nan, 0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]],
+        ),
+        (
+            plc.types.NanEquality.UNEQUAL,
+            plc.types.NullEquality.EQUAL,
             [[np.nan, 0, 1, 2, 3], [3, 1, 2], None, [4, None, None, 5]],
         ),
         (
-            True,
-            False,
+            plc.types.NanEquality.ALL_EQUAL,
+            plc.types.NullEquality.UNEQUAL,
             [[np.nan, np.nan, 0, 1, 2, 3], [3, 1, 2], None, [4, None, 5]],
         ),
         (
-            False,
-            False,
+            plc.types.NanEquality.UNEQUAL,
+            plc.types.NullEquality.UNEQUAL,
             [
                 [np.nan, np.nan, 0, 1, 2, 3],
                 [3, 1, 2],

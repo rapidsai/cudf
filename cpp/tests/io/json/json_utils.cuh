@@ -32,7 +32,9 @@
 template <typename IndexType = std::int32_t>
 std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   cudf::host_span<std::unique_ptr<cudf::io::datasource>> sources,
+  cudf::host_span<std::unique_ptr<cudf::io::datasource>> csources,
   cudf::io::json_reader_options const& reader_opts,
+  cudf::io::json_reader_options const& creader_opts,
   IndexType chunk_size,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -49,9 +51,9 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
     rmm::device_uvector<char> buffer(total_source_size, stream);
     auto readbufspan = cudf::io::json::detail::ingest_raw_input(buffer,
                                                                 sources,
-                                                                reader_opts.get_compression(),
                                                                 reader_opts.get_byte_range_offset(),
                                                                 reader_opts.get_byte_range_size(),
+                                                                reader_opts.get_delimiter(),
                                                                 stream);
     // Note: we cannot reuse cudf::io::json::detail::find_first_delimiter since the
     // return type of that function is size_type. However, when the chunk_size is
@@ -94,10 +96,11 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   record_ranges.emplace_back(prev, total_source_size);
 
   std::vector<cudf::io::table_with_metadata> tables;
+  auto creader_opts_chunk = creader_opts;
   for (auto const& [chunk_start, chunk_end] : record_ranges) {
-    reader_opts_chunk.set_byte_range_offset(chunk_start);
-    reader_opts_chunk.set_byte_range_size(chunk_end - chunk_start);
-    tables.push_back(cudf::io::json::detail::read_json(sources, reader_opts_chunk, stream, mr));
+    creader_opts_chunk.set_byte_range_offset(chunk_start);
+    creader_opts_chunk.set_byte_range_size(chunk_end - chunk_start);
+    tables.push_back(cudf::io::json::detail::read_json(csources, creader_opts_chunk, stream, mr));
   }
   // assume all records have same number of columns, and inferred same type. (or schema is passed)
   // TODO a step before to merge all columns, types and infer final schema.

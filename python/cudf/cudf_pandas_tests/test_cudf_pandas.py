@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
+import contextlib
 import copy
 import datetime
 import operator
@@ -11,6 +12,7 @@ import pathlib
 import pickle
 import subprocess
 import tempfile
+import time
 import types
 from io import BytesIO, StringIO
 
@@ -21,13 +23,24 @@ import numpy as np
 import pyarrow as pa
 import pytest
 from nbconvert.preprocessors import ExecutePreprocessor
-from numba import NumbaDeprecationWarning, vectorize
+from numba import (
+    NumbaDeprecationWarning,
+    __version__ as numba_version,
+    vectorize,
+)
+from packaging import version
 from pytz import utc
 
-from cudf.core._compat import PANDAS_GE_220
+from rmm import RMMError
+
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
-    ProxyFallbackError,
+    AttributeFallbackError,
+    FallbackError,
+    NotImplementedFallbackError,
+    OOMFallbackError,
+    TypeFallbackError,
     _Unusable,
     is_proxy_object,
 )
@@ -51,8 +64,6 @@ from pandas.tseries.holiday import (
     USThanksgivingDay,
     get_calendar,
 )
-
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
 pd = xpd._fsproxy_slow
@@ -622,10 +633,6 @@ def test_array_function_series_fallback(series):
     tm.assert_equal(expect, got)
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_timedeltaproperties(series):
     psr, sr = series
     psr, sr = psr.astype("timedelta64[ns]"), sr.astype("timedelta64[ns]")
@@ -685,10 +692,6 @@ def test_maintain_container_subclasses(multiindex):
     assert isinstance(got, xpd.core.indexes.frozen.FrozenList)
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas due to unsupported boxcar window type",
-)
 def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
@@ -697,8 +700,14 @@ def test_rolling_win_type():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.skip(
-    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009"
+@pytest.mark.skipif(
+    version.parse(numba_version) < version.parse("0.59"),
+    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009",
+)
+@pytest.mark.xfail(
+    version.parse(numba_version) >= version.parse("0.59")
+    and PANDAS_VERSION < version.parse("2.1"),
+    reason="numba.generated_jit removed in 0.59, requires pandas >= 2.1",
 )
 def test_rolling_apply_numba_engine():
     def weighted_mean(x):
@@ -709,7 +718,12 @@ def test_rolling_apply_numba_engine():
     pdf = pd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
     df = xpd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
 
-    with pytest.warns(NumbaDeprecationWarning):
+    ctx = (
+        contextlib.nullcontext()
+        if PANDAS_GE_210
+        else pytest.warns(NumbaDeprecationWarning)
+    )
+    with ctx:
         expect = pdf.rolling(2, method="table", min_periods=0).apply(
             weighted_mean, raw=True, engine="numba"
         )
@@ -1135,8 +1149,8 @@ def test_private_method_result_wrapped():
 
 
 def test_numpy_var():
-    np.random.seed(42)
-    data = np.random.rand(1000)
+    rng = np.random.default_rng(seed=42)
+    data = rng.random(1000)
     psr = pd.Series(data)
     sr = xpd.Series(data)
 
@@ -1305,7 +1319,7 @@ def test_super_attribute_lookup():
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION < version.parse("2.1"),
     reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
 )
 def test_floordiv_array_vs_df():
@@ -1580,7 +1594,7 @@ def test_numpy_cupy_flatiter(series):
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_VERSION < version.parse("2.1"),
     reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
 )
 def test_arrow_string_arrays():
@@ -1750,5 +1764,124 @@ def test_numpy_ndarray_numba_cuda_ufunc(array):
 def test_fallback_raises_error(monkeypatch):
     with monkeypatch.context() as monkeycontext:
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
-        with pytest.raises(ProxyFallbackError):
+        with pytest.raises(FallbackError):
             pd.Series(range(2)).astype(object)
+
+
+def mock_mean_memory_error(self, *args, **kwargs):
+    raise MemoryError()
+
+
+def mock_mean_rmm_error(self, *args, **kwargs):
+    raise RMMError(1, "error")
+
+
+def mock_mean_not_impl_error(self, *args, **kwargs):
+    raise NotImplementedError()
+
+
+def mock_mean_attr_error(self, *args, **kwargs):
+    raise AttributeError()
+
+
+def mock_mean_type_error(self, *args, **kwargs):
+    raise TypeError()
+
+
+@pytest.mark.parametrize(
+    "mock_mean, err",
+    [
+        (
+            mock_mean_memory_error,
+            OOMFallbackError,
+        ),
+        (
+            mock_mean_rmm_error,
+            OOMFallbackError,
+        ),
+        (
+            mock_mean_not_impl_error,
+            NotImplementedFallbackError,
+        ),
+        (
+            mock_mean_attr_error,
+            AttributeFallbackError,
+        ),
+        (
+            mock_mean_type_error,
+            TypeFallbackError,
+        ),
+    ],
+)
+def test_fallback_raises_specific_error(
+    monkeypatch,
+    mock_mean,
+    err,
+):
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        s = xpd.Series([1, 2])
+        with pytest.raises(err, match="Falling back to the slow path"):
+            assert s.mean() == 1.5
+
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf.Series.mean)
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [
+        "_exceptions",
+        "version",
+        "_print_versions",
+        "capitalize_first_letter",
+        "_validators",
+        "_decorators",
+    ],
+)
+def test_cudf_pandas_util_version(attrs):
+    if not PANDAS_GE_220 and attrs == "capitalize_first_letter":
+        assert not hasattr(pd.util, attrs)
+    else:
+        assert hasattr(pd.util, attrs)
+
+
+def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
+    _, xdf = dataframe
+    xdf["b"] = xpd.IntervalIndex.from_arrays(xdf["a"], xdf["b"])
+    xdf["a"] = xpd.Series([1, 1, 1, 2, 3], dtype="category")
+    dtype_series = xdf.dtypes
+    assert all(is_proxy_object(x) for x in dtype_series)
+    assert isinstance(dtype_series.iloc[0], xpd.CategoricalDtype)
+    assert isinstance(dtype_series.iloc[1], xpd.IntervalDtype)
+
+
+def test_iter_doesnot_raise(monkeypatch):
+    s = xpd.Series([1, 2, 3])
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        for _ in s:
+            pass
+
+
+def test_dataframe_setitem_slowdown():
+    # We are explicitly testing the slowdown of the setitem operation
+    df = xpd.DataFrame(
+        {"a": [1, 2, 3] * 100000, "b": [1, 2, 3] * 100000}
+    ).astype("float64")
+    df = xpd.DataFrame({"a": df["a"].repeat(1000), "b": df["b"].repeat(1000)})
+    new_df = df + 1
+    start_time = time.time()
+    df[df.columns] = new_df
+    end_time = time.time()
+    delta = int(end_time - start_time)
+    if delta > 5:
+        pytest.fail(f"Test took too long to run, runtime: {delta}")
+
+
+def test_dataframe_setitem():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]}).astype("float64")
+    new_df = df + 1
+    df[df.columns] = new_df
+    tm.assert_equal(df, new_df)

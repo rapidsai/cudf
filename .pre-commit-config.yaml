@@ -16,17 +16,6 @@ repos:
             ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        # Use the config file specific to each subproject so that each
-        # project can specify its own first/third-party packages.
-        args: ["--config-root=python/", "--resolve-all-configs"]
-        files: python/.*
-        exclude: |
-          (?x)^(^python/cudf_polars/.*)
-        types_or: [python, cython, pyi]
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.16.2
     hooks:
@@ -95,6 +84,16 @@ repos:
         entry: 'pytest\.xfail'
         language: pygrep
         types: [python]
+      - id: no-unseeded-default-rng
+        name: no-unseeded-default-rng
+        description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
+        entry: |
+          # Check for usage of default_rng without seeding
+          default_rng\(\)|
+          # Check for usage of np.random.seed (NPY002 only disallows this being called)
+          np.random.seed
+        language: pygrep
+        types: [python]
       - id: cmake-format
         name: cmake-format
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format
@@ -106,6 +105,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: cmake-lint
         name: cmake-lint
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -117,6 +120,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: doxygen-check
         name: doxygen-check
         entry: ./ci/checks/doxygen.sh
@@ -140,6 +147,7 @@ repos:
     rev: v0.4.8
     hooks:
       - id: ruff
+        args: ["--fix"]
         files: python/.*$
       - id: ruff-format
         files: python/.*$
@@ -151,11 +159,12 @@ repos:
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
-            cpp/src/io/parquet/ipc/Schema_generated[.]h$
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$|
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
           )
       - id: verify-alpha-spec
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.13.11
+    rev: v1.16.0
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean"]

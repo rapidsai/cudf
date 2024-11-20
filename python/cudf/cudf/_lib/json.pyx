@@ -1,6 +1,5 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-import io
 import os
 from collections import abc
 
@@ -9,28 +8,12 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-cimport pylibcudf.libcudf.io.types as cudf_io_types
-from pylibcudf.io.types cimport compression_type
-from pylibcudf.libcudf.io.json cimport json_recovery_mode_t
-from pylibcudf.libcudf.io.types cimport compression_type
-from pylibcudf.libcudf.types cimport data_type, type_id
-from pylibcudf.types cimport DataType
-
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport add_df_col_struct_names
-from cudf._lib.types cimport dtype_to_data_type
+from cudf._lib.types cimport dtype_to_pylibcudf_type
 from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
 
 import pylibcudf as plc
-
-
-cdef json_recovery_mode_t _get_json_recovery_mode(object on_bad_lines):
-    if on_bad_lines.lower() == "error":
-        return json_recovery_mode_t.FAIL
-    elif on_bad_lines.lower() == "recover":
-        return json_recovery_mode_t.RECOVER_WITH_NULL
-    else:
-        raise TypeError(f"Invalid parameter for {on_bad_lines=}")
 
 
 cpdef read_json(object filepaths_or_buffers,
@@ -41,7 +24,7 @@ cpdef read_json(object filepaths_or_buffers,
                 bool keep_quotes,
                 bool mixed_types_as_string,
                 bool prune_columns,
-                object on_bad_lines):
+                str on_bad_lines):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -55,28 +38,29 @@ cpdef read_json(object filepaths_or_buffers,
     # the encoded memoryview externally to ensure the encoded buffer
     # isn't destroyed before calling libcudf `read_json()`
 
-    for idx in range(len(filepaths_or_buffers)):
-        if isinstance(filepaths_or_buffers[idx], io.StringIO):
-            filepaths_or_buffers[idx] = \
-                filepaths_or_buffers[idx].read().encode()
-        elif isinstance(filepaths_or_buffers[idx], str) and \
-                not os.path.isfile(filepaths_or_buffers[idx]):
-            filepaths_or_buffers[idx] = filepaths_or_buffers[idx].encode()
+    for idx, source in enumerate(filepaths_or_buffers):
+        if isinstance(source, str) and not os.path.isfile(source):
+            filepaths_or_buffers[idx] = source.encode()
 
     # Setup arguments
-    cdef cudf_io_types.compression_type c_compression
-
     if compression is not None:
         if compression == 'gzip':
-            c_compression = cudf_io_types.compression_type.GZIP
+            c_compression = plc.io.types.CompressionType.GZIP
         elif compression == 'bz2':
-            c_compression = cudf_io_types.compression_type.BZIP2
+            c_compression = plc.io.types.CompressionType.BZIP2
         elif compression == 'zip':
-            c_compression = cudf_io_types.compression_type.ZIP
+            c_compression = plc.io.types.CompressionType.ZIP
         else:
-            c_compression = cudf_io_types.compression_type.AUTO
+            c_compression = plc.io.types.CompressionType.AUTO
     else:
-        c_compression = cudf_io_types.compression_type.NONE
+        c_compression = plc.io.types.CompressionType.NONE
+
+    if on_bad_lines.lower() == "error":
+        c_on_bad_lines = plc.io.types.JSONRecoveryMode.FAIL
+    elif on_bad_lines.lower() == "recover":
+        c_on_bad_lines = plc.io.types.JSONRecoveryMode.RECOVER_WITH_NULL
+    else:
+        raise TypeError(f"Invalid parameter for {on_bad_lines=}")
 
     processed_dtypes = None
 
@@ -108,11 +92,11 @@ cpdef read_json(object filepaths_or_buffers,
             keep_quotes = keep_quotes,
             mixed_types_as_string = mixed_types_as_string,
             prune_columns = prune_columns,
-            recovery_mode = _get_json_recovery_mode(on_bad_lines)
+            recovery_mode = c_on_bad_lines
         )
         df = cudf.DataFrame._from_data(
             *_data_from_columns(
-                columns=[Column.from_pylibcudf(plc) for plc in res_cols],
+                columns=[Column.from_pylibcudf(col) for col in res_cols],
                 column_names=res_col_names,
                 index_names=None
                )
@@ -130,7 +114,7 @@ cpdef read_json(object filepaths_or_buffers,
             keep_quotes = keep_quotes,
             mixed_types_as_string = mixed_types_as_string,
             prune_columns = prune_columns,
-            recovery_mode = _get_json_recovery_mode(on_bad_lines)
+            recovery_mode = c_on_bad_lines
         )
 
         df = cudf.DataFrame._from_data(
@@ -189,7 +173,7 @@ def write_json(
         )
 
 
-cdef _get_cudf_schema_element_from_dtype(object dtype) except *:
+def _get_cudf_schema_element_from_dtype(object dtype):
     dtype = cudf.dtype(dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
@@ -197,7 +181,7 @@ cdef _get_cudf_schema_element_from_dtype(object dtype) except *:
             "supported in JSON reader"
         )
 
-    lib_type = DataType.from_libcudf(dtype_to_data_type(dtype))
+    lib_type = dtype_to_pylibcudf_type(dtype)
     child_types = []
 
     if isinstance(dtype, cudf.StructDtype):
@@ -210,21 +194,11 @@ cdef _get_cudf_schema_element_from_dtype(object dtype) except *:
             _get_cudf_schema_element_from_dtype(dtype.element_type)
 
         child_types = [
-            ("offsets", DataType.from_libcudf(data_type(type_id.INT32)), []),
+            ("offsets", plc.DataType(plc.TypeId.INT32), []),
             ("element", child_lib_type, grandchild_types)
         ]
 
     return lib_type, child_types
-
-
-cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
-    dtype = cudf.dtype(dtype)
-    if isinstance(dtype, cudf.CategoricalDtype):
-        raise NotImplementedError(
-            "CategoricalDtype as dtype is not yet "
-            "supported in JSON reader"
-        )
-    return dtype_to_data_type(dtype)
 
 
 def _dtype_to_names_list(col):

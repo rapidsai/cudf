@@ -19,6 +19,8 @@ from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 
 
+__all__ = ["read_csv"]
+
 cdef tuple _process_parse_dates_hex(list cols):
     cdef vector[string] str_cols
     cdef vector[int] int_cols
@@ -168,7 +170,7 @@ def read_csv(
     cdef vector[data_type] c_dtypes_list
     cdef map[string, data_type] c_dtypes_map
 
-    cdef csv_reader_options options = move(
+    cdef csv_reader_options options = (
         csv_reader_options.builder(source_info.c_obj)
         .compression(compression)
         .mangle_dupe_cols(mangle_dupe_cols)

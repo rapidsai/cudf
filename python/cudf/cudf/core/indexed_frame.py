@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import numbers
 import operator
 import textwrap
 import warnings
@@ -11,9 +10,7 @@ from collections import Counter, abc
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Literal,
-    MutableMapping,
     TypeVar,
     cast,
 )
@@ -24,7 +21,7 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
-import pylibcudf
+import pylibcudf as plc
 
 import cudf
 import cudf._lib as libcudf
@@ -64,6 +61,8 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, MutableMapping
+
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,
@@ -150,24 +149,14 @@ doc_binop_template = textwrap.dedent(
 )
 
 
-def _get_host_unique(array):
+def _get_unique_drop_labels(array):
+    """Return labels to be dropped for IndexFrame.drop."""
     if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
-        return array.unique.to_pandas()
-    elif isinstance(array, (str, numbers.Number)):
-        return [array]
+        yield from np.unique(as_column(array).values_host)
+    elif is_scalar(array):
+        yield array
     else:
-        return set(array)
-
-
-def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
-    for c in columns:
-        try:
-            f._drop_column(c)
-        except KeyError as e:
-            if errors == "ignore":
-                pass
-            else:
-                raise e
+        yield from set(array)
 
 
 def _indices_from_labels(obj, labels):
@@ -2828,7 +2817,20 @@ class IndexedFrame(Frame):
         """
         raise NotImplementedError
 
-    def hash_values(self, method="murmur3", seed=None):
+    def hash_values(
+        self,
+        method: Literal[
+            "murmur3",
+            "xxhash64",
+            "md5",
+            "sha1",
+            "sha224",
+            "sha256",
+            "sha384",
+            "sha512",
+        ] = "murmur3",
+        seed: int | None = None,
+    ) -> cudf.Series:
         """Compute the hash of values in this column.
 
         Parameters
@@ -2905,11 +2907,31 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        # Note that both Series and DataFrame return Series objects from this
-        # calculation, necessitating the unfortunate circular reference to the
-        # child class here.
+        with acquire_spill_lock():
+            plc_table = plc.Table(
+                [c.to_pylibcudf(mode="read") for c in self._columns]
+            )
+            if method == "murmur3":
+                plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
+            elif method == "xxhash64":
+                plc_column = plc.hashing.xxhash_64(plc_table, seed)
+            elif method == "md5":
+                plc_column = plc.hashing.md5(plc_table)
+            elif method == "sha1":
+                plc_column = plc.hashing.sha1(plc_table)
+            elif method == "sha224":
+                plc_column = plc.hashing.sha224(plc_table)
+            elif method == "sha256":
+                plc_column = plc.hashing.sha256(plc_table)
+            elif method == "sha384":
+                plc_column = plc.hashing.sha384(plc_table)
+            elif method == "sha512":
+                plc_column = plc.hashing.sha512(plc_table)
+            else:
+                raise ValueError(f"Unsupported hashing algorithm {method}.")
+            result = libcudf.column.Column.from_pylibcudf(plc_column)
         return cudf.Series._from_column(
-            libcudf.hash.hash([*self._columns], method, seed),
+            result,
             index=self.index,
         )
 
@@ -5262,15 +5284,14 @@ class IndexedFrame(Frame):
             out = self.copy()
 
         if axis in (1, "columns"):
-            target = _get_host_unique(target)
-
-            _drop_columns(out, target, errors)
+            for label in _get_unique_drop_labels(target):
+                out._drop_column(label, errors=errors)
         elif axis in (0, "index"):
             dropped = _drop_rows_by_labels(out, target, level, errors)
 
             if columns is not None:
-                columns = _get_host_unique(columns)
-                _drop_columns(dropped, columns, errors)
+                for label in _get_unique_drop_labels(columns):
+                    dropped._drop_column(label, errors=errors)
 
             out._mimic_inplace(dropped, inplace=True)
 
@@ -6282,7 +6303,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = pylibcudf.aggregation.RankMethod[method.upper()]
+        method_enum = plc.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"

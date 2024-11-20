@@ -4,9 +4,10 @@ import math
 
 import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 def idfn(param):
@@ -544,13 +545,6 @@ def py_shift_right_unsigned(x, y):
             "int64",
             "int64",
             "int64",
-            plc.binaryop.BinaryOperator.LOGICAL_AND,
-            pa.compute.and_,
-        ),
-        (
-            "int64",
-            "int64",
-            "int64",
             plc.binaryop.BinaryOperator.LOGICAL_OR,
             pa.compute.or_,
         ),
@@ -558,13 +552,6 @@ def py_shift_right_unsigned(x, y):
             "int64",
             "float64",
             "float64",
-            plc.binaryop.BinaryOperator.LOGICAL_OR,
-            pa.compute.or_,
-        ),
-        (
-            "int64",
-            "int64",
-            "int64",
             plc.binaryop.BinaryOperator.LOGICAL_OR,
             pa.compute.or_,
         ),

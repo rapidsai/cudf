@@ -11,6 +11,7 @@ from pylibcudf.libcudf.column.column cimport column
 
 from .column cimport Column
 
+__all__ = ["RoundingMethod", "round"]
 
 cpdef Column round(
     Column source,
@@ -39,12 +40,10 @@ cpdef Column round(
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_round(
-                source.view(),
-                decimal_places,
-                round_method
-            )
+        c_result = cpp_round(
+            source.view(),
+            decimal_places,
+            round_method
         )
 
     return Column.from_libcudf(move(c_result))
