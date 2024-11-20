@@ -1,9 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-import pandas as pd
 import pyarrow as pa
 import pytest
-from packaging import version
 from utils import _convert_types, assert_table_and_meta_eq, make_source
 
 import pylibcudf as plc
@@ -57,10 +55,6 @@ def test_read_orc_basic(
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
 
 
-@pytest.mark.skipif(
-    version.parse(pd.__version__) < version.parse("2.2.3"),
-    reason="fails on a pandas version < 2.2.3",
-)
 @pytest.mark.parametrize(
     "compression",
     [
@@ -78,7 +72,7 @@ def test_read_orc_basic(
 @pytest.mark.parametrize("stripe_size_bytes", [None, 65536])
 @pytest.mark.parametrize("stripe_size_rows", [None, 512])
 @pytest.mark.parametrize("row_index_stride", [None, 512])
-def test_roundtrip_pd_dataframe(
+def test_roundtrip_pa_table(
     compression,
     statistics,
     stripe_size_bytes,
@@ -86,9 +80,7 @@ def test_roundtrip_pd_dataframe(
     row_index_stride,
     tmp_path,
 ):
-    pdf = pd.DataFrame({"a": [1.0, 2.0, None], "b": [True, None, False]})
-
-    pa_table = pa.Table.from_pandas(pdf)
+    pa_table = pa.table({"a": [1.0, 2.0, None], "b": [True, None, False]})
     plc_table = plc.interop.from_arrow(pa_table)
 
     tmpfile_name = tmp_path / "test.orc"
@@ -114,12 +106,11 @@ def test_roundtrip_pd_dataframe(
 
     plc.io.orc.write_orc(options)
 
-    expected_pdf = pd.read_orc(tmpfile_name)
-    expected_pdf.columns = pdf.columns
+    read_table = pa.orc.read_table(str(tmpfile_name))
 
     res = plc.io.types.TableWithMetadata(
-        plc.interop.from_arrow(pa.Table.from_pandas(expected_pdf)),
-        [(name, []) for name in pdf.columns],
+        plc.interop.from_arrow(read_table),
+        [(name, []) for name in pa_table.schema.names],
     )
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
