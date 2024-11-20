@@ -37,9 +37,7 @@ void BM_to_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enum_
   auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
-  std::vector<cudf::type_id> types;
-
-  std::fill_n(std::back_inserter(types), num_columns, data_type);
+  std::vector<cudf::type_id> types(num_columns, data_type);
 
   auto const table         = create_random_table(types, row_count{num_rows});
   int64_t const size_bytes = estimate_size(table->view());
@@ -60,9 +58,7 @@ void BM_to_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
   auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
-  std::vector<cudf::type_id> types;
-
-  std::fill_n(std::back_inserter(types), num_columns, data_type);
+  std::vector<cudf::type_id> types(num_columns, data_type);
 
   auto const table         = create_random_table(types, row_count{num_rows});
   int64_t const size_bytes = estimate_size(table->view());
@@ -83,9 +79,7 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
   auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
-  std::vector<cudf::type_id> types;
-
-  std::fill_n(std::back_inserter(types), num_columns, data_type);
+  std::vector<cudf::type_id> types(num_columns, data_type);
 
   data_profile profile;
   profile.set_struct_depth(1);
@@ -102,11 +96,8 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
                  std::back_inserter(table_metadata),
                  [&](auto const column) {
                    cudf::column_metadata column_metadata{""};
-                   std::vector<cudf::column_metadata> children_metadata;
-                   std::fill_n(std::back_inserter(children_metadata),
-                               table->get_column(column).num_children(),
-                               cudf::column_metadata{""});
-                   column_metadata.children_meta = children_metadata;
+                   column_metadata.children_meta = std::vector(
+                     table->get_column(column).num_children(), cudf::column_metadata{""});
                    return column_metadata;
                  });
 
@@ -130,9 +121,7 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
   auto const num_columns  = static_cast<cudf::size_type>(state.get_int64("num_columns"));
   auto const num_elements = static_cast<int64_t>(num_rows) * num_columns;
 
-  std::vector<cudf::type_id> types;
-
-  std::fill_n(std::back_inserter(types), num_columns, data_type);
+  std::vector<cudf::type_id> types(num_columns, data_type);
 
   data_profile profile;
   profile.set_struct_depth(1);
@@ -149,11 +138,8 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
                  std::back_inserter(table_metadata),
                  [&](auto const column) {
                    cudf::column_metadata column_metadata{""};
-                   std::vector<cudf::column_metadata> children_metadata;
-                   std::fill_n(std::back_inserter(children_metadata),
-                               table->get_column(column).num_children(),
-                               cudf::column_metadata{""});
-                   column_metadata.children_meta = children_metadata;
+                   column_metadata.children_meta = std::vector(
+                     table->get_column(column).num_children(), cudf::column_metadata{""});
                    return column_metadata;
                  });
 
