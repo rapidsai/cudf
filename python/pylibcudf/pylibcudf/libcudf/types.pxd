@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
@@ -85,10 +85,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         NUM_TYPE_IDS
 
     cdef cppclass data_type:
-        data_type() except +
-        data_type(const data_type&) except +
-        data_type(type_id id) except +
-        data_type(type_id id, int32_t scale) except +
+        data_type() except +libcudf_exception_handler
+        data_type(const data_type&) except +libcudf_exception_handler
+        data_type(type_id id) except +libcudf_exception_handler
+        data_type(type_id id, int32_t scale) except +libcudf_exception_handler
         type_id id() noexcept
         int32_t scale() noexcept
         bool operator==(const data_type&, const data_type&) noexcept
@@ -100,4 +100,4 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         MIDPOINT
         NEAREST
 
-    cdef size_type size_of(data_type t) except +
+    cdef size_type size_of(data_type t) except +libcudf_exception_handler
