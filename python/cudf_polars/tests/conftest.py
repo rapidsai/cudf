@@ -20,10 +20,8 @@ class DistributedClusterResource:
     """
 
     _instance = None
-
-    def __init__(self):
-        _cluster = None
-        _client = None
+    _cluster = None
+    _client = None
 
     @classmethod
     def get_instance(cls):
@@ -38,8 +36,12 @@ class DistributedClusterResource:
             self._client = Client(self._cluster)
 
     def stop(self):
-        self._client = None
-        self._cluster = None
+        if self._client is not None:
+            self._client.shutdown()
+            self._client = None
+        if self._cluster is not None:
+            self._cluster.close()
+            self._cluster = None
 
 
 def pytest_addoption(parser):
@@ -61,14 +63,13 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     import cudf_polars.testing.asserts
 
-    if config.getoption("--dask-cluster"):
-        if config.getoption("--executor") != "dask-experimental":
-            raise pytest.UsageError(
-                "--dask-cluster requires --executor='dask-experimental'"
-            )
-        else:
-            config._dask_cluster = LocalCluster()
-            config._dask_client = Client()
+    if (
+        config.getoption("--dask-cluster")
+        and config.getoption("--executor") != "dask-experimental"
+    ):
+        raise pytest.UsageError(
+            "--dask-cluster requires --executor='dask-experimental'"
+        )
 
     cudf_polars.testing.asserts.Executor = config.getoption("--executor")
 
@@ -76,7 +77,7 @@ def pytest_configure(config):
 def pytest_sessionstart(session):
     if (
         session.config.getoption("--dask-cluster")
-        and session.config.getoption("--executor") != "dask-experimental"
+        and session.config.getoption("--executor") == "dask-experimental"
     ):
         DistributedClusterResource.get_instance().start()
 
