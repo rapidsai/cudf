@@ -51,7 +51,7 @@ struct XXHash_64 : public cuco::xxhash_64<Key> {
 };
 
 template <>
-hash_value_type __device__ XXHash_64<bool>::operator()(bool const& key) const
+hash_value_type __device__ inline XXHash_64<bool>::operator()(bool const& key) const
 {
   return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(key));
 }
