@@ -1455,13 +1455,30 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 
 
 def column_empty(
-    row_count: int, dtype: Dtype = "object", masked: bool = False
+    row_count: int,
+    dtype: Dtype = "object",
+    masked: bool = False,
+    for_numba: bool = False,
 ) -> ColumnBase:
     """
     Allocate a new column with the given row_count and dtype.
 
     * Passing row_count == 0 creates a size 0 column without a mask buffer.
     * Passing row_count > 0 creates an all null column with a mask buffer.
+
+    Parameters
+    ----------
+    row_count : int
+        Number of elements in the column.
+
+    dtype : Dtype
+        Type of the column.
+
+    masked : bool
+        Unused.
+
+    for_numba : bool, default False
+        If True, don't allocate a mask as it's not supported by numba.
     """
     dtype = cudf.dtype(dtype)
     children: tuple[ColumnBase, ...] = ()
@@ -1504,7 +1521,7 @@ def column_empty(
     else:
         data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
-    if row_count > 0:
+    if row_count > 0 and not for_numba:
         mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
     else:
         mask = None

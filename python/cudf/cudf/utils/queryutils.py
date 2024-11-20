@@ -246,8 +246,7 @@ def query_execute(df, expr, callenv):
 
     # allocate output buffer
     nrows = len(df)
-    # numba doesn't support masks
-    out = column_empty(nrows, dtype=np.bool_).set_mask(None)
+    out = column_empty(nrows, dtype=np.bool_, for_numba=True)
     # run kernel
     args = [out] + colarrays + envargs
     with _CUDFNumbaConfig():

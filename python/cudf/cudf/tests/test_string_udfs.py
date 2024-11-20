@@ -83,8 +83,8 @@ def run_udf_test(data, func, dtype):
     else:
         dtype = np.dtype(dtype)
         output = cudf.core.column.column_empty(
-            len(data), dtype=dtype
-        ).set_mask(None)
+            len(data), dtype=dtype, for_numba=True
+        )
 
     cudf_column = cudf.core.column.as_column(data)
     str_views = column_to_string_view_array(cudf_column)
