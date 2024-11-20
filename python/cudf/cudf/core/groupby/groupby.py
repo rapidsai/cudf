@@ -14,6 +14,8 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
@@ -25,6 +27,7 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
@@ -770,9 +773,22 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys = map(list, zip(*join_keys))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
-                left_order, right_order = libcudf.join.join(
-                    *join_keys, how="inner"
-                )
+                with acquire_spill_lock():
+                    plc_tables = [
+                        plc.Table(
+                            [col.to_pylibcudf(mode="read") for col in cols]
+                        )
+                        for cols in join_keys
+                    ]
+                    left_plc, right_plc = plc.join.inner_join(
+                        plc_tables[0],
+                        plc_tables[1],
+                        plc.types.NullEquality.EQUAL,
+                    )
+                    left_order = libcudf.column.Column.from_pylibcudf(left_plc)
+                    right_order = libcudf.column.Column.from_pylibcudf(
+                        right_plc
+                    )
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
