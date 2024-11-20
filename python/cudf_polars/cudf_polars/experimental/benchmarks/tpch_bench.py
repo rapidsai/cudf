@@ -31,6 +31,12 @@ parser.add_argument(
     help="Root directory path.",
 )
 parser.add_argument(
+    "--suffix",
+    type=str,
+    default="",
+    help="Table file suffix.",
+)
+parser.add_argument(
     "-e",
     "--executor",
     default="dask-experimental",
@@ -40,7 +46,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--blocksize",
-    default=4 * 1024**3,
+    default=1 * 1024**3,
     type=int,
     help="Approx. partition size.",
 )
@@ -53,14 +59,14 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-def get_data(path, table_name):
+def get_data(path, table_name, suffix=""):
     """Get table from dataset."""
-    return pl.scan_parquet(f"{path}/{table_name}")
+    return pl.scan_parquet(f"{path}/{table_name}{suffix}")
 
 
-def q1(path):
+def q1(args):
     """Query 1."""
-    lineitem = get_data(path, "lineitem")
+    lineitem = get_data(args.path, "lineitem", args.suffix)
 
     var1 = date(1998, 9, 2)
 
@@ -89,14 +95,16 @@ def q1(path):
     )
 
 
-def q5(path):
+def q5(args):
     """Query 5."""
-    customer = get_data(path, "customer")
-    lineitem = get_data(path, "lineitem")
-    nation = get_data(path, "nation")
-    orders = get_data(path, "orders")
-    region = get_data(path, "region")
-    supplier = get_data(path, "supplier")
+    path = args.path
+    suffix = args.suffix
+    customer = get_data(path, "customer", suffix)
+    lineitem = get_data(path, "lineitem", suffix)
+    nation = get_data(path, "nation", suffix)
+    orders = get_data(path, "orders", suffix)
+    region = get_data(path, "region", suffix)
+    supplier = get_data(path, "supplier", suffix)
 
     var1 = "ASIA"
     var2 = date(1994, 1, 1)
@@ -129,9 +137,9 @@ def run(args):
 
     q_id = args.query
     if q_id == 1:
-        q = q1(args.path)
+        q = q1(args)
     elif q_id == 5:
-        q = q5(args.path)
+        q = q5(args)
     else:
         raise NotImplementedError(f"Query {q_id} not implemented.")
 
