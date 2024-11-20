@@ -90,13 +90,13 @@ def dtype(arbitrary):
         raise TypeError(f"Cannot interpret {arbitrary} as a valid cuDF dtype")
 
 
-def _decode_type(
+def _check_type(
     cls: type,
     header: dict,
     frames: list,
     is_valid_class: Callable[[type, type], bool] = operator.is_,
-) -> tuple[dict, list]:
-    """Decode metadata-encoded type and check validity
+) -> None:
+    """Perform metadata-encoded type and check validity
 
     Parameters
     ----------
@@ -110,11 +110,6 @@ def _decode_type(
         function to call to check if the encoded class type is valid for
         serialization by `cls` (default is to check type equality), called
         as `is_valid_class(decoded_class, cls)`.
-
-    Returns
-    -------
-    tuple
-        Tuple of validated headers and frames.
 
     Raises
     ------
@@ -130,7 +125,6 @@ def _decode_type(
         klass := Serializable._name_type_map[header["type-serialized-name"]],
         cls,
     ), f"Header-encoded {klass=} does not match decoding {cls=}."
-    return header, frames
 
 
 class _BaseDtype(ExtensionDtype, Serializable):
@@ -318,7 +312,7 @@ class CategoricalDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header, frames):
-        header, frames = _decode_type(cls, header, frames)
+        _check_type(cls, header, frames)
         ordered = header["ordered"]
         categories_header = header["categories"]
         categories_frames = frames
@@ -509,7 +503,7 @@ class ListDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(cls, header, frames)
+        _check_type(cls, header, frames)
         if isinstance(header["element-type"], dict):
             element_type = Serializable.device_deserialize(
                 header["element-type"], frames
@@ -661,7 +655,7 @@ class StructDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(cls, header, frames)
+        _check_type(cls, header, frames)
         fields = {}
         for k, dtype in header["fields"].items():
             if isinstance(dtype, tuple):
@@ -843,9 +837,7 @@ class DecimalDtype(_BaseDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(
-            cls, header, frames, is_valid_class=issubclass
-        )
+        _check_type(cls, header, frames, is_valid_class=issubclass)
         return cls(header["precision"], header["scale"])
 
     def __eq__(self, other: Dtype) -> bool:
@@ -961,7 +953,7 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        header, frames = _decode_type(cls, header, frames)
+        _check_type(cls, header, frames)
         subtype, closed = header["fields"]
         subtype = np.dtype(subtype)
         return cls(subtype, closed=closed)
