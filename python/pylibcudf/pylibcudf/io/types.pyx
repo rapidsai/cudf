@@ -2,6 +2,7 @@
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+from libc.stdint cimport uint8_t, int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -20,6 +21,7 @@ from pylibcudf.libcudf.io.types cimport (
     table_input_metadata,
     table_with_metadata,
 )
+from pylibcudf.libcudf.types cimport size_type
 
 import codecs
 import errno
@@ -63,7 +65,7 @@ cdef class PartitionInfo:
     num_rows : int
         The number of rows in the partition.
     """
-    def __init__(self, int start_row, int num_rows):
+    def __init__(self, size_type start_row, size_type num_rows):
         self.c_obj = partition_info(start_row, num_rows)
 
 
@@ -146,7 +148,7 @@ cdef class ColumnInMetadata:
         self.c_obj.set_int96_timestamps(req)
         return self
 
-    cpdef ColumnInMetadata set_decimal_precision(self, int precision):
+    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t precision):
         """
         Set the decimal precision of this column.
         Only valid if this column is a decimal (fixed-point) type.
@@ -163,7 +165,7 @@ cdef class ColumnInMetadata:
         self.c_obj.set_decimal_precision(precision)
         return self
 
-    cpdef ColumnInMetadata child(self, int i):
+    cpdef ColumnInMetadata child(self, size_type i):
         """
         Get reference to a child of this column.
 
@@ -194,7 +196,7 @@ cdef class ColumnInMetadata:
         self.c_obj.set_output_as_binary(binary)
         return self
 
-    cpdef ColumnInMetadata set_type_length(self, int type_length):
+    cpdef ColumnInMetadata set_type_length(self, int32_t type_length):
         """
         Sets the length of fixed length data.
 

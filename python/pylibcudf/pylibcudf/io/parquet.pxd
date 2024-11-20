@@ -55,15 +55,15 @@ cdef class ParquetWriterOptions:
 
     cpdef void set_column_chunks_file_paths(self, list file_paths)
 
-    cpdef void set_row_group_size_bytes(self, int size_bytes)
+    cpdef void set_row_group_size_bytes(self, size_t size_bytes)
 
-    cpdef void set_row_group_size_rows(self, int size_rows)
+    cpdef void set_row_group_size_rows(self, size_type size_rows)
 
-    cpdef void set_max_page_size_bytes(self, int size_bytes)
+    cpdef void set_max_page_size_bytes(self, size_t size_bytes)
 
-    cpdef void set_max_page_size_rows(self, int size_rows)
+    cpdef void set_max_page_size_rows(self, size_type size_rows)
 
-    cpdef void set_max_dictionary_size(self, int size_rows)
+    cpdef void set_max_dictionary_size(self, size_t size_rows)
 
 cdef class ParquetWriterOptionsBuilder:
     cdef parquet_writer_options_builder c_obj

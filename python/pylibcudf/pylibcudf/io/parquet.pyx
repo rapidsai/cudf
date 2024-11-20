@@ -310,7 +310,7 @@ cdef class ParquetWriterOptions:
         """
         self.c_obj.set_column_chunks_file_paths([fp.encode() for fp in file_paths])
 
-    cpdef void set_row_group_size_bytes(self, int size_bytes):
+    cpdef void set_row_group_size_bytes(self, size_t size_bytes):
         """
         Sets the maximum row group size, in bytes.
 
@@ -325,7 +325,7 @@ cdef class ParquetWriterOptions:
         """
         self.c_obj.set_row_group_size_bytes(size_bytes)
 
-    cpdef void set_row_group_size_rows(self, int size_rows):
+    cpdef void set_row_group_size_rows(self, size_type size_rows):
         """
         Sets the maximum row group size, in rows.
 
@@ -340,7 +340,7 @@ cdef class ParquetWriterOptions:
         """
         self.c_obj.set_row_group_size_rows(size_rows)
 
-    cpdef void set_max_page_size_bytes(self, int size_bytes):
+    cpdef void set_max_page_size_bytes(self, size_t size_bytes):
         """
         Sets the maximum uncompressed page size, in bytes.
 
@@ -355,7 +355,7 @@ cdef class ParquetWriterOptions:
         """
         self.c_obj.set_max_page_size_bytes(size_bytes)
 
-    cpdef void set_max_page_size_rows(self, int size_rows):
+    cpdef void set_max_page_size_rows(self, size_type size_rows):
         """
         Sets the maximum page size, in rows.
 
@@ -370,7 +370,7 @@ cdef class ParquetWriterOptions:
         """
         self.c_obj.set_max_page_size_rows(size_rows)
 
-    cpdef void set_max_dictionary_size(self, int size_rows):
+    cpdef void set_max_dictionary_size(self, size_t size_rows):
         """
         Sets the maximum dictionary size, in bytes.
 
@@ -539,7 +539,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptions build(self):
         """
-        Options member once it's built
+        Create a ParquetWriterOptions from the set options.
 
         Returns
         -------

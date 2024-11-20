@@ -1,4 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+from libc.stdint cimport uint8_t, int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -19,6 +20,7 @@ from pylibcudf.libcudf.io.types cimport (
     table_metadata,
     table_with_metadata,
 )
+from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 
 
@@ -41,13 +43,13 @@ cdef class ColumnInMetadata:
 
     cpdef ColumnInMetadata set_int96_timestamps(self, bool req)
 
-    cpdef ColumnInMetadata set_decimal_precision(self, int req)
+    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t req)
 
-    cpdef ColumnInMetadata child(self, int i)
+    cpdef ColumnInMetadata child(self, size_type i)
 
     cpdef ColumnInMetadata set_output_as_binary(self, bool binary)
 
-    cpdef ColumnInMetadata set_type_length(self, int type_length)
+    cpdef ColumnInMetadata set_type_length(self, int32_t type_length)
 
     cpdef ColumnInMetadata set_skip_compression(self, bool skip)
 
