@@ -37,21 +37,12 @@ def enable_uvm(device: int):
     managed_memory_is_supported = (
         pylibcudf.utils._is_concurrent_managed_access_supported()
     )
-    default_rmm_mode = "managed_pool" if managed_memory_is_supported else "pool"
-    rmm_mode = os.getenv("CUDF_POLARS_RMM_MODE", default_rmm_mode)
+    rmm_mode = "managed_pool" if managed_memory_is_supported else "pool"
     if "managed" in rmm_mode and not managed_memory_is_supported:
         raise ValueError(
             f"Managed memory is not supported on this system, so the requested {rmm_mode=} is invalid."
         )
-    # Check if a non-default memory resource is set
     current_mr = rmm.mr.get_current_device_resource()
-    if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
-        warnings.warn(
-            f"cudf_polars detected an already configured memory resource, ignoring 'CUDF_POLARS_RMM_MODE'={rmm_mode!s}",
-            UserWarning,
-            stacklevel=2,
-        )
-        return None
     free_memory, _ = rmm.mr.available_device_memory()
     free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
     new_mr = current_mr
@@ -60,10 +51,6 @@ def enable_uvm(device: int):
             current_mr,
             initial_pool_size=free_memory,
         )
-    elif rmm_mode == "async":
-        new_mr = rmm.mr.CudaAsyncMemoryResource(initial_pool_size=free_memory)
-    elif rmm_mode == "managed":
-        new_mr = rmm.mr.PrefetchResourceAdaptor(rmm.mr.ManagedMemoryResource())
     elif rmm_mode == "managed_pool":
         new_mr = rmm.mr.PrefetchResourceAdaptor(
             rmm.mr.PoolMemoryResource(
@@ -74,7 +61,6 @@ def enable_uvm(device: int):
     elif rmm_mode != "cuda":
         raise ValueError(f"Unsupported {rmm_mode=}")
 
-    # rmm.mr.set_current_device_resource(new_mr)
     return new_mr
 
 
@@ -126,6 +112,26 @@ def _enable_managed_prefetching(rmm_mode, managed_memory_is_supported):
             pylibcudf.experimental.enable_prefetching(key)
 
 
+def _env_get_int(name, default):
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):
+        return default
+
+
+def _env_get_bool(name, default):
+    env = os.getenv(name)
+    if env is None:
+        return default
+    as_a_int = _env_get_int(name, None)
+    env = env.lower().strip()
+    if env == "true" or env == "on" or as_a_int:
+        return True
+    if env == "false" or env == "off" or as_a_int == 0:
+        return False
+    return default
+
+
 @contextlib.contextmanager
 def set_memory_resource(
     mr: rmm.mr.DeviceMemoryResource | None,
@@ -152,17 +158,18 @@ def set_memory_resource(
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
         device: int = gpu.getDevice()
-        rmm_mode = os.getenv("CUDF_POLARS_RMM_MODE", "managed_pool")
-        if rmm_mode == "managed_pool":
+        if _env_get_bool("CUDF_POLARS_DISABLE_UVM", default=False):
             managed_memory_is_supported = (
                 pylibcudf.utils._is_concurrent_managed_access_supported()
             )
             mr = enable_uvm(device)
             rmm.mr.set_current_device_resource(mr)
-            _enable_managed_prefetching(rmm_mode, managed_memory_is_supported)
+            _enable_managed_prefetching("managed_pool", managed_memory_is_supported)
         else:
             mr = default_memory_resource(device)
             rmm.mr.set_current_device_resource(mr)
+    else:
+        rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
     finally:

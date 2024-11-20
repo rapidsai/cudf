@@ -23,3 +23,10 @@ engine = GPUEngine(
 result = query.collect(engine=engine)
 ```
 Note that passing `chunked: False` disables chunked reading entirely, and thus `chunk_read_limit` and `pass_read_limit` will have no effect.
+
+## Disabling Unified Memory
+
+By default `cudf_polars` will default to CUDA Unified Managed memory with RMM's asynchronouse pool allocator. On system's that don't support Managed Memory, a non-managed pool
+allocator is used.
+[Unified Memory](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#unified-memory-introduction) can be turned off by setting `CUDF_POLARS_DISABLE_UVM` to `"True"`. System requirement for Unified memory can be found [here](
+https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#system-requirements-for-unified-memory).
