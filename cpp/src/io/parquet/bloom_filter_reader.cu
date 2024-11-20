@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "arrow_filter_policy.cuh"
 #include "compact_protocol_reader.hpp"
 #include "io/parquet/parquet.hpp"
 #include "reader_impl_helpers.hpp"
@@ -36,6 +37,7 @@
 #include <cuco/bloom_filter_policy.cuh>
 #include <cuco/bloom_filter_ref.cuh>
 #include <cuco/hash_functions.cuh>
+#include <cuda/std/span>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
@@ -48,6 +50,61 @@
 namespace cudf::io::parquet::detail {
 
 namespace {
+
+/**
+ * @brief Temporary function that tests for key `third-037493` in bloom filters of column `c2` in
+ * test Parquet file.
+ *
+ * @param buffer Device buffer containing bloom filter bitset
+ * @param chunk Current row group index
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ */
+void check_arbitrary_string_key(rmm::device_buffer const& buffer,
+                                size_t chunk,
+                                rmm::cuda_stream_view stream)
+{
+  using word_type   = cuda::std::uint32_t;
+  using key_type    = cuda::std::span<cuda::std::byte>;
+  using policy_type = cuco::arrow_filter_policy<key_type, cuco::xxhash_64<key_type>>;
+
+  thrust::for_each(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(1),
+    [bitset     = const_cast<word_type*>(reinterpret_cast<word_type const*>(buffer.data())),
+     num_blocks = static_cast<cuda::std::size_t>(buffer.size()) / sizeof(uint32_t),
+     chunk      = chunk,
+     stream     = stream] __device__(auto idx) {
+      // using arrow_policy_type = cuco::arrow_filter_policy<key_type>;
+      cuco::bloom_filter_ref<key_type,
+                             cuco::extent<std::size_t>,
+                             cuco::thread_scope_device,
+                             policy_type>
+        filter{
+          bitset,
+          num_blocks,
+          {},  // scope
+          {0}  // policy
+        };
+
+      // literal to search
+      cudf::string_view literal("third-037493", sizeof("third-037493"));
+      // convert to a cuda::std::span key to search
+      cuda::std::span<cuda::std::byte> const key(
+        const_cast<cuda::std::byte*>(reinterpret_cast<cuda::std::byte const*>(literal.data())),
+        static_cast<cuda::std::size_t>(literal.length()));
+      // Search in the filter
+      if (filter.contains(key)) {
+        printf("YES: Filter chunk: %lu contains key: third-037493\n", chunk);
+      } else {
+        printf("NO: Filter chunk: %lu does not contain key: third-037493\n", chunk);
+      }
+    });
+
+  stream.synchronize_no_throw();
+}
+
 /**
  * @brief Asynchronously reads bloom filters to device.
  *
@@ -119,36 +176,8 @@ std::future<void> read_bloom_filters_async(
           bloom_filter_data[chunk] =
             rmm::device_buffer(buffer->data() + bloom_filter_header_size, bitset_size, stream);
 
-          /* MH: Remove this
-          using word_type = uint32_t;
-
-          thrust::for_each(rmm::exec_policy(stream),
-                           thrust::make_counting_iterator(0),
-                           thrust::make_counting_iterator(1),
-                           [words = reinterpret_cast<word_type*>(bloom_filter_data[chunk].data()),
-                            num_blocks = bloom_filter_data[chunk].size() / sizeof(uint32_t),
-                            chunk      = chunk,
-                            stream     = stream] __device__(auto idx) {
-                             using key_type = cuda::std::string;
-                             using policy_type =
-                               cuco::bloom_filter_policy<cuco::xxhash_64<key_type>, std::uint32_t,
-          8>;
-                             // using arrow_policy_type = cuco::arrow_filter_policy<key_type>;
-                             cuco::bloom_filter_ref<key_type,
-                                                    cuco::extent<std::size_t>,
-                                                    cuco::thread_scope_device,
-                                                    policy_type>
-                               filter{words, size_t{num_blocks}, {}, {8}};
-                             // cuda::std::string key{"third-136666"};
-                             // filter.add("third-136666");
-
-                             cuco::xxhash_64<key_type> hasher{};
-                             cuda::std::array<char, 13> val{"third-136666"};
-                             auto hash =
-          hasher.compute_hash(reinterpret_cast<std::byte*>(val.data()), val.size()); if
-          (filter.contains(hash)) { printf("Filter chunk: %lu contains key: third-136666\n", chunk);
-                             }
-                           });*/
+          // MH: TODO: Temporary test. Remove me!!
+          check_arbitrary_string_key(bloom_filter_data[chunk], chunk, stream);
         }
         // Read the bitset from datasource.
         else {
