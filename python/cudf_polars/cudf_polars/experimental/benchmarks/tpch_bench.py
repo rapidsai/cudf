@@ -150,7 +150,7 @@ def run(args):
         engine = pl.GPUEngine(
             raise_on_fail=True,
             executor=executor,
-            parquet_options={"blocksize": args.blocksize},
+            parquet_options={"blocksize": args.blocksize, "chunked": False},
         )
         if args.debug:
             ir = Translator(q._ldf.visit(), engine).translate_ir()
