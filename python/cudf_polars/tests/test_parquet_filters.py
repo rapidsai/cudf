@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 import polars as pl
-from polars.testing import assert_frame_equal
+
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
@@ -50,11 +51,9 @@ def pq_file(tmp_path_factory, df):
     ],
 )
 @pytest.mark.parametrize("selection", [["c", "b"], ["a"], ["a", "c"], ["b"], "c"])
-def test_scan_by_hand(expr, selection, pq_file):
-    df = pq_file.collect()
+@pytest.mark.parametrize("chunked", [False, True], ids=["unchunked", "chunked"])
+def test_scan_by_hand(expr, selection, pq_file, chunked):
     q = pq_file.filter(expr).select(*selection)
-    # Not using assert_gpu_result_equal because
-    # https://github.com/pola-rs/polars/issues/19238
-    got = q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    expect = df.filter(expr).select(*selection)
-    assert_frame_equal(got, expect)
+    assert_gpu_result_equal(
+        q, engine=pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": chunked})
+    )
