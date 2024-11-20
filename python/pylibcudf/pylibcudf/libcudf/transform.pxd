@@ -30,7 +30,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] compute_column(
         table_view table,
         expression expr
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] transform(
         column_view input,
@@ -46,7 +46,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[column], table_view] one_hot_encode(
         column_view input_column,
         column_view categories
-    )
+    ) except +
 
     cdef unique_ptr[column] compute_column(
         const table_view table,
