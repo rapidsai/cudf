@@ -3,6 +3,7 @@
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging import version
 from utils import _convert_types, assert_table_and_meta_eq, make_source
 
 import pylibcudf as plc
@@ -56,6 +57,10 @@ def test_read_orc_basic(
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
 
 
+@pytest.mark.skipif(
+    version.parse(pd.__version__) < version.parse("2.2.3"),
+    reason="fails on a pandas version < 2.2.3",
+)
 @pytest.mark.parametrize(
     "compression",
     [
