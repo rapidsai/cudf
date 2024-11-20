@@ -5,7 +5,8 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cudf_polars.dsl.ir import Scan
 from cudf_polars.experimental.parallel import (
@@ -26,9 +27,49 @@ if TYPE_CHECKING:
 class ParFileScan(Scan):
     """Parallel scan over files."""
 
-    @property
+    _STATS_CACHE: ClassVar[dict[int, dict[str, float]]] = {}
+
+    def _sample_pq_statistics(self) -> dict[str, float]:
+        import numpy as np
+        import pyarrow.dataset as pa_ds
+
+        n_sample = 3
+        paths = self.paths[:n_sample]
+        key = hash(tuple(paths))
+        try:
+            return self._STATS_CACHE[key]
+        except KeyError:
+            # Use average total_uncompressed_size of three files
+            column_sizes = {}
+            ds = pa_ds.dataset(paths, format="parquet")
+            for i, frag in enumerate(ds.get_fragments()):
+                md = frag.metadata
+                for rg in range(md.num_row_groups):
+                    row_group = md.row_group(rg)
+                    for col in range(row_group.num_columns):
+                        column = row_group.column(col)
+                        name = column.path_in_schema
+                        if name not in column_sizes:
+                            column_sizes[name] = np.zeros(n_sample, dtype="int64")
+                        column_sizes[name][i] += column.total_uncompressed_size
+
+            self._STATS_CACHE[key] = {
+                name: np.mean(sizes) for name, sizes in column_sizes.items()
+            }
+            return self._STATS_CACHE[key]
+
+    @cached_property
     def _stride(self) -> int:
-        # TODO: Use file statistics
+        if self.typ == "parquet":
+            file_size: float = 0
+            # TODO: Choose blocksize wisely, and make it configurable
+            blocksize = 2 * 1024**3
+            stats = self._sample_pq_statistics()
+            for name in self.with_columns or []:
+                file_size += stats[name]
+            if file_size > 0:
+                return max(int(blocksize / file_size), 1)
+        # TODO: Use file sizes for csv/json
         return 1
 
 
