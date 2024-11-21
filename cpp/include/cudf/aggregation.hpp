@@ -686,8 +686,8 @@ struct host_udf_base {
   /**
    * @brief Get the output when the input values is empty.
    *
-   * This is needed since libcudf tries to avoid unnecessarily evaluating the intermediate data when
-   * the input values is empty.
+   * This may be called in the situations that libcudf tries to avoid unnecessarily evaluating the
+   * intermediate data when the input values is empty.
    *
    * @return The output result of the aggregation when input values is empty
    */
