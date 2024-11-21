@@ -76,6 +76,8 @@ def default_memory_resource(
             cuda_managed_memory
             and pylibcudf.utils._is_concurrent_managed_access_supported()
         ):
+            # Allocating 80% of the available memory for the pool.
+            # Leaving a 20% headroom to avoid OOM errors.
             free_memory, _ = rmm.mr.available_device_memory()
             free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
             for key in _SUPPORTED_PREFETCHES:
