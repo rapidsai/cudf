@@ -129,7 +129,6 @@ def set_device(device: int | None) -> Generator[int, None, None]:
 
 def _callback(
     ir: IR,
-    config: GPUEngine,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
@@ -148,11 +147,11 @@ def _callback(
         set_memory_resource(memory_resource),
     ):
         if executor is None or executor == "cudf":
-            return ir.evaluate(cache={}, config=config).to_polars()
+            return ir.evaluate(cache={}).to_polars()
         elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask
 
-            return evaluate_dask(ir, config).to_polars()
+            return evaluate_dask(ir).to_polars()
         else:
             raise ValueError(f"Unknown executor '{executor}'")
 
@@ -212,7 +211,7 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     validate_config_options(config.config)
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
-        translator = Translator(nt)
+        translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
         if len(ir_translation_errors):
@@ -236,7 +235,6 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
                 partial(
                     _callback,
                     ir,
-                    config,
                     device=device,
                     memory_resource=memory_resource,
                     executor=executor,

@@ -4,20 +4,20 @@
 
 from __future__ import annotations
 
-from functools import singledispatch
+import operator
+from functools import reduce, singledispatch
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import NamedExpr
+from cudf_polars.dsl.ir import IR
 from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from polars import GPUEngine
-
     from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
+    from cudf_polars.typing import IRTransformer
 
 
 class PartitionInfo:
@@ -33,10 +33,10 @@ class PartitionInfo:
         self.count = count
 
 
-# The hash of an IR object must always map to a
-# unique PartitionInfo object, and we can cache
+# An IR object must always map to a unique
+# PartitionInfo object, and we can cache
 # this mapping until evaluation is complete.
-_IR_PARTS_CACHE: MutableMapping[int, PartitionInfo] = {}
+_IR_PARTS_CACHE: MutableMapping[IR, PartitionInfo] = {}
 
 
 def _clear_parts_info_cache() -> None:
@@ -52,10 +52,13 @@ def get_key_name(node: Node | NamedExpr) -> str:
 
 
 @singledispatch
-def lower_ir_node(ir: IR, rec) -> IR:
+def lower_ir_node(ir: IR, rec: IRTransformer) -> IR:
     """Rewrite an IR node with proper partitioning."""
-    # Return same node by default
-    return reuse_if_unchanged(ir, rec)
+    raise AssertionError(f"Unhandled type {type(ir)}")
+
+
+# Return same node by default
+lower_ir_node.register(IR)(reuse_if_unchanged)
 
 
 def lower_ir_graph(ir: IR) -> IR:
@@ -66,6 +69,13 @@ def lower_ir_graph(ir: IR) -> IR:
     return mapper(ir)
 
 
+@singledispatch
+def _ir_parts_info(ir: IR) -> PartitionInfo:
+    """IR partitioning-info dispatch."""
+    raise AssertionError(f"Unhandled type {type(ir)}")
+
+
+@_ir_parts_info.register(IR)
 def _default_ir_parts_info(ir: IR) -> PartitionInfo:
     # Single-partition default behavior.
     # This is used by `_ir_parts_info` for all unregistered IR sub-types.
@@ -77,23 +87,28 @@ def _default_ir_parts_info(ir: IR) -> PartitionInfo:
     return PartitionInfo(count=count)
 
 
-@singledispatch
-def _ir_parts_info(ir: IR) -> PartitionInfo:
-    """IR partitioning-info dispatch."""
-    return _default_ir_parts_info(ir)
-
-
 def ir_parts_info(ir: IR) -> PartitionInfo:
     """Return the partitioning info for an IR node."""
-    key = hash(ir)
     try:
-        return _IR_PARTS_CACHE[key]
+        return _IR_PARTS_CACHE[ir]
     except KeyError:
-        _IR_PARTS_CACHE[key] = _ir_parts_info(ir)
-        return _IR_PARTS_CACHE[key]
+        _IR_PARTS_CACHE[ir] = _ir_parts_info(ir)
+        return _IR_PARTS_CACHE[ir]
 
 
-def _default_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
+@singledispatch
+def generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
+    """
+    Generate tasks for an IR node.
+
+    An IR node only needs to generate the graph for
+    the current IR logic (not including child IRs).
+    """
+    raise AssertionError(f"Unhandled type {type(ir)}")
+
+
+@generate_ir_tasks.register(IR)
+def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     # Single-partition default behavior.
     # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
     if ir_parts_info(ir).count > 1:
@@ -113,33 +128,17 @@ def _default_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
     return {
         (key_name, 0): (
             ir.do_evaluate,
-            config,
             *ir._non_child_args,
             *((child_name, 0) for child_name in child_names),
         )
     }
 
 
-@singledispatch
-def generate_ir_tasks(ir: IR, config: GPUEngine) -> MutableMapping[Any, Any]:
-    """
-    Generate tasks for an IR node.
-
-    An IR node only needs to generate the graph for
-    the current IR logic (not including child IRs).
-    """
-    return _default_ir_tasks(ir, config)
-
-
-def task_graph(_ir: IR, config: GPUEngine) -> tuple[MutableMapping[str, Any], str]:
+def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
     """Construct a Dask-compatible task graph."""
     ir: IR = lower_ir_graph(_ir)
 
-    graph = {
-        k: v
-        for layer in [generate_ir_tasks(n, config) for n in traversal(ir)]
-        for k, v in layer.items()
-    }
+    graph = reduce(operator.or_, map(generate_ir_tasks, traversal(ir)))
     key_name = get_key_name(ir)
     graph[key_name] = (key_name, 0)
 
@@ -147,7 +146,7 @@ def task_graph(_ir: IR, config: GPUEngine) -> tuple[MutableMapping[str, Any], st
     return graph, key_name
 
 
-def evaluate_dask(ir: IR, config: GPUEngine) -> DataFrame:
+def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
     from dask import get as _get
     from distributed import get_client
@@ -157,5 +156,5 @@ def evaluate_dask(ir: IR, config: GPUEngine) -> DataFrame:
     except ValueError:
         get = _get
 
-    graph, key = task_graph(ir, config)
+    graph, key = task_graph(ir)
     return get(graph, key)

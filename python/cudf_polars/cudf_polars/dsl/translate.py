@@ -26,6 +26,8 @@ from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
+    from polars import GPUEngine
+
     from cudf_polars.typing import NodeTraverser
 
 __all__ = ["Translator", "translate_named_expr"]
@@ -39,10 +41,13 @@ class Translator:
     ----------
     visitor
         Polars NodeTraverser object
+    config
+        GPU engine configuration.
     """
 
-    def __init__(self, visitor: NodeTraverser):
+    def __init__(self, visitor: NodeTraverser, config: GPUEngine):
         self.visitor = visitor
+        self.config = config
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
@@ -228,6 +233,7 @@ def _(
         typ,
         reader_options,
         cloud_options,
+        translator.config.config.copy(),
         node.paths,
         with_columns,
         skip_rows,
@@ -627,9 +633,10 @@ def _(node: pl_expr.Sort, translator: Translator, dtype: plc.DataType) -> expr.E
 
 @_translate_expr.register
 def _(node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+    options = node.sort_options
     return expr.SortBy(
         dtype,
-        node.sort_options,
+        (options[0], tuple(options[1]), tuple(options[2])),
         translator.translate_expr(n=node.expr),
         *(translator.translate_expr(n=n) for n in node.by),
     )
