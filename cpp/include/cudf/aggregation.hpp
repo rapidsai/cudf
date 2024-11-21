@@ -631,7 +631,7 @@ struct host_udf_base {
    * that it needs and only such data will be evaluated.
    */
   enum class input_kind {
-    INPUT_VALUES,           // the input values column
+    INPUT_VALUES,           // the input values column, may be used in any aggregation
     NULL_POLICY,            // to control null handling, used in scan
     OUTPUT_DTYPE,           // output data type, used in reduction
     INIT_VALUE,             // initial value for reduction

@@ -488,11 +488,11 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
         break;
       }
 
-      default: CUDF_FAIL("Unsupported data kind in sort-based groupby aggregation.")
+      default: CUDF_FAIL("Unsupported data kind in host-based UDF groupby aggregation.");
     }
   }
 
-  cache.add_result(values, agg, udf_ptr(udf_input, stream, mr));
+  cache.add_result(values, agg, std::get<std::unique_ptr<column>>(udf_ptr(udf_input, stream, mr)));
 }
 
 /**
