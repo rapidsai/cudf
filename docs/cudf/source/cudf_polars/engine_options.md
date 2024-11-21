@@ -26,7 +26,7 @@ Note that passing `chunked: False` disables chunked reading entirely, and thus `
 
 ## Disabling CUDA Managed Memory
 
-By default `cudf_polars` will default to [CUDA managed memory](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#unified-memory-introduction) with RMM's managed pool allocator. On systems that don't support managed memory, a non-managed asynchronous pool
+By default `cudf_polars` will default to [CUDA managed memory](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#unified-memory-introduction) with RMM's pool allocator. On systems that don't support managed memory, a non-managed asynchronous pool
 allocator is used.
 Managed memory can be turned off by setting `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` to `0`. System requirements for managed memory can be found [here](
 https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#system-requirements-for-unified-memory).
