@@ -4,18 +4,20 @@
 
 from __future__ import annotations
 
-from functools import singledispatch
+import operator
+from functools import reduce, singledispatch
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import NamedExpr
+from cudf_polars.dsl.ir import IR
 from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
+    from cudf_polars.typing import IRTransformer
 
 
 class PartitionInfo:
@@ -50,10 +52,13 @@ def get_key_name(node: Node | NamedExpr) -> str:
 
 
 @singledispatch
-def lower_ir_node(ir: IR, rec) -> IR:
+def lower_ir_node(ir: IR, rec: IRTransformer) -> IR:
     """Rewrite an IR node with proper partitioning."""
-    # Return same node by default
-    return reuse_if_unchanged(ir, rec)
+    raise AssertionError(f"Unhandled type {type(ir)}")
+
+
+# Return same node by default
+lower_ir_node.register(IR)(reuse_if_unchanged)
 
 
 def lower_ir_graph(ir: IR) -> IR:
@@ -64,6 +69,13 @@ def lower_ir_graph(ir: IR) -> IR:
     return mapper(ir)
 
 
+@singledispatch
+def _ir_parts_info(ir: IR) -> PartitionInfo:
+    """IR partitioning-info dispatch."""
+    raise AssertionError(f"Unhandled type {type(ir)}")
+
+
+@_ir_parts_info.register(IR)
 def _default_ir_parts_info(ir: IR) -> PartitionInfo:
     # Single-partition default behavior.
     # This is used by `_ir_parts_info` for all unregistered IR sub-types.
@@ -73,12 +85,6 @@ def _default_ir_parts_info(ir: IR) -> PartitionInfo:
             f"Class {type(ir)} does not support multiple partitions."
         )  # pragma: no cover
     return PartitionInfo(count=count)
-
-
-@singledispatch
-def _ir_parts_info(ir: IR) -> PartitionInfo:
-    """IR partitioning-info dispatch."""
-    return _default_ir_parts_info(ir)
 
 
 def ir_parts_info(ir: IR) -> PartitionInfo:
@@ -91,6 +97,18 @@ def ir_parts_info(ir: IR) -> PartitionInfo:
         return _IR_PARTS_CACHE[key]
 
 
+@singledispatch
+def generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
+    """
+    Generate tasks for an IR node.
+
+    An IR node only needs to generate the graph for
+    the current IR logic (not including child IRs).
+    """
+    raise AssertionError(f"Unhandled type {type(ir)}")
+
+
+@generate_ir_tasks.register(IR)
 def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     # Single-partition default behavior.
     # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
@@ -117,26 +135,11 @@ def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     }
 
 
-@singledispatch
-def generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
-    """
-    Generate tasks for an IR node.
-
-    An IR node only needs to generate the graph for
-    the current IR logic (not including child IRs).
-    """
-    return _default_ir_tasks(ir)
-
-
 def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
     """Construct a Dask-compatible task graph."""
     ir: IR = lower_ir_graph(_ir)
 
-    graph = {
-        k: v
-        for layer in [generate_ir_tasks(n) for n in traversal(ir)]
-        for k, v in layer.items()
-    }
+    graph = reduce(operator.or_, map(generate_ir_tasks, traversal(ir)))
     key_name = get_key_name(ir)
     graph[key_name] = (key_name, 0)
 
