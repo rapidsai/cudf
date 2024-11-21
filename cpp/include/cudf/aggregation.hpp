@@ -24,6 +24,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
@@ -75,6 +76,11 @@ enum class rank_percentage : int32_t {
   ZERO_NORMALIZED,  ///< rank / count
   ONE_NORMALIZED    ///< (rank - 1) / (count - 1)
 };
+
+/**
+ *  @brief Enum to describe scan operation type.
+ */
+enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
 
 /**
  * @brief Abstract base class for specifying the desired aggregation in an
@@ -607,55 +613,70 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            data_type output_type);
 
 /**
- * @brief The base class for HOST_UDF implementation.
+ * @brief The base class for host-based UDF implementation.
  *
- * The users need to derive from this base class, defining their own implementation for a UDF
- * function as well as all the required data from libcudf to perform its operations.
+ * An actual implementation of host-based UDF needs to be derived from this base class, defining
+ * its own operations as well as all the required input data to the aggregation.
  */
 struct host_udf_base {
   host_udf_base()          = default;
   virtual ~host_udf_base() = default;
 
   /**
-   * @brief Define the data that may be needed for computing the aggregation.
+   * @brief Define the possible data that may be needed in the derived class for its operations.
    *
-   * Each derived HOST_UDF class may need a different set of intermediate aggregation data (such as
-   * sorted values, sorted keys, group offsets etc). It is inefficient to evaluate and pass down all
-   * these data at once. As such, the derived HOST_UDF class will define a set of data that it
-   * needs, and only such requested data will be evaluated.
+   * Each derived host-based UDF class may need a different set of input data (such as sorted
+   * values, group labels, group offsets etc). It is inefficient to evaluate and pass down all these
+   * data at once from libcudf. A solution for that is, the derived class defines a subset of data
+   * that it needs and only such data will be evaluated.
    */
-  // TODO: add more
-  enum class input_kind { OUTPUT_DTYPE, GROUPED_VALUES, GROUPED_OFFSETS, GROUPED_LABELS };
+  enum class input_kind {
+    INPUT_VALUES,           // the input values column
+    NULL_POLICY,            // to control null handling, used in scan
+    OUTPUT_DTYPE,           // output data type, used in reduction
+    INIT_VALUE,             // initial value for reduction
+    SCAN_TYPE,              // used in scan aggregations
+    OFFSETS,                // offsets for sort-based groupby or segmented reduction
+    GROUP_LABELS,           // group labels used in sort-based groupby
+    SORTED_GROUPED_VALUES,  // the input values grouped according to the input `keys` and
+                            // sorted within each group, used in sort-based groupby
+    GROUPED_VALUES,         // the input values grouped according to the input `keys` for which the
+                            // values within each group maintain their original order,
+                            // used in sort-based groupby
+    NUM_GROUPS              // number of groups, used in sort-based groupby
+  };
 
   /**
-   * @brief Return a set of data kind that is needed for computing the aggregation on the derived
-   * HOST_UDF class.
-   *
-   * This set is used by libcudf to determine which data need to be evaluated and pass down to the
-   * instance of the derived HOST_UDF class at runtime.
+   * @brief Return a set of data kind that is needed for computing the aggregation.
    *
    * @return A set of `input_kind` enum.
    */
-  [[nodiscard]] virtual std::unordered_set<input_kind> get_required_data() const = 0;
+  [[nodiscard]] virtual std::unordered_set<input_kind> const& get_required_data() const = 0;
 
   /**
-   * Aggregation data that is needed for performing UDF computation.
+   * Aggregation data that is needed for computing the aggregation.
    */
-  using input_data = std::variant<column_view, device_span<size_type const>, size_type, data_type>;
+  using input_data = std::variant<column_view,
+                                  null_policy,
+                                  data_type,
+                                  std::optional<std::reference_wrapper<scalar const>>,
+                                  scan_type,
+                                  device_span<size_type const>,
+                                  size_type>;
 
   /**
-   * Output type of the UDF class. It can be either a scalar (for reduction) or a column
-   * (for groupby) aggregations.
+   * Output type of the aggregation. It can be either a scalar (for reduction) or a column
+   * (for groupby) aggregation.
    */
   using output_type = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
 
   /**
-   * @brief Perform UDF aggregation computation.
+   * @brief Perform the main computation for the host-based UDF.
    *
-   * @param agg_data The aggregation data needed for performing all computation
+   * @param input The input data needed for performing all computation
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
-   * @return The computed cudf column as the result of UDF aggregation
+   * @return The output result of the aggregation
    */
   [[nodiscard]] virtual output_type operator()(
     std::unordered_map<input_kind, input_data> const& input,
@@ -663,35 +684,35 @@ struct host_udf_base {
     rmm::device_async_resource_ref mr) = 0;
 
   /**
-   * @brief Compares two HOST_UDF objects for equality.
+   * @brief Compares two instances of the derived class for equality.
    *
-   * @param other The other HOST_UDF object to compare with
-   * @return True if the two object are equal
+   * @param other The other derived class's instance to compare with
+   * @return True if the two instances are equal
    */
   [[nodiscard]] virtual bool is_equal(host_udf_base const& other) const = 0;
 
   /**
-   * @brief Computes the hash value of the HOST_UDF object.
+   * @brief Computes hash value of the derived class's instance.
    *
-   * @return The hash value of the object
+   * @return The hash value of the instance
    */
-  [[nodiscard]] virtual size_t do_hash() const = 0;
+  [[nodiscard]] virtual std::size_t do_hash() const = 0;
 
   /**
-   * @pure @brief Clones the HOST_UDF object.
+   * @pure @brief Clones the instance.
    *
    * A class derived from `host_udf_base` should not store too much data such that its instances
    * remain lightweight for efficient cloning.
    *
-   * @return A copy of the HOST_UDF object
+   * @return A new instance cloned from this
    */
-  [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
+  [[nodiscard]] virtual std::unique_ptr<host_udf_base> clone() const = 0;
 };
 
 /**
  * @brief Factory to create a HOST_UDF aggregation
  *
- * @param host_udf An instance of a class derived from `host_udf_base` to perform UDF aggregation
+ * @param host_udf An instance of a class derived from `host_udf_base` to perform aggregation
  * @return A HOST_UDF aggregation object
  */
 template <typename Base>
