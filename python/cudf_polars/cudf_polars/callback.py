@@ -34,34 +34,14 @@ __all__: list[str] = ["execute_with_cudf"]
 
 
 def enable_uvm(device: int):
-    managed_memory_is_supported = (
-        pylibcudf.utils._is_concurrent_managed_access_supported()
-    )
-    rmm_mode = "managed_pool" if managed_memory_is_supported else "pool"
-    if "managed" in rmm_mode and not managed_memory_is_supported:
-        raise ValueError(
-            f"Managed memory is not supported on this system, so the requested {rmm_mode=} is invalid."
-        )
-    current_mr = rmm.mr.get_current_device_resource()
     free_memory, _ = rmm.mr.available_device_memory()
     free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-    new_mr = current_mr
-    if rmm_mode == "pool":
-        new_mr = rmm.mr.PoolMemoryResource(
-            current_mr,
+    return rmm.mr.PrefetchResourceAdaptor(
+        rmm.mr.PoolMemoryResource(
+            rmm.mr.ManagedMemoryResource(),
             initial_pool_size=free_memory,
         )
-    elif rmm_mode == "managed_pool":
-        new_mr = rmm.mr.PrefetchResourceAdaptor(
-            rmm.mr.PoolMemoryResource(
-                rmm.mr.ManagedMemoryResource(),
-                initial_pool_size=free_memory,
-            )
-        )
-    elif rmm_mode != "cuda":
-        raise ValueError(f"Unsupported {rmm_mode=}")
-
-    return new_mr
+    )
 
 
 @cache
@@ -106,8 +86,8 @@ _SUPPORTED_PREFETCHES = {
 }
 
 
-def _enable_managed_prefetching(rmm_mode, managed_memory_is_supported):
-    if managed_memory_is_supported and "managed" in rmm_mode:
+def _enable_managed_prefetching(rmm_mode):
+    if "managed" in rmm_mode:
         for key in _SUPPORTED_PREFETCHES:
             pylibcudf.experimental.enable_prefetching(key)
 
@@ -158,13 +138,13 @@ def set_memory_resource(
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
         device: int = gpu.getDevice()
-        if _env_get_bool("CUDF_POLARS_DISABLE_UVM", default=False):
-            managed_memory_is_supported = (
-                pylibcudf.utils._is_concurrent_managed_access_supported()
-            )
+        if (
+            _env_get_bool("CUDF_POLARS_DISABLE_UVM", default=False)
+            and pylibcudf.utils._is_concurrent_managed_access_supported()
+        ):
             mr = enable_uvm(device)
             rmm.mr.set_current_device_resource(mr)
-            _enable_managed_prefetching("managed_pool", managed_memory_is_supported)
+            _enable_managed_prefetching("managed_pool")
         else:
             mr = default_memory_resource(device)
             rmm.mr.set_current_device_resource(mr)
