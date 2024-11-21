@@ -22,22 +22,18 @@
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/logger.hpp>
-#include <cudf/utilities/error.hpp>
+#include <cudf/hashing/detail/xxhash_64.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuco/bloom_filter_policy.cuh>
+#include <cuco/bloom_filter.cuh>
 #include <cuco/bloom_filter_ref.cuh>
-#include <cuco/hash_functions.cuh>
-#include <cuda/std/span>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
@@ -46,10 +42,114 @@
 #include <iterator>
 #include <numeric>
 #include <optional>
+#include <random>
 
 namespace cudf::io::parquet::detail {
 
 namespace {
+
+std::pair<std::vector<char>, std::vector<size_t>> generate_chars_and_offsets(size_t num_keys)
+{
+  static std::vector<std::string> const strings{"first",
+                                                "second",
+                                                "third",
+                                                "fourth",
+                                                "fifth",
+                                                "sixth",
+                                                "seventh",
+                                                "eighth",
+                                                "ninth",
+                                                "tenth",
+                                                "eleventh",
+                                                "twelfth",
+                                                "thirteenth",
+                                                "fourteenth",
+                                                "fifteenth",
+                                                "sixteenth",
+                                                "seventeenth",
+                                                "eighteenth"};
+
+  auto constexpr seed = 0xf00d;
+  /*static*/ std::mt19937 engine{seed};
+  /*static*/ std::uniform_int_distribution dist{};
+
+  std::vector<size_t> offsets(num_keys + 1);
+  std::vector<char> chars;
+  chars.reserve(12 * num_keys);  // 12 is the length of "seventeenth", the largest string
+  size_t offset = 0;
+  offsets[0]    = size_t{0};
+  std::generate_n(offsets.begin() + 1, num_keys, [&]() {
+    auto const& string  = strings[dist(engine) % strings.size()];
+    auto const char_ptr = const_cast<char*>(string.data());
+    chars.insert(chars.end(), char_ptr, char_ptr + string.length());
+    offset += string.length();
+    return offset;
+  });
+  return {std::move(chars), std::move(offsets)};
+}
+
+void validate_filter_bitwise(rmm::cuda_stream_view stream)
+{
+  std::size_t constexpr num_filter_blocks = 4;
+  std::size_t constexpr num_keys          = 50;
+
+  // Generate strings data
+  auto const [h_chars, h_offsets] = generate_chars_and_offsets(num_keys);
+  auto const mr                   = cudf::get_current_device_resource_ref();
+  auto d_chars                    = cudf::detail::make_device_uvector_async(h_chars, stream, mr);
+  auto d_offsets                  = cudf::detail::make_device_uvector_async(h_offsets, stream, mr);
+
+  rmm::device_uvector<cudf::string_view> d_keys(num_keys, stream);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::make_counting_iterator<size_t>(0),
+                    thrust::make_counting_iterator<size_t>(num_keys),
+                    d_keys.begin(),
+                    [chars   = thrust::raw_pointer_cast(d_chars.data()),
+                     offsets = thrust::raw_pointer_cast(d_offsets.data())] __device__(auto idx) {
+                      return cudf::string_view{
+                        chars + offsets[idx],
+                        static_cast<cudf::size_type>(offsets[idx + 1] - offsets[idx])};
+                    });
+
+  using key_type    = cudf::string_view;
+  using hasher_type = cudf::hashing::detail::XXHash_64<key_type>;
+  using policy_type = cuco::arrow_filter_policy<key_type, hasher_type>;
+  using filter_type = cuco::bloom_filter<key_type,
+                                         cuco::extent<size_t>,
+                                         cuda::thread_scope_device,
+                                         policy_type,
+                                         cudf::detail::cuco_allocator<char>>;
+  // Spawn a bloom filter
+  filter_type filter{
+    num_filter_blocks,
+    cuco::thread_scope_device,
+    {hasher_type{0}},
+    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+    stream};
+
+  // Add strings to the bloom filter
+  filter.add(d_keys.begin(), d_keys.end(), stream);
+
+  using word_type = filter_type::word_type;
+
+  // Number of words in the filter
+  size_t const num_words = filter.block_extent() * filter.words_per_block;
+
+  // Get the filter bitset words
+  cudf::device_span<word_type const> filter_bitset(filter.data(), num_words);
+  // Expected filter bitset words
+  rmm::device_vector<word_type> const expected_bitset{
+    4194306,    4194305,  2359296,   1073774592, 524544,     1024,       268443648,  8519680,
+    2147500040, 8421380,  269500416, 4202624,    8396802,    100665344,  2147747840, 5243136,
+    131146,     655364,   285345792, 134222340,  545390596,  2281717768, 51201,      41943553,
+    1619656708, 67441680, 8462730,   361220,     2216738864, 587333888,  4219272,    873463873};
+
+  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+                             expected_bitset.cbegin(),
+                             expected_bitset.cend(),
+                             filter_bitset.begin()),
+               "Bloom filter bitset mismatched");
+}
 
 /**
  * @brief Temporary function that tests for key `third-037493` in bloom filters of column `c2` in
@@ -64,16 +164,21 @@ void check_arbitrary_string_key(rmm::device_buffer const& buffer,
                                 size_t chunk,
                                 rmm::cuda_stream_view stream)
 {
-  using word_type   = cuda::std::uint32_t;
-  using key_type    = cuda::std::span<cuda::std::byte>;
-  using policy_type = cuco::arrow_filter_policy<key_type, cuco::xxhash_64<key_type>>;
+  using key_type    = cudf::string_view;
+  using hasher_type = cudf::hashing::detail::XXHash_64<key_type>;
+  using policy_type = cuco::arrow_filter_policy<key_type, hasher_type>;
+  using word_type   = policy_type::word_type;
+
+  auto constexpr word_size       = sizeof(word_type);
+  auto constexpr words_per_block = policy_type::words_per_block;
+  auto const num_filter_blocks   = buffer.size() / (word_size * words_per_block);
 
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(1),
     [bitset     = const_cast<word_type*>(reinterpret_cast<word_type const*>(buffer.data())),
-     num_blocks = static_cast<cuda::std::size_t>(buffer.size()) / sizeof(uint32_t),
+     num_blocks = num_filter_blocks,
      chunk      = chunk,
      stream     = stream] __device__(auto idx) {
       // using arrow_policy_type = cuco::arrow_filter_policy<key_type>;
@@ -81,19 +186,13 @@ void check_arbitrary_string_key(rmm::device_buffer const& buffer,
                              cuco::extent<std::size_t>,
                              cuco::thread_scope_device,
                              policy_type>
-        filter{
-          bitset,
-          num_blocks,
-          {},  // scope
-          {0}  // policy
-        };
+        filter{bitset,
+               num_blocks,
+               {},  // scope
+               {hasher_type{0}}};
 
       // literal to search
-      cudf::string_view literal("third-037493", sizeof("third-037493"));
-      // convert to a cuda::std::span key to search
-      cuda::std::span<cuda::std::byte> const key(
-        const_cast<cuda::std::byte*>(reinterpret_cast<cuda::std::byte const*>(literal.data())),
-        static_cast<cuda::std::size_t>(literal.length()));
+      cudf::string_view key("third-037493", 12);
       // Search in the filter
       if (filter.contains(key)) {
         printf("YES: Filter chunk: %lu contains key: third-037493\n", chunk);
@@ -101,8 +200,6 @@ void check_arbitrary_string_key(rmm::device_buffer const& buffer,
         printf("NO: Filter chunk: %lu does not contain key: third-037493\n", chunk);
       }
     });
-
-  stream.synchronize_no_throw();
 }
 
 /**
@@ -205,6 +302,9 @@ std::future<void> read_bloom_filters_async(
       task.wait();
     }
   };
+
+  // MH: Remove me. Bitwise validation for bloom filter
+  validate_filter_bitwise(stream);
 
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
 }
