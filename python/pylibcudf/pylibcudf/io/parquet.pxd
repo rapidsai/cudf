@@ -63,7 +63,7 @@ cdef class ParquetWriterOptions:
 
     cpdef void set_max_page_size_rows(self, size_type size_rows)
 
-    cpdef void set_max_dictionary_size(self, size_t size_rows)
+    cpdef void set_max_dictionary_size(self, size_t size_bytes)
 
 cdef class ParquetWriterOptionsBuilder:
     cdef parquet_writer_options_builder c_obj
