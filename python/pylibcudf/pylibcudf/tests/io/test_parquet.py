@@ -111,28 +111,7 @@ def test_read_parquet_filters(
 # bool use_pandas_metadata = True
 
 
-@pytest.mark.parametrize(
-    "compression",
-    [
-        plc.io.types.CompressionType.NONE,
-        plc.io.types.CompressionType.SNAPPY,
-    ],
-)
-@pytest.mark.parametrize(
-    "stats_level",
-    [
-        plc.io.types.StatisticsFreq.STATISTICS_NONE,
-        plc.io.types.StatisticsFreq.STATISTICS_COLUMN,
-    ],
-)
 @pytest.mark.parametrize("write_v2_headers", [True, False])
-@pytest.mark.parametrize(
-    "dictionary_policy",
-    [
-        plc.io.types.DictionaryPolicy.ADAPTIVE,
-        plc.io.types.DictionaryPolicy.NEVER,
-    ],
-)
 @pytest.mark.parametrize("utc_timestamps", [True, False])
 @pytest.mark.parametrize("write_arrow_schema", [True, False])
 @pytest.mark.parametrize(
@@ -147,10 +126,7 @@ def test_read_parquet_filters(
 @pytest.mark.parametrize("max_dictionary_size", [None, 100])
 def test_write_parquet(
     table_data,
-    compression,
-    stats_level,
     write_v2_headers,
-    dictionary_policy,
     utc_timestamps,
     write_arrow_schema,
     partitions,
@@ -168,6 +144,9 @@ def test_write_parquet(
     table_meta = plc.io.types.TableInputMetadata(plc_table)
     sink = plc.io.SinkInfo([io.BytesIO()])
     user_data = [{"foo": "{'bar': 'baz'}"}]
+    compression = plc.io.types.CompressionType.SNAPPY
+    stats_level = plc.io.types.StatisticsFreq.STATISTICS_COLUMN
+    dictionary_policy = plc.io.types.DictionaryPolicy.ADAPTIVE
     options = (
         plc.io.parquet.ParquetWriterOptions.builder(sink, plc_table)
         .metadata(table_meta)

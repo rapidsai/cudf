@@ -459,7 +459,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptionsBuilder int96_timestamps(self, bool enabled):
         """
-        Sets whether int96 timestamps are written or not.
+        Sets whether timestamps are written as int96 or timestamp micros.
 
         Parameters
         ----------
@@ -475,7 +475,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptionsBuilder write_v2_headers(self, bool enabled):
         """
-        Set to true if V2 page headers are to be written.
+        Set to true to write V2 page headers, otherwise false to write V1 page headers.
 
         Parameters
         ----------
