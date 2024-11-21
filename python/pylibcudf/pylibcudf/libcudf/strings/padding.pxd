@@ -2,6 +2,7 @@
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
@@ -15,8 +16,8 @@ cdef extern from "cudf/strings/padding.hpp" namespace "cudf::strings" nogil:
         column_view input,
         size_type width,
         side_type side,
-        string fill_char) except +
+        string fill_char) except +libcudf_exception_handler
 
     cdef unique_ptr[column] zfill(
         column_view input,
-        size_type width) except +
+        size_type width) except +libcudf_exception_handler

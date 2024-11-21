@@ -3,12 +3,10 @@
 from numba.np import numpy_support
 
 import cudf
-from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.utils import cudautils
 
 from pylibcudf cimport transform as plc_transform
-from pylibcudf.expressions cimport Expression
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
@@ -93,7 +91,7 @@ def one_hot_encode(Column input_column, Column categories):
 
 
 @acquire_spill_lock()
-def compute_column(list columns, tuple column_names, expr: str):
+def compute_column(list columns, tuple column_names, str expr):
     """Compute a new column by evaluating an expression on a set of columns.
 
     Parameters
@@ -108,12 +106,8 @@ def compute_column(list columns, tuple column_names, expr: str):
     expr : str
         The expression to evaluate.
     """
-    visitor = parse_expression(expr, column_names)
-
-    # At the end, all the stack contains is the expression to evaluate.
-    cdef Expression cudf_expr = visitor.expression
     result = plc_transform.compute_column(
         plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
-        cudf_expr,
+        plc.expressions.to_expression(expr, column_names),
     )
     return Column.from_pylibcudf(result)
