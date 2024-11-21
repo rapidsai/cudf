@@ -36,8 +36,6 @@
 
 #include <arrow/c/bridge.h>
 
-#include <iostream>
-
 std::unique_ptr<cudf::table> get_cudf_table()
 {
   std::vector<std::unique_ptr<cudf::column>> columns;
