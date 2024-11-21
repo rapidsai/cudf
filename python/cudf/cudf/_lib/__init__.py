@@ -28,7 +28,6 @@ from . import (
     string_casting,
     strings,
     strings_udf,
-    text,
     timezone,
     transpose,
 )
