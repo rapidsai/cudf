@@ -383,7 +383,7 @@ cdef class ParquetWriterOptions:
         -------
         None
         """
-        self.c_obj.set_max_dictionary_size(size_rows)
+        self.c_obj.set_max_dictionary_size(size_bytes)
 
 
 cdef class ParquetWriterOptionsBuilder:
