@@ -50,6 +50,8 @@ cdef class SinkInfo:
 cdef class ColumnInMetadata:
     cdef column_in_metadata* c_obj
 
+    cdef TableInputMetadata table
+
     cpdef ColumnInMetadata set_name(self, str name)
 
     cpdef ColumnInMetadata set_name(self, str name)

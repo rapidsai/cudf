@@ -758,6 +758,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - pynvml>=11.4.1,<12.0.0a0
           - rapids-dask-dependency==24.12.*,>=0.0.0a0
   run_custreamz:
     common:
