@@ -364,8 +364,6 @@ def test_write_csv_na_rep(na_rep):
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)
 
-    pd_result = pa_tbl.to_pandas().to_csv(
-        na_rep=na_rep, index=False
-    )
+    pd_result = pa_tbl.to_pandas().to_csv(na_rep=na_rep, index=False)
 
     assert str_result == pd_result
