@@ -16,6 +16,7 @@ jobs:
       - changed-files
       - checks
       - conda-cpp-build
+      - cpp-linters
       - conda-cpp-checks
       - conda-cpp-tests
       - conda-python-build
