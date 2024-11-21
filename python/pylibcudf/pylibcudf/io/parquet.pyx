@@ -302,7 +302,7 @@ cdef class ParquetWriterOptions:
         Parameters
         ----------
         file_paths : list[str]
-            Vector of Strings which indicates file path.
+            Vector of strings which indicate file paths.
 
         Returns
         -------
