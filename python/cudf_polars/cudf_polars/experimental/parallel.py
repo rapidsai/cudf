@@ -8,16 +8,16 @@ import operator
 from functools import reduce, singledispatch
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.expr import NamedExpr
 from cudf_polars.dsl.ir import IR
-from cudf_polars.dsl.traversal import reuse_if_unchanged, traversal
+from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+    from typing import TypeAlias
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.nodebase import Node
-    from cudf_polars.typing import IRTransformer
+    from cudf_polars.typing import GenericTransformer
 
 
 class PartitionInfo:
@@ -33,35 +33,52 @@ class PartitionInfo:
         self.count = count
 
 
-# An IR object must always map to a unique
-# PartitionInfo object, and we can cache
-# this mapping until evaluation is complete.
-_IR_PARTS_CACHE: MutableMapping[IR, PartitionInfo] = {}
+LowerIRTransformer: TypeAlias = (
+    "GenericTransformer[IR, MutableMapping[IR, PartitionInfo]]"
+)
+"""Protocol for Lowering IR nodes."""
 
 
-def _clear_parts_info_cache() -> None:
-    """Clear cached partitioning information."""
-    _IR_PARTS_CACHE.clear()
-
-
-def get_key_name(node: Node | NamedExpr) -> str:
+def get_key_name(node: Node) -> str:
     """Generate the key name for a Node."""
-    if isinstance(node, NamedExpr):
-        return f"named-{get_key_name(node.value)}"  # pragma: no cover
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
 @singledispatch
-def lower_ir_node(ir: IR, rec: IRTransformer) -> IR:
+def lower_ir_node(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Rewrite an IR node with proper partitioning."""
     raise AssertionError(f"Unhandled type {type(ir)}")
 
 
-# Return same node by default
-lower_ir_node.register(IR)(reuse_if_unchanged)
+@lower_ir_node.register(IR)
+def _default_lower_ir_node(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if len(ir.children) == 0:
+        # Default leaf node has single partition
+        return ir, {ir: PartitionInfo(count=1)}
+
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=False)
+    partition_info = reduce(operator.or_, _partition_info)
+
+    # Check that child partitioning is supported
+    count = max(partition_info[c].count for c in children)
+    if count > 1:
+        raise NotImplementedError(
+            f"Class {type(ir)} does not support multiple partitions."
+        )  # pragma: no cover
+
+    # Return reconstructed node and
+    partition = PartitionInfo(count=1)
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = partition
+    return new_node, partition_info
 
 
-def lower_ir_graph(ir: IR) -> IR:
+def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Rewrite an IR graph with proper partitioning."""
     from cudf_polars.dsl.traversal import CachingVisitor
 
@@ -70,34 +87,9 @@ def lower_ir_graph(ir: IR) -> IR:
 
 
 @singledispatch
-def _ir_parts_info(ir: IR) -> PartitionInfo:
-    """IR partitioning-info dispatch."""
-    raise AssertionError(f"Unhandled type {type(ir)}")
-
-
-@_ir_parts_info.register(IR)
-def _default_ir_parts_info(ir: IR) -> PartitionInfo:
-    # Single-partition default behavior.
-    # This is used by `_ir_parts_info` for all unregistered IR sub-types.
-    count = max((ir_parts_info(child).count for child in ir.children), default=1)
-    if count > 1:
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support multiple partitions."
-        )  # pragma: no cover
-    return PartitionInfo(count=count)
-
-
-def ir_parts_info(ir: IR) -> PartitionInfo:
-    """Return the partitioning info for an IR node."""
-    try:
-        return _IR_PARTS_CACHE[ir]
-    except KeyError:
-        _IR_PARTS_CACHE[ir] = _ir_parts_info(ir)
-        return _IR_PARTS_CACHE[ir]
-
-
-@singledispatch
-def generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
+def generate_ir_tasks(
+    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
     """
     Generate tasks for an IR node.
 
@@ -108,10 +100,12 @@ def generate_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
 
 
 @generate_ir_tasks.register(IR)
-def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
+def _default_ir_tasks(
+    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
     # Single-partition default behavior.
     # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
-    if ir_parts_info(ir).count > 1:
+    if partition_info[ir].count > 1:
         raise NotImplementedError(
             f"Failed to generate multiple output tasks for {ir}."
         )  # pragma: no cover
@@ -119,7 +113,7 @@ def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     child_names = []
     for child in ir.children:
         child_names.append(get_key_name(child))
-        if ir_parts_info(child).count > 1:
+        if partition_info[child].count > 1:
             raise NotImplementedError(
                 f"Failed to generate tasks for {ir} with child {child}."
             )  # pragma: no cover
@@ -134,15 +128,17 @@ def _default_ir_tasks(ir: IR) -> MutableMapping[Any, Any]:
     }
 
 
-def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
+def task_graph(
+    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+) -> tuple[MutableMapping[str, Any], str]:
     """Construct a Dask-compatible task graph."""
-    ir: IR = lower_ir_graph(_ir)
-
-    graph = reduce(operator.or_, map(generate_ir_tasks, traversal(ir)))
+    graph = reduce(
+        operator.or_,
+        [generate_ir_tasks(node, partition_info) for node in traversal(ir)],
+    )
     key_name = get_key_name(ir)
     graph[key_name] = (key_name, 0)
 
-    _clear_parts_info_cache()
     return graph, key_name
 
 
@@ -150,5 +146,7 @@ def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
     from dask import get
 
-    graph, key = task_graph(ir)
+    ir, partition_info = lower_ir_graph(ir)
+
+    graph, key = task_graph(ir, partition_info)
     return get(graph, key)
