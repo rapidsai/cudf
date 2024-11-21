@@ -140,8 +140,6 @@ def _split_read(
         total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
         n_rows = int(total_rows / total_splits)
         skip_rows = n_rows * split_index
-        if split_index == (total_splits - 1):
-            n_rows += total_rows - (skip_rows + n_rows)
     else:
         # Align split with row-groups
         rg_stride = int(total_row_groups / total_splits)
@@ -154,9 +152,10 @@ def _split_read(
         n_rows = sum(
             rg["num_rows"] for rg in rowgroup_metadata[skip_rgs : skip_rgs + rg_stride]
         )
-        if split_index == (total_splits - 1):
-            total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
-            n_rows += total_rows - (skip_rows + n_rows)
+
+    # Last split should always read to end of file
+    if split_index == (total_splits - 1):
+        n_rows = -1
 
     return do_evaluate(
         schema,
