@@ -446,6 +446,55 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
       lists_column_view{collect_result->view()}, nulls_equal, nans_equal, stream, mr));
 }
 
+template <>
+void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const& udf_ptr    = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+  auto const& data_kinds = udf_ptr->get_required_data_kinds();
+
+  // Do not cache udf_input, as the actual input data may change from run to run.
+  std::unordered_map<cudf::host_udf_base::input_kind, cudf::host_udf_base::input_data> udf_input;
+  for (auto const kind : data_kinds) {
+    switch (kind) {
+      case cudf::host_udf_base::input_kind::INPUT_VALUES: {
+        udf_input.emplace(kind, values);
+        break;
+      }
+
+      case cudf::host_udf_base::input_kind::OFFSETS: {
+        udf_input.emplace(kind, helper.group_offsets(stream));
+        break;
+      }
+
+      case cudf::host_udf_base::input_kind::GROUP_LABELS: {
+        udf_input.emplace(kind, helper.group_labels(stream));
+        break;
+      }
+
+      case cudf::host_udf_base::input_kind::SORTED_GROUPED_VALUES: {
+        udf_input.emplace(kind, get_sorted_values());
+        break;
+      }
+
+      case cudf::host_udf_base::input_kind::GROUPED_VALUES: {
+        udf_input.emplace(kind, get_grouped_values());
+        break;
+      }
+
+      case cudf::host_udf_base::input_kind::NUM_GROUPS: {
+        udf_input.emplace(kind, helper.num_groups(stream));
+        break;
+      }
+
+      default: CUDF_FAIL("Unsupported data kind in sort-based groupby aggregation.")
+    }
+  }
+
+  cache.add_result(values, agg, udf_ptr(udf_input, stream, mr));
+}
+
 /**
  * @brief Perform merging for the lists that correspond to the same key value.
  *
@@ -789,23 +838,6 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                                                               max_centroids,
                                                               stream,
                                                               mr));
-}
-
-template <>
-void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
-{
-  // TODO: Add a name string to the aggregation so that we can look up different host UDFs.
-  if (cache.has_result(values, agg)) { return; }
-  auto const udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).host_udf_ptr;
-  CUDF_EXPECTS(udf_ptr != nullptr, "errrrrrrrrr");
-  cache.add_result(values,
-                   agg,
-                   udf_ptr(get_grouped_values(),
-                           helper.group_offsets(stream),
-                           helper.group_labels(stream),
-                           helper.num_groups(stream),
-                           stream,
-                           mr));
 }
 
 }  // namespace detail

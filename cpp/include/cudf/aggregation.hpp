@@ -651,7 +651,7 @@ struct host_udf_base {
    *
    * @return A set of `input_kind` enum.
    */
-  [[nodiscard]] virtual std::unordered_set<input_kind> const& get_required_data() const = 0;
+  [[nodiscard]] virtual std::unordered_set<input_kind> const& get_required_data_kinds() const = 0;
 
   /**
    * Aggregation data that is needed for computing the aggregation.

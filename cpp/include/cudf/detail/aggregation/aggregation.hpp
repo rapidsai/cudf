@@ -90,6 +90,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class udf_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class host_udf_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_lists_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_sets_aggregation const& agg);
@@ -105,8 +107,6 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class tdigest_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class merge_tdigest_aggregation const& agg);
-  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class host_udf_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -138,6 +138,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
   virtual void visit(class udf_aggregation const& agg);
+  virtual void visit(class host_udf_aggregation const& agg);
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
@@ -147,7 +148,6 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class tdigest_aggregation const& agg);
   virtual void visit(class merge_tdigest_aggregation const& agg);
   virtual void visit(class ewma_aggregation const& agg);
-  virtual void visit(class host_udf_aggregation const& agg);
 };
 
 /**
@@ -965,6 +965,47 @@ class udf_aggregation final : public rolling_aggregation {
 };
 
 /**
+ * @brief Derived class for specifying a custom aggregation specified in host-based UDF.
+ */
+class host_udf_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  std::unique_ptr<host_udf_base> udf_ptr;
+
+  host_udf_aggregation()                            = delete;
+  host_udf_aggregation(host_udf_aggregation const&) = delete;
+
+  explicit host_udf_aggregation(std::unique_ptr<host_udf_base>&& udf_ptr_)
+    : aggregation{HOST_UDF}, udf_ptr{std::move(udf_ptr_)}
+  {
+    CUDF_EXPECTS(udf_ptr != nullptr, "Invalid host-based UDF instance.");
+  }
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<host_udf_aggregation const&>(_other);
+    return udf_ptr->is_equal(*other.udf_ptr);
+  }
+
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ udf_ptr->do_hash();
+  }
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<host_udf_aggregation>(udf_ptr->clone());
+  }
+
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
 class merge_lists_aggregation final : public groupby_aggregation, public reduce_aggregation {
@@ -1181,30 +1222,6 @@ class merge_tdigest_aggregation final : public groupby_aggregation, public reduc
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<merge_tdigest_aggregation>(*this);
-  }
-  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, simple_aggregations_collector& collector) const override
-  {
-    return collector.visit(col_type, *this);
-  }
-  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
-};
-
-/**
- * @brief
- */
-class host_udf_aggregation final : public groupby_aggregation, public reduce_aggregation {
- public:
-  host_udf_func_type host_udf_ptr;
-
-  explicit host_udf_aggregation(host_udf_func_type host_udf_ptr_)
-    : aggregation{HOST_UDF}, host_udf_ptr{std::move(host_udf_ptr_)}
-  {
-  }
-
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<host_udf_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
