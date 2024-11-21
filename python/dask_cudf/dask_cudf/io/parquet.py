@@ -55,7 +55,7 @@ def _get_device_size():
             handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
         return pynvml.nvmlDeviceGetMemoryInfo(handle).total
 
-    except (ImportError, ValueError):
+    except ValueError:
         # Fall back to a conservative 8GiB default
         return 8 * 1024**3
 
