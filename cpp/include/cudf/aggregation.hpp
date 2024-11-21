@@ -684,6 +684,16 @@ struct host_udf_base {
     rmm::device_async_resource_ref mr) = 0;
 
   /**
+   * @brief Get the output when the input values is empty.
+   *
+   * This is needed since libcudf tries to avoid unnecessarily evaluating the intermediate data when
+   * the input values is empty.
+   *
+   * @return The output result of the aggregation when input values is empty
+   */
+  [[nodiscard]] virtual output_type get_empty_output() const = 0;
+
+  /**
    * @brief Compares two instances of the derived class for equality.
    *
    * @param other The other derived class's instance to compare with
