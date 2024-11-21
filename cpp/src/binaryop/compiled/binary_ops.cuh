@@ -21,7 +21,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/unary.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -253,16 +253,11 @@ struct binary_op_double_device_dispatcher {
 template <typename Functor>
 CUDF_KERNEL void for_each_kernel(cudf::size_type size, Functor f)
 {
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
-
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
+  auto start        = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
 #pragma unroll
-  for (cudf::size_type i = start; i < size; i += step) {
+  for (auto i = start; i < size; i += stride) {
     f(i);
   }
 }
@@ -282,9 +277,9 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   int min_grid_size;
   CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
-  // 2 elements per thread.
-  int const grid_size = util::div_rounding_up_safe(size, 2 * block_size);
-  for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
+  auto grid = cudf::detail::grid_1d(size, block_size, 2 /* elements_per_thread */);
+  for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    size, std::forward<Functor&&>(f));
 }
 
 template <class BinaryOperator>

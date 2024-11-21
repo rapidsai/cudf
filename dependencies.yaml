@@ -748,7 +748,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.11,<1.14
+          - polars>=1.11,<1.15
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -758,6 +758,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - pynvml>=11.4.1,<12.0.0a0
           - rapids-dask-dependency==25.2.*,>=0.0.0a0
   run_custreamz:
     common:
