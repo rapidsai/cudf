@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-24.12/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/branch-25.02/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -459,11 +459,12 @@ and convert back to polars:
 
 ```python
 from cudf_polars.dsl.translate import Translator
+import polars as pl
 
 q = ...
 
 # Convert to our IR
-ir = Translator(q._ldf.visit()).translate_ir()
+ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
 # DataFrame living on the device
 result = ir.evaluate(cache={})
