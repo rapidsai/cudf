@@ -18,6 +18,7 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -25,7 +26,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuco/hash_functions.cuh>
 #include <thrust/tabulate.h>
 
 namespace cudf {
@@ -35,72 +35,6 @@ namespace detail {
 namespace {
 
 using hash_value_type = uint64_t;
-
-template <typename Key>
-struct XXHash_64 : public cuco::xxhash_64<Key> {
-  __device__ hash_value_type operator()(Key const& key) const
-  {
-    return cuco::xxhash_64<Key>::operator()(key);
-  }
-
-  template <typename Extent>
-  __device__ hash_value_type compute_hash(cuda::std::byte const* bytes, Extent size) const
-  {
-    return cuco::xxhash_64<Key>::compute_hash(bytes, size);
-  }
-};
-
-template <>
-hash_value_type __device__ inline XXHash_64<bool>::operator()(bool const& key) const
-{
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(key));
-}
-
-template <>
-hash_value_type __device__ inline XXHash_64<float>::operator()(float const& key) const
-{
-  return cuco::xxhash_64<float>::operator()(normalize_nans(key));
-}
-
-template <>
-hash_value_type __device__ inline XXHash_64<double>::operator()(double const& key) const
-{
-  return cuco::xxhash_64<double>::operator()(normalize_nans(key));
-}
-
-template <>
-hash_value_type __device__ inline XXHash_64<cudf::string_view>::operator()(
-  cudf::string_view const& key) const
-{
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(key.data()), key.size_bytes());
-}
-
-template <>
-hash_value_type __device__ inline XXHash_64<numeric::decimal32>::operator()(
-  numeric::decimal32 const& key) const
-{
-  auto const val = key.value();
-  auto const len = sizeof(val);
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&val), len);
-}
-
-template <>
-hash_value_type __device__ inline XXHash_64<numeric::decimal64>::operator()(
-  numeric::decimal64 const& key) const
-{
-  auto const val = key.value();
-  auto const len = sizeof(val);
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&val), len);
-}
-
-template <>
-hash_value_type __device__ inline XXHash_64<numeric::decimal128>::operator()(
-  numeric::decimal128 const& key) const
-{
-  auto const val = key.value();
-  auto const len = sizeof(val);
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&val), len);
-}
 
 /**
  * @brief Computes the hash value of a row in the given table.
