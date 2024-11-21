@@ -21,8 +21,6 @@
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <string>
-
 struct StringsAttributesTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsAttributesTest, CodePoints)
