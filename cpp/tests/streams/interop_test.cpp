@@ -41,6 +41,6 @@ TEST_F(DLPackTest, FromDLPack)
   cudf::test::fixed_width_column_wrapper<int32_t> col1({});
   cudf::test::fixed_width_column_wrapper<int32_t> col2({});
   cudf::table_view input({col1, col2});
-  unique_managed_tensor tensor(cudf::to_dlpack(input));
-  auto result = cudf::from_dlpack(tensor.get());
+  unique_managed_tensor tensor(cudf::to_dlpack(input, cudf::test::get_default_stream()));
+  auto result = cudf::from_dlpack(tensor.get(), cudf::test::get_default_stream());
 }
