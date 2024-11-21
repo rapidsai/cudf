@@ -33,10 +33,10 @@ class PartitionInfo:
         self.count = count
 
 
-# The hash of an IR object must always map to a
-# unique PartitionInfo object, and we can cache
+# An IR object must always map to a unique
+# PartitionInfo object, and we can cache
 # this mapping until evaluation is complete.
-_IR_PARTS_CACHE: MutableMapping[int, PartitionInfo] = {}
+_IR_PARTS_CACHE: MutableMapping[IR, PartitionInfo] = {}
 
 
 def _clear_parts_info_cache() -> None:
@@ -89,12 +89,11 @@ def _default_ir_parts_info(ir: IR) -> PartitionInfo:
 
 def ir_parts_info(ir: IR) -> PartitionInfo:
     """Return the partitioning info for an IR node."""
-    key = hash(ir)
     try:
-        return _IR_PARTS_CACHE[key]
+        return _IR_PARTS_CACHE[ir]
     except KeyError:
-        _IR_PARTS_CACHE[key] = _ir_parts_info(ir)
-        return _IR_PARTS_CACHE[key]
+        _IR_PARTS_CACHE[ir] = _ir_parts_info(ir)
+        return _IR_PARTS_CACHE[ir]
 
 
 @singledispatch
