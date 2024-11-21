@@ -46,9 +46,12 @@ if TYPE_CHECKING:
 
 def str_to_boolean(column: StringColumn):
     """Takes in string column and returns boolean column"""
-    return (
-        libstrings.count_characters(column) > cudf.Scalar(0, dtype="int8")
-    ).fillna(False)
+    with acquire_spill_lock():
+        plc_column = plc.strings.attributes.count_characters(
+            column.to_pylibcudf(mode="read")
+        )
+        result = Column.from_pylibcudf(plc_column)
+    return (result > cudf.Scalar(0, dtype="int8")).fillna(False)
 
 
 _str_to_numeric_typecast_functions = {
@@ -4131,9 +4134,7 @@ class StringMethods(ColumnMethods):
         """
         if suffix is None or len(suffix) == 0:
             return self._return_or_inplace(self._column)
-        ends_column = libstrings.endswith(
-            self._column, cudf.Scalar(suffix, "str")
-        )
+        ends_column = self.endswith(suffix)._column  # type: ignore[union-attr]
         removed_column = self.slice(0, -len(suffix), None)._column  # type: ignore[union-attr]
 
         result = cudf._lib.copying.copy_if_else(
@@ -4174,9 +4175,7 @@ class StringMethods(ColumnMethods):
         """
         if prefix is None or len(prefix) == 0:
             return self._return_or_inplace(self._column)
-        starts_column = libstrings.startswith(
-            self._column, cudf.Scalar(prefix, "str")
-        )
+        starts_column = self.startswith(prefix)._column  # type: ignore[union-attr]
         removed_column = self.slice(len(prefix), None, None)._column  # type: ignore[union-attr]
         result = cudf._lib.copying.copy_if_else(
             removed_column, self._column, starts_column
@@ -4200,7 +4199,10 @@ class StringMethods(ColumnMethods):
 
         with acquire_spill_lock():
             plc_result = method(
-                self._column, cudf.Scalar(sub, "str"), start, end
+                self._column.to_pylibcudf(mode="read"),
+                cudf.Scalar(sub, "str").device_value.c_value,
+                start,
+                end,
             )
             result = Column.from_pylibcudf(plc_result)
         return self._return_or_inplace(result)
@@ -4350,9 +4352,7 @@ class StringMethods(ColumnMethods):
         if end is None:
             end = -1
 
-        result_col = libstrings.find(
-            self._column, cudf.Scalar(sub, "str"), start, end
-        )
+        result_col = self.find(sub, start, end)._column  # type: ignore[union-attr]
 
         result = self._return_or_inplace(result_col)
 
@@ -4412,9 +4412,7 @@ class StringMethods(ColumnMethods):
         if end is None:
             end = -1
 
-        result_col = libstrings.rfind(
-            self._column, cudf.Scalar(sub, "str"), start, end
-        )
+        result_col = self.rfind(sub, start, end)._column  # type: ignore[union-attr]
 
         result = self._return_or_inplace(result_col)
 
@@ -4582,7 +4580,7 @@ class StringMethods(ColumnMethods):
                 self._column.to_pylibcudf(mode="read")
             )
             result = Column.from_pylibcudf(plc_column)
-        return self._return_or_inplace(result)
+        return self._return_or_inplace(result, retain_index=False)
 
     def translate(self, table: dict) -> SeriesOrIndex:
         """
@@ -4683,7 +4681,9 @@ class StringMethods(ColumnMethods):
             plc_result = plc.strings.translate.filter_characters(
                 self._column.to_pylibcudf(mode="read"),
                 table,
-                keep,
+                plc.strings.translate.FilterType.KEEP
+                if keep
+                else plc.strings.translate.FilterType.REMOVE,
                 cudf.Scalar(repl, "str").device_value.c_value,
             )
             result = Column.from_pylibcudf(plc_result)
@@ -6071,13 +6071,12 @@ class StringColumn(column.ColumnBase):
                 )
             is_nat = self == "NaT"
             without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
-            all_same_length = (
-                libstrings.count_characters(without_nat).distinct_count(
-                    dropna=True
+            with acquire_spill_lock():
+                plc_column = plc.strings.attributes.count_characters(
+                    without_nat.to_pylibcudf(mode="read")
                 )
-                == 1
-            )
-            if not all_same_length:
+                char_counts = Column.from_pylibcudf(plc_column)
+            if char_counts.distinct_count(dropna=True) != 1:
                 # Unfortunately disables OK cases like:
                 # ["2020-01-01", "2020-01-01 00:00:00"]
                 # But currently incorrect for cases like (drops 10):
