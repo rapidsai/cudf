@@ -370,7 +370,7 @@ cdef class ParquetWriterOptions:
         """
         self.c_obj.set_max_page_size_rows(size_rows)
 
-    cpdef void set_max_dictionary_size(self, size_t size_rows):
+    cpdef void set_max_dictionary_size(self, size_t size_bytes):
         """
         Sets the maximum dictionary size, in bytes.
 
