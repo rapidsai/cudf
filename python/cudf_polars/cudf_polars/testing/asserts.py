@@ -122,7 +122,7 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     AssertionError
        If the specified exceptions were not raised.
     """
-    translator = Translator(q._ldf.visit())
+    translator = Translator(q._ldf.visit(), GPUEngine())
     translator.translate_ir()
     if errors := translator.errors:
         for err in errors:
