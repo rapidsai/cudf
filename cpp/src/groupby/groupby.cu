@@ -193,6 +193,13 @@ void verify_valid_requests(host_span<RequestType const> requests)
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
+  host_span<aggregation_request const> requests, rmm::device_async_resource_ref mr)
+{
+  return aggregate(requests, cudf::get_default_stream(), mr);
+}
+
+// Compute aggregation requests
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
   host_span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -213,9 +220,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
 // Compute scan requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
-  host_span<scan_request const> requests,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  host_span<scan_request const> requests, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -228,14 +233,13 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 
   if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
-  return sort_scan(requests, stream, mr);
+  return sort_scan(requests, cudf::get_default_stream(), mr);
 }
 
-groupby::groups groupby::get_groups(table_view values,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+groupby::groups groupby::get_groups(table_view values, rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+  auto const stream = cudf::get_default_stream();
   auto grouped_keys = helper().sorted_keys(stream, mr);
 
   auto const& group_offsets       = helper().group_offsets(stream);
@@ -258,7 +262,6 @@ groupby::groups groupby::get_groups(table_view values,
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls(
   table_view const& values,
   host_span<cudf::replace_policy const> replace_policies,
-  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -268,6 +271,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                "Size mismatch between num_columns and replace_policies.");
 
   if (values.is_empty()) { return std::pair(empty_like(_keys), empty_like(values)); }
+  auto const stream = cudf::get_default_stream();
 
   auto const& group_labels = helper().group_labels(stream);
   std::vector<std::unique_ptr<column>> results;
@@ -302,7 +306,6 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   table_view const& values,
   host_span<size_type const> offsets,
   std::vector<std::reference_wrapper<scalar const>> const& fill_values,
-  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -317,6 +320,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
                           }),
                "values and fill_value should have the same type.",
                cudf::data_type_error);
+  auto stream = cudf::get_default_stream();
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);
   std::transform(
