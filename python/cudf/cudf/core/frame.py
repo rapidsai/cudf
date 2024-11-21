@@ -823,15 +823,20 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         null_precedence = [plc.types.NullOrder[key] for key in null_precedence]
 
-        return self._from_columns_like_self(
-            libcudf.quantiles.quantile_table(
-                [*self._columns],
+        with acquire_spill_lock():
+            plc_table = plc.quantiles.quantiles(
+                plc.Table(
+                    [c.to_pylibcudf(mode="read") for c in self._columns]
+                ),
                 q,
                 interpolation,
                 is_sorted,
                 column_order,
                 null_precedence,
-            ),
+            )
+            columns = libcudf.utils.columns_from_pylibcudf_table(plc_table)
+        return self._from_columns_like_self(
+            columns,
             column_names=self._column_names,
         )
 

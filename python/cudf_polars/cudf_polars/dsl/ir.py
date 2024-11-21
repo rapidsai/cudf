@@ -256,6 +256,7 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
+        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -268,6 +269,7 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
+        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -281,6 +283,8 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
+    config_options: dict[str, Any]
+    """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
     with_columns: list[str] | None
@@ -294,12 +298,16 @@ class Scan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
+    PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
+    PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
+
     def __init__(
         self,
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
+        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -311,6 +319,7 @@ class Scan(IR):
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
+        self.config_options = config_options
         self.paths = paths
         self.with_columns = with_columns
         self.skip_rows = skip_rows
@@ -321,6 +330,7 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
+            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -339,7 +349,7 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if self.typ == "csv" and self.skip_rows != 0:  # pragma: no cover
+        if self.typ in {"csv"} and self.skip_rows != 0:  # pragma: no cover
             # This comes from slice pushdown, but that
             # optimization doesn't happen right now
             raise NotImplementedError("skipping rows in CSV reader")
@@ -402,6 +412,7 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
+            json.dumps(self.config_options),
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
@@ -416,6 +427,7 @@ class Scan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
+        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -498,25 +510,80 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
-            filters = None
-            if predicate is not None and row_index is None:
-                # Can't apply filters during read if we have a row index.
-                filters = to_parquet_filter(predicate.value)
-            tbl_w_meta = plc.io.parquet.read_parquet(
-                plc.io.SourceInfo(paths),
-                columns=with_columns,
-                filters=filters,
-                nrows=n_rows,
-                skip_rows=skip_rows,
-            )
-            df = DataFrame.from_table(
-                tbl_w_meta.tbl,
-                # TODO: consider nested column names?
-                tbl_w_meta.column_names(include_children=False),
-            )
-            if filters is not None:
-                # Mask must have been applied.
-                return df
+            parquet_options = config_options.get("parquet_options", {})
+            if parquet_options.get("chunked", True):
+                reader = plc.io.parquet.ChunkedParquetReader(
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    # We handle skip_rows != 0 by reading from the
+                    # up to n_rows + skip_rows and slicing off the
+                    # first skip_rows entries.
+                    # TODO: Remove this workaround once
+                    # https://github.com/rapidsai/cudf/issues/16186
+                    # is fixed
+                    nrows=n_rows + skip_rows,
+                    skip_rows=0,
+                    chunk_read_limit=parquet_options.get(
+                        "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
+                    ),
+                    pass_read_limit=parquet_options.get(
+                        "pass_read_limit", cls.PARQUET_DEFAULT_PASS_LIMIT
+                    ),
+                )
+                chk = reader.read_chunk()
+                rows_left_to_skip = skip_rows
+
+                def slice_skip(tbl: plc.Table):
+                    nonlocal rows_left_to_skip
+                    if rows_left_to_skip > 0:
+                        table_rows = tbl.num_rows()
+                        chunk_skip = min(rows_left_to_skip, table_rows)
+                        # TODO: Check performance impact of skipping this
+                        # call and creating an empty table manually when the
+                        # slice would be empty (chunk_skip == table_rows).
+                        (tbl,) = plc.copying.slice(tbl, [chunk_skip, table_rows])
+                        rows_left_to_skip -= chunk_skip
+                    return tbl
+
+                tbl = slice_skip(chk.tbl)
+                # TODO: Nested column names
+                names = chk.column_names(include_children=False)
+                concatenated_columns = tbl.columns()
+                while reader.has_next():
+                    tbl = slice_skip(reader.read_chunk().tbl)
+
+                    for i in range(tbl.num_columns()):
+                        concatenated_columns[i] = plc.concatenate.concatenate(
+                            [concatenated_columns[i], tbl._columns[i]]
+                        )
+                        # Drop residual columns to save memory
+                        tbl._columns[i] = None
+
+                df = DataFrame.from_table(
+                    plc.Table(concatenated_columns),
+                    names=names,
+                )
+            else:
+                filters = None
+                if predicate is not None and row_index is None:
+                    # Can't apply filters during read if we have a row index.
+                    filters = to_parquet_filter(predicate.value)
+                tbl_w_meta = plc.io.parquet.read_parquet(
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    filters=filters,
+                    nrows=n_rows,
+                    skip_rows=skip_rows,
+                )
+                df = DataFrame.from_table(
+                    tbl_w_meta.tbl,
+                    # TODO: consider nested column names?
+                    tbl_w_meta.column_names(include_children=False),
+                )
+                if filters is not None:
+                    # Mask must have been applied.
+                    return df
+
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
@@ -733,7 +800,9 @@ class Reduce(IR):
 
     @classmethod
     def do_evaluate(
-        cls, exprs: tuple[expr.NamedExpr, ...], df: DataFrame
+        cls,
+        exprs: tuple[expr.NamedExpr, ...],
+        df: DataFrame,
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
         columns = broadcast(*(e.evaluate(df) for e in exprs))

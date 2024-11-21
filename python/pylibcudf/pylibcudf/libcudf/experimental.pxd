@@ -1,7 +1,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
-
 from libcpp cimport bool
 from libcpp.string cimport string
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 
 cdef extern from "cudf/utilities/prefetch.hpp" \
