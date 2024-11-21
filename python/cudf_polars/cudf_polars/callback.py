@@ -64,7 +64,7 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
     rmm.mr.DeviceMemoryResource
         The default memory resource that cudf-polars uses. Currently
         a managed memory resource, if `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY`
-        environment variable is set `0`, then an async pool resource is returned.
+        environment variable is set to `0`, then an async pool resource is returned.
     bool
         A flag indicating whether to enable prefetching.
     """
