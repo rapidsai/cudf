@@ -427,7 +427,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptionsBuilder compression(self, compression_type compression):
         """
-        Sets Key-Value footer metadata.
+        Sets compression type.
 
         Parameters
         ----------
