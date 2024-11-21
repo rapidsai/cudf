@@ -146,13 +146,26 @@ def task_graph(_ir: IR) -> tuple[MutableMapping[str, Any], str]:
     return graph, key_name
 
 
+def _register_serialize():
+    """Register Dask/cudf-polars serializers in calling process."""
+    from cudf_polars.experimental.dask_serialize import register
+
+    register()
+
+
 def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
     from dask import get as _get
     from distributed import get_client
 
+    _register_serialize()
+
     try:
-        get = get_client().get
+        client = get_client()
+        client.run(_register_serialize)
+        client.run_on_scheduler(_register_serialize)
+
+        get = client.get
     except ValueError:
         get = _get
 
