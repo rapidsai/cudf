@@ -13,18 +13,18 @@ from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.experimental.parallel import (
     PartitionInfo,
     _concat,
-    _ir_parts_info,
-    _partitionwise_ir_parts_info,
+    _default_lower_ir_node,
+    _lower_children,
     _partitionwise_ir_tasks,
     generate_ir_tasks,
     get_key_name,
-    ir_parts_info,
 )
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
 class GroupByPart(GroupBy):
@@ -42,19 +42,22 @@ class GroupByFinalize(Select):
 _GB_AGG_SUPPORTED = ("sum", "count", "mean")
 
 
-def lower_groupby_node(ir: GroupBy, rec) -> IR:
+def lower_groupby_node(
+    ir: GroupBy, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Rewrite a GroupBy node with proper partitioning."""
     # Lower children first
-    children = [rec(child) for child in ir.children]
-    if ir_parts_info(children[0]).count == 1:
+    children, partition_info = _lower_children(ir, rec)
+
+    if partition_info[children[0]].count == 1:
         # Single partition
-        return ir.reconstruct(children)
+        return _default_lower_ir_node(ir, rec)
 
     # Check that we are groupbing on element-wise
     # keys (is this already guaranteed?)
     for ne in ir.keys:
         if not isinstance(ne.value, Col):
-            return ir.reconstruct(children)
+            return _default_lower_ir_node(ir, rec)
 
     name_map: MutableMapping[str, Any] = {}
     agg_tree: Cast | Agg | None = None
@@ -73,10 +76,10 @@ def lower_groupby_node(ir: GroupBy, rec) -> IR:
         elif isinstance(agg, Agg):
             # Agg
             if agg.name not in _GB_AGG_SUPPORTED:
-                return ir.reconstruct(children)
+                return _default_lower_ir_node(ir, rec)
 
             if len(agg.children) > 1:
-                return ir.reconstruct(children)
+                return _default_lower_ir_node(ir, rec)
 
             if agg.name == "sum":
                 # Partwise
@@ -106,7 +109,7 @@ def lower_groupby_node(ir: GroupBy, rec) -> IR:
                     agg_requests_tree.append(NamedExpr(tmp_name, agg_tree))
         else:
             # Unsupported
-            return ir.reconstruct(children)
+            return _default_lower_ir_node(ir, rec)
 
     gb_pwise = GroupByPart(
         ir.schema,
@@ -146,27 +149,21 @@ def lower_groupby_node(ir: GroupBy, rec) -> IR:
                 )
             )
     should_broadcast: bool = False
-    return GroupByFinalize(
+    new_node = GroupByFinalize(
         schema,
         output_exprs,
         should_broadcast,
         gb_tree,
     )
-
-
-@_ir_parts_info.register(GroupByPart)
-def _(ir: GroupByPart) -> PartitionInfo:
-    return _partitionwise_ir_parts_info(ir)
+    partition_info[new_node] = PartitionInfo(count=1)
+    return new_node, partition_info
 
 
 @generate_ir_tasks.register(GroupByPart)
-def _(ir: GroupByPart) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir)
-
-
-@_ir_parts_info.register(GroupByTree)
-def _(ir: GroupByTree) -> PartitionInfo:
-    return PartitionInfo(count=1)
+def _(
+    ir: GroupByPart, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir, partition_info)
 
 
 def _tree_node(do_evaluate, batch, *args):
@@ -174,9 +171,11 @@ def _tree_node(do_evaluate, batch, *args):
 
 
 @generate_ir_tasks.register(GroupByTree)
-def _(ir: GroupByTree) -> MutableMapping[Any, Any]:
+def _(
+    ir: GroupByTree, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
     child = ir.children[0]
-    child_count = ir_parts_info(child).count
+    child_count = partition_info[child].count
     child_name = get_key_name(child)
     name = get_key_name(ir)
 
@@ -207,12 +206,9 @@ def _(ir: GroupByTree) -> MutableMapping[Any, Any]:
     return graph
 
 
-@_ir_parts_info.register(GroupByFinalize)
-def _(ir: GroupByFinalize) -> PartitionInfo:
-    return _partitionwise_ir_parts_info(ir)
-
-
 @generate_ir_tasks.register(GroupByFinalize)
-def _(ir: GroupByFinalize) -> MutableMapping[Any, Any]:
+def _(
+    ir: GroupByFinalize, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
     # TODO: Fuse with GroupByTree child task?
-    return _partitionwise_ir_tasks(ir)
+    return _partitionwise_ir_tasks(ir, partition_info)

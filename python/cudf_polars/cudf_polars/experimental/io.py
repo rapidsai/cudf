@@ -13,7 +13,7 @@ import pylibcudf as plc
 from cudf_polars.dsl.ir import Scan
 from cudf_polars.experimental.parallel import (
     PartitionInfo,
-    _ir_parts_info,
+    _default_lower_ir_node,
     generate_ir_tasks,
     get_key_name,
 )
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
 class ParFileScan(Scan):
@@ -83,14 +84,13 @@ class ParFileScan(Scan):
         return (split, stride)
 
 
-def lower_scan_node(ir: Scan, rec) -> IR:
+def lower_scan_node(
+    ir: Scan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Rewrite a Scan node with proper partitioning."""
-    if (
-        # len(ir.paths) > 1 and
-        ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0
-    ):
+    if ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0:
         # TODO: mypy complains: ParFileScan(*ir._ctor_arguments([]))
-        return ParFileScan(
+        new_node = ParFileScan(
             ir.schema,
             ir.typ,
             ir.reader_options,
@@ -103,17 +103,14 @@ def lower_scan_node(ir: Scan, rec) -> IR:
             ir.row_index,
             ir.predicate,
         )
-    return ir
+        split, stride = new_node._plan
+        if split > 1:
+            count = len(new_node.paths) * split
+        else:
+            count = math.ceil(len(new_node.paths) / stride)
+        return new_node, {new_node: PartitionInfo(count=count)}
 
-
-@_ir_parts_info.register(ParFileScan)
-def _(ir: ParFileScan) -> PartitionInfo:
-    split, stride = ir._plan
-    if split > 1:
-        count = len(ir.paths) * split
-    else:
-        count = math.ceil(len(ir.paths) / stride)
-    return PartitionInfo(count=count)
+    return _default_lower_ir_node(ir, rec)
 
 
 def _split_read(
@@ -173,7 +170,9 @@ def _split_read(
 
 
 @generate_ir_tasks.register(ParFileScan)
-def _(ir: ParFileScan) -> MutableMapping[Any, Any]:
+def _(
+    ir: ParFileScan, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
     key_name = get_key_name(ir)
     split, stride = ir._plan
     paths = list(ir.paths)

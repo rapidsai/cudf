@@ -69,7 +69,7 @@ class SortBy(Expr):
         *by: Expr,
     ) -> None:
         self.dtype = dtype
-        self.options = (options[0], tuple(options[1]), tuple(options[2]))
+        self.options = options
         self.children = (column, *by)
 
     def do_evaluate(

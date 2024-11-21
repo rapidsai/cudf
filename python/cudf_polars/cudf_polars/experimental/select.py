@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import Select
 from cudf_polars.experimental.parallel import (
-    _ir_parts_info,
-    _partitionwise_ir_parts_info,
+    PartitionInfo,
+    _default_lower_ir_node,
+    _lower_children,
     _partitionwise_ir_tasks,
     generate_ir_tasks,
 )
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.parallel import PartitionInfo
+    from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
 _PARTWISE = (
@@ -41,33 +42,36 @@ class PartwiseSelect(Select):
     """Partitionwise Select operation."""
 
 
-def lower_select_node(ir: Select, rec) -> IR:
+def lower_select_node(
+    ir: Select, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Rewrite a GroupBy node with proper partitioning."""
     from cudf_polars.dsl.traversal import traversal
 
     # Lower children first
-    children = [rec(child) for child in ir.children]
+    children, partition_info = _lower_children(ir, rec)
 
     # Search the expressions for "complex" operations
     for ne in ir.exprs:
         for expr in traversal(ne.value):
             if type(expr).__name__ not in _PARTWISE:
-                return ir.reconstruct(children)
+                return _default_lower_ir_node(ir, rec)
 
-    # Remailing Select ops are partition-wise
-    return PartwiseSelect(
+    # Remaining Select ops are partition-wise
+    new_node = PartwiseSelect(
         ir.schema,
         ir.exprs,
         ir.should_broadcast,
         *children,
     )
-
-
-@_ir_parts_info.register(PartwiseSelect)
-def _(ir: PartwiseSelect) -> PartitionInfo:
-    return _partitionwise_ir_parts_info(ir)
+    partition_info[new_node] = PartitionInfo(
+        count=max(partition_info[c].count for c in children)
+    )
+    return new_node, partition_info
 
 
 @generate_ir_tasks.register(PartwiseSelect)
-def _(ir: PartwiseSelect) -> MutableMapping[Any, Any]:
-    return _partitionwise_ir_tasks(ir)
+def _(
+    ir: PartwiseSelect, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    return _partitionwise_ir_tasks(ir, partition_info)

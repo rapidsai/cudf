@@ -9,17 +9,17 @@ from typing import TYPE_CHECKING, Any
 from cudf_polars.dsl.ir import Join
 from cudf_polars.experimental.parallel import (
     _concat,
-    _ir_parts_info,
+    _default_lower_ir_node,
+    _lower_children,
     generate_ir_tasks,
     get_key_name,
-    ir_parts_info,
 )
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.parallel import PartitionInfo
+    from cudf_polars.experimental.parallel import LowerIRTransformer, PartitionInfo
 
 
 class BroadcastJoin(Join):
@@ -34,61 +34,64 @@ class RightBroadcastJoin(BroadcastJoin):
     """Right Broadcast Join operation."""
 
 
-def lower_join_node(ir: Join, rec) -> IR:
+def lower_join_node(
+    ir: Join, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Rewrite a Join node with proper partitioning."""
     # TODO: Add shuffle-based join.
     # (Currently using broadcast join in all cases)
 
+    # Lower children first
+    children, partition_info = _lower_children(ir, rec)
+
     how = ir.options[0]
     if how not in ("inner", "left", "right"):
         # Not supported (yet)
-        return ir
-    children = [rec(child) for child in ir.children]
+        return _default_lower_ir_node(ir, rec)
+
+    assert len(children) == 2
     left, right = children
-    left_parts = ir_parts_info(left)
-    right_parts = ir_parts_info(right)
+    left_parts = partition_info[left]
+    right_parts = partition_info[right]
     if left_parts.count == right_parts.count == 1:
         # Single-partition case
-        return ir
+        return _default_lower_ir_node(ir, rec)
     elif left_parts.count >= right_parts.count and how in ("inner", "left"):
         # Broadcast right to every partition of left
-        return RightBroadcastJoin(
+        new_node = RightBroadcastJoin(
             ir.schema,
             ir.left_on,
             ir.right_on,
             ir.options,
             *children,
         )
+        partition_info[new_node] = partition_info[left]
     else:
         # Broadcast left to every partition of right
-        return LeftBroadcastJoin(
+        new_node = LeftBroadcastJoin(
             ir.schema,
             ir.left_on,
             ir.right_on,
             ir.options,
             *children,
         )
-
-
-@_ir_parts_info.register(LeftBroadcastJoin)
-def _(ir: LeftBroadcastJoin) -> PartitionInfo:
-    return ir_parts_info(ir.children[1])
-
-
-@_ir_parts_info.register(RightBroadcastJoin)
-def _(ir: RightBroadcastJoin) -> PartitionInfo:
-    return ir_parts_info(ir.children[0])
+        partition_info[new_node] = partition_info[right]
+    return new_node, partition_info
 
 
 @generate_ir_tasks.register(BroadcastJoin)
-def _(ir: BroadcastJoin) -> MutableMapping[Any, Any]:
+def _(
+    ir: BroadcastJoin, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
     left, right = ir.children
     bcast_side = "right" if isinstance(ir, RightBroadcastJoin) else "left"
     left_name = get_key_name(left)
     right_name = get_key_name(right)
     key_name = get_key_name(ir)
-    parts = ir_parts_info(ir)
-    bcast_parts = ir_parts_info(right) if bcast_side == "right" else ir_parts_info(left)
+    parts = partition_info[ir]
+    bcast_parts = (
+        partition_info[right] if bcast_side == "right" else partition_info[left]
+    )
 
     graph: MutableMapping[Any, Any] = {}
     for i in range(parts.count):
