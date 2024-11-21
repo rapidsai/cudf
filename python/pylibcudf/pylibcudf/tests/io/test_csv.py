@@ -285,27 +285,6 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
 # bool dayfirst = False,
 
 
-def post_process_str_result(
-    str_result, sep=",", lineterminator="\n", header=True
-):
-    lines = str_result.split(lineterminator)[:-1]
-
-    if header:
-        result_lines = [
-            f"{i-1}{sep}{s}" if i > 0 else f"{sep}{s}"
-            for i, s in enumerate(lines)
-        ]
-    else:
-        result_lines = [f"{i}{sep}{s}" for i, s in enumerate(lines)]
-
-    str_result = lineterminator.join(result_lines)
-
-    if header or len(lines) > 1:
-        str_result += lineterminator
-
-    return str_result
-
-
 @pytest.mark.parametrize("sep", [",", "*"])
 @pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
 @pytest.mark.parametrize("header", [True, False])
@@ -340,12 +319,12 @@ def test_write_csv(
 
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)
-    str_result = post_process_str_result(
-        str_result, sep=sep, lineterminator=lineterminator, header=header
-    )
 
     pd_result = pa_table.to_pandas().to_csv(
-        sep=sep, lineterminator=lineterminator, header=header
+        sep=sep,
+        lineterminator=lineterminator,
+        header=header,
+        index=False,
     )
 
     assert str_result == pd_result
@@ -384,8 +363,9 @@ def test_write_csv_na_rep(na_rep):
 
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)
-    str_result = post_process_str_result(str_result)
 
-    pd_result = pa_tbl.to_pandas().to_csv(na_rep=na_rep)
+    pd_result = pa_tbl.to_pandas().to_csv(
+        na_rep=na_rep, index=False
+    )
 
     assert str_result == pd_result
