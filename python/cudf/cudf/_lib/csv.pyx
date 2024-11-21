@@ -305,16 +305,14 @@ def write_csv(
     --------
     cudf.to_csv
     """
-    columns = []
-    col_names = []
     index_and_not_empty = index is True and table.index is not None
-    if index_and_not_empty:
-        columns.extend(col.to_pylibcudf(mode="read") for col in table.index._columns)
+    columns = [
+        col.to_pylibcudf(mode="read") for col in table.index._columns
+    ] if index_and_not_empty else []
     columns.extend(col.to_pylibcudf(mode="read") for col in table._columns)
+    col_names = []
     if header:
-        all_names = []
-        if index_and_not_empty:
-            all_names.extend(table.index.names)
+        all_names = list(table.index.names) if index_and_not_empty else []
         all_names.extend(
             na_rep if name is None or pd.isnull(name)
             else name for name in table._column_names

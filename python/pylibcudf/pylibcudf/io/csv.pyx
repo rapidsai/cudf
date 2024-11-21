@@ -444,7 +444,7 @@ cdef class CsvWriterOptionsBuilder:
         return self
 
     cpdef CsvWriterOptions build(self):
-        """Moves the CSV writer options builder"""
+        """Create a CsvWriterOptions object"""
         cdef CsvWriterOptions csv_options = CsvWriterOptions.__new__(
             CsvWriterOptions
         )
