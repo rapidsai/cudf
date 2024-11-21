@@ -1362,7 +1362,7 @@ table_with_metadata read_csv(
  */
 
 /**
- *@brief Builder to build options for `writer_csv()`.
+ *@brief Builder to build options for `write_csv()`.
  */
 class csv_writer_options_builder;
 
