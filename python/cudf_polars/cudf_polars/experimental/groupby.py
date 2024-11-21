@@ -57,6 +57,7 @@ def lower_groupby_node(ir: GroupBy, rec) -> IR:
             return ir.reconstruct(children)
 
     name_map: MutableMapping[str, Any] = {}
+    agg_tree: Cast | Agg | None = None
     agg_requests_pwise = []
     agg_requests_tree = []
     for ne in ir.agg_requests:
@@ -65,7 +66,9 @@ def lower_groupby_node(ir: GroupBy, rec) -> IR:
         if isinstance(agg, Cast) and isinstance(agg.children[0], Len):
             # Len
             agg_requests_pwise.append(ne)
-            agg_tree = Agg(agg.dtype, "sum", None, Col(agg.dtype, name))
+            agg_tree = Cast(
+                agg.dtype, Agg(agg.dtype, "sum", None, Col(agg.dtype, name))
+            )
             agg_requests_tree.append(NamedExpr(name, agg_tree))
         elif isinstance(agg, Agg):
             # Agg
@@ -166,6 +169,10 @@ def _(ir: GroupByTree) -> PartitionInfo:
     return PartitionInfo(count=1)
 
 
+def _tree_node(do_evaluate, batch, *args):
+    return do_evaluate(*args, _concat(batch))
+
+
 @generate_ir_tasks.register(GroupByTree)
 def _(ir: GroupByTree) -> MutableMapping[Any, Any]:
     child = ir.children[0]
@@ -183,14 +190,20 @@ def _(ir: GroupByTree) -> MutableMapping[Any, Any]:
         for i, k in enumerate(range(0, len(keys), split_every)):
             batch = keys[k : k + split_every]
             graph[(name, j, i)] = (
+                _tree_node,
                 ir.do_evaluate,
+                batch,
                 *ir._non_child_args,
-                (_concat, batch),
             )
             new_keys.append((name, j, i))
         j += 1
         keys = new_keys
-    graph[(name, 0)] = (ir.do_evaluate, *ir._non_child_args, (_concat, keys))
+    graph[(name, 0)] = (
+        _tree_node,
+        ir.do_evaluate,
+        keys,
+        *ir._non_child_args,
+    )
     return graph
 
 

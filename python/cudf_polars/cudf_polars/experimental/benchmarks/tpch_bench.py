@@ -27,26 +27,26 @@ parser.add_argument(
 parser.add_argument(
     "--path",
     type=str,
-    default="/datasets/tpch_sf100",
+    default="/datasets/rzamora/tpch-data/scale-30.0",
     help="Root directory path.",
 )
 parser.add_argument(
     "--suffix",
     type=str,
-    default="",
+    default=".parquet",
     help="Table file suffix.",
 )
 parser.add_argument(
     "-e",
     "--executor",
-    default="dask-experimental",
+    default="dask",
     type=str,
-    choices=["dask-experimental", "cudf", "polars"],
+    choices=["dask", "dask-experimental", "cudf", "polars"],
     help="Executor.",
 )
 parser.add_argument(
     "--blocksize",
-    default=1 * 1024**3,
+    default=2 * 1024**3,
     type=int,
     help="Approx. partition size.",
 )
@@ -236,14 +236,14 @@ def run(args):
     else:
         engine = pl.GPUEngine(
             raise_on_fail=True,
-            executor=executor,
+            executor="dask-experimental" if executor.startswith("dask") else executor,
             parquet_options={"blocksize": args.blocksize, "chunked": False},
         )
         if args.debug:
             ir = Translator(q._ldf.visit(), engine).translate_ir()
-            if args.executor == "cudf":
+            if executor == "cudf":
                 result = ir.evaluate(cache={}).to_polars()
-            elif args.executor == "dask-experimental":
+            elif executor.startswith("dask"):
                 result = evaluate_dask(ir).to_polars()
         else:
             result = q.collect(engine=engine)
