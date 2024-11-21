@@ -1599,13 +1599,15 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
+            self.options = (tuple(to_explode),)
         elif self.name == "rename":
-            old, new, _ = self.options
+            old, new, strict = self.options
             # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
                 raise NotImplementedError("Duplicate new names in rename.")
+            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -1631,7 +1633,7 @@ class MapFunction(IR):
     def get_hashable(self) -> Hashable:  # pragma: no cover; Needed by experimental
         """Hashable representation of the node."""
         schema_hash = tuple(self.schema.items())
-        return (type(self), schema_hash, self.name, str(self.options), *self.children)
+        return (type(self), schema_hash, self.name, self.options, *self.children)
 
     @classmethod
     def do_evaluate(
