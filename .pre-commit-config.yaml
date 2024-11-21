@@ -90,8 +90,8 @@ repos:
         entry: |
           # Check for usage of default_rng without seeding
           default_rng\(\)|
-          # Check for usage of np.random.seed
-          np.random.seed\(
+          # Check for usage of np.random.seed (NPY002 only disallows this being called)
+          np.random.seed
         language: pygrep
         types: [python]
       - id: cmake-format
@@ -105,6 +105,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: cmake-lint
         name: cmake-lint
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -116,6 +120,10 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
+        exclude: |
+          (?x)^(
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
+          )
       - id: doxygen-check
         name: doxygen-check
         entry: ./ci/checks/doxygen.sh
@@ -151,7 +159,8 @@ repos:
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
             cpp/src/io/parquet/ipc/Message_generated[.]h$|
-            cpp/src/io/parquet/ipc/Schema_generated[.]h$
+            cpp/src/io/parquet/ipc/Schema_generated[.]h$|
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
           )
       - id: verify-alpha-spec
   - repo: https://github.com/rapidsai/dependency-file-generator

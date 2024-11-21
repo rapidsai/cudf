@@ -15,6 +15,7 @@ from dask.utils import natural_sort_key
 import cudf
 
 import dask_cudf
+from dask_cudf._legacy.io.parquet import create_metadata_file
 from dask_cudf.tests.utils import (
     require_dask_expr,
     skip_dask_expr,
@@ -24,7 +25,7 @@ from dask_cudf.tests.utils import (
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
 need_create_meta = pytest.mark.skipif(
-    dask_cudf.io.parquet.create_metadata_file is None,
+    create_metadata_file is None,
     reason="Need create_metadata_file support in dask.dataframe.",
 )
 
@@ -45,7 +46,7 @@ def test_roundtrip_backend_dispatch(tmpdir):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine="pyarrow")
     with dask.config.set({"dataframe.backend": "cudf"}):
-        ddf2 = dd.read_parquet(tmpdir, index=False)
+        ddf2 = dd.read_parquet(tmpdir, index=False, blocksize=None)
     assert isinstance(ddf2, dask_cudf.DataFrame)
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
 
@@ -99,7 +100,7 @@ def test_roundtrip_from_dask_index_false(tmpdir):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine="pyarrow")
 
-    ddf2 = dask_cudf.read_parquet(tmpdir, index=False)
+    ddf2 = dask_cudf.read_parquet(tmpdir, index=False, blocksize=None)
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
 
 
@@ -425,10 +426,14 @@ def test_create_metadata_file(tmpdir, partition_on):
         fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
-    dask_cudf.io.parquet.create_metadata_file(
-        fns,
-        split_every=3,  # Force tree reduction
-    )
+
+    with pytest.warns(
+        match="dask_cudf.io.parquet.create_metadata_file is now deprecated"
+    ):
+        dask_cudf.io.parquet.create_metadata_file(
+            fns,
+            split_every=3,  # Force tree reduction
+        )
 
     # Check that we can now read the ddf
     # with the _metadata file present
@@ -472,7 +477,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # Add global metadata file.
     # Dask-CuDF can do this without requiring schema
     # consistency.
-    dask_cudf.io.parquet.create_metadata_file([p0, p1])
+    create_metadata_file([p0, p1])
 
     # Check that we can still read the ddf
     # with the _metadata file present
@@ -533,9 +538,9 @@ def test_check_file_size(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
     cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
     with pytest.warns(match="large parquet file"):
-        # Need to use `dask_cudf.io` path
+        # Need to use `dask_cudf._legacy.io` path
         # TODO: Remove outdated `check_file_size` functionality
-        dask_cudf.io.read_parquet(fn, check_file_size=1).compute()
+        dask_cudf._legacy.io.read_parquet(fn, check_file_size=1).compute()
 
 
 @xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="2024.3.0")
@@ -662,5 +667,27 @@ def test_to_parquet_append(tmpdir, write_metadata_file):
         write_metadata_file=write_metadata_file,
         write_index=False,
     )
-    ddf2 = dask_cudf.read_parquet(tmpdir)
+    ddf2 = dask_cudf.read_parquet(tmpdir, blocksize=None)
     dd.assert_eq(cudf.concat([df, df]), ddf2)
+
+
+def test_deprecated_api_paths(tmpdir):
+    df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
+    # io.to_parquet function is deprecated
+    with pytest.warns(match="dask_cudf.io.to_parquet is now deprecated"):
+        dask_cudf.io.to_parquet(df, tmpdir)
+
+    if dask_cudf.QUERY_PLANNING_ON:
+        df2 = dask_cudf.io.read_parquet(tmpdir)
+        dd.assert_eq(df, df2, check_divisions=False)
+
+        df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
+        dd.assert_eq(df, df2, check_divisions=False)
+    else:
+        with pytest.warns(match="legacy dask_cudf.io.read_parquet"):
+            df2 = dask_cudf.io.read_parquet(tmpdir)
+            dd.assert_eq(df, df2, check_divisions=False)
+
+        with pytest.warns(match="legacy dask_cudf.io.parquet.read_parquet"):
+            df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
+            dd.assert_eq(df, df2, check_divisions=False)

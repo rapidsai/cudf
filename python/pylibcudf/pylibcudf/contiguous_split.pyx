@@ -20,6 +20,13 @@ from .table cimport Table
 from .utils cimport int_to_void_ptr
 
 
+__all__ = [
+    "PackedColumns",
+    "pack",
+    "unpack",
+    "unpack_from_memoryviews",
+]
+
 cdef class HostBuffer:
     """Owning host buffer that implements the buffer protocol"""
     cdef unique_ptr[vector[uint8_t]] c_obj
@@ -38,6 +45,8 @@ cdef class HostBuffer:
         out.strides[0] = 1
         return out
 
+    __hash__ = None
+
     def __getbuffer__(self, Py_buffer *buffer, int flags):
         buffer.buf = dereference(self.c_obj).data()
         buffer.format = NULL  # byte
@@ -54,6 +63,7 @@ cdef class HostBuffer:
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
 
+
 cdef class PackedColumns:
     """Column data in a serialized format.
 
@@ -69,6 +79,8 @@ cdef class PackedColumns:
             "Use one of the factories."
         )
 
+    __hash__ = None
+
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data):
         """Create a Python PackedColumns from a libcudf packed_columns."""
@@ -76,7 +88,7 @@ cdef class PackedColumns:
         out.c_obj = move(data)
         return out
 
-    def release(self):
+    cpdef tuple release(self):
         """Releases and returns the underlying serialized metadata and gpu data.
 
         The ownership of the memory are transferred to the returned buffers. After

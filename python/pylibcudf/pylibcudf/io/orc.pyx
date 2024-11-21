@@ -30,6 +30,12 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.variant cimport get_if, holds_alternative
 
+__all__ = [
+    "OrcColumnStatistics",
+    "ParsedOrcStatistics",
+    "read_orc",
+    "read_parsed_orc_statistics",
+]
 
 cdef class OrcColumnStatistics:
     def __init__(self):
@@ -38,6 +44,8 @@ cdef class OrcColumnStatistics:
             "being constructed in Cython from a preexisting libcudf object, "
             "use `OrcColumnStatistics.from_libcudf` instead."
         )
+
+    __hash__ = None
 
     @property
     def number_of_values(self):
@@ -182,6 +190,8 @@ cdef class OrcColumnStatistics:
 
 
 cdef class ParsedOrcStatistics:
+
+    __hash__ = None
 
     @property
     def column_names(self):

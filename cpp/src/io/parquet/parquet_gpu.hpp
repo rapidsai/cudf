@@ -224,6 +224,9 @@ enum class decode_kernel_mask {
   FIXED_WIDTH_NO_DICT_LIST   = (1 << 13),  // Run decode kernel for fixed width non-dictionary pages
   BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST =
     (1 << 14),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data for fixed width lists
+  BOOLEAN        = (1 << 15),  // Run decode kernel for boolean data
+  BOOLEAN_NESTED = (1 << 16),  // Run decode kernel for nested boolean data
+  BOOLEAN_LIST   = (1 << 17),  // Run decode kernel for list boolean data
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -307,8 +310,10 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;  // starting row of this page relative to the start of the chunk
-  int32_t num_rows;   // number of rows in this page
+  int32_t chunk_row;          // starting row of this page relative to the start of the chunk
+  int32_t num_rows;           // number of rows in this page
+  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
+                              // adjusted to compensate for the list row size estimates.
   // the next four are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
@@ -539,7 +544,7 @@ enum class encode_kernel_mask {
   DELTA_BINARY      = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
   DELTA_LENGTH_BA   = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
   DELTA_BYTE_ARRAY  = (1 << 4),  // Run DELTA_BYtE_ARRAY encoding kernel
-  BYTE_STREAM_SPLIT = (1 << 5),  // Run plain encoding kernel, but split streams
+  BYTE_STREAM_SPLIT = (1 << 5)   // Run plain encoding kernel, but split streams
 };
 
 /**
@@ -911,72 +916,18 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
- * @param[in] is_list Whether or not the data contains list data.
+ * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
-                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                         std::size_t num_rows,
-                         size_t min_row,
-                         int level_type_size,
-                         bool has_nesting,
-                         bool is_list,
-                         kernel_error::pointer error_code,
-                         rmm::cuda_stream_view stream);
-
-/**
- * @brief Launches kernel for reading dictionary fixed width column data stored in the pages
- *
- * The page data will be written to the output pointed to in the page's
- * associated column chunk.
- *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in] num_rows Total number of rows to read
- * @param[in] min_row Minimum number of rows to read
- * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
- * @param[in] is_list Whether or not the data contains list data.
- * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use
- */
-void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             std::size_t num_rows,
-                             size_t min_row,
-                             int level_type_size,
-                             bool has_nesting,
-                             bool is_list,
-                             kernel_error::pointer error_code,
-                             rmm::cuda_stream_view stream);
-
-/**
- * @brief Launches kernel for reading fixed width column data stored in the pages
- *
- * The page data will be written to the output pointed to in the page's
- * associated column chunk.
- *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in] num_rows Total number of rows to read
- * @param[in] min_row Minimum number of rows to read
- * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
- * @param[in] is_list Whether or not the data contains list data.
- * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use
- */
-void DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
-                                   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                   std::size_t num_rows,
-                                   size_t min_row,
-                                   int level_type_size,
-                                   bool has_nesting,
-                                   bool is_list,
-                                   kernel_error::pointer error_code,
-                                   rmm::cuda_stream_view stream);
+void DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                    cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                    size_t num_rows,
+                    size_t min_row,
+                    int level_type_size,
+                    decode_kernel_mask kernel_mask,
+                    kernel_error::pointer error_code,
+                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments

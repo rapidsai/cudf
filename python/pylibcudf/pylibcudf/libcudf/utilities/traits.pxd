@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
 from libcpp cimport bool
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type
 
 
@@ -9,6 +9,7 @@ cdef extern from "cudf/utilities/traits.hpp" namespace "cudf" nogil:
     cdef bool is_relationally_comparable(data_type)
     cdef bool is_equality_comparable(data_type)
     cdef bool is_numeric(data_type)
+    cdef bool is_numeric_not_bool(data_type)
     cdef bool is_index_type(data_type)
     cdef bool is_unsigned(data_type)
     cdef bool is_integral(data_type)

@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-24.12/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/branch-25.02/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -212,7 +212,11 @@ methods.
 
 Plan node definitions live in `cudf_polars/dsl/ir.py`, these all
 inherit from the base `IR` node. The evaluation of a plan node is done
-by implementing the `evaluate` method.
+by implementing the `do_evaluate` method. This method takes in
+the non-child arguments specified in `_non_child_args`, followed by
+pre-evaluated child nodes (`DataFrame` objects). To perform the
+evaluation, one should use the base class (generic) `evaluate` method
+which handles the recursive evaluation of child nodes.
 
 To translate the plan node, add a case handler in `translate_ir` that
 lives in `cudf_polars/dsl/translate.py`.
@@ -454,12 +458,13 @@ translate it to our intermediate representation (IR), and then execute
 and convert back to polars:
 
 ```python
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
+import polars as pl
 
 q = ...
 
 # Convert to our IR
-ir = translate_ir(q._ldf.visit())
+ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
 # DataFrame living on the device
 result = ir.evaluate(cache={})

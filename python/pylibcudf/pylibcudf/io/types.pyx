@@ -20,12 +20,29 @@ import codecs
 import errno
 import io
 import os
+import re
 
 from pylibcudf.libcudf.io.json import \
     json_recovery_mode_t as JSONRecoveryMode  # no-cython-lint
-from pylibcudf.libcudf.io.types import \
-    compression_type as CompressionType  # no-cython-lint
+from pylibcudf.libcudf.io.types import (
+    compression_type as CompressionType,  # no-cython-lint
+    column_encoding as ColumnEncoding,  # no-cython-lint
+    dictionary_policy as DictionaryPolicy,  # no-cython-lint
+    quote_style as QuoteStyle,  # no-cython-lint
+    statistics_freq as StatisticsFreq, # no-cython-lint
+)
 
+__all__ = [
+    "ColumnEncoding",
+    "CompressionType",
+    "DictionaryPolicy",
+    "JSONRecoveryMode",
+    "QuoteStyle",
+    "SinkInfo",
+    "SourceInfo",
+    "StatisticsFreq",
+    "TableWithMetadata",
+]
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
@@ -48,6 +65,8 @@ cdef class TableWithMetadata:
         self.tbl = tbl
 
         self.metadata.schema_info = self._make_column_info(column_names)
+
+    __hash__ = None
 
     cdef vector[column_name_info] _make_column_info(self, list column_names):
         cdef vector[column_name_info] col_name_infos
@@ -143,6 +162,8 @@ cdef class SourceInfo:
 
         Mixing different types of sources will raise a `ValueError`.
     """
+    # Regular expression that match remote file paths supported by libcudf
+    _is_remote_file_pattern = re.compile(r"^s3://", re.IGNORECASE)
 
     def __init__(self, list sources):
         if not sources:
@@ -157,11 +178,12 @@ cdef class SourceInfo:
             for src in sources:
                 if not isinstance(src, (os.PathLike, str)):
                     raise ValueError("All sources must be of the same type!")
-                if not os.path.isfile(src):
-                    raise FileNotFoundError(errno.ENOENT,
-                                            os.strerror(errno.ENOENT),
-                                            src)
-
+                if not (os.path.isfile(src) or self._is_remote_file_pattern.match(src)):
+                    raise FileNotFoundError(
+                        errno.ENOENT, os.strerror(errno.ENOENT), src
+                    )
+                # TODO: Keep the sources alive (self.byte_sources = sources)
+                # for str data (e.g. read_json)?
                 c_files.push_back(<string> str(src).encode())
 
             self.c_obj = move(source_info(c_files))
@@ -213,6 +235,8 @@ cdef class SourceInfo:
 
         self.c_obj = source_info(c_host_buffers)
 
+    __hash__ = None
+
 
 # Adapts a python io.IOBase object as a libcudf IO data_sink. This lets you
 # write from cudf to any python file-like object (File/BytesIO/SocketIO etc)
@@ -237,18 +261,24 @@ cdef cppclass iobase_data_sink(data_sink):
 
 
 cdef class SinkInfo:
-    """A class containing details on a source to read from.
+    """
+    A class containing details about destinations (sinks) to write data to.
 
-    For details, see :cpp:class:`cudf::io::sink_info`.
+    For more details, see :cpp:class:`cudf::io::sink_info`.
 
     Parameters
     ----------
-    sinks : list of str, PathLike, BytesIO, StringIO
+    sinks : list of str, PathLike, or io.IOBase instances
+        A list of sinks to write data to. Each sink can be:
 
-        A homogeneous list of sinks (this can be a string filename,
-        bytes, or one of the Python I/O classes) to read from.
+        - A string representing a filename.
+        - A PathLike object.
+        - An instance of a Python I/O class that is a subclass of io.IOBase
+          (eg., io.BytesIO, io.StringIO).
 
-        Mixing different types of sinks will raise a `ValueError`.
+        The list must be homogeneous in type unless all sinks are instances
+        of subclasses of io.IOBase. Mixing different types of sinks
+        (that are not all io.IOBase instances) will raise a ValueError.
     """
 
     def __init__(self, list sinks):
@@ -256,32 +286,42 @@ cdef class SinkInfo:
         cdef vector[string] paths
 
         if not sinks:
-            raise ValueError("Need to pass at least one sink")
+            raise ValueError("At least one sink must be provided.")
 
         if isinstance(sinks[0], os.PathLike):
             sinks = [os.path.expanduser(s) for s in sinks]
 
         cdef object initial_sink_cls = type(sinks[0])
 
-        if not all(isinstance(s, initial_sink_cls) for s in sinks):
-            raise ValueError("All sinks must be of the same type!")
+        if not all(
+            isinstance(s, initial_sink_cls) or (
+                isinstance(sinks[0], io.IOBase) and isinstance(s, io.IOBase)
+            ) for s in sinks
+        ):
+            raise ValueError(
+                "All sinks must be of the same type unless they are all instances "
+                "of subclasses of io.IOBase."
+            )
 
-        if initial_sink_cls in {io.StringIO, io.BytesIO, io.TextIOBase}:
+        if isinstance(sinks[0], io.IOBase):
             data_sinks.reserve(len(sinks))
-            if isinstance(sinks[0], (io.StringIO, io.BytesIO)):
-                for s in sinks:
+            for s in sinks:
+                if isinstance(s, (io.StringIO, io.BytesIO)):
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s))
                     )
-            elif isinstance(sinks[0], io.TextIOBase):
-                for s in sinks:
-                    if codecs.lookup(s).name not in ('utf-8', 'ascii'):
+                elif isinstance(s, io.TextIOBase):
+                    if codecs.lookup(s.encoding).name not in ('utf-8', 'ascii'):
                         raise NotImplementedError(f"Unsupported encoding {s.encoding}")
                     self.sink_storage.push_back(
                         unique_ptr[data_sink](new iobase_data_sink(s.buffer))
                     )
-            data_sinks.push_back(self.sink_storage.back().get())
-        elif initial_sink_cls is str:
+                else:
+                    self.sink_storage.push_back(
+                        unique_ptr[data_sink](new iobase_data_sink(s))
+                    )
+                data_sinks.push_back(self.sink_storage.back().get())
+        elif isinstance(sinks[0], str):
             paths.reserve(len(sinks))
             for s in sinks:
                 paths.push_back(<string> s.encode())
@@ -295,3 +335,5 @@ cdef class SinkInfo:
         else:
             # we don't have sinks so we must have paths to sinks
             self.c_obj = sink_info(paths)
+
+    __hash__ = None

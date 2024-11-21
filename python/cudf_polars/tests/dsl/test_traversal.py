@@ -10,7 +10,7 @@ from polars.testing import assert_frame_equal
 
 import pylibcudf as plc
 
-from cudf_polars import translate_ir
+from cudf_polars import Translator
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -109,7 +109,7 @@ def test_rewrite_ir_node():
     df = pl.LazyFrame({"a": [1, 2, 1], "b": [1, 3, 4]})
     q = df.group_by("a").agg(pl.col("b").sum()).sort("b")
 
-    orig = translate_ir(q._ldf.visit())
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     new_df = pl.DataFrame({"a": [1, 1, 2], "b": [-1, -2, -4]})
 
@@ -150,7 +150,7 @@ def test_rewrite_scan_node(tmp_path):
 
     mapper = CachingVisitor(replace_scan)
 
-    orig = translate_ir(q._ldf.visit())
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
 
     result = new.evaluate(cache={}).to_polars()
@@ -174,7 +174,7 @@ def test_rewrite_names_and_ops():
         .collect()
     )
 
-    qir = translate_ir(q._ldf.visit())
+    qir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     @singledispatch
     def _transform(e: expr.Expr, fn: ExprTransformer) -> expr.Expr:

@@ -13,7 +13,7 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
-from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
+from dask_cudf._legacy.groupby import OPTIMIZED_AGGS, _aggs_optimized
 from dask_cudf.tests.utils import (
     QUERY_PLANNING_ON,
     require_dask_expr,

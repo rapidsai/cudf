@@ -460,7 +460,7 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
       dst_length += block_len;
     } else {
       // Compressed block
-      dst_length += decompress(
+      dst_length += cudf::io::detail::decompress(
         _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize}, stream);
     }
     i += block_len;

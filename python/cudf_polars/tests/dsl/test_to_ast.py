@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import pyarrow as pa
 import pytest
 
 import polars as pl
@@ -10,10 +11,11 @@ from polars.testing import assert_frame_equal
 
 import pylibcudf as plc
 
+import cudf_polars.dsl.expr as expr_nodes
 import cudf_polars.dsl.ir as ir_nodes
-from cudf_polars import translate_ir
+from cudf_polars import Translator
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
-from cudf_polars.dsl.to_ast import to_ast
+from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
 
 
 @pytest.fixture(scope="module")
@@ -58,14 +60,21 @@ def df():
 )
 def test_compute_column(expr, df):
     q = df.select(expr)
-    ir = translate_ir(q._ldf.visit())
+    ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert isinstance(ir, ir_nodes.Select)
     table = ir.children[0].evaluate(cache={})
     name_to_index = {c.name: i for i, c in enumerate(table.columns)}
 
     def compute_column(e):
-        ast = to_ast(e.value, name_to_index=name_to_index)
+        e_with_colrefs = insert_colrefs(
+            e.value,
+            table_ref=plc.expressions.TableReference.LEFT,
+            name_to_index=name_to_index,
+        )
+        with pytest.raises(NotImplementedError):
+            e_with_colrefs.evaluate(table)
+        ast = to_ast(e_with_colrefs)
         if ast is not None:
             return NamedColumn(
                 plc.transform.compute_column(table.table, ast), name=e.name
@@ -77,3 +86,28 @@ def test_compute_column(expr, df):
     expect = q.collect()
 
     assert_frame_equal(expect, got)
+
+
+def test_invalid_colref_construction_raises():
+    literal = expr_nodes.Literal(
+        plc.DataType(plc.TypeId.INT8), pa.scalar(1, type=pa.int8())
+    )
+    with pytest.raises(TypeError):
+        expr_nodes.ColRef(
+            literal.dtype, 0, plc.expressions.TableReference.LEFT, literal
+        )
+
+
+def test_to_ast_without_colref_raises():
+    col = expr_nodes.Col(plc.DataType(plc.TypeId.INT8), "a")
+
+    with pytest.raises(TypeError):
+        to_ast(col)
+
+
+def test_to_parquet_filter_with_colref_raises():
+    col = expr_nodes.Col(plc.DataType(plc.TypeId.INT8), "a")
+    colref = expr_nodes.ColRef(col.dtype, 0, plc.expressions.TableReference.LEFT, col)
+
+    with pytest.raises(TypeError):
+        to_parquet_filter(colref)

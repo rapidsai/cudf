@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from polars import GPUEngine
 from polars.testing.asserts import assert_frame_equal
 
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
 
 if TYPE_CHECKING:
     import polars as pl
@@ -23,6 +23,7 @@ __all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 def assert_gpu_result_equal(
     lazydf: pl.LazyFrame,
     *,
+    engine: GPUEngine | None = None,
     collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     polars_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
     cudf_collect_kwargs: dict[OptimizationArgs, bool] | None = None,
@@ -41,6 +42,8 @@ def assert_gpu_result_equal(
     ----------
     lazydf
         frame to collect.
+    engine
+        Custom GPU engine configuration.
     collect_kwargs
         Common keyword arguments to pass to collect for both polars CPU and
         cudf-polars.
@@ -76,12 +79,14 @@ def assert_gpu_result_equal(
     NotImplementedError
         If GPU collection failed in some way.
     """
+    if engine is None:
+        engine = GPUEngine(raise_on_fail=True)
+
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
     )
 
     expect = lazydf.collect(**final_polars_collect_kwargs)
-    engine = GPUEngine(raise_on_fail=True)
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
     assert_frame_equal(
         expect,
@@ -117,12 +122,14 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     AssertionError
        If the specified exceptions were not raised.
     """
-    try:
-        _ = translate_ir(q._ldf.visit())
-    except exceptions:
+    translator = Translator(q._ldf.visit(), GPUEngine())
+    translator.translate_ir()
+    if errors := translator.errors:
+        for err in errors:
+            assert any(
+                isinstance(err, err_type) for err_type in exceptions
+            ), f"Translation DID NOT RAISE {exceptions}"
         return
-    except Exception as e:
-        raise AssertionError(f"Translation DID NOT RAISE {exceptions}") from e
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
 

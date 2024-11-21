@@ -1,10 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
-from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 cimport pylibcudf.libcudf.types as libcudf_types
 
@@ -23,16 +19,7 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 
-from pylibcudf.libcudf.io.csv cimport (
-    csv_writer_options,
-    write_csv as cpp_write_csv,
-)
-from pylibcudf.libcudf.io.data_sink cimport data_sink
-from pylibcudf.libcudf.io.types cimport compression_type, sink_info
-from pylibcudf.libcudf.table.table_view cimport table_view
-
-from cudf._lib.io.utils cimport make_sink_info
-from cudf._lib.utils cimport data_from_pylibcudf_io, table_view_from_table
+from cudf._lib.utils cimport data_from_pylibcudf_io
 
 import pylibcudf as plc
 
@@ -148,13 +135,13 @@ def read_csv(
         byte_range = (0, 0)
 
     if compression is None:
-        c_compression = compression_type.NONE
+        c_compression = plc.io.types.CompressionType.NONE
     else:
         compression_map = {
-            "infer": compression_type.AUTO,
-            "gzip": compression_type.GZIP,
-            "bz2": compression_type.BZIP2,
-            "zip": compression_type.ZIP,
+            "infer": plc.io.types.CompressionType.AUTO,
+            "gzip": plc.io.types.CompressionType.GZIP,
+            "bz2": plc.io.types.CompressionType.BZIP2,
+            "zip": plc.io.types.CompressionType.ZIP,
         }
         c_compression = compression_map[compression]
 
@@ -318,59 +305,40 @@ def write_csv(
     --------
     cudf.to_csv
     """
-    cdef table_view input_table_view = table_view_from_table(
-        table, not index
-    )
-    cdef bool include_header_c = header
-    cdef char delim_c = ord(sep)
-    cdef string line_term_c = lineterminator.encode()
-    cdef string na_c = na_rep.encode()
-    cdef int rows_per_chunk_c = rows_per_chunk
-    cdef vector[string] col_names
-    cdef string true_value_c = 'True'.encode()
-    cdef string false_value_c = 'False'.encode()
-    cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
-
-    if header is True:
-        all_names = columns_apply_na_rep(table._column_names, na_rep)
-        if index is True:
-            all_names = table._index.names + all_names
-
-        if len(all_names) > 0:
-            col_names.reserve(len(all_names))
-            if len(all_names) == 1:
-                if all_names[0] in (None, ''):
-                    col_names.push_back('""'.encode())
-                else:
-                    col_names.push_back(
-                        str(all_names[0]).encode()
-                    )
-            else:
-                for idx, col_name in enumerate(all_names):
-                    if col_name is None:
-                        col_names.push_back(''.encode())
-                    else:
-                        col_names.push_back(
-                            str(col_name).encode()
-                        )
-
-    cdef csv_writer_options options = move(
-        csv_writer_options.builder(sink_info_c, input_table_view)
-        .names(col_names)
-        .na_rep(na_c)
-        .include_header(include_header_c)
-        .rows_per_chunk(rows_per_chunk_c)
-        .line_terminator(line_term_c)
-        .inter_column_delimiter(delim_c)
-        .true_value(true_value_c)
-        .false_value(false_value_c)
-        .build()
-    )
-
+    index_and_not_empty = index is True and table.index is not None
+    columns = [
+        col.to_pylibcudf(mode="read") for col in table.index._columns
+    ] if index_and_not_empty else []
+    columns.extend(col.to_pylibcudf(mode="read") for col in table._columns)
+    col_names = []
+    if header:
+        all_names = list(table.index.names) if index_and_not_empty else []
+        all_names.extend(
+            na_rep if name is None or pd.isnull(name)
+            else name for name in table._column_names
+        )
+        col_names = [
+            '""' if (name in (None, '') and len(all_names) == 1)
+            else (str(name) if name not in (None, '') else '')
+            for name in all_names
+        ]
     try:
-        with nogil:
-            cpp_write_csv(options)
+        plc.io.csv.write_csv(
+            (
+                plc.io.csv.CsvWriterOptions.builder(
+                    plc.io.SinkInfo([path_or_buf]), plc.Table(columns)
+                )
+                .names(col_names)
+                .na_rep(na_rep)
+                .include_header(header)
+                .rows_per_chunk(rows_per_chunk)
+                .line_terminator(str(lineterminator))
+                .inter_column_delimiter(str(sep))
+                .true_value("True")
+                .false_value("False")
+                .build()
+            )
+        )
     except OverflowError:
         raise OverflowError(
             f"Writing CSV file with chunksize={rows_per_chunk} failed. "
@@ -419,11 +387,3 @@ cdef DataType _get_plc_data_type_from_dtype(object dtype) except *:
 
     dtype = cudf.dtype(dtype)
     return dtype_to_pylibcudf_type(dtype)
-
-
-def columns_apply_na_rep(column_names, na_rep):
-    return tuple(
-        na_rep if pd.isnull(col_name)
-        else col_name
-        for col_name in column_names
-    )

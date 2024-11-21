@@ -40,13 +40,16 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line(
         "filterwarnings",
-        "ignore:.*Query execution with GPU not supported",
+        "ignore:.*Query execution with GPU not possible",
     )
 
 
 EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
+    "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
+    "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
+    "tests/unit/io/test_delta.py::test_read_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_csv.py::test_scan_csv_slice_offset_zero": "Integer overflow in sliced read",
     "tests/unit/io/test_lazy_parquet.py::test_dsl2ir_cached_metadata[False]": "cudf-polars doesn't use metadata read by rust preprocessing",
@@ -158,6 +161,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values0-values::uint8-conversion from `f64` to `u64` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values1-values::uint4-conversion from `i64` to `u32` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
+    "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
     "tests/unit/sql/test_wildcard_opts.py::test_select_wildcard_errors": "Raises correctly but with different exception",
     "tests/unit/streaming/test_streaming_io.py::test_parquet_eq_statistics": "Debug output on stderr doesn't match",

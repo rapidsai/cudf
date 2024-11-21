@@ -82,7 +82,7 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-#ifdef CUFILE_FOUND
+#ifdef CUDF_CUFILE_FOUND
 
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
@@ -108,7 +108,11 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    if (driver_close != nullptr) driver_close();
+    // Explicit cuFile driver close should not be performed here to avoid segfault. However, in the
+    // absence of driver_close(), cuFile will implicitly do that, which in most cases causes
+    // segfault anyway. TODO: Revisit this conundrum once cuFile is fixed.
+    // https://github.com/rapidsai/cudf/issues/17121
+
     if (cf_lib != nullptr) dlclose(cf_lib);
   }
 

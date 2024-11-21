@@ -10,7 +10,7 @@ import dask.dataframe as dd
 
 import cudf
 
-from dask_cudf.expr import QUERY_PLANNING_ON
+from dask_cudf import QUERY_PLANNING_ON
 
 if QUERY_PLANNING_ON:
     DASK_VERSION = Version(dask.__version__)
@@ -19,7 +19,7 @@ else:
 
 
 def _make_random_frame(nelem, npartitions=2, include_na=False):
-    rng = np.random.default_rng(seed=None)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {"x": rng.random(size=nelem), "y": rng.random(size=nelem)}
     )

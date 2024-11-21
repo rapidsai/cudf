@@ -16,6 +16,8 @@ import numpy as np
 import pyarrow as pa
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
@@ -789,25 +791,28 @@ class Frame(BinaryOperand, Scannable):
         column_order=(),
         null_precedence=(),
     ):
-        interpolation = libcudf.types.Interpolation[interpolation]
+        interpolation = plc.types.Interpolation[interpolation]
 
-        is_sorted = libcudf.types.Sorted["YES" if is_sorted else "NO"]
+        is_sorted = plc.types.Sorted["YES" if is_sorted else "NO"]
 
-        column_order = [libcudf.types.Order[key] for key in column_order]
+        column_order = [plc.types.Order[key] for key in column_order]
 
-        null_precedence = [
-            libcudf.types.NullOrder[key] for key in null_precedence
-        ]
+        null_precedence = [plc.types.NullOrder[key] for key in null_precedence]
 
-        return self._from_columns_like_self(
-            libcudf.quantiles.quantile_table(
-                [*self._columns],
+        with acquire_spill_lock():
+            plc_table = plc.quantiles.quantiles(
+                plc.Table(
+                    [c.to_pylibcudf(mode="read") for c in self._columns]
+                ),
                 q,
                 interpolation,
                 is_sorted,
                 column_order,
                 null_precedence,
-            ),
+            )
+            columns = libcudf.utils.columns_from_pylibcudf_table(plc_table)
+        return self._from_columns_like_self(
+            columns,
             column_names=self._column_names,
         )
 
