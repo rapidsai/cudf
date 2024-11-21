@@ -70,8 +70,6 @@ def default_memory_resource(
         The default memory resource that cudf-polars uses. Currently
         a managed memory resource, if `cuda_managed_memory` is `True`.
         else, an async pool resource is returned.
-    bool
-        A flag indicating whether to enable prefetching.
     """
     try:
         if (
