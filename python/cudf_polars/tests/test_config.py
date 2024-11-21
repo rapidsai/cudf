@@ -58,12 +58,14 @@ def test_invalid_memory_resource_raises(mr):
         q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
-@pytest.mark.parametrize("disable_uvm", [True, False])
-def test_cudf_polars_enable_disable_uvm(monkeypatch, disable_uvm):
+@pytest.mark.parametrize("disable_managed_memory", ["1", "0"])
+def test_cudf_polars_enable_disable_managed_memory(monkeypatch, disable_managed_memory):
     q = pl.LazyFrame({"a": [1, 2, 3]})
 
     with monkeypatch.context() as monkeycontext:
-        monkeycontext.setenv("CUDF_POLARS_DISABLE_UVM", str(disable_uvm))
+        monkeycontext.setenv(
+            "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", disable_managed_memory
+        )
         result = q.collect(engine=pl.GPUEngine())
     assert_frame_equal(q.collect(), result)
 
