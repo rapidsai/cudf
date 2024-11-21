@@ -154,6 +154,9 @@ def _split_read(
         n_rows = sum(
             rg["num_rows"] for rg in rowgroup_metadata[skip_rgs : skip_rgs + rg_stride]
         )
+        if split_index == (total_splits - 1):
+            total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
+            n_rows += total_rows - (skip_rows + n_rows)
 
     return do_evaluate(
         schema,
