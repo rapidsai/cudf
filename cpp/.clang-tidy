@@ -37,28 +37,7 @@ Checks:
        clang-analyzer-*,
        -clang-analyzer-cplusplus.NewDeleteLeaks,
        -clang-analyzer-optin.core.EnumCastOutOfRange,
-       -clang-analyzer-optin.cplusplus.UninitializedObject,
-       cppcoreguidelines-init-variables,
-       cppcoreguidelines-narrowing-conversions,
-       cppcoreguidelines-no-malloc,
-       cppcoreguidelines-pro-type-member-init,
-       cppcoreguidelines-slicing,
-       cppcoreguidelines-rvalue-param-not-moved,
-       cppcoreguidelines-virtual-class-destructor,
-       bugprone-copy-constructor-init,
-       bugprone-dangling-handle,
-       bugprone-fold-init-type,
-       bugprone-implicit-widening-of-multiplication-result,
-       bugprone-move-forwarding-reference,
-       bugprone-redundant-branch-condition,
-       bugprone-return-const-ref-from-parameter,
-       bugprone-too-small-loop-variable,
-       bugprone-unchecked-optional-access,
-       bugprone-use-after-move,
-       misc-const-correctness,
-       misc-definitions-in-headers,
-       misc-use-anonymous-namespace,
-       misc-use-internal-linkage'
+       -clang-analyzer-optin.cplusplus.UninitializedObject'
 
 WarningsAsErrors: ''
 HeaderFilterRegex: '.*cudf/cpp/(src|include).*'
