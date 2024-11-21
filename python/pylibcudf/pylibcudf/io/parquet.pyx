@@ -377,7 +377,7 @@ cdef class ParquetWriterOptions:
         Parameters
         ----------
         size_bytes : int
-            Sets the maximum dictionary size, in bytes..
+            Sets the maximum dictionary size, in bytes.
 
         Returns
         -------
