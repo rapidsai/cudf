@@ -10,6 +10,7 @@ from polars.testing.asserts import assert_frame_equal
 
 import rmm
 
+from cudf_polars.callback import default_memory_resource
 from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -67,6 +68,13 @@ def test_cudf_polars_enable_disable_managed_memory(monkeypatch, disable_managed_
             "POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", disable_managed_memory
         )
         result = q.collect(engine=pl.GPUEngine())
+        mr = default_memory_resource(0, bool(disable_managed_memory == "1"))
+        if disable_managed_memory == "1":
+            assert isinstance(mr, rmm.mr.PrefetchResourceAdaptor)
+            assert isinstance(mr.upstream_mr, rmm.mr.PoolMemoryResource)
+        else:
+            assert isinstance(mr, rmm.mr.CudaAsyncMemoryResource)
+        monkeycontext.delenv("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY")
     assert_frame_equal(q.collect(), result)
 
 

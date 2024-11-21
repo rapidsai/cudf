@@ -49,7 +49,10 @@ def _env_get_int(name, default):
 
 
 @cache
-def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
+def default_memory_resource(
+    device: int,
+    cuda_managed_memory: bool,  # noqa: FBT001
+) -> rmm.mr.DeviceMemoryResource:
     """
     Return the default memory resource for cudf-polars.
 
@@ -58,31 +61,35 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
     device
         Disambiguating device id when selecting the device. Must be
         the active device when this function is called.
+    cuda_managed_memory
+        Whether to use managed memory or not.
 
     Returns
     -------
     rmm.mr.DeviceMemoryResource
         The default memory resource that cudf-polars uses. Currently
-        a managed memory resource, if `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY`
-        environment variable is set to `0`, then an async pool resource is returned.
+        a managed memory resource, if `cuda_managed_memory` is `True`.
+        else, an async pool resource is returned.
     bool
         A flag indicating whether to enable prefetching.
     """
     try:
         if (
-            _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 1
+            cuda_managed_memory
             and pylibcudf.utils._is_concurrent_managed_access_supported()
         ):
             free_memory, _ = rmm.mr.available_device_memory()
             free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-            return rmm.mr.PrefetchResourceAdaptor(
+            for key in _SUPPORTED_PREFETCHES:
+                pylibcudf.experimental.enable_prefetching(key)
+            mr = rmm.mr.PrefetchResourceAdaptor(
                 rmm.mr.PoolMemoryResource(
                     rmm.mr.ManagedMemoryResource(),
                     initial_pool_size=free_memory,
                 )
-            ), True
+            )
         else:
-            return rmm.mr.CudaAsyncMemoryResource(), False
+            mr = rmm.mr.CudaAsyncMemoryResource()
     except RuntimeError as e:  # pragma: no cover
         msg, *_ = e.args
         if (
@@ -96,6 +103,8 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
             ) from None
         else:
             raise
+    else:
+        return mr
 
 
 @contextlib.contextmanager
@@ -124,13 +133,13 @@ def set_memory_resource(
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
         device: int = gpu.getDevice()
-        mr, enable_prefetching = default_memory_resource(device)
-        rmm.mr.set_current_device_resource(mr)
-        if enable_prefetching:
-            for key in _SUPPORTED_PREFETCHES:
-                pylibcudf.experimental.enable_prefetching(key)
-    else:
-        rmm.mr.set_current_device_resource(mr)
+        mr = default_memory_resource(
+            device=device,
+            cuda_managed_memory=bool(
+                _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) != 0
+            ),
+        )
+    rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
     finally:
