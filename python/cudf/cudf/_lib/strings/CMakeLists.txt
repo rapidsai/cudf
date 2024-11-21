@@ -12,27 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-    attributes.pyx
-    capitalize.pyx
-    case.pyx
-    char_types.pyx
-    combine.pyx
-    contains.pyx
-    extract.pyx
-    find.pyx
-    find_multiple.pyx
-    findall.pyx
-    json.pyx
-    padding.pyx
-    repeat.pyx
-    replace.pyx
-    replace_re.pyx
-    strip.pyx
-    substring.pyx
-    translate.pyx
-    wrap.pyx
-)
+set(cython_sources)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
