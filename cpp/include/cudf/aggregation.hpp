@@ -632,11 +632,11 @@ struct host_udf_base {
    */
   enum class input_kind {
     INPUT_VALUES,           // the input values column, may be used in any aggregation
-    NULL_POLICY,            // to control null handling, used in scan
     OUTPUT_DTYPE,           // output data type, used in reduction
     INIT_VALUE,             // initial value for reduction
+    NULL_POLICY,            // to control null handling, used in segmented reduction and scan
     SCAN_TYPE,              // used in scan aggregations
-    OFFSETS,                // offsets for sort-based groupby or segmented reduction
+    OFFSETS,                // offsets for segmented reduction or sort-based groupby
     GROUP_LABELS,           // group labels used in sort-based groupby
     SORTED_GROUPED_VALUES,  // the input values grouped according to the input `keys` and
                             // sorted within each group, used in sort-based groupby
@@ -657,16 +657,16 @@ struct host_udf_base {
    * Aggregation data that is needed for computing the aggregation.
    */
   using input_data = std::variant<column_view,
-                                  null_policy,
                                   data_type,
                                   std::optional<std::reference_wrapper<scalar const>>,
+                                  null_policy,
                                   scan_type,
                                   device_span<size_type const>,
                                   size_type>;
 
   /**
    * Output type of the aggregation. It can be either a scalar (for reduction) or a column
-   * (for groupby) aggregation.
+   * (for segmented reduction or groupby) aggregation.
    */
   using output_type = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
 

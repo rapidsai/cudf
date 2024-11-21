@@ -95,6 +95,46 @@ struct segmented_reduce_dispatch_functor {
       }
       case segmented_reduce_aggregation::NUNIQUE:
         return segmented_nunique(col, offsets, null_handling, stream, mr);
+      case aggregation::HOST_UDF: {
+        auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+        auto const& data_kinds = udf_ptr->get_required_data_kinds();
+
+        // Do not cache udf_input, as the actual input data may change from run to run.
+        std::unordered_map<cudf::host_udf_base::input_kind, cudf::host_udf_base::input_data>
+          udf_input;
+        for (auto const kind : data_kinds) {
+          switch (kind) {
+            case cudf::host_udf_base::input_kind::INPUT_VALUES: {
+              udf_input.emplace(kind, values);
+              break;
+            }
+
+            case cudf::host_udf_base::input_kind::OUTPUT_DTYPE: {
+              udf_input.emplace(kind, output_dtype);
+              break;
+            }
+
+            case cudf::host_udf_base::input_kind::INIT_VALUE: {
+              udf_input.emplace(kind, init);
+              break;
+            }
+
+            case cudf::host_udf_base::input_kind::NULL_POLICY: {
+              udf_input.emplace(kind, null_handling);
+              break;
+            }
+
+            case cudf::host_udf_base::input_kind::OFFSETS: {
+              udf_input.emplace(kind, offsets);
+              break;
+            }
+
+            default: CUDF_FAIL("Unsupported data kind in host-based UDF segmented reduction.");
+          }
+        }
+
+        return std::get<std::unique_ptr<column>>(udf_ptr(udf_input, stream, mr));
+      }
       default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }
@@ -114,9 +154,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
-                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {
+                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL ||
+                            agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
-      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
+      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
+      "aggregation types");
   }
   CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
 
