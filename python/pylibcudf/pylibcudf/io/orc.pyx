@@ -714,7 +714,7 @@ cdef class ChunkedOrcWriterOptionsBuilder:
         return self
 
     cpdef ChunkedOrcWriterOptions build(self):
-        """Moves the chunked ORC writer options builder"""
+        """Create a OrcWriterOptions object"""
         cdef ChunkedOrcWriterOptions orc_options = ChunkedOrcWriterOptions.__new__(
             ChunkedOrcWriterOptions
         )

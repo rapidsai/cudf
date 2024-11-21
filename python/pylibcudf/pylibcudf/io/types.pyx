@@ -34,9 +34,11 @@ from pylibcudf.libcudf.io.types import (
     statistics_freq as StatisticsFreq, # no-cython-lint
 )
 from cython.operator cimport dereference
+from pylibcudf.libcudf.types cimport size_type
 
 __all__ = [
     "ColumnEncoding",
+    "ColumnInMetadata",
     "CompressionType",
     "DictionaryPolicy",
     "JSONRecoveryMode",
@@ -44,6 +46,7 @@ __all__ = [
     "SinkInfo",
     "SourceInfo",
     "StatisticsFreq",
+    "TableInputMetadata",
     "TableWithMetadata",
 ]
 
@@ -334,11 +337,6 @@ cdef class SinkInfo:
 cdef class ColumnInMetadata:
     """
     Metadata for a column
-
-    Parameters
-    ----------
-    metadata:
-        column_in_metadata
     """
 
     def __init__(self):
@@ -348,10 +346,16 @@ cdef class ColumnInMetadata:
         )
 
     @staticmethod
-    cdef ColumnInMetadata from_libcudf(column_in_metadata* data):
-        """Create a Python ColumnInMetadata from a libcudf column_in_metadata."""
+    cdef ColumnInMetadata from_libcudf_ptr(column_in_metadata* metadata):
+        """
+        Create a Python ColumnInMetadata from a libcudf column_in_metadata pointer.
+
+        Parameters
+        ----------
+        metadata : column_in_metadata*
+        """
         cdef ColumnInMetadata out = ColumnInMetadata.__new__(ColumnInMetadata)
-        out.c_obj = data
+        out.c_obj = metadata
         return out
 
     cpdef ColumnInMetadata set_name(self, str name):
@@ -432,7 +436,7 @@ cdef class ColumnInMetadata:
         dereference(self.c_obj).set_decimal_precision(precision)
         return self
 
-    cpdef ColumnInMetadata child(self, int i):
+    cpdef ColumnInMetadata child(self, size_type i):
         """
         Get reference to a child of this column.
 
@@ -446,7 +450,7 @@ cdef class ColumnInMetadata:
         ColumnInMetadata
         """
         cdef column_in_metadata* child_c_obj = &dereference(self.c_obj).child(i)
-        return ColumnInMetadata.from_libcudf(child_c_obj)
+        return ColumnInMetadata.from_libcudf_ptr(child_c_obj)
 
     cpdef ColumnInMetadata set_output_as_binary(self, bool binary):
         """
@@ -542,5 +546,5 @@ cdef class TableInputMetadata:
         cdef int num_columns = self.c_obj.column_metadata.size()
         for i in range(num_columns):
             self.column_metadata.append(
-                ColumnInMetadata.from_libcudf(&self.c_obj.column_metadata[i])
+                ColumnInMetadata.from_libcudf_ptr(&self.c_obj.column_metadata[i])
             )

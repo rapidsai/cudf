@@ -20,7 +20,7 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 from pylibcudf.table cimport Table
-
+from pylibcudf.libcudf.types cimport size_type
 
 cdef class TableWithMetadata:
     cdef public Table tbl
@@ -62,7 +62,7 @@ cdef class ColumnInMetadata:
 
     cpdef ColumnInMetadata set_decimal_precision(self, int req)
 
-    cpdef ColumnInMetadata child(self, int i)
+    cpdef ColumnInMetadata child(self, size_type i)
 
     cpdef ColumnInMetadata set_output_as_binary(self, bool binary)
 
@@ -75,7 +75,7 @@ cdef class ColumnInMetadata:
     cpdef str get_name(self)
 
     @staticmethod
-    cdef ColumnInMetadata from_libcudf(column_in_metadata* data)
+    cdef ColumnInMetadata from_libcudf_ptr(column_in_metadata* data)
 
 cdef class TableInputMetadata:
     cdef public Table table
