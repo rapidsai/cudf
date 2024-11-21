@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import pylibcudf as plc
 
@@ -1096,8 +1097,8 @@ class StringMethods(ColumnMethods):
                     "`pat` and `repl` are list-like inputs"
                 )
 
-            with acquire_spill_lock():
-                if regex:
+            if regex:
+                with acquire_spill_lock():
                     plc_result = plc.strings.replace_re.replace_re(
                         self._column.to_pylibcudf(mode="read"),
                         list(pat),
@@ -1105,17 +1106,12 @@ class StringMethods(ColumnMethods):
                             mode="read"
                         ),
                     )
-                else:
-                    plc_result = plc.strings.replace.replace_multiple(
-                        self._column.to_pylibcudf(mode="read"),
-                        column.as_column(pat, dtype="str").to_pylibcudf(
-                            mode="read"
-                        ),
-                        column.as_column(repl, dtype="str").to_pylibcudf(
-                            mode="read"
-                        ),
-                    )
-                result = Column.from_pylibcudf(plc_result)
+                    result = Column.from_pylibcudf(plc_result)
+            else:
+                result = self._column.replace_multiple(
+                    cast(StringColumn, column.as_column(pat, dtype="str")),
+                    cast(StringColumn, column.as_column(repl, dtype="str")),
+                )
             return self._return_or_inplace(result)
         # Pandas treats 0 as all
         if n == 0:
@@ -1959,14 +1955,6 @@ class StringMethods(ColumnMethods):
         """
         return self._return_or_inplace(str_cast.is_ipv4(self._column))
 
-    def _modify_characters(
-        self, method: Callable[[plc.Column], plc.Column]
-    ) -> SeriesOrIndex:
-        with acquire_spill_lock():
-            plc_column = method(self._column.to_pylibcudf(mode="read"))
-            result = Column.from_pylibcudf(plc_column)
-        return self._return_or_inplace(result)
-
     def lower(self) -> SeriesOrIndex:
         """
         Converts all characters to lowercase.
@@ -2006,7 +1994,7 @@ class StringMethods(ColumnMethods):
         3              swapcase
         dtype: object
         """
-        return self._modify_characters(plc.strings.case.to_lower)
+        return self._return_or_inplace(self._column.to_lower())
 
     def upper(self) -> SeriesOrIndex:
         """
@@ -2057,7 +2045,7 @@ class StringMethods(ColumnMethods):
         3              SWAPCASE
         dtype: object
         """
-        return self._modify_characters(plc.strings.case.to_upper)
+        return self._return_or_inplace(self._column.to_upper())
 
     def capitalize(self) -> SeriesOrIndex:
         """
@@ -2085,7 +2073,7 @@ class StringMethods(ColumnMethods):
         1    Goodbye, friend
         dtype: object
         """
-        return self._modify_characters(plc.strings.capitalize.capitalize)
+        return self._return_or_inplace(self._column.capitalize())
 
     def swapcase(self) -> SeriesOrIndex:
         """
@@ -2132,7 +2120,7 @@ class StringMethods(ColumnMethods):
         3              sWaPcAsE
         dtype: object
         """
-        return self._modify_characters(plc.strings.case.swapcase)
+        return self._return_or_inplace(self._column.swapcase())
 
     def title(self) -> SeriesOrIndex:
         """
@@ -2179,7 +2167,7 @@ class StringMethods(ColumnMethods):
         3              Swapcase
         dtype: object
         """
-        return self._modify_characters(plc.strings.capitalize.title)
+        return self._return_or_inplace(self._column.title())
 
     def istitle(self) -> SeriesOrIndex:
         """
@@ -2205,7 +2193,7 @@ class StringMethods(ColumnMethods):
         3    False
         dtype: bool
         """
-        return self._modify_characters(plc.strings.capitalize.is_title)
+        return self._return_or_inplace(self._column.is_title())
 
     def filter_alphanum(
         self, repl: str | None = None, keep: bool = True
@@ -6327,3 +6315,40 @@ class StringColumn(column.ColumnBase):
         )
 
         return to_view.view(dtype)
+
+    def _modify_characters(
+        self, method: Callable[[plc.Column], plc.Column]
+    ) -> Self:
+        """
+        Helper function for methods that modify characters e.g. to_lower
+        """
+        with acquire_spill_lock():
+            plc_column = method(self.to_pylibcudf(mode="read"))
+            return cast(Self, Column.from_pylibcudf(plc_column))
+
+    def to_lower(self) -> Self:
+        return self._modify_characters(plc.strings.case.to_lower)
+
+    def to_upper(self) -> Self:
+        return self._modify_characters(plc.strings.case.to_upper)
+
+    def capitalize(self) -> Self:
+        return self._modify_characters(plc.strings.capitalize.capitalize)
+
+    def swapcase(self) -> Self:
+        return self._modify_characters(plc.strings.case.swapcase)
+
+    def title(self) -> Self:
+        return self._modify_characters(plc.strings.capitalize.title)
+
+    def is_title(self) -> Self:
+        return self._modify_characters(plc.strings.capitalize.is_title)
+
+    def replace_multiple(self, pattern: Self, replacements: Self) -> Self:
+        with acquire_spill_lock():
+            plc_result = plc.strings.replace.replace_multiple(
+                self.to_pylibcudf(mode="read"),
+                pattern.to_pylibcudf(mode="read"),
+                replacements.to_pylibcudf(mode="read"),
+            )
+            return cast(Self, Column.from_pylibcudf(plc_result))
