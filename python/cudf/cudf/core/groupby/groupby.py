@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+import cudf.core._internals
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.null_mask import bitmask_or
@@ -430,7 +431,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             ]
         )
 
-        group_keys = libcudf.stream_compaction.drop_duplicates(group_keys)
+        group_keys = cudf.core._internals.stream_compaction.drop_duplicates(
+            group_keys
+        )
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:

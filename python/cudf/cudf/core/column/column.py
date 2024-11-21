@@ -31,12 +31,6 @@ from cudf._lib.null_mask import (
     create_null_mask,
 )
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.stream_compaction import (
-    apply_boolean_mask,
-    distinct_count as cpp_distinct_count,
-    drop_duplicates,
-    drop_nulls,
-)
 from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
@@ -49,6 +43,11 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_210
 from cudf.core._internals import unary
+from cudf.core._internals.stream_compaction import (
+    apply_boolean_mask,
+    drop_duplicates,
+    drop_nulls,
+)
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -278,7 +277,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def dropna(self) -> Self:
         if self.has_nulls():
-            return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+            return drop_nulls([self])[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
             return self.copy()
 
@@ -758,7 +757,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             value = as_column(value, dtype=self.dtype, length=1)
         mask = libcudf.search.contains(value, self)
-        return apply_boolean_mask(
+        return apply_boolean_mask(  # type: ignore[return-value]
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
         )[0]
 
@@ -973,9 +972,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         try:
             return self._distinct_count[dropna]
         except KeyError:
-            self._distinct_count[dropna] = cpp_distinct_count(
-                self, ignore_nulls=dropna
-            )
+            with acquire_spill_lock():
+                result = plc.stream_compaction.distinct_count(
+                    self.to_pylibcudf(mode="read"),
+                    plc.types.NullPolicy.EXCLUDE
+                    if dropna
+                    else plc.types.NullPolicy.INCLUDE,
+                    plc.types.NanPolicy.NAN_IS_VALID,
+                )
+            self._distinct_count[dropna] = result
             return self._distinct_count[dropna]
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
@@ -1205,7 +1210,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.is_unique:
             return self.copy()
         else:
-            return drop_duplicates([self], keep="first")[
+            return drop_duplicates([self], keep="first")[  # type: ignore[return-value]
                 0
             ]._with_type_metadata(self.dtype)
 

@@ -38,7 +38,6 @@ set(cython_sources
     scalar.pyx
     search.pyx
     sort.pyx
-    stream_compaction.pyx
     string_casting.pyx
     strings_udf.pyx
     text.pyx

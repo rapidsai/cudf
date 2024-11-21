@@ -26,6 +26,7 @@ import pylibcudf as plc
 import cudf
 import cudf._lib as libcudf
 import cudf.core
+import cudf.core._internals
 import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -3104,7 +3105,7 @@ class IndexedFrame(Frame):
             subset, offset_by_index_columns=not ignore_index
         )
         return self._from_columns_like_self(
-            libcudf.stream_compaction.drop_duplicates(
+            cudf.core._internals.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
                 else list(self.index._columns + self._columns),
@@ -3117,7 +3118,9 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def duplicated(self, subset=None, keep="first"):
+    def duplicated(
+        self, subset=None, keep: Literal["first", "last", False] = "first"
+    ) -> cudf.Series:
         """
         Return boolean Series denoting duplicate rows.
 
@@ -3217,9 +3220,24 @@ class IndexedFrame(Frame):
             name = self.name
         else:
             columns = [self._data[n] for n in subset]
-        distinct = libcudf.stream_compaction.distinct_indices(
-            columns, keep=keep
-        )
+
+        _keep_options = {
+            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+        }
+
+        if (keep_option := _keep_options.get(keep)) is None:
+            raise ValueError('keep must be either "first", "last" or False')
+
+        with acquire_spill_lock():
+            plc_column = plc.stream_compaction.distinct_indices(
+                plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+                keep_option,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            distinct = libcudf.column.Column.from_pylibcudf(plc_column)
         result = libcudf.copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
@@ -4327,7 +4345,7 @@ class IndexedFrame(Frame):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            libcudf.stream_compaction.drop_nulls(
+            cudf.core._internals.stream_compaction.drop_nulls(
                 [*self.index._columns, *data_columns],
                 how=how,
                 keys=self._positions_from_column_names(
@@ -4352,7 +4370,7 @@ class IndexedFrame(Frame):
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
-            libcudf.stream_compaction.apply_boolean_mask(
+            cudf.core._internals.stream_compaction.apply_boolean_mask(
                 list(self.index._columns + self._columns)
                 if keep_index
                 else list(self._columns),

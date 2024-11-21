@@ -24,7 +24,6 @@ from . import (
     round,
     search,
     sort,
-    stream_compaction,
     string_casting,
     strings,
     strings_udf,

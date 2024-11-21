@@ -12,14 +12,14 @@ from typing_extensions import Self
 
 import cudf
 from cudf._lib.copying import _gather_map_is_valid, gather
-from cudf._lib.stream_compaction import (
+from cudf._lib.types import size_type_dtype
+from cudf.api.extensions import no_default
+from cudf.api.types import is_integer, is_list_like, is_scalar
+from cudf.core._internals.stream_compaction import (
     apply_boolean_mask,
     drop_duplicates,
     drop_nulls,
 )
-from cudf._lib.types import size_type_dtype
-from cudf.api.extensions import no_default
-from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.errors import MixedTypeError
@@ -2040,7 +2040,6 @@ class BaseIndex(Serializable):
             drop_nulls(
                 data_columns,
                 how=how,
-                keys=range(len(data_columns)),
             ),
             self._column_names,
         )
