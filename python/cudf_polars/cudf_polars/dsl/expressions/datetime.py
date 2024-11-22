@@ -19,6 +19,10 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from typing_extensions import Self
+
+    from polars.polars import _expr_nodes as pl_expr
+
     from cudf_polars.containers import DataFrame
 
 __all__ = ["TemporalFunction"]
@@ -69,12 +73,12 @@ class TemporalFunctionName(Enum):
     WithTimeUnit = auto()
     Year = auto()
 
-    @staticmethod
-    def get_polars_type(tp: TemporalFunctionName):
-        function, name = str(tp).split(".")
+    @classmethod
+    def from_polars(cls, obj: pl_expr.TemporalFunction) -> Self:
+        function, name = str(obj).split(".", maxsplit=1)
         if function != "TemporalFunction":
             raise ValueError("TemporalFunction required")
-        return getattr(TemporalFunctionName, name)
+        return getattr(cls, name)
 
 
 class TemporalFunction(Expr):

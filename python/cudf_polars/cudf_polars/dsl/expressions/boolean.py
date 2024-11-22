@@ -23,7 +23,10 @@ from cudf_polars.dsl.expressions.base import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from typing_extensions import Self
+
     import polars.type_aliases as pl_types
+    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame
 
@@ -49,12 +52,12 @@ class BooleanFunctionName(Enum):
     IsUnique = auto()
     Not = auto()
 
-    @staticmethod
-    def get_polars_type(tp: BooleanFunctionName):
-        function, name = str(tp).split(".")
+    @classmethod
+    def from_polars(cls, obj: pl_expr.BooleanFunction) -> Self:
+        function, name = str(obj).split(".", maxsplit=1)
         if function != "BooleanFunction":
             raise ValueError("BooleanFunction required")
-        return getattr(BooleanFunctionName, name)
+        return getattr(cls, name)
 
 
 class BooleanFunction(Expr):

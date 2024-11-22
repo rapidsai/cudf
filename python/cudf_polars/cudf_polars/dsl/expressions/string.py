@@ -23,6 +23,10 @@ from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from typing_extensions import Self
+
+    from polars.polars import _expr_nodes as pl_expr
+
     from cudf_polars.containers import DataFrame
 
 __all__ = ["StringFunction"]
@@ -73,12 +77,12 @@ class StringFunctionName(Enum):
     Uppercase = auto()
     ZFill = auto()
 
-    @staticmethod
-    def get_polars_type(tp: StringFunctionName):
-        function, name = str(tp).split(".")
+    @classmethod
+    def from_polars(cls, obj: pl_expr.StringFunction) -> Self:
+        function, name = str(obj).split(".", maxsplit=1)
         if function != "StringFunction":
             raise ValueError("StringFunction required")
-        return getattr(StringFunctionName, name)
+        return getattr(cls, name)
 
 
 class StringFunction(Expr):
