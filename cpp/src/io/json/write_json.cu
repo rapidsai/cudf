@@ -279,7 +279,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                "All columns must be of type string");
   auto constexpr strviews_per_column = 3;  // (for each "column_name:", "value",  "separator")
   auto const num_strviews_per_row    = 1 + strings_columns.num_columns() * strviews_per_column -
-                                    (strings_columns.num_columns() > 0 ? 1 : 0) + 1;
+                                    (strings_columns.num_columns() == 0 ? 1 : 0);
   // e.g. {col1: value, col2: value, col3: value} = 1 + 3 + 3 + (3-1) + 1 = 10
 
   auto tbl_device_view = cudf::table_device_view::create(strings_columns, stream);
