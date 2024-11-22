@@ -244,23 +244,6 @@ struct binary_op_double_device_dispatcher {
   }
 };
 
-/**
- * @brief Launches Simplified for_each kernel with maximum occupancy grid dimensions.
- *
- * @tparam Functor
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param size number of elements to process.
- * @param f Functor object to call for each element.
- */
-template <typename Functor>
-void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
-{
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<size_type>(0),
-                     size,
-                     std::forward<Functor&&>(f));
-}
-
 template <class BinaryOperator>
 void apply_binary_op(mutable_column_view& out,
                      column_view const& lhs,
@@ -277,16 +260,18 @@ void apply_binary_op(mutable_column_view& out,
   // Create binop functor instance
   if (common_dtype) {
     // Execute it on every element
-    for_each(stream,
-             out.size(),
-             binary_op_device_dispatcher<BinaryOperator>{
-               *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       out.size(),
+                       binary_op_device_dispatcher<BinaryOperator>{
+                         *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   } else {
     // Execute it on every element
-    for_each(stream,
-             out.size(),
-             binary_op_double_device_dispatcher<BinaryOperator>{
-               *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       out.size(),
+                       binary_op_double_device_dispatcher<BinaryOperator>{
+                         *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   }
 }
 
