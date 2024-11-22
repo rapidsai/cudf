@@ -43,7 +43,6 @@ set(cython_sources
     strings_udf.pyx
     text.pyx
     transform.pyx
-    transpose.pyx
     types.pyx
     utils.pyx
 )
