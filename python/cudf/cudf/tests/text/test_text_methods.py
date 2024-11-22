@@ -882,7 +882,7 @@ def test_is_vowel_consonant():
     assert_eq(expected, actual)
 
 
-def test_minhash_permuted():
+def test_minhash():
     strings = cudf.Series(["this is my", "favorite book", None, ""])
 
     params = cudf.Series([1, 2, 3], dtype=np.uint32)
@@ -894,7 +894,7 @@ def test_minhash_permuted():
             cudf.Series([0, 0, 0], dtype=np.uint32),
         ]
     )
-    actual = strings.str.minhash_permuted(0, a=params, b=params, width=5)
+    actual = strings.str.minhash(0, a=params, b=params, width=5)
     assert_eq(expected, actual)
 
     params = cudf.Series([1, 2, 3], dtype=np.uint64)
@@ -912,78 +912,18 @@ def test_minhash_permuted():
             cudf.Series([0, 0, 0], dtype=np.uint64),
         ]
     )
-    actual = strings.str.minhash64_permuted(0, a=params, b=params, width=5)
+    actual = strings.str.minhash64(0, a=params, b=params, width=5)
     assert_eq(expected, actual)
 
     # test wrong seed types
     with pytest.raises(ValueError):
-        strings.str.minhash_permuted(1, a="a", b="b", width=7)
+        strings.str.minhash(1, a="a", b="b", width=7)
     with pytest.raises(ValueError):
         params = cudf.Series([0, 1, 2], dtype=np.int32)
-        strings.str.minhash_permuted(1, a=params, b=params, width=6)
+        strings.str.minhash(1, a=params, b=params, width=6)
     with pytest.raises(ValueError):
         params = cudf.Series([0, 1, 2], dtype=np.uint32)
-        strings.str.minhash64_permuted(1, a=params, b=params, width=8)
-
-
-def test_word_minhash():
-    ls = cudf.Series([["this", "is", "my"], ["favorite", "book"]])
-
-    expected = cudf.Series(
-        [
-            cudf.Series([21141582], dtype=np.uint32),
-            cudf.Series([962346254], dtype=np.uint32),
-        ]
-    )
-    actual = ls.str.word_minhash()
-    assert_eq(expected, actual)
-    seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
-    expected = cudf.Series(
-        [
-            cudf.Series([21141582, 1232889953, 1268336794], dtype=np.uint32),
-            cudf.Series([962346254, 2321233602, 1354839212], dtype=np.uint32),
-        ]
-    )
-    actual = ls.str.word_minhash(seeds=seeds)
-    assert_eq(expected, actual)
-
-    expected = cudf.Series(
-        [
-            cudf.Series([2603139454418834912], dtype=np.uint64),
-            cudf.Series([5240044617220523711], dtype=np.uint64),
-        ]
-    )
-    actual = ls.str.word_minhash64()
-    assert_eq(expected, actual)
-    seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
-    expected = cudf.Series(
-        [
-            cudf.Series(
-                [
-                    2603139454418834912,
-                    8644371945174847701,
-                    5541030711534384340,
-                ],
-                dtype=np.uint64,
-            ),
-            cudf.Series(
-                [5240044617220523711, 5847101123925041457, 153762819128779913],
-                dtype=np.uint64,
-            ),
-        ]
-    )
-    actual = ls.str.word_minhash64(seeds=seeds)
-    assert_eq(expected, actual)
-
-    # test wrong seed types
-    with pytest.raises(ValueError):
-        ls.str.word_minhash(seeds="a")
-    with pytest.raises(ValueError):
-        seeds = cudf.Series([0, 1, 2], dtype=np.int32)
-        ls.str.word_minhash(seeds=seeds)
-    with pytest.raises(ValueError):
-        seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
-        ls.str.word_minhash64(seeds=seeds)
+        strings.str.minhash64(1, a=params, b=params, width=8)
 
 
 def test_jaccard_index():
