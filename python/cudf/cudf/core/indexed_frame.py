@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 import textwrap
 import warnings
@@ -5316,10 +5317,20 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        exploded = libcudf.lists.explode_outer(
-            [*idx_cols, *self._columns],
-            column_index + len(idx_cols),
-        )
+        with acquire_spill_lock():
+            plc_table = plc.lists.explode_outer(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in itertools.chain(idx_cols, self._columns)
+                    ]
+                ),
+                column_index + len(idx_cols),
+            )
+            exploded = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
         element_type = cast(
