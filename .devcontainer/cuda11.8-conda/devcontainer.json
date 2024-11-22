@@ -5,17 +5,17 @@
     "args": {
       "CUDA": "11.8",
       "PYTHON_PACKAGE_MANAGER": "conda",
-      "BASE": "rapidsai/devcontainers:24.12-cpp-cuda11.8-mambaforge-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:25.02-cpp-cuda11.8-mambaforge-ubuntu22.04"
     }
   },
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-24.12-cuda11.8-conda"
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-25.02-cuda11.8-conda"
   ],
   "hostRequirements": {"gpu": "optional"},
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.12": {}
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:25.2": {}
   },
   "overrideFeatureInstallOrder": [
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
