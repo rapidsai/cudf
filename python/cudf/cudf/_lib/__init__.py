@@ -20,7 +20,6 @@ from . import (
     reduce,
     replace,
     reshape,
-    rolling,
     round,
     search,
     sort,
