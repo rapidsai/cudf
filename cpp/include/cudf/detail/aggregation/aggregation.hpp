@@ -974,7 +974,7 @@ class host_udf_aggregation final : public groupby_aggregation, public reduce_agg
   host_udf_aggregation()                            = delete;
   host_udf_aggregation(host_udf_aggregation const&) = delete;
 
-  explicit host_udf_aggregation(std::unique_ptr<host_udf_base>&& udf_ptr_)
+  explicit host_udf_aggregation(std::unique_ptr<host_udf_base> udf_ptr_)
     : aggregation{HOST_UDF}, udf_ptr{std::move(udf_ptr_)}
   {
     CUDF_EXPECTS(udf_ptr != nullptr, "Invalid host-based UDF instance.");
