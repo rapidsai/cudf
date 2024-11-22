@@ -22,6 +22,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.boolean import BooleanFunctionName
+from cudf_polars.dsl.expressions.datetime import TemporalFunctionName
 from cudf_polars.dsl.expressions.string import StringFunctionName
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
@@ -575,7 +576,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }
         result_expr = expr.TemporalFunction(
             dtype,
-            name,
+            TemporalFunctionName.get_polars_type(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
