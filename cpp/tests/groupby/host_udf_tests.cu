@@ -26,6 +26,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/groupby.hpp>
+#include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -36,10 +37,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
-
-using namespace cudf::test::iterators;
-
-struct test : public cudf::test::BaseFixture {};
 
 /**
  * @brief A host-based UDF implementation.
@@ -53,7 +50,7 @@ struct test : public cudf::test::BaseFixture {};
  * replaced with an initial value if it is provided.
  */
 template <typename cudf_aggregation>
-class test_udf_simple_type : cudf::host_udf_base {
+class test_udf_simple_type : public cudf::host_udf_base {
   static_assert(std::is_same_v<cudf_aggregation, cudf::reduce_aggregation> ||
                 std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation> ||
                 std::is_same_v<cudf_aggregation, cudf::groupby_aggregation>);
@@ -336,40 +333,19 @@ class test_udf_simple_type : cudf::host_udf_base {
   };
 };
 
-TEST_F(test, double_sqr)
+// using namespace cudf::test::iterators;
+using int32s_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+struct HostUDFReductionTest : cudf::test::BaseFixture {};
+
+TEST_F(HostUDFReductionTest, SimpleInput)
 {
-  cudf::test::fixed_width_column_wrapper<int> keys{1, 2, 3, 1, 2, 3};
-  cudf::test::fixed_width_column_wrapper<int> vals{0, 1, 2, 3, 4, 5};
+  int32s_col vals{0, 1, 2, 3, 4, 5};
 
-  auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(double_sqr);
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back();
-  requests[0].values = vals;
-  requests[0].aggregations.push_back(std::move(agg));
-  cudf::groupby::groupby gb_obj(
-    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
-
-  auto result = gb_obj.aggregate(requests, cudf::test::get_default_stream());
-
-  // Got output: 0,18,4,64,24,150
-  cudf::test::print(*result.second[0].results[0]);
-}
-
-TEST_F(test, triple_sqr)
-{
-  cudf::test::fixed_width_column_wrapper<int> keys{1, 2, 3, 1, 2, 3};
-  cudf::test::fixed_width_column_wrapper<int> vals{0, 1, 2, 3, 4, 5};
-
-  auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(triple_sqr);
-  std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back();
-  requests[0].values = vals;
-  requests[0].aggregations.push_back(std::move(agg));
-  cudf::groupby::groupby gb_obj(
-    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
-
-  auto result = gb_obj.aggregate(requests, cudf::test::get_default_stream());
-
-  // Got output: 0,27,6,96,36,225
-  cudf::test::print(*result.second[0].results[0]);
+  auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
+    std::make_unique<test_udf_simple_type<cudf::reduce_aggregation>>());
+  auto const reduced = cudf::reduce(vals, agg, cudf::data_type{cudf::type_id::INT64});
+  auto const result =
+    static_cast<cudf::scalar_type_t<int64_t>*>(reduced.get())->value(cudf::get_default_stream());
+  printf("Result: %ld\n", result);
 }
