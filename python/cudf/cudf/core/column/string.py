@@ -5857,10 +5857,7 @@ class StringColumn(column.ColumnBase):
             return result_col
 
     def __contains__(self, item: ScalarLike) -> bool:
-        if is_scalar(item):
-            other = [item]
-        else:
-            other = item
+        other = [item] if is_scalar(item) else item
         return self.contains(column.as_column(other, dtype=self.dtype)).any()
 
     def as_numerical_column(
