@@ -27,7 +27,6 @@ source rapids-configure-sccache
 # Run the build via CMake, which will run clang-tidy when CUDF_STATIC_LINTERS is enabled.
 
 iwyu_flag=""
-# Check if the RAPIDS_BUILD_TYPE environment variable is equal to the string nightly
 if [[ "${RAPIDS_BUILD_TYPE}" == "nightly" ]]; then
   iwyu_flag="-DCUDF_IWYU=ON"
 fi
