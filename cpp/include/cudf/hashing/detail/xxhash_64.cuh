@@ -18,6 +18,7 @@
 
 #include "hash_functions.cuh"
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
