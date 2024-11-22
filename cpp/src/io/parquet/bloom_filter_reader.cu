@@ -34,8 +34,8 @@
 
 #include <cuco/bloom_filter.cuh>
 #include <cuco/bloom_filter_ref.cuh>
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/sequence.h>
 
 #include <future>
@@ -155,51 +155,61 @@ void validate_filter_bitwise(rmm::cuda_stream_view stream)
  * @brief Temporary function that tests for key `third-037493` in bloom filters of column `c2` in
  * test Parquet file.
  *
+ * @tparam Key Type of the key to query bloom filter.
+ *
  * @param buffer Device buffer containing bloom filter bitset
  * @param chunk Current row group index
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
  */
-void check_arbitrary_string_key(rmm::device_buffer const& buffer,
-                                size_t chunk,
-                                rmm::cuda_stream_view stream)
+template <typename Key = cudf::string_view>
+[[nodiscard]] bool check_arbitrary_string_key(rmm::device_buffer const& buffer,
+                                              Key const& literal,
+                                              size_t chunk_idx,
+                                              rmm::cuda_stream_view stream)
 {
-  using key_type    = cudf::string_view;
+  using key_type    = Key;
   using hasher_type = cudf::hashing::detail::XXHash_64<key_type>;
   using policy_type = cuco::arrow_filter_policy<key_type, hasher_type>;
-  using word_type   = policy_type::word_type;
+  using word_type   = typename policy_type::word_type;
 
+  // Filter properties
   auto constexpr word_size       = sizeof(word_type);
   auto constexpr words_per_block = policy_type::words_per_block;
   auto const num_filter_blocks   = buffer.size() / (word_size * words_per_block);
 
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(1),
-    [bitset     = const_cast<word_type*>(reinterpret_cast<word_type const*>(buffer.data())),
-     num_blocks = num_filter_blocks,
-     chunk      = chunk,
-     stream     = stream] __device__(auto idx) {
-      // using arrow_policy_type = cuco::arrow_filter_policy<key_type>;
-      cuco::bloom_filter_ref<key_type,
-                             cuco::extent<std::size_t>,
-                             cuco::thread_scope_device,
-                             policy_type>
-        filter{bitset,
-               num_blocks,
-               {},  // scope
-               {hasher_type{0}}};
+  // Bitset ptr must be a non-const to be used in bloom_filter_ref.
+  auto bitset = const_cast<word_type*>(reinterpret_cast<word_type const*>(buffer.data()));
 
-      // literal to search
-      cudf::string_view key("third-037493", 12);
-      // Search in the filter
-      if (filter.contains(key)) {
-        printf("YES: Filter chunk: %lu contains key: third-037493\n", chunk);
-      } else {
-        printf("NO: Filter chunk: %lu does not contain key: third-037493\n", chunk);
-      }
-    });
+  // Create a bloom filter view
+  cuco::
+    bloom_filter_ref<key_type, cuco::extent<std::size_t>, cuco::thread_scope_device, policy_type>
+      filter{bitset,
+             num_filter_blocks,
+             {},  // scope
+             {hasher_type{0}}};
+
+  // Copy over the key (literal) to device
+  rmm::device_buffer d_key{literal.data(), static_cast<size_t>(literal.size_bytes()), stream};
+
+  // Query literal in bloom filter.
+  bool const is_literal_found =
+    thrust::count_if(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator(0),
+                     thrust::make_counting_iterator(1),
+                     [filter   = filter,
+                      key_ptr  = reinterpret_cast<char*>(d_key.data()),
+                      key_size = static_cast<cudf::size_type>(d_key.size())] __device__(auto idx) {
+                       auto const d_key = cudf::string_view{key_ptr, key_size};
+                       return filter.contains(d_key);
+                     });
+
+  // MH: Temporary
+  auto const found_string = (is_literal_found) ? "YES" : "NO";
+  std::cout << "Literal: third-037493 found in chunk " << chunk_idx << ": " << found_string
+            << std::endl;
+
+  return is_literal_found;
 }
 
 /**
@@ -274,7 +284,9 @@ std::future<void> read_bloom_filters_async(
             rmm::device_buffer(buffer->data() + bloom_filter_header_size, bitset_size, stream);
 
           // MH: TODO: Temporary test. Remove me!!
-          check_arbitrary_string_key(bloom_filter_data[chunk], chunk, stream);
+          cudf::string_view literal{"third-037493", 12};
+          std::ignore =
+            check_arbitrary_string_key(bloom_filter_data[chunk], literal, chunk, stream);
         }
         // Read the bitset from datasource.
         else {
