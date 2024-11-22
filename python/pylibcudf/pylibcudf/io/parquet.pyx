@@ -1,22 +1,45 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from cython.operator cimport dereference
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from pylibcudf.contiguous_split cimport HostBuffer
 from pylibcudf.expressions cimport Expression
-from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
+from pylibcudf.io.types cimport (
+    SinkInfo,
+    SourceInfo,
+    PartitionInfo,
+    TableInputMetadata,
+    TableWithMetadata
+)
 from pylibcudf.libcudf.expressions cimport expression
 from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_reader as cpp_chunked_parquet_reader,
     parquet_reader_options,
     read_parquet as cpp_read_parquet,
+    write_parquet as cpp_write_parquet,
+    parquet_writer_options,
 )
-from pylibcudf.libcudf.io.types cimport table_with_metadata
+from pylibcudf.libcudf.io.types cimport (
+    compression_type,
+    dictionary_policy as dictionary_policy_t,
+    partition_info,
+    statistics_freq,
+    table_with_metadata,
+)
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.table cimport Table
 
-__all__ = ["ChunkedParquetReader", "read_parquet"]
+__all__ = [
+    "ChunkedParquetReader",
+    "ParquetWriterOptions",
+    "ParquetWriterOptionsBuilder",
+    "read_parquet",
+    "write_parquet"
+]
 
 
 cdef parquet_reader_options _setup_parquet_reader_options(
@@ -221,3 +244,336 @@ cpdef read_parquet(
         c_result = move(cpp_read_parquet(opts))
 
     return TableWithMetadata.from_libcudf(c_result)
+
+
+cdef class ParquetWriterOptions:
+
+    @staticmethod
+    def builder(SinkInfo sink, Table table):
+        """
+        Create builder to create ParquetWriterOptionsBuilder.
+
+        Parameters
+        ----------
+        sink : SinkInfo
+            The sink used for writer output
+
+        table : Table
+            Table to be written to output
+
+        Returns
+        -------
+        ParquetWriterOptionsBuilder
+        """
+        cdef ParquetWriterOptionsBuilder bldr = ParquetWriterOptionsBuilder.__new__(
+            ParquetWriterOptionsBuilder
+        )
+        bldr.c_obj = parquet_writer_options.builder(sink.c_obj, table.view())
+        bldr.table_ref = table
+        bldr.sink_ref = sink
+        return bldr
+
+    cpdef void set_partitions(self, list partitions):
+        """
+        Sets partitions.
+
+        Parameters
+        ----------
+        partitions : list[Partitions]
+            Partitions of input table in {start_row, num_rows} pairs.
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[partition_info] c_partions
+        cdef PartitionInfo partition
+
+        c_partions.reserve(len(partitions))
+        for partition in partitions:
+            c_partions.push_back(partition.c_obj)
+
+        self.c_obj.set_partitions(c_partions)
+
+    cpdef void set_column_chunks_file_paths(self, list file_paths):
+        """
+        Sets column chunks file path to be set in the raw output metadata.
+
+        Parameters
+        ----------
+        file_paths : list[str]
+            Vector of strings which indicate file paths.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_column_chunks_file_paths([fp.encode() for fp in file_paths])
+
+    cpdef void set_row_group_size_bytes(self, size_t size_bytes):
+        """
+        Sets the maximum row group size, in bytes.
+
+        Parameters
+        ----------
+        size_bytes : int
+            Maximum row group size, in bytes to set
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_row_group_size_bytes(size_bytes)
+
+    cpdef void set_row_group_size_rows(self, size_type size_rows):
+        """
+        Sets the maximum row group size, in rows.
+
+        Parameters
+        ----------
+        size_rows : int
+            Maximum row group size, in rows to set
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_row_group_size_rows(size_rows)
+
+    cpdef void set_max_page_size_bytes(self, size_t size_bytes):
+        """
+        Sets the maximum uncompressed page size, in bytes.
+
+        Parameters
+        ----------
+        size_bytes : int
+            Maximum uncompressed page size, in bytes to set
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_max_page_size_bytes(size_bytes)
+
+    cpdef void set_max_page_size_rows(self, size_type size_rows):
+        """
+        Sets the maximum page size, in rows.
+
+        Parameters
+        ----------
+        size_rows : int
+            Maximum page size, in rows to set.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_max_page_size_rows(size_rows)
+
+    cpdef void set_max_dictionary_size(self, size_t size_bytes):
+        """
+        Sets the maximum dictionary size, in bytes.
+
+        Parameters
+        ----------
+        size_bytes : int
+            Sets the maximum dictionary size, in bytes.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_max_dictionary_size(size_bytes)
+
+
+cdef class ParquetWriterOptionsBuilder:
+
+    cpdef ParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata):
+        """
+        Sets metadata.
+
+        Parameters
+        ----------
+        metadata : TableInputMetadata
+            Associated metadata
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.metadata(metadata.c_obj)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder key_value_metadata(self, list metadata):
+        """
+        Sets Key-Value footer metadata.
+
+        Parameters
+        ----------
+        metadata : list[dict[str, str]]
+            Key-Value footer metadata
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.key_value_metadata(
+            [
+                {key.encode(): value.encode() for key, value in mapping.items()}
+                for mapping in metadata
+            ]
+        )
+        return self
+
+    cpdef ParquetWriterOptionsBuilder compression(self, compression_type compression):
+        """
+        Sets compression type.
+
+        Parameters
+        ----------
+        compression : CompressionType
+            The compression type to use
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.compression(compression)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder stats_level(self, statistics_freq sf):
+        """
+        Sets the level of statistics.
+
+        Parameters
+        ----------
+        sf : StatisticsFreq
+            Level of statistics requested in the output file
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.stats_level(sf)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder int96_timestamps(self, bool enabled):
+        """
+        Sets whether timestamps are written as int96 or timestamp micros.
+
+        Parameters
+        ----------
+        enabled : bool
+            Boolean value to enable/disable int96 timestamps
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.int96_timestamps(enabled)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder write_v2_headers(self, bool enabled):
+        """
+        Set to true to write V2 page headers, otherwise false to write V1 page headers.
+
+        Parameters
+        ----------
+        enabled : bool
+            Boolean value to enable/disable writing of V2 page headers.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.write_v2_headers(enabled)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder dictionary_policy(self, dictionary_policy_t val):
+        """
+        Sets the policy for dictionary use.
+
+        Parameters
+        ----------
+        val : DictionaryPolicy
+            Policy for dictionary use.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.dictionary_policy(val)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder utc_timestamps(self, bool enabled):
+        """
+        Set to true if timestamps are to be written as UTC.
+
+        Parameters
+        ----------
+        enabled : bool
+            Boolean value to enable/disable writing of timestamps as UTC.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.utc_timestamps(enabled)
+        return self
+
+    cpdef ParquetWriterOptionsBuilder write_arrow_schema(self, bool enabled):
+        """
+        Set to true if arrow schema is to be written.
+
+        Parameters
+        ----------
+        enabled : bool
+            Boolean value to enable/disable writing of arrow schema.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.write_arrow_schema(enabled)
+        return self
+
+    cpdef ParquetWriterOptions build(self):
+        """
+        Create a ParquetWriterOptions from the set options.
+
+        Returns
+        -------
+        ParquetWriterOptions
+        """
+        cdef ParquetWriterOptions parquet_options = ParquetWriterOptions.__new__(
+            ParquetWriterOptions
+        )
+        parquet_options.c_obj = move(self.c_obj.build())
+        parquet_options.table_ref = self.table_ref
+        parquet_options.sink_ref = self.sink_ref
+        return parquet_options
+
+
+cpdef memoryview write_parquet(ParquetWriterOptions options):
+    """
+    Writes a set of columns to parquet format.
+
+    Parameters
+    ----------
+    options : ParquetWriterOptions
+        Settings for controlling writing behavior
+
+    Returns
+    -------
+    memoryview
+        A blob that contains the file metadata
+        (parquet FileMetadata thrift message) if requested in
+        parquet_writer_options (empty blob otherwise).
+    """
+    cdef parquet_writer_options c_options = options.c_obj
+    cdef unique_ptr[vector[uint8_t]] c_result
+
+    with nogil:
+        c_result = cpp_write_parquet(c_options)
+
+    return memoryview(HostBuffer.from_unique_ptr(move(c_result)))

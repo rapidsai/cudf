@@ -156,7 +156,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             table_input_metadata m
         ) except +libcudf_exception_handler
         BuilderT& key_value_metadata(
-            vector[map[string, string]] kvm
+            vector[map[string, string]] metadata
         ) except +libcudf_exception_handler
         BuilderT& stats_level(
             statistics_freq sf
@@ -189,7 +189,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t val
         ) except +libcudf_exception_handler
         BuilderT& write_v2_headers(
-            bool val
+            bool enabled
         ) except +libcudf_exception_handler
         BuilderT& dictionary_policy(
             dictionary_policy val
@@ -212,7 +212,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
 
     cdef unique_ptr[vector[uint8_t]] write_parquet(
-        parquet_writer_options args
+        parquet_writer_options options
     ) except +libcudf_exception_handler
 
     cdef cppclass chunked_parquet_writer_options(parquet_writer_options_base):
