@@ -61,7 +61,7 @@ class test_udf_simple_type : public cudf::host_udf_base {
   [[nodiscard]] std::unordered_set<input_kind> const& get_required_data_kinds() const override
   {
     static std::unordered_set<input_kind> const required_data_kinds =
-      [&] -> std::unordered_set<input_kind> {
+      [&]() -> std::unordered_set<input_kind> {
       if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
         return {input_kind::INPUT_VALUES, input_kind::OUTPUT_DTYPE, input_kind::INIT_VALUE};
       } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
@@ -80,21 +80,21 @@ class test_udf_simple_type : public cudf::host_udf_base {
 
   [[nodiscard]] output_type operator()(std::unordered_map<input_kind, input_data> const& input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr) override
+                                       rmm::device_async_resource_ref mr) const override
   {
     if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
       auto const& values      = std::get<cudf::column_view>(input.at(input_kind::INPUT_VALUES));
       auto const output_dtype = std::get<cudf::data_type>(input.at(input_kind::OUTPUT_DTYPE));
       return cudf::double_type_dispatcher(
-        values.type(), output_dtype, reduce_fn{}, input, stream, mr);
+        values.type(), output_dtype, reduce_fn{this}, input, stream, mr);
     } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
       auto const& values      = std::get<cudf::column_view>(input.at(input_kind::INPUT_VALUES));
       auto const output_dtype = std::get<cudf::data_type>(input.at(input_kind::OUTPUT_DTYPE));
       return cudf::double_type_dispatcher(
-        values.type(), output_dtype, segmented_reduce_fn{}, input, stream, mr);
+        values.type(), output_dtype, segmented_reduce_fn{this}, input, stream, mr);
     } else {
       auto const& values = std::get<cudf::column_view>(input.at(input_kind::GROUPED_VALUES));
-      return cudf::type_dispatcher(values.type(), groupby_fn{}, input, stream, mr);
+      return cudf::type_dispatcher(values.type(), groupby_fn{this}, input, stream, mr);
     }
   }
 
@@ -102,7 +102,7 @@ class test_udf_simple_type : public cudf::host_udf_base {
     [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
     [[maybe_unused]] std::optional<std::reference_wrapper<cudf::scalar const>> init,
     [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::mr::device_memory_resource* mr) const override
+    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
   {
     if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation> ||
                   std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
@@ -133,11 +133,14 @@ class test_udf_simple_type : public cudf::host_udf_base {
 
   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
   {
-    return std::make_unique<host_udf_base>();
+    return std::make_unique<test_udf_simple_type>();
   }
 
  private:
   struct reduce_fn {
+    // Store pointer to the parent class so we can call its functions.
+    test_udf_simple_type const* parent;
+
     template <typename InputType,
               typename OutputType,
               typename... Args,
@@ -152,7 +155,7 @@ class test_udf_simple_type : public cudf::host_udf_base {
               CUDF_ENABLE_IF(cudf::is_numeric<InputType>() && cudf::is_numeric<OutputType>())>
     output_type operator()(std::unordered_map<input_kind, input_data> const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr) const
+                           rmm::device_async_resource_ref mr) const
     {
       auto const& values      = std::get<cudf::column_view>(input.at(input_kind::INPUT_VALUES));
       auto const output_dtype = std::get<cudf::data_type>(input.at(input_kind::OUTPUT_DTYPE));
@@ -161,15 +164,15 @@ class test_udf_simple_type : public cudf::host_udf_base {
           input.at(input_kind::INIT_VALUE));
 
       if (values.size() == 0) {
-        return get_empty_output(output_dtype, input_init_value, stream, mr);
+        return parent->get_empty_output(output_dtype, input_init_value, stream, mr);
       }
 
-      auto const init_value = [&] -> OutputType {
+      auto const init_value = [&]() -> OutputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
           CUDF_EXPECTS(output_dtype == input_init_value.value().get().type(),
                        "Data type for reduction result must be the same as init value.");
           auto const numeric_init_scalar =
-            dynamic_cast<cudf::numeric_scalar const*>(&input_init_value.value().get());
+            dynamic_cast<cudf::numeric_scalar<OutputType> const*>(&input_init_value.value().get());
           CUDF_EXPECTS(numeric_init_scalar != nullptr, "Invalid init scalar for reduction.");
           return static_cast<OutputType>(numeric_init_scalar->value(stream));
         }
@@ -177,25 +180,35 @@ class test_udf_simple_type : public cudf::host_udf_base {
       }();
 
       auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
-      auto const result        = thrust::transform_reduce(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(values.size()),
-        [values = *values_dv_ptr] __device__(cudf::size_type idx) -> OutputType {
-          if (values.is_null(idx)) { return OutputType{0}; }
-          auto const val = static_cast<OutputType>(values.element<InputType>(idx));
-          return val * val;
-        },
-        init_value,
-        thrust::plus<>{});
+      auto const result =
+        thrust::transform_reduce(rmm::exec_policy(stream),
+                                 thrust::make_counting_iterator(0),
+                                 thrust::make_counting_iterator(values.size()),
+                                 transform_fn<InputType, OutputType>{*values_dv_ptr},
+                                 init_value,
+                                 thrust::plus<>{});
 
       auto output = cudf::make_numeric_scalar(output_dtype, stream, mr);
       static_cast<cudf::scalar_type_t<OutputType>*>(output.get())->set_value(result, stream);
       return output;
     }
+
+    template <typename InputType, typename OutputType>
+    struct transform_fn {
+      cudf::column_device_view values;
+      OutputType __device__ operator()(cudf::size_type idx) const
+      {
+        if (values.is_null(idx)) { return OutputType{0}; }
+        auto const val = static_cast<OutputType>(values.element<InputType>(idx));
+        return val * val;
+      }
+    };
   };
 
   struct segmented_reduce_fn {
+    // Store pointer to the parent class so we can call its functions.
+    test_udf_simple_type const* parent;
+
     template <typename InputType,
               typename OutputType,
               typename... Args,
@@ -210,7 +223,7 @@ class test_udf_simple_type : public cudf::host_udf_base {
               CUDF_ENABLE_IF(cudf::is_numeric<InputType>() && cudf::is_numeric<OutputType>())>
     output_type operator()(std::unordered_map<input_kind, input_data> const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr) const
+                           rmm::device_async_resource_ref mr) const
     {
       auto const& values      = std::get<cudf::column_view>(input.at(input_kind::INPUT_VALUES));
       auto const output_dtype = std::get<cudf::data_type>(input.at(input_kind::OUTPUT_DTYPE));
@@ -219,15 +232,15 @@ class test_udf_simple_type : public cudf::host_udf_base {
           input.at(input_kind::INIT_VALUE));
 
       if (values.size() == 0) {
-        return get_empty_output(output_dtype, input_init_value, stream, mr);
+        return parent->get_empty_output(output_dtype, input_init_value, stream, mr);
       }
 
-      auto const init_value = [&] -> OutputType {
+      auto const init_value = [&]() -> OutputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
           CUDF_EXPECTS(output_dtype == input_init_value.value().get().type(),
                        "Data type for reduction result must be the same as init value.");
           auto const numeric_init_scalar =
-            dynamic_cast<cudf::numeric_scalar const*>(&input_init_value.value().get());
+            dynamic_cast<cudf::numeric_scalar<OutputType> const*>(&input_init_value.value().get());
           CUDF_EXPECTS(numeric_init_scalar != nullptr, "Invalid init scalar for reduction.");
           return static_cast<OutputType>(numeric_init_scalar->value(stream));
         }
@@ -250,32 +263,44 @@ class test_udf_simple_type : public cudf::host_udf_base {
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_segments),
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), validity.begin()),
-        [values = *values_dv_ptr, init_value, null_handling, offsets] __device__(
-          cudf::size_type idx) -> thrust::tuple<OutputType, bool> {
-          auto const start = offsets[idx];
-          auto const end   = offsets[idx + 1];
-          if (start == end) { return {OutputType{0}, false}; }
-
-          auto sum = init_value;
-          for (auto i = start; i < end; ++i) {
-            if (values.is_null(i)) {
-              if (null_handling == cudf::null_policy::INCLUDE) { sum += init_value * init_value; }
-              continue;
-            }
-            auto const val = static_cast<OutputType>(values.element<InputType>(i));
-            sum += val * val;
-          }
-          auto const segment_size = end - start;
-          return {segment_size * sum, true};
-        });
+        transform_fn<InputType, OutputType>{*values_dv_ptr, offsets, init_value, null_handling});
       auto [null_mask, null_count] =
         cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity<>{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
       return output;
     }
+
+    template <typename InputType, typename OutputType>
+    struct transform_fn {
+      cudf::column_device_view values;
+      cudf::device_span<cudf::size_type const> offsets;
+      OutputType init_value;
+      cudf::null_policy null_handling;
+
+      thrust::tuple<OutputType, bool> __device__ operator()(cudf::size_type idx) const
+      {
+        auto const start = offsets[idx];
+        auto const end   = offsets[idx + 1];
+        if (start == end) { return {OutputType{0}, false}; }
+
+        auto sum = init_value;
+        for (auto i = start; i < end; ++i) {
+          if (values.is_null(i)) {
+            if (null_handling == cudf::null_policy::INCLUDE) { sum += init_value * init_value; }
+            continue;
+          }
+          auto const val = static_cast<OutputType>(values.element<InputType>(i));
+          sum += val * val;
+        }
+        auto const segment_size = end - start;
+        return {segment_size * sum, true};
+      }
+    };
   };
 
   struct groupby_fn {
+    // Store pointer to the parent class so we can call its functions.
+    test_udf_simple_type const* parent;
     using OutputType = double;
 
     template <typename InputType, typename... Args, CUDF_ENABLE_IF(!cudf::is_numeric<InputType>())>
@@ -287,10 +312,12 @@ class test_udf_simple_type : public cudf::host_udf_base {
     template <typename InputType, CUDF_ENABLE_IF(cudf::is_numeric<InputType>())>
     output_type operator()(std::unordered_map<input_kind, input_data> const& input,
                            rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr) const
+                           rmm::device_async_resource_ref mr) const
     {
       auto const& values = std::get<cudf::column_view>(input.at(input_kind::GROUPED_VALUES));
-      if (values.size() == 0) { return get_empty_output(std::nullopt, std::nullopt, stream, mr); }
+      if (values.size() == 0) {
+        return parent->get_empty_output(std::nullopt, std::nullopt, stream, mr);
+      }
 
       auto const offsets =
         std::get<cudf::device_span<cudf::size_type const>>(input.at(input_kind::OFFSETS));
@@ -311,25 +338,34 @@ class test_udf_simple_type : public cudf::host_udf_base {
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_groups),
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), validity.begin()),
-        [values = *values_dv_ptr, offsets, group_indices] __device__(
-          cudf::size_type idx) -> thrust::tuple<OutputType, bool> {
-          auto const start = offsets[idx];
-          auto const end   = offsets[idx + 1];
-          if (start == end) { return {OutputType{0}, false}; }
-
-          auto sum = OutputType{0};
-          for (auto i = start; i < end; ++i) {
-            if (values.is_null(i)) { continue; }
-            auto const val = static_cast<OutputType>(values.element<InputType>(i));
-            sum += val * val;
-          }
-          return {(group_indices[idx] + 1) * sum, true};
-        });
+        transform_fn<InputType, OutputType>{*values_dv_ptr, offsets, group_indices});
       auto [null_mask, null_count] =
         cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity<>{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
       return output;
     }
+
+    template <typename InputType, typename OutputType>
+    struct transform_fn {
+      cudf::column_device_view values;
+      cudf::device_span<cudf::size_type const> offsets;
+      cudf::device_span<cudf::size_type const> group_indices;
+
+      thrust::tuple<OutputType, bool> __device__ operator()(cudf::size_type idx) const
+      {
+        auto const start = offsets[idx];
+        auto const end   = offsets[idx + 1];
+        if (start == end) { return {OutputType{0}, false}; }
+
+        auto sum = OutputType{0};
+        for (auto i = start; i < end; ++i) {
+          if (values.is_null(i)) { continue; }
+          auto const val = static_cast<OutputType>(values.element<InputType>(i));
+          sum += val * val;
+        }
+        return {(group_indices[idx] + 1) * sum, true};
+      }
+    };
   };
 };
 
@@ -342,9 +378,13 @@ TEST_F(HostUDFReductionTest, SimpleInput)
 {
   int32s_col vals{0, 1, 2, 3, 4, 5};
 
-  auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
+  auto agg = cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(
     std::make_unique<test_udf_simple_type<cudf::reduce_aggregation>>());
-  auto const reduced = cudf::reduce(vals, agg, cudf::data_type{cudf::type_id::INT64});
+  auto const reduced = cudf::reduce(vals,
+                                    *agg,
+                                    cudf::data_type{cudf::type_id::INT64},
+                                    cudf::get_default_stream(),
+                                    cudf::get_current_device_resource_ref());
   auto const result =
     static_cast<cudf::scalar_type_t<int64_t>*>(reduced.get())->value(cudf::get_default_stream());
   printf("Result: %ld\n", result);
