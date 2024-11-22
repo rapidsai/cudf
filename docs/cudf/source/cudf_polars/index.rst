@@ -10,7 +10,7 @@ and run on the CPU.
 Benchmark
 ---------
 
-````{note}
+```{note}
 The following benchmarks were performed with `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` environment variable set to `"0"`. Using managed memory (the default) imposes a performance cost in order to avoid out of memory errors. Peak performance can still be attained by setting the environment variable to 1.
 
 ```
