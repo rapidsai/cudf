@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "hash_functions.cuh"
+
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
