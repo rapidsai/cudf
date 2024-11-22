@@ -39,7 +39,7 @@ Checks:
        -clang-analyzer-optin.core.EnumCastOutOfRange,
        -clang-analyzer-optin.cplusplus.UninitializedObject'
 
-WarningsAsErrors: ''
+WarningsAsErrors: '*'
 HeaderFilterRegex: '.*cudf/cpp/(src|include).*'
 ExcludeHeaderFilterRegex: '.*(Message_generated.h|Schema_generated.h|brotli_dict.hpp|unbz2.hpp|cxxopts.hpp).*'
 FormatStyle:     none
