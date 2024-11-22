@@ -71,7 +71,7 @@ def _default_lower_ir_node(
             f"Class {type(ir)} does not support multiple partitions."
         )  # pragma: no cover
 
-    # Return reconstructed node and
+    # Return reconstructed node and partition-info dict
     partition = PartitionInfo(count=1)
     new_node = ir.reconstruct(children)
     partition_info[new_node] = partition
