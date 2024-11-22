@@ -2,6 +2,8 @@
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+from libc.stdint cimport uint8_t, int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -10,11 +12,16 @@ from pylibcudf.io.datasource cimport Datasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
+    column_encoding,
+    column_in_metadata,
     column_name_info,
     host_buffer,
+    partition_info,
     source_info,
+    table_input_metadata,
     table_with_metadata,
 )
+from pylibcudf.libcudf.types cimport size_type
 
 import codecs
 import errno
@@ -37,12 +44,232 @@ __all__ = [
     "CompressionType",
     "DictionaryPolicy",
     "JSONRecoveryMode",
+    "PartitionInfo",
     "QuoteStyle",
     "SinkInfo",
     "SourceInfo",
     "StatisticsFreq",
+    "TableInputMetadata",
     "TableWithMetadata",
 ]
+
+cdef class PartitionInfo:
+    """
+    Information used while writing partitioned datasets.
+
+    Parameters
+    ----------
+    start_row : int
+        The start row of the partition.
+
+    num_rows : int
+        The number of rows in the partition.
+    """
+    def __init__(self, size_type start_row, size_type num_rows):
+        self.c_obj = partition_info(start_row, num_rows)
+
+
+cdef class ColumnInMetadata:
+    """
+    Metadata for a column
+    """
+
+    @staticmethod
+    cdef ColumnInMetadata from_metadata(column_in_metadata metadata):
+        """
+        Construct a ColumnInMetadata.
+
+        Parameters
+        ----------
+        metadata : column_in_metadata
+        """
+        cdef ColumnInMetadata col_metadata = ColumnInMetadata.__new__(ColumnInMetadata)
+        col_metadata.c_obj = metadata
+        return col_metadata
+
+    cpdef ColumnInMetadata set_name(self, str name):
+        """
+        Set the name of this column.
+
+        Parameters
+        ----------
+        name : str
+            Name of the column
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_name(name.encode())
+        return self
+
+    cpdef ColumnInMetadata set_nullability(self, bool nullable):
+        """
+        Set the nullability of this column.
+
+        Parameters
+        ----------
+        nullable : bool
+            Whether this column is nullable
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_nullability(nullable)
+        return self
+
+    cpdef ColumnInMetadata set_list_column_as_map(self):
+        """
+        Specify that this list column should be encoded as a map in the
+        written file.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_list_column_as_map()
+        return self
+
+    cpdef ColumnInMetadata set_int96_timestamps(self, bool req):
+        """
+        Specifies whether this timestamp column should be encoded using
+        the deprecated int96.
+
+        Parameters
+        ----------
+        req : bool
+            True = use int96 physical type. False = use int64 physical type.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_int96_timestamps(req)
+        return self
+
+    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t precision):
+        """
+        Set the decimal precision of this column.
+        Only valid if this column is a decimal (fixed-point) type.
+
+        Parameters
+        ----------
+        precision : int
+            The integer precision to set for this decimal column
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_decimal_precision(precision)
+        return self
+
+    cpdef ColumnInMetadata child(self, size_type i):
+        """
+        Get reference to a child of this column.
+
+        Parameters
+        ----------
+        i : int
+            Index of the child to get.
+
+        Returns
+        -------
+        ColumnInMetadata
+        """
+        return ColumnInMetadata.from_metadata(self.c_obj.child(i))
+
+    cpdef ColumnInMetadata set_output_as_binary(self, bool binary):
+        """
+        Specifies whether this column should be written as binary or string data.
+
+        Parameters
+        ----------
+        binary : bool
+            True = use binary data type. False = use string data type
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_output_as_binary(binary)
+        return self
+
+    cpdef ColumnInMetadata set_type_length(self, int32_t type_length):
+        """
+        Sets the length of fixed length data.
+
+        Parameters
+        ----------
+        type_length : int
+            Size of the data type in bytes
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_type_length(type_length)
+        return self
+
+    cpdef ColumnInMetadata set_skip_compression(self, bool skip):
+        """
+        Specifies whether this column should not be compressed
+        regardless of the compression.
+
+        Parameters
+        ----------
+        skip : bool
+            If `true` do not compress this column
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.set_skip_compression(skip)
+        return self
+
+    cpdef ColumnInMetadata set_encoding(self, column_encoding encoding):
+        """
+        Specifies whether this column should not be compressed
+        regardless of the compression.
+
+        Parameters
+        ----------
+        encoding : ColumnEncoding
+            The encoding to use
+
+        Returns
+        -------
+        ColumnInMetadata
+        """
+        self.c_obj.set_encoding(encoding)
+        return self
+
+    cpdef str get_name(self):
+        """
+        Get the name of this column.
+
+        Returns
+        -------
+        str
+            The name of this column
+        """
+        return self.c_obj.get_name().decode()
+
+
+cdef class TableInputMetadata:
+    """
+    Metadata for a table
+
+    Parameters
+    ----------
+    table : Table
+        The Table to construct metadata for
+    """
+    def __init__(self, Table table):
+        self.c_obj = table_input_metadata(table.view())
+
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata
