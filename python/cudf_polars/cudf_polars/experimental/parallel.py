@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import (
     IR,
+    DataFrameScan,
     Filter,
     GroupBy,
     HStack,
@@ -217,6 +218,20 @@ def evaluate_dask(ir: IR) -> DataFrame:
 def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
     return Union.do_evaluate(None, *dfs)
+
+
+##
+## DataFrameScan
+##
+
+
+@lower_ir_node.register(DataFrameScan)
+def _(
+    ir: DataFrameScan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    import cudf_polars.experimental.io as _io
+
+    return _io.lower_dataframescan_node(ir, rec)
 
 
 ##

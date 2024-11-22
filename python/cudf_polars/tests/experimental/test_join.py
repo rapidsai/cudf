@@ -10,45 +10,27 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.fixture(scope="module")
-def engine():
-    return pl.GPUEngine(
+@pytest.mark.parametrize("how", ["inner"])
+@pytest.mark.parametrize("num_rows_threshold", [5, 10, 15])
+def test_parallel_join(how, num_rows_threshold):
+    engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
+        parallel_options={"num_rows_threshold": num_rows_threshold},
     )
-
-
-@pytest.fixture(scope="module")
-def module_tmp_dir(tmp_path_factory):
-    return tmp_path_factory.mktemp("data")
-
-
-@pytest.fixture(scope="module")
-def df(module_tmp_dir):
-    pdf = pl.DataFrame(
+    left = pl.LazyFrame(
         {
-            "x": range(30),
-            "y": ["cat", "dog", "fish"] * 10,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 6,
+            "x": range(15),
+            "y": ["cat", "dog", "fish"] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
         }
     )
-    n_files = 3
-    n_rows = len(pdf)
-    stride = int(n_rows / n_files)
-    for i in range(n_files):
-        offset = stride * i
-        part = pdf.slice(offset, stride)
-        part.write_parquet(module_tmp_dir / f"part.{i}.parquet")
-    return pl.scan_parquet(module_tmp_dir)
-
-
-@pytest.mark.parametrize("how", ["inner", "left", "right"])
-def test_parallel_join(df, engine, how):
-    other = pl.LazyFrame(
+    right = pl.LazyFrame(
         {
-            "y": ["dog", "bird", "fish", "snake"] * 30,
-            "zz": [1, 2, 3] * 40,
+            "xx": range(6),
+            "y": ["dog", "bird", "fish"] * 2,
+            "zz": [1, 2] * 3,
         }
     )
-    q = df.join(other, on="y", how=how)
+    q = left.join(right, on="y", how=how)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)

@@ -45,7 +45,7 @@ def lower_join_node(
     children, partition_info = _lower_children(ir, rec)
 
     how = ir.options[0]
-    if how not in ("inner", "left", "right"):
+    if how not in ("inner",):  # TODO: Support "left" and "right"
         # Not supported (yet)
         return _default_lower_ir_node(ir, rec)
 

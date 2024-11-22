@@ -15,31 +15,19 @@ def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
+        parallel_options={"num_rows_threshold": 100},
     )
 
 
 @pytest.fixture(scope="module")
-def module_tmp_dir(tmp_path_factory):
-    return tmp_path_factory.mktemp("data")
-
-
-@pytest.fixture(scope="module")
-def df(module_tmp_dir):
-    pdf = pl.DataFrame(
+def df():
+    return pl.LazyFrame(
         {
             "x": range(30),
             "y": ["cat", "dog", "fish"] * 10,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 6,
         }
     )
-    n_files = 3
-    n_rows = len(pdf)
-    stride = int(n_rows / n_files)
-    for i in range(n_files):
-        offset = stride * i
-        part = pdf.slice(offset, stride)
-        part.write_parquet(module_tmp_dir / f"part.{i}.parquet")
-    return pl.scan_parquet(module_tmp_dir)
 
 
 @pytest.mark.parametrize("op", ["sum", "mean", "len"])

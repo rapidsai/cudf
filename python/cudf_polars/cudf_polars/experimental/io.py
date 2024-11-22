@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import Scan
+from cudf_polars.dsl.ir import DataFrameScan, Scan
 from cudf_polars.experimental.parallel import (
     PartitionInfo,
     _default_lower_ir_node,
@@ -23,6 +23,69 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
+
+
+##
+## DataFrameScan
+##
+
+
+class ParDataFrameScan(DataFrameScan):
+    """Parallel DataFrameScan."""
+
+    @property
+    def _max_n_rows(self) -> int:
+        """Row-count threshold for splitting a DataFrame."""
+        parallel_options = self.config_options.get("parallel_options", {})
+        return parallel_options.get("num_rows_threshold", 1_000_000)
+
+    @property
+    def _count(self) -> int:
+        """Partition count."""
+        total_rows, _ = self.df.shape()
+        return math.ceil(total_rows / self._max_n_rows)
+
+    def _tasks(self) -> MutableMapping[Any, Any]:
+        """Task graph."""
+        total_rows, _ = self.df.shape()
+        stride = math.ceil(total_rows / self._count)
+        key_name = get_key_name(self)
+        return {
+            (key_name, i): (
+                self.do_evaluate,
+                self.schema,
+                self.df.slice(offset, stride),
+                self.projection,
+                self.predicate,
+            )
+            for i, offset in enumerate(range(0, total_rows, stride))
+        }
+
+
+def lower_dataframescan_node(
+    ir: DataFrameScan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """Rewrite a Scan node with proper partitioning."""
+    new_node = ParDataFrameScan(
+        ir.schema,
+        ir.df,
+        ir.projection,
+        ir.predicate,
+        ir.config_options,
+    )
+    return new_node, {new_node: PartitionInfo(count=new_node._count)}
+
+
+@generate_ir_tasks.register(ParDataFrameScan)
+def _(
+    ir: ParDataFrameScan, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    return ir._tasks()
+
+
+##
+## Scan
+##
 
 
 class ParFileScan(Scan):
@@ -66,8 +129,8 @@ class ParFileScan(Scan):
         if self.typ == "parquet":
             file_size: float = 0
             # TODO: Use system info to set default blocksize
-            parquet_options = self.config_options.get("parquet_options", {})
-            blocksize: int = parquet_options.get("blocksize", 2 * 1024**3)
+            parallel_options = self.config_options.get("parallel_options", {})
+            blocksize: int = parallel_options.get("parquet_blocksize", 2 * 1024**3)
             stats = self._sample_pq_statistics()
             columns: list = self.with_columns or list(stats.keys())
             for name in columns:
@@ -179,6 +242,13 @@ def _(
     split, stride = ir._plan
     paths = list(ir.paths)
     if split > 1:
+        # Disable chunked reader
+        config_options = ir.config_options.copy()
+        config_options["parquet_options"] = config_options.get(
+            "parquet_options", {}
+        ).copy()
+        config_options["parquet_options"]["chunked"] = False
+
         graph = {}
         count = 0
         for path in paths:
@@ -191,7 +261,7 @@ def _(
                     ir.schema,
                     ir.typ,
                     ir.reader_options,
-                    ir.config_options,
+                    config_options,
                     [path],
                     ir.with_columns,
                     ir.skip_rows,

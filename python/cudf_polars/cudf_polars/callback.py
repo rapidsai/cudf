@@ -171,13 +171,17 @@ def validate_config_options(config: dict) -> None:
         If the configuration contains unsupported options.
     """
     if unsupported := (
-        config.keys() - {"raise_on_fail", "parquet_options", "executor"}
+        config.keys()
+        - {"raise_on_fail", "parquet_options", "parallel_options", "executor"}
     ):
         raise ValueError(
             f"Engine configuration contains unsupported settings: {unsupported}"
         )
     assert {"blocksize", "chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
         config.get("parquet_options", {})
+    )
+    assert {"parquet_blocksize", "num_rows_threshold"}.issuperset(
+        config.get("parallel_options", {})
     )
 
 
