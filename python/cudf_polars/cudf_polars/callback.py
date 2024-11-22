@@ -45,7 +45,7 @@ def _env_get_int(name, default):
     try:
         return int(os.getenv(name, default))
     except (ValueError, TypeError):
-        return default
+        return default # pragma: no cover
 
 
 @cache
