@@ -20,11 +20,10 @@ import cudf
 
 # TODO: The `numpy` import is needed for typing purposes during doc builds
 # only, need to figure out why the `np` alias is insufficient then remove.
-import cudf.core._internals
-import cudf.core._internals.search
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals.search import search_sorted
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -1305,7 +1304,7 @@ class Frame(BinaryOperand, Scannable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = cudf.core._internals.search.search_sorted(
+        outcol = search_sorted(
             sources,
             values,
             side,
