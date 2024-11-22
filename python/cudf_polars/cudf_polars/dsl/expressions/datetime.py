@@ -126,7 +126,7 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
-        if self.name == TemporalFunction.Name.Microsecond:
+        if self.name is TemporalFunction.Name.Microsecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND
             )
@@ -146,7 +146,7 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(total_micros)
-        elif self.name == TemporalFunction.Name.Nanosecond:
+        elif self.name is TemporalFunction.Name.Nanosecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND
             )

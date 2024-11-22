@@ -120,7 +120,7 @@ class StringFunction(Expr):
             StringFunction.Name.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
-        if self.name == StringFunction.Name.Contains:
+        if self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
                 if not strict:
@@ -141,7 +141,7 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         f"Unsupported regex {pattern} for GPU engine."
                     ) from e
-        elif self.name == StringFunction.Name.Replace:
+        elif self.name is StringFunction.Name.Replace:
             _, literal = self.options
             if not literal:
                 raise NotImplementedError("literal=False is not supported for replace")
@@ -152,7 +152,7 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
-        elif self.name == StringFunction.Name.ReplaceMany:
+        elif self.name is StringFunction.Name.ReplaceMany:
             (ascii_case_insensitive,) = self.options
             if ascii_case_insensitive:
                 raise NotImplementedError(
@@ -168,12 +168,12 @@ class StringFunction(Expr):
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
                 )
-        elif self.name == StringFunction.Name.Slice:
+        elif self.name is StringFunction.Name.Slice:
             if not all(isinstance(child, Literal) for child in self.children[1:]):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
-        elif self.name == StringFunction.Name.Strptime:
+        elif self.name is StringFunction.Name.Strptime:
             format, _, exact, cache = self.options
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
@@ -199,7 +199,7 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if self.name == StringFunction.Name.Contains:
+        if self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
 
@@ -216,7 +216,7 @@ class StringFunction(Expr):
                 return Column(
                     plc.strings.contains.contains_re(column.obj, self._regex_program)
                 )
-        elif self.name == StringFunction.Name.Slice:
+        elif self.name is StringFunction.Name.Slice:
             child, expr_offset, expr_length = self.children
             assert isinstance(expr_offset, Literal)
             assert isinstance(expr_length, Literal)
@@ -254,9 +254,9 @@ class StringFunction(Expr):
             column, chars = (
                 c.evaluate(df, context=context, mapping=mapping) for c in self.children
             )
-            if self.name == StringFunction.Name.StripCharsStart:
+            if self.name is StringFunction.Name.StripCharsStart:
                 side = plc.strings.SideType.LEFT
-            elif self.name == StringFunction.Name.StripCharsEnd:
+            elif self.name is StringFunction.Name.StripCharsEnd:
                 side = plc.strings.SideType.RIGHT
             else:
                 side = plc.strings.SideType.BOTH
@@ -266,13 +266,13 @@ class StringFunction(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
-        if self.name == StringFunction.Name.Lowercase:
+        if self.name is StringFunction.Name.Lowercase:
             (column,) = columns
             return Column(plc.strings.case.to_lower(column.obj))
-        elif self.name == StringFunction.Name.Uppercase:
+        elif self.name is StringFunction.Name.Uppercase:
             (column,) = columns
             return Column(plc.strings.case.to_upper(column.obj))
-        elif self.name == StringFunction.Name.EndsWith:
+        elif self.name is StringFunction.Name.EndsWith:
             column, suffix = columns
             return Column(
                 plc.strings.find.ends_with(
@@ -282,7 +282,7 @@ class StringFunction(Expr):
                     else suffix.obj,
                 )
             )
-        elif self.name == StringFunction.Name.StartsWith:
+        elif self.name is StringFunction.Name.StartsWith:
             column, prefix = columns
             return Column(
                 plc.strings.find.starts_with(
@@ -292,7 +292,7 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
-        elif self.name == StringFunction.Name.Strptime:
+        elif self.name is StringFunction.Name.Strptime:
             # TODO: ignores ambiguous
             format, strict, exact, cache = self.options
             col = self.children[0].evaluate(df, context=context, mapping=mapping)
@@ -324,7 +324,7 @@ class StringFunction(Expr):
                         res.columns()[0], self.dtype, format
                     )
                 )
-        elif self.name == StringFunction.Name.Replace:
+        elif self.name is StringFunction.Name.Replace:
             column, target, repl = columns
             n, _ = self.options
             return Column(
@@ -332,7 +332,7 @@ class StringFunction(Expr):
                     column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
                 )
             )
-        elif self.name == StringFunction.Name.ReplaceMany:
+        elif self.name is StringFunction.Name.ReplaceMany:
             column, target, repl = columns
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)

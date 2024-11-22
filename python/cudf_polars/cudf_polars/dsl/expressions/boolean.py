@@ -77,7 +77,7 @@ class BooleanFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if self.name == BooleanFunction.Name.IsIn and not all(
+        if self.name is BooleanFunction.Name.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):
             # TODO: If polars IR doesn't put the casts in, we need to
@@ -146,7 +146,7 @@ class BooleanFunction(Expr):
         ):
             # Avoid evaluating the child if the dtype tells us it's unnecessary.
             (child,) = self.children
-            is_finite = self.name == BooleanFunction.Name.IsFinite
+            is_finite = self.name is BooleanFunction.Name.IsFinite
             if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
                 value = plc.interop.from_arrow(
                     pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
@@ -176,7 +176,7 @@ class BooleanFunction(Expr):
         if self.name in (BooleanFunction.Name.Any, BooleanFunction.Name.All):
             (ignore_nulls,) = self.options
             (column,) = columns
-            is_any = self.name == BooleanFunction.Name.Any
+            is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
             result = plc.reduce.reduce(column.obj, agg, self.dtype)
             if not ignore_nulls and column.obj.null_count() > 0:
@@ -196,27 +196,27 @@ class BooleanFunction(Expr):
                     # False || Null => Null   True && Null => Null
                     return Column(plc.Column.all_null_like(column.obj, 1))
             return Column(plc.Column.from_scalar(result, 1))
-        if self.name == BooleanFunction.Name.IsNull:
+        if self.name is BooleanFunction.Name.IsNull:
             (column,) = columns
             return Column(plc.unary.is_null(column.obj))
-        elif self.name == BooleanFunction.Name.IsNotNull:
+        elif self.name is BooleanFunction.Name.IsNotNull:
             (column,) = columns
             return Column(plc.unary.is_valid(column.obj))
-        elif self.name == BooleanFunction.Name.IsNan:
+        elif self.name is BooleanFunction.Name.IsNan:
             (column,) = columns
             return Column(
                 plc.unary.is_nan(column.obj).with_mask(
                     column.obj.null_mask(), column.obj.null_count()
                 )
             )
-        elif self.name == BooleanFunction.Name.IsNotNan:
+        elif self.name is BooleanFunction.Name.IsNotNan:
             (column,) = columns
             return Column(
                 plc.unary.is_not_nan(column.obj).with_mask(
                     column.obj.null_mask(), column.obj.null_count()
                 )
             )
-        elif self.name == BooleanFunction.Name.IsFirstDistinct:
+        elif self.name is BooleanFunction.Name.IsFirstDistinct:
             (column,) = columns
             return self._distinct(
                 column,
@@ -228,7 +228,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == BooleanFunction.Name.IsLastDistinct:
+        elif self.name is BooleanFunction.Name.IsLastDistinct:
             (column,) = columns
             return self._distinct(
                 column,
@@ -240,7 +240,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == BooleanFunction.Name.IsUnique:
+        elif self.name is BooleanFunction.Name.IsUnique:
             (column,) = columns
             return self._distinct(
                 column,
@@ -252,7 +252,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == BooleanFunction.Name.IsDuplicated:
+        elif self.name is BooleanFunction.Name.IsDuplicated:
             (column,) = columns
             return self._distinct(
                 column,
@@ -264,7 +264,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == BooleanFunction.Name.AllHorizontal:
+        elif self.name is BooleanFunction.Name.AllHorizontal:
             return Column(
                 reduce(
                     partial(
@@ -275,7 +275,7 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 )
             )
-        elif self.name == BooleanFunction.Name.AnyHorizontal:
+        elif self.name is BooleanFunction.Name.AnyHorizontal:
             return Column(
                 reduce(
                     partial(
@@ -286,10 +286,10 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 )
             )
-        elif self.name == BooleanFunction.Name.IsIn:
+        elif self.name is BooleanFunction.Name.IsIn:
             needles, haystack = columns
             return Column(plc.search.contains(haystack.obj, needles.obj))
-        elif self.name == BooleanFunction.Name.Not:
+        elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
             return Column(
                 plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT)
