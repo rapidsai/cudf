@@ -50,12 +50,11 @@
  * replaced with an initial value if it is provided.
  */
 template <typename cudf_aggregation>
-class test_udf_simple_type : public cudf::host_udf_base {
+struct test_udf_simple_type : cudf::host_udf_base {
   static_assert(std::is_same_v<cudf_aggregation, cudf::reduce_aggregation> ||
                 std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation> ||
                 std::is_same_v<cudf_aggregation, cudf::groupby_aggregation>);
 
- public:
   test_udf_simple_type() = default;
 
   [[nodiscard]] std::unordered_set<input_kind> const& get_required_data_kinds() const override
@@ -100,7 +99,6 @@ class test_udf_simple_type : public cudf::host_udf_base {
 
   [[nodiscard]] output_type get_empty_output(
     [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
-    [[maybe_unused]] std::optional<std::reference_wrapper<cudf::scalar const>> init,
     [[maybe_unused]] rmm::cuda_stream_view stream,
     [[maybe_unused]] rmm::device_async_resource_ref mr) const override
   {
@@ -108,11 +106,6 @@ class test_udf_simple_type : public cudf::host_udf_base {
                   std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
       CUDF_EXPECTS(output_dtype.has_value(),
                    "Data type for the reduction result must be specified.");
-      if (init.has_value() && init.value().get().is_valid(stream)) {
-        CUDF_EXPECTS(output_dtype.value() == init.value().get().type(),
-                     "Data type for reduction result must be the same as init value.");
-        return std::make_unique<cudf::scalar>(init.value().get());
-      }
       return cudf::make_default_constructed_scalar(output_dtype.value(), stream, mr);
     } else {
       return cudf::make_empty_column(
@@ -136,7 +129,6 @@ class test_udf_simple_type : public cudf::host_udf_base {
     return std::make_unique<test_udf_simple_type>();
   }
 
- private:
   struct reduce_fn {
     // Store pointer to the parent class so we can call its functions.
     test_udf_simple_type const* parent;
@@ -163,9 +155,7 @@ class test_udf_simple_type : public cudf::host_udf_base {
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
           input.at(input_kind::INIT_VALUE));
 
-      if (values.size() == 0) {
-        return parent->get_empty_output(output_dtype, input_init_value, stream, mr);
-      }
+      if (values.size() == 0) { return parent->get_empty_output(output_dtype, stream, mr); }
 
       auto const init_value = [&]() -> OutputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
@@ -231,9 +221,7 @@ class test_udf_simple_type : public cudf::host_udf_base {
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
           input.at(input_kind::INIT_VALUE));
 
-      if (values.size() == 0) {
-        return parent->get_empty_output(output_dtype, input_init_value, stream, mr);
-      }
+      if (values.size() == 0) { return parent->get_empty_output(output_dtype, stream, mr); }
 
       auto const init_value = [&]() -> OutputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
@@ -315,9 +303,7 @@ class test_udf_simple_type : public cudf::host_udf_base {
                            rmm::device_async_resource_ref mr) const
     {
       auto const& values = std::get<cudf::column_view>(input.at(input_kind::GROUPED_VALUES));
-      if (values.size() == 0) {
-        return parent->get_empty_output(std::nullopt, std::nullopt, stream, mr);
-      }
+      if (values.size() == 0) { return parent->get_empty_output(std::nullopt, stream, mr); }
 
       auto const offsets =
         std::get<cudf::device_span<cudf::size_type const>>(input.at(input_kind::OFFSETS));
