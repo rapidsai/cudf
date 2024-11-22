@@ -55,109 +55,194 @@ cdef class CsvReaderOptions:
         cdef CsvReaderOptionsBuilder csv_builder = CsvReaderOptionsBuilder.__new__(
             CsvReaderOptionsBuilder
         )
-        csv_builder.c_obj = csv_writer_options.builder(source.c_obj)
+        csv_builder.c_obj = csv_reader_options.builder(source.c_obj)
         csv_builder.source = source
 
-    cpdef void set_header(size_type header):
+    cpdef void set_header(self, size_type header):
         self.c_obj.set_header(header)
 
-    cpdef void set_names(list col_names):
-        pass
+    cpdef void set_names(self, list col_names):
+        cdef vector[string] vec
+        vec.reserve(len(col_names))
+        for name in col_names:
+            vec.push_back(name.encode())
+        self.c_obj.set_names(vec)
 
-    cpdef void set_prefix(str prefix):
-        pass
+    cpdef void set_prefix(self, str prefix):
+        self.c_obj.set_prefix(prefix.encode())
 
-    cpdef void set_use_cols_indexes(list col_indices):
-        pass
+    cpdef void set_use_cols_indexes(self, list col_indices):
+        cdef vector[int] vec
+        vec.reserve(len(col_indices))
+        for i in col_indices:
+            vec.push_back(i)
+        self.c_obj.set_use_cols_indexes(vec)
 
-    cpdef void set_use_cols_names(list col_names):
-        pass
+    cpdef void set_use_cols_names(self, list col_names):
+        cdef vector[string] vec
+        vec.reserve(len(col_names))
+        for name in col_names:
+            vec.push_back(name.encode())
+        self.c_obj.set_use_cols_names(vec)
 
-    cpdef void set_delimiter(str delimiter):
-        pass
+    cpdef void set_delimiter(self, str delimiter):
+        self.c_obj.set_delimiter(ord(delimiter))
 
-    cpdef void set_thousands(str thousands):
-        pass
+    cpdef void set_thousands(self, str thousands):
+        self.c_obj.set_thousands(ord(thousands))
 
-    cpdef void set_comment(str comment):
-        pass
+    cpdef void set_comment(self, str comment):
+        self.c_obj.set_comment(ord(comment))
 
-    cpdef void set_parse_dates(list val):
-        pass
+    cpdef void set_parse_dates(self, list val):
+        cdef vector[string] vec_str
+        cdef vector[int] vec_int
+        if all([isinstance(date, str) for date in val]):
+            vec_str.reserve(len(val))
+            for date in val:
+                vec_str.push_back(date.encode())
+            self.c_obj.set_parse_dates(vec_str)
+        elif all([isinstance(date, int) for date in val]):
+            vec_int.reserve(len(val))
+            for date in val:
+                vec_int.push_back(date)
+            self.c_obj.set_parse_dates(vec_int)
+        else:
+            raise TypeError("Must pass an int or str")
 
-    cpdef void set_parse_hex(list val):
-        pass
+    cpdef void set_parse_hex(self, list[IntOrStr] val):
+        cdef vector[string] vec_str
+        cdef vector[int] vec_int
+        if all([isinstance(hx, str) for hx in val]):
+            vec_str.reserve(len(val))
+            for hx in val:
+                vec_str.push_back(hx.encode())
+            self.c_obj.set_parse_dates(vec_str)
+        elif all([isinstance(hx, int) for hx in val]):
+            vec_int.reserve(len(val))
+            for hx in val:
+                vec_int.push_back(hx)
+            self.c_obj.set_parse_dates(vec_int)
+        else:
+            raise TypeError("Must pass an int or str")
 
-    cpdef void set_dtypes(DictOrList types):
-        pass
+    cpdef void set_dtypes(self, object types):
+        cdef map[string, data_type] dtype_map
+        cdef vector[data_type] dtype_list
+        if isinstance(types, dict):
+            for name, dtype in types.items():
+                dtype_map[name.encode()] = (<DataType>dtype).c_obj
+            self.c_obj.set_dtypes(dtype_map)
+        elif isinstance(types, list):
+            dtype_list.reserve(len(types))
+            for dtype in types:
+                dtype_list.push_back((<DataType>dtype).c_obj)
+            self.c_obj.set_dtypes(dtype_list)
+        else:
+            raise TypeError("Must pass an dict or list")
 
-    cpdef void set_true_values(list true_values):
-        pass
+    cpdef void set_true_values(self, list true_values):
+        cdef vector[string] vec
+        vec.reserve(len(true_values))
+        for val in true_values:
+            vec.push_back(val.encode())
+        self.c_obj.set_true_values(vec)
 
-    cpdef void set_false_values(list false_values):
-        pass
+    cpdef void set_false_values(self, list false_values):
+        cdef vector[string] vec
+        vec.reserve(len(false_values))
+        for val in false_values:
+            vec.push_back(val.encode())
+        self.c_obj.set_false_values(vec)
 
-    cpdef void set_na_values(list na_values):
-        pass
+    cpdef void set_na_values(self, list na_values):
+        cdef vector[string] vec
+        vec.reserve(len(na_values))
+        for val in na_values:
+            vec.push_back(val.encode())
+        self.c_obj.set_na_values(vec)
 
 
 cdef class CsvReaderOptionsBuilder:
-    cdef CsvReaderOptionsBuilder compression(self, compression_type compression):
-        return self.c_obj.compression()
+    cpdef CsvReaderOptionsBuilder compression(self, compression_type compression):
+        self.c_obj.compression(compression)
+        return self
 
-    cdef CsvReaderOptionsBuilder mangle_dupe_cols(self, bool mangle_dupe_cols):
-        pass
+    cpdef CsvReaderOptionsBuilder mangle_dupe_cols(self, bool mangle_dupe_cols):
+        self.c_obj.mangle_dupe_cols(mangle_dupe_cols)
+        return self
 
-    cdef CsvReaderOptionsBuilder byte_range_offset(self, size_t byte_range_offset):
-        pass
+    cpdef CsvReaderOptionsBuilder byte_range_offset(self, size_t byte_range_offset):
+        self.c_obj.byte_range_offset(byte_range_offset)
+        return self
 
-    cdef CsvReaderOptionsBuilder byte_range_size(self, size_t byte_range_size):
-        pass
+    cpdef CsvReaderOptionsBuilder byte_range_size(self, size_t byte_range_size):
+        self.c_obj.byte_range_size(byte_range_size)
+        return self
 
-    cdef CsvReaderOptionsBuilder nrows(self, size_type nrows):
-        pass
+    cpdef CsvReaderOptionsBuilder nrows(self, size_type nrows):
+        self.c_obj.nrows(nrows)
+        return self
 
-    cdef CsvReaderOptionsBuilder skiprows(self, size_type skiprows):
-        pass
+    cpdef CsvReaderOptionsBuilder skiprows(self, size_type skiprows):
+        self.c_obj.skiprows(skiprows)
+        return self
 
-    cdef CsvReaderOptionsBuilder skipfooter(self, size_type skipfooter):
-        pass
+    cpdef CsvReaderOptionsBuilder skipfooter(self, size_type skipfooter):
+        self.c_obj.skipfooter(skipfooter)
+        return self
 
-    cdef CsvReaderOptionsBuilder quoting(self, quote_style quoting):
-        pass
+    cpdef CsvReaderOptionsBuilder quoting(self, quote_style quoting):
+        self.c_obj.quoting(quoting)
+        return self
 
-    cdef CsvReaderOptionsBuilder lineterminator(self, str lineterminator):
-        pass
+    cpdef CsvReaderOptionsBuilder lineterminator(self, str lineterminator):
+        self.c_obj.lineterminator(ord(lineterminator))
+        return self
 
-    cdef CsvReaderOptionsBuilder quotechar(self, str quotechar):
-        pass
+    cpdef CsvReaderOptionsBuilder quotechar(self, str quotechar):
+        self.c_obj.quotechar(ord(quotechar))
+        return self
 
-    cdef CsvReaderOptionsBuilder decimal(self, str decimal):
-        pass
+    cpdef CsvReaderOptionsBuilder decimal(self, str decimal):
+        self.c_obj.decimal(ord(decimal))
+        return self
 
-    cdef CsvReaderOptionsBuilder delim_whitespace(self, bool delim_whitespace):
-        pass
+    cpdef CsvReaderOptionsBuilder delim_whitespace(self, bool delim_whitespace):
+        self.c_obj.delim_whitespace(delim_whitespace)
+        return self
 
-    cdef CsvReaderOptionsBuilder skipinitialspace(self, bool skipinitialspace):
-        pass
+    cpdef CsvReaderOptionsBuilder skipinitialspace(self, bool skipinitialspace):
+        self.c_obj.skipinitialspace(skipinitialspace)
+        return self
 
-    cdef CsvReaderOptionsBuilder skip_blank_lines(self, bool skip_blank_lines):
-        pass
+    cpdef CsvReaderOptionsBuilder skip_blank_lines(self, bool skip_blank_lines):
+        self.c_obj.skip_blank_lines(skip_blank_lines)
+        return self
 
-    cdef CsvReaderOptionsBuilder doublequote(self, bool doublequote):
-        pass
+    cpdef CsvReaderOptionsBuilder doublequote(self, bool doublequote):
+        self.c_obj.doublequote(doublequote)
+        return self
 
-    cdef CsvReaderOptionsBuilder keep_default_na(self, bool keep_default_na):
-        pass
+    cpdef CsvReaderOptionsBuilder keep_default_na(self, bool keep_default_na):
+        self.c_obj.keep_default_na(keep_default_na)
+        return self
 
-    cdef CsvReaderOptionsBuilder na_filter(self, bool na_filter):
-        pass
+    cpdef CsvReaderOptionsBuilder na_filter(self, bool na_filter):
+        self.c_obj.na_filter(na_filter)
+        return self
 
-    cdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst):
-        pass
+    cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst):
+        self.c_obj.dayfirst(dayfirst)
+        return self
 
-    cdef CsvReaderOptions build(self):
-        pass
+    cpdef CsvReaderOptions build(self):
+        cdef CsvReaderOptions csv_options = CsvReaderOptions.__new__(
+            CsvReaderOptions
+        )
+        csv_options.c_obj = move(self.c_obj.build())
+        csv_options.source = self.source
+        return csv_options
 
 
 def read_csv(
