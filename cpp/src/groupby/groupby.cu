@@ -99,6 +99,8 @@ namespace {
 struct empty_column_constructor {
   column_view values;
   aggregation const& agg;
+  rmm::cuda_stream_view stream;
+  rmm::device_async_resource_ref mr;
 
   template <typename ValuesType, aggregation::Kind k>
   std::unique_ptr<cudf::column> operator()() const
@@ -142,7 +144,8 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::HOST_UDF) {
       auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-      return udf_ptr->get_empty_output(std::nullopt, std::nullopt, stream, mr);
+      return std::get<std::unique_ptr<column>>(
+        udf_ptr->get_empty_output(std::nullopt, std::nullopt, stream, mr));
     }
 
     return make_empty_column(target_type(values.type(), k));
@@ -151,25 +154,30 @@ struct empty_column_constructor {
 
 /// Make an empty table with appropriate types for requested aggs
 template <typename RequestType>
-auto empty_results(host_span<RequestType const> requests)
+auto empty_results(host_span<RequestType const> requests,
+                   rmm::cuda_stream_view stream,
+                   rmm::device_async_resource_ref mr)
 {
   std::vector<aggregation_result> empty_results;
 
-  std::transform(
-    requests.begin(), requests.end(), std::back_inserter(empty_results), [](auto const& request) {
-      std::vector<std::unique_ptr<column>> results;
+  std::transform(requests.begin(),
+                 requests.end(),
+                 std::back_inserter(empty_results),
+                 [stream, mr](auto const& request) {
+                   std::vector<std::unique_ptr<column>> results;
 
-      std::transform(
-        request.aggregations.begin(),
-        request.aggregations.end(),
-        std::back_inserter(results),
-        [&request](auto const& agg) {
-          return cudf::detail::dispatch_type_and_aggregation(
-            request.values.type(), agg->kind, empty_column_constructor{request.values, *agg});
-        });
+                   std::transform(request.aggregations.begin(),
+                                  request.aggregations.end(),
+                                  std::back_inserter(results),
+                                  [&request, stream, mr](auto const& agg) {
+                                    return cudf::detail::dispatch_type_and_aggregation(
+                                      request.values.type(),
+                                      agg->kind,
+                                      empty_column_constructor{request.values, *agg, stream, mr});
+                                  });
 
-      return aggregation_result{std::move(results)};
-    });
+                   return aggregation_result{std::move(results)};
+                 });
 
   return empty_results;
 }
@@ -218,7 +226,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return {empty_like(_keys), empty_results(requests)}; }
+  if (_keys.num_rows() == 0) { return {empty_like(_keys), empty_results(requests, stream, mr)}; }
 
   return dispatch_aggregation(requests, stream, mr);
 }
@@ -236,7 +244,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
+  if (_keys.num_rows() == 0) {
+    return std::pair(empty_like(_keys), empty_results(requests, cudf::get_default_stream(), mr));
+  }
 
   return sort_scan(requests, cudf::get_default_stream(), mr);
 }

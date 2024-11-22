@@ -133,7 +133,7 @@ struct segmented_reduce_dispatch_functor {
           }
         }
 
-        return std::get<std::unique_ptr<column>>(udf_ptr(udf_input, stream, mr));
+        return std::get<std::unique_ptr<column>>((*udf_ptr)(udf_input, stream, mr));
       }
       default: CUDF_FAIL("Unsupported aggregation type.");
     }

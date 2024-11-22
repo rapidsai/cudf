@@ -172,7 +172,7 @@ struct reduce_dispatch_functor {
           }
         }
 
-        return std::get<std::unique_ptr<scalar>>(udf_ptr(udf_input, stream, mr));
+        return std::get<std::unique_ptr<scalar>>((*udf_ptr)(udf_input, stream, mr));
       }
       default: CUDF_FAIL("Unsupported reduction operator");
     }

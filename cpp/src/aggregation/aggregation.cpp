@@ -929,16 +929,16 @@ template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_merge_tdigest_aggregation<reduce_aggregation>(int max_centroids);
 
 template <typename Base>
-std::unique_ptr<Base> make_host_udf_aggregation(host_udf_func_type udf_func_)
+std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base>&& udf_ptr_)
 {
-  return std::make_unique<detail::host_udf_aggregation>(udf_func_);
+  return std::make_unique<detail::host_udf_aggregation>(std::move(udf_ptr_));
 }
 template CUDF_EXPORT std::unique_ptr<aggregation> make_host_udf_aggregation<aggregation>(
-  host_udf_func_type);
+  std::unique_ptr<host_udf_base>&&);
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
-  make_host_udf_aggregation<groupby_aggregation>(host_udf_func_type);
+make_host_udf_aggregation<groupby_aggregation>(std::unique_ptr<host_udf_base>&&);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
-  make_host_udf_aggregation<reduce_aggregation>(host_udf_func_type);
+make_host_udf_aggregation<reduce_aggregation>(std::unique_ptr<host_udf_base>&&);
 
 namespace detail {
 namespace {

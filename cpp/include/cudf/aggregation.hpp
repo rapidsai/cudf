@@ -679,7 +679,7 @@ struct host_udf_base {
   [[nodiscard]] virtual output_type operator()(
     std::unordered_map<input_kind, input_data> const& input,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) = 0;
+    rmm::device_async_resource_ref mr) const = 0;
 
   /**
    * @brief Get the output when the input values is empty.
@@ -697,7 +697,7 @@ struct host_udf_base {
     std::optional<data_type> output_dtype,
     std::optional<std::reference_wrapper<scalar const>> init,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const = 0;
+    rmm::device_async_resource_ref mr) const = 0;
 
   /**
    * @brief Compares two instances of the derived class for equality.
