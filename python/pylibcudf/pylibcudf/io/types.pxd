@@ -1,4 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+from libc.stdint cimport uint8_t, int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from pylibcudf.libcudf.io.data_sink cimport data_sink
@@ -18,8 +20,45 @@ from pylibcudf.libcudf.io.types cimport (
     table_metadata,
     table_with_metadata,
 )
+from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 
+
+cdef class PartitionInfo:
+    cdef partition_info c_obj
+
+cdef class ColumnInMetadata:
+    cdef column_in_metadata c_obj
+
+    @staticmethod
+    cdef ColumnInMetadata from_metadata(column_in_metadata metadata)
+
+    cpdef ColumnInMetadata set_name(self, str name)
+
+    cpdef ColumnInMetadata set_name(self, str name)
+
+    cpdef ColumnInMetadata set_nullability(self, bool nullable)
+
+    cpdef ColumnInMetadata set_list_column_as_map(self)
+
+    cpdef ColumnInMetadata set_int96_timestamps(self, bool req)
+
+    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t req)
+
+    cpdef ColumnInMetadata child(self, size_type i)
+
+    cpdef ColumnInMetadata set_output_as_binary(self, bool binary)
+
+    cpdef ColumnInMetadata set_type_length(self, int32_t type_length)
+
+    cpdef ColumnInMetadata set_skip_compression(self, bool skip)
+
+    cpdef ColumnInMetadata set_encoding(self, column_encoding encoding)
+
+    cpdef str get_name(self)
+
+cdef class TableInputMetadata:
+    cdef table_input_metadata c_obj
 
 cdef class TableWithMetadata:
     cdef public Table tbl

@@ -43,7 +43,6 @@ set(cython_sources
     text.pyx
     timezone.pyx
     transform.pyx
-    transpose.pyx
     types.pyx
     utils.pyx
 )
