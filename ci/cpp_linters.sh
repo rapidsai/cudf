@@ -25,7 +25,7 @@ RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 source rapids-configure-sccache
 
 # Run the build via CMake, which will run clang-tidy when CUDF_STATIC_LINTERS is enabled.
-cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_STATIC_LINTERS=ON -GNinja
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DCUDF_STATIC_LINTERS=ON -DBUILD_TESTS=OFF -GNinja
 cmake --build cpp/build 2>&1 | python cpp/scripts/parse_iwyu_output.py
 
 # Remove invalid components of the path for local usage. The path below is
