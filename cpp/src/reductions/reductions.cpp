@@ -154,7 +154,7 @@ struct reduce_dispatch_functor {
         for (auto const kind : data_kinds) {
           switch (kind) {
             case cudf::host_udf_base::input_kind::INPUT_VALUES: {
-              udf_input.emplace(kind, values);
+              udf_input.emplace(kind, col);
               break;
             }
 
