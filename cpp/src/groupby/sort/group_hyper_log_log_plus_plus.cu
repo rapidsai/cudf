@@ -43,8 +43,14 @@ namespace groupby {
 namespace detail {
 namespace {
 
-// The number of bits required by register value. Register value stores num of zeros.
-// XXHash64 value is 64 bits, it's safe to use 6 bits to store a register value.
+/**
+ * The number of bits that is required for register value.
+ *
+ * This number is determined by the maximum number of leading binary zeros a hashcode can
+ * produce. This is equal to the number of bits the hashcode returns. The current
+ * implementation uses a 64-bit hashcode, this means 6-bits are (at most) needed to store the
+ * number of leading zeros.
+ */
 constexpr int REGISTER_VALUE_BITS = 6;
 
 // MASK binary 6 bits: 111111
@@ -630,10 +636,14 @@ std::unique_ptr<column> merge_hyper_log_log(
 }
 
 /**
- * launch only 1 block
+ * Launch only 1 block, uses max 1M(2^18 *sizeof(int)) shared memory.
+ * For each hash, get a pair: (register index, register value).
+ * Use shared memory to speedup the fetch max atomic operation.
  */
 template <int block_size>
-CUDF_KERNEL void reduce_hllpp_kernel(column_device_view hashs, int32_t* const output, int precision)
+CUDF_KERNEL void reduce_hllpp_kernel(column_device_view hashs,
+                                     cudf::device_span<int64_t*> output,
+                                     int precision)
 {
   __shared__ int32_t shared_data[block_size];
 
@@ -649,10 +659,12 @@ CUDF_KERNEL void reduce_hllpp_kernel(column_device_view hashs, int32_t* const ou
   }
   __syncthreads();
 
-  // update max reg value
+  // update max reg value for the reg index
   for (int i = tid; i < num_hashs; i += block_size) {
-    uint64_t const hash    = static_cast<uint64_t>(hashs.element<int64_t>(i));
+    uint64_t const hash = static_cast<uint64_t>(hashs.element<int64_t>(i));
+    // use unsigned int to avoid insert 1 for the highest bit when do right shift
     uint64_t const reg_idx = hash >> idx_shift;
+    // get the leading zeros
     int const reg_v =
       static_cast<int>(cuda::std::countl_zero((hash << precision) | w_padding) + 1ULL);
     cuda::atomic_ref<int32_t, cuda::thread_scope_block> register_ref(shared_data[reg_idx]);
@@ -660,9 +672,22 @@ CUDF_KERNEL void reduce_hllpp_kernel(column_device_view hashs, int32_t* const ou
   }
   __syncthreads();
 
-  // copy to output
-  for (int i = tid; i < num_registers_per_sketch; i += block_size) {
-    output[i] = shared_data[i];
+  // compact from register values (int array) to long array
+  // each long holds 10 integers, note reg value < 64 which means the bits from 7 to highest are all
+  // 0.
+  if (tid * REGISTERS_PER_LONG < num_registers_per_sketch) {
+    int start = tid * REGISTERS_PER_LONG;
+    int end   = (tid + 1) * REGISTERS_PER_LONG;
+    if (end > num_registers_per_sketch) { end = num_registers_per_sketch; }
+
+    int64_t ret = 0;
+    for (int i = 0; i < end - start; i++) {
+      int shift   = i * REGISTER_VALUE_BITS;
+      int64_t reg = shared_data[start + i];
+      ret |= (reg << shift);
+    }
+
+    output[tid][0] = ret;
   }
 }
 
@@ -685,15 +710,7 @@ std::unique_ptr<scalar> reduce_hllpp(column_view const& input,
     cudf::hashing::detail::xxhash_64_device_row_hasher(nullable, *d_input_table, SEED));
   auto d_hashs = cudf::column_device_view::create(hash_col->view(), stream);
 
-  // 2. reduce
-  rmm::device_uvector<int32_t> output_tmp(num_registers_per_sketch, stream, mr);
-  constexpr int64_t block_size = 256;
-  // max shared memory is 2^18 * 4 = 1M
-  auto const shared_mem_size = num_registers_per_sketch * sizeof(int32_t);
-  reduce_hllpp_kernel<block_size>
-    <<<1, block_size, shared_mem_size, stream.value()>>>(*d_hashs, output_tmp.begin(), precision);
-
-  // 3. compact to longs
+  // 2. generate long columns, the size of each long column is 1
   auto num_long_cols      = num_registers_per_sketch / REGISTERS_PER_LONG + 1;
   auto const results_iter = cudf::detail::make_counting_transform_iterator(0, [&](int i) {
     return make_numeric_column(
@@ -709,12 +726,15 @@ std::unique_ptr<scalar> reduce_hllpp(column_view const& input,
       std::vector<int64_t*>(host_results_pointer_iter, host_results_pointer_iter + children.size());
     return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
   }();
-  auto const num_compact_threads = num_long_cols;
-  auto const num_compact_blocks = cudf::util::div_rounding_up_safe(num_compact_threads, block_size);
-  compact_kernel<<<num_compact_blocks, block_size, 0, stream.value()>>>(
-    1 /**num_groups*/, num_registers_per_sketch, d_results, output_tmp);
 
-  // 4. create scalar
+  // 2. reduce and generate compacted long values
+  constexpr int64_t block_size = 256;
+  // max shared memory is 2^18 * 4 = 1M
+  auto const shared_mem_size = num_registers_per_sketch * sizeof(int32_t);
+  reduce_hllpp_kernel<block_size>
+    <<<1, block_size, shared_mem_size, stream.value()>>>(*d_hashs, d_results, precision);
+
+  // 3. create struct scalar
   auto host_results_view_iter = thrust::make_transform_iterator(
     children.begin(), [](auto const& results_column) { return results_column->view(); });
   auto views =
