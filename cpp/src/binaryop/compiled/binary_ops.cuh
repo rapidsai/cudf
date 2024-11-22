@@ -255,7 +255,7 @@ struct binary_op_double_device_dispatcher {
 template <typename Functor>
 void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
 {
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
                      thrust::counting_iterator<size_type>(0),
                      size,
                      std::forward<Functor&&>(f));
