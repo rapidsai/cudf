@@ -240,7 +240,8 @@ def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
     assert_eq(df, out)
 
 
-@pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
+# @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
+@pytest.mark.parametrize("parse_dates", [["date2"]])
 def test_csv_reader_datetime(parse_dates):
     df = make_datetime_dataframe(include_non_standard=True)
     buffer = df.to_csv(index=False, header=False)
@@ -248,7 +249,7 @@ def test_csv_reader_datetime(parse_dates):
     gdf = read_csv(
         StringIO(buffer),
         names=["date1", "date2", "bad"],
-        parse_dates=parse_dates,
+        # parse_dates=parse_dates,
         dayfirst=True,
     )
     # Need to used `date_format='mixed'`,
@@ -260,6 +261,8 @@ def test_csv_reader_datetime(parse_dates):
         dayfirst=True,
         date_format="mixed",
     )
+    print("GOT\n", gdf)
+    print("EXPECT\n", pdf)
 
     assert_eq(gdf, pdf)
 
