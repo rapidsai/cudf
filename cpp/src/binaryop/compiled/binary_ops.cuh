@@ -245,24 +245,6 @@ struct binary_op_double_device_dispatcher {
 };
 
 /**
- * @brief Simplified for_each kernel
- *
- * @param size number of elements to process.
- * @param f Functor object to call for each element.
- */
-template <typename Functor>
-CUDF_KERNEL void for_each_kernel(cudf::size_type size, Functor f)
-{
-  auto start        = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-
-#pragma unroll
-  for (auto i = start; i < size; i += stride) {
-    f(i);
-  }
-}
-
-/**
  * @brief Launches Simplified for_each kernel with maximum occupancy grid dimensions.
  *
  * @tparam Functor
@@ -273,13 +255,10 @@ CUDF_KERNEL void for_each_kernel(cudf::size_type size, Functor f)
 template <typename Functor>
 void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
 {
-  int block_size;
-  int min_grid_size;
-  CUDF_CUDA_TRY(
-    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
-  auto grid = cudf::detail::grid_1d(size, block_size, 2 /* elements_per_thread */);
-  for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    size, std::forward<Functor&&>(f));
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::counting_iterator<size_type>(0),
+                     size,
+                     std::forward<Functor&&>(f));
 }
 
 template <class BinaryOperator>
