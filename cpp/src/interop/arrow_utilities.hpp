@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -85,6 +86,16 @@ template <typename DeviceType>
 std::unique_ptr<rmm::device_buffer> decimals_to_arrow(cudf::column_view input,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::device_async_resource_ref mr);
+
+template <typename T, class Enable = void>
+struct DeviceType {
+  using type = T;
+};
+
+template <typename T>
+struct DeviceType<T, typename std::enable_if_t<is_fixed_point<T>(), void>> {
+  using type = typename T::rep;
+};
 
 }  // namespace detail
 }  // namespace cudf

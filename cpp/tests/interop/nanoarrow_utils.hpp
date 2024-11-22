@@ -218,6 +218,24 @@ DEFINE_NANOARROW_STORAGE(__int128_t, DECIMAL128);
 #undef DEFINE_NANOARROW_STORAGE
 
 template <typename T>
+struct nanoarrow_decimal_type {};
+
+template <>
+struct nanoarrow_decimal_type<int32_t> {
+  static constexpr ArrowType type = NANOARROW_TYPE_DECIMAL32;
+};
+
+template <>
+struct nanoarrow_decimal_type<int64_t> {
+  static constexpr ArrowType type = NANOARROW_TYPE_DECIMAL64;
+};
+
+template <>
+struct nanoarrow_decimal_type<__int128_t> {
+  static constexpr ArrowType type = NANOARROW_TYPE_DECIMAL128;
+};
+
+template <typename T>
 std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, nanoarrow::UniqueArray>
 get_nanoarrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {})
 {

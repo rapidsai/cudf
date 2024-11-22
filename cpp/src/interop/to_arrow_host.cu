@@ -115,8 +115,7 @@ struct dispatch_to_arrow_host {
     CUDF_FAIL("Unsupported type for to_arrow_host", cudf::data_type_error);
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || is_fixed_point<T>())>
   int operator()(ArrowArray* out) const
   {
     nanoarrow::UniqueArray tmp;
@@ -125,7 +124,7 @@ struct dispatch_to_arrow_host {
     NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), storage_type, column));
 
     NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-    using DataType = std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, T>;
+    using DataType = typename detail::DeviceType<T>::type;
     NANOARROW_RETURN_NOT_OK(
       populate_data_buffer(device_span<DataType const>(column.data<DataType>(), column.size()),
                            ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
@@ -134,31 +133,6 @@ struct dispatch_to_arrow_host {
     return NANOARROW_OK;
   }
 
-  // convert decimal types from libcudf to arrow where those types are not directly
-  // supported by Arrow. These types must be fit into 128 bits, the smallest
-  // decimal resolution supported by Arrow
-  template <typename T,
-            CUDF_ENABLE_IF(!is_rep_layout_compatible<T>() &&
-                           (std::is_same_v<T, numeric::decimal32> ||
-                            std::is_same_v<T, numeric::decimal64>))>
-  int operator()(ArrowArray* out) const
-  {
-    using DeviceType = std::conditional_t<std::is_same_v<T, numeric::decimal32>, int32_t, int64_t>;
-    nanoarrow::UniqueArray tmp;
-    NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
-
-    NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-    auto buf = detail::convert_decimals_to_decimal128<DeviceType>(column, stream, mr);
-    // No need to synchronize stream here as populate_data_buffer uses the same stream to copy data
-    // to host.
-    NANOARROW_RETURN_NOT_OK(
-      populate_data_buffer(device_span<__int128_t const>(
-                             reinterpret_cast<const __int128_t*>(buf->data()), column.size()),
-                           ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
-
-    ArrowArrayMove(tmp.get(), out);
-    return NANOARROW_OK;
-  }
 };
 
 int get_column(cudf::column_view column,

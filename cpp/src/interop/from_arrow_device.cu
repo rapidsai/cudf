@@ -49,9 +49,7 @@ namespace {
 using dispatch_tuple_t = std::tuple<column_view, owned_columns_t>;
 
 struct dispatch_from_arrow_device {
-  template <typename T,
-            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() &&
-                           !std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() && !is_fixed_point<T>())>
   dispatch_tuple_t operator()(ArrowSchemaView*,
                               ArrowArray const*,
                               data_type,
@@ -62,8 +60,7 @@ struct dispatch_from_arrow_device {
     CUDF_FAIL("Unsupported type in from_arrow_device", cudf::data_type_error);
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || is_fixed_point<T>())>
   dispatch_tuple_t operator()(ArrowSchemaView* schema,
                               ArrowArray const* input,
                               data_type type,

@@ -25,6 +25,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/interop.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/interop.hpp>
@@ -95,7 +96,12 @@ struct FromArrowHostDeviceTest : public cudf::test::BaseFixture {};
 template <typename T>
 struct FromArrowHostDeviceTestDurationsTest : public cudf::test::BaseFixture {};
 
+template <typename T>
+struct FromArrowHostDeviceTestDecimalsTest : public cudf::test::BaseFixture {};
+
 TYPED_TEST_SUITE(FromArrowHostDeviceTestDurationsTest, cudf::test::DurationTypes);
+using FixedPointTypes = cudf::test::Types<int32_t, int64_t, __int128_t>;
+TYPED_TEST_SUITE(FromArrowHostDeviceTestDecimalsTest, FixedPointTypes);
 
 TEST_F(FromArrowHostDeviceTest, EmptyTable)
 {
@@ -213,6 +219,242 @@ TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
   cudf::table_view from_struct{
     std::vector<cudf::column_view>(got_cudf_col_view.child_begin(), got_cudf_col_view.child_end())};
   CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+}
+
+template <typename T>
+using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
+
+TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTable)
+{
+  using T = TypeParam;
+  using namespace numeric;
+
+  auto const precision = []() {
+    if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return cudf::detail::max_precision<T>();
+  }();
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
+    auto const col      = fp_wrapper<T>(data.cbegin(), data.cend(), scale_type{scale});
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
+    ArrowSchemaInit(input_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
+
+    nanoarrow::UniqueArray input_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
+    input_array->length     = expected.num_rows();
+    input_array->null_count = 0;
+
+    auto arr = get_nanoarrow_array<T>(data);
+    arr.move(input_array->children[0]);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+    ArrowDeviceArray input;
+    memcpy(&input.array, input_array.get(), sizeof(ArrowArray));
+    input.device_id   = -1;
+    input.device_type = ARROW_DEVICE_CPU;
+
+    // converting arrow host memory to cudf table gives us the expected table
+    auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+
+    // converting to a cudf table with a single struct column gives us the expected
+    // result column
+    auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    auto got_cudf_col_view = got_cudf_col->view();
+    cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
+                                                                got_cudf_col_view.child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+  }
+}
+
+TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLarge)
+{
+  using T = TypeParam;
+  using namespace numeric;
+
+  auto const precision = []() {
+    if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return cudf::detail::max_precision<T>();
+  }();
+
+  auto constexpr NUM_ELEMENTS = 1000;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto iota = thrust::make_counting_iterator(1);
+    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});    
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
+    ArrowSchemaInit(input_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
+
+    nanoarrow::UniqueArray input_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
+    input_array->length     = expected.num_rows();
+    input_array->null_count = 0;
+
+    auto arr = get_nanoarrow_array<T>(data);
+    arr.move(input_array->children[0]);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+    ArrowDeviceArray input;
+    memcpy(&input.array, input_array.get(), sizeof(ArrowArray));
+    input.device_id   = -1;
+    input.device_type = ARROW_DEVICE_CPU;
+
+    // converting arrow host memory to cudf table gives us the expected table
+    auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+
+    // converting to a cudf table with a single struct column gives us the expected
+    // result column
+    auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    auto got_cudf_col_view = got_cudf_col->view();
+    cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
+                                                                got_cudf_col_view.child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+  }
+}
+
+TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableNulls)
+{
+  using T = TypeParam;
+  using namespace numeric;
+
+  auto const precision = []() {
+    if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return cudf::detail::max_precision<T>();
+  }();
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
+    auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
+    auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
+    ArrowSchemaInit(input_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
+
+    nanoarrow::UniqueArray input_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
+    input_array->length     = expected.num_rows();    
+
+    auto arr = get_nanoarrow_array<T>(data, validity);
+    arr.move(input_array->children[0]);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+    ArrowDeviceArray input;
+    memcpy(&input.array, input_array.get(), sizeof(ArrowArray));
+    input.device_id   = -1;
+    input.device_type = ARROW_DEVICE_CPU;
+
+    // converting arrow host memory to cudf table gives us the expected table
+    auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+
+    // converting to a cudf table with a single struct column gives us the expected
+    // result column
+    auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    auto got_cudf_col_view = got_cudf_col->view();
+    cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
+                                                                got_cudf_col_view.child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+  }
+}
+
+
+TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
+{
+  using T = TypeParam;
+  using namespace numeric;
+
+  auto const precision = []() {
+    if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return cudf::detail::max_precision<T>();
+  }();
+
+  auto constexpr NUM_ELEMENTS = 1000;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto every_other = [](auto i) { return i % 2 ? 0 : 1; };
+    auto validity = cudf::detail::make_counting_transform_iterator(0, every_other);
+    std::vector<uint8_t> validity_vec(validity, validity + NUM_ELEMENTS);
+    auto iota = thrust::make_counting_iterator(1);
+    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, cudf::detail::make_counting_transform_iterator(0, every_other), scale_type{scale});
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 1));
+    ArrowSchemaInit(input_schema->children[0]);
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      input_schema->children[0], nanoarrow_decimal_type<T>::type, precision, -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
+
+    nanoarrow::UniqueArray input_array;
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
+    input_array->length     = expected.num_rows();    
+
+    auto arr = get_nanoarrow_array<T>(data, validity_vec);
+    arr.move(input_array->children[0]);
+    NANOARROW_THROW_NOT_OK(
+      ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+    ArrowDeviceArray input;
+    memcpy(&input.array, input_array.get(), sizeof(ArrowArray));
+    input.device_id   = -1;
+    input.device_type = ARROW_DEVICE_CPU;
+
+    // converting arrow host memory to cudf table gives us the expected table
+    auto got_cudf_table = cudf::from_arrow_host(input_schema.get(), &input);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+
+    // converting to a cudf table with a single struct column gives us the expected
+    // result column
+    auto got_cudf_col = cudf::from_arrow_host_column(input_schema.get(), &input);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    auto got_cudf_col_view = got_cudf_col->view();
+    cudf::table_view from_struct{std::vector<cudf::column_view>(got_cudf_col_view.child_begin(),
+                                                                got_cudf_col_view.child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
+  }
 }
 
 TEST_F(FromArrowHostDeviceTest, NestedList)

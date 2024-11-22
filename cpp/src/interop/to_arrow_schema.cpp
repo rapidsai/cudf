@@ -76,15 +76,10 @@ struct dispatch_to_arrow_type {
 };
 
 template <typename DeviceType>
-int decimals_to_arrow(column_view input, ArrowSchema* out)
+int decimals_to_arrow(column_view input, int32_t precision, ArrowSchema* out)
 {
-  // Arrow doesn't support decimal32/decimal64 currently. decimal128
-  // is the smallest that arrow supports besides float32/float64 so we
-  // upcast to decimal128.
-  return ArrowSchemaSetTypeDecimal(out,
-                                   NANOARROW_TYPE_DECIMAL128,
-                                   cudf::detail::max_precision<DeviceType>(),
-                                   -input.type().scale());
+  return ArrowSchemaSetTypeDecimal(
+    out, id_to_arrow_type(input.type().id()), precision, -input.type().scale());
 }
 
 template <>
@@ -93,7 +88,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
                                                            ArrowSchema* out)
 {
   using DeviceType = int32_t;
-  return decimals_to_arrow<DeviceType>(input, out);
+  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
 }
 
 template <>
@@ -102,7 +97,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
                                                            ArrowSchema* out)
 {
   using DeviceType = int64_t;
-  return decimals_to_arrow<DeviceType>(input, out);
+  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>() - 1, out);
 }
 
 template <>
@@ -111,7 +106,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
                                                             ArrowSchema* out)
 {
   using DeviceType = __int128_t;
-  return decimals_to_arrow<DeviceType>(input, out);
+  return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>(), out);
 }
 
 template <>
