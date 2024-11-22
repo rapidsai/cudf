@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <tests/groupby/groupby_test_util.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/debug_utilities.hpp>
@@ -24,6 +22,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/groupby.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -34,7 +33,60 @@ using namespace cudf::test::iterators;
 
 struct test : public cudf::test::BaseFixture {};
 
-// For each group: compute (group_idx + 1)* values^2 * 2
+/**
+ * @brief A host-based UDF implementation.
+ *
+ * The aggregations perform the following computation:
+ *  - For reduction: compute `sum(value^2, for value in group)`.
+ *  - For segmented reduction: compute `group_size * sum(value^2, for value in group)`.
+ *  - For groupby: compute `(group_label + 1) * sum(value^2, for value in group)`.
+ */
+template <typename cudf_aggregation>
+struct special_sum : cudf::host_udf_base {
+  [[nodiscard]] std::unordered_set<input_kind> const& get_required_data_kinds() const override
+  {
+    static std::unordered_set<input_kind> const required_data_kinds =
+      [&] -> std::unordered_set<input_kind> {
+      if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
+        return {input_kind::INPUT_VALUES, input_kind::OUTPUT_DTYPE, input_kind::INIT_VALUE};
+      } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
+        return {input_kind::INPUT_VALUES,
+                input_kind::OUTPUT_DTYPE,
+                input_kind::INIT_VALUE,
+                input_kind::NULL_POLICY,
+                input_kind::OFFSETS};
+      } else if constexpr (std::is_same_v<cudf_aggregation, cudf::groupby_aggregation>) {
+        return {
+          input_kind::OFFSETS,
+          input_kind::GROUP_LABELS,
+          input_kind::GROUPED_VALUES,
+          input_kind::NUM_GROUPS,
+        };
+      } else {
+        CUDF_FAIL("Unsupported agregation type.");
+        return {};
+      }
+    }();
+
+    return required_data_kinds;
+  }
+
+  [[nodiscard]] output_type operator()(std::unordered_map<input_kind, input_data> const& input,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr) override
+  {
+  }
+
+  [[nodiscard]] output_type get_empty_output() const override
+  {
+    //
+  }
+
+  [[nodiscard]] bool is_equal(host_udf_base const& other) const override;
+  [[nodiscard]] std::size_t do_hash() const override;
+  [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override;
+};
+
 std::unique_ptr<cudf::column> double_sqr(cudf::column_view const& values,
                                          cudf::device_span<cudf::size_type const> group_offsets,
                                          cudf::device_span<cudf::size_type const> group_labels,
