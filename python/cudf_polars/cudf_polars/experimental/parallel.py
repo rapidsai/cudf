@@ -49,7 +49,7 @@ def lower_ir_node(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """Rewrite an IR node with proper partitioning."""
-    raise AssertionError(f"Unhandled type {type(ir)}")
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
 
 
 @lower_ir_node.register(IR)
@@ -96,7 +96,7 @@ def generate_ir_tasks(
     An IR node only needs to generate the graph for
     the current IR logic (not including child IRs).
     """
-    raise AssertionError(f"Unhandled type {type(ir)}")
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
 
 
 @generate_ir_tasks.register(IR)
