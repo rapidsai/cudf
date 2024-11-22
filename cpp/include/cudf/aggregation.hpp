@@ -688,16 +688,13 @@ struct host_udf_base {
    * intermediate data when the input values is empty.
    *
    * @param output_dtype The expected output data type for reduction (if specified)
-   * @param init The initial value for reduction (if specified)
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation when input values is empty
    */
-  [[nodiscard]] virtual output_type get_empty_output(
-    std::optional<data_type> output_dtype,
-    std::optional<std::reference_wrapper<scalar const>> init,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const = 0;
+  [[nodiscard]] virtual output_type get_empty_output(std::optional<data_type> output_dtype,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::device_async_resource_ref mr) const = 0;
 
   /**
    * @brief Compares two instances of the derived class for equality.
