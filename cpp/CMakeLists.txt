@@ -91,7 +91,8 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
+option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
+option(CUDF_IWYU "Enable IWYU during compilation" OFF)
 
 option(
   CUDF_KVIKIO_REMOTE_IO
@@ -159,9 +160,7 @@ endif()
 
 # ##################################################################################################
 # * linter configuration ---------------------------------------------------------------------------
-if(CUDF_STATIC_LINTERS)
-  # For simplicity, for now we assume that all linters can be installed into an environment where
-  # any linter is being run. We could relax this requirement if desired.
+if(CUDF_CLANG_TIDY)
   find_program(
     CLANG_TIDY_EXE
     NAMES "clang-tidy"
@@ -188,7 +187,9 @@ if(CUDF_STATIC_LINTERS)
         "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
     )
   endif()
+endif()
 
+if(CUDF_IWYU)
   find_program(IWYU_EXE NAMES include-what-you-use iwyu REQUIRED)
 endif()
 
@@ -201,38 +202,36 @@ function(enable_static_checkers target)
     _LINT "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
   )
 
-  if(CUDF_STATIC_LINTERS)
-    if(_LINT_CLANG_TIDY)
-      # clang will complain about unused link libraries on the compile line unless we specify
-      # -Qunused-arguments.
-      set_target_properties(
-        ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
-      )
-    endif()
-    if(_LINT_IWYU)
-      # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
-      # relevant since they don't show up in any other build so it's better to suppress them until
-      # we can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not
-      # appear to be sufficient, we must also ensure that it is set to the underlying target's CXX
-      # compile flags. To do this completely cleanly we should modify the flags on the target rather
-      # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
-      # the linters on real builds.
-      foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
-        list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
-        if(_flag_index EQUAL -1)
-          list(APPEND CUDF_CXX_FLAGS ${_flag})
-        endif()
-      endforeach()
-      set(CUDF_CXX_FLAGS
-          "${CUDF_CXX_FLAGS}"
-          PARENT_SCOPE
-      )
-      set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
-    endif()
-    foreach(file IN LISTS _LINT_SKIPPED_FILES)
-      set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
-    endforeach()
+  if(_LINT_CLANG_TIDY)
+    # clang will complain about unused link libraries on the compile line unless we specify
+    # -Qunused-arguments.
+    set_target_properties(
+      ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
+    )
   endif()
+  if(_LINT_IWYU)
+    # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
+    # relevant since they don't show up in any other build so it's better to suppress them until we
+    # can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not appear to
+    # be sufficient, we must also ensure that it is set to the underlying target's CXX compile
+    # flags. To do this completely cleanly we should modify the flags on the target rather than the
+    # global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run the linters
+    # on real builds.
+    foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
+      list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
+      if(_flag_index EQUAL -1)
+        list(APPEND CUDF_CXX_FLAGS ${_flag})
+      endif()
+    endforeach()
+    set(CUDF_CXX_FLAGS
+        "${CUDF_CXX_FLAGS}"
+        PARENT_SCOPE
+    )
+    set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+  endif()
+  foreach(file IN LISTS _LINT_SKIPPED_FILES)
+    set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
+  endforeach()
 endfunction()
 
 # ##################################################################################################
@@ -812,9 +811,18 @@ set_target_properties(
 
 # Note: This must come before the target_compile_options below so that the function can modify the
 # flags if necessary.
-enable_static_checkers(
-  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
-)
+if(CUDF_CLANG_TIDY OR CUDF_IWYU)
+  set(linters)
+  if(CUDF_CLANG_TIDY)
+    list(APPEND linters CLANG_TIDY)
+  endif()
+  if(CUDF_IWYU)
+    list(APPEND linters IWYU)
+  endif()
+  enable_static_checkers(
+    cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp ${linters}
+  )
+endif()
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
