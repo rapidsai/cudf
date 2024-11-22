@@ -142,7 +142,7 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::HOST_UDF) {
       auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-      return udf_ptr->get_empty_output();
+      return udf_ptr->get_empty_output(std::nullopt, std::nullopt, stream, mr);
     }
 
     return make_empty_column(target_type(values.type(), k));

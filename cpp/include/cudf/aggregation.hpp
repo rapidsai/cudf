@@ -640,10 +640,9 @@ struct host_udf_base {
     GROUP_LABELS,           // group labels used in sort-based groupby
     SORTED_GROUPED_VALUES,  // the input values grouped according to the input `keys` and
                             // sorted within each group, used in sort-based groupby
-    GROUPED_VALUES,         // the input values grouped according to the input `keys` for which the
+    GROUPED_VALUES          // the input values grouped according to the input `keys` for which the
                             // values within each group maintain their original order,
                             // used in sort-based groupby
-    NUM_GROUPS              // number of groups, used in sort-based groupby
   };
 
   /**
@@ -661,8 +660,7 @@ struct host_udf_base {
                                   std::optional<std::reference_wrapper<scalar const>>,
                                   null_policy,
                                   scan_type,
-                                  device_span<size_type const>,
-                                  size_type>;
+                                  device_span<size_type const>>;
 
   /**
    * Output type of the aggregation. It can be either a scalar (for reduction) or a column
@@ -689,9 +687,17 @@ struct host_udf_base {
    * This may be called in the situations that libcudf tries to avoid unnecessarily evaluating the
    * intermediate data when the input values is empty.
    *
+   * @param output_dtype The expected output data type for reduction (if specified)
+   * @param init The initial value for reduction (if specified)
+   * @param stream The CUDA stream to use for any kernel launches
+   * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation when input values is empty
    */
-  [[nodiscard]] virtual output_type get_empty_output() const = 0;
+  [[nodiscard]] virtual output_type get_empty_output(
+    std::optional<data_type> output_dtype,
+    std::optional<std::reference_wrapper<scalar const>> init,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const = 0;
 
   /**
    * @brief Compares two instances of the derived class for equality.

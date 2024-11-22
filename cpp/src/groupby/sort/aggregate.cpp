@@ -483,11 +483,6 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
         break;
       }
 
-      case cudf::host_udf_base::input_kind::NUM_GROUPS: {
-        udf_input.emplace(kind, helper.num_groups(stream));
-        break;
-      }
-
       default: CUDF_FAIL("Unsupported data kind in host-based UDF groupby aggregation.");
     }
   }
