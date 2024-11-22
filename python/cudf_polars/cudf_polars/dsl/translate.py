@@ -22,6 +22,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.boolean import BooleanFunctionName
+from cudf_polars.dsl.expressions.string import StringFunctionName
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
@@ -532,10 +533,12 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
                         column.dtype,
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
-            return expr.StringFunction(dtype, name, options, column, chars)
+            return expr.StringFunction(
+                dtype, StringFunctionName.get_polars_type(name), options, column, chars
+            )
         return expr.StringFunction(
             dtype,
-            name,
+            StringFunctionName.get_polars_type(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
