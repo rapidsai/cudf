@@ -28,6 +28,8 @@ __all__ = [
     "write_csv",
     "CsvWriterOptions",
     "CsvWriterOptionsBuilder",
+    "CsvReaderOptions",
+    "CsvReaderOptionsBuilder",
 ]
 
 cdef tuple _process_parse_dates_hex(list cols):
@@ -45,6 +47,117 @@ cdef vector[string] _make_str_vector(list vals):
     for val in vals:
         res.push_back((<str?>val).encode())
     return res
+
+
+cdef class CsvReaderOptions:
+    @staticmethod
+    def builder(SourceInfo source):
+        cdef CsvReaderOptionsBuilder csv_builder = CsvReaderOptionsBuilder.__new__(
+            CsvReaderOptionsBuilder
+        )
+        csv_builder.c_obj = csv_writer_options.builder(source.c_obj)
+        csv_builder.source = source
+
+    cpdef void set_header(size_type header):
+        self.c_obj.set_header(header)
+
+    cpdef void set_names(list col_names):
+        pass
+
+    cpdef void set_prefix(str prefix):
+        pass
+
+    cpdef void set_use_cols_indexes(list col_indices):
+        pass
+
+    cpdef void set_use_cols_names(list col_names):
+        pass
+
+    cpdef void set_delimiter(str delimiter):
+        pass
+
+    cpdef void set_thousands(str thousands):
+        pass
+
+    cpdef void set_comment(str comment):
+        pass
+
+    cpdef void set_parse_dates(list val):
+        pass
+
+    cpdef void set_parse_hex(list val):
+        pass
+
+    cpdef void set_dtypes(DictOrList types):
+        pass
+
+    cpdef void set_true_values(list true_values):
+        pass
+
+    cpdef void set_false_values(list false_values):
+        pass
+
+    cpdef void set_na_values(list na_values):
+        pass
+
+
+cdef class CsvReaderOptionsBuilder:
+    cdef CsvReaderOptionsBuilder compression(self, compression_type compression):
+        return self.c_obj.compression()
+
+    cdef CsvReaderOptionsBuilder mangle_dupe_cols(self, bool mangle_dupe_cols):
+        pass
+
+    cdef CsvReaderOptionsBuilder byte_range_offset(self, size_t byte_range_offset):
+        pass
+
+    cdef CsvReaderOptionsBuilder byte_range_size(self, size_t byte_range_size):
+        pass
+
+    cdef CsvReaderOptionsBuilder nrows(self, size_type nrows):
+        pass
+
+    cdef CsvReaderOptionsBuilder skiprows(self, size_type skiprows):
+        pass
+
+    cdef CsvReaderOptionsBuilder skipfooter(self, size_type skipfooter):
+        pass
+
+    cdef CsvReaderOptionsBuilder quoting(self, quote_style quoting):
+        pass
+
+    cdef CsvReaderOptionsBuilder lineterminator(self, str lineterminator):
+        pass
+
+    cdef CsvReaderOptionsBuilder quotechar(self, str quotechar):
+        pass
+
+    cdef CsvReaderOptionsBuilder decimal(self, str decimal):
+        pass
+
+    cdef CsvReaderOptionsBuilder delim_whitespace(self, bool delim_whitespace):
+        pass
+
+    cdef CsvReaderOptionsBuilder skipinitialspace(self, bool skipinitialspace):
+        pass
+
+    cdef CsvReaderOptionsBuilder skip_blank_lines(self, bool skip_blank_lines):
+        pass
+
+    cdef CsvReaderOptionsBuilder doublequote(self, bool doublequote):
+        pass
+
+    cdef CsvReaderOptionsBuilder keep_default_na(self, bool keep_default_na):
+        pass
+
+    cdef CsvReaderOptionsBuilder na_filter(self, bool na_filter):
+        pass
+
+    cdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst):
+        pass
+
+    cdef CsvReaderOptions build(self):
+        pass
 
 
 def read_csv(
