@@ -41,7 +41,7 @@ Checks:
 
 WarningsAsErrors: ''
 HeaderFilterRegex: '.*cudf/cpp/(src|include).*'
-ExcludeHeaderFilterRegex: '.*(Message_generated.h|Schema_generated.h|brotli_dict.hpp|unbz2.hpp|cxxopts.hpp).*'
+ExcludeHeaderFilterRegex: '.*(Message_generated.h|Schema_generated.h|brotli_dict.hpp|unbz2.hpp|cxxopts.hpp|/include/kvikio/).*'
 FormatStyle:     none
 CheckOptions:
  - key:             modernize-loop-convert.MaxCopySize
