@@ -73,14 +73,9 @@ struct finder_fn {
     auto const d_target = d_targets[idx];
 
     if constexpr (forward) {
-      // fast-path for the most common case
       if (start == 0 && stop < 0) {
-        size_type pos = 0;
-        for (size_type i = 0; i <= (d_str.size_bytes() - d_target.size_bytes()); ++i) {
-          if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { return pos; }
-          pos += is_begin_utf8_char(d_str.data()[i]);
-        }
-        return -1;
+        // fast-path for the most common case
+        return d_str.find(d_target, 0, -1);
       }
     }
 

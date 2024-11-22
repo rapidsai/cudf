@@ -373,8 +373,19 @@ __device__ inline size_type string_view::find_impl(char const* str,
                                                    size_type pos,
                                                    size_type count) const
 {
+  if (!str || pos < 0) { return npos; }
+  if (pos == 0 && count < 0) {
+    // fast-path for the most common case
+    size_type cpos      = 0;
+    auto const d_target = string_view{str, bytes};
+    for (size_type i = 0; i <= (size_bytes() - bytes); ++i) {
+      if (d_target.compare(data() + i, bytes) == 0) { return cpos; }
+      cpos += strings::detail::is_begin_utf8_char(data()[i]);
+    }
+    return npos;
+  }
   auto const nchars = length();
-  if (!str || pos < 0 || pos > nchars) return npos;
+  if (pos > nchars) { return npos; }
   if (count < 0) count = nchars;
 
   // use iterator to help reduce character/byte counting
