@@ -8,8 +8,6 @@ import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, Literal
 
-# TODO: The `numpy` import is needed for typing purposes during doc builds
-# only, need to figure out why the `np` alias is insufficient then remove.
 import cupy
 import numpy
 import numpy as np
@@ -19,6 +17,11 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+
+# TODO: The `numpy` import is needed for typing purposes during doc builds
+# only, need to figure out why the `np` alias is insufficient then remove.
+import cudf.core._internals
+import cudf.core._internals.search
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
@@ -1302,7 +1305,7 @@ class Frame(BinaryOperand, Scannable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = libcudf.search.search_sorted(
+        outcol = cudf.core._internals.search.search_sorted(
             sources,
             values,
             side,
