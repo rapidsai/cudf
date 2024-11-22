@@ -44,8 +44,8 @@ _SUPPORTED_PREFETCHES = {
 def _env_get_int(name, default):
     try:
         return int(os.getenv(name, default))
-    except (ValueError, TypeError): # pragma: no cover
-        return default # pragma: no cover
+    except (ValueError, TypeError):  # pragma: no cover
+        return default  # pragma: no cover
 
 
 @cache
