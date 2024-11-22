@@ -55,6 +55,16 @@ jobs:
       # primary static consumers (Spark) are not in conda anyway.
       container_image: "rapidsai/ci-wheel:latest"
       run_script: "ci/configure_cpp_static.sh"
+  cpp-linters:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.02
+    with:
+      build_type: nightly
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      run_script: "ci/cpp_linters.sh"
+      file_to_upload: iwyu_results.txt
   conda-python-cudf-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-25.02
