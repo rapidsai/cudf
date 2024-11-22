@@ -21,9 +21,6 @@ from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
-from cudf_polars.dsl.expressions.boolean import BooleanFunctionName
-from cudf_polars.dsl.expressions.datetime import TemporalFunctionName
-from cudf_polars.dsl.expressions.string import StringFunctionName
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.typing import NodeTraverser
 from cudf_polars.utils import dtypes, sorting
@@ -535,11 +532,15 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
             return expr.StringFunction(
-                dtype, StringFunctionName.from_polars(name), options, column, chars
+                dtype,
+                expr.StringFunction.Name.from_polars(name),
+                options,
+                column,
+                chars,
             )
         return expr.StringFunction(
             dtype,
-            StringFunctionName.from_polars(name),
+            expr.StringFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
@@ -556,7 +557,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             )
         return expr.BooleanFunction(
             dtype,
-            BooleanFunctionName.from_polars(name),
+            expr.BooleanFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
@@ -576,7 +577,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }
         result_expr = expr.TemporalFunction(
             dtype,
-            TemporalFunctionName.from_polars(name),
+            expr.TemporalFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )

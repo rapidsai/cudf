@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from enum import Enum, auto
+from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
@@ -28,81 +28,81 @@ if TYPE_CHECKING:
 __all__ = ["TemporalFunction"]
 
 
-class TemporalFunctionName(Enum):
-    BaseUtcOffset = auto()
-    CastTimeUnit = auto()
-    Century = auto()
-    Combine = auto()
-    ConvertTimeZone = auto()
-    DSTOffset = auto()
-    Date = auto()
-    Datetime = auto()
-    DatetimeFunction = auto()
-    Day = auto()
-    Duration = auto()
-    Hour = auto()
-    IsLeapYear = auto()
-    IsoYear = auto()
-    Microsecond = auto()
-    Millennium = auto()
-    Millisecond = auto()
-    Minute = auto()
-    Month = auto()
-    MonthEnd = auto()
-    MonthStart = auto()
-    Nanosecond = auto()
-    OffsetBy = auto()
-    OrdinalDay = auto()
-    Quarter = auto()
-    ReplaceTimeZone = auto()
-    Round = auto()
-    Second = auto()
-    Time = auto()
-    TimeStamp = auto()
-    ToString = auto()
-    TotalDays = auto()
-    TotalHours = auto()
-    TotalMicroseconds = auto()
-    TotalMilliseconds = auto()
-    TotalMinutes = auto()
-    TotalNanoseconds = auto()
-    TotalSeconds = auto()
-    Truncate = auto()
-    Week = auto()
-    WeekDay = auto()
-    WithTimeUnit = auto()
-    Year = auto()
-
-    @classmethod
-    def from_polars(cls, obj: pl_expr.TemporalFunction) -> Self:
-        function, name = str(obj).split(".", maxsplit=1)
-        if function != "TemporalFunction":
-            raise ValueError("TemporalFunction required")
-        return getattr(cls, name)
-
-
 class TemporalFunction(Expr):
+    class Name(IntEnum):
+        """Internal and picklable representation of polars' `TemporalFunction`."""
+
+        BaseUtcOffset = auto()
+        CastTimeUnit = auto()
+        Century = auto()
+        Combine = auto()
+        ConvertTimeZone = auto()
+        DSTOffset = auto()
+        Date = auto()
+        Datetime = auto()
+        DatetimeFunction = auto()
+        Day = auto()
+        Duration = auto()
+        Hour = auto()
+        IsLeapYear = auto()
+        IsoYear = auto()
+        Microsecond = auto()
+        Millennium = auto()
+        Millisecond = auto()
+        Minute = auto()
+        Month = auto()
+        MonthEnd = auto()
+        MonthStart = auto()
+        Nanosecond = auto()
+        OffsetBy = auto()
+        OrdinalDay = auto()
+        Quarter = auto()
+        ReplaceTimeZone = auto()
+        Round = auto()
+        Second = auto()
+        Time = auto()
+        TimeStamp = auto()
+        ToString = auto()
+        TotalDays = auto()
+        TotalHours = auto()
+        TotalMicroseconds = auto()
+        TotalMilliseconds = auto()
+        TotalMinutes = auto()
+        TotalNanoseconds = auto()
+        TotalSeconds = auto()
+        Truncate = auto()
+        Week = auto()
+        WeekDay = auto()
+        WithTimeUnit = auto()
+        Year = auto()
+
+        @classmethod
+        def from_polars(cls, obj: pl_expr.TemporalFunction) -> Self:
+            """Convert from polars' `TemporalFunction`."""
+            function, name = str(obj).split(".", maxsplit=1)
+            if function != "TemporalFunction":
+                raise ValueError("TemporalFunction required")
+            return getattr(cls, name)
+
     __slots__ = ("name", "options")
-    _COMPONENT_MAP: ClassVar[
-        dict[TemporalFunctionName, plc.datetime.DatetimeComponent]
-    ] = {
-        TemporalFunctionName.Year: plc.datetime.DatetimeComponent.YEAR,
-        TemporalFunctionName.Month: plc.datetime.DatetimeComponent.MONTH,
-        TemporalFunctionName.Day: plc.datetime.DatetimeComponent.DAY,
-        TemporalFunctionName.WeekDay: plc.datetime.DatetimeComponent.WEEKDAY,
-        TemporalFunctionName.Hour: plc.datetime.DatetimeComponent.HOUR,
-        TemporalFunctionName.Minute: plc.datetime.DatetimeComponent.MINUTE,
-        TemporalFunctionName.Second: plc.datetime.DatetimeComponent.SECOND,
-        TemporalFunctionName.Millisecond: plc.datetime.DatetimeComponent.MILLISECOND,
-        TemporalFunctionName.Microsecond: plc.datetime.DatetimeComponent.MICROSECOND,
-        TemporalFunctionName.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
-    }
     _non_child = ("dtype", "name", "options")
+    _COMPONENT_MAP: ClassVar[dict[Name, plc.datetime.DatetimeComponent]] = {
+        Name.Year: plc.datetime.DatetimeComponent.YEAR,
+        Name.Month: plc.datetime.DatetimeComponent.MONTH,
+        Name.Day: plc.datetime.DatetimeComponent.DAY,
+        Name.WeekDay: plc.datetime.DatetimeComponent.WEEKDAY,
+        Name.Hour: plc.datetime.DatetimeComponent.HOUR,
+        Name.Minute: plc.datetime.DatetimeComponent.MINUTE,
+        Name.Second: plc.datetime.DatetimeComponent.SECOND,
+        Name.Millisecond: plc.datetime.DatetimeComponent.MILLISECOND,
+        Name.Microsecond: plc.datetime.DatetimeComponent.MICROSECOND,
+        Name.Nanosecond: plc.datetime.DatetimeComponent.NANOSECOND,
+    }
 
     def __init__(
         self,
         dtype: plc.DataType,
-        name: TemporalFunctionName,
+        name: TemporalFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
@@ -126,7 +126,7 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
-        if self.name == TemporalFunctionName.Microsecond:
+        if self.name == TemporalFunction.Name.Microsecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND
             )
@@ -146,7 +146,7 @@ class TemporalFunction(Expr):
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
             return Column(total_micros)
-        elif self.name == TemporalFunctionName.Nanosecond:
+        elif self.name == TemporalFunction.Name.Nanosecond:
             millis = plc.datetime.extract_datetime_component(
                 column.obj, plc.datetime.DatetimeComponent.MILLISECOND
             )

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from enum import Enum, auto
+from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
@@ -32,67 +32,69 @@ if TYPE_CHECKING:
 __all__ = ["StringFunction"]
 
 
-class StringFunctionName(Enum):
-    Base64Decode = auto()
-    Base64Encode = auto()
-    ConcatHorizontal = auto()
-    ConcatVertical = auto()
-    Contains = auto()
-    ContainsMany = auto()
-    CountMatches = auto()
-    EndsWith = auto()
-    EscapeRegex = auto()
-    Extract = auto()
-    ExtractAll = auto()
-    ExtractGroups = auto()
-    Find = auto()
-    Head = auto()
-    HexDecode = auto()
-    HexEncode = auto()
-    JsonDecode = auto()
-    JsonPathMatch = auto()
-    LenBytes = auto()
-    LenChars = auto()
-    Lowercase = auto()
-    PadEnd = auto()
-    PadStart = auto()
-    Replace = auto()
-    ReplaceMany = auto()
-    Reverse = auto()
-    Slice = auto()
-    Split = auto()
-    SplitExact = auto()
-    SplitN = auto()
-    StartsWith = auto()
-    StripChars = auto()
-    StripCharsEnd = auto()
-    StripCharsStart = auto()
-    StripPrefix = auto()
-    StripSuffix = auto()
-    Strptime = auto()
-    Tail = auto()
-    Titlecase = auto()
-    ToDecimal = auto()
-    ToInteger = auto()
-    Uppercase = auto()
-    ZFill = auto()
-
-    @classmethod
-    def from_polars(cls, obj: pl_expr.StringFunction) -> Self:
-        function, name = str(obj).split(".", maxsplit=1)
-        if function != "StringFunction":
-            raise ValueError("StringFunction required")
-        return getattr(cls, name)
-
-
 class StringFunction(Expr):
+    class Name(IntEnum):
+        """Internal and picklable representation of polars' `StringFunction`."""
+
+        Base64Decode = auto()
+        Base64Encode = auto()
+        ConcatHorizontal = auto()
+        ConcatVertical = auto()
+        Contains = auto()
+        ContainsMany = auto()
+        CountMatches = auto()
+        EndsWith = auto()
+        EscapeRegex = auto()
+        Extract = auto()
+        ExtractAll = auto()
+        ExtractGroups = auto()
+        Find = auto()
+        Head = auto()
+        HexDecode = auto()
+        HexEncode = auto()
+        JsonDecode = auto()
+        JsonPathMatch = auto()
+        LenBytes = auto()
+        LenChars = auto()
+        Lowercase = auto()
+        PadEnd = auto()
+        PadStart = auto()
+        Replace = auto()
+        ReplaceMany = auto()
+        Reverse = auto()
+        Slice = auto()
+        Split = auto()
+        SplitExact = auto()
+        SplitN = auto()
+        StartsWith = auto()
+        StripChars = auto()
+        StripCharsEnd = auto()
+        StripCharsStart = auto()
+        StripPrefix = auto()
+        StripSuffix = auto()
+        Strptime = auto()
+        Tail = auto()
+        Titlecase = auto()
+        ToDecimal = auto()
+        ToInteger = auto()
+        Uppercase = auto()
+        ZFill = auto()
+
+        @classmethod
+        def from_polars(cls, obj: pl_expr.StringFunction) -> Self:
+            """Convert from polars' `StringFunction`."""
+            function, name = str(obj).split(".", maxsplit=1)
+            if function != "StringFunction":
+                raise ValueError("StringFunction required")
+            return getattr(cls, name)
+
     __slots__ = ("name", "options", "_regex_program")
     _non_child = ("dtype", "name", "options")
 
     def __init__(
         self,
         dtype: plc.DataType,
-        name: StringFunctionName,
+        name: StringFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
@@ -104,21 +106,21 @@ class StringFunction(Expr):
 
     def _validate_input(self):
         if self.name not in (
-            StringFunctionName.Contains,
-            StringFunctionName.EndsWith,
-            StringFunctionName.Lowercase,
-            StringFunctionName.Replace,
-            StringFunctionName.ReplaceMany,
-            StringFunctionName.Slice,
-            StringFunctionName.Strptime,
-            StringFunctionName.StartsWith,
-            StringFunctionName.StripChars,
-            StringFunctionName.StripCharsStart,
-            StringFunctionName.StripCharsEnd,
-            StringFunctionName.Uppercase,
+            StringFunction.Name.Contains,
+            StringFunction.Name.EndsWith,
+            StringFunction.Name.Lowercase,
+            StringFunction.Name.Replace,
+            StringFunction.Name.ReplaceMany,
+            StringFunction.Name.Slice,
+            StringFunction.Name.Strptime,
+            StringFunction.Name.StartsWith,
+            StringFunction.Name.StripChars,
+            StringFunction.Name.StripCharsStart,
+            StringFunction.Name.StripCharsEnd,
+            StringFunction.Name.Uppercase,
         ):
             raise NotImplementedError(f"String function {self.name}")
-        if self.name == StringFunctionName.Contains:
+        if self.name == StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
                 if not strict:
@@ -139,7 +141,7 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         f"Unsupported regex {pattern} for GPU engine."
                     ) from e
-        elif self.name == StringFunctionName.Replace:
+        elif self.name == StringFunction.Name.Replace:
             _, literal = self.options
             if not literal:
                 raise NotImplementedError("literal=False is not supported for replace")
@@ -150,7 +152,7 @@ class StringFunction(Expr):
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
-        elif self.name == StringFunctionName.ReplaceMany:
+        elif self.name == StringFunction.Name.ReplaceMany:
             (ascii_case_insensitive,) = self.options
             if ascii_case_insensitive:
                 raise NotImplementedError(
@@ -166,12 +168,12 @@ class StringFunction(Expr):
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
                 )
-        elif self.name == StringFunctionName.Slice:
+        elif self.name == StringFunction.Name.Slice:
             if not all(isinstance(child, Literal) for child in self.children[1:]):
                 raise NotImplementedError(
                     "Slice only supports literal start and stop values"
                 )
-        elif self.name == StringFunctionName.Strptime:
+        elif self.name == StringFunction.Name.Strptime:
             format, _, exact, cache = self.options
             if cache:
                 raise NotImplementedError("Strptime cache is a CPU feature")
@@ -180,9 +182,9 @@ class StringFunction(Expr):
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
-            StringFunctionName.StripChars,
-            StringFunctionName.StripCharsStart,
-            StringFunctionName.StripCharsEnd,
+            StringFunction.Name.StripChars,
+            StringFunction.Name.StripCharsStart,
+            StringFunction.Name.StripCharsEnd,
         }:
             if not isinstance(self.children[1], Literal):
                 raise NotImplementedError(
@@ -197,7 +199,7 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if self.name == StringFunctionName.Contains:
+        if self.name == StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
 
@@ -214,7 +216,7 @@ class StringFunction(Expr):
                 return Column(
                     plc.strings.contains.contains_re(column.obj, self._regex_program)
                 )
-        elif self.name == StringFunctionName.Slice:
+        elif self.name == StringFunction.Name.Slice:
             child, expr_offset, expr_length = self.children
             assert isinstance(expr_offset, Literal)
             assert isinstance(expr_length, Literal)
@@ -245,16 +247,16 @@ class StringFunction(Expr):
                 )
             )
         elif self.name in {
-            StringFunctionName.StripChars,
-            StringFunctionName.StripCharsStart,
-            StringFunctionName.StripCharsEnd,
+            StringFunction.Name.StripChars,
+            StringFunction.Name.StripCharsStart,
+            StringFunction.Name.StripCharsEnd,
         }:
             column, chars = (
                 c.evaluate(df, context=context, mapping=mapping) for c in self.children
             )
-            if self.name == StringFunctionName.StripCharsStart:
+            if self.name == StringFunction.Name.StripCharsStart:
                 side = plc.strings.SideType.LEFT
-            elif self.name == StringFunctionName.StripCharsEnd:
+            elif self.name == StringFunction.Name.StripCharsEnd:
                 side = plc.strings.SideType.RIGHT
             else:
                 side = plc.strings.SideType.BOTH
@@ -264,13 +266,13 @@ class StringFunction(Expr):
             child.evaluate(df, context=context, mapping=mapping)
             for child in self.children
         ]
-        if self.name == StringFunctionName.Lowercase:
+        if self.name == StringFunction.Name.Lowercase:
             (column,) = columns
             return Column(plc.strings.case.to_lower(column.obj))
-        elif self.name == StringFunctionName.Uppercase:
+        elif self.name == StringFunction.Name.Uppercase:
             (column,) = columns
             return Column(plc.strings.case.to_upper(column.obj))
-        elif self.name == StringFunctionName.EndsWith:
+        elif self.name == StringFunction.Name.EndsWith:
             column, suffix = columns
             return Column(
                 plc.strings.find.ends_with(
@@ -280,7 +282,7 @@ class StringFunction(Expr):
                     else suffix.obj,
                 )
             )
-        elif self.name == StringFunctionName.StartsWith:
+        elif self.name == StringFunction.Name.StartsWith:
             column, prefix = columns
             return Column(
                 plc.strings.find.starts_with(
@@ -290,7 +292,7 @@ class StringFunction(Expr):
                     else prefix.obj,
                 )
             )
-        elif self.name == StringFunctionName.Strptime:
+        elif self.name == StringFunction.Name.Strptime:
             # TODO: ignores ambiguous
             format, strict, exact, cache = self.options
             col = self.children[0].evaluate(df, context=context, mapping=mapping)
@@ -322,7 +324,7 @@ class StringFunction(Expr):
                         res.columns()[0], self.dtype, format
                     )
                 )
-        elif self.name == StringFunctionName.Replace:
+        elif self.name == StringFunction.Name.Replace:
             column, target, repl = columns
             n, _ = self.options
             return Column(
@@ -330,7 +332,7 @@ class StringFunction(Expr):
                     column.obj, target.obj_scalar, repl.obj_scalar, maxrepl=n
                 )
             )
-        elif self.name == StringFunctionName.ReplaceMany:
+        elif self.name == StringFunction.Name.ReplaceMany:
             column, target, repl = columns
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
