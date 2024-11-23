@@ -30,7 +30,6 @@ from . import (
     strings_udf,
     text,
     timezone,
-    transpose,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
