@@ -70,20 +70,11 @@ struct finder_fn {
     if (d_strings.is_null(idx)) { return -1; }
     auto const d_str = d_strings.element<string_view>(idx);
     if (d_str.empty() && (start > 0)) { return -1; }
+    if (stop >= 0 && start > stop) { return -1; }
     auto const d_target = d_targets[idx];
 
-    if constexpr (forward) {
-      if (start == 0 && stop < 0) {
-        // fast-path for the most common case
-        return d_str.find(d_target, 0, -1);
-      }
-    }
-
-    auto const length = d_str.length();
-    auto const begin  = (start > length) ? length : start;
-    auto const end    = (stop < 0) || (stop > length) ? length : stop;
-    return forward ? d_str.find(d_target, begin, end - begin)
-                   : d_str.rfind(d_target, begin, end - begin);
+    auto const count = (stop < 0) ? stop : (stop - start);
+    return forward ? d_str.find(d_target, start, count) : d_str.rfind(d_target, start, count);
   }
 };
 
