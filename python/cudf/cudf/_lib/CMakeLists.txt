@@ -36,7 +36,6 @@ set(cython_sources
     rolling.pyx
     round.pyx
     scalar.pyx
-    search.pyx
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
@@ -44,7 +43,6 @@ set(cython_sources
     text.pyx
     timezone.pyx
     transform.pyx
-    transpose.pyx
     types.pyx
     utils.pyx
 )
