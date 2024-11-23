@@ -34,6 +34,11 @@ template <typename Key>
 struct MurmurHash3_x86_32 : public cuco::murmurhash3_32<Key> {
   using result_type = typename cuco::murmurhash3_32<Key>::result_type;
 
+  __host__ __device__ constexpr MurmurHash3_x86_32(uint32_t seed = cudf::DEFAULT_HASH_SEED)
+    : cuco::murmurhash3_32<Key>{seed}
+  {
+  }
+
   __device__ result_type operator()(Key const& key) const
   {
     return cuco::murmurhash3_32<Key>::operator()(key);
