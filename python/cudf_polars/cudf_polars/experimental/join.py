@@ -83,6 +83,34 @@ def lower_join_node(
     return new_node, partition_info
 
 
+def rearrange_by_column(
+    name_out: str, name_in: str, on: list[str], count_in: int, count_out: int
+) -> MutableMapping[Any, Any]:
+    """Shuffle on a list of columns."""
+    # Simple all-to-all shuffle (for now)
+    split_name = f"split-{name_out}"
+    inter_name = f"inter-{name_out}"
+
+    graph: MutableMapping[Any, Any] = {}
+    for part_out in range(count_out):
+        _concat_list = []
+        for part_in in range(count_in):
+            graph[(split_name, part_in)] = (
+                _split_partition,
+                (name_in, part_in),
+                on,
+                count_out,
+            )
+            _concat_list.append((inter_name, part_out, part_in))
+            graph[_concat_list[-1]] = (
+                operator.getitem,
+                (split_name, part_in),
+                part_out,
+            )
+        graph[(name_out, part_out)] = (_concat, _concat_list)
+    return graph
+
+
 def _split_partition(df: DataFrame, on: list[str], count: int) -> dict[int, DataFrame]:
     on_ind = [df.column_names.index(col) for col in on]
     table, indices = plc.partitioning.hash_partition(df.table, on_ind, count)
@@ -108,22 +136,26 @@ def _(
         bcast_size = partition_info[left].count
         other = get_key_name(right)
         other_on = [v.name for v in ir.right_on]
+        bcast_on = [v.name for v in ir.left_on]
     else:
         bcast_name = get_key_name(right)
         bcast_size = partition_info[right].count
         other = get_key_name(left)
         other_on = [v.name for v in ir.left_on]
+        bcast_on = [v.name for v in ir.right_on]
 
     graph: MutableMapping[Any, Any] = {}
 
-    # Special handling until RearrangeByColumn is implemented.
-    if bcast_size > 1:
+    # Shuffle broadcasted side if necessary
+    if how != "inner" and bcast_size > 1:
         shuffle_name = "shuffle-" + bcast_name
-        graph[(shuffle_name, 0)] = (
-            _concat,
-            [(bcast_name, i) for i in range(bcast_size)],
+        graph = rearrange_by_column(
+            shuffle_name,
+            bcast_name,
+            bcast_on,
+            bcast_size,
+            bcast_size,
         )
-        bcast_size = 1
         bcast_name = shuffle_name
 
     out_name = get_key_name(ir)
