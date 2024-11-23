@@ -1057,12 +1057,13 @@ struct packed_partition_buf_size_and_dst_buf_info {
       buf_sizes_size{cudf::util::round_up_safe(num_partitions * sizeof(std::size_t), split_align)},
       dst_buf_info_size{cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align)},
       // host-side
-      h_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size),
+      h_buf_sizes_and_dst_info{
+        detail::make_host_vector<uint8_t>(buf_sizes_size + dst_buf_info_size, stream)},
       h_buf_sizes{reinterpret_cast<std::size_t*>(h_buf_sizes_and_dst_info.data())},
       h_dst_buf_info{
         reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size)},
       // device-side
-      d_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size, stream, temp_mr),
+      d_buf_sizes_and_dst_info(h_buf_sizes_and_dst_info.size(), stream, temp_mr),
       d_buf_sizes{reinterpret_cast<std::size_t*>(d_buf_sizes_and_dst_info.data())},
       // destination buffer info
       d_dst_buf_info{reinterpret_cast<dst_buf_info*>(
@@ -1073,11 +1074,11 @@ struct packed_partition_buf_size_and_dst_buf_info {
   void copy_to_host()
   {
     // DtoH buf sizes and col info back to the host
-    CUDF_CUDA_TRY(cudaMemcpyAsync(h_buf_sizes,
-                                  d_buf_sizes,
-                                  buf_sizes_size + dst_buf_info_size,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    detail::cuda_memcpy_async<uint8_t>(
+      h_buf_sizes_and_dst_info,
+      device_span<uint8_t>{static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()),
+                           d_buf_sizes_and_dst_info.size()},
+      stream);
   }
 
   rmm::cuda_stream_view const stream;
@@ -1086,7 +1087,7 @@ struct packed_partition_buf_size_and_dst_buf_info {
   std::size_t const buf_sizes_size;
   std::size_t const dst_buf_info_size;
 
-  std::vector<uint8_t> h_buf_sizes_and_dst_info;
+  detail::host_vector<uint8_t> h_buf_sizes_and_dst_info;
   std::size_t* const h_buf_sizes;
   dst_buf_info* const h_dst_buf_info;
 
@@ -1108,11 +1109,12 @@ struct packed_src_and_dst_pointers {
       src_bufs_size{cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align)},
       dst_bufs_size{cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align)},
       // host-side
-      h_src_and_dst_buffers(src_bufs_size + dst_bufs_size),
+      h_src_and_dst_buffers{
+        detail::make_host_vector<uint8_t>(src_bufs_size + dst_bufs_size, stream)},
       h_src_bufs{reinterpret_cast<uint8_t const**>(h_src_and_dst_buffers.data())},
       h_dst_bufs{reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data() + src_bufs_size)},
       // device-side
-      d_src_and_dst_buffers{rmm::device_buffer(src_bufs_size + dst_bufs_size, stream, temp_mr)},
+      d_src_and_dst_buffers{h_src_and_dst_buffers.size(), stream, temp_mr},
       d_src_bufs{reinterpret_cast<uint8_t const**>(d_src_and_dst_buffers.data())},
       d_dst_bufs{reinterpret_cast<uint8_t**>(
         reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size)}
@@ -1123,18 +1125,18 @@ struct packed_src_and_dst_pointers {
 
   void copy_to_device()
   {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(d_src_and_dst_buffers.data(),
-                                  h_src_and_dst_buffers.data(),
-                                  src_bufs_size + dst_bufs_size,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    detail::cuda_memcpy_async<uint8_t>(
+      device_span<uint8_t>{static_cast<uint8_t*>(d_src_and_dst_buffers.data()),
+                           d_src_and_dst_buffers.size()},
+      h_src_and_dst_buffers,
+      stream);
   }
 
   rmm::cuda_stream_view const stream;
   std::size_t const src_bufs_size;
   std::size_t const dst_bufs_size;
 
-  std::vector<uint8_t> h_src_and_dst_buffers;
+  detail::host_vector<uint8_t> h_src_and_dst_buffers;
   uint8_t const** const h_src_bufs;
   uint8_t** const h_dst_bufs;
 
@@ -1520,26 +1522,19 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
    */
   if (user_buffer_size != 0) {
     // copy the batch offsets back to host
-    std::vector<std::size_t> h_offsets(num_batches + 1);
-    {
-      rmm::device_uvector<std::size_t> offsets(h_offsets.size(), stream, temp_mr);
+    auto const h_offsets = [&] {
+      rmm::device_uvector<std::size_t> offsets(num_batches + 1, stream, temp_mr);
       auto const batch_byte_size_iter = cudf::detail::make_counting_transform_iterator(
         0, batch_byte_size_function{num_batches, d_batched_dst_buf_info.begin()});
 
-      thrust::exclusive_scan(rmm::exec_policy(stream, temp_mr),
+      thrust::exclusive_scan(rmm::exec_policy_nosync(stream, temp_mr),
                              batch_byte_size_iter,
-                             batch_byte_size_iter + num_batches + 1,
+                             batch_byte_size_iter + offsets.size(),
                              offsets.begin());
 
-      CUDF_CUDA_TRY(cudaMemcpyAsync(h_offsets.data(),
-                                    offsets.data(),
-                                    sizeof(std::size_t) * offsets.size(),
-                                    cudaMemcpyDefault,
-                                    stream.value()));
-
       // the next part is working on the CPU, so we want to synchronize here
-      stream.synchronize();
-    }
+      return detail::make_host_vector_sync(offsets, stream);
+    }();
 
     std::vector<std::size_t> num_batches_per_iteration;
     std::vector<std::size_t> size_of_batches_per_iteration;
