@@ -45,7 +45,7 @@ class parquet_field {
   [[nodiscard]] int field() const { return _field_val; }
 };
 
-std::string field_type_string(FieldType type)
+static std::string field_type_string(FieldType type)
 {
   switch (type) {
     case FieldType::BOOLEAN_TRUE: return "bool(true)";
@@ -65,14 +65,14 @@ std::string field_type_string(FieldType type)
   }
 }
 
-void assert_field_type(int type, FieldType expected)
+static void assert_field_type(int type, FieldType expected)
 {
   CUDF_EXPECTS(type == static_cast<int>(expected),
                "expected " + field_type_string(expected) + " field, got " +
                  field_type_string(static_cast<FieldType>(type)) + " field instead");
 }
 
-void assert_bool_field_type(int type)
+static void assert_bool_field_type(int type)
 {
   auto const field_type = static_cast<FieldType>(type);
   CUDF_EXPECTS(field_type == FieldType::BOOLEAN_TRUE || field_type == FieldType::BOOLEAN_FALSE,
@@ -527,7 +527,7 @@ struct FunctionSwitchImpl<0> {
 };
 
 template <typename... Operator>
-inline void function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
+inline static void function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
   int field           = 0;

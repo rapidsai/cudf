@@ -100,14 +100,15 @@ struct segmented_reduce_dispatch_functor {
   }
 };
 
-std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
-                                         device_span<size_type const> offsets,
-                                         segmented_reduce_aggregation const& agg,
-                                         data_type output_dtype,
-                                         null_policy null_handling,
-                                         std::optional<std::reference_wrapper<scalar const>> init,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
+static std::unique_ptr<column> segmented_reduce(
+  column_view const& segmented_values,
+  device_span<size_type const> offsets,
+  segmented_reduce_aggregation const& agg,
+  data_type output_dtype,
+  null_policy null_handling,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(segmented_values, init.value().get()),
                "column and initial value must be the same type",

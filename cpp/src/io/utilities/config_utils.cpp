@@ -46,13 +46,16 @@ usage_policy get_env_policy()
 }
 }  // namespace
 
-bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
+static bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_policy::GDS; }
+static bool is_gds_enabled()
+{
+  return is_always_enabled() or get_env_policy() == usage_policy::GDS;
+}
 
-bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
+static bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
 
-void set_up_kvikio()
+static void set_up_kvikio()
 {
   static std::once_flag flag{};
   std::call_once(flag, [] {
@@ -87,9 +90,12 @@ usage_policy get_env_policy()
 }
 }  // namespace
 
-bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
+static bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
+static bool is_stable_enabled()
+{
+  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
+}
 
 }  // namespace nvcomp_integration
 }  // namespace cudf::io

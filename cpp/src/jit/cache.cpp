@@ -24,7 +24,7 @@ namespace cudf {
 namespace jit {
 
 // Get the directory in home to use for storing the cache
-std::filesystem::path get_user_home_cache_dir()
+static std::filesystem::path get_user_home_cache_dir()
 {
   auto home_dir = std::getenv("HOME");
   if (home_dir != nullptr) {
@@ -57,7 +57,7 @@ std::filesystem::path get_user_home_cache_dir()
  * are used and if $HOME is not defined, returns an empty path and file
  * caching is not used.
  */
-std::filesystem::path get_cache_dir()
+static std::filesystem::path get_cache_dir()
 {
   // The environment variable always overrides the
   // default/compile-time value of `LIBCUDF_KERNEL_CACHE_PATH`
@@ -72,13 +72,13 @@ std::filesystem::path get_cache_dir()
 
     // Make per device cache based on compute capability. This is to avoid multiple devices of
     // different compute capability to access the same kernel cache.
-    int device;
-    int cc_major;
-    int cc_minor;
+    int device   = 0;
+    int cc_major = 0;
+    int cc_minor = 0;
     CUDF_CUDA_TRY(cudaGetDevice(&device));
     CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
     CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
-    int cc = cc_major * 10 + cc_minor;
+    int const cc = cc_major * 10 + cc_minor;
 
     kernel_cache_path /= std::to_string(cc);
 
@@ -93,7 +93,7 @@ std::filesystem::path get_cache_dir()
   return kernel_cache_path;
 }
 
-std::string get_program_cache_dir()
+static std::string get_program_cache_dir()
 {
 #if defined(JITIFY_USE_CACHE)
   return get_cache_dir().string();
@@ -102,18 +102,18 @@ std::string get_program_cache_dir()
 #endif
 }
 
-std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t default_val)
+static std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t default_val)
 {
   auto const value = std::getenv(env_name);
   return value != nullptr ? std::stoull(value) : default_val;
 }
 
-jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
+static jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
   static std::mutex caches_mutex{};
   static std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> caches{};
 
-  std::lock_guard<std::mutex> caches_lock(caches_mutex);
+  std::lock_guard<std::mutex> const caches_lock(caches_mutex);
 
   auto existing_cache = caches.find(preprog.name());
 

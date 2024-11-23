@@ -39,7 +39,7 @@ table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols
 }
 
 template <typename ViewType>
-auto concatenate_column_views(std::vector<ViewType> const& views)
+static auto concatenate_column_views(std::vector<ViewType> const& views)
 {
   using ColumnView = typename ViewType::ColumnView;
   std::vector<ColumnView> concat_cols;
@@ -65,7 +65,7 @@ table_view table_view::select(std::vector<size_type> const& column_indices) cons
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view()
 {
-  std::vector<column_view> cols{begin(), end()};
+  std::vector<column_view> const cols{begin(), end()};
   return table_view{cols};
 }
 

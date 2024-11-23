@@ -34,7 +34,7 @@ namespace cudf::io::nvcomp {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
 template <typename... Args>
-auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&... args)
+static auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&... args)
 {
   switch (compression) {
     case compression_type::SNAPPY:
@@ -55,8 +55,8 @@ size_t batched_decompress_temp_size(compression_type compression,
                                     size_t max_uncomp_chunk_size,
                                     size_t max_total_uncomp_size)
 {
-  size_t temp_size             = 0;
-  nvcompStatus_t nvcomp_status = batched_decompress_get_temp_size_ex(
+  size_t temp_size                   = 0;
+  nvcompStatus_t const nvcomp_status = batched_decompress_get_temp_size_ex(
     compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
 
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
@@ -66,7 +66,7 @@ size_t batched_decompress_temp_size(compression_type compression,
 
 // Dispatcher for nvcompBatched<format>DecompressAsync
 template <typename... Args>
-auto batched_decompress_async(compression_type compression, Args&&... args)
+static auto batched_decompress_async(compression_type compression, Args&&... args)
 {
   switch (compression) {
     case compression_type::SNAPPY:
@@ -82,7 +82,7 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
   }
 }
 
-std::string compression_type_name(compression_type compression)
+static std::string compression_type_name(compression_type compression)
 {
   switch (compression) {
     case compression_type::SNAPPY: return "Snappy";
@@ -128,10 +128,10 @@ void batched_decompress(compression_type compression,
   update_compression_results(nvcomp_statuses, actual_uncompressed_data_sizes, results, stream);
 }
 
-size_t batched_compress_temp_size(compression_type compression,
-                                  size_t batch_size,
-                                  size_t max_uncompressed_chunk_bytes,
-                                  size_t max_total_uncompressed_bytes)
+static size_t batched_compress_temp_size(compression_type compression,
+                                         size_t batch_size,
+                                         size_t max_uncompressed_chunk_bytes,
+                                         size_t max_total_uncompressed_bytes)
 {
   size_t temp_size             = 0;
   nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
@@ -274,7 +274,7 @@ static void batched_compress_async(compression_type compression,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in compression");
 }
 
-bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
+static bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
 {
   return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
 }
@@ -347,8 +347,8 @@ struct hash_feature_status_inputs {
 using feature_status_memo_map =
   std::unordered_map<feature_status_inputs, std::optional<std::string>, hash_feature_status_inputs>;
 
-std::optional<std::string> is_compression_disabled_impl(compression_type compression,
-                                                        feature_status_parameters params)
+static std::optional<std::string> is_compression_disabled_impl(compression_type compression,
+                                                               feature_status_parameters params)
 {
   switch (compression) {
     case compression_type::DEFLATE: {
@@ -398,8 +398,8 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
   return reason;
 }
 
-std::optional<std::string> is_decompression_disabled_impl(compression_type compression,
-                                                          feature_status_parameters params)
+static std::optional<std::string> is_decompression_disabled_impl(compression_type compression,
+                                                                 feature_status_parameters params)
 {
   switch (compression) {
     case compression_type::DEFLATE:

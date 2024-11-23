@@ -170,7 +170,8 @@ table_with_metadata read_avro(avro_reader_options const& options, rmm::device_as
   return avro::read_avro(std::move(datasources[0]), options, cudf::get_default_stream(), mr);
 }
 
-compression_type infer_compression_type(compression_type compression, source_info const& info)
+static compression_type infer_compression_type(compression_type compression,
+                                               source_info const& info)
 {
   if (compression != compression_type::AUTO) { return compression; }
 
@@ -287,7 +288,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
     CUDF_FAIL("Unsupported source type");
   }
 
-  orc::metadata metadata(source.get(), stream);
+  orc::metadata const metadata(source.get(), stream);
 
   // Initialize statistics to return
   raw_orc_statistics result;

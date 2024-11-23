@@ -110,16 +110,16 @@ cuda_stream_pool* create_global_cuda_stream_pool()
 }
 
 // FIXME: these will be available in rmm soon
-inline int get_num_cuda_devices()
+inline static int get_num_cuda_devices()
 {
   rmm::cuda_device_id::value_type num_dev{};
   CUDF_CUDA_TRY(cudaGetDeviceCount(&num_dev));
   return num_dev;
 }
 
-rmm::cuda_device_id get_current_cuda_device()
+static rmm::cuda_device_id get_current_cuda_device()
 {
-  int device_id;
+  int device_id = 0;
   CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   return rmm::cuda_device_id{device_id};
 }
@@ -141,7 +141,7 @@ struct cuda_event {
   operator cudaEvent_t() { return e_; }
 
  private:
-  cudaEvent_t e_;
+  cudaEvent_t e_{};
 };
 
 /**
@@ -151,12 +151,12 @@ struct cuda_event {
  *
  * @return A cudaEvent_t unique to the current thread and valid on the current device.
  */
-cudaEvent_t event_for_thread()
+static cudaEvent_t event_for_thread()
 {
   // The program may crash if this function is called from the main thread and user application
   // subsequently calls cudaDeviceReset().
   // As a workaround, here we intentionally disable RAII and leak cudaEvent_t.
-  thread_local std::vector<cuda_event*> thread_events(get_num_cuda_devices());
+  thread_local static std::vector<cuda_event*> thread_events(get_num_cuda_devices());
   auto const device_id = get_current_cuda_device();
   if (not thread_events[device_id.value()]) { thread_events[device_id.value()] = new cuda_event(); }
   return *thread_events[device_id.value()];
@@ -174,7 +174,7 @@ cuda_stream_pool& global_cuda_stream_pool()
   static std::mutex mutex;
   auto const device_id = get_current_cuda_device();
 
-  std::lock_guard<std::mutex> lock(mutex);
+  std::lock_guard<std::mutex> const lock(mutex);
   if (pools[device_id.value()] == nullptr) {
     pools[device_id.value()] = create_global_cuda_stream_pool();
   }

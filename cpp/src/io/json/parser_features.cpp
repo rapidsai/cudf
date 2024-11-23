@@ -211,8 +211,8 @@ column_name_info make_column_name_info(schema_element const& schema, std::string
   return info;
 }
 
-std::optional<schema_element> child_schema_element(std::string const& col_name,
-                                                   cudf::io::json_reader_options const& options)
+static std::optional<schema_element> child_schema_element(
+  std::string const& col_name, cudf::io::json_reader_options const& options)
 {
   return std::visit(
     cudf::detail::visitor_overload{
@@ -257,7 +257,7 @@ std::optional<schema_element> child_schema_element(std::string const& col_name,
  * @param root root of input schema element
  * @return data type of the column if present, otherwise std::nullopt
  */
-std::optional<data_type> get_path_data_type(
+static std::optional<data_type> get_path_data_type(
   host_span<std::pair<std::string, cudf::io::json::NodeT> const> path, schema_element const& root)
 {
   if (path.empty() || path.size() == 1) {

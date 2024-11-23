@@ -48,20 +48,20 @@ struct serialized_column {
       null_count(_null_count),
       data_offset(_data_offset),
       null_mask_offset(_null_mask_offset),
-      num_children(_num_children),
-      pad(0)
+      num_children(_num_children)
+
   {
   }
 
   data_type type;
-  size_type size;
-  size_type null_count;
-  int64_t data_offset;       // offset into contiguous data buffer, or -1 if column data is null
-  int64_t null_mask_offset;  // offset into contiguous data buffer, or -1 if column data is null
-  size_type num_children;
+  size_type size{};
+  size_type null_count{};
+  int64_t data_offset{};       // offset into contiguous data buffer, or -1 if column data is null
+  int64_t null_mask_offset{};  // offset into contiguous data buffer, or -1 if column data is null
+  size_type num_children{};
   // Explicitly pad to avoid uninitialized padding bits, allowing `serialized_column` to be bit-wise
   // comparable
-  int pad;
+  int pad{};
 };
 
 /**
@@ -201,7 +201,7 @@ class metadata_builder_impl {
 /**
  * @copydoc cudf::detail::unpack
  */
-table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
+static table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
   // gpu data can be null if everything is empty but the metadata must always be valid
   CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
@@ -218,7 +218,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
       auto serial_column = serialized_columns[current_index];
       current_index++;
 
-      std::vector<column_view> children = get_columns(serial_column.num_children);
+      std::vector<column_view> const children = get_columns(serial_column.num_children);
 
       cols.emplace_back(deserialize_column(serial_column, children, base_ptr));
     }

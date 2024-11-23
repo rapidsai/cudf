@@ -22,12 +22,12 @@
 namespace cudf {
 
 namespace detail {
-std::unique_ptr<column> scan(column_view const& input,
-                             scan_aggregation const& agg,
-                             scan_type inclusive,
-                             null_policy null_handling,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+static std::unique_ptr<column> scan(column_view const& input,
+                                    scan_aggregation const& agg,
+                                    scan_type inclusive,
+                                    null_policy null_handling,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   if (agg.kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,

@@ -41,7 +41,7 @@ void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view k
       cudf::experimental::prefetch::detail::prefetch_noexcept(
         key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {
-      strings_column_view scv{col};
+      strings_column_view const scv{col};
       if (data_ptr == nullptr) {
         // Do not call chars_size if the data_ptr is nullptr.
         return;
@@ -114,12 +114,12 @@ struct HashValue {
 };
 
 template <typename... Ts>
-constexpr auto hash(Ts&&... ts)
+constexpr static auto hash(Ts&&... ts)
 {
   return (... ^ HashValue(std::hash<Ts>{}(ts))).hash;
 }
 
-std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false)
+static std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false)
 {
   std::size_t const init = (is_parent_empty or c.is_empty())
                              ? hash(c.type(), 0)
@@ -135,9 +135,9 @@ std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false
 
 std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl(input); }
 
-bool shallow_equivalent_impl(column_view const& lhs,
-                             column_view const& rhs,
-                             bool is_parent_empty = false)
+static bool shallow_equivalent_impl(column_view const& lhs,
+                                    column_view const& rhs,
+                                    bool is_parent_empty = false)
 {
   bool const is_empty = (lhs.is_empty() and rhs.is_empty()) or is_parent_empty;
   return (lhs.type() == rhs.type()) and

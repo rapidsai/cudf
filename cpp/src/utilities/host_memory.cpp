@@ -254,7 +254,7 @@ static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host
 rmm::host_device_async_resource_ref set_pinned_memory_resource(
   rmm::host_device_async_resource_ref mr)
 {
-  std::scoped_lock lock{host_mr_mutex()};
+  std::scoped_lock const lock{host_mr_mutex()};
   auto last_mr = host_mr();
   host_mr()    = mr;
   return last_mr;
@@ -262,19 +262,19 @@ rmm::host_device_async_resource_ref set_pinned_memory_resource(
 
 rmm::host_device_async_resource_ref get_pinned_memory_resource()
 {
-  std::scoped_lock lock{host_mr_mutex()};
+  std::scoped_lock const lock{host_mr_mutex()};
   return host_mr();
 }
 
 bool config_default_pinned_memory_resource(pinned_mr_options const& opts)
 {
-  std::scoped_lock lock{host_mr_mutex()};
+  std::scoped_lock const lock{host_mr_mutex()};
   auto did_configure = false;
   make_host_mr(opts, &did_configure);
   return did_configure;
 }
 
-CUDF_EXPORT auto& kernel_pinned_copy_threshold()
+CUDF_EXPORT static auto& kernel_pinned_copy_threshold()
 {
   // use cudaMemcpyAsync for all pinned copies
   static std::atomic<size_t> threshold = 0;
@@ -288,7 +288,7 @@ void set_kernel_pinned_copy_threshold(size_t threshold)
 
 size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(); }
 
-CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
+CUDF_EXPORT static auto& allocate_host_as_pinned_threshold()
 {
   // use pageable memory for all host allocations
   static std::atomic<size_t> threshold = 0;
@@ -304,10 +304,10 @@ size_t get_allocate_host_as_pinned_threshold() { return allocate_host_as_pinned_
 
 namespace detail {
 
-CUDF_EXPORT rmm::host_async_resource_ref get_pageable_memory_resource()
+CUDF_EXPORT static rmm::host_async_resource_ref get_pageable_memory_resource()
 {
   static new_delete_memory_resource mr{};
-  static rmm::host_async_resource_ref mr_ref{mr};
+  static rmm::host_async_resource_ref const mr_ref{mr};
   return mr_ref;
 }
 

@@ -28,7 +28,10 @@ namespace cudf {
 namespace jit {
 constexpr char percent_escape[] = "_";  // NOLINT
 
-inline bool is_white(char const c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+inline static bool is_white(char const c)
+{
+  return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+}
 
 std::string ptx_parser::escape_percent(std::string const& src)
 {
@@ -106,7 +109,7 @@ std::string ptx_parser::parse_instruction(std::string const& src)
   std::string output;
   std::string suffix;
 
-  std::string original_code = "\n   /**   " + src + "  */\n";
+  std::string const original_code = "\n   /**   " + src + "  */\n";
 
   int piece_count = 0;
 
@@ -316,7 +319,7 @@ std::string ptx_parser::parse_function_header(std::string const& src)
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
 }
 
-std::string remove_comments(std::string const& src)
+static std::string remove_comments(std::string const& src)
 {
   std::string output;
   auto f = src.cbegin();
@@ -325,7 +328,7 @@ std::string remove_comments(std::string const& src)
     output.append(f, l);  // push chunk instead of 1 char at a time
     f = std::next(l);     // skip over '/'
     if (l < src.cend()) {
-      char n = f < src.cend() ? *f : '?';
+      char const n = f < src.cend() ? *f : '?';
       if (n == '/') {                        // found "//"
         f = std::find(f, src.cend(), '\n');  // skip to end of line
       } else if (n == '*') {                 // found "/*"
@@ -342,7 +345,7 @@ std::string remove_comments(std::string const& src)
 // The interface
 std::string ptx_parser::parse()
 {
-  std::string no_comments = remove_comments(ptx);
+  std::string const no_comments = remove_comments(ptx);
 
   input_arg_list.clear();
   auto const _func = std::string(".func");  // Go directly to the .func mark

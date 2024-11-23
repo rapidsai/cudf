@@ -196,7 +196,7 @@ struct is_supported_operation_functor {
 
 }  // namespace
 
-std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type rhs)
+static std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type rhs)
 {
   // Compute the common type of (out, lhs, rhs) if it exists, or the common
   // type of (lhs, rhs) if it exists, else return a null optional.
@@ -216,7 +216,7 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
   return common_type;
 }
 
-bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
+static bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
 {
   return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op);
 }

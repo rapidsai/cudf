@@ -34,14 +34,14 @@ namespace cudf {
 namespace transformation {
 namespace jit {
 
-void unary_operation(mutable_column_view output,
-                     column_view input,
-                     std::string const& udf,
-                     data_type output_type,
-                     bool is_ptx,
-                     rmm::cuda_stream_view stream)
+static void unary_operation(mutable_column_view output,
+                            column_view input,
+                            std::string const& udf,
+                            data_type output_type,
+                            bool is_ptx,
+                            rmm::cuda_stream_view stream)
 {
-  std::string kernel_name =
+  std::string const kernel_name =
     jitify2::reflection::Template("cudf::transformation::jit::kernel")  //
       .instantiate(cudf::type_to_name(output.type()),  // list of template arguments
                    cudf::type_to_name(input.type()));
@@ -81,7 +81,7 @@ std::unique_ptr<column> transform(column_view const& input,
 
   if (input.is_empty()) { return output; }
 
-  mutable_column_view output_view = *output;
+  mutable_column_view const output_view = *output;
 
   // transform
   transformation::jit::unary_operation(output_view, input, unary_udf, output_type, is_ptx, stream);
