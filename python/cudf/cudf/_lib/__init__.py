@@ -21,7 +21,6 @@ from . import (
     replace,
     reshape,
     rolling,
-    round,
     sort,
     stream_compaction,
     string_casting,
