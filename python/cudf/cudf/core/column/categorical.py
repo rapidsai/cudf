@@ -989,10 +989,8 @@ class CategoricalColumn(column.ColumnBase):
         replacement_col = catmap._data["index"].astype(replaced.codes.dtype)
 
         replaced_codes = column.as_column(replaced.codes)
-        output = libcudf.replace.replace(
-            replaced_codes, to_replace_col, replacement_col
-        )
-        codes = as_unsigned_codes(len(new_cats["cats"]), output)
+        output = replaced_codes.replace(to_replace_col, replacement_col)
+        codes = as_unsigned_codes(len(new_cats["cats"]), output)  # type: ignore[arg-type]
 
         result = type(self)(
             data=self.data,  # type: ignore[arg-type]

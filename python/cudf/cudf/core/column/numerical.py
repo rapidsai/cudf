@@ -563,9 +563,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
             df = df.dropna(subset=["old"])
 
-        return libcudf.replace.replace(
-            replaced, df._data["old"], df._data["new"]
-        )
+        return replaced.replace(df._data["old"], df._data["new"])  # type: ignore[return-value]
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike

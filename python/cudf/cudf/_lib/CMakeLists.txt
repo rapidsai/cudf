@@ -31,7 +31,6 @@ set(cython_sources
     parquet.pyx
     partitioning.pyx
     reduce.pyx
-    replace.pyx
     reshape.pyx
     rolling.pyx
     round.pyx
