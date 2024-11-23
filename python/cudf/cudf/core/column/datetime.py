@@ -18,9 +18,9 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.search import search_sorted
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import unary
+from cudf.core._internals.search import search_sorted
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
     get_compatible_timezone,

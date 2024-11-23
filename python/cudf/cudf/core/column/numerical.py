@@ -111,8 +111,8 @@ class NumericalColumn(NumericalBaseColumn):
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
-        return libcudf.search.contains(
-            self, column.as_column([search_item], dtype=self.dtype)
+        return self.contains(
+            column.as_column([search_item], dtype=self.dtype)
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
