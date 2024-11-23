@@ -10,7 +10,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.mark.parametrize("how", ["inner"])
+@pytest.mark.parametrize("how", ["inner", "left", "right"])
 @pytest.mark.parametrize("num_rows_threshold", [5, 10, 15])
 def test_parallel_join(how, num_rows_threshold):
     engine = pl.GPUEngine(
@@ -33,4 +33,10 @@ def test_parallel_join(how, num_rows_threshold):
         }
     )
     q = left.join(right, on="y", how=how)
+
+    # from cudf_polars import Translator
+    # from cudf_polars.experimental.parallel import evaluate_dask
+    # qir = Translator(q._ldf.visit(), engine).translate_ir()
+    # evaluate_dask(qir)
+
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
