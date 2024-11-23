@@ -1061,24 +1061,22 @@ struct packed_partition_buf_size_and_dst_buf_info {
         detail::make_host_vector<uint8_t>(buf_sizes_size + dst_buf_info_size, stream)},
       h_buf_sizes{reinterpret_cast<std::size_t*>(h_buf_sizes_and_dst_info.data())},
       h_dst_buf_info{
-        reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size)},
+        reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size),
+        num_bufs,
+        h_buf_sizes_and_dst_info.get_allocator().is_device_accessible()},
       // device-side
       d_buf_sizes_and_dst_info(h_buf_sizes_and_dst_info.size(), stream, temp_mr),
       d_buf_sizes{reinterpret_cast<std::size_t*>(d_buf_sizes_and_dst_info.data())},
       // destination buffer info
-      d_dst_buf_info{reinterpret_cast<dst_buf_info*>(
-        static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()) + buf_sizes_size)}
+      d_dst_buf_info{
+        reinterpret_cast<dst_buf_info*>(d_buf_sizes_and_dst_info.data() + buf_sizes_size), num_bufs}
   {
   }
 
   void copy_to_host()
   {
     // DtoH buf sizes and col info back to the host
-    detail::cuda_memcpy_async<uint8_t>(
-      h_buf_sizes_and_dst_info,
-      device_span<uint8_t>{static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()),
-                           d_buf_sizes_and_dst_info.size()},
-      stream);
+    detail::cuda_memcpy_async<uint8_t>(h_buf_sizes_and_dst_info, d_buf_sizes_and_dst_info, stream);
   }
 
   rmm::cuda_stream_view const stream;
@@ -1089,11 +1087,11 @@ struct packed_partition_buf_size_and_dst_buf_info {
 
   detail::host_vector<uint8_t> h_buf_sizes_and_dst_info;
   std::size_t* const h_buf_sizes;
-  dst_buf_info* const h_dst_buf_info;
+  host_span<dst_buf_info> const h_dst_buf_info;
 
-  rmm::device_buffer d_buf_sizes_and_dst_info;
+  rmm::device_uvector<uint8_t> d_buf_sizes_and_dst_info;
   std::size_t* const d_buf_sizes;
-  dst_buf_info* const d_dst_buf_info;
+  device_span<dst_buf_info> const d_dst_buf_info;
 };
 
 // Packed block of memory 3:
@@ -1209,7 +1207,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
     std::make_unique<packed_partition_buf_size_and_dst_buf_info>(
       num_partitions, num_bufs, stream, temp_mr);
 
-  auto const d_dst_buf_info = partition_buf_size_and_dst_buf_info->d_dst_buf_info;
+  auto const d_dst_buf_info = partition_buf_size_and_dst_buf_info->d_dst_buf_info.begin();
   auto const d_buf_sizes    = partition_buf_size_and_dst_buf_info->d_buf_sizes;
 
   auto const split_indices_and_src_buf_info = packed_split_indices_and_src_buf_info(
@@ -1696,7 +1694,7 @@ void copy_data(int num_batches_to_copy,
                int starting_batch,
                uint8_t const** d_src_bufs,
                uint8_t** d_dst_bufs,
-               rmm::device_uvector<dst_buf_info>& d_dst_buf_info,
+               device_span<dst_buf_info> d_dst_buf_info,
                uint8_t* user_buffer,
                rmm::cuda_stream_view stream)
 {
@@ -1830,15 +1828,9 @@ struct contiguous_split_state {
                           keys + num_batches_total,
                           values,
                           thrust::make_discard_iterator(),
-                          dst_valid_count_output_iterator{d_orig_dst_buf_info});
+                          dst_valid_count_output_iterator{d_orig_dst_buf_info.begin()});
 
-    CUDF_CUDA_TRY(cudaMemcpyAsync(h_orig_dst_buf_info,
-                                  d_orig_dst_buf_info,
-                                  partition_buf_size_and_dst_buf_info->dst_buf_info_size,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-
-    stream.synchronize();
+    detail::cuda_memcpy<dst_buf_info>(h_orig_dst_buf_info, d_orig_dst_buf_info, stream);
 
     // not necessary for the non-chunked case, but it makes it so further calls to has_next
     // return false, just in case
@@ -1886,7 +1878,7 @@ struct contiguous_split_state {
     }
 
     auto& h_dst_buf_info  = partition_buf_size_and_dst_buf_info->h_dst_buf_info;
-    auto cur_dst_buf_info = h_dst_buf_info;
+    auto cur_dst_buf_info = h_dst_buf_info.data();
     detail::metadata_builder mb{input.num_columns()};
 
     populate_metadata(input.begin(), input.end(), cur_dst_buf_info, mb);
@@ -1924,7 +1916,7 @@ struct contiguous_split_state {
 
     // Second pass: uses `dst_buf_info` to break down the work into 1MB batches.
     chunk_iter_state = compute_batches(num_bufs,
-                                       partition_buf_size_and_dst_buf_info->d_dst_buf_info,
+                                       partition_buf_size_and_dst_buf_info->d_dst_buf_info.data(),
                                        partition_buf_size_and_dst_buf_info->h_buf_sizes,
                                        num_partitions,
                                        user_buffer_size,
@@ -1960,7 +1952,7 @@ struct contiguous_split_state {
     auto& h_dst_buf_info = partition_buf_size_and_dst_buf_info->h_dst_buf_info;
     auto& h_dst_bufs     = src_and_dst_pointers->h_dst_bufs;
 
-    auto cur_dst_buf_info = h_dst_buf_info;
+    auto cur_dst_buf_info = h_dst_buf_info.data();
     detail::metadata_builder mb(input.num_columns());
 
     for (std::size_t idx = 0; idx < num_partitions; idx++) {
