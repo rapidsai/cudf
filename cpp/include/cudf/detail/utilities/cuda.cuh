@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -25,8 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
-
-#include <type_traits>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace detail {
