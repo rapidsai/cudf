@@ -371,7 +371,7 @@ struct test_udf_simple_type : cudf::host_udf_base {
           auto const val = static_cast<OutputType>(values.element<InputType>(i));
           sum += val * val;
         }
-        return {static_cast<OutputType>((group_indices[idx] + 1)) * sum, true};
+        return {static_cast<OutputType>((group_indices[start] + 1)) * sum, true};
       }
     };
   };
@@ -517,5 +517,31 @@ TEST_F(HostUDFExampleTest, SegmentedReductionEmptyInput)
     cudf::get_default_stream(),
     cudf::get_current_device_resource_ref());
   auto const expected = int64s_col{};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+}
+
+TEST_F(HostUDFExampleTest, GroupbySimpleInput)
+{
+  auto const keys = int32s_col{0, 1, 2, 0, 1, 2, 0, 1, 2, 0};
+  auto const vals = doubles_col{
+    {0.0, 0.0 /*null*/, 2.0, 3.0, 0.0 /*null*/, 5.0, 0.0 /*null*/, 0.0 /*null*/, 8.0, 9.0},
+    {true, false, true, true, false, true, false, false, true, true}};
+  auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
+    std::make_unique<test_udf_simple_type<cudf::groupby_aggregation>>());
+
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back();
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(std::move(agg));
+  cudf::groupby::groupby gb_obj(
+    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
+
+  auto const grp_result = gb_obj.aggregate(requests, cudf::test::get_default_stream());
+  auto const& result    = grp_result.second[0].results[0];
+
+  // Output type of groupby is double.
+  // Values grouped by keys: [ {0, 3, null, 9}, {null, null, null}, {2, 5, 8} ]
+  // [ 1 * (0^2 + 3^2 + 9^2), 0, 3 * (2^2 + 5^2 + 8^2) ]
+  auto const expected = doubles_col{90, 0, 279};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
