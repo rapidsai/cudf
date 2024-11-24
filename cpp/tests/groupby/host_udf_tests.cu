@@ -381,9 +381,9 @@ using doubles_col = cudf::test::fixed_width_column_wrapper<double>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-struct HostUDFImplementationTest : cudf::test::BaseFixture {};
+struct HostUDFExampleTest : cudf::test::BaseFixture {};
 
-TEST_F(HostUDFImplementationTest, ReductionSimpleInput)
+TEST_F(HostUDFExampleTest, ReductionSimpleInput)
 {
   auto const vals = doubles_col{0.0, 1.0, 2.0, 3.0, 4.0, 5.0};
   auto const agg  = cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(
@@ -401,7 +401,7 @@ TEST_F(HostUDFImplementationTest, ReductionSimpleInput)
   EXPECT_EQ(expected, result);
 }
 
-TEST_F(HostUDFImplementationTest, ReductionEmptyInput)
+TEST_F(HostUDFExampleTest, ReductionEmptyInput)
 {
   auto const vals = doubles_col{};
   auto const agg  = cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(
@@ -415,7 +415,7 @@ TEST_F(HostUDFImplementationTest, ReductionEmptyInput)
   EXPECT_EQ(cudf::type_id::INT64, reduced->type().id());
 }
 
-TEST_F(HostUDFImplementationTest, SegmentedReductionSimpleInput)
+TEST_F(HostUDFExampleTest, SegmentedReductionSimpleInput)
 {
   auto const vals = doubles_col{
     {0.0, 0.0 /*null*/, 2.0, 3.0, 0.0 /*null*/, 5.0, 0.0 /*null*/, 0.0 /*null*/, 8.0, 9.0},
@@ -481,7 +481,7 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionSimpleInput)
   }
 }
 
-TEST_F(HostUDFImplementationTest, SegmentedReductionEmptySegments)
+TEST_F(HostUDFExampleTest, SegmentedReductionEmptySegments)
 {
   auto const vals    = int32s_col{};
   auto const offsets = int32s_col{0, 0, 0, 0}.release();
@@ -500,7 +500,7 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionEmptySegments)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-TEST_F(HostUDFImplementationTest, SegmentedReductionEmptyInput)
+TEST_F(HostUDFExampleTest, SegmentedReductionEmptyInput)
 {
   auto const vals = int32s_col{};
   // Cannot be empty due to a bug in the libcudf: https://github.com/rapidsai/cudf/issues/17433.
