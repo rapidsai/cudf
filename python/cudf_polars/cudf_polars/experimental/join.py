@@ -7,6 +7,8 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any
 
+import pyarrow as pa
+
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
@@ -22,6 +24,7 @@ from cudf_polars.experimental.parallel import (
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer, PartitionInfo
 
@@ -84,7 +87,11 @@ def lower_join_node(
 
 
 def rearrange_by_column(
-    name_out: str, name_in: str, on: list[str], count_in: int, count_out: int
+    name_out: str,
+    name_in: str,
+    on: tuple[NamedExpr, ...],
+    count_in: int,
+    count_out: int,
 ) -> MutableMapping[Any, Any]:
     """Shuffle on a list of columns."""
     # Simple all-to-all shuffle (for now)
@@ -96,7 +103,7 @@ def rearrange_by_column(
         _concat_list = []
         for part_in in range(count_in):
             graph[(split_name, part_in)] = (
-                _split_partition,
+                _split_by_column,
                 (name_in, part_in),
                 on,
                 count_out,
@@ -111,16 +118,43 @@ def rearrange_by_column(
     return graph
 
 
-def _split_partition(df: DataFrame, on: list[str], count: int) -> dict[int, DataFrame]:
-    on_ind = [df.column_names.index(col) for col in on]
-    table, indices = plc.partitioning.hash_partition(df.table, on_ind, count)
-    indices += [df.num_rows]
+def _split_by_column(
+    df: DataFrame,
+    on: list[NamedExpr],
+    count: int,
+) -> dict[int, DataFrame]:
+    # Extract the partition-map column
+    if len(on) == 1 and on[0].name == "_partitions":
+        # The `on` argument already contains the
+        # destination partition id for each row.
+        partition_map = on[0].evaluate(df).obj
+    else:
+        # Use murmurhash % count to choose the
+        # destination partition id for each row.
+        partition_map = plc.binaryop.binary_operation(
+            plc.hashing.murmurhash3_x86_32(
+                DataFrame([expr.evaluate(df) for expr in on]).table
+            ),
+            plc.interop.from_arrow(pa.scalar(count, type="uint32")),
+            plc.binaryop.BinaryOperator.PYMOD,
+            plc.types.DataType(plc.types.TypeId.UINT32),
+        )
+
+    # Split and return the partitioned result
     return {
         i: DataFrame.from_table(
-            plc.copying.slice(table, indices[i : i + 2])[0],
+            split,
             df.column_names,
         )
-        for i in range(count)
+        for i, split in enumerate(
+            plc.copying.split(
+                *plc.partitioning.partition(
+                    df.table,
+                    partition_map,
+                    count,
+                )
+            )
+        )
     }
 
 
@@ -135,14 +169,14 @@ def _(
         bcast_name = get_key_name(left)
         bcast_size = partition_info[left].count
         other = get_key_name(right)
-        other_on = [v.name for v in ir.right_on]
-        bcast_on = [v.name for v in ir.left_on]
+        other_on = ir.right_on  # [v.name for v in ir.right_on]
+        bcast_on = ir.left_on  # [v.name for v in ir.left_on]
     else:
         bcast_name = get_key_name(right)
         bcast_size = partition_info[right].count
         other = get_key_name(left)
-        other_on = [v.name for v in ir.left_on]
-        bcast_on = [v.name for v in ir.right_on]
+        other_on = ir.left_on  # [v.name for v in ir.left_on]
+        bcast_on = ir.right_on  # [v.name for v in ir.right_on]
 
     graph: MutableMapping[Any, Any] = {}
 
@@ -166,7 +200,7 @@ def _(
     for part_out in range(out_size):
         if how != "inner":
             graph[(split_name, part_out)] = (
-                _split_partition,
+                _split_by_column,
                 (other, part_out),
                 other_on,
                 bcast_size,
