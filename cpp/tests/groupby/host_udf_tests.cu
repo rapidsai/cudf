@@ -232,11 +232,23 @@ struct test_udf_simple_type : cudf::host_udf_base {
     {
       auto const& values      = std::get<cudf::column_view>(input.at(input_kind::INPUT_VALUES));
       auto const output_dtype = std::get<cudf::data_type>(input.at(input_kind::OUTPUT_DTYPE));
+      auto const offsets =
+        std::get<cudf::device_span<cudf::size_type const>>(input.at(input_kind::OFFSETS));
+      CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
+      auto const num_segments = static_cast<cudf::size_type>(offsets.size()) - 1;
+
+      if (values.size() == 0) {
+        if (num_segments <= 0) {
+          return parent->get_empty_output(output_dtype, stream, mr);
+        } else {
+          return cudf::make_numeric_column(
+            output_dtype, num_segments, cudf::mask_state::ALL_NULL, stream, mr);
+        }
+      }
+
       auto const input_init_value =
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
           input.at(input_kind::INIT_VALUE));
-
-      if (values.size() == 0) { return parent->get_empty_output(output_dtype, stream, mr); }
 
       auto const init_value = [&]() -> InputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
@@ -249,10 +261,6 @@ struct test_udf_simple_type : cudf::host_udf_base {
       }();
 
       auto const null_handling = std::get<cudf::null_policy>(input.at(input_kind::NULL_POLICY));
-      auto const offsets =
-        std::get<cudf::device_span<cudf::size_type const>>(input.at(input_kind::OFFSETS));
-      CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
-      auto const num_segments = static_cast<cudf::size_type>(offsets.size()) - 1;
 
       auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
       auto output              = cudf::make_numeric_column(
@@ -488,7 +496,7 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionEmptySegments)
     std::nullopt,  // init_value
     cudf::get_default_stream(),
     cudf::get_current_device_resource_ref());
-  auto const expected = int64s_col{{0, 0, 0, 0}, {false, false, false, false}};
+  auto const expected = int64s_col{{0, 0, 0}, {false, false, false}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
