@@ -19,7 +19,6 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.filling import sequence
-from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -32,6 +31,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals.search import search_sorted
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
