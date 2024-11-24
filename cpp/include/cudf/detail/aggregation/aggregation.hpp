@@ -1509,6 +1509,12 @@ struct target_type_impl<Source,
   using type = struct_view;
 };
 
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::HOST_UDF> {
+  // Just a placeholder. The actual return type is unknown.
+  using type = struct_view;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
