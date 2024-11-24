@@ -102,11 +102,14 @@ struct test_udf_simple_type : cudf::host_udf_base {
     [[maybe_unused]] rmm::cuda_stream_view stream,
     [[maybe_unused]] rmm::device_async_resource_ref mr) const override
   {
-    if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation> ||
-                  std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
+    if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
       CUDF_EXPECTS(output_dtype.has_value(),
                    "Data type for the reduction result must be specified.");
       return cudf::make_default_constructed_scalar(output_dtype.value(), stream, mr);
+    } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
+      CUDF_EXPECTS(output_dtype.has_value(),
+                   "Data type for the reduction result must be specified.");
+      return cudf::make_empty_column(output_dtype.value());
     } else {
       return cudf::make_empty_column(
         cudf::data_type{cudf::type_to_id<typename groupby_fn::OutputType>()});
