@@ -424,7 +424,7 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionSimpleInput)
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
     std::make_unique<test_udf_simple_type<cudf::segmented_reduce_aggregation>>());
 
-  // Test without init_value.
+  // Test without init value.
   {
     auto const result = cudf::segmented_reduce(
       vals,
@@ -432,12 +432,12 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionSimpleInput)
       *agg,
       cudf::data_type{cudf::type_id::INT64},
       cudf::null_policy::INCLUDE,
-      std::nullopt,  // init_value
+      std::nullopt,  // init value
       cudf::get_default_stream(),
       cudf::get_current_device_resource_ref());
 
-    // When null_policy is set to `INCLUDE`, the null values are replaced with the init_value.
-    // Since init_value is not given, it is set to 0.
+    // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
+    // Since init value is not given, it is set to 0.
     // [ 3 * (0^2 + init^2 + 2^2), 2 * (3^2 + init^2), 5 * (5^2 + init^2 + init^2 + 8^2 + 9^2) ]
     auto const expected = int64s_col{12, 18, 850};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
@@ -456,7 +456,7 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionSimpleInput)
       cudf::get_default_stream(),
       cudf::get_current_device_resource_ref());
 
-    // When null_policy is set to `INCLUDE`, the null values are replaced with the init_value.
+    // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
     // [ 3 * (3 + 0^2 + 3^2 + 2^2), 2 * (3 + 3^2 + 3^2), 5 * (3 + 5^2 + 3^2 + 3^2 + 8^2 + 9^2) ]
     auto const expected = int64s_col{48, 42, 955};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
@@ -493,7 +493,7 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionEmptySegments)
     *agg,
     cudf::data_type{cudf::type_id::INT64},
     cudf::null_policy::INCLUDE,
-    std::nullopt,  // init_value
+    std::nullopt,  // init value
     cudf::get_default_stream(),
     cudf::get_current_device_resource_ref());
   auto const expected = int64s_col{{0, 0, 0}, {false, false, false}};
@@ -513,7 +513,7 @@ TEST_F(HostUDFImplementationTest, SegmentedReductionEmptyInput)
     *agg,
     cudf::data_type{cudf::type_id::INT64},
     cudf::null_policy::INCLUDE,
-    std::nullopt,  // init_value
+    std::nullopt,  // init value
     cudf::get_default_stream(),
     cudf::get_current_device_resource_ref());
   auto const expected = int64s_col{};
