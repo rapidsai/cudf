@@ -967,7 +967,9 @@ class udf_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a custom aggregation specified in host-based UDF.
  */
-class host_udf_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class host_udf_aggregation final : public groupby_aggregation,
+                                   public reduce_aggregation,
+                                   public segmented_reduce_aggregation {
  public:
   std::unique_ptr<host_udf_base> const udf_ptr;
 

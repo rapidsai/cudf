@@ -939,6 +939,8 @@ template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
   make_host_udf_aggregation<groupby_aggregation>(std::unique_ptr<host_udf_base>);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
   make_host_udf_aggregation<reduce_aggregation>(std::unique_ptr<host_udf_base>);
+template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
+  make_host_udf_aggregation<segmented_reduce_aggregation>(std::unique_ptr<host_udf_base>);
 
 namespace detail {
 namespace {
