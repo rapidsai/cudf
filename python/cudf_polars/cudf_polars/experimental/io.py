@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.experimental.parallel import (
-    PartitionInfo,
     generate_ir_tasks,
     get_key_name,
 )
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.parallel import LowerIRTransformer
+    from cudf_polars.experimental.parallel import PartitionInfo
 
 
 ##
@@ -42,8 +41,13 @@ class ParDataFrameScan(DataFrameScan):
         total_rows = max(self.df.shape()[0], 1)
         return math.ceil(total_rows / self._max_n_rows)
 
-    def _tasks(self) -> MutableMapping[Any, Any]:
+    def _tasks(
+        self, partition_info: MutableMapping[IR, PartitionInfo]
+    ) -> MutableMapping[Any, Any]:
         """Task graph."""
+        assert (
+            partition_info[self].count == self._count
+        ), "Inconsistent ParDataFrameScan partitioning."
         total_rows = max(self.df.shape()[0], 1)
         stride = math.ceil(total_rows / self._count)
         key_name = get_key_name(self)
@@ -59,25 +63,8 @@ class ParDataFrameScan(DataFrameScan):
         }
 
 
-def lower_dataframescan_node(
-    ir: DataFrameScan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Rewrite a Scan node with proper partitioning."""
-    new_node = ParDataFrameScan(
-        ir.schema,
-        ir.df,
-        ir.projection,
-        ir.predicate,
-        ir.config_options,
-    )
-    return new_node, {new_node: PartitionInfo(count=new_node._count)}
-
-
 @generate_ir_tasks.register(ParDataFrameScan)
 def _(
     ir: ParDataFrameScan, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    assert (
-        partition_info[ir].count == ir._count
-    ), "Inconsistent ParDataFrameScan partitioning."
-    return ir._tasks()
+    return ir._tasks(partition_info)

@@ -257,6 +257,13 @@ def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    import cudf_polars.experimental.io as _io
+    from cudf_polars.experimental.io import ParDataFrameScan
 
-    return _io.lower_dataframescan_node(ir, rec)
+    new_node = ParDataFrameScan(
+        ir.schema,
+        ir.df,
+        ir.projection,
+        ir.predicate,
+        ir.config_options,
+    )
+    return new_node, {new_node: PartitionInfo(count=new_node._count)}
