@@ -453,7 +453,6 @@ class CudfFusedIO(FusedIO):
             return Task(
                 name,
                 cudf.concat,
-                # [expr._filtered_task(name, i) for i in bucket],
                 TaskList(*(expr._filtered_task(name, i) for i in bucket)),
             )
 
