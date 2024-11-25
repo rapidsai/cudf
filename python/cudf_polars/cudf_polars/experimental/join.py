@@ -120,7 +120,7 @@ def rearrange_by_column(
 
 def _split_by_column(
     df: DataFrame,
-    on: list[NamedExpr],
+    on: tuple[NamedExpr, ...],
     count: int,
 ) -> dict[int, DataFrame]:
     # Extract the partition-map column
@@ -169,14 +169,14 @@ def _(
         bcast_name = get_key_name(left)
         bcast_size = partition_info[left].count
         other = get_key_name(right)
-        other_on = ir.right_on  # [v.name for v in ir.right_on]
-        bcast_on = ir.left_on  # [v.name for v in ir.left_on]
+        other_on = ir.right_on
+        bcast_on = ir.left_on
     else:
         bcast_name = get_key_name(right)
         bcast_size = partition_info[right].count
         other = get_key_name(left)
-        other_on = ir.left_on  # [v.name for v in ir.left_on]
-        bcast_on = ir.right_on  # [v.name for v in ir.right_on]
+        other_on = ir.left_on
+        bcast_on = ir.right_on
 
     graph: MutableMapping[Any, Any] = {}
 
