@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.mark.parametrize("executor", [None, "pylibcudf", "dask-experimental"])
 def test_executor_basics(executor):
-    """Test basics of each executor."""
     if executor == "dask-experimental":
         pytest.importorskip("dask")
 
@@ -35,7 +34,6 @@ def test_executor_basics(executor):
 
 
 def test_cudf_cache_evaluate():
-    """Tests `cudf_polars.dsl.ir.Cache.evaluate()`."""
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -48,7 +46,6 @@ def test_cudf_cache_evaluate():
 
 
 def test_dask_experimental_map_function_get_hashable():
-    """Tests `cudf_polars.dsl.ir.MapFunction.get_hashable()`."""
     df = pl.LazyFrame(
         {
             "a": pl.Series([11, 12, 13], dtype=pl.UInt16),
@@ -62,7 +59,6 @@ def test_dask_experimental_map_function_get_hashable():
 
 
 def test_unknown_executor():
-    """Test invalid executor."""
     df = pl.LazyFrame({})
 
     with pytest.raises(
