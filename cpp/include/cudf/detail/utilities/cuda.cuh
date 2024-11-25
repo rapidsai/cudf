@@ -162,7 +162,7 @@ template <int32_t block_size, int32_t leader_lane = 0, typename T>
 __device__ T single_lane_block_sum_reduce(T lane_value)
 {
   static_assert(block_size <= 1024, "Invalid block size.");
-  static_assert(std::is_arithmetic_v<T>, "Invalid non-arithmetic type.");
+  static_assert(cuda::std::is_arithmetic_v<T>, "Invalid non-arithmetic type.");
   constexpr auto warps_per_block{block_size / warp_size};
   auto const lane_id{threadIdx.x % warp_size};
   auto const warp_id{threadIdx.x / warp_size};
