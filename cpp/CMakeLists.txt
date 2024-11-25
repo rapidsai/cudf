@@ -208,7 +208,8 @@ function(enable_static_checkers target)
     # -Qunused-arguments.
     if(CUDF_CLANG_TIDY_AUTOFIX)
       set_target_properties(
-        ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments;--fix"
+        ${target} PROPERTIES CXX_CLANG_TIDY
+                             "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments;--fix"
       )
     else()
       set_target_properties(
