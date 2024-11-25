@@ -9,7 +9,7 @@ import contextlib
 import os
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import nvtx
 
@@ -135,7 +135,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: str | None,
+    executor: Literal["pylibcudf", "dask-experimental"] | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
