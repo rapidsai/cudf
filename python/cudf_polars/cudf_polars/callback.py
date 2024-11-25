@@ -146,7 +146,7 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "cudf":
+        if executor is None or executor == "pylibcudf":
             return ir.evaluate(cache={}).to_polars()
         elif executor == "dask-experimental":
             from cudf_polars.experimental.parallel import evaluate_dask

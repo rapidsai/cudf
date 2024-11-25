@@ -10,7 +10,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-@pytest.mark.parametrize("executor", [None, "cudf", "dask-experimental"])
+@pytest.mark.parametrize("executor", [None, "pylibcudf", "dask-experimental"])
 def test_executor_basics(executor):
     """Test basics of each executor."""
     if executor == "dask-experimental":
@@ -44,7 +44,7 @@ def test_cudf_cache_evaluate():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"), pl.col("a"))
     query = pl.concat([ldf, ldf2], how="diagonal")
-    assert_gpu_result_equal(query, executor="cudf")
+    assert_gpu_result_equal(query, executor="pylibcudf")
 
 
 def test_dask_experimental_map_function_get_hashable():
