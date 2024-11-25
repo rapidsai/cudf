@@ -22,7 +22,6 @@ from . import (
     reshape,
     rolling,
     round,
-    search,
     sort,
     stream_compaction,
     string_casting,
@@ -30,7 +29,6 @@ from . import (
     strings_udf,
     text,
     timezone,
-    transpose,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
