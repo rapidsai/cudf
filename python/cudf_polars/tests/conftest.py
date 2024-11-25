@@ -48,8 +48,8 @@ def pytest_addoption(parser):
     parser.addoption(
         "--executor",
         action="store",
-        default="cudf",
-        choices=("cudf", "dask-experimental"),
+        default="pylibcudf",
+        choices=("pylibcudf", "dask-experimental"),
         help="Executor to use for GPUEngine.",
     )
 

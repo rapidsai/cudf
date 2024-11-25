@@ -612,19 +612,19 @@ class tree {
    * @brief get the first expression in the tree
    * @returns the first inserted expression into the tree
    */
-  expression const& front() const { return *expressions.front(); }
+  [[nodiscard]] expression const& front() const { return *expressions.front(); }
 
   /**
    * @brief get the last expression in the tree
    * @returns the last inserted expression into the tree
    */
-  expression const& back() const { return *expressions.back(); }
+  [[nodiscard]] expression const& back() const { return *expressions.back(); }
 
   /**
    * @brief get the number of expressions added to the tree
    * @returns the number of expressions added to the tree
    */
-  size_t size() const { return expressions.size(); }
+  [[nodiscard]] size_t size() const { return expressions.size(); }
 
   /**
    * @brief get the expression at an index in the tree. Index is checked.

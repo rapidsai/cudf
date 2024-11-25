@@ -16,6 +16,7 @@ jobs:
       - changed-files
       - checks
       - conda-cpp-build
+      - cpp-linters
       - conda-cpp-checks
       - conda-cpp-tests
       - conda-python-build
@@ -113,6 +114,13 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-25.02
     with:
       build_type: pull-request
+  cpp-linters:
+    secrets: inherit
+    needs: checks
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.02
+    with:
+      build_type: pull-request
+      run_script: "ci/cpp_linters.sh"
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit

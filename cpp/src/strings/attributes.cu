@@ -264,24 +264,27 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
 // external APIS
 
 std::unique_ptr<column> count_characters(strings_column_view const& input,
+                                         rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_characters(input, cudf::get_default_stream(), mr);
+  return detail::count_characters(input, stream, mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& input,
+                                    rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_bytes(input, cudf::get_default_stream(), mr);
+  return detail::count_bytes(input, stream, mr);
 }
 
 std::unique_ptr<column> code_points(strings_column_view const& input,
+                                    rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::code_points(input, cudf::get_default_stream(), mr);
+  return detail::code_points(input, stream, mr);
 }
 
 }  // namespace strings

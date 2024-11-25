@@ -1634,11 +1634,6 @@ class MapFunction(IR):
             )
         self._non_child_args = (schema, name, self.options)
 
-    def get_hashable(self) -> Hashable:  # pragma: no cover; Needed by experimental
-        """Hashable representation of the node."""
-        schema_hash = tuple(self.schema.items())
-        return (type(self), schema_hash, self.name, self.options, *self.children)
-
     @classmethod
     def do_evaluate(
         cls, schema: Schema, name: str, options: Any, df: DataFrame

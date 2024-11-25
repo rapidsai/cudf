@@ -4113,7 +4113,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if any(c.dtype != source_columns[0].dtype for c in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_columns = libcudf.transpose.transpose(source_columns)
+        result_table = plc.transpose.transpose(
+            plc.table.Table(
+                [col.to_pylibcudf(mode="read") for col in source_columns]
+            )
+        )
+        result_columns = [
+            libcudf.column.Column.from_pylibcudf(col, data_ptr_exposed=True)
+            for col in result_table.columns()
+        ]
 
         if isinstance(source_dtype, cudf.CategoricalDtype):
             result_columns = [

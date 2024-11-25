@@ -5857,14 +5857,8 @@ class StringColumn(column.ColumnBase):
             return result_col
 
     def __contains__(self, item: ScalarLike) -> bool:
-        if is_scalar(item):
-            return True in libcudf.search.contains(
-                self, column.as_column([item], dtype=self.dtype)
-            )
-        else:
-            return True in libcudf.search.contains(
-                self, column.as_column(item, dtype=self.dtype)
-            )
+        other = [item] if is_scalar(item) else item
+        return self.contains(column.as_column(other, dtype=self.dtype)).any()
 
     def as_numerical_column(
         self, dtype: Dtype

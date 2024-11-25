@@ -48,14 +48,35 @@ def get_key_name(node: Node) -> str:
 def lower_ir_node(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Rewrite an IR node with proper partitioning."""
-    raise AssertionError(f"Unhandled type {type(ir)}")
+    """
+    Rewrite an IR node and extract partitioning information.
+
+    Parameters
+    ----------
+    ir
+        IR node to rewrite.
+    rec
+        Recursive LowerIRTransformer callable.
+
+    Returns
+    -------
+    new_ir, partition_info
+        The rewritten node, and a mapping from unique nodes in
+        the full IR graph to associated partitioning information.
+
+    Notes
+    -----
+    This function is used by `lower_ir_graph`.
+
+    See Also
+    --------
+    lower_ir_graph
+    """
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
 
 
 @lower_ir_node.register(IR)
-def _default_lower_ir_node(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if len(ir.children) == 0:
         # Default leaf node has single partition
         return ir, {ir: PartitionInfo(count=1)}
@@ -71,7 +92,7 @@ def _default_lower_ir_node(
             f"Class {type(ir)} does not support multiple partitions."
         )  # pragma: no cover
 
-    # Return reconstructed node and
+    # Return reconstructed node and partition-info dict
     partition = PartitionInfo(count=1)
     new_node = ir.reconstruct(children)
     partition_info[new_node] = partition
@@ -79,7 +100,29 @@ def _default_lower_ir_node(
 
 
 def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """Rewrite an IR graph with proper partitioning."""
+    """
+    Rewrite an IR graph and extract partitioning information.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to rewrite.
+
+    Returns
+    -------
+    new_ir, partition_info
+        The rewritten graph, and a mapping from unique nodes
+        in the new graph to associated partitioning information.
+
+    Notes
+    -----
+    This function traverses the unique nodes of the graph with
+    root `ir`, and applies :func:`lower_ir_node` to each node.
+
+    See Also
+    --------
+    lower_ir_node
+    """
     from cudf_polars.dsl.traversal import CachingVisitor
 
     mapper = CachingVisitor(lower_ir_node)
@@ -130,16 +173,39 @@ def _default_ir_tasks(
 
 def task_graph(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> tuple[MutableMapping[str, Any], str]:
-    """Construct a Dask-compatible task graph."""
+) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
+    """
+    Construct a task graph for evaluation of an IR graph.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to rewrite.
+    partition_info
+        A mapping from all unique IR nodes to the
+        associated partitioning information.
+
+    Returns
+    -------
+    graph
+        A Dask-compatible task graph for the entire
+        IR graph with root `ir`.
+
+    Notes
+    -----
+    This function traverses the unique nodes of the
+    graph with root `ir`, and extracts the tasks for
+    each node with :func:`generate_ir_tasks`.
+
+    See Also
+    --------
+    generate_ir_tasks
+    """
     graph = reduce(
         operator.or_,
-        [generate_ir_tasks(node, partition_info) for node in traversal(ir)],
+        (generate_ir_tasks(node, partition_info) for node in traversal(ir)),
     )
-    key_name = get_key_name(ir)
-    graph[key_name] = (key_name, 0)
-
-    return graph, key_name
+    return graph, (get_key_name(ir), 0)
 
 
 def _register_serialize():
