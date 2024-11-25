@@ -74,7 +74,7 @@ class StringFunction(Expr):
                     )
                 pattern = self.children[1].value.as_py()
                 try:
-                    self._regex_program = plc.strings.regex_program.RegexProgram.create(
+                    plc.strings.regex_program.RegexProgram.create(
                         pattern,
                         flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
                     )
@@ -154,6 +154,12 @@ class StringFunction(Expr):
                 )
                 return Column(plc.strings.find.contains(column.obj, pattern))
             else:
+                assert isinstance(arg, Literal)
+                pattern = arg.value.as_py()
+                self._regex_program = plc.strings.regex_program.RegexProgram.create(
+                    pattern,
+                    flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                )
                 return Column(
                     plc.strings.contains.contains_re(column.obj, self._regex_program)
                 )
