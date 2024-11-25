@@ -818,7 +818,6 @@ class GroupBy(IR):
         "keys",
         "maintain_order",
         "options",
-        "agg_infos",
     )
     _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
     keys: tuple[expr.NamedExpr, ...]
@@ -853,13 +852,11 @@ class GroupBy(IR):
             raise NotImplementedError("dynamic group by")
         if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
             raise NotImplementedError("Nested aggregations in groupby")
-        self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
             options,
-            self.agg_infos,
         )
 
     @staticmethod
@@ -897,7 +894,6 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         options: Any,
-        agg_infos: Sequence[expr.AggInfo],
         df: DataFrame,
     ):
         """Evaluate and return a dataframe."""
@@ -917,6 +913,7 @@ class GroupBy(IR):
         # TODO: uniquify
         requests = []
         replacements: list[expr.Expr] = []
+        agg_infos = [req.collect_agg(depth=0) for req in agg_requests]
         for info in agg_infos:
             for pre_eval, req, rep in info.requests:
                 if pre_eval is None:
