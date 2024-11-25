@@ -149,31 +149,38 @@ struct reduce_dispatch_functor {
         auto const& data_kinds = udf_ptr->get_required_data_kinds();
 
         // Do not cache udf_input, as the actual input data may change from run to run.
-        std::unordered_map<cudf::host_udf_base::input_kind, cudf::host_udf_base::input_data>
-          udf_input;
-        for (auto const kind : data_kinds) {
-          switch (kind) {
-            case cudf::host_udf_base::input_kind::INPUT_VALUES: {
-              udf_input.emplace(kind, col);
-              break;
-            }
+        cudf::host_udf_base::host_udf_input_map udf_input;
+        for (auto const& kind : data_kinds) {
+          if (std::holds_alternative<cudf::host_udf_base::intermediate_data_kind>(kind.value)) {
+            auto const intermediate_kind =
+              std::get<cudf::host_udf_base::intermediate_data_kind>(kind.value);
+            switch (intermediate_kind) {
+              case cudf::host_udf_base::intermediate_data_kind::INPUT_VALUES: {
+                udf_input.emplace(kind, col);
+                break;
+              }
 
-            case cudf::host_udf_base::input_kind::OUTPUT_DTYPE: {
-              udf_input.emplace(kind, output_dtype);
-              break;
-            }
+              case cudf::host_udf_base::intermediate_data_kind::OUTPUT_DTYPE: {
+                udf_input.emplace(kind, output_dtype);
+                break;
+              }
 
-            case cudf::host_udf_base::input_kind::INIT_VALUE: {
-              udf_input.emplace(kind, init);
-              break;
-            }
+              case cudf::host_udf_base::intermediate_data_kind::INIT_VALUE: {
+                udf_input.emplace(kind, init);
+                break;
+              }
 
-            default: CUDF_FAIL("Unsupported data kind in host-based UDF reduction.");
+              default: CUDF_FAIL("Unsupported data kind in host-based UDF reduction.");
+            }
+          } else {
+            CUDF_FAIL("Reduction aggregation does not support calling other aggregations.");
           }
         }
-
-        return std::get<std::unique_ptr<scalar>>((*udf_ptr)(udf_input, stream, mr));
-      }
+        auto output = (*udf_ptr)(udf_input, stream, mr);
+        CUDF_EXPECTS(std::holds_alternative<std::unique_ptr<scalar>>(output),
+                     "Invalid output type from HOST_UDF reduction.");
+        return std::get<std::unique_ptr<scalar>>(std::move(output));
+      }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }

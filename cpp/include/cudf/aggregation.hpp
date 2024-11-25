@@ -623,14 +623,14 @@ struct host_udf_base {
   virtual ~host_udf_base() = default;
 
   /**
-   * @brief Define the possible data that may be needed in the derived class for its operations.
+   * @brief Define the intermediate data that may be needed in the derived class for its operations.
    *
-   * Each derived host-based UDF class may need a different set of input data (such as sorted
+   * Each derived host-based UDF class may need a different set of intermediate data (such as sorted
    * values, group labels, group offsets etc). It is inefficient to evaluate and pass down all these
    * data at once from libcudf. A solution for that is, the derived class defines a subset of data
    * that it needs and only such data will be evaluated.
    */
-  enum class input_kind {
+  enum class intermediate_data_kind {
     INPUT_VALUES,           // the input values column, may be used in any aggregation
     OUTPUT_DTYPE,           // output data type, used in reduction
     INIT_VALUE,             // initial value for reduction
@@ -646,25 +646,88 @@ struct host_udf_base {
   };
 
   /**
-   * @brief Return a set of data kind that is needed for computing the aggregation.
+   * @brief The possible data kind that may be needed in the derived class for its operations.
    *
-   * @return A set of `input_kind` enum.
+   * Such data can be either intermediate data, or the results of other aggregations.
    */
-  [[nodiscard]] virtual std::unordered_set<input_kind> const& get_required_data_kinds() const = 0;
+  struct input_data_kind {
+    using value_type = std::variant<intermediate_data_kind, std::unique_ptr<aggregation>>;
+    value_type value;
+
+    input_data_kind()                  = default;
+    input_data_kind(input_data_kind&&) = default;
+    input_data_kind(input_data_kind const& other) : value{copy_value(other.value)} {}
+    input_data_kind(intermediate_data_kind value_) : value{value_} {}
+
+    template <typename T>
+    input_data_kind(std::unique_ptr<T> value_) : value{std::move(value_)}
+    {
+      static_assert(std::is_same_v<T, aggregation> || std::is_same_v<T, groupby_aggregation>);
+    }
+
+    static value_type copy_value(value_type const& value)
+    {
+      if (std::holds_alternative<intermediate_data_kind>(value)) {
+        return std::get<intermediate_data_kind>(value);
+      }
+      return std::get<std::unique_ptr<aggregation>>(value)->clone();
+    }
+
+    struct hash {
+      std::size_t operator()(input_data_kind const& kind) const
+      {
+        if (std::holds_alternative<intermediate_data_kind>(kind.value)) {
+          return std::hash<int>{}(static_cast<int>(std::get<intermediate_data_kind>(kind.value)));
+        }
+        return std::get<std::unique_ptr<aggregation>>(kind.value)->do_hash();
+      }
+    };
+
+    struct equal_to {
+      bool operator()(input_data_kind const& lhs, input_data_kind const& rhs) const
+      {
+        if (std::holds_alternative<intermediate_data_kind>(lhs.value) !=
+            std::holds_alternative<intermediate_data_kind>(rhs.value)) {
+          return false;
+        }
+        if (std::holds_alternative<intermediate_data_kind>(lhs.value)) {
+          return std::get<intermediate_data_kind>(lhs.value) ==
+                 std::get<intermediate_data_kind>(rhs.value);
+        }
+        return std::get<std::unique_ptr<aggregation>>(lhs.value)->is_equal(
+          *std::get<std::unique_ptr<aggregation>>(rhs.value));
+      }
+    };
+  };
+
+  using data_kind_set =
+    std::unordered_set<input_data_kind, input_data_kind::hash, input_data_kind::equal_to>;
 
   /**
-   * Aggregation data that is needed for computing the aggregation.
+   * @brief Return a set of data kinds that is needed for computing the aggregation.
+   *
+   * @return A set of `input_data_kind`.
    */
-  using input_data = std::variant<column_view,
-                                  data_type,
-                                  std::optional<std::reference_wrapper<scalar const>>,
-                                  null_policy,
-                                  scan_type,
-                                  device_span<size_type const>>;
+  [[nodiscard]] virtual data_kind_set get_required_data_kinds() const = 0;
+
+  /**
+   * @brief Type of the data that is passed to the derived class for computing aggregation.
+   */
+  using input_data_type = std::variant<column_view,
+                                       data_type,
+                                       std::optional<std::reference_wrapper<scalar const>>,
+                                       null_policy,
+                                       scan_type,
+                                       device_span<size_type const>>;
+
+  using host_udf_input_map = std::unordered_map<input_data_kind,
+                                                input_data_type,
+                                                input_data_kind::hash,
+                                                input_data_kind::equal_to>;
 
   /**
    * Output type of the aggregation. It can be either a scalar (for reduction) or a column
-   * (for segmented reduction or groupby) aggregation.
+   * (for segmented reduction or groupby aggregations).
    */
   using output_type = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
 
@@ -676,10 +739,9 @@ struct host_udf_base {
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation
    */
-  [[nodiscard]] virtual output_type operator()(
-    std::unordered_map<input_kind, input_data> const& input,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const = 0;
+  [[nodiscard]] virtual output_type operator()(host_udf_input_map const& input,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr) const = 0;
 
   /**
    * @brief Get the output when the input values is empty.
