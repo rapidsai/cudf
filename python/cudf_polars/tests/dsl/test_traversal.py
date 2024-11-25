@@ -116,7 +116,11 @@ def test_rewrite_ir_node():
     def replace_df(node, rec):
         if isinstance(node, ir.DataFrameScan):
             return ir.DataFrameScan(
-                node.schema, new_df._df, node.projection, node.predicate
+                node.schema,
+                new_df._df,
+                node.projection,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
@@ -144,7 +148,11 @@ def test_rewrite_scan_node(tmp_path):
     def replace_scan(node, rec):
         if isinstance(node, ir.Scan):
             return ir.DataFrameScan(
-                node.schema, right._df, node.with_columns, node.predicate
+                node.schema,
+                right._df,
+                node.with_columns,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 

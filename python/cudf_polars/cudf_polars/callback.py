@@ -181,6 +181,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
+    executor: str | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -191,7 +192,14 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        return ir.evaluate(cache={}).to_polars()
+        if executor is None or executor == "cudf":
+            return ir.evaluate(cache={}).to_polars()
+        elif executor == "dask-experimental":
+            from cudf_polars.experimental.parallel import evaluate_dask
+
+            return evaluate_dask(ir).to_polars()
+        else:
+            raise ValueError(f"Unknown executor '{executor}'")
 
 
 def validate_config_options(config: dict) -> None:
@@ -208,12 +216,18 @@ def validate_config_options(config: dict) -> None:
     ValueError
         If the configuration contains unsupported options.
     """
-    if unsupported := (config.keys() - {"raise_on_fail", "parquet_options"}):
+    if unsupported := (
+        config.keys()
+        - {"raise_on_fail", "parquet_options", "parallel_options", "executor"}
+    ):
         raise ValueError(
             f"Engine configuration contains unsupported settings: {unsupported}"
         )
-    assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
+    assert {"blocksize", "chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
         config.get("parquet_options", {})
+    )
+    assert {"parquet_blocksize", "num_rows_threshold"}.issuperset(
+        config.get("parallel_options", {})
     )
 
 
@@ -243,6 +257,7 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
+    executor = config.config.get("executor", None)
     validate_config_options(config.config)
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
@@ -272,5 +287,6 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
                     ir,
                     device=device,
                     memory_resource=memory_resource,
+                    executor=executor,
                 )
             )

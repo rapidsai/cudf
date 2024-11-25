@@ -8,4 +8,8 @@ set -euo pipefail
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
+# Test the default "cudf" executor
 python -m pytest --cache-clear "$@" tests
+
+# Test the "dask-experimental" executor
+python -m pytest --cache-clear "$@" tests --executor dask-experimental

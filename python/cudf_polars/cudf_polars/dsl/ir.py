@@ -683,14 +683,16 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("df", "projection", "predicate")
-    _non_child = ("schema", "df", "projection", "predicate")
+    __slots__ = ("df", "projection", "predicate", "config_options")
+    _non_child = ("schema", "df", "projection", "predicate", "config_options")
     df: Any
     """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     predicate: expr.NamedExpr | None
     """Mask to apply."""
+    config_options: dict[str, Any]
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -698,11 +700,13 @@ class DataFrameScan(IR):
         df: Any,
         projection: Sequence[str] | None,
         predicate: expr.NamedExpr | None,
+        config_options: dict[str, Any],
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
+        self.config_options = config_options
         self._non_child_args = (schema, df, self.projection, predicate)
         self.children = ()
 
@@ -1599,13 +1603,15 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
+            self.options = (tuple(to_explode),)
         elif self.name == "rename":
-            old, new, _ = self.options
+            old, new, strict = self.options
             # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
                 raise NotImplementedError("Duplicate new names in rename.")
+            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -1623,13 +1629,20 @@ class MapFunction(IR):
             self.options = (
                 tuple(indices),
                 tuple(pivotees),
-                (variable_name, schema[variable_name]),
-                (value_name, schema[value_name]),
+                variable_name,
+                value_name,
             )
-        self._non_child_args = (name, self.options)
+        self._non_child_args = (schema, name, self.options)
+
+    def get_hashable(self) -> Hashable:  # pragma: no cover; Needed by experimental
+        """Hashable representation of the node."""
+        schema_hash = tuple(self.schema.items())
+        return (type(self), schema_hash, self.name, self.options, *self.children)
 
     @classmethod
-    def do_evaluate(cls, name: str, options: Any, df: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, schema: Schema, name: str, options: Any, df: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if name == "rechunk":
             # No-op in our data model
@@ -1651,8 +1664,8 @@ class MapFunction(IR):
             (
                 indices,
                 pivotees,
-                (variable_name, variable_dtype),
-                (value_name, value_dtype),
+                variable_name,
+                value_name,
             ) = options
             npiv = len(pivotees)
             index_columns = [
@@ -1669,7 +1682,7 @@ class MapFunction(IR):
                         plc.interop.from_arrow(
                             pa.array(
                                 pivotees,
-                                type=plc.interop.to_arrow(variable_dtype),
+                                type=plc.interop.to_arrow(schema[variable_name]),
                             ),
                         )
                     ]
@@ -1677,7 +1690,10 @@ class MapFunction(IR):
                 df.num_rows,
             ).columns()
             value_column = plc.concatenate.concatenate(
-                [df.column_map[pivotee].astype(value_dtype).obj for pivotee in pivotees]
+                [
+                    df.column_map[pivotee].astype(schema[value_name]).obj
+                    for pivotee in pivotees
+                ]
             )
             return DataFrame(
                 [
