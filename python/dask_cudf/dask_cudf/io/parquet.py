@@ -26,6 +26,12 @@ from dask.dataframe.io.parquet.core import ParquetFunctionWrapper
 from dask.tokenize import tokenize
 from dask.utils import parse_bytes
 
+try:
+    # TODO: Remove when dask>2024.11.2
+    from dask._task_spec import List as TaskList
+except ImportError:
+    TaskList = list
+
 import cudf
 
 from dask_cudf import QUERY_PLANNING_ON, _deprecated_api
@@ -447,7 +453,8 @@ class CudfFusedIO(FusedIO):
             return Task(
                 name,
                 cudf.concat,
-                [expr._filtered_task(name, i) for i in bucket],
+                # [expr._filtered_task(name, i) for i in bucket],
+                TaskList(*(expr._filtered_task(name, i) for i in bucket)),
             )
 
         pieces = []

@@ -156,16 +156,12 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         from dask_cudf._legacy.io import to_orc
 
         return to_orc(self, *args, **kwargs)
-        # return self.to_legacy_dataframe().to_orc(*args, **kwargs)
 
     @staticmethod
     def read_text(*args, **kwargs):
-        from dask_expr import from_legacy_dataframe
-
         from dask_cudf._legacy.io.text import read_text as legacy_read_text
 
-        ddf = legacy_read_text(*args, **kwargs)
-        return from_legacy_dataframe(ddf)
+        return legacy_read_text(*args, **kwargs)
 
 
 class Series(DXSeries, CudfFrameBase):
