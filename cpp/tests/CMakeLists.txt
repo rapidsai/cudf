@@ -182,6 +182,7 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 # * hashing tests ---------------------------------------------------------------------------------
 ConfigureTest(
   HASHING_TEST
+  hashing/bloom_filter_test.cu
   hashing/md5_test.cpp
   hashing/murmurhash3_x86_32_test.cpp
   hashing/murmurhash3_x64_128_test.cpp
