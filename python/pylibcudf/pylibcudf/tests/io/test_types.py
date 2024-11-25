@@ -19,7 +19,12 @@ def test_gc_with_table_and_column_input_metadata(monkeypatch):
 
     tbl_meta = A(plc_table)
 
+    gc.disable()
+    gc.collect()
+
     del tbl_meta
 
-    # Circular reference creates one uncollectable object 1
+    # Circular reference creates an additional uncollectable object
     assert gc.collect() == 4
+
+    gc.enable()
