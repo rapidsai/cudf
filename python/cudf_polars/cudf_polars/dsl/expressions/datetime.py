@@ -79,7 +79,11 @@ class TemporalFunction(Expr):
         @classmethod
         def from_polars(cls, obj: pl_expr.TemporalFunction) -> Self:
             """Convert from polars' `TemporalFunction`."""
-            function, name = str(obj).split(".", maxsplit=1)
+            try:
+                function, name = str(obj).split(".", maxsplit=1)
+            except ValueError:
+                # Failed to unpack string
+                function = None
             if function != "TemporalFunction":
                 raise ValueError("TemporalFunction required")
             return getattr(cls, name)

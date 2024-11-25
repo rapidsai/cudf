@@ -83,7 +83,11 @@ class StringFunction(Expr):
         @classmethod
         def from_polars(cls, obj: pl_expr.StringFunction) -> Self:
             """Convert from polars' `StringFunction`."""
-            function, name = str(obj).split(".", maxsplit=1)
+            try:
+                function, name = str(obj).split(".", maxsplit=1)
+            except ValueError:
+                # Failed to unpack string
+                function = None
             if function != "StringFunction":
                 raise ValueError("StringFunction required")
             return getattr(cls, name)

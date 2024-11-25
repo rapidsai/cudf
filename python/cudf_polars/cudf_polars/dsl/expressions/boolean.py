@@ -58,7 +58,11 @@ class BooleanFunction(Expr):
         @classmethod
         def from_polars(cls, obj: pl_expr.BooleanFunction) -> Self:
             """Convert from polars' `BooleanFunction`."""
-            function, name = str(obj).split(".", maxsplit=1)
+            try:
+                function, name = str(obj).split(".", maxsplit=1)
+            except ValueError:
+                # Failed to unpack string
+                function = None
             if function != "BooleanFunction":
                 raise ValueError("BooleanFunction required")
             return getattr(cls, name)
