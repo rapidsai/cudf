@@ -261,8 +261,6 @@ def test_csv_reader_datetime(parse_dates):
         dayfirst=True,
         date_format="mixed",
     )
-    print("GOT\n", gdf)
-    print("EXPECT\n", pdf)
 
     assert_eq(gdf, pdf)
 

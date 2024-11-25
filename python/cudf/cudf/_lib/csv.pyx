@@ -160,11 +160,8 @@ def read_csv(
             header = -1
         elif header == 'infer':
             header = 0
-
     hex_cols = []
-
     new_dtypes = []
-    print("HERE0")
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
             new_dtypes = dict()
@@ -203,46 +200,7 @@ def read_csv(
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"
             )
-    print("HERE1")
     lineterminator = str(lineterminator)
-
-    # df = cudf.DataFrame._from_data(
-    #     *data_from_pylibcudf_io(
-            # plc.io.csv.read_csv(
-            #     plc.io.SourceInfo([datasource]),
-            #     lineterminator=lineterminator,
-            #     quotechar = quotechar,
-            #     quoting = quoting,
-            #     doublequote = doublequote,
-            #     header = header,
-            #     mangle_dupe_cols = mangle_dupe_cols,
-            #     usecols = usecols,
-            #     delimiter = delimiter,
-            #     delim_whitespace = delim_whitespace,
-            #     skipinitialspace = skipinitialspace,
-            #     col_names = names,
-            #     dtypes = new_dtypes,
-            #     skipfooter = skipfooter,
-            #     skiprows = skiprows,
-            #     dayfirst = dayfirst,
-            #     compression = c_compression,
-            #     thousands = thousands,
-            #     decimal = decimal,
-            #     true_values = true_values,
-            #     false_values = false_values,
-            #     nrows = nrows if nrows is not None else -1,
-            #     byte_range_offset = byte_range[0],
-            #     byte_range_size = byte_range[1],
-            #     skip_blank_lines = skip_blank_lines,
-            #     parse_dates = parse_dates,
-            #     parse_hex = hex_cols,
-            #     comment = comment,
-            #     na_values = na_values,
-            #     keep_default_na = keep_default_na,
-            #     na_filter = na_filter,
-            #     prefix = prefix,
-            # )
-
     options = (
         plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([datasource]))
         .compression(c_compression)
@@ -310,8 +268,9 @@ def read_csv(
     if na_values is not None:
         options.set_na_values([str(val) for val in na_values])
 
-    df = cudf.DataFrame._from_data(*data_from_pylibcudf_io(plc.io.csv.read_csv(options)))
-    print("PRE GOT\n", df)
+    df = cudf.DataFrame._from_data(
+        *data_from_pylibcudf_io(plc.io.csv.read_csv(options))
+    )
 
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):

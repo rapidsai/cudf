@@ -124,12 +124,10 @@ cdef class CsvReaderOptions:
         cdef map[string, data_type] dtype_map
         cdef vector[data_type] dtype_list
         if isinstance(types, dict):
-            print("DICT", types)
             for name, dtype in types.items():
                 dtype_map[str(name).encode()] = (<DataType>dtype).c_obj
             self.c_obj.set_dtypes(dtype_map)
         elif isinstance(types, list):
-            print("LIST", types)
             for dtype in types:
                 dtype_list.push_back((<DataType>dtype).c_obj)
             self.c_obj.set_dtypes(dtype_list)
@@ -238,46 +236,6 @@ cdef class CsvReaderOptionsBuilder:
 
 
 def read_csv(
-    # SourceInfo source_info,
-    # *,
-    # compression_type compression = compression_type.AUTO,
-    # size_t byte_range_offset = 0,
-    # size_t byte_range_size = 0,
-    # list col_names = None,
-    # str prefix = "",
-    # bool mangle_dupe_cols = True,
-    # list usecols = None,
-    # size_type nrows = -1,
-    # size_type skiprows = 0,
-    # size_type skipfooter = 0,
-    # size_type header = 0,
-    # str lineterminator = "\n",
-    # str delimiter = None,
-    # str thousands = None,
-    # str decimal = ".",
-    # str comment = None,
-    # bool delim_whitespace = False,
-    # bool skipinitialspace = False,
-    # bool skip_blank_lines = True,
-    # quote_style quoting = quote_style.MINIMAL,
-    # str quotechar = '"',
-    # bool doublequote = True,
-    # list parse_dates = None,
-    # list parse_hex = None,
-    # # Technically this should be dict/list
-    # # but using a fused type prevents using None as default
-    # object dtypes = None,
-    # list true_values = None,
-    # list false_values = None,
-    # list na_values = None,
-    # bool keep_default_na = True,
-    # bool na_filter = True,
-    # bool dayfirst = False,
-    # # Note: These options are supported by the libcudf reader
-    # # but are not exposed here since there is no demand for them
-    # # on the Python side yet.
-    # # bool detect_whitespace_around_quotes = False,
-    # # DataType timestamp_type = DataType(type_id.EMPTY),
     CsvReaderOptions options
 ):
     """Reads a CSV file into a :py:class:`~.types.TableWithMetadata`.
@@ -365,107 +323,12 @@ def read_csv(
     TableWithMetadata
         The Table and its corresponding metadata (column names) that were read in.
     """
-    # cdef vector[string] c_parse_dates_names
-    # cdef vector[int] c_parse_dates_indexes
-    # cdef vector[int] c_parse_hex_names
-    # cdef vector[int] c_parse_hex_indexes
-    # cdef vector[data_type] c_dtypes_list
-    # cdef map[string, data_type] c_dtypes_map
-
-    # cdef csv_reader_options options = (
-    #     csv_reader_options.builder(source_info.c_obj)
-    #     .compression(compression)
-    #     .mangle_dupe_cols(mangle_dupe_cols)
-    #     .byte_range_offset(byte_range_offset)
-    #     .byte_range_size(byte_range_size)
-    #     .nrows(nrows)
-    #     .skiprows(skiprows)
-    #     .skipfooter(skipfooter)
-    #     .quoting(quoting)
-    #     .lineterminator(ord(lineterminator))
-    #     .quotechar(ord(quotechar))
-    #     .decimal(ord(decimal))
-    #     .delim_whitespace(delim_whitespace)
-    #     .skipinitialspace(skipinitialspace)
-    #     .skip_blank_lines(skip_blank_lines)
-    #     .doublequote(doublequote)
-    #     .keep_default_na(keep_default_na)
-    #     .na_filter(na_filter)
-    #     .dayfirst(dayfirst)
-    #     .build()
-    # )
-
-    # options.set_header(header)
-
-    # if col_names is not None:
-    #     options.set_names([str(name).encode() for name in col_names])
-
-    # if prefix is not None:
-    #     options.set_prefix(prefix.encode())
-
-    # if usecols is not None:
-    #     if all([isinstance(col, int) for col in usecols]):
-    #         options.set_use_cols_indexes(list(usecols))
-    #     else:
-    #         options.set_use_cols_names([str(name).encode() for name in usecols])
-
-    # if delimiter is not None:
-    #     options.set_delimiter(ord(delimiter))
-
-    # if thousands is not None:
-    #     options.set_thousands(ord(thousands))
-
-    # if comment is not None:
-    #     options.set_comment(ord(comment))
-
-    # if parse_dates is not None:
-    #     if not all([isinstance(col, (str, int)) for col in parse_dates]):
-    #         raise NotImplementedError(
-    #                 "`parse_dates`: Must pass a list of column names/indices")
-
-    #     # Set both since users are allowed to mix column names and indices
-    #     c_parse_dates_names, c_parse_dates_indexes = \
-    #         _process_parse_dates_hex(parse_dates)
-    #     options.set_parse_dates(c_parse_dates_names)
-    #     options.set_parse_dates(c_parse_dates_indexes)
-
-    # if parse_hex is not None:
-    #     if not all([isinstance(col, (str, int)) for col in parse_hex]):
-    #         raise NotImplementedError(
-    #                 "`parse_hex`: Must pass a list of column names/indices")
-
-    #     # Set both since users are allowed to mix column names and indices
-    #     c_parse_hex_names, c_parse_hex_indexes = _process_parse_dates_hex(parse_hex)
-    #     options.set_parse_hex(c_parse_hex_names)
-    #     options.set_parse_hex(c_parse_hex_indexes)
-
-    # if isinstance(dtypes, list):
-    #     for dtype in dtypes:
-    #         c_dtypes_list.push_back((<DataType?>dtype).c_obj)
-    #     options.set_dtypes(c_dtypes_list)
-    # elif isinstance(dtypes, dict):
-    #     # dtypes_t is dict
-    #     for k, v in dtypes.items():
-    #         c_dtypes_map[str(k).encode()] = (<DataType?>v).c_obj
-    #     options.set_dtypes(c_dtypes_map)
-    # elif dtypes is not None:
-    #     raise TypeError("dtypes must either by a list/dict")
-
-    # if true_values is not None:
-    #     options.set_true_values(_make_str_vector(true_values))
-
-    # if false_values is not None:
-    #     options.set_false_values(_make_str_vector(false_values))
-
-    # if na_values is not None:
-    #     options.set_na_values(_make_str_vector(na_values))
 
     cdef table_with_metadata c_result
     with nogil:
         c_result = move(cpp_read_csv(options.c_obj))
 
     cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result)
-    print("PRE PRE GOT\n", tbl_meta)
     return tbl_meta
 
 
