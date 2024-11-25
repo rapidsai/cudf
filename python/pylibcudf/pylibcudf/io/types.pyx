@@ -270,10 +270,6 @@ cdef class ColumnInMetadata:
         """
         return dereference(self.c_obj).get_name().decode()
 
-    def __del__(self):
-        # strictly for testing purposes
-        print("Deleting ColumnInMetadata object...")
-
 
 cdef class TableInputMetadata:
     """
@@ -294,10 +290,6 @@ cdef class TableInputMetadata:
             col_meta = ColumnInMetadata.from_libcudf_ptr(&self.c_obj.column_metadata[i])
             col_meta.table = self
             self.column_metadata.append(col_meta)
-
-    def __del__(self):
-        # strictly for testing purposes
-        print("Deleting TableInputMetadata object...")
 
 
 cdef class TableWithMetadata:
