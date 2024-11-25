@@ -9,6 +9,12 @@ and run on the CPU.
 
 Benchmark
 ---------
+
+.. note::
+   The following benchmarks were performed with `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` environment variable set to `"0"`.
+   Using managed memory (the default) imposes a performance cost in order to avoid out of memory errors.
+   Peak performance can still be attained by setting the environment variable to 1.
+
 We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/polars-benchmark>`__ benchmark to compare Polars GPU engine with the default CPU settings across several dataset sizes. Here are the results:
 
 .. figure:: ../_static/pds_benchmark_polars.png
