@@ -22,9 +22,10 @@
 
 namespace cudf {
 namespace jit {
+namespace {
 
 // Get the directory in home to use for storing the cache
-static std::filesystem::path get_user_home_cache_dir()
+std::filesystem::path get_user_home_cache_dir()
 {
   auto home_dir = std::getenv("HOME");
   if (home_dir != nullptr) {
@@ -57,7 +58,7 @@ static std::filesystem::path get_user_home_cache_dir()
  * are used and if $HOME is not defined, returns an empty path and file
  * caching is not used.
  */
-static std::filesystem::path get_cache_dir()
+std::filesystem::path get_cache_dir()
 {
   // The environment variable always overrides the
   // default/compile-time value of `LIBCUDF_KERNEL_CACHE_PATH`
@@ -93,7 +94,7 @@ static std::filesystem::path get_cache_dir()
   return kernel_cache_path;
 }
 
-static std::string get_program_cache_dir()
+std::string get_program_cache_dir()
 {
 #if defined(JITIFY_USE_CACHE)
   return get_cache_dir().string();
@@ -102,13 +103,14 @@ static std::string get_program_cache_dir()
 #endif
 }
 
-static std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t default_val)
+std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t default_val)
 {
   auto const value = std::getenv(env_name);
   return value != nullptr ? std::stoull(value) : default_val;
 }
+}  // namespace
 
-static jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
+jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
   static std::mutex caches_mutex{};
   static std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> caches{};

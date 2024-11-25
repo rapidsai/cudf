@@ -25,32 +25,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::detail {
-
-static bool can_optimize_unbounded_window(bool unbounded_preceding,
-                                          bool unbounded_following,
-                                          size_type min_periods,
-                                          rolling_aggregation const& agg)
-{
-  auto is_supported = [](auto const& agg) {
-    switch (agg.kind) {
-      case cudf::aggregation::Kind::COUNT_ALL: [[fallthrough]];
-      case cudf::aggregation::Kind::COUNT_VALID: [[fallthrough]];
-      case cudf::aggregation::Kind::SUM: [[fallthrough]];
-      case cudf::aggregation::Kind::MIN: [[fallthrough]];
-      case cudf::aggregation::Kind::MAX: return true;
-      default:
-        // COLLECT_LIST and COLLECT_SET can be added at a later date.
-        // Other aggregations do not fit into the [UNBOUNDED, UNBOUNDED]
-        // category. For instance:
-        // 1. Ranking functions (ROW_NUMBER, RANK, DENSE_RANK, PERCENT_RANK)
-        //    use [UNBOUNDED PRECEDING, CURRENT ROW].
-        // 2. LEAD/LAG are defined on finite row boundaries.
-        return false;
-    }
-  };
-
-  return unbounded_preceding && unbounded_following && (min_periods == 1) && is_supported(agg);
-}
+namespace {
 
 /// Converts rolling_aggregation to corresponding reduce/groupby_aggregation.
 template <typename Base>
@@ -81,18 +56,18 @@ struct aggregation_converter {
 };
 
 template <typename Base>
-static std::unique_ptr<Base> convert_to(cudf::rolling_aggregation const& aggr)
+std::unique_ptr<Base> convert_to(cudf::rolling_aggregation const& aggr)
 {
   return cudf::detail::aggregation_dispatcher(aggr.kind, aggregation_converter<Base>{});
 }
 
 /// Compute unbounded rolling window via groupby-aggregation.
 /// Used for input that has groupby key columns.
-static std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group_keys,
-                                                                column_view const& input,
-                                                                rolling_aggregation const& aggr,
-                                                                rmm::cuda_stream_view stream,
-                                                                rmm::device_async_resource_ref mr)
+std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group_keys,
+                                                         column_view const& input,
+                                                         rolling_aggregation const& aggr,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(group_keys.num_columns() > 0,
                "Ungrouped rolling window not supported in aggregation path.");
@@ -122,10 +97,10 @@ static std::unique_ptr<column> aggregation_based_rolling_window(table_view const
 
 /// Compute unbounded rolling window via cudf::reduce.
 /// Used for input that has no groupby keys. i.e. The window spans the column.
-static std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
-                                                              rolling_aggregation const& aggr,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr)
+std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
+                                                       rolling_aggregation const& aggr,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
 {
   auto const reduce_results = [&] {
     auto const return_dtype = cudf::detail::target_type(input.type(), aggr.kind);
@@ -145,12 +120,39 @@ static std::unique_ptr<column> reduction_based_rolling_window(column_view const&
   // Blow up results into separate column.
   return cudf::make_column_from_scalar(*reduce_results, input.size(), stream, mr);
 }
+}  // namespace
 
-static std::unique_ptr<column> optimized_unbounded_window(table_view const& group_keys,
-                                                          column_view const& input,
-                                                          rolling_aggregation const& aggr,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::device_async_resource_ref mr)
+bool can_optimize_unbounded_window(bool unbounded_preceding,
+                                   bool unbounded_following,
+                                   size_type min_periods,
+                                   rolling_aggregation const& agg)
+{
+  auto is_supported = [](auto const& agg) {
+    switch (agg.kind) {
+      case cudf::aggregation::Kind::COUNT_ALL: [[fallthrough]];
+      case cudf::aggregation::Kind::COUNT_VALID: [[fallthrough]];
+      case cudf::aggregation::Kind::SUM: [[fallthrough]];
+      case cudf::aggregation::Kind::MIN: [[fallthrough]];
+      case cudf::aggregation::Kind::MAX: return true;
+      default:
+        // COLLECT_LIST and COLLECT_SET can be added at a later date.
+        // Other aggregations do not fit into the [UNBOUNDED, UNBOUNDED]
+        // category. For instance:
+        // 1. Ranking functions (ROW_NUMBER, RANK, DENSE_RANK, PERCENT_RANK)
+        //    use [UNBOUNDED PRECEDING, CURRENT ROW].
+        // 2. LEAD/LAG are defined on finite row boundaries.
+        return false;
+    }
+  };
+
+  return unbounded_preceding && unbounded_following && (min_periods == 1) && is_supported(agg);
+}
+
+std::unique_ptr<column> optimized_unbounded_window(table_view const& group_keys,
+                                                   column_view const& input,
+                                                   rolling_aggregation const& aggr,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr)
 {
   return group_keys.num_columns() > 0
            ? aggregation_based_rolling_window(group_keys, input, aggr, stream, mr)
