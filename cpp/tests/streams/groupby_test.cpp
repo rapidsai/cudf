@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 using K = int32_t;  // Key type.
 
@@ -64,4 +66,57 @@ TYPED_TEST(groupby_stream_test, test_count)
   this->test_groupby(make_count_agg());
   this->test_groupby(make_count_agg(), force_use_sort_impl::YES);
   this->test_groupby(make_count_agg(cudf::null_policy::INCLUDE));
+}
+
+struct GroupbyTest : public cudf::test::BaseFixture {};
+
+TEST_F(GroupbyTest, Scan)
+{
+  using key_wrapper   = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using value_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  key_wrapper keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  value_wrapper vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4});
+
+  auto agg = cudf::make_min_aggregation<cudf::groupby_scan_aggregation>();
+  std::vector<cudf::groupby::scan_request> requests;
+  requests.emplace_back();
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(std::move(agg));
+
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
+  // cudf::groupby scan uses sort implementation
+  auto result = gb_obj.scan(requests, cudf::test::get_default_stream());
+}
+
+TEST_F(GroupbyTest, Shift)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> key{1, 2, 1, 2, 2, 1, 1};
+  cudf::test::fixed_width_column_wrapper<int32_t> val{3, 4, 5, 6, 7, 8, 9};
+  cudf::size_type offset = 2;
+  auto slr               = cudf::make_default_constructed_scalar(cudf::column_view(val).type(),
+                                                   cudf::test::get_default_stream());
+
+  cudf::groupby::groupby gb_obj(cudf::table_view({key}));
+  std::vector<cudf::size_type> offsets{offset};
+  auto got =
+    gb_obj.shift(cudf::table_view{{val}}, offsets, {*slr}, cudf::test::get_default_stream());
+}
+
+TEST_F(GroupbyTest, GetGroups)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> keys{1, 1, 2, 1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<int32_t> values({0, 0, 1, 1, 2, 2});
+  cudf::groupby::groupby gb(cudf::table_view({keys}));
+  auto gb_groups = gb.get_groups(cudf::table_view({values}), cudf::test::get_default_stream());
+}
+
+TEST_F(GroupbyTest, ReplaceNullsTest)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> key{0, 1, 0, 1, 0, 1};
+  cudf::test::fixed_width_column_wrapper<int32_t> val({42, 7, 24, 10, 1, 1000}, {1, 1, 1, 0, 0, 0});
+  cudf::groupby::groupby gb_obj(cudf::table_view({key}));
+  std::vector<cudf::replace_policy> policies{cudf::replace_policy::PRECEDING};
+  auto p =
+    gb_obj.replace_nulls(cudf::table_view({val}), policies, cudf::test::get_default_stream());
 }

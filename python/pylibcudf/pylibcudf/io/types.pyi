@@ -59,6 +59,9 @@ class QuoteStyle(IntEnum):
 ColumnNameSpec: TypeAlias = tuple[str, list[ColumnNameSpec]]
 ChildNameSpec: TypeAlias = Mapping[str, ChildNameSpec]
 
+class PartitionInfo:
+    def __init__(self, start_row: int, num_rows: int): ...
+
 class TableInputMetadata:
     def __init__(self, table: Table): ...
 

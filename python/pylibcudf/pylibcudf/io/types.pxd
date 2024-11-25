@@ -1,4 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+from libc.stdint cimport uint8_t, int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from libcpp cimport bool
@@ -19,8 +21,12 @@ from pylibcudf.libcudf.io.types cimport (
     table_metadata,
     table_with_metadata,
 )
+from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 from pylibcudf.libcudf.types cimport size_type
+
+cdef class PartitionInfo:
+    cdef partition_info c_obj
 
 cdef class TableWithMetadata:
     cdef public Table tbl

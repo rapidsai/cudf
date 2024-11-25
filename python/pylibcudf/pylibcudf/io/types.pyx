@@ -2,6 +2,7 @@
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -10,13 +11,18 @@ from pylibcudf.io.datasource cimport Datasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
+    column_encoding,
+    column_in_metadata,
     column_name_info,
     host_buffer,
+    partition_info,
     source_info,
+    table_input_metadata,
     table_with_metadata,
     column_in_metadata,
     table_input_metadata,
 )
+from pylibcudf.libcudf.types cimport size_type
 
 import codecs
 import errno
@@ -35,6 +41,8 @@ from pylibcudf.libcudf.io.types import (
 )
 from cython.operator cimport dereference
 from pylibcudf.libcudf.types cimport size_type
+from cython.operator cimport dereference
+from pylibcudf.libcudf.types cimport size_type
 
 __all__ = [
     "ColumnEncoding",
@@ -42,6 +50,7 @@ __all__ = [
     "CompressionType",
     "DictionaryPolicy",
     "JSONRecoveryMode",
+    "PartitionInfo",
     "QuoteStyle",
     "SinkInfo",
     "SourceInfo",
@@ -49,6 +58,21 @@ __all__ = [
     "TableInputMetadata",
     "TableWithMetadata",
 ]
+
+cdef class PartitionInfo:
+    """
+    Information used while writing partitioned datasets.
+
+    Parameters
+    ----------
+    start_row : int
+        The start row of the partition.
+
+    num_rows : int
+        The number of rows in the partition.
+    """
+    def __init__(self, size_type start_row, size_type num_rows):
+        self.c_obj = partition_info(start_row, num_rows)
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata

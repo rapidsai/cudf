@@ -261,14 +261,14 @@ TEST_F(ToArrowTest, NestedList)
   std::vector<int32_t> offset{0, 0, 2};
   auto mask_buffer     = arrow::internal::BytesToBits({0, 1}).ValueOrDie();
   auto nested_list_arr = std::make_shared<arrow::ListArray>(
-    arrow::list(arrow::field("a", arrow::list(arrow::int64()), false)),
+    arrow::list(arrow::field("element", arrow::list(arrow::int64()), false)),
     offset.size() - 1,
     arrow::Buffer::Wrap(offset),
     list_arr,
     mask_buffer);
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector(
-    {arrow::field("a", nested_list_arr->type())});
+    {arrow::field("a", nested_list_arr->type(), false)});
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
   auto expected_arrow_table                         = arrow::Table::Make(schema, {nested_list_arr});
