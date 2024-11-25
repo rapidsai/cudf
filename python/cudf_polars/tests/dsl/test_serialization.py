@@ -14,9 +14,11 @@ from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
 
 
-@pytest.mark.parametrize(
-    "function", [BooleanFunction, TemporalFunction, StringFunction]
-)
+@pytest.fixture(params=[BooleanFunction, StringFunction, TemporalFunction])
+def function(request):
+    return request.param
+
+
 def test_function_name_serialization_all_values(function):
     # Test serialization and deserialization for all values of function.Name
     for name in function.Name:
@@ -25,9 +27,6 @@ def test_function_name_serialization_all_values(function):
         assert deserialized_name is name
 
 
-@pytest.mark.parametrize(
-    "function", [BooleanFunction, TemporalFunction, StringFunction]
-)
 def test_function_name_invalid(function):
     # Test invalid attribute name
     with pytest.raises(
@@ -36,9 +35,6 @@ def test_function_name_invalid(function):
         assert function.Name.InvalidAttribute is function.Name.InvalidAttribute
 
 
-@pytest.mark.parametrize(
-    "function", [BooleanFunction, TemporalFunction, StringFunction]
-)
 def test_from_polars_all_names(function):
     # Test that all valid names of polars expressions are correctly converted
     for name in function.Name:
@@ -48,18 +44,12 @@ def test_from_polars_all_names(function):
         assert cudf_function == name
 
 
-@pytest.mark.parametrize(
-    "function", [BooleanFunction, TemporalFunction, StringFunction]
-)
 def test_from_polars_invalid_attribute(function):
     # Test converting from invalid attribute name
     with pytest.raises(ValueError, match=f"{function.__name__} required"):
         function.Name.from_polars("InvalidAttribute")
 
 
-@pytest.mark.parametrize(
-    "function", [BooleanFunction, TemporalFunction, StringFunction]
-)
 def test_from_polars_invalid_polars_attribute(function):
     # Test converting from polars function with invalid attribute name
     with pytest.raises(
