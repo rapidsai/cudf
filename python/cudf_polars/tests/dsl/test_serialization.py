@@ -37,11 +37,13 @@ def test_function_name_invalid(function):
 
 def test_from_polars_all_names(function):
     # Test that all valid names of polars expressions are correctly converted
+    polars_function = getattr(pl_expr, function.__name__)
+    polars_names = [name for name in dir(polars_function) if not name.startswith("_")]
+    # Check names advertised by polars are the same as we advertise
+    assert set(polars_names) == set(function.Name.__members__)
     for name in function.Name:
-        polars_function = getattr(pl_expr, function.__name__)
-        polars_function_attr = getattr(polars_function, name.name)
-        cudf_function = function.Name.from_polars(polars_function_attr)
-        assert cudf_function == name
+        attr = getattr(polars_function, name.name)
+        assert function.Name.from_polars(attr) == name
 
 
 def test_from_polars_invalid_attribute(function):
