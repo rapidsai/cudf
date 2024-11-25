@@ -78,7 +78,7 @@ class device_scalar : public rmm::device_scalar<T> {
   [[nodiscard]] T value(rmm::cuda_stream_view stream) const
   {
     cuda_memcpy<T>(bounce_buffer, device_span<T const>{this->data(), 1}, stream);
-    return bounce_buffer[0];
+    return std::move(bounce_buffer[0]);
   }
 
   void set_value_async(T const& value, rmm::cuda_stream_view stream)
