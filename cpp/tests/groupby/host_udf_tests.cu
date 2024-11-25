@@ -38,6 +38,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
+namespace {
 /**
  * @brief A host-based UDF implementation.
  *
@@ -408,6 +409,8 @@ struct test_udf_simple_type : cudf::host_udf_base {
     };
   };
 };
+
+}  // namespace
 
 using doubles_col = cudf::test::fixed_width_column_wrapper<double>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
