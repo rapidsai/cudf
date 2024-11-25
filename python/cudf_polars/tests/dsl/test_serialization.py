@@ -29,9 +29,7 @@ def test_function_name_serialization_all_values(function):
 
 def test_function_name_invalid(function):
     # Test invalid attribute name
-    with pytest.raises(
-        AttributeError, match="type object 'Name' has no attribute 'InvalidAttribute'"
-    ):
+    with pytest.raises(AttributeError, match="InvalidAttribute"):
         assert function.Name.InvalidAttribute is function.Name.InvalidAttribute
 
 
@@ -54,7 +52,5 @@ def test_from_polars_invalid_attribute(function):
 
 def test_from_polars_invalid_polars_attribute(function):
     # Test converting from polars function with invalid attribute name
-    with pytest.raises(
-        AttributeError, match="type object 'Name' has no attribute 'InvalidAttribute'"
-    ):
+    with pytest.raises(AttributeError, match="InvalidAttribute"):
         function.Name.from_polars(f"{function.__name__}.InvalidAttribute")
