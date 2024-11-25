@@ -134,16 +134,34 @@ def generate_ir_tasks(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     """
-    Generate tasks for an IR node.
+    Generate a task graph for evaluation of an IR node.
 
-    An IR node only needs to generate the graph for
-    the current IR logic (not including child IRs).
+    Parameters
+    ----------
+    ir
+        IR node to generate tasks for.
+    partition_info
+        Partitioning information, obtained from :func:`lower_ir_graph`.
+
+    Returns
+    -------
+    mapping
+        A (partial) dask task graph for the evaluation of an ir node.
+
+    Notes
+    -----
+    Task generation should only produce the tasks for the current node,
+    referring to child tasks by name.
+
+    See Also
+    --------
+    task_graph
     """
-    raise AssertionError(f"Unhandled type {type(ir)}")
+    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
 
 
 @generate_ir_tasks.register(IR)
-def _default_ir_tasks(
+def _(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Single-partition default behavior.
