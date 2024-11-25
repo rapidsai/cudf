@@ -160,7 +160,9 @@ def read_csv(
             header = -1
         elif header == 'infer':
             header = 0
+
     hex_cols = []
+
     new_dtypes = []
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
@@ -200,7 +202,6 @@ def read_csv(
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"
             )
-    lineterminator = str(lineterminator)
     options = (
         plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([datasource]))
         .compression(c_compression)
@@ -211,7 +212,7 @@ def read_csv(
         .skiprows(skiprows)
         .skipfooter(skipfooter)
         .quoting(quoting)
-        .lineterminator(lineterminator)
+        .lineterminator(str(lineterminator))
         .quotechar(quotechar)
         .decimal(decimal)
         .delim_whitespace(delim_whitespace)
