@@ -628,7 +628,7 @@ cdef class CsvReaderOptionsBuilder:
         return csv_options
 
 
-def read_csv(
+cpdef TableWithMetadata read_csv(
     CsvReaderOptions options
 ):
     """

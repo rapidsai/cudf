@@ -9,7 +9,7 @@ from pylibcudf.libcudf.io.csv cimport (
     csv_reader_options,
     csv_reader_options_builder,
 )
-from pylibcudf.io.types cimport SinkInfo, SourceInfo
+from pylibcudf.io.types cimport SinkInfo, SourceInfo, TableWithMetadata
 from pylibcudf.table cimport Table
 
 from pylibcudf.libcudf.io.types cimport (
@@ -60,6 +60,8 @@ cdef class CsvReaderOptionsBuilder:
     cpdef CsvReaderOptionsBuilder na_filter(self, bool na_filter)
     cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst)
     cpdef CsvReaderOptions build(self)
+
+cpdef TableWithMetadata read_csv(CsvReaderOptions options)
 
 cdef class CsvWriterOptions:
     cdef csv_writer_options c_obj
