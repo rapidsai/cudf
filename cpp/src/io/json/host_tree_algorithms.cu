@@ -807,10 +807,13 @@ std::
                      "list child column insertion failed, duplicate column name in the parent");
         ref.get().column_order.emplace_back(list_child_name);
         auto this_ref = std::ref(ref.get().child_columns.at(list_child_name));
-        for (auto const& child_id : child_ids) {
-          if (is_pruned[child_id]) std::cout << "pruned.child " << column_names[root] << std::endl;
-          // store this child_id for mixed_type nullify parent list_id.
-          is_mixed_pruned[child_id] = is_pruned[child_id];
+        if (options.is_enabled_experimental()) {
+          for (auto const& child_id : child_ids) {
+            if (is_pruned[child_id])
+              std::cout << "pruned.child " << column_names[root] << std::endl;
+            // store this child_id for mixed_type nullify parent list_id.
+            is_mixed_pruned[child_id] = is_pruned[child_id];
+          }
         }
         // Mixed type handling
         handle_mixed_types(child_ids);
