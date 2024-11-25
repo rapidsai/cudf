@@ -12,7 +12,6 @@ from . import (
     join,
     json,
     merge,
-    null_mask,
     nvtext,
     orc,
     parquet,

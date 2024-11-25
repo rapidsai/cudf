@@ -15,8 +15,9 @@ from numba.core.typing.templates import AbstractTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.cuda.cudaimpl import lower as cuda_lower
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
@@ -91,7 +92,7 @@ def random_bitmask(size):
     size : int
         number of bits
     """
-    sz = bitmask_allocation_size_bytes(size)
+    sz = plc.null_mask.bitmask_allocation_size_bytes(size)
     rng = np.random.default_rng(seed=0)
     data = rng.integers(0, 255, dtype="u1", size=sz)
     return data.view("i1")

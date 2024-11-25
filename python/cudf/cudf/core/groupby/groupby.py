@@ -14,10 +14,11 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.null_mask import bitmask_or
 from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
@@ -25,6 +26,7 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
@@ -1103,7 +1105,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         index = self.grouping.keys.unique().sort_values()
         num_groups = len(index)
-        _, has_null_group = bitmask_or([*index._columns])
+        with acquire_spill_lock():
+            _, has_null_group = plc.null_mask.bitmask_or(
+                [col.to_pylibcudf(mode="read") for col in index._columns]
+            )
 
         if ascending:
             # Count ascending from 0 to num_groups - 1

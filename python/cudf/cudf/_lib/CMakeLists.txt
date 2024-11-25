@@ -26,7 +26,6 @@ set(cython_sources
     json.pyx
     lists.pyx
     merge.pyx
-    null_mask.pyx
     orc.pyx
     parquet.pyx
     partitioning.pyx
