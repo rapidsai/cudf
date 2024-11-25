@@ -55,12 +55,12 @@ struct get_data_ptr_functor {
   }
 };
 
-static void const* get_data_ptr(column_view const& view)
+void const* get_data_ptr(column_view const& view)
 {
   return type_dispatcher<dispatch_storage_type>(view.type(), get_data_ptr_functor{}, view);
 }
 
-static void const* get_data_ptr(scalar const& s)
+void const* get_data_ptr(scalar const& s)
 {
   return type_dispatcher<dispatch_storage_type>(s.type(), get_data_ptr_functor{}, s);
 }

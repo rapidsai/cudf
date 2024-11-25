@@ -44,7 +44,32 @@
 
 namespace cudf {
 namespace binops {
-namespace {
+
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
+{
+  return cudf::binops::compiled::is_supported_operation(out, lhs, rhs, op);
+}
+
+/**
+ * @brief Computes output valid mask for op between a column and a scalar
+ */
+std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
+  column_view const& col,
+  scalar const& s,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  if (col.is_empty()) return std::pair(rmm::device_buffer{0, stream, mr}, 0);
+
+  if (not s.is_valid(stream)) {
+    return std::pair(cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
+                     col.size());
+  } else if (s.is_valid(stream) and col.nullable()) {
+    return std::pair(cudf::detail::copy_bitmask(col, stream, mr), col.null_count());
+  } else {
+    return std::pair(rmm::device_buffer{0, stream, mr}, 0);
+  }
+}
 
 /**
  * @brief Does the binop need to know if an operand is null/invalid to perform special
@@ -76,7 +101,7 @@ bool is_basic_arithmetic_binop(binary_operator op)
 /**
  * @brief Returns `true` if `binary_operator` `op` is a comparison binary operation
  */
-static bool is_comparison_binop(binary_operator op)
+bool is_comparison_binop(binary_operator op)
 {
   return op == binary_operator::EQUAL or          // operator ==
          op == binary_operator::NOT_EQUAL or      // operator !=
@@ -91,7 +116,7 @@ static bool is_comparison_binop(binary_operator op)
 /**
  * @brief Returns `true` if `binary_operator` `op` is supported by `fixed_point`
  */
-static bool is_supported_fixed_point_binop(binary_operator op)
+bool is_supported_fixed_point_binop(binary_operator op)
 {
   return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
 }
@@ -107,33 +132,6 @@ bool is_same_scale_necessary(binary_operator op)
 {
   return op != binary_operator::MUL && op != binary_operator::DIV;
 }
-}  // namespace
-
-bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
-{
-  return cudf::binops::compiled::is_supported_operation(out, lhs, rhs, op);
-}
-
-/**
- * @brief Computes output valid mask for op between a column and a scalar
- */
-std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
-  column_view const& col,
-  scalar const& s,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  if (col.is_empty()) return std::pair(rmm::device_buffer{0, stream, mr}, 0);
-
-  if (not s.is_valid(stream)) {
-    return std::pair(cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-                     col.size());
-  } else if (s.is_valid(stream) and col.nullable()) {
-    return std::pair(cudf::detail::copy_bitmask(col, stream, mr), col.null_count());
-  } else {
-    return std::pair(rmm::device_buffer{0, stream, mr}, 0);
-  }
-}
 
 namespace jit {
 void binary_operation(mutable_column_view& out,
@@ -147,11 +145,11 @@ void binary_operation(mutable_column_view& out,
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
-  std::string const kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
-                                    .instantiate(output_type_name,  // list of template arguments
-                                                 cudf::type_to_name(lhs.type()),
-                                                 cudf::type_to_name(rhs.type()),
-                                                 std::string("cudf::binops::jit::UserDefinedOp"));
+  std::string kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
+                              .instantiate(output_type_name,  // list of template arguments
+                                           cudf::type_to_name(lhs.type()),
+                                           cudf::type_to_name(rhs.type()),
+                                           std::string("cudf::binops::jit::UserDefinedOp"));
 
   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
     .get_kernel(kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})
@@ -165,7 +163,6 @@ void binary_operation(mutable_column_view& out,
 
 // Compiled Binary operation
 namespace compiled {
-namespace {
 
 template <typename Lhs, typename Rhs>
 void fixed_point_binary_operation_validation(binary_operator op,
@@ -225,12 +222,10 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
   out->set_null_count(cudf::detail::null_count(out_view.null_mask(), 0, out->size(), stream));
   return out;
 }
-}  // namespace
 }  // namespace compiled
 }  // namespace binops
 
 namespace detail {
-namespace {
 
 // There are 3 overloads of each of the following functions:
 // - `make_fixed_width_column_for_output`
@@ -266,7 +261,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
     return make_fixed_width_column(
       output_type, rhs.size(), std::move(new_mask), new_null_count, stream, mr);
   }
-}
+};
 
 /**
  * @brief Helper function for making output column for binary operation
@@ -293,7 +288,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
     return make_fixed_width_column(
       output_type, lhs.size(), std::move(new_mask), new_null_count, stream, mr);
   }
-}
+};
 
 /**
  * @brief Helper function for making output column for binary operation
@@ -320,8 +315,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
     return make_fixed_width_column(
       output_type, lhs.size(), std::move(new_mask), null_count, stream, mr);
   }
-}
-}  // namespace
+};
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
