@@ -31,7 +31,7 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("name", "options", "op", "request")
+    __slots__ = ("name", "options", "request")
     _non_child = ("dtype", "name", "options")
 
     def __init__(
@@ -45,54 +45,11 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Unsupported aggregation {name=}"
             )  # pragma: no cover; all valid aggs are supported
-        # TODO: nan handling in groupby case
-        if name == "min":
-            req = plc.aggregation.min()
-        elif name == "max":
-            req = plc.aggregation.max()
-        elif name == "median":
-            req = plc.aggregation.median()
-        elif name == "n_unique":
-            # TODO: datatype of result
-            req = plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE)
-        elif name == "first" or name == "last":
-            req = None
-        elif name == "mean":
-            req = plc.aggregation.mean()
-        elif name == "sum":
-            req = plc.aggregation.sum()
-        elif name == "std":
-            # TODO: handle nans
-            req = plc.aggregation.std(ddof=options)
-        elif name == "var":
-            # TODO: handle nans
-            req = plc.aggregation.variance(ddof=options)
-        elif name == "count":
-            req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
         elif name == "quantile":
             _, quantile = self.children
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
-            req = plc.aggregation.quantile(
-                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
-            )
-        else:
-            raise NotImplementedError(
-                f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
-            )  # pragma: no cover
-        self.request = req
-        op = getattr(self, f"_{name}", None)
-        if op is None:
-            op = partial(self._reduce, request=req)
-        elif name in {"min", "max"}:
-            op = partial(op, propagate_nans=options)
-        elif name in {"count", "first", "last"}:
-            pass
-        else:
-            raise NotImplementedError(
-                f"Unreachable, supported agg {name=} has no implementation"
-            )  # pragma: no cover
-        self.op = op
+        self.request = None
 
     _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
         [
@@ -119,6 +76,46 @@ class Agg(Expr):
         "linear": plc.types.Interpolation.LINEAR,
     }
 
+    def _fill_request(self):
+        if self.request is None:
+            # TODO: nan handling in groupby case
+            if self.name == "min":
+                req = plc.aggregation.min()
+            elif self.name == "max":
+                req = plc.aggregation.max()
+            elif self.name == "median":
+                req = plc.aggregation.median()
+            elif self.name == "n_unique":
+                # TODO: datatype of result
+                req = plc.aggregation.nunique(
+                    null_handling=plc.types.NullPolicy.INCLUDE
+                )
+            elif self.name == "first" or self.name == "last":
+                req = None
+            elif self.name == "mean":
+                req = plc.aggregation.mean()
+            elif self.name == "sum":
+                req = plc.aggregation.sum()
+            elif self.name == "std":
+                # TODO: handle nans
+                req = plc.aggregation.std(ddof=self.options)
+            elif self.name == "var":
+                # TODO: handle nans
+                req = plc.aggregation.variance(ddof=self.options)
+            elif self.name == "count":
+                req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
+            elif self.name == "quantile":
+                _, quantile = self.children
+                req = plc.aggregation.quantile(
+                    quantiles=[quantile.value.as_py()],
+                    interp=Agg.interp_mapping[self.options],
+                )
+            else:
+                raise NotImplementedError(
+                    f"Unreachable, {self.name=} is incorrectly listed in _SUPPORTED"
+                )  # pragma: no cover
+            self.request = req
+
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
         if depth >= 1:
@@ -129,6 +126,7 @@ class Agg(Expr):
             raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
+        self._fill_request()
         request = self.request
         # These are handled specially here because we don't set up the
         # request for the whole-frame agg because we can avoid a
@@ -223,7 +221,21 @@ class Agg(Expr):
                 f"Agg in context {context}"
             )  # pragma: no cover; unreachable
 
+        self._fill_request()
+
+        op = getattr(self, f"_{self.name}", None)
+        if op is None:
+            op = partial(self._reduce, request=self.request)
+        elif self.name in {"min", "max"}:
+            op = partial(op, propagate_nans=self.options)
+        elif self.name in {"count", "first", "last"}:
+            pass
+        else:
+            raise NotImplementedError(
+                f"Unreachable, supported agg {self.name=} has no implementation"
+            )  # pragma: no cover
+
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-        return self.op(child.evaluate(df, context=context, mapping=mapping))
+        return op(child.evaluate(df, context=context, mapping=mapping))
