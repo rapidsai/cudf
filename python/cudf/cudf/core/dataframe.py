@@ -26,6 +26,8 @@ from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
 
+import pylibcudf as plc
+
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
@@ -43,6 +45,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -1784,11 +1787,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Concatenate the Tables
-        out = cls._from_data(
-            *libcudf.concat.concat_tables(
-                tables, ignore_index=ignore_index or are_all_range_index
+        ignore = ignore_index or are_all_range_index
+        index_names = None if ignore else tables[0]._index_names
+        column_names = tables[0]._column_names
+        with acquire_spill_lock():
+            plc_tables = [
+                plc.Table(
+                    [
+                        c.to_pylibcudf(mode="read")
+                        for c in (
+                            table._columns
+                            if ignore
+                            else itertools.chain(
+                                table._index._columns, table._columns
+                            )
+                        )
+                    ]
+                )
+                for table in tables
+            ]
+
+            concatted = libcudf.utils.data_from_pylibcudf_table(
+                plc.concatenate.concatenate(plc_tables),
+                column_names=column_names,
+                index_names=index_names,
             )
-        )
+        out = cls._from_data(*concatted)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
@@ -4089,7 +4113,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if any(c.dtype != source_columns[0].dtype for c in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_columns = libcudf.transpose.transpose(source_columns)
+        result_table = plc.transpose.transpose(
+            plc.table.Table(
+                [col.to_pylibcudf(mode="read") for col in source_columns]
+            )
+        )
+        result_columns = [
+            libcudf.column.Column.from_pylibcudf(col, data_ptr_exposed=True)
+            for col in result_table.columns()
+        ]
 
         if isinstance(source_dtype, cudf.CategoricalDtype):
             result_columns = [
@@ -4962,7 +4994,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def partition_by_hash(self, columns, nparts, keep_index=True):
+    def partition_by_hash(
+        self, columns, nparts: int, keep_index: bool = True
+    ) -> list[DataFrame]:
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -4986,13 +5020,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             cols = [*self._columns]
 
-        output_columns, offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts
-        )
+        with acquire_spill_lock():
+            plc_table, offsets = plc.partitioning.hash_partition(
+                plc.Table([col.to_pylibcudf(mode="read") for col in cols]),
+                key_indices,
+                nparts,
+            )
+            output_columns = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
+
         outdf = self._from_columns_like_self(
             output_columns,
             self._column_names,
-            self._index_names if keep_index else None,
+            self._index_names if keep_index else None,  # type: ignore[arg-type]
         )
         # Slice into partitions. Notice, `hash_partition` returns the start
         # offset of each partition thus we skip the first offset

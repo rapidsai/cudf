@@ -14,6 +14,7 @@ import pylibcudf
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
+from cudf.core._internals import unary
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
@@ -110,8 +111,8 @@ class NumericalColumn(NumericalBaseColumn):
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
-        return libcudf.search.contains(
-            self, column.as_column([search_item], dtype=self.dtype)
+        return self.contains(
+            column.as_column([search_item], dtype=self.dtype)
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
@@ -125,7 +126,7 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            nan_col = libcudf.unary.is_nan(self)
+            nan_col = unary.is_nan(self)
             return nan_col.indices_of(True)
         else:
             return super().indices_of(value)
@@ -184,7 +185,7 @@ class NumericalColumn(NumericalBaseColumn):
         unaryop = unaryop.upper()
         unaryop = _unaryop_map.get(unaryop, unaryop)
         unaryop = pylibcudf.unary.UnaryOperator[unaryop]
-        return libcudf.unary.unary_operation(self, unaryop)
+        return unary.unary_operation(self, unaryop)
 
     def __invert__(self):
         if self.dtype.kind in "ui":
@@ -388,13 +389,13 @@ class NumericalColumn(NumericalBaseColumn):
     def as_decimal_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
-        return libcudf.unary.cast(self, dtype)
+        return unary.cast(self, dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype)
+        return unary.cast(self, dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
@@ -421,7 +422,7 @@ class NumericalColumn(NumericalBaseColumn):
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
             return 0
-        nan_col = libcudf.unary.is_nan(self)
+        nan_col = unary.is_nan(self)
         return nan_col.sum()
 
     def _process_values_for_isin(

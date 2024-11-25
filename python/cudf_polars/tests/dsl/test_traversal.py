@@ -109,7 +109,7 @@ def test_rewrite_ir_node():
     df = pl.LazyFrame({"a": [1, 2, 1], "b": [1, 3, 4]})
     q = df.group_by("a").agg(pl.col("b").sum()).sort("b")
 
-    orig = Translator(q._ldf.visit()).translate_ir()
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     new_df = pl.DataFrame({"a": [1, 1, 2], "b": [-1, -2, -4]})
 
@@ -124,7 +124,7 @@ def test_rewrite_ir_node():
 
     new = mapper(orig)
 
-    result = new.evaluate(cache={}, config=pl.GPUEngine()).to_polars()
+    result = new.evaluate(cache={}).to_polars()
 
     expect = pl.DataFrame({"a": [2, 1], "b": [-4, -3]})
 
@@ -150,10 +150,10 @@ def test_rewrite_scan_node(tmp_path):
 
     mapper = CachingVisitor(replace_scan)
 
-    orig = Translator(q._ldf.visit()).translate_ir()
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
 
-    result = new.evaluate(cache={}, config=pl.GPUEngine()).to_polars()
+    result = new.evaluate(cache={}).to_polars()
 
     expect = q.collect()
 
@@ -174,7 +174,7 @@ def test_rewrite_names_and_ops():
         .collect()
     )
 
-    qir = Translator(q._ldf.visit()).translate_ir()
+    qir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     @singledispatch
     def _transform(e: expr.Expr, fn: ExprTransformer) -> expr.Expr:
@@ -224,6 +224,6 @@ def test_rewrite_names_and_ops():
 
     new_ir = rewriter(qir)
 
-    got = new_ir.evaluate(cache={}, config=pl.GPUEngine()).to_polars()
+    got = new_ir.evaluate(cache={}).to_polars()
 
     assert_frame_equal(expect, got)

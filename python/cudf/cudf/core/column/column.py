@@ -19,6 +19,7 @@ from numba import cuda
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
+import pylibcudf as plc
 import rmm
 
 import cudf
@@ -47,6 +48,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
+from cudf.core._internals import unary
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -713,12 +715,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             return as_column(False, length=len(self))
 
-        result = libcudf.unary.is_null(self)
+        result = unary.is_null(self)
 
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of a float column
-            result = result | libcudf.unary.is_nan(self)
+            result = result | unary.is_nan(self)
 
         return result
 
@@ -727,12 +729,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             return as_column(True, length=len(self))
 
-        result = libcudf.unary.is_valid(self)
+        result = unary.is_valid(self)
 
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of a float column
-            result = result & libcudf.unary.is_non_nan(self)
+            result = result & unary.is_non_nan(self)
 
         return result
 
@@ -755,7 +757,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("value must be a scalar")
         else:
             value = as_column(value, dtype=self.dtype, length=1)
-        mask = libcudf.search.contains(value, self)
+        mask = value.contains(self)
         return apply_boolean_mask(
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
         )[0]
@@ -912,7 +914,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # self.isin(other) asks "which values of self are in other"
         # contains(haystack, needles) asks "which needles are in haystack"
         # hence this argument ordering.
-        result = libcudf.search.contains(rhs, self)
+        result = rhs.contains(self)
         if self.null_count > 0:
             # If one of the needles is null, then the result contains
             # nulls, these nulls should be replaced by whether or not the
@@ -953,6 +955,23 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
         )
+
+    def contains(self, other: ColumnBase) -> ColumnBase:
+        """
+        Check whether column contains multiple values.
+
+        Parameters
+        ----------
+        other : Column
+            A column of values to search for
+        """
+        with acquire_spill_lock():
+            return Column.from_pylibcudf(
+                plc.search.contains(
+                    self.to_pylibcudf(mode="read"),
+                    other.to_pylibcudf(mode="read"),
+                )
+            )
 
     def sort_values(
         self: Self,
@@ -1188,7 +1207,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 "Column searchsorted expects values to be column of same dtype"
             )
-        return libcudf.search.search_sorted(
+        return cudf.core._internals.search.search_sorted(  # type: ignore[return-value]
             [self],
             [value],
             side=side,
@@ -2299,4 +2318,10 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         return column_empty(0, head.dtype, masked=True)
 
     # Filter out inputs that have 0 length, then concatenate.
-    return libcudf.concat.concat_columns([o for o in objs if len(o)])
+    objs_with_len = [o for o in objs if len(o)]
+    with acquire_spill_lock():
+        return Column.from_pylibcudf(
+            plc.concatenate.concatenate(
+                [col.to_pylibcudf(mode="read") for col in objs_with_len]
+            )
+        )
