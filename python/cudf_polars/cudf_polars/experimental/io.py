@@ -77,5 +77,7 @@ def lower_dataframescan_node(
 def _(
     ir: ParDataFrameScan, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    assert partition_info[ir].count == ir._count
+    assert (
+        partition_info[ir].count == ir._count
+    ), "Inconsistent ParDataFrameScan partitioning."
     return ir._tasks()
