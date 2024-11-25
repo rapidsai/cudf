@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Please keep pr-builder as the top job here
   pr-builder:
     needs:
       - changed-files
@@ -37,13 +38,23 @@ jobs:
       - unit-tests-cudf-pandas
       - pandas-tests
       - pandas-tests-diff
+      - telemetry-setup
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.12
     if: always()
     with:
       needs: ${{ toJSON(needs) }}
+  telemetry-setup:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    env:
+      OTEL_SERVICE_NAME: 'pr-cudf'
+    steps:
+      - name: Telemetry setup
+        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   changed-files:
     secrets: inherit
+    needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-24.12
     with:
       files_yaml: |
@@ -91,9 +102,11 @@ jobs:
           - '!notebooks/**'
   checks:
     secrets: inherit
+    needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
     with:
       enable_check_generated_files: false
+      ignored_pr_jobs: "telemetry-summarize"
   conda-cpp-build:
     needs: checks
     secrets: inherit
@@ -228,8 +241,6 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      # This always runs, but only fails if this PR touches code in
-      # pylibcudf or cudf_polars
       script: "ci/test_wheel_cudf_polars.sh"
   cudf-polars-polars-tests:
     needs: wheel-build-cudf-polars
@@ -239,8 +250,6 @@ jobs:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      # This always runs, but only fails if this PR touches code in
-      # pylibcudf or cudf_polars
       script: "ci/test_cudf_polars_polars_tests.sh"
   wheel-build-dask-cudf:
     needs: wheel-build-cudf
@@ -264,6 +273,7 @@ jobs:
   devcontainer:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.12
+    needs: telemetry-setup
     with:
       arch: '["amd64"]'
       cuda: '["12.5"]'
@@ -302,3 +312,18 @@ jobs:
         node_type: cpu4
         build_type: pull-request
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+
+  telemetry-summarize:
+    runs-on: ubuntu-latest
+    needs: pr-builder
+    if: always()
+    continue-on-error: true
+    steps:
+      - name: Load stashed telemetry env vars
+        uses: rapidsai/shared-actions/telemetry-dispatch-load-base-env-vars@main
+        with:
+            load_service_name: true
+      - name: Telemetry summarize
+        uses: rapidsai/shared-actions/telemetry-dispatch-write-summary@main
+        with:
+          cert_concat: "${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}"

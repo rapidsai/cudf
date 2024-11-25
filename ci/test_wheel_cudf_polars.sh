@@ -17,11 +17,11 @@ rapids-logger "Installing cudf_polars and its dependencies"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 
-# echo to expand wildcard before adding `[test]` requires for pip
+# echo to expand wildcard before adding `[test,experimental]` requires for pip
 python -m pip install \
     -v \
     --constraint ./constraints.txt \
-    "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
+    "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test,experimental]" \
     "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
     "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
 

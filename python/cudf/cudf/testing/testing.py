@@ -10,8 +10,8 @@ import pandas as pd
 from pandas import testing as tm
 
 import cudf
-from cudf._lib.unary import is_nan
 from cudf.api.types import is_numeric_dtype, is_string_dtype
+from cudf.core._internals.unary import is_nan
 from cudf.core.missing import NA, NaT
 
 

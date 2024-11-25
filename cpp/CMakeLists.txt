@@ -36,6 +36,8 @@ if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERS
   )
 endif()
 
+rapids_cmake_write_version_file(include/cudf/version_config.hpp)
+
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
 # `Threads::Threads` is the same value in first run and subsequent runs.
@@ -77,6 +79,7 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -214,10 +217,10 @@ function(enable_static_checkers target)
       # compile flags. To do this completely cleanly we should modify the flags on the target rather
       # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
       # the linters on real builds.
-      foreach(_flag -Wno-missing-braces -Wno-absolute-value -Wunneeded-internal-declaration)
-        list(FIND CUDF_CXX_FLAGS "${flag}" _flag_index)
+      foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
+        list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
         if(_flag_index EQUAL -1)
-          list(APPEND CUDF_CXX_FLAGS ${flag})
+          list(APPEND CUDF_CXX_FLAGS ${_flag})
         endif()
       endforeach()
       set(CUDF_CXX_FLAGS
@@ -238,6 +241,7 @@ rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules ${CMAKE_MODULE_PATH})
 rapids_find_package(
   CUDAToolkit REQUIRED
   BUILD_EXPORT_SET cudf-exports
@@ -284,8 +288,6 @@ if(CUDF_BUILD_TESTUTIL)
 endif()
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
-# find cuFile
-include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 # find fmt
@@ -302,9 +304,6 @@ if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
   list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
-  if(TARGET cufile::cuFile_interface)
-    list(APPEND dependencies cuFile)
-  endif()
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -465,6 +464,7 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
+  src/io/comp/comp.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
@@ -903,6 +903,15 @@ target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCU
 # Enable remote IO through KvikIO
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
 
+# Enable cuFile support
+set(_cufile_suffix)
+if(CUDA_STATIC_CUFILE)
+  set(_cufile_suffix _static)
+endif()
+if(TARGET CUDA::cuFile${_cufile_suffix})
+  target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
+endif()
+
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
@@ -911,7 +920,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
@@ -1125,6 +1134,9 @@ install(
   TARGETS cudf
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
+)
+install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
 )
 
 set(_components_export_string)
