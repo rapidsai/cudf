@@ -248,14 +248,10 @@ def read_csv(
         options.set_comment(comment)
 
     if parse_dates is not None:
-        # Set both since users are allowed to mix column names and indices
-        options.set_parse_dates(list(filter(lambda x: isinstance(x, str), parse_dates)))
-        options.set_parse_dates(list(filter(lambda x: isinstance(x, int), parse_dates)))
+        options.set_parse_dates(list(parse_dates))
 
     if hex_cols is not None:
-        # Set both since users are allowed to mix column names and indices
-        options.set_parse_hex(list(filter(lambda x: isinstance(x, str), hex_cols)))
-        options.set_parse_hex(list(filter(lambda x: isinstance(x, int), hex_cols)))
+        options.set_parse_hex(list(hex_cols))
 
     options.set_dtypes(new_dtypes)
 

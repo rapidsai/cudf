@@ -95,30 +95,31 @@ cdef class CsvReaderOptions:
     cpdef void set_parse_dates(self, list val):
         cdef vector[string] vec_str
         cdef vector[int] vec_int
-        if all([isinstance(date, str) for date in val]):
-            for date in val:
-                vec_str.push_back(date.encode())
-            self.c_obj.set_parse_dates(vec_str)
-        elif all([isinstance(date, int) for date in val]):
-            for date in val:
-                vec_int.push_back(date)
-            self.c_obj.set_parse_dates(vec_int)
+        if not all([isinstance(col, (str, int)) for col in val]):
+            raise TypeError("Must be a list of int or str")
         else:
-            raise TypeError("Must pass an int or str")
+            for date in val:
+                if isinstance(date, str):
+                    vec_str.push_back(date.encode())
+                else:
+                    vec_int.push_back(date)
+            self.c_obj.set_parse_dates(vec_str)
+            self.c_obj.set_parse_dates(vec_int)
 
     cpdef void set_parse_hex(self, list val):
         cdef vector[string] vec_str
         cdef vector[int] vec_int
-        if all([isinstance(hx, str) for hx in val]):
-            for hx in val:
-                vec_str.push_back(hx.encode())
-            self.c_obj.set_parse_hex(vec_str)
-        elif all([isinstance(hx, int) for hx in val]):
-            for hx in val:
-                vec_int.push_back(hx)
-            self.c_obj.set_parse_hex(vec_int)
+        if not all([isinstance(col, (str, int)) for col in val]):
+            raise TypeError("Must be a list of int or str")
         else:
-            raise TypeError("Must pass an int or str")
+            for hx in val:
+                if isinstance(hx, str):
+                    vec_str.push_back(hx.encode())
+                else:
+                    vec_int.push_back(hx)
+
+            self.c_obj.set_parse_hex(vec_str)
+            self.c_obj.set_parse_hex(vec_int)
 
     cpdef void set_dtypes(self, object types):
         cdef map[string, data_type] dtype_map
@@ -238,92 +239,6 @@ cdef class CsvReaderOptionsBuilder:
 def read_csv(
     CsvReaderOptions options
 ):
-    """Reads a CSV file into a :py:class:`~.types.TableWithMetadata`.
-
-    For details, see :cpp:func:`read_csv`.
-
-    Parameters
-    ----------
-    source_info : SourceInfo
-        The SourceInfo to read the CSV file from.
-    compression : compression_type, default CompressionType.AUTO
-        The compression format of the CSV source.
-    byte_range_offset : size_type, default 0
-        Number of bytes to skip from source start.
-    byte_range_size : size_type, default 0
-        Number of bytes to read. By default, will read all bytes.
-    col_names : list, default None
-        The column names to use.
-    prefix : string, default ''
-        The prefix to apply to the column names.
-    mangle_dupe_cols : bool, default True
-        If True, rename duplicate column names.
-    usecols : list, default None
-        Specify the string column names/integer column indices of columns to be read.
-    nrows : size_type, default -1
-        The number of rows to read.
-    skiprows : size_type, default 0
-        The number of rows to skip from the start before reading
-    skipfooter : size_type, default 0
-        The number of rows to skip from the end
-    header : size_type, default 0
-        The index of the row that will be used for header names.
-        Pass -1 to use default column names.
-    lineterminator : str, default '\\n'
-        The character used to determine the end of a line.
-    delimiter : str, default ","
-        The character used to separate fields in a row.
-    thousands : str, default None
-        The character used as the thousands separator.
-        Cannot match delimiter.
-    decimal : str, default '.'
-        The character used as the decimal separator.
-        Cannot match delimiter.
-    comment : str, default None
-        The character used to identify the start of a comment line.
-        (which will be skipped by the reader)
-    delim_whitespace : bool, default False
-        If True, treat whitespace as the field delimiter.
-    skipinitialspace : bool, default False
-        If True, skip whitespace after the delimiter.
-    skip_blank_lines : bool, default True
-        If True, ignore empty lines (otherwise line values are parsed as null).
-    quoting : QuoteStyle, default QuoteStyle.MINIMAL
-        The quoting style used in the input CSV data. One of
-        { QuoteStyle.MINIMAL, QuoteStyle.ALL, QuoteStyle.NONNUMERIC, QuoteStyle.NONE }
-    quotechar : str, default '"'
-        The character used to indicate quoting.
-    doublequote : bool, default True
-        If True, a quote inside a value is double-quoted.
-    parse_dates : list, default None
-        A list of integer column indices/string column names
-        of columns to read as datetime.
-    parse_hex : list, default None
-        A list of integer column indices/string column names
-        of columns to read as hexadecimal.
-    dtypes : Union[Dict[str, DataType], List[DataType]], default None
-        A list of data types or a dictionary mapping column names
-        to a DataType.
-    true_values : List[str], default None
-        A list of additional values to recognize as True.
-    false_values : List[str], default None
-        A list of additional values to recognize as False.
-    na_values : List[str], default None
-        A list of additional values to recognize as null.
-    keep_default_na : bool, default True
-        Whether to keep the built-in default N/A values.
-    na_filter : bool, default True
-        Whether to detect missing values. If False, can
-        improve performance.
-    dayfirst : bool, default False
-        If True, interpret dates as being in the DD/MM format.
-
-    Returns
-    -------
-    TableWithMetadata
-        The Table and its corresponding metadata (column names) that were read in.
-    """
-
     cdef table_with_metadata c_result
     with nogil:
         c_result = move(cpp_read_csv(options.c_obj))
