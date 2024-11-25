@@ -8,11 +8,11 @@ import operator
 from functools import reduce, singledispatch
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.ir import IR, DataFrameScan, Union
 from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import MutableMapping, Sequence
     from typing import TypeAlias
 
     from cudf_polars.containers import DataFrame
@@ -223,7 +223,14 @@ def task_graph(
         operator.or_,
         (generate_ir_tasks(node, partition_info) for node in traversal(ir)),
     )
-    return graph, (get_key_name(ir), 0)
+
+    key_name = get_key_name(ir)
+    partition_count = partition_info[ir].count
+    if partition_count > 1:
+        graph[key_name] = (_concat, [(key_name, i) for i in range(partition_count)])
+        return graph, key_name
+    else:
+        return graph, (key_name, 0)
 
 
 def evaluate_dask(ir: IR) -> DataFrame:
@@ -234,3 +241,22 @@ def evaluate_dask(ir: IR) -> DataFrame:
 
     graph, key = task_graph(ir, partition_info)
     return get(graph, key)
+
+
+def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
+    # Concatenate a sequence of DataFrames vertically
+    return Union.do_evaluate(None, *dfs)
+
+
+##
+## DataFrameScan
+##
+
+
+@lower_ir_node.register(DataFrameScan)
+def _(
+    ir: DataFrameScan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    import cudf_polars.experimental.io as _io
+
+    return _io.lower_dataframescan_node(ir, rec)
