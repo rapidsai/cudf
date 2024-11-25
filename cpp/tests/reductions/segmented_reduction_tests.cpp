@@ -1122,6 +1122,26 @@ TEST_F(SegmentedReductionTestUntyped, EmptyInputWithOffsets)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect_bool);
 }
 
+TEST_F(SegmentedReductionTestUntyped, EmptyInputEmptyOffsets)
+{
+  auto const str_empty = cudf::test::strings_column_wrapper{};
+  auto const int_empty = cudf::test::fixed_width_column_wrapper<cudf::size_type>{};
+  auto result =
+    cudf::segmented_reduce(str_empty,
+                           cudf::column_view{int_empty},
+                           *cudf::make_max_aggregation<cudf::segmented_reduce_aggregation>(),
+                           cudf::data_type{cudf::type_id::STRING},
+                           cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, str_empty);
+
+  result = cudf::segmented_reduce(int_empty,
+                                  cudf::column_view{int_empty},
+                                  *cudf::make_min_aggregation<cudf::segmented_reduce_aggregation>(),
+                                  cudf::data_type{cudf::type_id::INT32},
+                                  cudf::null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, int_empty);
+}
+
 template <typename T>
 struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {};
 
