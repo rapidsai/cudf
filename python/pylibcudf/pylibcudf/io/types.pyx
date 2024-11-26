@@ -2,7 +2,6 @@
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
-from libc.stdint cimport uint8_t, int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -20,6 +19,8 @@ from pylibcudf.libcudf.io.types cimport (
     source_info,
     table_input_metadata,
     table_with_metadata,
+    column_in_metadata,
+    table_input_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
 
@@ -38,9 +39,14 @@ from pylibcudf.libcudf.io.types import (
     quote_style as QuoteStyle,  # no-cython-lint
     statistics_freq as StatisticsFreq, # no-cython-lint
 )
+from cython.operator cimport dereference
+from pylibcudf.libcudf.types cimport size_type
+from cython.operator cimport dereference
+from pylibcudf.libcudf.types cimport size_type
 
 __all__ = [
     "ColumnEncoding",
+    "ColumnInMetadata",
     "CompressionType",
     "DictionaryPolicy",
     "JSONRecoveryMode",
@@ -74,18 +80,30 @@ cdef class ColumnInMetadata:
     Metadata for a column
     """
 
+    def __init__(self):
+        raise ValueError(
+            "ColumnInMetadata should not be constructed directly. "
+            "Use one of the factories."
+        )
+
     @staticmethod
-    cdef ColumnInMetadata from_metadata(column_in_metadata metadata):
+    cdef ColumnInMetadata from_libcudf(
+        column_in_metadata* metadata, TableInputMetadata owner
+    ):
         """
-        Construct a ColumnInMetadata.
+        A Python representation of `column_in_metadata`.
 
         Parameters
         ----------
-        metadata : column_in_metadata
+        metadata : column_in_metadata*
+            Raw pointer to C++ metadata.
+        owner : TableInputMetadata
+            Owning table input metadata that manages lifetime of the raw pointer.
         """
-        cdef ColumnInMetadata col_metadata = ColumnInMetadata.__new__(ColumnInMetadata)
-        col_metadata.c_obj = metadata
-        return col_metadata
+        cdef ColumnInMetadata out = ColumnInMetadata.__new__(ColumnInMetadata)
+        out.c_obj = metadata
+        out.owner = owner
+        return out
 
     cpdef ColumnInMetadata set_name(self, str name):
         """
@@ -100,7 +118,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_name(name.encode())
+        dereference(self.c_obj).set_name(name.encode())
         return self
 
     cpdef ColumnInMetadata set_nullability(self, bool nullable):
@@ -116,7 +134,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_nullability(nullable)
+        dereference(self.c_obj).set_nullability(nullable)
         return self
 
     cpdef ColumnInMetadata set_list_column_as_map(self):
@@ -128,7 +146,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_list_column_as_map()
+        dereference(self.c_obj).set_list_column_as_map()
         return self
 
     cpdef ColumnInMetadata set_int96_timestamps(self, bool req):
@@ -145,7 +163,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_int96_timestamps(req)
+        dereference(self.c_obj).set_int96_timestamps(req)
         return self
 
     cpdef ColumnInMetadata set_decimal_precision(self, uint8_t precision):
@@ -162,7 +180,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_decimal_precision(precision)
+        dereference(self.c_obj).set_decimal_precision(precision)
         return self
 
     cpdef ColumnInMetadata child(self, size_type i):
@@ -178,7 +196,8 @@ cdef class ColumnInMetadata:
         -------
         ColumnInMetadata
         """
-        return ColumnInMetadata.from_metadata(self.c_obj.child(i))
+        cdef column_in_metadata* child_c_obj = &dereference(self.c_obj).child(i)
+        return ColumnInMetadata.from_libcudf(child_c_obj, self.owner)
 
     cpdef ColumnInMetadata set_output_as_binary(self, bool binary):
         """
@@ -193,7 +212,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_output_as_binary(binary)
+        dereference(self.c_obj).set_output_as_binary(binary)
         return self
 
     cpdef ColumnInMetadata set_type_length(self, int32_t type_length):
@@ -209,7 +228,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_type_length(type_length)
+        dereference(self.c_obj).set_type_length(type_length)
         return self
 
     cpdef ColumnInMetadata set_skip_compression(self, bool skip):
@@ -226,7 +245,7 @@ cdef class ColumnInMetadata:
         -------
         Self
         """
-        self.c_obj.set_skip_compression(skip)
+        dereference(self.c_obj).set_skip_compression(skip)
         return self
 
     cpdef ColumnInMetadata set_encoding(self, column_encoding encoding):
@@ -243,7 +262,7 @@ cdef class ColumnInMetadata:
         -------
         ColumnInMetadata
         """
-        self.c_obj.set_encoding(encoding)
+        dereference(self.c_obj).set_encoding(encoding)
         return self
 
     cpdef str get_name(self):
@@ -255,7 +274,7 @@ cdef class ColumnInMetadata:
         str
             The name of this column
         """
-        return self.c_obj.get_name().decode()
+        return dereference(self.c_obj).get_name().decode()
 
 
 cdef class TableInputMetadata:
@@ -269,6 +288,10 @@ cdef class TableInputMetadata:
     """
     def __init__(self, Table table):
         self.c_obj = table_input_metadata(table.view())
+        self.column_metadata = [
+            ColumnInMetadata.from_libcudf(&self.c_obj.column_metadata[i], self)
+            for i in range(self.c_obj.column_metadata.size())
+        ]
 
 
 cdef class TableWithMetadata:

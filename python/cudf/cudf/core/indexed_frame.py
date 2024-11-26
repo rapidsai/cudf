@@ -5349,7 +5349,7 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def tile(self, count):
+    def tile(self, count: int):
         """Repeats the rows `count` times to form a new Frame.
 
         Parameters
@@ -5373,10 +5373,24 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
+        with acquire_spill_lock():
+            plc_table = plc.reshape.tile(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in itertools.chain(
+                            self.index._columns, self._columns
+                        )
+                    ]
+                ),
+                count,
+            )
+            tiled = [
+                libcudf.column.Column.from_pylibcudf(plc)
+                for plc in plc_table.columns()
+            ]
         return self._from_columns_like_self(
-            libcudf.reshape.tile(
-                [*self.index._columns, *self._columns], count
-            ),
+            tiled,
             column_names=self._column_names,
             index_names=self._index_names,
         )

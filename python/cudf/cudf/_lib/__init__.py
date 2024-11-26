@@ -17,7 +17,6 @@ from . import (
     parquet,
     reduce,
     replace,
-    reshape,
     round,
     sort,
     stream_compaction,

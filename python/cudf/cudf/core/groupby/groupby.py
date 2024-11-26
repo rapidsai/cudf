@@ -19,7 +19,6 @@ import pylibcudf as plc
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
@@ -2206,6 +2205,17 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
+
+        @acquire_spill_lock()
+        def interleave_columns(source_columns):
+            return libcudf.column.Column.from_pylibcudf(
+                plc.reshape.interleave_columns(
+                    plc.Table(
+                        [c.to_pylibcudf(mode="read") for c in source_columns]
+                    )
+                )
+            )
+
         res = cudf.DataFrame._from_data(
             {
                 x: interleave_columns([gb_cov_corr._data[y] for y in ys])
