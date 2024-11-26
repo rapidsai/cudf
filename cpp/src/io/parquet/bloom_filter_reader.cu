@@ -26,6 +26,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/logger.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -93,7 +94,15 @@ struct bloom_filter_caster {
          num_equality_columns = num_equality_columns,
          results = reinterpret_cast<bool*>(results.data())] __device__(auto row_group_idx) {
           // Filter bitset buffer index
-          auto const filter_idx        = col_idx + (num_equality_columns * row_group_idx);
+          auto const filter_idx = col_idx + (num_equality_columns * row_group_idx);
+
+          // If no bloom filter, then fill in `true` as membership cannot be determined
+          if (buffer_sizes[filter_idx] == 0) {
+            results[row_group_idx] = true;
+            return;
+          }
+
+          // Number of filter blocks
           auto const num_filter_blocks = buffer_sizes[filter_idx] / (word_size * words_per_block);
 
           // Create a bloom filter view.
@@ -101,11 +110,13 @@ struct bloom_filter_caster {
                                  cuco::extent<std::size_t>,
                                  cuco::thread_scope_thread,
                                  policy_type>
-            filter{reinterpret_cast<word_type*>(buffer_ptrs[filter_idx]),
-                   num_filter_blocks,
-                   {},   // thread scope since the same literal is being search across different
-                         // bitsets per thread
-                   {}};  // Arrow policy with default xxhash_64, seed = 0 for Arrow compatibility
+            filter{
+              reinterpret_cast<word_type*>(buffer_ptrs[filter_idx]),
+              num_filter_blocks,
+              cuco::thread_scope_thread,  // Thread scope since the same literal is being search
+                                          // across (read-only) different bitsets per thread
+              {hasher_type{cudf::DEFAULT_HASH_SEED}}};  // Arrow policy with cudf::xxhash_64 seeded
+                                                        // with 0 for Arrow compatibility
 
           // Query the bloom filter and store results
           results[row_group_idx] = filter.contains(d_scalar.value<T>());
@@ -357,9 +368,11 @@ std::future<void> read_bloom_filter_data_async(
     thrust::make_counting_iterator<size_t>(0),
     thrust::make_counting_iterator<size_t>(num_chunks),
     [&](auto const chunk) {
-      // Skip if bloom filter offset absent
-      if (not bloom_filter_offsets[chunk].has_value()) { return; }
-
+      // If bloom filter offset absent, fill in an empty buffer and skip ahead
+      if (not bloom_filter_offsets[chunk].has_value()) {
+        bloom_filter_data[chunk] = {};
+        return;
+      }
       // Read bloom filter iff present
       auto const bloom_filter_offset = bloom_filter_offsets[chunk].value();
 
@@ -379,15 +392,22 @@ std::future<void> read_bloom_filter_data_async(
       CompactProtocolReader cp{buffer->data(), buffer->size()};
       cp.read(&header);
 
+      // Get the hardcoded words_per_block value from `cuco::arrow_filter_policy` using a temporary
+      // `std::byte` key type.
+      auto constexpr words_per_block =
+        cuco::arrow_filter_policy<std::byte,
+                                  cudf::hashing::detail::XXHash_64<std::byte>>::words_per_block;
+
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
-        (header.num_bytes % 32) == 0 and
+        (header.num_bytes % words_per_block) == 0 and
         header.compression.compression == BloomFilterCompression::Compression::UNCOMPRESSED and
         header.algorithm.algorithm == BloomFilterAlgorithm::Algorithm::SPLIT_BLOCK and
         header.hash.hash == BloomFilterHash::Hash::XXHASH;
 
       // Do not read if the bloom filter is invalid
       if (not is_header_valid) {
+        bloom_filter_data[chunk] = {};
         CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
         return;
       }
