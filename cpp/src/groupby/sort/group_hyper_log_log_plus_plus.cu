@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
 #include <cuda/std/__algorithm/min.h>  // TODO #include <cuda/std/algorithm> once available
 #include <cuda/std/bit>
 #include <thrust/iterator/transform_iterator.h>
@@ -343,13 +344,11 @@ std::unique_ptr<column> group_hllpp(column_view const& input,
   int64_t num_registers_per_sketch = 1 << precision;
 
   // 1. compute all the hashs
-  // TODO: mask_state::ALL_VALID => unallocate
   auto hash_col =
     make_numeric_column(data_type{type_id::INT64}, input.size(), mask_state::ALL_VALID, stream, mr);
-  auto input_table   = cudf::table_view{{input}};
-  auto d_input_table = cudf::table_device_view::create(input_table, stream);
-  // TODO: has_nulls has nested null?
-  bool const nullable = input.has_nulls();
+  auto input_table    = cudf::table_view{{input}};
+  auto d_input_table  = cudf::table_device_view::create(input_table, stream);
+  bool const nullable = has_nested_nulls(input_table);
   thrust::tabulate(
     rmm::exec_policy(stream),
     hash_col->mutable_view().begin<int64_t>(),
