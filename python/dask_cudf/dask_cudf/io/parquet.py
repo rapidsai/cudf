@@ -27,7 +27,7 @@ from dask.tokenize import tokenize
 from dask.utils import parse_bytes
 
 try:
-    # TODO: Remove when dask>2024.11.2
+    # TODO: Remove try/except when dask>2024.11.2
     from dask._task_spec import List as TaskList
 except ImportError:
 
