@@ -30,7 +30,10 @@ try:
     # TODO: Remove when dask>2024.11.2
     from dask._task_spec import List as TaskList
 except ImportError:
-    TaskList = list
+
+    def TaskList(*x):
+        return list(x)
+
 
 import cudf
 
