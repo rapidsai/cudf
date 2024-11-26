@@ -8,7 +8,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 
-def test_gc_with_table_and_column_input_metadata(monkeypatch):
+def test_gc_with_table_and_column_input_metadata():
     class Foo(plc.io.types.TableInputMetadata):
         def __del__(self):
             pass
