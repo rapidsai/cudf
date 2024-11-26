@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 import textwrap
 import warnings
@@ -5316,10 +5317,20 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        exploded = libcudf.lists.explode_outer(
-            [*idx_cols, *self._columns],
-            column_index + len(idx_cols),
-        )
+        with acquire_spill_lock():
+            plc_table = plc.lists.explode_outer(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in itertools.chain(idx_cols, self._columns)
+                    ]
+                ),
+                column_index + len(idx_cols),
+            )
+            exploded = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
         element_type = cast(
@@ -5338,7 +5349,7 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def tile(self, count):
+    def tile(self, count: int):
         """Repeats the rows `count` times to form a new Frame.
 
         Parameters
@@ -5362,10 +5373,24 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
+        with acquire_spill_lock():
+            plc_table = plc.reshape.tile(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in itertools.chain(
+                            self.index._columns, self._columns
+                        )
+                    ]
+                ),
+                count,
+            )
+            tiled = [
+                libcudf.column.Column.from_pylibcudf(plc)
+                for plc in plc_table.columns()
+            ]
         return self._from_columns_like_self(
-            libcudf.reshape.tile(
-                [*self.index._columns, *self._columns], count
-            ),
+            tiled,
             column_names=self._column_names,
             index_names=self._index_names,
         )
