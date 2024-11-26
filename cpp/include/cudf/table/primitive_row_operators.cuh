@@ -326,56 +326,19 @@ class row_lexicographic_comparator {
 };  // class row_lexicographic_comparator
 
 /**
- * @brief Computes the hash value of an element in the given column.
- *
- * @tparam Hash Hash functor to use for hashing elements.
- */
-template <template <typename> class Hash>
-class element_hasher {
- public:
-  /**
-   * @brief Returns the hash value of the given element in the given column.
-   *
-   * @tparam T The type of the element to hash
-   * @param col The column to hash
-   * @param row_index The index of the row to hash
-   * @return The hash value of the given element
-   */
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
-  {
-    return Hash<T>{}(col.element<T>(row_index));
-  }
-
-  /**
-   * @brief Returns the hash value of the given element in the given column.
-   *
-   * @tparam T The type of the element to hash
-   * @param col The column to hash
-   * @param row_index The index of the row to hash
-   * @return The hash value of the given element
-   */
-  template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
-  {
-    CUDF_UNREACHABLE("Unsupported type in hash.");
-  }
-};
-
-/**
  * @brief Function object for computing the hash value of a row in a column.
  *
  * @tparam Hash Hash functor to use for hashing elements
  */
-template <template <typename> class Hash>
-class element_hasher_with_seed {
+template <class Hash>
+class element_hasher {
  public:
   /**
    * @brief Constructs a function object for hashing an element in the given column
    *
    * @param seed The seed to use for the hash function
    */
-  __device__ element_hasher_with_seed(uint32_t seed) : _seed{seed} {}
+  __device__ element_hasher(uint32_t seed) : _seed{seed} {}
 
   /**
    * @brief Returns the hash value of the given element in the given column.
@@ -414,7 +377,7 @@ class element_hasher_with_seed {
  *
  * @tparam Hash Hash functor to use for hashing elements.
  */
-template <template <typename> class Hash>
+template <class Hash>
 class row_hasher {
  public:
   row_hasher() = delete;
@@ -436,7 +399,7 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     return cudf::type_dispatcher<dispatch_storage_type>(
-      _table.column(0).type(), element_hasher_with_seed<Hash>{_seed}, _table.column(0), row_index);
+      _table.column(0).type(), element_hasher<Hash>{_seed}, _table.column(0), row_index);
   }
 
  private:
