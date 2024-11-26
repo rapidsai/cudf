@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,27 +34,31 @@ void dispatch_equality_op(mutable_column_view& out,
   auto rhsd         = column_device_view::create(rhs, stream);
   if (common_dtype) {
     if (op == binary_operator::EQUAL) {
-      for_each(stream,
-               out.size(),
-               binary_op_device_dispatcher<ops::Equal>{
-                 *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                         thrust::counting_iterator<size_type>(0),
+                         out.size(),
+                         binary_op_device_dispatcher<ops::Equal>{
+                           *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
-      for_each(stream,
-               out.size(),
-               binary_op_device_dispatcher<ops::NotEqual>{
-                 *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                         thrust::counting_iterator<size_type>(0),
+                         out.size(),
+                         binary_op_device_dispatcher<ops::NotEqual>{
+                           *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     }
   } else {
     if (op == binary_operator::EQUAL) {
-      for_each(stream,
-               out.size(),
-               binary_op_double_device_dispatcher<ops::Equal>{
-                 *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                         thrust::counting_iterator<size_type>(0),
+                         out.size(),
+                         binary_op_double_device_dispatcher<ops::Equal>{
+                           *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
-      for_each(stream,
-               out.size(),
-               binary_op_double_device_dispatcher<ops::NotEqual>{
-                 *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                         thrust::counting_iterator<size_type>(0),
+                         out.size(),
+                         binary_op_double_device_dispatcher<ops::NotEqual>{
+                           *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     }
   }
 }
