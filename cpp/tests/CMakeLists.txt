@@ -132,6 +132,7 @@ ConfigureTest(
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/histogram_tests.cpp
+  groupby/host_udf_example_tests.cu
   groupby/host_udf_tests.cu
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
