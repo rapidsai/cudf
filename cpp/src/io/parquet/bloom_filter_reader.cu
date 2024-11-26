@@ -108,7 +108,7 @@ struct bloom_filter_caster {
                    num_filter_blocks,
                    {},   // thread scope since the same literal is being search across different
                          // bitsets per thread
-                   {}};  // Arrow policy with default xxhash_64, seed = 0 for Arrow compatiblity
+                   {}};  // Arrow policy with default xxhash_64, seed = 0 for Arrow compatibility
 
           // Query the bloom filter and store results
           results[row_group_idx] = filter.contains(d_scalar.value<T>());
