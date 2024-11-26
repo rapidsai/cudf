@@ -7,39 +7,22 @@ from pylibcudf import DataType
 from pylibcudf.types import TypeId
 
 
-@pytest.mark.parametrize("tid", TypeId)
-def test_reduce(tid):
-    dt = DataType(tid, 0)
-    reduced_dt = dt.__reduce__()
-    assert reduced_dt[0] is DataType
-    assert reduced_dt[1][0] == tid
-    assert reduced_dt[1][1] == 0
+@pytest.fixture(params=list(TypeId))
+def dtype(request):
+    tid = request.param
+    if tid in {TypeId.DECIMAL32, TypeId.DECIMAL64, TypeId.DECIMAL128}:
+        scale = 5
+    else:
+        scale = 0
+    return DataType(tid, scale)
 
 
-@pytest.mark.parametrize(
-    "tid", [TypeId.DECIMAL32, TypeId.DECIMAL64, TypeId.DECIMAL128]
-)
-def test_reduce_decimal(tid):
-    dt = DataType(tid, 10)
-    reduced_dt = dt.__reduce__()
-    assert reduced_dt[0] is DataType
-    assert reduced_dt[1][0] == tid
-    assert reduced_dt[1][1] == 10
+def test_reduce(dtype):
+    (typ, (tid, scale)) = dtype.__reduce__()
+    assert typ is DataType
+    assert tid == dtype.id()
+    assert scale == dtype.scale()
 
 
-@pytest.mark.parametrize("tid", TypeId)
-def test_pickle(tid):
-    dt = DataType(tid, 0)
-    serialized = pickle.dumps(dt)
-    dt_got = pickle.loads(serialized)
-    assert dt_got == dt
-
-
-@pytest.mark.parametrize(
-    "tid", [TypeId.DECIMAL32, TypeId.DECIMAL64, TypeId.DECIMAL128]
-)
-def test_pickle_decimal(tid):
-    dt = DataType(tid, 0)
-    serialized = pickle.dumps(dt)
-    dt_got = pickle.loads(serialized)
-    assert dt_got == dt
+def test_pickle(dtype):
+    assert dtype == pickle.loads(pickle.dumps(dtype))
