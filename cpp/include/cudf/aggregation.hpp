@@ -679,13 +679,19 @@ struct host_udf_base {
                                     std::unique_ptr<aggregation>>;
     value_type value;
 
-    data_attribute()                 = default;
-    data_attribute(data_attribute&&) = default;
+    data_attribute()                 = default;  ///< Default constructor
+    data_attribute(data_attribute&&) = default;  ///< Move constructor
 
-    // Copy constructor is needed to be used as keys in set and map.
-    // Since the `value` contains `unique_ptr`, we need to define the copy operator for it.
+    /**
+     * @brief Copy constructor.
+     * @param other The other data attribute to copy from.
+     */
     data_attribute(data_attribute const& other) : value{copy_value(other.value)} {}
 
+    /**
+     * @brief Construct a new data attribute from aggregation attributes.
+     * @param value_ An aggregation attribute
+     */
     template <typename T,
               CUDF_ENABLE_IF(std::is_same_v<T, reduction_data_attribute> ||
                              std::is_same_v<T, segmented_reduction_data_attribute> ||
@@ -694,6 +700,10 @@ struct host_udf_base {
     {
     }
 
+    /**
+     * @brief Construct a new data attribute from another aggregation request.
+     * @param value_ An aggregation request
+     */
     template <typename T,
               CUDF_ENABLE_IF(std::is_same_v<T, aggregation> ||
                              std::is_same_v<T, groupby_aggregation>)>
@@ -711,6 +721,8 @@ struct host_udf_base {
 
     /**
      * @brief Copy the value, used in copy constructor.
+     * @param value The value to copy
+     * @return The copied value
      */
     static value_type copy_value(value_type const& value)
     {
@@ -794,8 +806,8 @@ struct host_udf_base {
   [[nodiscard]] virtual input_data_attributes get_required_data() const { return {}; }
 
   /**
-   * @brief Hold all possible types of the data that is passed to the derived class for computing
-   * aggregation.
+   * @brief Hold all possible types of the data that is passed to the derived class for executing
+   * the aggregation.
    */
   using input_data_type = std::variant<column_view,
                                        data_type,
@@ -844,7 +856,6 @@ struct host_udf_base {
 
   /**
    * @brief Compares two instances of the derived class for equality.
-   *
    * @param other The other derived class's instance to compare with
    * @return True if the two instances are equal
    */
@@ -852,13 +863,12 @@ struct host_udf_base {
 
   /**
    * @brief Computes hash value of the derived class's instance.
-   *
    * @return The hash value of the instance
    */
   [[nodiscard]] virtual std::size_t do_hash() const = 0;
 
   /**
-   * @pure @brief Clones the instance.
+   * @brief Clones the instance.
    *
    * A class derived from `host_udf_base` should not store too much data such that its instances
    * remain lightweight for efficient cloning.
