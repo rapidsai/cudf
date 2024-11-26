@@ -843,9 +843,9 @@ class CategoricalColumn(column.ColumnBase):
         """
         raise NotImplementedError("cudf.Categorical is not yet implemented")
 
-    def clip(self, lo: ScalarLike, hi: ScalarLike) -> "column.ColumnBase":
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         return (
-            self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
+            self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)  # type: ignore[return-value]
         )
 
     def data_array_view(

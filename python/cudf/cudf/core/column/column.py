@@ -242,13 +242,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         raise NotImplementedError
 
     @acquire_spill_lock()
-    def clip(self, lo: ScalarLike, hi: ScalarLike) -> ColumnBase:
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
             cudf.Scalar(lo, self.dtype).device_value.c_value,
             cudf.Scalar(hi, self.dtype).device_value.c_value,
         )
-        return type(self).from_pylibcudf(plc_column)
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
         if self is other:
@@ -694,9 +694,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def replace(
-        self, values_to_replace: ColumnBase, replacement_values: ColumnBase
-    ) -> ColumnBase:
-        return type(self).from_pylibcudf(
+        self, values_to_replace: Self, replacement_values: Self
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.replace.find_and_replace_all(
                 self.to_pylibcudf(mode="read"),
                 values_to_replace.to_pylibcudf(mode="read"),
