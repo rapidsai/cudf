@@ -19,7 +19,6 @@ set(cython_sources
     copying.pyx
     csv.pyx
     datetime.pyx
-    filling.pyx
     groupby.pyx
     interop.pyx
     json.pyx
