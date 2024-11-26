@@ -814,7 +814,6 @@ void aggregate_result_functor::operator()<aggregation::MERGE_HLLPP>(aggregation 
 
   int const precision =
     dynamic_cast<cudf::detail::merge_hyper_log_log_aggregation const&>(agg).precision;
-
   cache.add_result(values,
                    agg,
                    detail::group_merge_hyper_log_log_plus_plus(get_grouped_values(),

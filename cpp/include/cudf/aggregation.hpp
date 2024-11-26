@@ -121,8 +121,8 @@ class aggregation {
     MERGE_TDIGEST,    ///< create a tdigest by merging multiple tdigests together
     HISTOGRAM,        ///< compute frequency of each element
     MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation
-    HLLPP,  ///< approximating the number of distinct items by using hyper log log plus plus (HLLPP)
-    MERGE_HLLPP  ///< merge partial values of HLLPP aggregation
+    HLLPP,  ///< approximating the number of distinct items by using HyperLogLogPlusPlus (HLLPP)
+    MERGE_HLLPP  ///< merge partial values of HyperLogLogPlusPlus aggregation
   };
 
   aggregation() = delete;
