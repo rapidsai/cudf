@@ -677,7 +677,8 @@ struct host_udf_base {
                                     segmented_reduction_data_attribute,
                                     groupby_data_attribute,
                                     std::unique_ptr<aggregation>>;
-    value_type value;
+    value_type value;  ///< The actual data attribute, wrapped in this struct
+                       ///< as a wrapper is needed to define hash and equal_to functors.
 
     data_attribute()                 = default;  ///< Default constructor
     data_attribute(data_attribute&&) = default;  ///< Move constructor
@@ -742,6 +743,11 @@ struct host_udf_base {
      * @brief Hash functor for `data_attribute`.
      */
     struct hash {
+      /**
+       * @brief Compute the hash value of a data attribute.
+       * @param attr The data attribute to hash
+       * @return The hash value of the data attribute
+       */
       std::size_t operator()(data_attribute const& attr) const
       {
         auto const& value     = attr.value;
@@ -766,6 +772,12 @@ struct host_udf_base {
      * @brief Equality comparison functor for `data_attribute`.
      */
     struct equal_to {
+      /**
+       * @brief Check if two data attributes are equal.
+       * @param lhs The left-hand side data attribute
+       * @param rhs The right-hand side data attribute
+       * @return True if the two data attributes are equal
+       */
       bool operator()(data_attribute const& lhs, data_attribute const& rhs) const
       {
         auto const& lhs_val = lhs.value;
