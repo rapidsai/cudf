@@ -366,7 +366,7 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param output_dtypes Datatypes of of output columns
    * @param output_column_schemas schema indices of output columns
-   * @param filter AST expression to filter row groups based on Column chunk statistics
+   * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Filtered row group indices, if any is filtered.
@@ -488,5 +488,24 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
 [[nodiscard]] std::vector<std::string> get_column_names_in_expression(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   std::vector<std::string> const& skip_names);
+
+/**
+ * @brief Filter table using the provided (StatsAST or BloomfilterAST) expression and
+ * collect filtered row group indices
+ *
+ * @param table Table of stats or bloom filter membership columns
+ * @param expr_ast StatsAST or BloomfilterAST expression to evaluate.
+ * @param input_row_group_indices Lists of input row groups to read, one per source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to be used in cudf::compute_column
+ *
+ * @return Collected filtered row group indices, if any.
+ */
+[[nodiscard]] std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
+  cudf::table_view ast_table,
+  std::reference_wrapper<ast::expression const> expr_ast,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::io::parquet::detail

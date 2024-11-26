@@ -400,7 +400,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
 {
   auto mr = cudf::get_current_device_resource_ref();
   // Create row group indices.
-  std::vector<std::vector<size_type>> filtered_row_group_indices;
   std::vector<std::vector<size_type>> all_row_group_indices;
   host_span<std::vector<size_type> const> input_row_group_indices;
   if (row_group_indices.empty()) {
@@ -449,54 +448,24 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
   stats_expression_converter stats_expr{filter.get(), static_cast<size_type>(output_dtypes.size())};
-  auto stats_ast     = stats_expr.get_stats_expr();
-  auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
-  auto predicate     = predicate_col->view();
-  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
-               "Filter expression must return a boolean column");
 
-  auto const host_bitmask = [&] {
-    auto const num_bitmasks = num_bitmask_words(predicate.size());
-    if (predicate.nullable()) {
-      return cudf::detail::make_host_vector_sync(
-        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
-    } else {
-      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
-      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
-      return bitmask;
-    }
-  }();
+  // Filter stats table with StatsAST expression and collect filtered row group indices
+  auto filtered_row_group_indices = collect_filtered_row_group_indices(
+    stats_table, stats_expr.get_stats_expr(), row_group_indices, stream, mr);
 
-  auto validity_it = cudf::detail::make_counting_transform_iterator(
-    0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
+  // Span on row groups to apply bloom filtering on.
+  auto const bloom_filter_input_row_groups =
+    filtered_row_group_indices.has_value()
+      ? host_span<std::vector<size_type> const>(filtered_row_group_indices.value())
+      : input_row_group_indices;
 
-  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
-    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
+  // Apply bloom filtering on the bloom filter input row groups
+  auto const bloom_filtered_row_groups = apply_bloom_filters(
+    sources, bloom_filter_input_row_groups, output_dtypes, output_column_schemas, filter, stream);
 
-  // Return only filtered row groups based on predicate
-  // if all are required or all are nulls, return.
-  if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
-                                                                is_row_group_required.cend(),
-                                                                [](auto i) { return bool(i); })) {
-    // Call with input_row_group_indices
-    return apply_bloom_filters(
-      sources, input_row_group_indices, output_dtypes, output_column_schemas, filter, stream);
-  }
-  size_type is_required_idx = 0;
-  for (auto const& input_row_group_index : input_row_group_indices) {
-    std::vector<size_type> filtered_row_groups;
-    for (auto const rg_idx : input_row_group_index) {
-      if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
-        filtered_row_groups.push_back(rg_idx);
-      }
-      ++is_required_idx;
-    }
-    filtered_row_group_indices.push_back(std::move(filtered_row_groups));
-  }
-
-  // Call with filtered_row_group_indices
-  return apply_bloom_filters(
-    sources, filtered_row_group_indices, output_dtypes, output_column_schemas, filter, stream);
+  // Return bloom filtered row group indices iff collected
+  return bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups
+                                               : filtered_row_group_indices;
 }
 
 // convert column named expression to column index reference expression
@@ -645,6 +614,61 @@ class names_from_expression : public ast::detail::expression_transformer {
   std::vector<std::string> const& skip_names)
 {
   return names_from_expression(expr, skip_names).to_vector();
+}
+
+std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
+  cudf::table_view table,
+  std::reference_wrapper<ast::expression const> expr_ast,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // Filter the input table using equality predicate evaluator
+  auto predicate_col = cudf::detail::compute_column(table, expr_ast.get(), stream, mr);
+  auto predicate     = predicate_col->view();
+  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
+               "Filter expression must return a boolean column");
+
+  auto const host_bitmask = [&] {
+    auto const num_bitmasks = num_bitmask_words(predicate.size());
+    if (predicate.nullable()) {
+      return cudf::detail::make_host_vector_sync(
+        device_span<bitmask_type const>(predicate.null_mask(), num_bitmasks), stream);
+    } else {
+      auto bitmask = cudf::detail::make_host_vector<bitmask_type>(num_bitmasks, stream);
+      std::fill(bitmask.begin(), bitmask.end(), ~bitmask_type{0});
+      return bitmask;
+    }
+  }();
+
+  auto validity_it = cudf::detail::make_counting_transform_iterator(
+    0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
+
+  auto const is_row_group_required = cudf::detail::make_host_vector_sync(
+    device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
+
+  // Return only filtered row groups based on predicate, or all are required, or all are nulls.
+  if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
+                                                                is_row_group_required.cend(),
+                                                                [](auto i) { return bool(i); })) {
+    return std::nullopt;
+  }
+
+  // Collect indices of the filtered row groups
+  size_type is_required_idx = 0;
+  std::vector<std::vector<size_type>> filtered_row_group_indices;
+  for (auto const& input_row_group_index : input_row_group_indices) {
+    std::vector<size_type> filtered_row_groups;
+    for (auto const rg_idx : input_row_group_index) {
+      if ((!validity_it[is_required_idx]) || is_row_group_required[is_required_idx]) {
+        filtered_row_groups.push_back(rg_idx);
+      }
+      ++is_required_idx;
+    }
+    filtered_row_group_indices.push_back(std::move(filtered_row_groups));
+  }
+
+  return {filtered_row_group_indices};
 }
 
 }  // namespace cudf::io::parquet::detail
