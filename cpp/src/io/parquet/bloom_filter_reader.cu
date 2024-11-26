@@ -206,7 +206,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    *
    * @return Vectors of equality literals, one per input table column
    */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() const
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> const get_equality_literals() const
   {
     return _equality_literals;
   }
@@ -286,17 +286,18 @@ class bloom_filter_expression_converter : public equality_literals_collector {
       v->accept(*this);
 
       if (op == ast_operator::EQUAL) {
-        auto const literal_ptr =
-          const_cast<ast::literal*>(dynamic_cast<ast::literal const*>(&operands[1].get()));
+        // Search the literal in this input column's equality literals list and add to the offset.
         auto const col_idx            = v->get_column_index();
         auto const& equality_literals = _equality_literals[col_idx];
-        auto col_ref_offset           = _col_literals_offsets[col_idx];
-        auto const ptr =
-          std::find(equality_literals.cbegin(), equality_literals.cend(), literal_ptr);
-        CUDF_EXPECTS(ptr != equality_literals.end(), "Could not find the literal ptr");
-        col_ref_offset += std::distance(equality_literals.cbegin(), ptr);
+        auto col_literal_offset       = _col_literals_offsets[col_idx];
+        auto const literal_iter       = std::find(equality_literals.cbegin(),
+                                            equality_literals.cend(),
+                                            dynamic_cast<ast::literal const*>(&operands[1].get()));
+        CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
+        col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
 
-        auto const& value = _col_ref.emplace_back(col_ref_offset);
+        // Evaluate boolean is_true(value) expression as NOT(NOT(value))
+        auto const& value = _col_ref.emplace_back(col_literal_offset);
         auto const& op    = _operators.emplace_back(ast_operator::NOT, value);
         _operators.emplace_back(ast_operator::NOT, op);
       }
