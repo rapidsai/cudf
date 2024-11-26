@@ -44,7 +44,7 @@ namespace detail {
 namespace {
 
 /**
- * The number of bits that is required for register value.
+ * The number of bits that is required for a HLLPP register value.
  *
  * This number is determined by the maximum number of leading binary zeros a hashcode can
  * produce. This is equal to the number of bits the hashcode returns. The current
@@ -53,13 +53,13 @@ namespace {
  */
 constexpr int REGISTER_VALUE_BITS = 6;
 
-// MASK binary 6 bits: 111111
+// MASK binary 6 bits: 111-111
 constexpr uint64_t MASK = (1L << REGISTER_VALUE_BITS) - 1L;
 
-// One long stores 10 register values
+// This value is 10, one long stores 10 register values
 constexpr int REGISTERS_PER_LONG = 64 / REGISTER_VALUE_BITS;
 
-// XXHash seed
+// XXHash seed, consistent with Spark
 constexpr int64_t SEED = 42L;
 
 // max precision, if require a precision bigger than 18, then use 18.
@@ -67,37 +67,41 @@ constexpr int MAX_PRECISION = 18;
 
 /**
  *
- * Computes register values from hash values and partially groups from register values.
- * It splits input into multiple segments with num_hashs_per_thread length.
- * Each thread scans in its segment, find the max register values for all the values
- * at the same register index at the same group, outputs gathered result when meets a new group,
- * and in the end each thread saves a buffer for the last group in the segment.
+ * Computes register values from hash values and partially groups register values.
+ * It splits input into multiple segments with each segment has num_hashs_per_thread length.
+ * The input is sorted by group labels, each segment contains several consecutive groups.
+ * Each thread scans in its segment, find the max register values for all the register values
+ * at the same register index at the same group, outputs gathered result of previous group
+ * when meets a new group, and in the end each thread saves a buffer for the last group
+ * in the segment.
  *
- * In this way, we can save memory usage, only need to cache `num_threads` caches.
+ * In this way, we can save memory usage, only need to cache
+ * (num_hashs / num_hashs_per_thread) sketches.
  *
  * num_threads = div_round_up(num_hashs, num_hashs_per_thread).
  *
- * After register values are computed.
  *
  * e.g.: num_registers_per_sketch = 512 and num_hashs_per_thread = 4;
  *
  * Input:
  *    register_index register_value  group_lable
  * [
+ * ------------------ segment 0 begin --------------------------------------
  *    (0,                1),          0
  *    (0,                2),          0
- *    (1,                1),          1      // meets a new group, outputs result for g0
- *    (1,                9),          1      // outputs for thread 0 when scan to here
+ *    (1,                1),          1   // meets a new group, outputs result for g0
+ *    (1,                9),          1   // outputs for thread 0 when scan to here
+ * ------------------ segment 1 begin --------------------------------------
  *    (1,                1),          1
  *    (1,                1),          1
  *    (1,                5),          1
- *    (1,                1),          1      // outputs for thread 1; Output result for g1
+ *    (1,                1),          1   // outputs for thread 1; Output result for g1
  * ]
  * Output e.g.:
  *
  * group_lables_thread_cache:
  * [
- *   g0
+ *   g1
  *   g1
  * ]
  * Has num_threads rows.
@@ -116,7 +120,7 @@ constexpr int MAX_PRECISION = 18;
  * ]
  * Has num_groups rows.
  *
- * The next kernel will merge the partial result to final result
+ * The next kernel will merge the registers_output_cache and registers_thread_cache
  */
 template <int num_hashs_per_thread>
 CUDF_KERNEL void partial_group_sketches_from_hashs_kernel(
@@ -162,31 +166,26 @@ CUDF_KERNEL void partial_group_sketches_from_hashs_kernel(
       // still in the same group, update the max value
       if (reg_v > sketch_ptr[reg_idx]) { sketch_ptr[reg_idx] = reg_v; }
     } else {
-      // meets new group, save output for the previous group
+      // meets new group, save output for the previous group and reset
       for (auto i = 0; i < num_registers_per_sketch; i++) {
         registers_output_cache[prev_group * num_registers_per_sketch + i] = sketch_ptr[i];
+        sketch_ptr[i]                                                     = 0;
       }
-
-      // reset cache
-      for (auto i = 0; i < num_registers_per_sketch; i++) {
-        sketch_ptr[i] = 0;
-      }
-
-      // save the max value
+      // save the result for current group
       sketch_ptr[reg_idx] = reg_v;
     }
 
-    // special logic for the last sketch in this thread
     if (hash_idx == hash_end - 1) {
       // meets the last hash in the segment
       if (hash_idx == num_hashs - 1) {
-        // this segment is the last one
+        // meets the last segment, special logic: assume meets new group
         for (auto i = 0; i < num_registers_per_sketch; i++) {
           registers_output_cache[curr_group * num_registers_per_sketch + i] = sketch_ptr[i];
         }
       } else {
-        // not the last segment, proble one item forward.
+        // not the last segment, probe one item forward.
         if (curr_group != group_lables[hash_idx + 1]) {
+          // meets a new group by checking the next item in the next segment
           for (auto i = 0; i < num_registers_per_sketch; i++) {
             registers_output_cache[curr_group * num_registers_per_sketch + i] = sketch_ptr[i];
           }
@@ -202,7 +201,7 @@ CUDF_KERNEL void partial_group_sketches_from_hashs_kernel(
 }
 
 /*
- *
+ * Merge registers_output_cache and registers_thread_cache produced in the above kernel
  * Merge sketches vertically.
  *
  * For all register at the same index, starts a thread to merge the max value.
@@ -239,6 +238,7 @@ CUDF_KERNEL void partial_group_sketches_from_hashs_kernel(
  * ]
  * Has num_groups rows.
  *
+ * First find the max value in registers_thread_cache and then merge to registers_output_cache
  */
 template <int block_size>
 CUDF_KERNEL void merge_sketches_vertically(int64_t num_sketches,
@@ -257,15 +257,15 @@ CUDF_KERNEL void merge_sketches_vertically(int64_t num_sketches,
   for (auto i = 0; i < num_sketches; i++) {
     int curr_group = group_lables_thread_cache[i];
     int8_t curr_reg_v =
-      static_cast<int8_t>(registers_thread_cache[tid + i * num_registers_per_sketch]);
+      static_cast<int8_t>(registers_thread_cache[i * num_registers_per_sketch + tid]);
     if (curr_group == prev_group) {
       if (curr_reg_v > shared_data[shared_idx]) { shared_data[shared_idx] = curr_reg_v; }
     } else {
       // meets a new group, store the result for previous group
-      int64_t reg_idx = prev_group * num_registers_per_sketch + tid;
-      int curr_reg_v  = registers_output_cache[reg_idx];
-      if (shared_data[shared_idx] > curr_reg_v) {
-        registers_output_cache[reg_idx] = shared_data[shared_idx];
+      int64_t result_reg_idx = prev_group * num_registers_per_sketch + tid;
+      int result_curr_reg_v  = registers_output_cache[result_reg_idx];
+      if (shared_data[shared_idx] > result_curr_reg_v) {
+        registers_output_cache[result_reg_idx] = shared_data[shared_idx];
       }
 
       shared_data[shared_idx] = curr_reg_v;
@@ -282,11 +282,14 @@ CUDF_KERNEL void merge_sketches_vertically(int64_t num_sketches,
 }
 
 /**
+ * Compact register values, compact 10 registers values
+ * (each register value is 6 bits) in to a long.
+ * This is consistent with Spark.
+ * Output: long columns which will be composed into a struct column
  *
- * Compact register values, compact 10 registers values (each is 6 bits) in to a long.
- * Number of threads is num_groups * num_longs_per_sketch
+ * Number of threads is num_groups * num_long_cols.
  *
- * e.g.:
+ * e.g., num_registers_per_sketch is 512, precision is 9:
  * Input:
  * registers_output_cache:
  * [
@@ -309,20 +312,17 @@ CUDF_KERNEL void compact_kernel(int64_t const num_groups,
                                 // num_groups * num_registers_per_sketch integers
                                 cudf::device_span<int> registers_output_cache)
 {
-  int64_t const tid = cudf::detail::grid_1d::global_thread_id();
+  int64_t const tid           = cudf::detail::grid_1d::global_thread_id();
+  int64_t const num_long_cols = num_registers_per_sketch / REGISTERS_PER_LONG + 1;
+  if (tid >= num_groups * num_long_cols) { return; }
 
-  int64_t const num_longs_per_sketch = sketches_output.size();
-  if (tid >= num_groups * num_longs_per_sketch) { return; }
-
-  int64_t const group_idx = tid / num_longs_per_sketch;
-  int64_t const long_idx  = tid % num_longs_per_sketch;
+  int64_t const group_idx = tid / num_long_cols;
+  int64_t const long_idx  = tid % num_long_cols;
 
   int64_t const reg_begin_idx =
     group_idx * num_registers_per_sketch + long_idx * REGISTERS_PER_LONG;
   int64_t num_regs = REGISTERS_PER_LONG;
-  if (long_idx == num_longs_per_sketch - 1) {
-    num_regs = num_registers_per_sketch % REGISTERS_PER_LONG;
-  }
+  if (long_idx == num_long_cols - 1) { num_regs = num_registers_per_sketch % REGISTERS_PER_LONG; }
 
   int64_t ten_registers = 0;
   for (auto i = 0; i < num_regs; i++) {
@@ -344,10 +344,12 @@ std::unique_ptr<column> group_hllpp(column_view const& input,
   int64_t num_registers_per_sketch = 1 << precision;
 
   // 1. compute all the hashs
+  // TODO: mask_state::ALL_VALID => unallocate
   auto hash_col =
     make_numeric_column(data_type{type_id::INT64}, input.size(), mask_state::ALL_VALID, stream, mr);
-  auto input_table    = cudf::table_view{{input}};
-  auto d_input_table  = cudf::table_device_view::create(input_table, stream);
+  auto input_table   = cudf::table_view{{input}};
+  auto d_input_table = cudf::table_device_view::create(input_table, stream);
+  // TODO: has_nulls has nested null?
   bool const nullable = input.has_nulls();
   thrust::tabulate(
     rmm::exec_policy(stream),
@@ -362,32 +364,32 @@ std::unique_ptr<column> group_hllpp(column_view const& input,
   int64_t total_threads_partial_group =
     cudf::util::div_rounding_up_safe(static_cast<int64_t>(input.size()), num_hashs_per_thread);
   int64_t num_blocks_p1 = cudf::util::div_rounding_up_safe(total_threads_partial_group, block_size);
-
   auto sketches_output =
     rmm::device_uvector<int32_t>(num_groups * num_registers_per_sketch, stream, mr);
-  auto registers_thread_cache = rmm::device_uvector<int32_t>(
-    total_threads_partial_group * num_registers_per_sketch, stream, mr);
-  auto group_lables_thread_cache =
-    rmm::device_uvector<int32_t>(total_threads_partial_group, stream, mr);
+  {
+    auto registers_thread_cache = rmm::device_uvector<int32_t>(
+      total_threads_partial_group * num_registers_per_sketch, stream, mr);
+    auto group_lables_thread_cache =
+      rmm::device_uvector<int32_t>(total_threads_partial_group, stream, mr);
+    partial_group_sketches_from_hashs_kernel<num_hashs_per_thread>
+      <<<num_blocks_p1, block_size, 0, stream.value()>>>(*d_hashs,
+                                                         group_lables,
+                                                         precision,
+                                                         sketches_output.begin(),
+                                                         registers_thread_cache.begin(),
+                                                         group_lables_thread_cache.begin());
 
-  partial_group_sketches_from_hashs_kernel<num_hashs_per_thread>
-    <<<num_blocks_p1, block_size, 0, stream.value()>>>(*d_hashs,
-                                                       group_lables,
-                                                       precision,
-                                                       sketches_output.begin(),
-                                                       registers_thread_cache.begin(),
-                                                       group_lables_thread_cache.begin());
-
-  // 3. merge the intermidate result
-  auto num_merge_threads = num_registers_per_sketch;
-  auto num_merge_blocks  = cudf::util::div_rounding_up_safe(num_merge_threads, block_size);
-  merge_sketches_vertically<block_size>
-    <<<num_merge_blocks, block_size, block_size, stream.value()>>>(
-      total_threads_partial_group,  // num_sketches
-      num_registers_per_sketch,
-      sketches_output.begin(),
-      registers_thread_cache.begin(),
-      group_lables_thread_cache.begin());
+    // 3. merge the intermidate result
+    auto num_merge_threads = num_registers_per_sketch;
+    auto num_merge_blocks  = cudf::util::div_rounding_up_safe(num_merge_threads, block_size);
+    merge_sketches_vertically<block_size>
+      <<<num_merge_blocks, block_size, block_size, stream.value()>>>(
+        total_threads_partial_group,  // num_sketches
+        num_registers_per_sketch,
+        sketches_output.begin(),
+        registers_thread_cache.begin(),
+        group_lables_thread_cache.begin());
+  }
 
   // 4. create output columns
   auto num_long_cols      = num_registers_per_sketch / REGISTERS_PER_LONG + 1;
@@ -411,7 +413,7 @@ std::unique_ptr<column> group_hllpp(column_view const& input,
                                           rmm::device_buffer{},  // null mask
                                           stream);
 
-  // 4. compact sketches
+  // 5. compact sketches
   auto num_phase3_threads = num_groups * num_long_cols;
   auto num_phase3_blocks  = cudf::util::div_rounding_up_safe(num_phase3_threads, block_size);
   compact_kernel<<<num_phase3_blocks, block_size, 0, stream.value()>>>(
@@ -444,37 +446,9 @@ __device__ inline int get_register_value(int64_t const long_10_registers, int re
  * and output the max register value when meets a new group.
  * For the last long in a thread, outputs the result into `registers_thread_cache`.
  *
- * Output:
- *
- * group_lables_thread_cache:
- * [
- *   g0
- *   g0
- *   g1
- *   ...
- *   gN
- * ]
- * Has num_threads rows.
- *
- * registers_thread_cache:
- * [
- *    r0_g0, r1_g0, r2_g0, r3_g0, ... , r511_g0 // register values for group 0
- *    r0_g0, r1_g0, r2_g0, r3_g0, ... , r511_g0 // register values for group 0
- *    r0_g1, r1_g1, r2_g1, r3_g1, ... , r511_g1 // register values for group 1
- *    ...
- *    r0_gN, r1_gN, r2_gN, r3_gN, ... , r511_gN // register values for group N
- * ]
- * Has num_threads rows, each row is corresponding to `group_lables_thread_cache`
- *
- * registers_output_cache:
- * [
- *    r0_g0, r1_g0, r2_g0, r3_g0, ... , r511_g0 // register values for group 0
- *    r0_g1, r1_g1, r2_g1, r3_g1, ... , r511_g1 // register values for group 1
- *    ...
- *    r0_gN, r1_gN, r2_gN, r3_gN, ... , r511_gN // register values for group N
- * ]
- * Has num_groups rows.
- *
+ * By split inputs into segments like `partial_group_sketches_from_hashs_kernel` and
+ * do partial merge, it will use less memory. Then the kernel merge_sketches_vertically
+ * can be used to merge the intermidate results: registers_output_cache, registers_thread_cache
  */
 template <int num_longs_per_threads>
 CUDF_KERNEL void partial_group_long_sketches_kernel(
@@ -501,8 +475,8 @@ CUDF_KERNEL void partial_group_long_sketches_kernel(
 
   int* const registers_thread_ptr =
     registers_thread_cache + thread_idx_in_cols * num_registers_per_sketch;
-  auto const sketch_first = thread_idx_in_cols * num_longs_per_threads;
 
+  auto const sketch_first = thread_idx_in_cols * num_longs_per_threads;
   auto const sketch_end = cuda::std::min(sketch_first + num_longs_per_threads, num_sketches_input);
 
   int num_regs = REGISTERS_PER_LONG;
@@ -514,35 +488,31 @@ CUDF_KERNEL void partial_group_long_sketches_kernel(
     int reg_idx_in_sketch = long_idx * REGISTERS_PER_LONG + i;
     for (auto sketch_idx = sketch_first; sketch_idx < sketch_end; sketch_idx++) {
       size_type curr_group = group_lables[sketch_idx];
-
-      int64_t output_idx_for_prev_group = num_registers_per_sketch * prev_group + reg_idx_in_sketch;
-
-      int curr_reg_v = get_register_value(longs_ptr[sketch_idx], i);
+      int curr_reg_v       = get_register_value(longs_ptr[sketch_idx], i);
       if (curr_group == prev_group) {
         // still in the same group, update the max value
         if (curr_reg_v > max_reg_v) { max_reg_v = curr_reg_v; }
       } else {
         // meets new group, save output for the previous group
-        registers_output_cache[output_idx_for_prev_group] = max_reg_v;
+        int64_t output_idx_prev = num_registers_per_sketch * prev_group + reg_idx_in_sketch;
+        registers_output_cache[output_idx_prev] = max_reg_v;
 
-        // reset the cache
+        // reset
         max_reg_v = curr_reg_v;
       }
 
-      // special logic for the last sketch in this thread
       if (sketch_idx == sketch_end - 1) {
-        // last long in the segment
-        int64_t output_idx_for_curr_group =
-          num_registers_per_sketch * curr_group + reg_idx_in_sketch;
+        // last item in the segment
+        int64_t output_idx_curr = num_registers_per_sketch * curr_group + reg_idx_in_sketch;
         if (sketch_idx == num_sketches_input - 1) {
           // last segment
-          registers_output_cache[output_idx_for_curr_group] = max_reg_v;
-          max_reg_v                                         = curr_reg_v;
+          registers_output_cache[output_idx_curr] = max_reg_v;
+          max_reg_v                               = curr_reg_v;
         } else {
           if (curr_group != group_lables[sketch_idx + 1]) {
-            // look one more forward
-            registers_output_cache[output_idx_for_curr_group] = max_reg_v;
-            max_reg_v                                         = curr_reg_v;
+            // look the first item in the next segment
+            registers_output_cache[output_idx_curr] = max_reg_v;
+            max_reg_v                               = curr_reg_v;
           }
         }
       }
@@ -550,14 +520,19 @@ CUDF_KERNEL void partial_group_long_sketches_kernel(
       prev_group = curr_group;
     }
 
-    // For each thread, output register values
+    // For each thread, output current max value
     registers_thread_ptr[reg_idx_in_sketch] = max_reg_v;
   }
+
   if (long_idx == 0) {
     group_lables_thread_cache[thread_idx_in_cols] = group_lables[sketch_end - 1];
   }
 }
 
+/**
+ * Merge for struct<long, ..., long> column. Each long contains 10 register values.
+ * Merge all rows in the same group.
+ */
 std::unique_ptr<column> merge_hyper_log_log(
   column_view const& hll_input,  // struct<long, ..., long> column
   int64_t const num_groups,
@@ -581,7 +556,8 @@ std::unique_ptr<column> merge_hyper_log_log(
   {
     auto registers_thread_cache =
       rmm::device_uvector<int32_t>(num_registers_per_sketch * num_threads_phase1, stream, mr);
-    auto group_lables_thread_cache = rmm::device_uvector<int32_t>(num_threads_phase1, stream, mr);
+    auto group_lables_thread_cache =
+      rmm::device_uvector<int32_t>(num_threads_per_col_phase1, stream, mr);
 
     cudf::structs_column_view scv(hll_input);
     auto const input_iter = cudf::detail::make_counting_transform_iterator(
@@ -627,11 +603,12 @@ std::unique_ptr<column> merge_hyper_log_log(
     return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
   }();
 
+  // 3rd kernel: compact
   auto num_phase3_threads = num_groups * num_long_cols;
   auto num_phase3_blocks  = cudf::util::div_rounding_up_safe(num_phase3_threads, block_size);
-  // 3rd kernel: compact
   compact_kernel<<<num_phase3_blocks, block_size, 0, stream.value()>>>(
     num_groups, num_registers_per_sketch, d_sketches_output, registers_output_cache);
+
   return make_structs_column(num_groups, std::move(results), 0, rmm::device_buffer{});
 }
 
@@ -818,7 +795,7 @@ std::unique_ptr<scalar> reduce_merge_hllpp(column_view const& input,
 }  // namespace
 
 /**
- * Compute hyper log log against the input values and merge the sketches in the same group.
+ * Compute hyper log log for the input values and merge the sketches in the same group.
  * Output is a struct column with multiple long columns which is consistent with Spark.
  */
 std::unique_ptr<column> group_hyper_log_log_plus_plus(
@@ -829,7 +806,7 @@ std::unique_ptr<column> group_hyper_log_log_plus_plus(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision is bigger than 4.");
+  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision >= 4.");
   auto adjust_precision = precision > MAX_PRECISION ? MAX_PRECISION : precision;
   return group_hllpp(input, num_groups, group_lables, adjust_precision, stream, mr);
 }
@@ -846,7 +823,7 @@ std::unique_ptr<column> group_merge_hyper_log_log_plus_plus(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision is bigger than 4.");
+  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision >= 4.");
   CUDF_EXPECTS(input.type().id() == type_id::STRUCT,
                "HyperLogLogPlusPlus buffer type must be a STRUCT of long columns.");
   for (auto i = 0; i < input.num_children(); i++) {
@@ -868,7 +845,7 @@ std::unique_ptr<scalar> reduce_hyper_log_log_plus_plus(column_view const& input,
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision is bigger than 4.");
+  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision >= 4.");
   auto adjust_precision = precision > MAX_PRECISION ? MAX_PRECISION : precision;
   return reduce_hllpp(input, adjust_precision, stream, mr);
 }
@@ -882,7 +859,7 @@ std::unique_ptr<scalar> reduce_merge_hyper_log_log_plus_plus(column_view const& 
                                                              rmm::cuda_stream_view stream,
                                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision is bigger than 4.");
+  CUDF_EXPECTS(precision >= 4, "HyperLogLogPlusPlus requires precision >= 4.");
   CUDF_EXPECTS(input.type().id() == type_id::STRUCT,
                "HyperLogLogPlusPlus buffer type must be a STRUCT of long columns.");
   for (auto i = 0; i < input.num_children(); i++) {
