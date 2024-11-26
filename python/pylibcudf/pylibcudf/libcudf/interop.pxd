@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport scalar
@@ -12,19 +12,19 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
-        void(*deleter)(DLManagedTensor*) except +
+        void(*deleter)(DLManagedTensor*) except +libcudf_exception_handler
 
 
 # The Arrow structs are not namespaced.
 cdef extern from "cudf/interop.hpp" nogil:
     cdef struct ArrowSchema:
-        void (*release)(ArrowSchema*) noexcept nogil
+        void (*release)(ArrowSchema*) noexcept
 
     cdef struct ArrowArray:
-        void (*release)(ArrowArray*) noexcept nogil
+        void (*release)(ArrowArray*) noexcept
 
     cdef struct ArrowArrayStream:
-        void (*release)(ArrowArrayStream*) noexcept nogil
+        void (*release)(ArrowArrayStream*) noexcept
 
     cdef struct ArrowDeviceArray:
         ArrowArray array
@@ -34,23 +34,25 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
     cdef unique_ptr[table] from_dlpack(
         const DLManagedTensor* managed_tensor
-    ) except +
+    ) except +libcudf_exception_handler
 
     DLManagedTensor* to_dlpack(
         const table_view& input
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef cppclass column_metadata:
-        column_metadata() except +
-        column_metadata(string name_) except +
+        column_metadata() except +libcudf_exception_handler
+        column_metadata(string name_) except +libcudf_exception_handler
         string name
         vector[column_metadata] children_meta
 
-    cdef unique_ptr[table] from_arrow_stream(ArrowArrayStream* input) except +
+    cdef unique_ptr[table] from_arrow_stream(
+        ArrowArrayStream* input
+    ) except +libcudf_exception_handler
     cdef unique_ptr[column] from_arrow_column(
         const ArrowSchema* schema,
         const ArrowArray* input
-    ) except +
+    ) except +libcudf_exception_handler
 
 
 cdef extern from *:
@@ -84,5 +86,7 @@ cdef extern from *:
     cdef ArrowSchema *to_arrow_schema_raw(
         const table_view& tbl,
         const vector[column_metadata]& metadata,
-    ) except + nogil
-    cdef ArrowArray* to_arrow_host_raw(const table_view& tbl) except + nogil
+    ) except +libcudf_exception_handler nogil
+    cdef ArrowArray* to_arrow_host_raw(
+        const table_view& tbl
+    ) except +libcudf_exception_handler nogil
