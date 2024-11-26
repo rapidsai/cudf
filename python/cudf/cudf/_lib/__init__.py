@@ -10,7 +10,6 @@ from . import (
     groupby,
     interop,
     join,
-    json,
     merge,
     null_mask,
     nvtext,

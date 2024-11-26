@@ -19,4 +19,4 @@ cdef table_view table_view_from_table(tbl, ignore_index=*) except*
 cdef columns_from_unique_ptr(unique_ptr[table] c_tbl)
 cdef columns_from_table_view(table_view tv, object owners)
 cpdef columns_from_pylibcudf_table(tbl)
-cdef _data_from_columns(columns, column_names, index_names=*)
+cpdef _data_from_columns(columns, column_names, index_names=*)

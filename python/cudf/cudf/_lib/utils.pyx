@@ -245,7 +245,7 @@ cpdef columns_from_pylibcudf_table(tbl):
     return [Column.from_pylibcudf(plc) for plc in tbl.columns()]
 
 
-cdef _data_from_columns(columns, column_names, index_names=None):
+cpdef _data_from_columns(columns, column_names, index_names=None):
     """Convert a list of columns into a dict with an index.
 
     This method is intended to provide the bridge between the columns returned
