@@ -11,7 +11,6 @@ import pylibcudf
 import rmm
 
 import cudf
-import cudf._lib as libcudf
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -158,7 +157,10 @@ cdef class Column:
             if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
-                self._mask = libcudf.null_mask.copy_bitmask(self)
+                with acquire_spill_lock():
+                    self._mask = as_buffer(
+                        pylibcudf.null_mask.copy_bitmask(self.to_pylibcudf(mode="read"))
+                    )
         return self._mask
 
     @property
