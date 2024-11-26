@@ -1104,11 +1104,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         index = self.grouping.keys.unique().sort_values()
         num_groups = len(index)
-        with acquire_spill_lock():
-            _, has_null_group = plc.null_mask.bitmask_or(
-                [col.to_pylibcudf(mode="read") for col in index._columns]
-            )
-
+        has_null_group = any(col.has_nulls() for col in index._columns)
         if ascending:
             # Count ascending from 0 to num_groups - 1
             groups = range(num_groups)
