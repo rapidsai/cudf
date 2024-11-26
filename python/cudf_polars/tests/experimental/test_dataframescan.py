@@ -28,8 +28,8 @@ def test_parallel_dataframescan(df, num_rows_threshold):
     total_row_count = len(df.collect())
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        parallel_options={"num_rows_threshold": num_rows_threshold},
         executor="dask-experimental",
+        executor_options={"num_rows_threshold": num_rows_threshold},
     )
     assert_gpu_result_equal(df, engine=engine)
 

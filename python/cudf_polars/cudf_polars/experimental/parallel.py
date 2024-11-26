@@ -272,7 +272,7 @@ def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    rows_per_partition = ir.config_options.get("parallel_options", {}).get(
+    rows_per_partition = ir.config_options.get("executor_options", {}).get(
         "num_rows_threshold", 1_000_000
     )
 
