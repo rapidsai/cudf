@@ -31,7 +31,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuco/hyperloglog_ref.cuh>
 #include <cuda/std/__algorithm/min.h>  // TODO #include <cuda/std/algorithm> once available
 #include <cuda/std/bit>
 #include <thrust/iterator/transform_iterator.h>
@@ -360,7 +359,7 @@ std::unique_ptr<column> group_hllpp(column_view const& input,
 
   // 2. execute partial group by
   constexpr int64_t block_size           = 256;
-  constexpr int64_t num_hashs_per_thread = 32;  // handles 32 items per thread
+  constexpr int64_t num_hashs_per_thread = 256;  // handles 32 items per thread
   int64_t total_threads_partial_group =
     cudf::util::div_rounding_up_safe(static_cast<int64_t>(input.size()), num_hashs_per_thread);
   int64_t num_blocks_p1 = cudf::util::div_rounding_up_safe(total_threads_partial_group, block_size);
@@ -544,7 +543,7 @@ std::unique_ptr<column> merge_hyper_log_log(
   int64_t num_registers_per_sketch        = 1 << precision;
   int64_t const num_sketches              = hll_input.size();
   int64_t const num_long_cols             = num_registers_per_sketch / REGISTERS_PER_LONG + 1;
-  constexpr int64_t num_longs_per_threads = 32;
+  constexpr int64_t num_longs_per_threads = 256;
   constexpr int64_t block_size            = 256;
 
   int64_t num_threads_per_col_phase1 =
