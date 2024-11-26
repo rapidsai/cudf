@@ -12,15 +12,17 @@ import polars as pl
 
 from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.experimental.parallel import (
+    PartitionInfo,
     generate_ir_tasks,
     get_key_name,
+    lower_ir_node,
 )
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.parallel import PartitionInfo
+    from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
 ##
@@ -63,6 +65,14 @@ class ParDataFrameScan(DataFrameScan):
             )
             for i, offset in enumerate(range(0, total_rows, stride))
         }
+
+
+@lower_ir_node.register(ParDataFrameScan)
+def _(
+    ir: ParDataFrameScan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Avoid reconstruction if we need to re-lower
+    return ir, {ir: PartitionInfo(count=ir._count)}  # pragma: no cover
 
 
 @generate_ir_tasks.register(ParDataFrameScan)
