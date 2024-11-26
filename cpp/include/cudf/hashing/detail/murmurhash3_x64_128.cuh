@@ -79,9 +79,8 @@ MurmurHash3_x64_128<cudf::string_view>::result_type
   __device__ inline MurmurHash3_x64_128<cudf::string_view>::operator()(
     cudf::string_view const& key) const
 {
-  auto const data = reinterpret_cast<std::byte const*>(key.data());
-  auto const len  = key.size_bytes();
-  return this->compute_bytes(data, len);
+  return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(key.data()),
+                             key.size_bytes());
 }
 
 template <>
