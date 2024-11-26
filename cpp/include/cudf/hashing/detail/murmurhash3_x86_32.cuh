@@ -40,8 +40,8 @@ struct MurmurHash3_x86_32 {
 
   __device__ constexpr result_type operator()(Key const& key) const { return this->_impl(key); }
 
-  __device__ constexpr result_type compute_hash(cuda::std::byte const* bytes,
-                                                std::uint64_t size) const
+  __device__ constexpr result_type compute_bytes(cuda::std::byte const* bytes,
+                                                 std::uint64_t size) const
   {
     return this->_impl.compute_hash(bytes, size);
   }
@@ -78,16 +78,14 @@ template <>
 hash_value_type __device__ inline MurmurHash3_x86_32<cudf::string_view>::operator()(
   cudf::string_view const& key) const
 {
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(key.data()), key.size_bytes());
+  return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(key.data()),
+                             key.size_bytes());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_x86_32<numeric::decimal32>::operator()(
   numeric::decimal32 const& key) const
 {
-  auto const val = key.value();
-  auto const len = sizeof(val);
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&val), len);
   return this->compute(key.value());
 }
 
