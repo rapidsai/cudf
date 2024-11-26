@@ -896,7 +896,7 @@ struct host_udf_base {
  * @param host_udf An instance of a class derived from `host_udf_base` to perform aggregation
  * @return A HOST_UDF aggregation object
  */
-template <typename Base>
+template <typename Base = aggregation>
 std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base> host_udf);
 
 /**
