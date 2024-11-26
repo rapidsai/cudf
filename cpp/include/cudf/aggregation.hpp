@@ -670,6 +670,9 @@ struct host_udf_base {
    * and pass down only data requested from that set.
    */
   struct data_attribute {
+    /**
+     * @brief Hold all possible data types for the input of the derived class.
+     */
     using value_type = std::variant<reduction_data_attribute,
                                     segmented_reduction_data_attribute,
                                     groupby_data_attribute,
@@ -706,6 +709,9 @@ struct host_udf_base {
                    "Invalid aggregation request.");
     }
 
+    /**
+     * @brief Copy the value, used in copy constructor.
+     */
     static value_type copy_value(value_type const& value)
     {
       if (std::holds_alternative<reduction_data_attribute>(value)) {
@@ -720,6 +726,9 @@ struct host_udf_base {
       return std::get<std::unique_ptr<aggregation>>(value)->clone();
     }
 
+    /**
+     * @brief Hash functor for `data_attribute`.
+     */
     struct hash {
       std::size_t operator()(data_attribute const& attr) const
       {
@@ -741,6 +750,9 @@ struct host_udf_base {
       }
     };
 
+    /**
+     * @brief Equality comparison functor for `data_attribute`.
+     */
     struct equal_to {
       bool operator()(data_attribute const& lhs, data_attribute const& rhs) const
       {
@@ -765,6 +777,9 @@ struct host_udf_base {
     };
   };
 
+  /**
+   * @brief Set of attributes for the data that is needed for computing the aggregation.
+   */
   using input_data_attributes =
     std::unordered_set<data_attribute, data_attribute::hash, data_attribute::equal_to>;
 
@@ -779,7 +794,8 @@ struct host_udf_base {
   [[nodiscard]] virtual input_data_attributes get_required_data() const { return {}; }
 
   /**
-   * @brief Type of the data that is passed to the derived class for computing aggregation.
+   * @brief Hold all possible types of the data that is passed to the derived class for computing
+   * aggregation.
    */
   using input_data_type = std::variant<column_view,
                                        data_type,
