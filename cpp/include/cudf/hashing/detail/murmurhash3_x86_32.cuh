@@ -50,7 +50,7 @@ struct MurmurHash3_x86_32 {
   template <typename T>
   __device__ constexpr result_type compute(T const& key) const
   {
-    return this->_impl.compute_hash(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
+    return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
   }
 
   cuco::murmurhash3_32<Key> _impl;
