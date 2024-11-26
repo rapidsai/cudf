@@ -121,7 +121,45 @@ ConfigureTest(TIMESTAMPS_TEST wrappers/timestamps_test.cu)
 # * groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(
   GROUPBY_TEST
+  groupby/argmin_tests.cpp
+  groupby/argmax_tests.cpp
+  groupby/collect_list_tests.cpp
+  groupby/collect_set_tests.cpp
+  groupby/correlation_tests.cpp
+  groupby/count_scan_tests.cpp
+  groupby/count_tests.cpp
+  groupby/covariance_tests.cpp
+  groupby/groupby_test_util.cpp
+  groupby/groups_tests.cpp
+  groupby/histogram_tests.cpp
   groupby/host_udf_tests.cu
+  groupby/keys_tests.cpp
+  groupby/lists_tests.cpp
+  groupby/m2_tests.cpp
+  groupby/min_tests.cpp
+  groupby/max_scan_tests.cpp
+  groupby/max_tests.cpp
+  groupby/mean_tests.cpp
+  groupby/median_tests.cpp
+  groupby/merge_m2_tests.cpp
+  groupby/merge_lists_tests.cpp
+  groupby/merge_sets_tests.cpp
+  groupby/min_scan_tests.cpp
+  groupby/nth_element_tests.cpp
+  groupby/nunique_tests.cpp
+  groupby/product_scan_tests.cpp
+  groupby/product_tests.cpp
+  groupby/quantile_tests.cpp
+  groupby/rank_scan_tests.cpp
+  groupby/replace_nulls_tests.cpp
+  groupby/shift_tests.cpp
+  groupby/std_tests.cpp
+  groupby/structs_tests.cpp
+  groupby/sum_of_squares_tests.cpp
+  groupby/sum_scan_tests.cpp
+  groupby/sum_tests.cpp
+  groupby/tdigest_tests.cu
+  groupby/var_tests.cpp
   GPUS 1
   PERCENT 100
 )
