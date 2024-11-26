@@ -21,6 +21,7 @@
 #include "io/utilities/trie.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
@@ -398,12 +399,31 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   }
 }
 
+namespace {
+
+/**
+ * @brief pack multiple row contexts together
+ *
+ * Pack four rowctx32_t values, where each value represents the output row context
+ * for one of four possible input contexts when parsing a character block.
+ * Each output state consists of the 2-bit row context state along with a 18-bit row count
+ * value (row count is assumed to be a local count that fits in 18-bit)
+ * The four 20-bit values are concatenated to form a 80-bit value, truncated to 64-bit
+ * since a block starting in a EOF state can only have a zero row count (and the output
+ * state corresponding to an EOF input state can only be EOF, so only the first 3 output
+ * states are included as parameters, and the EOF->EOF state transition is hardcoded)
+ */
+constexpr packed_rowctx_t pack_row_contexts(rowctx32_t ctx0, rowctx32_t ctx1, rowctx32_t ctx2)
+{
+  return (ctx0) | (static_cast<uint64_t>(ctx1) << 20) | (static_cast<uint64_t>(ctx2) << 40) |
+         (static_cast<uint64_t>(ROW_CTX_EOF) << 60);
+}
+
 /*
  * @brief Merge two packed row contexts (each corresponding to a block of characters)
  * and return the packed row context corresponding to the merged character block
  */
-inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
-                                                     packed_rowctx_t second_ctx)
+__device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx, packed_rowctx_t second_ctx)
 {
   uint32_t id0 = get_row_context(first_ctx, ROW_CTX_NONE) & 3;
   uint32_t id1 = get_row_context(first_ctx, ROW_CTX_QUOTE) & 3;
@@ -443,7 +463,7 @@ constexpr __device__ uint32_t make_char_context(uint32_t id0,
  * The char_ctx value should be created via make_char_context, and its value should
  * have been evaluated at compile-time.
  */
-inline __device__ void merge_char_context(uint4& ctx, uint32_t char_ctx, uint32_t pos)
+__device__ void merge_char_context(uint4& ctx, uint32_t char_ctx, uint32_t pos)
 {
   uint32_t id0 = (ctx.w >> 0) & 3;
   uint32_t id1 = (ctx.w >> 2) & 3;
@@ -460,7 +480,7 @@ inline __device__ void merge_char_context(uint4& ctx, uint32_t char_ctx, uint32_
 /*
  * Convert the context-with-row-bitmaps version to a packed row context
  */
-inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
+__device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
 {
   return pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
                            make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
@@ -470,7 +490,7 @@ inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
 /*
  * Selects the row bitmap corresponding to the given parser state
  */
-inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
+__device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 {
   return (ctxid == ROW_CTX_NONE)      ? ctx_map.x
          : (ctxid == ROW_CTX_QUOTE)   ? ctx_map.y
@@ -495,7 +515,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
  * @param t thread id (leaf node id)
  */
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
-inline __device__ void ctx_merge(uint64_t* ctxtree, packed_rowctx_t* ctxb, uint32_t t)
+__device__ void ctx_merge(device_span<packed_rowctx_t> ctxtree, packed_rowctx_t* ctxb, uint32_t t)
 {
   uint64_t tmp = shuffle_xor(*ctxb, lanemask);
   if (!(t & tmask)) {
@@ -517,13 +537,15 @@ inline __device__ void ctx_merge(uint64_t* ctxtree, packed_rowctx_t* ctxb, uint3
  * @param[in] t thread id (leaf node id)
  */
 template <uint32_t rmask>
-inline __device__ void ctx_unmerge(
-  uint32_t base, uint64_t* ctxtree, uint32_t* ctx, uint32_t* brow4, uint32_t t)
+__device__ void ctx_unmerge(uint32_t base,
+                            device_span<packed_rowctx_t const> ctxtree,
+                            uint32_t* ctx,
+                            uint32_t* brow4,
+                            uint32_t t)
 {
-  rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
-  ctxb_sum   = get_row_context(ctxtree[base], *ctx);
-  ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], *ctx);
-  ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3);
+  auto const ctxb_sum   = get_row_context(ctxtree[base], *ctx);
+  auto const ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], *ctx);
+  auto const ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3);
   if (t & (rmask)) {
     *brow4 += (ctxb_sum & ~3) - (ctxb_right & ~3);
     *ctx = ctxb_left & 3;
@@ -550,9 +572,9 @@ inline __device__ void ctx_unmerge(
  * @param[in] ctxb packed row context for the current character block
  * @param t thread id (leaf node id)
  */
-static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
-                                                     packed_rowctx_t ctxb,
-                                                     uint32_t t)
+__device__ void rowctx_merge_transform(device_span<packed_rowctx_t> ctxtree,
+                                       packed_rowctx_t ctxb,
+                                       uint32_t t)
 {
   ctxtree[512 + t] = ctxb;
   ctx_merge<1, 0x1, 256, 1>(ctxtree, &ctxb, t);
@@ -584,8 +606,8 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
  *
  * @return Final row context and count (row_position*4 + context_id format)
  */
-static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxtree[1024],
-                                                                   uint32_t t)
+__device__ rowctx32_t rowctx_inverse_merge_transform(device_span<uint64_t const> ctxtree,
+                                                     uint32_t t)
 {
   uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
   rowctx32_t brow4 = 0;               // output row in block *4
@@ -602,6 +624,7 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
 
   return brow4 + ctx;
 }
+}  // namespace
 
 /**
  * @brief Gather row offsets from CSV character data split into 16KB chunks
@@ -653,8 +676,10 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   using block_reduce = typename cub::BlockReduce<uint32_t, rowofs_block_dim>;
   __shared__ union {
     typename block_reduce::TempStorage bk_storage;
-    __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
+    packed_rowctx_t ctxtree[rowofs_block_dim * 2];
   } temp_storage;
+  auto const ctxtree_span =
+    device_span<packed_rowctx_t>(temp_storage.ctxtree, rowofs_block_dim * 2);
 
   char const* end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
   uint32_t t      = threadIdx.x;
@@ -723,16 +748,16 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   // Convert the long-form {rowmap,outctx}[inctx] version into packed version
   // {rowcount,ouctx}[inctx], then merge the row contexts of the 32-character blocks into
   // a single 16K-character block context
-  rowctx_merge_transform(temp_storage.ctxtree, pack_rowmaps(ctx_map), t);
+  rowctx_merge_transform(ctxtree_span, pack_rowmaps(ctx_map), t);
 
   // If this is the second phase, get the block's initial parser state and row counter
   if (offsets_out.data()) {
-    if (t == 0) { temp_storage.ctxtree[0] = row_ctx[blockIdx.x]; }
+    if (t == 0) { ctxtree_span[0] = row_ctx[blockIdx.x]; }
     __syncthreads();
 
     // Walk back the transform tree with the known initial parser state
-    rowctx32_t ctx             = rowctx_inverse_merge_transform(temp_storage.ctxtree, t);
-    uint64_t row               = (temp_storage.ctxtree[0] >> 2) + (ctx >> 2);
+    rowctx32_t ctx             = rowctx_inverse_merge_transform(ctxtree_span, t);
+    uint64_t row               = (ctxtree_span[0] >> 2) + (ctx >> 2);
     uint32_t rows_out_of_range = 0;
     uint32_t rowmap            = select_rowmap(ctx_map, ctx & 3);
     // Output row positions
@@ -753,14 +778,14 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
     if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
   } else {
     // Just store the row counts and output contexts
-    if (t == 0) { row_ctx[blockIdx.x] = temp_storage.ctxtree[1]; }
+    if (t == 0) { row_ctx[blockIdx.x] = ctxtree_span[1]; }
   }
 }
 
-size_t __host__ count_blank_rows(cudf::io::parse_options_view const& opts,
-                                 device_span<char const> data,
-                                 device_span<uint64_t const> row_offsets,
-                                 rmm::cuda_stream_view stream)
+size_t count_blank_rows(cudf::io::parse_options_view const& opts,
+                        device_span<char const> data,
+                        device_span<uint64_t const> row_offsets,
+                        rmm::cuda_stream_view stream)
 {
   auto const newline  = opts.skipblanklines ? opts.terminator : opts.comment;
   auto const comment  = opts.comment != '\0' ? opts.comment : newline;
@@ -775,10 +800,10 @@ size_t __host__ count_blank_rows(cudf::io::parse_options_view const& opts,
     });
 }
 
-device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view const& options,
-                                                 device_span<char const> data,
-                                                 device_span<uint64_t> row_offsets,
-                                                 rmm::cuda_stream_view stream)
+device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& options,
+                                        device_span<char const> data,
+                                        device_span<uint64_t> row_offsets,
+                                        rmm::cuda_stream_view stream)
 {
   size_t d_size       = data.size();
   auto const newline  = options.skipblanklines ? options.terminator : options.comment;
@@ -804,8 +829,8 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
-  int const block_size = csvparse_block_dim;
-  int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
+  auto const block_size = csvparse_block_dim;
+  auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(row_starts.size(), block_size);
 
   auto d_stats = detail::make_zeroed_device_uvector_async<column_type_histogram>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
@@ -829,26 +854,26 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   // Calculate actual block count to use based on records count
   auto const block_size = csvparse_block_dim;
   auto const num_rows   = row_offsets.size() - 1;
-  auto const grid_size  = (num_rows + block_size - 1) / block_size;
+  auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
 }
 
-uint32_t __host__ gather_row_offsets(parse_options_view const& options,
-                                     uint64_t* row_ctx,
-                                     device_span<uint64_t> const offsets_out,
-                                     device_span<char const> const data,
-                                     size_t chunk_size,
-                                     size_t parse_pos,
-                                     size_t start_offset,
-                                     size_t data_size,
-                                     size_t byte_range_start,
-                                     size_t byte_range_end,
-                                     size_t skip_rows,
-                                     rmm::cuda_stream_view stream)
+uint32_t gather_row_offsets(parse_options_view const& options,
+                            uint64_t* row_ctx,
+                            device_span<uint64_t> const offsets_out,
+                            device_span<char const> const data,
+                            size_t chunk_size,
+                            size_t parse_pos,
+                            size_t start_offset,
+                            size_t data_size,
+                            size_t byte_range_start,
+                            size_t byte_range_end,
+                            size_t skip_rows,
+                            rmm::cuda_stream_view stream)
 {
-  uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
+  uint32_t dim_grid = cudf::util::div_rounding_up_safe<size_t>(chunk_size, rowofs_block_bytes);
 
   gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream.value()>>>(
     row_ctx,
