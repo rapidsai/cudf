@@ -41,6 +41,7 @@ from pylibcudf.libcudf.io.types import (
 
 __all__ = [
     "ColumnEncoding",
+    "ColumnInMetadata",
     "CompressionType",
     "DictionaryPolicy",
     "JSONRecoveryMode",
