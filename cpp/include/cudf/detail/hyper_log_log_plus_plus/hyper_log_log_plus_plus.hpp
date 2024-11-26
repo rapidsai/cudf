@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {

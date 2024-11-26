@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/hyper_log_log_plus_plus/hyper_log_log_plus_plus.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/quantiles.hpp>
 #include <cudf/detail/sorting.hpp>
@@ -29,7 +30,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
-#include <cudf/detail/hyper_log_log_plus_plus/hyper_log_log_plus_plus.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <utility>
@@ -146,11 +147,13 @@ struct reduce_dispatch_functor {
       }
       case aggregation::HLLPP: {
         auto hllpp_agg = static_cast<cudf::detail::hyper_log_log_aggregation const&>(agg);
-        return cudf::groupby::detail::reduce_hyper_log_log_plus_plus(col, hllpp_agg.precision, stream, mr);
+        return cudf::groupby::detail::reduce_hyper_log_log_plus_plus(
+          col, hllpp_agg.precision, stream, mr);
       }
       case aggregation::MERGE_HLLPP: {
         auto hllpp_agg = static_cast<cudf::detail::merge_hyper_log_log_aggregation const&>(agg);
-        return cudf::groupby::detail::reduce_merge_hyper_log_log_plus_plus(col, hllpp_agg.precision, stream, mr);
+        return cudf::groupby::detail::reduce_merge_hyper_log_log_plus_plus(
+          col, hllpp_agg.precision, stream, mr);
       }
       default: CUDF_FAIL("Unsupported reduction operator");
     }
