@@ -724,6 +724,7 @@ ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_STREAM_COMPACTION_TEST streams/stream_compaction_test.cpp STREAM_MODE testing)
 ConfigureTest(
   STREAM_STRINGS_TEST
+  streams/strings/attributes_test.cpp
   streams/strings/case_test.cpp
   streams/strings/combine_test.cpp
   streams/strings/contains_test.cpp

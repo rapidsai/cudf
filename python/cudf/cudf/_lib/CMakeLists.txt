@@ -22,28 +22,20 @@ set(cython_sources
     filling.pyx
     groupby.pyx
     interop.pyx
-    join.pyx
     json.pyx
-    lists.pyx
     merge.pyx
     null_mask.pyx
     orc.pyx
     parquet.pyx
-    partitioning.pyx
     reduce.pyx
     replace.pyx
-    reshape.pyx
-    rolling.pyx
     round.pyx
     scalar.pyx
-    search.pyx
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
     strings_udf.pyx
-    timezone.pyx
     transform.pyx
-    transpose.pyx
     types.pyx
     utils.pyx
 )
