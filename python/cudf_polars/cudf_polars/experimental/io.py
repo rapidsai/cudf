@@ -8,6 +8,8 @@ import math
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 from cudf_polars.dsl.ir import DataFrameScan
 from cudf_polars.experimental.parallel import (
     generate_ir_tasks,
@@ -55,7 +57,7 @@ class ParDataFrameScan(DataFrameScan):
             (key_name, i): (
                 self.do_evaluate,
                 self.schema,
-                self.df.slice(offset, stride),
+                pl.DataFrame._from_pydf(self.df.slice(offset, stride)),
                 self.projection,
                 self.predicate,
             )
