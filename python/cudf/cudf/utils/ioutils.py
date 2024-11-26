@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import datetime
 import functools
@@ -6,9 +7,9 @@ import operator
 import os
 import urllib
 import warnings
-from collections.abc import Callable
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
+from typing import TYPE_CHECKING
 
 import fsspec
 import fsspec.implementations.local
@@ -26,6 +27,12 @@ try:
 
 except ImportError:
     fsspec_parquet = None
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from cudf.core.column import ColumnBase
+
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = np.iinfo(np.uint64).max
@@ -2231,3 +2238,28 @@ def _prefetch_remote_buffers(
 
     else:
         return paths
+
+
+def _add_df_col_struct_names(
+    df: cudf.DataFrame, child_names_dict: dict
+) -> None:
+    for name, child_names in child_names_dict.items():
+        col = df._data[name]
+        df._data[name] = _update_col_struct_field_names(col, child_names)
+
+
+def _update_col_struct_field_names(
+    col: ColumnBase, child_names: dict
+) -> ColumnBase:
+    if col.children:
+        children = list(col.children)
+        for i, (child, names) in enumerate(
+            zip(children, child_names.values())
+        ):
+            children[i] = _update_col_struct_field_names(child, names)
+        col.set_base_children(tuple(children))
+
+    if isinstance(col.dtype, cudf.StructDtype):
+        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
+
+    return col

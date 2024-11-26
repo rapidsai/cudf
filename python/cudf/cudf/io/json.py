@@ -24,31 +24,6 @@ if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
 
-def _add_df_col_struct_names(
-    df: cudf.DataFrame, child_names_dict: dict
-) -> None:
-    for name, child_names in child_names_dict.items():
-        col = df._data[name]
-        df._data[name] = _update_col_struct_field_names(col, child_names)
-
-
-def _update_col_struct_field_names(
-    col: ColumnBase, child_names: dict
-) -> ColumnBase:
-    if col.children:
-        children = list(col.children)
-        for i, (child, names) in enumerate(
-            zip(children, child_names.values())
-        ):
-            children[i] = _update_col_struct_field_names(child, names)
-        col.set_base_children(tuple(children))
-
-    if isinstance(col.dtype, cudf.StructDtype):
-        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
-
-    return col
-
-
 def _get_cudf_schema_element_from_dtype(
     dtype,
 ) -> tuple[plc.DataType, list[tuple[str, plc.DataType, Any]]]:
@@ -207,7 +182,7 @@ def read_json(
                     index_names=None,
                 )
             )
-            _add_df_col_struct_names(df, res_child_names)
+            ioutils._add_df_col_struct_names(df, res_child_names)
             return df
         else:
             table_w_meta = plc.io.json.read_json(
@@ -230,7 +205,7 @@ def read_json(
             )
 
             # Post-processing to add in struct column names
-            _add_df_col_struct_names(df, table_w_meta.child_names)
+            ioutils._add_df_col_struct_names(df, table_w_meta.child_names)
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "
