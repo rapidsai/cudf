@@ -47,7 +47,7 @@ CUDF_KERNEL void for_each_kernel(ForEachFunction fn, reprog_device const d_prog,
   __syncthreads();
   auto const s_prog = reprog_device::load(d_prog, shmem);
 
-  auto const thread_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = s_prog.thread_count();
   if (thread_idx < stride) {
     for (auto idx = thread_idx; idx < size; idx += stride) {
@@ -84,7 +84,7 @@ CUDF_KERNEL void transform_kernel(TransformFunction fn,
   __syncthreads();
   auto const s_prog = reprog_device::load(d_prog, shmem);
 
-  auto const thread_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = s_prog.thread_count();
   if (thread_idx < stride) {
     for (auto idx = thread_idx; idx < size; idx += stride) {
