@@ -4,10 +4,10 @@ import pickle
 import pytest
 
 from pylibcudf import DataType
-from pylibcudf.libcudf.types import type_id
+from pylibcudf.types import TypeId
 
 
-@pytest.mark.parametrize("tid", [t for t in type_id])
+@pytest.mark.parametrize("tid", TypeId)
 def test_reduce(tid):
     dt = DataType(tid, 0)
     reduced_dt = dt.__reduce__()
@@ -17,7 +17,7 @@ def test_reduce(tid):
 
 
 @pytest.mark.parametrize(
-    "tid", [type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128]
+    "tid", [TypeId.DECIMAL32, TypeId.DECIMAL64, TypeId.DECIMAL128]
 )
 def test_reduce_decimal(tid):
     dt = DataType(tid, 10)
@@ -27,7 +27,7 @@ def test_reduce_decimal(tid):
     assert reduced_dt[1][1] == 10
 
 
-@pytest.mark.parametrize("tid", [t for t in type_id])
+@pytest.mark.parametrize("tid", TypeId)
 def test_pickle(tid):
     dt = DataType(tid, 0)
     serialized = pickle.dumps(dt)
@@ -36,7 +36,7 @@ def test_pickle(tid):
 
 
 @pytest.mark.parametrize(
-    "tid", [type_id.DECIMAL32, type_id.DECIMAL64, type_id.DECIMAL128]
+    "tid", [TypeId.DECIMAL32, TypeId.DECIMAL64, TypeId.DECIMAL128]
 )
 def test_pickle_decimal(tid):
     dt = DataType(tid, 0)
