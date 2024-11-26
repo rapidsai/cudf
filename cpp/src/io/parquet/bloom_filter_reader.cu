@@ -356,68 +356,71 @@ std::future<void> read_bloom_filter_data_async(
     thrust::make_counting_iterator<size_t>(0),
     thrust::make_counting_iterator<size_t>(num_chunks),
     [&](auto const chunk) {
-      // Read bloom filter if present
-      if (bloom_filter_offsets[chunk].has_value()) {
-        auto const bloom_filter_offset = bloom_filter_offsets[chunk].value();
-        // If Bloom filter size (header + bitset) is available, just read the entire thing.
-        // Else just read 256 bytes which will contain the entire header and may contain the
-        // entire bitset as well.
-        auto constexpr bloom_filter_size_guess = 256;
-        auto const initial_read_size =
-          static_cast<size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_size_guess));
+      // Skip if bloom filter offset absent
+      if (not bloom_filter_offsets[chunk].has_value()) { return; }
 
-        // Read an initial buffer from source
-        auto& source = sources[chunk_source_map[chunk]];
-        auto buffer  = source->host_read(bloom_filter_offset, initial_read_size);
+      // Read bloom filter iff present
+      auto const bloom_filter_offset = bloom_filter_offsets[chunk].value();
 
-        // Deserialize the Bloom filter header from the buffer.
-        BloomFilterHeader header;
-        CompactProtocolReader cp{buffer->data(), buffer->size()};
-        cp.read(&header);
+      // If Bloom filter size (header + bitset) is available, just read the entire thing.
+      // Else just read 256 bytes which will contain the entire header and may contain the
+      // entire bitset as well.
+      auto constexpr bloom_filter_size_guess = 256;
+      auto const initial_read_size =
+        static_cast<size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_size_guess));
 
-        // Test if header is valid.
-        auto const is_header_valid =
-          (header.num_bytes % 32) == 0 and
-          header.compression.compression == BloomFilterCompression::Compression::UNCOMPRESSED and
-          header.algorithm.algorithm == BloomFilterAlgorithm::Algorithm::SPLIT_BLOCK and
-          header.hash.hash == BloomFilterHash::Hash::XXHASH;
+      // Read an initial buffer from source
+      auto& source = sources[chunk_source_map[chunk]];
+      auto buffer  = source->host_read(bloom_filter_offset, initial_read_size);
 
-        // Do not read if the bloom filter is invalid
-        if (not is_header_valid) {
-          CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
-          return;
-        }
+      // Deserialize the Bloom filter header from the buffer.
+      BloomFilterHeader header;
+      CompactProtocolReader cp{buffer->data(), buffer->size()};
+      cp.read(&header);
 
-        // Bloom filter header size
-        auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
-        size_t const bitset_size            = header.num_bytes;
+      // Check if the bloom filter header is valid.
+      auto const is_header_valid =
+        (header.num_bytes % 32) == 0 and
+        header.compression.compression == BloomFilterCompression::Compression::UNCOMPRESSED and
+        header.algorithm.algorithm == BloomFilterAlgorithm::Algorithm::SPLIT_BLOCK and
+        header.hash.hash == BloomFilterHash::Hash::XXHASH;
 
-        // Check if we already read in the filter bitset in the initial read.
-        if (initial_read_size >= bloom_filter_header_size + bitset_size) {
-          bloom_filter_data[chunk] =
-            rmm::device_buffer{buffer->data() + bloom_filter_header_size, bitset_size, stream};
-        }
-        // Read the bitset from datasource.
-        else {
-          auto const bitset_offset = bloom_filter_offset + bloom_filter_header_size;
-          // Directly read to device if preferred
-          if (source->is_device_read_preferred(bitset_size)) {
-            bloom_filter_data[chunk] = rmm::device_buffer{bitset_size, stream};
-            auto future_read_size =
-              source->device_read_async(bitset_offset,
-                                        bitset_size,
-                                        static_cast<uint8_t*>(bloom_filter_data[chunk].data()),
-                                        stream);
+      // Do not read if the bloom filter is invalid
+      if (not is_header_valid) {
+        CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
+        return;
+      }
 
-            read_tasks.emplace_back(std::move(future_read_size));
-          } else {
-            buffer                   = source->host_read(bitset_offset, bitset_size);
-            bloom_filter_data[chunk] = rmm::device_buffer{buffer->data(), buffer->size(), stream};
-          }
+      // Bloom filter header size
+      auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
+      size_t const bitset_size            = static_cast<size_t>(header.num_bytes);
+
+      // Check if we already read in the filter bitset in the initial read.
+      if (initial_read_size >= bloom_filter_header_size + bitset_size) {
+        bloom_filter_data[chunk] =
+          rmm::device_buffer{buffer->data() + bloom_filter_header_size, bitset_size, stream};
+      }
+      // Read the bitset from datasource.
+      else {
+        auto const bitset_offset = bloom_filter_offset + bloom_filter_header_size;
+        // Directly read to device if preferred
+        if (source->is_device_read_preferred(bitset_size)) {
+          bloom_filter_data[chunk] = rmm::device_buffer{bitset_size, stream};
+          auto future_read_size =
+            source->device_read_async(bitset_offset,
+                                      bitset_size,
+                                      static_cast<uint8_t*>(bloom_filter_data[chunk].data()),
+                                      stream);
+
+          read_tasks.emplace_back(std::move(future_read_size));
+        } else {
+          buffer                   = source->host_read(bitset_offset, bitset_size);
+          bloom_filter_data[chunk] = rmm::device_buffer{buffer->data(), buffer->size(), stream};
         }
       }
     });
 
+  // Read task sync function
   auto sync_fn = [](decltype(read_tasks) read_tasks) {
     for (auto& task : read_tasks) {
       task.wait();
