@@ -195,6 +195,26 @@ class aggregate_reader_metadata {
    */
   void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
 
+  /**
+   * @brief Reads bloom filter bitsets for the specified columns from the given lists of row
+   * groups.
+   *
+   * @param sources Dataset sources
+   * @param row_group_indices Lists of row groups to read bloom filters from, one per source
+   * @param[out] bloom_filter_data List of bloom filter data device buffers
+   * @param column_schemas Schema indices of columns whose bloom filters will be read
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A flattened list of bloom filter bitset device buffers for each equality column in each
+   * row group
+   */
+  [[nodiscard]] std::vector<rmm::device_buffer> read_bloom_filters(
+    host_span<std::unique_ptr<datasource> const> sources,
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<int const> column_schemas,
+    size_type num_row_groups,
+    rmm::cuda_stream_view stream) const;
+
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
@@ -385,24 +405,6 @@ class aggregate_reader_metadata {
                     host_span<int const> output_column_schemas,
                     std::optional<std::reference_wrapper<ast::expression const>> filter,
                     rmm::cuda_stream_view stream) const;
-
-  /**
-   * @brief Reads bloom filter bitsets for the specified columns from the given lists of row
-   * groups.
-   *
-   * @param sources Dataset sources
-   * @param row_group_indices Lists of row groups to read bloom filters from, one per source
-   * @param column_schemas Schema indices of columns whose bloom filters will be read
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @return A list of bloom filter bitset device buffers flattened over column schemas over lists
-   * of row group indices
-   */
-  std::vector<rmm::device_buffer> read_bloom_filters(
-    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<int const> column_schemas,
-    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of columns

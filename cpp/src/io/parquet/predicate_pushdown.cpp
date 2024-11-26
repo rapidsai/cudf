@@ -475,10 +475,9 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
 
   // Return only filtered row groups based on predicate
   // if all are required or all are nulls, return.
-  if (std::all_of(is_row_group_required.cbegin(),
-                  is_row_group_required.cend(),
-                  [](auto i) { return bool(i); }) or
-      predicate.null_count() == predicate.size()) {
+  if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
+                                                                is_row_group_required.cend(),
+                                                                [](auto i) { return bool(i); })) {
     // Call with input_row_group_indices
     return apply_bloom_filters(
       sources, input_row_group_indices, output_dtypes, output_column_schemas, filter, stream);
@@ -498,8 +497,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   // Call with filtered_row_group_indices
   return apply_bloom_filters(
     sources, filtered_row_group_indices, output_dtypes, output_column_schemas, filter, stream);
-
-  return {std::move(filtered_row_group_indices)};
 }
 
 // convert column named expression to column index reference expression
