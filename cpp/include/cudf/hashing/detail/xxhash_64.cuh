@@ -28,19 +28,25 @@
 namespace cudf::hashing::detail {
 
 template <typename Key>
-struct XXHash_64 : public cuco::xxhash_64<Key> {
-  using result_type = typename cuco::xxhash_64<Key>::result_type;
+struct XXHash_64 {
+  using result_type = std::uint64_t;
 
-  __device__ result_type operator()(Key const& key) const
+  __device__ constexpr result_type operator()(Key const& key) const { return this->_impl(key); }
+
+  __device__ constexpr result_type compute_bytes(cuda::std::byte const* bytes,
+                                                 std::uint64_t size) const
   {
-    return cuco::xxhash_64<Key>::operator()(key);
+    return this->_impl.compute_hash(bytes, size);
   }
 
-  template <typename Extent>
-  __device__ result_type compute_hash(cuda::std::byte const* bytes, Extent size) const
+ private:
+  template <typename T>
+  __device__ constexpr result_type compute(T const& key) const
   {
-    return cuco::xxhash_64<Key>::compute_hash(bytes, size);
+    return this->_impl.compute_hash(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
   }
+
+  cuco::xxhash_64<Key> _impl;
 };
 
 template <>
