@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -25,8 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
-
-#include <type_traits>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace detail {
@@ -164,7 +162,7 @@ template <int32_t block_size, int32_t leader_lane = 0, typename T>
 __device__ T single_lane_block_sum_reduce(T lane_value)
 {
   static_assert(block_size <= 1024, "Invalid block size.");
-  static_assert(std::is_arithmetic_v<T>, "Invalid non-arithmetic type.");
+  static_assert(cuda::std::is_arithmetic_v<T>, "Invalid non-arithmetic type.");
   constexpr auto warps_per_block{block_size / warp_size};
   auto const lane_id{threadIdx.x % warp_size};
   auto const warp_id{threadIdx.x / warp_size};

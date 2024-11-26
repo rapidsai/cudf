@@ -22,14 +22,12 @@ set(cython_sources
     filling.pyx
     groupby.pyx
     interop.pyx
-    join.pyx
     json.pyx
     null_mask.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx
     replace.pyx
-    reshape.pyx
     round.pyx
     scalar.pyx
     sort.pyx
