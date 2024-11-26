@@ -121,11 +121,10 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
                                          size_type const stop,
                                          size_type* d_results)
 {
-  size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
 
-  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
-
-  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size()) { return; }
   auto const lane_idx = idx % cudf::detail::warp_size;
 
   if (d_strings.is_null(str_idx)) { return; }
@@ -350,13 +349,12 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
                                            string_view const d_target,
                                            bool* d_results)
 {
-  size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  using warp_reduce   = cub::WarpReduce<bool>;
+  auto const idx    = cudf::detail::grid_1d::global_thread_id();
+  using warp_reduce = cub::WarpReduce<bool>;
   __shared__ typename warp_reduce::TempStorage temp_storage;
 
-  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
-
-  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const str_idx = idx / cudf::detail::warp_size;
+  if (str_idx >= d_strings.size()) { return; }
   auto const lane_idx = idx % cudf::detail::warp_size;
   if (d_strings.is_null(str_idx)) { return; }
   // get the string for this warp
