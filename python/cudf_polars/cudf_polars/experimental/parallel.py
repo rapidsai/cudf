@@ -79,7 +79,9 @@ def lower_ir_node(
 def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if len(ir.children) == 0:
         # Default leaf node has single partition
-        return ir, {ir: PartitionInfo(count=1)}
+        return ir, {
+            ir: PartitionInfo(count=1)
+        }  # pragma: no cover; Missed by pylibcudf executor
 
     # Lower children
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=False)
