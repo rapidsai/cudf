@@ -2938,5 +2938,5 @@ def test_empty_astype_always_castable(type1, type2, as_dtype, copy):
 
 def test_dtype_dtypes_equal():
     ser = cudf.Series([0])
-    assert ser.dtype == ser.dtypes
-    assert ser.dtypes == ser.to_pandas().dtypes
+    assert ser.dtype is ser.dtypes
+    assert ser.dtypes is ser.to_pandas().dtypes
