@@ -30,42 +30,48 @@
 namespace cudf::hashing::detail {
 
 template <typename Key>
-struct MurmurHash3_x86_32 : public cuco::murmurhash3_32<Key> {
-  using result_type = typename cuco::murmurhash3_32<Key>::result_type;
+struct MurmurHash3_x86_32 {
+  using result_type = hash_value_type;
 
   __host__ __device__ constexpr MurmurHash3_x86_32(uint32_t seed = cudf::DEFAULT_HASH_SEED)
-    : cuco::murmurhash3_32<Key>{seed}
+    : _impl{seed}
   {
   }
 
-  __device__ result_type operator()(Key const& key) const
+  __device__ constexpr result_type operator()(Key const& key) const { return this->_impl(key); }
+
+  __device__ constexpr result_type compute_hash(cuda::std::byte const* bytes,
+                                                std::uint64_t size) const
   {
-    return cuco::murmurhash3_32<Key>::operator()(key);
+    return this->_impl.compute_hash(bytes, size);
   }
 
-  template <typename Extent>
-  __device__ result_type compute_hash(cuda::std::byte const* bytes, Extent size) const
+ private:
+  template <typename T>
+  __device__ constexpr result_type compute(T const& key) const
   {
-    return cuco::murmurhash3_32<Key>::compute_hash(bytes, size);
+    return this->_impl.compute_hash(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
   }
+
+  cuco::murmurhash3_32<Key> _impl;
 };
 
 template <>
 hash_value_type __device__ inline MurmurHash3_x86_32<bool>::operator()(bool const& key) const
 {
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(key));
+  return this->compute(static_cast<uint8_t>(key));
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_x86_32<float>::operator()(float const& key) const
 {
-  return cuco::murmurhash3_32<float>::operator()(normalize_nans_and_zeros(key));
+  return this->compute(normalize_nans_and_zeros(key));
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_x86_32<double>::operator()(double const& key) const
 {
-  return cuco::murmurhash3_32<double>::operator()(normalize_nans_and_zeros(key));
+  return this->compute(normalize_nans_and_zeros(key));
 }
 
 template <>
@@ -82,24 +88,21 @@ hash_value_type __device__ inline MurmurHash3_x86_32<numeric::decimal32>::operat
   auto const val = key.value();
   auto const len = sizeof(val);
   return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&val), len);
+  return this->compute(key.value());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_x86_32<numeric::decimal64>::operator()(
   numeric::decimal64 const& key) const
 {
-  auto const val = key.value();
-  auto const len = sizeof(val);
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&val), len);
+  return this->compute(key.value());
 }
 
 template <>
 hash_value_type __device__ inline MurmurHash3_x86_32<numeric::decimal128>::operator()(
   numeric::decimal128 const& key) const
 {
-  auto const val = key.value();
-  auto const len = sizeof(val);
-  return this->compute_hash(reinterpret_cast<cuda::std::byte const*>(&val), len);
+  return this->compute(key.value());
 }
 
 template <>
