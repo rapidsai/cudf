@@ -278,8 +278,9 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                            [](auto const& c) { return c.type().id() == type_id::STRING; }),
                "All columns must be of type string");
   auto constexpr strviews_per_column = 3;  // (for each "column_name:", "value",  "separator")
-  auto const num_strviews_per_row    = 1 + strings_columns.num_columns() * strviews_per_column +
-                                    (strings_columns.num_columns() == 0 ? 1 : 0);
+  auto const num_strviews_per_row    = strings_columns.num_columns() == 0
+                                         ? 2
+                                         : (1 + strings_columns.num_columns() * strviews_per_column);
   // e.g. {col1: value, col2: value, col3: value} = 1 + 3 + 3 + (3-1) + 1 = 10
 
   auto tbl_device_view = cudf::table_device_view::create(strings_columns, stream);
@@ -301,13 +302,13 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                          include_nulls,
                                          d_strviews.begin()};
     // scatter row_prefix, row_suffix, column_name:, value, value_separator as string_views
-    thrust::for_each(rmm::exec_policy(stream),
+    thrust::for_each(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(total_rows),
                      scatter_fn);
   } else {
     thrust::for_each(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(num_rows),
       [d_strviews = d_strviews.begin(), row_prefix, row_suffix, num_strviews_per_row] __device__(
