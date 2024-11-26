@@ -36,7 +36,6 @@ from cudf._lib.types cimport (
     dtype_to_pylibcudf_type,
 )
 
-from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
 cimport pylibcudf.libcudf.copying as cpp_copying
@@ -183,7 +182,9 @@ cdef class Column:
 
         if value is not None:
             # bitmask size must be relative to offset = 0 data.
-            required_size = bitmask_allocation_size_bytes(self.base_size)
+            required_size = pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                self.base_size
+            )
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, "
@@ -220,7 +221,7 @@ cdef class Column:
         and compute new data Buffers zero-copy that use pointer arithmetic to
         properly adjust the pointer.
         """
-        mask_size = bitmask_allocation_size_bytes(self.size)
+        mask_size = pylibcudf.null_mask.bitmask_allocation_size_bytes(self.size)
         required_num_bytes = -(-self.size // 8)  # ceiling divide
         error_msg = (
             "The value for mask is smaller than expected, got {}  bytes, "
@@ -790,13 +791,17 @@ cdef class Column:
                     mask = as_buffer(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
-                            size=bitmask_allocation_size_bytes(base_size)
+                            size=pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                                base_size
+                            )
                         )
                     )
             else:
                 mask = as_buffer(
                     data=mask_ptr,
-                    size=bitmask_allocation_size_bytes(base_size),
+                    size=pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                        base_size
+                    ),
                     owner=mask_owner,
                     exposed=True
                 )
