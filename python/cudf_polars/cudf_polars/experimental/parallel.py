@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 import operator
 from functools import reduce, singledispatch
 from typing import TYPE_CHECKING, Any
@@ -44,6 +45,35 @@ def get_key_name(node: Node) -> str:
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
+def _lower_ir_single(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Single-partition fall-back for lower_ir_node
+    # (Used by rec.state["default_mapper"])
+    if len(ir.children) == 0:
+        # Default leaf node has single partition
+        return ir, {
+            ir: PartitionInfo(count=1)
+        }  # pragma: no cover; Missed by pylibcudf executor
+
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=False)
+    partition_info = reduce(operator.or_, _partition_info)
+
+    # Check that child partitioning is supported
+    count = max(partition_info[c].count for c in children)
+    if count > 1:
+        raise NotImplementedError(
+            f"Class {type(ir)} does not support multiple partitions."
+        )  # pragma: no cover
+
+    # Return reconstructed node and partition-info dict
+    partition = PartitionInfo(count=1)
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = partition
+    return new_node, partition_info
+
+
 @singledispatch
 def lower_ir_node(
     ir: IR, rec: LowerIRTransformer
@@ -77,28 +107,8 @@ def lower_ir_node(
 
 @lower_ir_node.register(IR)
 def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if len(ir.children) == 0:
-        # Default leaf node has single partition
-        return ir, {
-            ir: PartitionInfo(count=1)
-        }  # pragma: no cover; Missed by pylibcudf executor
-
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=False)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    # Check that child partitioning is supported
-    count = max(partition_info[c].count for c in children)
-    if count > 1:
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support multiple partitions."
-        )  # pragma: no cover
-
-    # Return reconstructed node and partition-info dict
-    partition = PartitionInfo(count=1)
-    new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
-    return new_node, partition_info
+    # Single-partition default (see: _lower_ir_single)
+    return rec.state["default_mapper"](ir)
 
 
 def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -127,7 +137,10 @@ def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     from cudf_polars.dsl.traversal import CachingVisitor
 
-    mapper = CachingVisitor(lower_ir_node)
+    mapper = CachingVisitor(
+        lower_ir_node,
+        state={"default_mapper": CachingVisitor(_lower_ir_single)},
+    )
     return mapper(ir)
 
 
@@ -259,13 +272,65 @@ def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    from cudf_polars.experimental.io import ParDataFrameScan
-
-    new_node = ParDataFrameScan(
-        ir.schema,
-        ir.df,
-        ir.projection,
-        ir.predicate,
-        ir.config_options,
+    rows_per_partition = ir.config_options.get("parallel_options", {}).get(
+        "num_rows_threshold", 1_000_000
     )
-    return new_node, {new_node: PartitionInfo(count=new_node._count)}
+
+    nrows = max(ir.df.shape()[0], 1)
+    count = math.ceil(nrows / rows_per_partition)
+    length = math.ceil(nrows / count)
+
+    slices = [
+        DataFrameScan(
+            ir.schema,
+            ir.df.slice(offset, length),
+            ir.projection,
+            ir.predicate,
+            ir.config_options,
+        )
+        for offset in range(0, nrows, length)
+    ]
+    new_node = Union(ir.schema, None, *slices)
+    return new_node, {slice: PartitionInfo(count=1) for slice in slices} | {
+        new_node: PartitionInfo(count=count)
+    }
+
+
+##
+## Union
+##
+
+
+@lower_ir_node.register(Union)
+def _(
+    ir: Union, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # zlice must be None
+    if ir.zlice is not None:
+        return rec.state["default_mapper"](ir)
+
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=False)
+    partition_info = reduce(operator.or_, _partition_info)
+
+    # Partition count is the sum of all child partitions
+    count = sum(partition_info[c].count for c in children)
+
+    # Return reconstructed node and partition-info dict
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = PartitionInfo(count=count)
+    return new_node, partition_info
+
+
+@generate_ir_tasks.register(Union)
+def _(
+    ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    part_out = 0
+    key_name = get_key_name(ir)
+    graph: MutableMapping[Any, Any] = {}
+    for child in ir.children:
+        for i in range(partition_info[child].count):
+            graph[(key_name, part_out)] = (get_key_name(child), i)
+            part_out += 1
+    return graph
