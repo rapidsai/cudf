@@ -16,7 +16,6 @@ from . import (
     nvtext,
     orc,
     parquet,
-    partitioning,
     reduce,
     replace,
     reshape,

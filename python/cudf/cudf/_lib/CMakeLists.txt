@@ -29,7 +29,6 @@ set(cython_sources
     null_mask.pyx
     orc.pyx
     parquet.pyx
-    partitioning.pyx
     reduce.pyx
     replace.pyx
     reshape.pyx
