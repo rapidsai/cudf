@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.timezone import make_timezone_transition_table
+from cudf._lib.column import Column
 
 if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
@@ -109,11 +111,14 @@ def _find_and_read_tzfile_tzdata(
 
 
 def _read_tzfile_as_columns(
-    tzdir, zone_name: str
+    tzdir: str, zone_name: str
 ) -> tuple[DatetimeColumn, TimeDeltaColumn]:
-    transition_times_and_offsets = make_timezone_transition_table(
+    plc_table = plc.io.timezone.make_timezone_transition_table(
         tzdir, zone_name
     )
+    transition_times_and_offsets = [
+        Column.from_pylibcudf(col) for col in plc_table.columns()
+    ]
 
     if not transition_times_and_offsets:
         from cudf.core.column.column import as_column
