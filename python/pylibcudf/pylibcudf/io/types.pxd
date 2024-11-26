@@ -30,6 +30,7 @@ cdef class PartitionInfo:
 
 cdef class ColumnInMetadata:
     cdef column_in_metadata* c_obj
+    cdef TableInputMetadata owner
 
     cdef TableInputMetadata table
 
@@ -43,13 +44,13 @@ cdef class ColumnInMetadata:
 
     cpdef ColumnInMetadata set_int96_timestamps(self, bool req)
 
-    cpdef ColumnInMetadata set_decimal_precision(self, int req)
+    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t precision)
 
     cpdef ColumnInMetadata child(self, size_type i)
 
     cpdef ColumnInMetadata set_output_as_binary(self, bool binary)
 
-    cpdef ColumnInMetadata set_type_length(self, int type_length)
+    cpdef ColumnInMetadata set_type_length(self, int32_t type_length)
 
     cpdef ColumnInMetadata set_skip_compression(self, bool skip)
 
@@ -58,10 +59,11 @@ cdef class ColumnInMetadata:
     cpdef str get_name(self)
 
     @staticmethod
-    cdef ColumnInMetadata from_libcudf_ptr(column_in_metadata* data)
+    cdef ColumnInMetadata from_libcudf(
+        column_in_metadata* metadata, TableInputMetadata owner
+    )
 
 cdef class TableInputMetadata:
-    cdef public Table table
     cdef table_input_metadata c_obj
     cdef list column_metadata
 

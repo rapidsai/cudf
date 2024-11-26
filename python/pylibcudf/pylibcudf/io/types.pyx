@@ -87,16 +87,22 @@ cdef class ColumnInMetadata:
         )
 
     @staticmethod
-    cdef ColumnInMetadata from_libcudf_ptr(column_in_metadata* metadata):
+    cdef ColumnInMetadata from_libcudf(
+        column_in_metadata* metadata, TableInputMetadata owner
+    ):
         """
-        Create a Python ColumnInMetadata from a libcudf column_in_metadata pointer.
+        A Python representation of `column_in_metadata`.
 
         Parameters
         ----------
         metadata : column_in_metadata*
+            Raw pointer to C++ metadata.
+        owner : TableInputMetadata
+            Owning table input metadata that manages lifetime of the raw pointer.
         """
         cdef ColumnInMetadata out = ColumnInMetadata.__new__(ColumnInMetadata)
         out.c_obj = metadata
+        out.owner = owner
         return out
 
     cpdef ColumnInMetadata set_name(self, str name):
@@ -160,7 +166,7 @@ cdef class ColumnInMetadata:
         dereference(self.c_obj).set_int96_timestamps(req)
         return self
 
-    cpdef ColumnInMetadata set_decimal_precision(self, int precision):
+    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t precision):
         """
         Set the decimal precision of this column.
         Only valid if this column is a decimal (fixed-point) type.
@@ -191,7 +197,7 @@ cdef class ColumnInMetadata:
         ColumnInMetadata
         """
         cdef column_in_metadata* child_c_obj = &dereference(self.c_obj).child(i)
-        return ColumnInMetadata.from_libcudf_ptr(child_c_obj)
+        return ColumnInMetadata.from_libcudf(child_c_obj, self.owner)
 
     cpdef ColumnInMetadata set_output_as_binary(self, bool binary):
         """
@@ -209,7 +215,7 @@ cdef class ColumnInMetadata:
         dereference(self.c_obj).set_output_as_binary(binary)
         return self
 
-    cpdef ColumnInMetadata set_type_length(self, int type_length):
+    cpdef ColumnInMetadata set_type_length(self, int32_t type_length):
         """
         Sets the length of fixed length data.
 
@@ -282,14 +288,10 @@ cdef class TableInputMetadata:
     """
     def __init__(self, Table table):
         self.c_obj = table_input_metadata(table.view())
-        self.column_metadata = []
-        self.table = table
-
-        cdef int num_columns = self.c_obj.column_metadata.size()
-        for i in range(num_columns):
-            col_meta = ColumnInMetadata.from_libcudf_ptr(&self.c_obj.column_metadata[i])
-            col_meta.table = self
-            self.column_metadata.append(col_meta)
+        self.column_metadata = [
+            ColumnInMetadata.from_libcudf(&self.c_obj.column_metadata[i], self)
+            for i in range(self.c_obj.column_metadata.size())
+        ]
 
 
 cdef class TableWithMetadata:
