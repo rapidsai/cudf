@@ -30,7 +30,6 @@ set(cython_sources
     parquet.pyx
     reduce.pyx
     replace.pyx
-    reshape.pyx
     round.pyx
     scalar.pyx
     sort.pyx
