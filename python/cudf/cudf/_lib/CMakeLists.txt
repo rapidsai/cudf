@@ -24,15 +24,12 @@ set(cython_sources
     interop.pyx
     join.pyx
     json.pyx
-    lists.pyx
     merge.pyx
     orc.pyx
     parquet.pyx
-    partitioning.pyx
     reduce.pyx
     replace.pyx
     reshape.pyx
-    rolling.pyx
     round.pyx
     scalar.pyx
     sort.pyx
@@ -40,7 +37,6 @@ set(cython_sources
     string_casting.pyx
     strings_udf.pyx
     text.pyx
-    timezone.pyx
     transform.pyx
     types.pyx
     utils.pyx
