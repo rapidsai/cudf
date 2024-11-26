@@ -1,7 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from collections.abc import Mapping
-from typing import Self
+
+from typing_extensions import Self
 
 from pylibcudf.io.types import (
     CompressionType,

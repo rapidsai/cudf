@@ -168,7 +168,7 @@ def test_read_csv_dtypes(csv_table_data, source_or_sink, usecols):
     ).build()
     options.set_dtypes(dtypes)
     if usecols is not None:
-        if all([isinstance(col, int) for col in usecols]):
+        if all(isinstance(col, int) for col in usecols):
             options.set_use_cols_indexes(list(usecols))
         else:
             options.set_use_cols_names([str(name) for name in usecols])
