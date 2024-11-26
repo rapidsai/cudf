@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import gc
+import weakref
 
 import pyarrow as pa
 
@@ -8,23 +9,20 @@ import pylibcudf as plc
 
 
 def test_gc_with_table_and_column_input_metadata(monkeypatch):
-    class A(plc.io.types.TableInputMetadata):
+    class Foo(plc.io.types.TableInputMetadata):
         def __del__(self):
-            print("Deleting A...")
+            pass
 
     pa_table = pa.table(
         {"a": pa.array([1, 2, 3]), "b": pa.array(["a", "b", "c"])}
     )
     plc_table = plc.interop.from_arrow(pa_table)
 
-    tbl_meta = A(plc_table)
-
-    gc.disable()
-    gc.collect()
+    tbl_meta = Foo(plc_table)
+    weak_tbl_meta = weakref.ref(tbl_meta)
 
     del tbl_meta
 
-    # Circular reference creates an additional uncollectable object
-    assert gc.collect() == 4
+    gc.collect()
 
-    gc.enable()
+    assert weak_tbl_meta() is None
