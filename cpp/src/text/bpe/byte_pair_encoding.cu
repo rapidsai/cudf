@@ -459,10 +459,11 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const& input,
                                                  bpe_merge_pairs const& merges_table,
                                                  cudf::string_scalar const& separator,
+                                                 rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_pair_encoding(input, merges_table, separator, cudf::get_default_stream(), mr);
+  return detail::byte_pair_encoding(input, merges_table, separator, stream, mr);
 }
 
 }  // namespace nvtext
