@@ -757,7 +757,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("value must be a scalar")
         else:
             value = as_column(value, dtype=self.dtype, length=1)
-        mask = libcudf.search.contains(value, self)
+        mask = value.contains(self)
         return apply_boolean_mask(
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
         )[0]
@@ -914,7 +914,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # self.isin(other) asks "which values of self are in other"
         # contains(haystack, needles) asks "which needles are in haystack"
         # hence this argument ordering.
-        result = libcudf.search.contains(rhs, self)
+        result = rhs.contains(self)
         if self.null_count > 0:
             # If one of the needles is null, then the result contains
             # nulls, these nulls should be replaced by whether or not the
@@ -955,6 +955,23 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
         )
+
+    def contains(self, other: ColumnBase) -> ColumnBase:
+        """
+        Check whether column contains multiple values.
+
+        Parameters
+        ----------
+        other : Column
+            A column of values to search for
+        """
+        with acquire_spill_lock():
+            return Column.from_pylibcudf(
+                plc.search.contains(
+                    self.to_pylibcudf(mode="read"),
+                    other.to_pylibcudf(mode="read"),
+                )
+            )
 
     def sort_values(
         self: Self,
@@ -1190,7 +1207,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 "Column searchsorted expects values to be column of same dtype"
             )
-        return libcudf.search.search_sorted(
+        return cudf.core._internals.search.search_sorted(  # type: ignore[return-value]
             [self],
             [value],
             side=side,

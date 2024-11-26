@@ -15,21 +15,16 @@ from . import (
     nvtext,
     orc,
     parquet,
-    partitioning,
     reduce,
     replace,
     reshape,
-    rolling,
     round,
-    search,
     sort,
     stream_compaction,
     string_casting,
     strings,
     strings_udf,
     text,
-    timezone,
-    transpose,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

@@ -2487,11 +2487,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        partitioned_columns, output_offsets = libcudf.partitioning.partition(
-            [*(self.index._columns if keep_index else ()), *self._columns],
-            map_index,
-            map_size,
+        source_columns = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
         )
+
+        with acquire_spill_lock():
+            if map_size is None:
+                map_size = plc.stream_compaction.distinct_count(
+                    map_index.to_pylibcudf(mode="read"),
+                    plc.types.NullPolicy.EXCLUDE,
+                    plc.types.NanPolicy.NAN_IS_VALID,
+                )
+
+            if map_index.size > 0:
+                plc_lo, plc_hi = plc.reduce.minmax(
+                    map_index.to_pylibcudf(mode="read")
+                )
+                # TODO: Use pylibcudf Scalar once APIs are more developed
+                lo = libcudf.column.Column.from_pylibcudf(
+                    plc.Column.from_scalar(plc_lo, 1)
+                ).element_indexing(0)
+                hi = libcudf.column.Column.from_pylibcudf(
+                    plc.Column.from_scalar(plc_hi, 1)
+                ).element_indexing(0)
+                if lo < 0 or hi >= map_size:
+                    raise ValueError("Partition map has invalid values")
+
+            plc_table, output_offsets = plc.partitioning.partition(
+                plc.Table(
+                    [col.to_pylibcudf(mode="read") for col in source_columns]
+                ),
+                map_index.to_pylibcudf(mode="read"),
+                map_size,
+            )
+            partitioned_columns = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
+
         partitioned = self._from_columns_like_self(
             partitioned_columns,
             column_names=self._column_names,
@@ -4113,7 +4148,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if any(c.dtype != source_columns[0].dtype for c in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_columns = libcudf.transpose.transpose(source_columns)
+        result_table = plc.transpose.transpose(
+            plc.table.Table(
+                [col.to_pylibcudf(mode="read") for col in source_columns]
+            )
+        )
+        result_columns = [
+            libcudf.column.Column.from_pylibcudf(col, data_ptr_exposed=True)
+            for col in result_table.columns()
+        ]
 
         if isinstance(source_dtype, cudf.CategoricalDtype):
             result_columns = [
