@@ -633,9 +633,10 @@ def _(node: pl_expr.Sort, translator: Translator, dtype: plc.DataType) -> expr.E
 
 @_translate_expr.register
 def _(node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType) -> expr.Expr:
+    options = node.sort_options
     return expr.SortBy(
         dtype,
-        node.sort_options,
+        (options[0], tuple(options[1]), tuple(options[2])),
         translator.translate_expr(n=node.expr),
         *(translator.translate_expr(n=n) for n in node.by),
     )
