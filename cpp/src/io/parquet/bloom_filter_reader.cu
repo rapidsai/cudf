@@ -17,7 +17,6 @@
 #include "arrow_filter_policy.cuh"
 #include "compact_protocol_reader.hpp"
 #include "io/parquet/parquet.hpp"
-#include "io/parquet/parquet_gpu.hpp"
 #include "reader_impl_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
@@ -28,6 +27,8 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -36,20 +37,16 @@
 
 #include <cuco/bloom_filter_ref.cuh>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/logical.h>
-#include <thrust/sequence.h>
 
 #include <future>
-#include <iterator>
 #include <numeric>
 #include <optional>
-#include <random>
 
 namespace cudf::io::parquet::detail {
 namespace {
 
 /**
- * @brief Converts bloom filter query results for column chunks to a device column.
+ * @brief Converts bloom filter membership results for column chunks to a device column.
  *
  */
 struct bloom_filter_caster {
@@ -124,7 +121,7 @@ struct bloom_filter_caster {
 };
 
 /**
- * @brief Collects lists of equality predicate  literals in the AST expression, one list per input
+ * @brief Collects lists of equality predicate literals in the AST expression, one list per input
  * table column. This is used in row group filtering based on bloom filters.
  */
 class equality_literals_collector : public ast::detail::expression_transformer {
@@ -143,7 +140,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
   {
-    _equality_expr = std::reference_wrapper<ast::expression const>(expr);
+    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(expr);
     return expr;
   }
 
@@ -153,10 +150,10 @@ class equality_literals_collector : public ast::detail::expression_transformer {
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
   {
     CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-                 "Equality AST supports only left table");
+                 "BloomfilterAST supports only left table");
     CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
                  "Column index cannot be more than number of columns in the table");
-    _equality_expr = std::reference_wrapper<ast::expression const>(expr);
+    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(expr);
     return expr;
   }
 
@@ -166,7 +163,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override
   {
-    CUDF_FAIL("Column name reference is not supported in equality AST");
+    CUDF_FAIL("Column name reference is not supported in BloomfilterAST");
   }
 
   /**
@@ -186,7 +183,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
                    "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
 
-      // Push to the corresponding column's literals list if equality predicate seen
+      // Push to the corresponding column's literals list iff equality predicate is seen
       if (op == ast_operator::EQUAL) {
         auto const col_idx = v->get_column_index();
         _equality_literals[col_idx].emplace_back(
@@ -200,7 +197,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
         _operators.emplace_back(op, new_operands.front());
       }
     }
-    _equality_expr = std::reference_wrapper<ast::expression const>(_operators.back());
+    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(_operators.back());
     return std::reference_wrapper<ast::expression const>(_operators.back());
   }
 
@@ -225,7 +222,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
     }
     return transformed_operands;
   }
-  std::optional<std::reference_wrapper<ast::expression const>> _equality_expr;
+  std::optional<std::reference_wrapper<ast::expression const>> _bloom_filter_expr;
   std::vector<std::vector<ast::literal*>> _equality_literals;
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
@@ -311,18 +308,18 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         _operators.emplace_back(op, new_operands.front());
       }
     }
-    _equality_expr = std::reference_wrapper<ast::expression const>(_operators.back());
+    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(_operators.back());
     return std::reference_wrapper<ast::expression const>(_operators.back());
   }
 
   /**
-   * @brief Returns the AST to apply on bloom filters
+   * @brief Returns the AST to apply on bloom filters mmebership.
    *
    * @return AST operation expression
    */
-  [[nodiscard]] std::reference_wrapper<ast::expression const> get_equality_expr() const
+  [[nodiscard]] std::reference_wrapper<ast::expression const> get_bloom_filter_expr() const
   {
-    return _equality_expr.value().get();
+    return _bloom_filter_expr.value().get();
   }
 
  private:
@@ -593,13 +590,13 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Convert AST to BloomfilterAST expression with reference to bloom filter membership
   // in above `bloom_filter_membership_table`
-  bloom_filter_expression_converter equality_expr{
+  bloom_filter_expression_converter bloom_filter_expr{
     filter.get(), num_input_columns, equality_literals};
 
   // Filter bloom filter membership table with the BloomfilterAST expression and collect filtered
   // row group indices
   return collect_filtered_row_group_indices(bloom_filter_membership_table,
-                                            equality_expr.get_equality_expr(),
+                                            bloom_filter_expr.get_bloom_filter_expr(),
                                             row_group_indices,
                                             stream,
                                             mr);
