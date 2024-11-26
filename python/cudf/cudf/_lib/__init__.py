@@ -19,7 +19,6 @@ from . import (
     reduce,
     replace,
     reshape,
-    rolling,
     round,
     sort,
     stream_compaction,

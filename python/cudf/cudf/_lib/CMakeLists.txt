@@ -31,7 +31,6 @@ set(cython_sources
     reduce.pyx
     replace.pyx
     reshape.pyx
-    rolling.pyx
     round.pyx
     scalar.pyx
     sort.pyx
