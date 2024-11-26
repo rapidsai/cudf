@@ -20,6 +20,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.expressions.binaryop import BinOp
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -80,24 +81,24 @@ class BooleanFunction(Expr):
     _BETWEEN_OPS: ClassVar[
         dict[
             pl_types.ClosedInterval,
-            tuple[plc.binaryop.BinaryOperator, plc.binaryop.BinaryOperator],
+            tuple[BinOp.Operator, BinOp.Operator],
         ]
     ] = {
         "none": (
-            plc.binaryop.BinaryOperator.GREATER,
-            plc.binaryop.BinaryOperator.LESS,
+            BinOp.Operator.GREATER,
+            BinOp.Operator.LESS,
         ),
         "left": (
-            plc.binaryop.BinaryOperator.GREATER_EQUAL,
-            plc.binaryop.BinaryOperator.LESS,
+            BinOp.Operator.GREATER_EQUAL,
+            BinOp.Operator.LESS,
         ),
         "right": (
-            plc.binaryop.BinaryOperator.GREATER,
-            plc.binaryop.BinaryOperator.LESS_EQUAL,
+            BinOp.Operator.GREATER,
+            BinOp.Operator.LESS_EQUAL,
         ),
         "both": (
-            plc.binaryop.BinaryOperator.GREATER_EQUAL,
-            plc.binaryop.BinaryOperator.LESS_EQUAL,
+            BinOp.Operator.GREATER_EQUAL,
+            BinOp.Operator.LESS_EQUAL,
         ),
     }
 

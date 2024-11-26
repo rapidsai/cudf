@@ -330,13 +330,11 @@ def _(
 
         dtype = plc.DataType(plc.TypeId.BOOL8)
         predicate = functools.reduce(
-            functools.partial(
-                expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
-            ),
+            functools.partial(expr.BinOp, dtype, expr.BinOp.Operator.LOGICAL_AND),
             (
                 expr.BinOp(
                     dtype,
-                    expr.BinOp._MAPPING[op],
+                    expr.BinOp.Operator.from_polars(op),
                     insert_colrefs(
                         left.value,
                         table_ref=plc.expressions.TableReference.LEFT,
@@ -545,7 +543,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             lop, rop = expr.BooleanFunction._BETWEEN_OPS[closed]
             return expr.BinOp(
                 dtype,
-                plc.binaryop.BinaryOperator.LOGICAL_AND,
+                expr.BinOp.Operator.LOGICAL_AND,
                 expr.BinOp(dtype, lop, column, lo),
                 expr.BinOp(dtype, rop, column, hi),
             )
@@ -586,12 +584,12 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             (child,) = children
             return expr.BinOp(
                 dtype,
-                plc.binaryop.BinaryOperator.LOG_BASE,
+                expr.BinOp.Operator.LOG_BASE,
                 child,
                 expr.Literal(dtype, pa.scalar(base, type=plc.interop.to_arrow(dtype))),
             )
         elif name == "pow":
-            return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+            return expr.BinOp(dtype, expr.BinOp.Operator.POW, *children)
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
@@ -707,7 +705,7 @@ def _(
 ) -> expr.Expr:
     return expr.BinOp(
         dtype,
-        expr.BinOp._MAPPING[node.op],
+        expr.BinOp.Operator.from_polars(node.op),
         translator.translate_expr(n=node.left),
         translator.translate_expr(n=node.right),
     )
