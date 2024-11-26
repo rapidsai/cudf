@@ -1424,8 +1424,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        from cudf._lib.join import join as cpp_join
-
         if na_sentinel is None or na_sentinel.value is cudf.NA:
             na_sentinel = cudf.Scalar(-1)
 
@@ -1447,15 +1445,21 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         except ValueError:
             return _return_sentinel_column()
 
-        left_gather_map, right_gather_map = cpp_join(
-            [self], [cats], how="left"
+        left_rows, right_rows = plc.join.left_join(
+            plc.Table([self.to_pylibcudf(mode="read")]),
+            plc.Table([cats.to_pylibcudf(mode="read")]),
+            plc.types.NullEquality.EQUAL,
         )
+        left_gather_map = type(self).from_pylibcudf(left_rows)
+        right_gather_map = type(self).from_pylibcudf(right_rows)
+
         codes = libcudf.copying.gather(
             [as_column(range(len(cats)), dtype=dtype)],
             right_gather_map,
             nullify=True,
         )
         del right_gather_map
+        del right_rows
         # reorder `codes` so that its values correspond to the
         # values of `self`:
         (codes,) = libcudf.sort.sort_by_key(
