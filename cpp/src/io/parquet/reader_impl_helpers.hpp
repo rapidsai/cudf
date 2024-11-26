@@ -494,7 +494,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  * collect filtered row group indices
  *
  * @param table Table of stats or bloom filter membership columns
- * @param expr_ast StatsAST or BloomfilterAST expression to evaluate.
+ * @param ast_expr StatsAST or BloomfilterAST expression to filter with.
  * @param input_row_group_indices Lists of input row groups to read, one per source
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to be used in cudf::compute_column
@@ -503,7 +503,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  */
 [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
   cudf::table_view ast_table,
-  std::reference_wrapper<ast::expression const> expr_ast,
+  std::reference_wrapper<ast::expression const> ast_expr,
   host_span<std::vector<size_type> const> input_row_group_indices,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

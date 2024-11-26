@@ -618,13 +618,13 @@ class names_from_expression : public ast::detail::expression_transformer {
 
 std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
   cudf::table_view table,
-  std::reference_wrapper<ast::expression const> expr_ast,
+  std::reference_wrapper<ast::expression const> ast_expr,
   host_span<std::vector<size_type> const> input_row_group_indices,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Filter the input table using equality predicate evaluator
-  auto predicate_col = cudf::detail::compute_column(table, expr_ast.get(), stream, mr);
+  // Filter the input table using AST expression
+  auto predicate_col = cudf::detail::compute_column(table, ast_expr.get(), stream, mr);
   auto predicate     = predicate_col->view();
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");
@@ -644,10 +644,11 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   auto validity_it = cudf::detail::make_counting_transform_iterator(
     0, [bitmask = host_bitmask.data()](auto bit_index) { return bit_is_set(bitmask, bit_index); });
 
+  // Return only filtered row groups based on predicate
   auto const is_row_group_required = cudf::detail::make_host_vector_sync(
     device_span<uint8_t const>(predicate.data<uint8_t>(), predicate.size()), stream);
 
-  // Return only filtered row groups based on predicate, or all are required, or all are nulls.
+  // Return if all are required, or all are nulls.
   if (predicate.null_count() == predicate.size() or std::all_of(is_row_group_required.cbegin(),
                                                                 is_row_group_required.cend(),
                                                                 [](auto i) { return bool(i); })) {
