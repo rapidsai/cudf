@@ -493,10 +493,7 @@ class Scan(IR):
                 options.set_header(header)
                 options.set_dtypes(schema)
                 if usecols is not None:
-                    if all(isinstance(col, int) for col in usecols):
-                        options.set_use_cols_indexes(list(usecols))
-                    else:
-                        options.set_use_cols_names([str(name) for name in usecols])
+                    options.set_use_cols_names([str(name) for name in usecols])
                 options.set_na_values(null_values)
                 if comment is not None:
                     options.set_comment(comment)
