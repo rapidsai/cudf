@@ -97,44 +97,43 @@ struct segmented_reduce_dispatch_functor {
         return segmented_nunique(col, offsets, null_handling, stream, mr);
       case aggregation::HOST_UDF: {
         auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-        auto const& data_kinds = udf_ptr->get_required_data_kinds();
+        auto data_attrs     = udf_ptr->get_required_data();
+        if (data_attrs.empty()) {  // empty means everything
+          data_attrs = {host_udf_base::segmented_reduction_data_attribute::INPUT_VALUES,
+                        host_udf_base::segmented_reduction_data_attribute::OUTPUT_DTYPE,
+                        host_udf_base::segmented_reduction_data_attribute::INIT_VALUE,
+                        host_udf_base::segmented_reduction_data_attribute::NULL_POLICY,
+                        host_udf_base::segmented_reduction_data_attribute::OFFSETS};
+        }
 
         // Do not cache udf_input, as the actual input data may change from run to run.
-        cudf::host_udf_base::host_udf_input_map udf_input;
-        for (auto const& kind : data_kinds) {
-          if (std::holds_alternative<cudf::host_udf_base::intermediate_data_kind>(kind.value)) {
-            auto const intermediate_kind =
-              std::get<cudf::host_udf_base::intermediate_data_kind>(kind.value);
-            switch (intermediate_kind) {
-              case cudf::host_udf_base::intermediate_data_kind::INPUT_VALUES: {
-                udf_input.emplace(kind, col);
-                break;
-              }
-
-              case cudf::host_udf_base::intermediate_data_kind::OUTPUT_DTYPE: {
-                udf_input.emplace(kind, output_dtype);
-                break;
-              }
-
-              case cudf::host_udf_base::intermediate_data_kind::INIT_VALUE: {
-                udf_input.emplace(kind, init);
-                break;
-              }
-
-              case cudf::host_udf_base::intermediate_data_kind::NULL_POLICY: {
-                udf_input.emplace(kind, null_handling);
-                break;
-              }
-
-              case cudf::host_udf_base::intermediate_data_kind::OFFSETS: {
-                udf_input.emplace(kind, offsets);
-                break;
-              }
-
-              default: CUDF_FAIL("Unsupported data kind in host-based UDF segmented reduction.");
+        host_udf_base::host_udf_input udf_input;
+        for (auto const& attr : data_attrs) {
+          CUDF_EXPECTS(
+            std::holds_alternative<host_udf_base::segmented_reduction_data_attribute>(attr.value),
+            "Invalid input data attribute for HOST_UDF segmented reduction.");
+          switch (std::get<host_udf_base::segmented_reduction_data_attribute>(attr.value)) {
+            case host_udf_base::segmented_reduction_data_attribute::INPUT_VALUES: {
+              udf_input.emplace(attr, col);
+              break;
             }
-          } else {
-            CUDF_FAIL("Reduction aggregation does not support calling other aggregations.");
+            case host_udf_base::segmented_reduction_data_attribute::OUTPUT_DTYPE: {
+              udf_input.emplace(attr, output_dtype);
+              break;
+            }
+            case host_udf_base::segmented_reduction_data_attribute::INIT_VALUE: {
+              udf_input.emplace(attr, init);
+              break;
+            }
+            case host_udf_base::segmented_reduction_data_attribute::NULL_POLICY: {
+              udf_input.emplace(attr, null_handling);
+              break;
+            }
+            case host_udf_base::segmented_reduction_data_attribute::OFFSETS: {
+              udf_input.emplace(attr, offsets);
+              break;
+            }
+            default:;
           }
         }
         auto output = (*udf_ptr)(udf_input, stream, mr);

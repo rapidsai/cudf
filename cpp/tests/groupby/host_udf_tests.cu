@@ -58,48 +58,42 @@ struct test_udf_simple_type : cudf::host_udf_base {
 
   test_udf_simple_type() = default;
 
-  [[nodiscard]] data_kind_set get_required_data_kinds() const override
+  [[nodiscard]] input_data_attributes get_required_data() const override
   {
-    if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
-      return {intermediate_data_kind::INPUT_VALUES,
-              intermediate_data_kind::OUTPUT_DTYPE,
-              intermediate_data_kind::INIT_VALUE};
-    } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
-      return {intermediate_data_kind::INPUT_VALUES,
-              intermediate_data_kind::OUTPUT_DTYPE,
-              intermediate_data_kind::INIT_VALUE,
-              intermediate_data_kind::NULL_POLICY,
-              intermediate_data_kind::OFFSETS};
+    if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation> ||
+                  std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
+      // Empty set, which means we need everything.
+      return {};
     } else {
-      return {intermediate_data_kind::OFFSETS,
-              intermediate_data_kind::GROUP_LABELS,
-              intermediate_data_kind::GROUPED_VALUES,
+      return {groupby_data_attribute::GROUPED_VALUES,
+              groupby_data_attribute::GROUP_OFFSETS,
+              groupby_data_attribute::GROUP_LABELS,
               cudf::make_max_aggregation<cudf::groupby_aggregation>(),
               cudf::make_sum_aggregation<cudf::groupby_aggregation>()};
     }
   }
 
-  [[nodiscard]] output_type operator()(host_udf_input_map const& input,
+  [[nodiscard]] output_type operator()(host_udf_input const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr) const override
   {
     if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
       auto const& values =
-        std::get<cudf::column_view>(input.at(intermediate_data_kind::INPUT_VALUES));
+        std::get<cudf::column_view>(input.at(reduction_data_attribute::INPUT_VALUES));
       auto const output_dtype =
-        std::get<cudf::data_type>(input.at(intermediate_data_kind::OUTPUT_DTYPE));
+        std::get<cudf::data_type>(input.at(reduction_data_attribute::OUTPUT_DTYPE));
       return cudf::double_type_dispatcher(
         values.type(), output_dtype, reduce_fn{this}, input, stream, mr);
     } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
       auto const& values =
-        std::get<cudf::column_view>(input.at(intermediate_data_kind::INPUT_VALUES));
+        std::get<cudf::column_view>(input.at(segmented_reduction_data_attribute::INPUT_VALUES));
       auto const output_dtype =
-        std::get<cudf::data_type>(input.at(intermediate_data_kind::OUTPUT_DTYPE));
+        std::get<cudf::data_type>(input.at(segmented_reduction_data_attribute::OUTPUT_DTYPE));
       return cudf::double_type_dispatcher(
         values.type(), output_dtype, segmented_reduce_fn{this}, input, stream, mr);
     } else {
       auto const& values =
-        std::get<cudf::column_view>(input.at(intermediate_data_kind::GROUPED_VALUES));
+        std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
       return cudf::type_dispatcher(values.type(), groupby_fn{this}, input, stream, mr);
     }
   }
@@ -169,17 +163,17 @@ struct test_udf_simple_type : cudf::host_udf_base {
     template <typename InputType,
               typename OutputType,
               CUDF_ENABLE_IF(is_valid_input_t<InputType>() && is_valid_output_t<OutputType>())>
-    output_type operator()(host_udf_input_map const& input,
+    output_type operator()(host_udf_input const& input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr) const
     {
       auto const& values =
-        std::get<cudf::column_view>(input.at(intermediate_data_kind::INPUT_VALUES));
+        std::get<cudf::column_view>(input.at(reduction_data_attribute::INPUT_VALUES));
       auto const output_dtype =
-        std::get<cudf::data_type>(input.at(intermediate_data_kind::OUTPUT_DTYPE));
+        std::get<cudf::data_type>(input.at(reduction_data_attribute::OUTPUT_DTYPE));
       auto const input_init_value =
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
-          input.at(intermediate_data_kind::INIT_VALUE));
+          input.at(reduction_data_attribute::INIT_VALUE));
 
       if (values.size() == 0) { return parent->get_empty_output(output_dtype, stream, mr); }
 
@@ -235,16 +229,16 @@ struct test_udf_simple_type : cudf::host_udf_base {
     template <typename InputType,
               typename OutputType,
               CUDF_ENABLE_IF(is_valid_input_t<InputType>() && is_valid_output_t<OutputType>())>
-    output_type operator()(host_udf_input_map const& input,
+    output_type operator()(host_udf_input const& input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr) const
     {
       auto const& values =
-        std::get<cudf::column_view>(input.at(intermediate_data_kind::INPUT_VALUES));
+        std::get<cudf::column_view>(input.at(segmented_reduction_data_attribute::INPUT_VALUES));
       auto const output_dtype =
-        std::get<cudf::data_type>(input.at(intermediate_data_kind::OUTPUT_DTYPE));
+        std::get<cudf::data_type>(input.at(segmented_reduction_data_attribute::OUTPUT_DTYPE));
       auto const offsets = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(intermediate_data_kind::OFFSETS));
+        input.at(segmented_reduction_data_attribute::OFFSETS));
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
       auto const num_segments = static_cast<cudf::size_type>(offsets.size()) - 1;
 
@@ -259,7 +253,7 @@ struct test_udf_simple_type : cudf::host_udf_base {
 
       auto const input_init_value =
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
-          input.at(intermediate_data_kind::INIT_VALUE));
+          input.at(segmented_reduction_data_attribute::INIT_VALUE));
 
       auto const init_value = [&]() -> InputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
@@ -272,7 +266,7 @@ struct test_udf_simple_type : cudf::host_udf_base {
       }();
 
       auto const null_handling =
-        std::get<cudf::null_policy>(input.at(intermediate_data_kind::NULL_POLICY));
+        std::get<cudf::null_policy>(input.at(segmented_reduction_data_attribute::NULL_POLICY));
 
       auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
       auto output              = cudf::make_numeric_column(
@@ -336,20 +330,20 @@ struct test_udf_simple_type : cudf::host_udf_base {
     }
 
     template <typename InputType, CUDF_ENABLE_IF(cudf::is_numeric<InputType>())>
-    output_type operator()(host_udf_input_map const& input,
+    output_type operator()(host_udf_input const& input,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr) const
     {
       auto const& values =
-        std::get<cudf::column_view>(input.at(intermediate_data_kind::GROUPED_VALUES));
+        std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
       if (values.size() == 0) { return parent->get_empty_output(std::nullopt, stream, mr); }
 
       auto const offsets = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(intermediate_data_kind::OFFSETS));
+        input.at(groupby_data_attribute::GROUP_OFFSETS));
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
       auto const num_groups    = static_cast<int>(offsets.size()) - 1;
       auto const group_indices = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(intermediate_data_kind::GROUP_LABELS));
+        input.at(groupby_data_attribute::GROUP_LABELS));
       auto const group_max = std::get<cudf::column_view>(
         input.at(cudf::make_max_aggregation<cudf::groupby_aggregation>()));
       auto const group_sum = std::get<cudf::column_view>(

@@ -971,7 +971,7 @@ class host_udf_aggregation final : public groupby_aggregation,
                                    public reduce_aggregation,
                                    public segmented_reduce_aggregation {
  public:
-  std::unique_ptr<host_udf_base> const udf_ptr;
+  std::unique_ptr<host_udf_base> udf_ptr;
 
   host_udf_aggregation()                            = delete;
   host_udf_aggregation(host_udf_aggregation const&) = delete;

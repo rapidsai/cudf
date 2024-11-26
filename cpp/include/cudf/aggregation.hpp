@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -623,76 +624,140 @@ struct host_udf_base {
   virtual ~host_udf_base() = default;
 
   /**
-   * @brief Define the intermediate data that may be needed in the derived class for its operations.
-   *
-   * Each derived host-based UDF class may need a different set of intermediate data (such as sorted
-   * values, group labels, group offsets etc). It is inefficient to evaluate and pass down all these
-   * data at once from libcudf. A solution for that is, the derived class defines a subset of data
-   * that it needs and only such data will be evaluated.
+   * @brief Define the possible data needed for reduction.
    */
-  enum class intermediate_data_kind {
-    INPUT_VALUES,           // the input values column, may be used in any aggregation
-    OUTPUT_DTYPE,           // output data type, used in reduction
-    INIT_VALUE,             // initial value for reduction
-    NULL_POLICY,            // to control null handling, used in segmented reduction and scan
-    SCAN_TYPE,              // used in scan aggregations
-    OFFSETS,                // offsets for segmented reduction or sort-based groupby
-    GROUP_LABELS,           // group labels used in sort-based groupby
-    SORTED_GROUPED_VALUES,  // the input values grouped according to the input `keys` and
-                            // sorted within each group, used in sort-based groupby
-    GROUPED_VALUES          // the input values grouped according to the input `keys` for which the
-                            // values within each group maintain their original order,
-                            // used in sort-based groupby
+  enum class reduction_data_attribute : int32_t {
+    INPUT_VALUES,  ///< The input values column
+    OUTPUT_DTYPE,  ///< Data type for the output result
+    INIT_VALUE     ///< Initial value
   };
 
   /**
-   * @brief The possible data kind that may be needed in the derived class for its operations.
-   *
-   * Such data can be either intermediate data, or the results of other aggregations.
+   * @brief Define the possible data needed for segmented reduction.
    */
-  struct input_data_kind {
-    using value_type = std::variant<intermediate_data_kind, std::unique_ptr<aggregation>>;
+  enum class segmented_reduction_data_attribute : int32_t {
+    INPUT_VALUES,  ///< The input values column
+    OUTPUT_DTYPE,  ///< Data type for the output result
+    INIT_VALUE,    ///< Initial value
+    NULL_POLICY,   ///< To control null handling
+    OFFSETS        ///< The offsets defining segments
+  };
+
+  /**
+   * @brief Define the possible data needed for groupby aggregations.
+   *
+   * Note that only sort-based groupby aggregations are supported.
+   */
+  enum class groupby_data_attribute : int32_t {
+    INPUT_VALUES,    ///< The input values column
+    GROUPED_VALUES,  ///< The input values grouped according to the input `keys` for which the
+                     ///< values within each group maintain their original order
+    SORTED_GROUPED_VALUES,  ///< The input values grouped according to the input `keys` and
+                            ///< sorted within each group
+    GROUP_OFFSETS,          ///< The offsets separating groups
+    GROUP_LABELS            ///< Group labels (which is also the same as group indices)
+  };
+
+  /**
+   * @brief The possible data that may be needed in the derived class for its operations.
+   *
+   * Such data can be either intermediate data such as sorted values or group labels etc, or the
+   * results of other aggregations.
+   *
+   * Each derived host-based UDF class may need a different set of data. It is inefficient to
+   * evaluate and pass down all these possible data at once from libcudf. A solution for that is,
+   * the derived class can define a subset of data that it needs and libcudf will evaluate
+   * and pass down only data requested from that set.
+   */
+  struct data_attribute {
+    using value_type = std::variant<reduction_data_attribute,
+                                    segmented_reduction_data_attribute,
+                                    groupby_data_attribute,
+                                    std::unique_ptr<aggregation>>;
     value_type value;
 
-    input_data_kind()                  = default;
-    input_data_kind(input_data_kind&&) = default;
-    input_data_kind(input_data_kind const& other) : value{copy_value(other.value)} {}
-    input_data_kind(intermediate_data_kind value_) : value{value_} {}
+    data_attribute()                 = default;
+    data_attribute(data_attribute&&) = default;
 
-    template <typename T>
-    input_data_kind(std::unique_ptr<T> value_) : value{std::move(value_)}
+    // Copy constructor is needed to be used as keys in set and map.
+    // Since the `value` contains `unique_ptr`, we need to define the copy operator for it.
+    data_attribute(data_attribute const& other) : value{copy_value(other.value)} {}
+
+    template <typename T,
+              CUDF_ENABLE_IF(std::is_same_v<T, reduction_data_attribute> ||
+                             std::is_same_v<T, segmented_reduction_data_attribute> ||
+                             std::is_same_v<T, groupby_data_attribute>)>
+    data_attribute(T value_) : value{value_}
     {
-      static_assert(std::is_same_v<T, aggregation> || std::is_same_v<T, groupby_aggregation>);
+    }
+
+    template <typename T,
+              CUDF_ENABLE_IF(std::is_same_v<T, aggregation> ||
+                             std::is_same_v<T, groupby_aggregation>)>
+    data_attribute(std::unique_ptr<T> value_) : value{std::move(value_)}
+    {
+      if constexpr (std::is_same_v<T, aggregation>) {
+        CUDF_EXPECTS(
+          dynamic_cast<groupby_aggregation*>(std::get<std::unique_ptr<T>>(value).get()) != nullptr,
+          "Requesting results from other aggregations is only supported in groupby "
+          "aggregations.");
+      }
+      CUDF_EXPECTS(std::get<std::unique_ptr<aggregation>>(value) != nullptr,
+                   "Invalid aggregation request.");
     }
 
     static value_type copy_value(value_type const& value)
     {
-      if (std::holds_alternative<intermediate_data_kind>(value)) {
-        return std::get<intermediate_data_kind>(value);
+      if (std::holds_alternative<reduction_data_attribute>(value)) {
+        return std::get<reduction_data_attribute>(value);
+      }
+      if (std::holds_alternative<segmented_reduction_data_attribute>(value)) {
+        return std::get<segmented_reduction_data_attribute>(value);
+      }
+      if (std::holds_alternative<groupby_data_attribute>(value)) {
+        return std::get<groupby_data_attribute>(value);
       }
       return std::get<std::unique_ptr<aggregation>>(value)->clone();
     }
 
     struct hash {
-      std::size_t operator()(input_data_kind const& kind) const
+      std::size_t operator()(data_attribute const& attr) const
       {
-        if (std::holds_alternative<intermediate_data_kind>(kind.value)) {
-          return std::hash<int>{}(static_cast<int>(std::get<intermediate_data_kind>(kind.value)));
-        }
-        return std::get<std::unique_ptr<aggregation>>(kind.value)->do_hash();
+        auto const& value     = attr.value;
+        auto const hash_value = [&] {
+          if (std::holds_alternative<reduction_data_attribute>(value)) {
+            return std::hash<int>{}(static_cast<int>(std::get<reduction_data_attribute>(value)));
+          }
+          if (std::holds_alternative<segmented_reduction_data_attribute>(value)) {
+            return std::hash<int>{}(
+              static_cast<int>(std::get<segmented_reduction_data_attribute>(value)));
+          }
+          if (std::holds_alternative<groupby_data_attribute>(value)) {
+            return std::hash<int>{}(static_cast<int>(std::get<groupby_data_attribute>(value)));
+          }
+          return std::get<std::unique_ptr<aggregation>>(value)->do_hash();
+        }();
+        return value.index() ^ hash_value;
       }
     };
 
     struct equal_to {
-      bool operator()(input_data_kind const& lhs, input_data_kind const& rhs) const
+      bool operator()(data_attribute const& lhs, data_attribute const& rhs) const
       {
-        if (std::holds_alternative<intermediate_data_kind>(lhs.value) !=
-            std::holds_alternative<intermediate_data_kind>(rhs.value)) {
-          return false;
+        auto const& lhs_val = lhs.value;
+        auto const& rhs_val = rhs.value;
+        if (lhs_val.index() != rhs_val.index()) { return false; }
+        if (std::holds_alternative<reduction_data_attribute>(lhs_val)) {
+          return std::get<reduction_data_attribute>(lhs_val) ==
+                 std::get<reduction_data_attribute>(rhs_val);
         }
-        if (std::holds_alternative<intermediate_data_kind>(lhs.value)) {
-          return std::get<intermediate_data_kind>(lhs.value) ==
-                 std::get<intermediate_data_kind>(rhs.value);
+        if (std::holds_alternative<segmented_reduction_data_attribute>(lhs_val)) {
+          return std::get<segmented_reduction_data_attribute>(lhs_val) ==
+                 std::get<segmented_reduction_data_attribute>(rhs_val);
+        }
+        if (std::holds_alternative<groupby_data_attribute>(lhs_val)) {
+          return std::get<groupby_data_attribute>(lhs_val) ==
+                 std::get<groupby_data_attribute>(rhs_val);
         }
         return std::get<std::unique_ptr<aggregation>>(lhs.value)->is_equal(
           *std::get<std::unique_ptr<aggregation>>(rhs.value));
@@ -700,15 +765,18 @@ struct host_udf_base {
     };
   };
 
-  using data_kind_set =
-    std::unordered_set<input_data_kind, input_data_kind::hash, input_data_kind::equal_to>;
+  using input_data_attributes =
+    std::unordered_set<data_attribute, data_attribute::hash, data_attribute::equal_to>;
 
   /**
-   * @brief Return a set of data kinds that is needed for computing the aggregation.
+   * @brief Return a set of attributes for the data that is needed for computing the aggregation.
    *
-   * @return A set of `input_data_kind`.
+   * If this function is not overridden, all the data attributes (except results from other
+   * aggregations in groupby) are assumed to be needed.
+   *
+   * @return A set of `data_attribute`.
    */
-  [[nodiscard]] virtual data_kind_set get_required_data_kinds() const = 0;
+  [[nodiscard]] virtual input_data_attributes get_required_data() const { return {}; }
 
   /**
    * @brief Type of the data that is passed to the derived class for computing aggregation.
@@ -717,16 +785,16 @@ struct host_udf_base {
                                        data_type,
                                        std::optional<std::reference_wrapper<scalar const>>,
                                        null_policy,
-                                       scan_type,
                                        device_span<size_type const>>;
 
-  using host_udf_input_map = std::unordered_map<input_data_kind,
-                                                input_data_type,
-                                                input_data_kind::hash,
-                                                input_data_kind::equal_to>;
+  /**
+   * @brief Input to the aggregation, mapping from each data attribute to its actual data.
+   */
+  using host_udf_input = std::
+    unordered_map<data_attribute, input_data_type, data_attribute::hash, data_attribute::equal_to>;
 
   /**
-   * Output type of the aggregation. It can be either a scalar (for reduction) or a column
+   * @brief Output type of the aggregation. It can be either a scalar (for reduction) or a column
    * (for segmented reduction or groupby aggregations).
    */
   using output_type = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
@@ -739,7 +807,7 @@ struct host_udf_base {
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation
    */
-  [[nodiscard]] virtual output_type operator()(host_udf_input_map const& input,
+  [[nodiscard]] virtual output_type operator()(host_udf_input const& input,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr) const = 0;
 

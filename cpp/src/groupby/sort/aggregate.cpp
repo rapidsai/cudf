@@ -616,8 +616,10 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto mean_agg = make_mean_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
 
   auto const mean0 = cache.get_result(values_child0, *mean_agg);
   auto const mean1 = cache.get_result(values_child1, *mean_agg);
@@ -665,8 +667,10 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto std_agg = make_std_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
 
   // Compute covariance here to avoid repeated computation of mean & count
   auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
@@ -796,45 +800,48 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
 {
   if (cache.has_result(values, agg)) { return; }
 
-  auto const& udf_ptr    = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-  auto const& data_kinds = udf_ptr->get_required_data_kinds();
+  auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+  auto data_attrs     = udf_ptr->get_required_data();
+  if (data_attrs.empty()) {  // empty means everything
+    data_attrs = {host_udf_base::groupby_data_attribute::INPUT_VALUES,
+                  host_udf_base::groupby_data_attribute::GROUPED_VALUES,
+                  host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
+                  host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
+                  host_udf_base::groupby_data_attribute::GROUP_LABELS};
+  }
 
   // Do not cache udf_input, as the actual input data may change from run to run.
-  cudf::host_udf_base::host_udf_input_map udf_input;
-  for (auto const& kind : data_kinds) {
-    if (std::holds_alternative<cudf::host_udf_base::intermediate_data_kind>(kind.value)) {
-      auto const intermediate_kind =
-        std::get<cudf::host_udf_base::intermediate_data_kind>(kind.value);
-      switch (intermediate_kind) {
-        case cudf::host_udf_base::intermediate_data_kind::INPUT_VALUES: {
-          udf_input.emplace(kind, values);
+  host_udf_base::host_udf_input udf_input;
+  for (auto const& attr : data_attrs) {
+    CUDF_EXPECTS(std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value) ||
+                   std::holds_alternative<std::unique_ptr<aggregation>>(attr.value),
+                 "Invalid input data attribute for HOST_UDF groupby aggregation.");
+    if (std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value)) {
+      switch (std::get<host_udf_base::groupby_data_attribute>(attr.value)) {
+        case host_udf_base::groupby_data_attribute::INPUT_VALUES: {
+          udf_input.emplace(attr, values);
           break;
         }
-
-        case cudf::host_udf_base::intermediate_data_kind::OFFSETS: {
-          udf_input.emplace(kind, helper.group_offsets(stream));
+        case host_udf_base::groupby_data_attribute::GROUPED_VALUES: {
+          udf_input.emplace(attr, get_grouped_values());
           break;
         }
-
-        case cudf::host_udf_base::intermediate_data_kind::GROUP_LABELS: {
-          udf_input.emplace(kind, helper.group_labels(stream));
+        case host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES: {
+          udf_input.emplace(attr, get_sorted_values());
           break;
         }
-
-        case cudf::host_udf_base::intermediate_data_kind::SORTED_GROUPED_VALUES: {
-          udf_input.emplace(kind, get_sorted_values());
+        case host_udf_base::groupby_data_attribute::GROUP_OFFSETS: {
+          udf_input.emplace(attr, helper.group_offsets(stream));
           break;
         }
-
-        case cudf::host_udf_base::intermediate_data_kind::GROUPED_VALUES: {
-          udf_input.emplace(kind, get_grouped_values());
+        case host_udf_base::groupby_data_attribute::GROUP_LABELS: {
+          udf_input.emplace(attr, helper.group_labels(stream));
           break;
         }
-
-        default: CUDF_FAIL("Unsupported data kind in host-based UDF groupby aggregation.");
+        default:;
       }
-    } else {  // `kind` is another aggregation
-      auto other_agg = std::get<std::unique_ptr<aggregation>>(kind.value)->clone();
+    } else {  // data is result from another aggregation
+      auto other_agg = std::get<std::unique_ptr<aggregation>>(attr.value)->clone();
       cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
       auto result = cache.get_result(values, *other_agg);
       udf_input.emplace(std::move(other_agg), std::move(result));
@@ -844,7 +851,6 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
   auto output = (*udf_ptr)(udf_input, stream, mr);
   CUDF_EXPECTS(std::holds_alternative<std::unique_ptr<column>>(output),
                "Invalid output type from HOST_UDF groupby aggregation.");
-
   cache.add_result(values, agg, std::get<std::unique_ptr<column>>(std::move(output)));
 }
 
