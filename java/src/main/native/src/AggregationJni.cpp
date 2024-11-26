@@ -80,25 +80,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv*
         // case 23: LAG
         // case 24: PTX
         // case 25: CUDA
-        case 26:  // M2
+        // case 26: HOST_UDF
+        case 27:  // M2
           return cudf::make_m2_aggregation();
-        case 27:  // MERGE_M2
+        case 28:  // MERGE_M2
           return cudf::make_merge_m2_aggregation();
-        case 28:  // RANK
+        case 29:  // RANK
           return cudf::make_rank_aggregation(
             cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE);
-        case 29:  // DENSE_RANK
+        case 30:  // DENSE_RANK
           return cudf::make_rank_aggregation(
             cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE);
-        case 30:  // ANSI SQL PERCENT_RANK
+        case 31:  // ANSI SQL PERCENT_RANK
           return cudf::make_rank_aggregation(cudf::rank_method::MIN,
                                              {},
                                              cudf::null_policy::INCLUDE,
                                              {},
                                              cudf::rank_percentage::ONE_NORMALIZED);
-        case 33:  // HISTOGRAM
+        // case 32: TDIGEST
+        // case 33: MERGE_TDIGEST
+        case 34:  // HISTOGRAM
           return cudf::make_histogram_aggregation();
-        case 34:  // MERGE_HISTOGRAM
+        case 35:  // MERGE_HISTOGRAM
           return cudf::make_merge_histogram_aggregation();
 
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
@@ -292,6 +295,36 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
     std::unique_ptr<cudf::aggregation> ret =
       cudf::make_merge_sets_aggregation(null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHostUDFAgg(JNIEnv* env,
+                                                                         jclass class_object,
+                                                                         jlong udf_native_handle)
+{
+  JNI_NULL_CHECK(env, udf_native_handle, "udf_native_handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(udf_native_handle)->clone();
+    auto output  = cudf::make_host_udf_aggregation(std::move(udf_ptr));
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_areHostUDFsEqual(JNIEnv* env,
+                                                                         jclass class_object,
+                                                                         jlong lhs_native_handle,
+                                                                         jlong rhs_native_handle)
+{
+  JNI_NULL_CHECK(env, lhs_native_handle, "lhs_native_handle is null", 0);
+  JNI_NULL_CHECK(env, rhs_native_handle, "rhs_native_handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs_udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(lhs_native_handle);
+    auto const rhs_udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(rhs_native_handle);
+    return lhs_udf_ptr->is_equal(*rhs_udf_ptr);
   }
   CATCH_STD(env, 0);
 }

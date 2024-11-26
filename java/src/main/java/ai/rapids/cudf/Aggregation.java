@@ -62,15 +62,16 @@ abstract class Aggregation {
         LAG(23),
         PTX(24),
         CUDA(25),
-        M2(26),
-        MERGE_M2(27),
-        RANK(28),
-        DENSE_RANK(29),
-        PERCENT_RANK(30),
-        TDIGEST(31), // This can take a delta argument for accuracy level
-        MERGE_TDIGEST(32), // This can take a delta argument for accuracy level
-        HISTOGRAM(33),
-        MERGE_HISTOGRAM(34);
+        HOST_UDF(26),
+        M2(27),
+        MERGE_M2(28),
+        RANK(29),
+        DENSE_RANK(30),
+        PERCENT_RANK(31),
+        TDIGEST(32), // This can take a delta argument for accuracy level
+        MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
+        HISTOGRAM(34),
+        MERGE_HISTOGRAM(35);
 
         final int nativeId;
 
@@ -380,6 +381,38 @@ abstract class Aggregation {
             } else if (other instanceof MergeSetsAggregation) {
                 MergeSetsAggregation o = (MergeSetsAggregation) other;
                 return o.nullEquality == this.nullEquality && o.nanEquality == this.nanEquality;
+            }
+            return false;
+        }
+    }
+
+    static final class HostUDFAggregation extends Aggregation {
+        private final long udfNativeHandle;
+        private final long udfNativeHashCode;
+
+        private HostUDFAggregation(long udfNativeHandle, long udfNativeHashCode) {
+            super(Kind.HOST_UDF);
+            this.udfNativeHandle = udfNativeHandle;
+            this.udfNativeHashCode = udfNativeHashCode;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createHostUDFAgg(udfNativeHandle);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + Long.hashCode(udfNativeHashCode);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof HostUDFAggregation) {
+                HostUDFAggregation o = (HostUDFAggregation) other;
+                return Aggregation.areHostUDFsEqual(udfNativeHandle, o.udfNativeHandle);
             }
             return false;
         }
@@ -990,4 +1023,14 @@ abstract class Aggregation {
      * Create a TDigest aggregation.
      */
     private static native long createTDigestAgg(int kind, int delta);
+
+    /**
+     * Create a HOST_UDF aggregation.
+     */
+    private static native long createHostUDFAgg(long udfNativeHandle);
+
+    /**
+     * Compare two host UDFs to see if they are equal.
+     */
+    private static native boolean areHostUDFsEqual(long lhsNativeHandle, long rhsNativeHandle);
 }
