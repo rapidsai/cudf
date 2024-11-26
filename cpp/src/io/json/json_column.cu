@@ -463,33 +463,21 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       column_names.emplace_back("offsets");
       column_names.emplace_back(
         json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
-      auto child_schema_element = get_list_child_schema();
-      if (json_col.child_columns.empty() and prune_columns and child_schema_element.has_value()) {
-        column_names.back()  = make_column_name_info(child_schema_element.value(), list_child_name);
-        auto all_null_column = make_all_nulls_column(
-          schema.value_or(schema_element{data_type{type_id::LIST}}), num_rows, stream, mr);
-        return {std::move(all_null_column), std::move(column_names)};
-      }
 
       // If child is not present, set the null mask correctly, but offsets are zero, and children
       // are empty. Note: json_col modified here, reuse the memory
-      auto offsets_column =
-        json_col.child_columns.empty()
-          ? std::make_unique<column>(
-              cudf::detail::make_zeroed_device_uvector_async<size_type>(num_rows + 1, stream, mr),
-              rmm::device_buffer{},
-              0)
-          : std::make_unique<column>(data_type{type_id::INT32},
-                                     num_rows + 1,
-                                     json_col.child_offsets.release(),
-                                     rmm::device_buffer{},
-                                     0);
+      auto offsets_column = std::make_unique<column>(data_type{type_id::INT32},
+                                                     num_rows + 1,
+                                                     json_col.child_offsets.release(),
+                                                     rmm::device_buffer{},
+                                                     0);
       // Create children column
+      auto child_schema_element  = get_list_child_schema();
       auto [child_column, names] = [&]() {
         if (json_col.child_columns.empty()) {
           // EMPTY type could not used because gather throws exception on EMPTY type.
           auto empty_col = make_empty_column(
-            child_schema_element.value_or(schema_element{data_type{type_id::INT8}}), stream, mr);
+            child_schema_element.value_or(schema_element{data_type{type_id::INT16}}), stream, mr);
           auto children_metadata = std::vector<column_name_info>{
             make_column_name_info(
               child_schema_element.value_or(schema_element{data_type{type_id::INT8}}),
