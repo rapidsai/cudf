@@ -476,23 +476,28 @@ class Scan(IR):
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                tbl_w_meta = plc.io.csv.read_csv(
-                    plc.io.SourceInfo([path]),
-                    delimiter=sep,
-                    quotechar=quote,
-                    lineterminator=eol,
-                    col_names=column_names,
-                    header=header,
-                    usecols=usecols,
-                    na_filter=True,
-                    na_values=null_values,
-                    keep_default_na=False,
-                    skiprows=skiprows,
-                    comment=comment,
-                    decimal=decimal,
-                    dtypes=schema,
-                    nrows=n_rows,
+                options = (
+                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
+                    .nrows(n_rows)
+                    .skiprows(skiprows)
+                    .lineterminator(str(eol))
+                    .quotechar(str(quote))
+                    .decimal(decimal)
+                    .keep_default_na(keep_default_na=False)
+                    .na_filter(na_filter=True)
+                    .build()
                 )
+                options.set_delimiter(str(sep))
+                if column_names is not None:
+                    options.set_names([str(name) for name in column_names])
+                options.set_header(header)
+                options.set_dtypes(schema)
+                if usecols is not None:
+                    options.set_use_cols_names([str(name) for name in usecols])
+                options.set_na_values(null_values)
+                if comment is not None:
+                    options.set_comment(comment)
+                tbl_w_meta = plc.io.csv.read_csv(options)
                 pieces.append(tbl_w_meta)
                 if read_partial:
                     n_rows -= tbl_w_meta.tbl.num_rows()
