@@ -288,11 +288,13 @@ cdef class TableInputMetadata:
     """
     def __init__(self, Table table):
         self.c_obj = table_input_metadata(table.view())
-        self.column_metadata = [
+
+    @property
+    def column_metadata(self):
+        return [
             ColumnInMetadata.from_libcudf(&self.c_obj.column_metadata[i], self)
             for i in range(self.c_obj.column_metadata.size())
         ]
-
 
 cdef class TableWithMetadata:
     """A container holding a table and its associated metadata

@@ -24,7 +24,6 @@ set(cython_sources
     interop.pyx
     json.pyx
     merge.pyx
-    orc.pyx
     parquet.pyx
     reduce.pyx
     replace.pyx

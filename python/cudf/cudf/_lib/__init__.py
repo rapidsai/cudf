@@ -12,7 +12,6 @@ from . import (
     json,
     merge,
     nvtext,
-    orc,
     parquet,
     reduce,
     replace,
