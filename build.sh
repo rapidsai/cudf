@@ -279,6 +279,7 @@ if buildAll || hasArg libcudf || hasArg pylibcudf || hasArg cudf || hasArg cudfj
         echo "Building for *ALL* supported GPU architectures..."
     fi
 fi
+CUDF_CMAKE_CUDA_ARCHITECTURES="NATIVE"
 
 if buildAll || hasArg libcudf; then
     # get the current count before the compile starts

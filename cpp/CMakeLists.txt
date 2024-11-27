@@ -730,23 +730,6 @@ add_library(
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
-  src/text/detokenize.cu
-  src/text/edit_distance.cu
-  src/text/generate_ngrams.cu
-  src/text/jaccard.cu
-  src/text/minhash.cu
-  src/text/ngrams_tokenize.cu
-  src/text/normalize.cu
-  src/text/replace.cu
-  src/text/stemmer.cu
-  src/text/bpe/byte_pair_encoding.cu
-  src/text/bpe/load_merge_pairs.cu
-  src/text/subword/data_normalizer.cu
-  src/text/subword/load_hash_file.cu
-  src/text/subword/subword_tokenize.cu
-  src/text/subword/wordpiece_tokenizer.cu
-  src/text/tokenize.cu
-  src/text/vocabulary_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
