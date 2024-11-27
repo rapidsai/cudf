@@ -72,7 +72,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // - Generate labels for lhs and rhs child elements.
   // - Check existence for rows of the table {rhs_labels, rhs_child} in the table
   //   {lhs_labels, lhs_child}.
-  // - `reduce_by_key` with keys are rhs_labels and `logical_or` reduction on the existence reults
+  // - `reduce_by_key` with keys are rhs_labels and `logical_or` reduction on the existence results
   //   computed in the previous step.
 
   auto const lhs_child = lhs.get_sliced_child(stream);
