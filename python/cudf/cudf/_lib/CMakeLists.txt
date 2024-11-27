@@ -23,7 +23,6 @@ set(cython_sources
     interop.pyx
     json.pyx
     merge.pyx
-    null_mask.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx
