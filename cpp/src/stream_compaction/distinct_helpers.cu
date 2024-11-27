@@ -21,8 +21,8 @@
 
 namespace cudf::detail {
 
-template <typename RowHasher>
-rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+template <typename HashSet>
+rmm::device_uvector<size_type> reduce_by_row(HashSet& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,

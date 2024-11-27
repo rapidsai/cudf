@@ -47,12 +47,12 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
-template <typename RowHasher>
+template <typename RowEqual>
 using hash_set_type =
   cuco::static_set<size_type,
                    cuco::extent<int64_t>,
                    cuda::thread_scope_device,
-                   RowHasher,
+                   RowEqual,
                    cuco::linear_probing<1,
                                         cudf::experimental::row::hash::device_row_hasher<
                                           cudf::hashing::detail::default_hash,
@@ -87,8 +87,8 @@ using hash_set_type =
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the output indices
  */
-template <typename RowHasher>
-rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+template <typename HashSet>
+rmm::device_uvector<size_type> reduce_by_row(HashSet& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
