@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
 
-__all__ = ["Cast", "UnaryFunction", "Len"]
+__all__ = ["Cast", "Len", "UnaryFunction"]
 
 
 class Cast(Expr):

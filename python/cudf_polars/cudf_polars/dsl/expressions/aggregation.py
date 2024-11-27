@@ -31,7 +31,7 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("name", "options", "op", "request")
+    __slots__ = ("name", "op", "options", "request")
     _non_child = ("dtype", "name", "options")
 
     def __init__(

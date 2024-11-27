@@ -21,8 +21,8 @@ _ensure_polars_version()
 del _ensure_polars_version
 
 __all__: list[str] = [
-    "execute_with_cudf",
     "Translator",
     "__git_commit__",
     "__version__",
+    "execute_with_cudf",
 ]

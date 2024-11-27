@@ -19,9 +19,9 @@ from pylibcudf.traits import (
 )
 
 __all__ = [
-    "from_polars",
-    "downcast_arrow_lists",
     "can_cast",
+    "downcast_arrow_lists",
+    "from_polars",
     "is_order_preserving_cast",
 ]
 import pylibcudf as plc
@@ -75,11 +75,13 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     return (
         (
             from_ == to
-            or not has_empty
-            and (
-                plc.traits.is_fixed_width(to)
-                and plc.traits.is_fixed_width(from_)
-                and plc.unary.is_supported_cast(from_, to)
+            or (
+                not has_empty
+                and (
+                    plc.traits.is_fixed_width(to)
+                    and plc.traits.is_fixed_width(from_)
+                    and plc.unary.is_supported_cast(from_, to)
+                )
             )
         )
         or (from_.id() == plc.TypeId.STRING and is_numeric_not_bool(to))
