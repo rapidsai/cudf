@@ -231,9 +231,9 @@ def _convert_str_col(col, errors, _downcast=None):
             return col.astype(dtype=cudf.dtype("float64"))
     else:
         if errors == "coerce":
-            col = col.astype(np.dtype(np.float64))
             non_numerics = is_float.unary_operator("not")
             col[non_numerics] = None
+            col = col.astype(np.dtype(np.float64))
             return col
         else:
             raise ValueError("Unable to convert some strings to numerics.")

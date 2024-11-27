@@ -5948,7 +5948,7 @@ class StringColumn(column.ColumnBase):
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         out_dtype = cudf.api.types.dtype(dtype)
-        if out_dtype == "b":
+        if out_dtype.kind == "b":
             with acquire_spill_lock():
                 plc_column = plc.strings.attributes.count_characters(
                     self.to_pylibcudf(mode="read")
@@ -6024,11 +6024,10 @@ class StringColumn(column.ColumnBase):
             add_back_nat = False
 
         with acquire_spill_lock():
-            plc_dtype = dtype_to_pylibcudf_type(self.dtype)
+            plc_dtype = dtype_to_pylibcudf_type(dtype)
             result_col = type(self).from_pylibcudf(
                 casting_func(self.to_pylibcudf(mode="read"), plc_dtype, format)
             )
-        result_col = casting_func(self, dtype, format)
 
         if add_back_nat:
             result_col[is_nat] = None
