@@ -83,9 +83,7 @@ CUDF_KERNEL void init_data_and_mark_word_start_and_ends(uint32_t const* code_poi
                                                         uint32_t* token_ids,
                                                         uint8_t* tokens_per_word)
 {
-  cudf::thread_index_type char_for_thread = static_cast<cudf::thread_index_type>(blockDim.x) *
-                                              static_cast<cudf::thread_index_type>(blockIdx.x) +
-                                            threadIdx.x;
+  auto const char_for_thread = cudf::detail::grid_1d::global_thread_id();
 
   // Deal with the start_word_indices array
   if (char_for_thread < num_code_points) {
@@ -138,9 +136,7 @@ CUDF_KERNEL void mark_string_start_and_ends(uint32_t const* code_points,
                                             uint32_t* end_word_indices,
                                             uint32_t num_strings)
 {
-  cudf::thread_index_type idx = static_cast<cudf::thread_index_type>(blockDim.x) *
-                                  static_cast<cudf::thread_index_type>(blockIdx.x) +
-                                threadIdx.x;
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
   // Ensure the starting character of each strings is written to the word start array.
   if (idx <= num_strings) {
     auto const offset = strings_offsets[idx];
@@ -335,11 +331,9 @@ CUDF_KERNEL void kernel_wordpiece_tokenizer(uint32_t const* code_points,
                                             uint32_t* token_ids,
                                             uint8_t* tokens_per_word)
 {
-  cudf::thread_index_type word_to_tokenize = static_cast<cudf::thread_index_type>(blockDim.x) *
-                                               static_cast<cudf::thread_index_type>(blockIdx.x) +
-                                             threadIdx.x;
+  auto const word_to_tokenize = cudf::detail::grid_1d::global_thread_id();
 
-  if (word_to_tokenize >= total_words) return;
+  if (word_to_tokenize >= total_words) { return; }
   // Each thread gets the start code_point offset for each word and resets the token_id memory to
   // the default value. In a post processing step, all of these values will be removed.
   auto const token_start = word_starts[word_to_tokenize];

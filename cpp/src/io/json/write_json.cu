@@ -244,6 +244,7 @@ struct validity_fn {
  *
  * @param strings_columns Table of strings columns
  * @param column_names Column of names for each column in the table
+ * @param num_rows Number of rows in the table
  * @param row_prefix Prepend this string to each row
  * @param row_suffix  Append this string to each row
  * @param value_separator Separator between values
@@ -255,6 +256,7 @@ struct validity_fn {
  */
 std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                           column_view const& column_names,
+                                          size_type const num_rows,
                                           string_view const row_prefix,
                                           string_view const row_suffix,
                                           string_view const value_separator,
@@ -268,8 +270,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   auto const num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns == column_names.size(),
                "Number of column names should be equal to number of columns in the table");
-  auto const strings_count = strings_columns.num_rows();
-  if (strings_count == 0)  // empty begets empty
+  if (num_rows == 0)  // empty begets empty
     return make_empty_column(type_id::STRING);
   // check all columns are of type string
   CUDF_EXPECTS(std::all_of(strings_columns.begin(),
@@ -277,31 +278,46 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                            [](auto const& c) { return c.type().id() == type_id::STRING; }),
                "All columns must be of type string");
   auto constexpr strviews_per_column = 3;  // (for each "column_name:", "value",  "separator")
-  auto const num_strviews_per_row    = strings_columns.num_columns() * strviews_per_column + 1;
+  auto const num_strviews_per_row    = strings_columns.num_columns() == 0
+                                         ? 2
+                                         : (1 + strings_columns.num_columns() * strviews_per_column);
   // e.g. {col1: value, col2: value, col3: value} = 1 + 3 + 3 + (3-1) + 1 = 10
 
   auto tbl_device_view = cudf::table_device_view::create(strings_columns, stream);
   auto d_column_names  = column_device_view::create(column_names, stream);
 
   // Note for future: chunk it but maximize parallelism, if memory usage is high.
-  auto const total_strings = num_strviews_per_row * strings_columns.num_rows();
-  auto const total_rows    = strings_columns.num_rows() * strings_columns.num_columns();
+  auto const total_strings = num_strviews_per_row * num_rows;
+  auto const total_rows    = num_rows * strings_columns.num_columns();
   rmm::device_uvector<string_view> d_strviews(total_strings, stream);
-  struct_scatter_strings_fn scatter_fn{*tbl_device_view,
-                                       *d_column_names,
-                                       strviews_per_column,
-                                       num_strviews_per_row,
-                                       row_prefix,
-                                       row_suffix,
-                                       value_separator,
-                                       narep.value(stream),
-                                       include_nulls,
-                                       d_strviews.begin()};
-  // scatter row_prefix, row_suffix, column_name:, value, value_separator as string_views
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator<size_type>(0),
-                   thrust::make_counting_iterator<size_type>(total_rows),
-                   scatter_fn);
+  if (strings_columns.num_columns() > 0) {
+    struct_scatter_strings_fn scatter_fn{*tbl_device_view,
+                                         *d_column_names,
+                                         strviews_per_column,
+                                         num_strviews_per_row,
+                                         row_prefix,
+                                         row_suffix,
+                                         value_separator,
+                                         narep.value(stream),
+                                         include_nulls,
+                                         d_strviews.begin()};
+    // scatter row_prefix, row_suffix, column_name:, value, value_separator as string_views
+    thrust::for_each(rmm::exec_policy_nosync(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(total_rows),
+                     scatter_fn);
+  } else {
+    thrust::for_each(
+      rmm::exec_policy_nosync(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(num_rows),
+      [d_strviews = d_strviews.begin(), row_prefix, row_suffix, num_strviews_per_row] __device__(
+        auto idx) {
+        auto const this_index                             = idx * num_strviews_per_row;
+        d_strviews[this_index]                            = row_prefix;
+        d_strviews[this_index + num_strviews_per_row - 1] = row_suffix;
+      });
+  }
   if (!include_nulls) {
     // if previous column was null, then we skip the value separator
     rmm::device_uvector<bool> d_str_separator(total_rows, stream);
@@ -341,7 +357,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
 
   // gather from offset and create a new string column
   auto old_offsets = strings_column_view(joined_col->view()).offsets();
-  rmm::device_uvector<size_type> row_string_offsets(strings_columns.num_rows() + 1, stream, mr);
+  rmm::device_uvector<size_type> row_string_offsets(num_rows + 1, stream, mr);
   auto const d_strview_offsets = cudf::detail::make_counting_transform_iterator(
     0, cuda::proclaim_return_type<size_type>([num_strviews_per_row] __device__(size_type const i) {
       return i * num_strviews_per_row;
@@ -353,7 +369,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                  row_string_offsets.begin());
   auto chars_data = joined_col->release().data;
   return make_strings_column(
-    strings_columns.num_rows(),
+    num_rows,
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
     std::move(chars_data.release()[0]),
     0,
@@ -677,6 +693,7 @@ struct column_to_strings_fn {
     auto col_string = operator()(child_it,
                                  child_it + column.num_children(),
                                  children_names,
+                                 column.size(),
                                  struct_row_end_wrap.value(stream_));
     col_string->set_null_mask(cudf::detail::copy_bitmask(column, stream_, mr_),
                               column.null_count());
@@ -688,6 +705,7 @@ struct column_to_strings_fn {
   std::unique_ptr<column> operator()(column_iterator column_begin,
                                      column_iterator column_end,
                                      host_span<column_name_info const> children_names,
+                                     size_type num_rows,
                                      cudf::string_view const row_end_wrap_value) const
   {
     auto const num_columns = std::distance(column_begin, column_end);
@@ -733,6 +751,7 @@ struct column_to_strings_fn {
     //
     return struct_to_strings(str_table_view,
                              column_names_view,
+                             num_rows,
                              struct_row_begin_wrap.value(stream_),
                              row_end_wrap_value,
                              struct_value_separator.value(stream_),
@@ -908,6 +927,7 @@ void write_json_uncompressed(data_sink* out_sink,
       auto str_concat_col = converter(sub_view.begin(),
                                       sub_view.end(),
                                       user_column_names,
+                                      sub_view.num_rows(),
                                       d_line_terminator_with_row_end.value(stream));
 
       // Needs line_terminator at the end, to separate from next chunk

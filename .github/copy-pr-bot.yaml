@@ -2,3 +2,4 @@
 # https://docs.gha-runners.nvidia.com/apps/copy-pr-bot/
 
 enabled: true
+auto_sync_draft: false
