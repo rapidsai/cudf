@@ -912,7 +912,4 @@ uint32_t gather_row_offsets(parse_options_view const& options,
   return dim_grid;
 }
 
-}  // namespace gpu
-}  // namespace csv
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::csv::gpu
