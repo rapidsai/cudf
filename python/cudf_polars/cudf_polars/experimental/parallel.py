@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 from functools import reduce, singledispatch
 from typing import TYPE_CHECKING, Any
@@ -291,15 +292,13 @@ def _(
 def _(
     ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    part_out = 0
     key_name = get_key_name(ir)
     partition = itertools.count()
-    graph = {
+    return {
         (key_name, next(partition)): (get_key_name(child), i)
-        for i in range(partition_info[child].count)
         for child in ir.children
+        for i in range(partition_info[child].count)
     }
-    return graph
 
 
 ##
