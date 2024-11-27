@@ -380,7 +380,7 @@ class option_context(ContextDecorator):
     >>> from cudf import option_context
     >>> with option_context('mode.pandas_compatible', True, 'default_float_bitwidth', 32):
     ...     pass
-    """  # noqa: E501
+    """
 
     def __init__(self, *args) -> None:
         if len(args) % 2 != 0:

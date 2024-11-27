@@ -548,7 +548,7 @@ class StringMethods(ColumnMethods):
         2    <NA>
         3     c-d
         dtype: object
-        """  # noqa E501
+        """
         if sep is None:
             sep = ""
 
@@ -694,7 +694,7 @@ class StringMethods(ColumnMethods):
 
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
-        """  # noqa W605
+        """
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
@@ -830,7 +830,7 @@ class StringMethods(ColumnMethods):
             value is set.
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
-        """  # noqa W605
+        """
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
@@ -3675,7 +3675,7 @@ class StringMethods(ColumnMethods):
             -   Some characters need to be escaped when passing
                 in pat. e.g. ``'$'`` has a special meaning in regex
                 and must be escaped when finding this literal character.
-        """  # noqa W605
+        """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
             pat = pat.pattern

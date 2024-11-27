@@ -468,7 +468,7 @@ class TimeDeltaColumn(ColumnBase):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """  # noqa: E501
+        """
 
         date_meta = {
             "seconds": ["m", "s"],

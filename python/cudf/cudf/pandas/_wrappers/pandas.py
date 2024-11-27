@@ -77,8 +77,8 @@ def _pandas_util_dir():
     # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/util/__init__.py
     res = list(
         set(
-            list(importlib.import_module("pandas.util").__dict__.keys())
-            + [
+            [
+                *list(importlib.import_module("pandas.util").__dict__.keys()),
                 "Appender",
                 "Substitution",
                 "_exceptions",
@@ -219,7 +219,7 @@ _CategoricalAccessor = make_intermediate_proxy_type(
 def _DataFrame__dir__(self):
     # Column names that are string identifiers are added to the dir of the
     # DataFrame
-    # See https://github.com/pandas-dev/pandas/blob/43691a2f5d235b08f0f3aa813d8fdcb7c4ce1e47/pandas/core/indexes/base.py#L878  # noqa: E501
+    # See https://github.com/pandas-dev/pandas/blob/43691a2f5d235b08f0f3aa813d8fdcb7c4ce1e47/pandas/core/indexes/base.py#L878
     _pd_df_dir = dir(pd.DataFrame)
     return _pd_df_dir + [
         colname

@@ -281,7 +281,7 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
         new_tbl_dict = {}
         for i, (name, vals) in enumerate(tbl_dict.items()):
             str_vals = [str(val) for val in vals]
-            new_tbl_dict[str(i)] = [name] + str_vals
+            new_tbl_dict[str(i)] = [name, *str_vals]
         pa_table = pa.table(new_tbl_dict)
 
     assert_table_and_meta_eq(

@@ -95,25 +95,33 @@ select = [
     "UP035",
     # usage of legacy `np.random` function calls
     "NPY002",
+    # Ruff-specific rules
+    "RUF",
 ]
 ignore = [
     # whitespace before :
     "E203",
     # line-too-long (due to Copyright header)
     "E501",
+    # String contains ambiguous character
+    "RUF001",
+    # Parenthesize `a and b` expressions when chaining `and` and `or`
+    # together, to make the precedence clear
+    "RUF021",
+    # Mutable class attributes should be annotated with
+    # `typing.ClassVar`
+    "RUF012",
 ]
 fixable = ["ALL"]
 exclude = [
-  # TODO: Remove this in a follow-up where we fix __all__.
-  "__init__.py",
-  # TODO: https://github.com/rapidsai/cudf/issues/17461
-  "**/*.ipynb",
+    # TODO: https://github.com/rapidsai/cudf/issues/17461
+    "**/*.ipynb",
 ]
 
 [tool.ruff.format]
 exclude = [
-  # TODO: https://github.com/rapidsai/cudf/issues/17461
-  "**/*.ipynb",
+    # TODO: https://github.com/rapidsai/cudf/issues/17461
+    "**/*.ipynb",
 ]
 
 [tool.ruff.lint.per-file-ignores]

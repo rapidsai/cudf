@@ -2248,7 +2248,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         n1 n2
         a  b   1  3
            c   2  4
-        """  # noqa: E501
+        """
 
         orient = orient.lower()
         if orient == "index":
@@ -2405,7 +2405,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.to_dict('records', into=dd)
         [defaultdict(<class 'list'>, {'col1': 1, 'col2': 0.5}),
          defaultdict(<class 'list'>, {'col1': 2, 'col2': 0.75})]
-        """  # noqa: E501
+        """
         orient = orient.lower()
 
         if orient == "series":
@@ -3033,7 +3033,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if len(keys) == 0:
             raise ValueError("No valid columns to be added to index.")
         if append:
-            keys = [self.index] + keys
+            keys = [self.index, *keys]
 
         # Preliminary type check
         labels_not_found = []
@@ -3099,7 +3099,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):  # noqa: D102
+    ):
         if isinstance(value, (pd.Series, pd.DataFrame)):
             value = cudf.from_pandas(value)
         if isinstance(value, cudf.Series):
@@ -3580,7 +3580,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  Yum Yum   cup     4.0
         2  Indomie   cup     3.5
         4  Indomie  pack     5.0
-        """  # noqa: E501
+        """
         outdf = super().drop_duplicates(
             subset=subset,
             keep=keep,
@@ -4860,7 +4860,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if na_action not in {"ignore", None}:
             raise ValueError(
-                f"na_action must be 'ignore' or None. Got {repr(na_action)}"
+                f"na_action must be 'ignore' or None. Got {na_action!r}"
             )
 
         if na_action == "ignore":
@@ -6145,7 +6145,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             non-numeric types and result is expected to be a Series in case of
             Pandas. cuDF will return a DataFrame as it doesn't support mixed
             types under Series.
-        """  # noqa: E501
+        """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
@@ -6844,7 +6844,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  False  2.0
         4   True  1.0
         5  False  2.0
-        """  # noqa: E501
+        """
 
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196

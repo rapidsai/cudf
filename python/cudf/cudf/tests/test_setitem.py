@@ -472,7 +472,7 @@ def test_loc_setitem_series_index_alignment_13031(other_index):
         ),
     ],
 )
-@pytest.mark.parametrize("arg", list(range(-20, 20)) + [5.6, 3.1])
+@pytest.mark.parametrize("arg", [*list(range(-20, 20)), 5.6, 3.1])
 def test_series_set_item_range_index(ps, arg):
     gsr = cudf.from_pandas(ps)
     psr = ps.copy(deep=True)

@@ -226,7 +226,7 @@ class NumericalColumn(NumericalBaseColumn):
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
             # in terms of `notnull` or `NULL_NOT_EQUALS`.
-            if type(other) is int and self.dtype.kind in "iu":  # noqa: E721
+            if type(other) is int and self.dtype.kind in "iu":
                 truthiness = None
                 iinfo = np.iinfo(self.dtype)
                 if iinfo.min > other:

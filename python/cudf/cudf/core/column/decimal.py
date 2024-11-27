@@ -435,7 +435,7 @@ def _get_decimal_type(
     `op` for the given dtypes.
 
     For precision & scale calculations see : https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-    """  # noqa: E501
+    """
 
     # This should at some point be hooked up to libcudf's
     # binary_operation_fixed_point_scale
@@ -506,8 +506,8 @@ def _get_decimal_type(
     # if we've reached this point, we cannot create a decimal type without
     # overflow; raise an informative error
     raise ValueError(
-        f"Performing {op} between columns of type {repr(lhs_dtype)} and "
-        f"{repr(rhs_dtype)} would result in overflow"
+        f"Performing {op} between columns of type {lhs_dtype!r} and "
+        f"{rhs_dtype!r} would result in overflow"
     )
 
 

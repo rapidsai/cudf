@@ -1467,9 +1467,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 RuntimeWarning,
             )
 
-        chunks = [
-            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
-        ]
+        chunks = [grouped_values[s:e] for s, e in itertools.pairwise(offsets)]
         chunk_results = [function(chk, *args) for chk in chunks]
         return self._post_process_chunk_results(
             chunk_results, group_names, group_keys, grouped_values

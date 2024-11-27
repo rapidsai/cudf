@@ -2313,7 +2313,7 @@ def test_parquet_writer_criteo(tmpdir):
 
     cont_names = ["I" + str(x) for x in range(1, 14)]
     cat_names = ["C" + str(x) for x in range(1, 27)]
-    cols = ["label"] + cont_names + cat_names
+    cols = ["label", *cont_names, *cat_names]
 
     df = cudf.read_csv(fname, sep="\t", names=cols, byte_range=(0, 1000000000))
     df = df.drop(columns=cont_names)

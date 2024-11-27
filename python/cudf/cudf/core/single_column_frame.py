@@ -83,7 +83,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def ndim(self) -> int:  # noqa: D401
+    def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -105,12 +105,12 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def values(self) -> cupy.ndarray:  # noqa: D102
+    def values(self) -> cupy.ndarray:
         return self._column.values
 
     @property  # type: ignore
     @_performance_tracking
-    def values_host(self) -> numpy.ndarray:  # noqa: D102
+    def values_host(self) -> numpy.ndarray:
         return self._column.values_host
 
     @classmethod

@@ -58,12 +58,14 @@ def gdf(pdf):
 @pytest.fixture(params=[0, 1, 10, 100])
 def gdf_writer_types(request):
     # datetime64[us], datetime64[ns] are unsupported due to a bug in parser
-    types = (
-        NUMERIC_TYPES
-        + ["datetime64[s]", "datetime64[ms]"]
-        + TIMEDELTA_TYPES
-        + ["bool", "str"]
-    )
+    types = [
+        *NUMERIC_TYPES,
+        "datetime64[s]",
+        "datetime64[ms]",
+        *TIMEDELTA_TYPES,
+        "bool",
+        "str",
+    ]
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
     nrows = request.param

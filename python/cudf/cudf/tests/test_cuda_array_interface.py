@@ -170,7 +170,7 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     # CuPy array
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a = cudf.core.column.as_column(a)
-    b = cupy.asarray([1, 1, 1])  # noqa: F841
+    b = cupy.asarray([1, 1, 1])
     assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column

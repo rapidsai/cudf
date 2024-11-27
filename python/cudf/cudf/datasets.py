@@ -6,7 +6,7 @@ import pandas as pd
 import cudf
 from cudf._lib.transform import bools_to_mask
 
-__all__ = ["timeseries", "randomdata"]
+__all__ = ["randomdata", "timeseries"]
 
 
 # TODO:

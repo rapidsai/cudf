@@ -133,7 +133,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def tolist(self):  # noqa: D102
+    def tolist(self):
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -148,7 +148,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property  # type: ignore
-    def ndim(self) -> int:  # noqa: D401
+    def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -265,7 +265,7 @@ class BaseIndex(Serializable):
         slice(1, 3, None)
         >>> multi_index.get_loc(('b', 'e'))
         1
-        """  # noqa: E501
+        """
 
     def max(self):
         """The maximum value of the index."""

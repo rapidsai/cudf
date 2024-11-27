@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.   # noqa: E501
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -247,7 +247,7 @@ def make_final_proxy_type(
     if metaclasses:
         metaclass = types.new_class(  # type: ignore
             f"{name}_Meta",
-            metaclasses + (_FastSlowProxyMeta,),
+            (*metaclasses, _FastSlowProxyMeta),
             {},
         )
     cls = types.new_class(
@@ -1301,7 +1301,7 @@ def _replace_closurevars(
     return functools.update_wrapper(
         g,
         f,
-        assigned=functools.WRAPPER_ASSIGNMENTS + ("__kwdefaults__",),
+        assigned=(*functools.WRAPPER_ASSIGNMENTS, "__kwdefaults__"),
     )
 
 

@@ -237,9 +237,9 @@ def generate(
 def get_dataframe(parameters, use_threads):
     # Initialize seeds
     if parameters.seed is not None:
-        rng = np.random.default_rng(seed=parameters.seed)  # noqa: F841
+        rng = np.random.default_rng(seed=parameters.seed)
     else:
-        rng = np.random.default_rng(seed=0)  # noqa: F841
+        rng = np.random.default_rng(seed=0)
 
     # For each column, invoke the data generator
     for column_params in parameters.column_parameters:

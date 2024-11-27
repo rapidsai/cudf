@@ -42,9 +42,9 @@ if "CUDF_BENCHMARKS_USE_PANDAS" in os.environ:
         items[:] = list(filter(is_pandas_compatible, items))
 
 else:
-    import cupy  # noqa: W0611, F401
+    import cupy  # noqa: F401
 
-    import cudf  # noqa: W0611, F401
+    import cudf  # noqa: F401
 
     def pytest_collection_modifyitems(session, config, items):
         pass

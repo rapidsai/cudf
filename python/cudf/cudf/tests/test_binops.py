@@ -167,11 +167,11 @@ if get_global_manager() is not None:
     _operators_arithmetic = _operators_arithmetic[:1]
     _operators_comparison = _operators_comparison[:1]
     _cudf_scalar_reflected_ops = _cudf_scalar_reflected_ops[:1]
-    DATETIME_TYPES = {"datetime64[ms]"}  # noqa: F811
-    NUMERIC_TYPES = {"float32"}  # noqa: F811
-    FLOAT_TYPES = {"float64"}  # noqa: F811
-    INTEGER_TYPES = {"int16"}  # noqa: F811
-    TIMEDELTA_TYPES = {"timedelta64[s]"}  # noqa: F811
+    DATETIME_TYPES = {"datetime64[ms]"}
+    NUMERIC_TYPES = {"float32"}
+    FLOAT_TYPES = {"float64"}
+    INTEGER_TYPES = {"int16"}
+    TIMEDELTA_TYPES = {"timedelta64[s]"}
     # To save time, we skip tests marked "pytest.mark.xfail"
     pytest_xfail = pytest.mark.skipif
 
@@ -444,7 +444,7 @@ def test_str_series_compare_num_reflected(
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES + ["datetime64[ms]"])
+@pytest.mark.parametrize("dtype", [*utils.NUMERIC_TYPES, "datetime64[ms]"])
 @pytest.mark.parametrize("use_cudf_scalar", [True, False])
 def test_series_compare_scalar(
     nelem, cmpop, obj_class, dtype, use_cudf_scalar
