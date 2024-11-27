@@ -307,6 +307,9 @@ def _(
 ##
 
 
-def _register():
+def _register_other():
     """Register multi-partition dispatch functions."""
     import cudf_polars.experimental.io  # noqa: F401
+
+
+_register_other()

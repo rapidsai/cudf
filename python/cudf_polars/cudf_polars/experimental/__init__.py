@@ -6,8 +6,3 @@
 from __future__ import annotations
 
 __all__: list[str] = []
-
-from cudf_polars.experimental.parallel import _register
-
-# Register multi-partition dispatch functions
-_register()
