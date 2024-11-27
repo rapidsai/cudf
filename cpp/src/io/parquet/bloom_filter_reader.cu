@@ -271,13 +271,14 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  */
 class bloom_filter_expression_converter : public equality_literals_collector {
  public:
-  bloom_filter_expression_converter(ast::expression const& expr,
-                                    size_type num_input_columns,
-                                    std::vector<std::vector<ast::literal*>>& equality_literals)
+  bloom_filter_expression_converter(
+    ast::expression const& expr,
+    size_type num_input_columns,
+    std::vector<std::vector<ast::literal*>> const& equality_literals)
   {
-    // Set the num columns and equality literals
+    // Set the num columns and copy equality literals
     _num_input_columns = num_input_columns;
-    _equality_literals = std::move(equality_literals);
+    _equality_literals = equality_literals;
 
     // Compute and store columns literals offsets
     _col_literals_offsets.reserve(_num_input_columns + 1);
@@ -593,7 +594,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
-  auto equality_literals =
+  auto const equality_literals =
     equality_literals_collector{filter.get(), num_input_columns}.get_equality_literals();
 
   // Collect schema indices of columns with equality predicate(s)
