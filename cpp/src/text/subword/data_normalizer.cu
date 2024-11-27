@@ -217,9 +217,8 @@ CUDF_KERNEL void kernel_data_normalizer(unsigned char const* strings,
   constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
 
-  cudf::thread_index_type const char_for_thread =
-    threadIdx.x + cudf::thread_index_type(blockIdx.x) * cudf::thread_index_type(blockDim.x);
-  uint32_t num_new_chars = 0;
+  auto const char_for_thread = cudf::detail::grid_1d::global_thread_id();
+  uint32_t num_new_chars     = 0;
 
   if (char_for_thread < total_bytes) {
     auto const code_point = extract_code_points_from_utf8(strings, total_bytes, char_for_thread);
