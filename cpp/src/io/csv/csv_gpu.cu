@@ -49,10 +49,9 @@ using namespace ::cudf::io;
 using cudf::device_span;
 using cudf::detail::grid_1d;
 
-namespace cudf {
-namespace io {
-namespace csv {
-namespace gpu {
+namespace cudf::io::csv::gpu {
+
+namespace {
 
 /// Block dimension for dtype detection and conversion kernels
 constexpr uint32_t csvparse_block_dim = 128;
@@ -399,7 +398,24 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   }
 }
 
-namespace {
+/**
+ * @brief Unpack a row context  (select one of the 4 contexts in packed form)
+ */
+__device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx, uint32_t ctxid)
+{
+  return static_cast<rowctx32_t>((packed_ctx >> (ctxid * 20)) & ((1 << 20) - 1));
+}
+
+/**
+ * @brief return a row context from a {count, id} pair
+ *
+ * The 32-bit row context consists of the 2-bit parser state stored in the lower 2-bits
+ * and a 30-bit row count in the upper 30 bits.
+ */
+__device__ rowctx32_t make_row_context(uint32_t row_count, uint32_t out_ctx)
+{
+  return (row_count << 2) + out_ctx;
+}
 
 /**
  * @brief pack multiple row contexts together
@@ -413,7 +429,7 @@ namespace {
  * state corresponding to an EOF input state can only be EOF, so only the first 3 output
  * states are included as parameters, and the EOF->EOF state transition is hardcoded)
  */
-constexpr packed_rowctx_t pack_row_contexts(rowctx32_t ctx0, rowctx32_t ctx1, rowctx32_t ctx2)
+__device__ packed_rowctx_t pack_row_contexts(rowctx32_t ctx0, rowctx32_t ctx1, rowctx32_t ctx2)
 {
   return (ctx0) | (static_cast<uint64_t>(ctx1) << 20) | (static_cast<uint64_t>(ctx2) << 40) |
          (static_cast<uint64_t>(ROW_CTX_EOF) << 60);
@@ -624,7 +640,6 @@ __device__ rowctx32_t rowctx_inverse_merge_transform(device_span<uint64_t const>
 
   return brow4 + ctx;
 }
-}  // namespace
 
 /**
  * @brief Gather row offsets from CSV character data split into 16KB chunks
@@ -781,6 +796,8 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
     if (t == 0) { row_ctx[blockIdx.x] = ctxtree_span[1]; }
   }
 }
+
+}  // namespace
 
 size_t count_blank_rows(cudf::io::parse_options_view const& opts,
                         device_span<char const> data,

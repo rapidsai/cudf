@@ -71,6 +71,24 @@ using namespace cudf::io;
 namespace {
 
 /**
+ * @brief Select the output row context from a given input context and a packed row
+ * context corresponding to a block of characters, and return the new output context with
+ * updated total row count.
+ * The input context is a 64-bit version of the 32-bit single row context as returned
+ * by make_row_context(), so the maximum row count here is a 62-bit value.
+ *
+ * @param sel_ctx input context (2-bit context id, 62-bit row count)
+ * @param packed_ctx row context of character block
+ * @return total_row_count * 4 + output context id
+ */
+uint64_t select_row_context(uint64_t sel_ctx, uint64_t packed_ctx)
+{
+  auto const ctxid = static_cast<uint32_t>(sel_ctx & 3);
+  auto const ctx   = static_cast<uint32_t>((packed_ctx >> (ctxid * 20)) & ((1 << 20) - 1));
+  return (sel_ctx & ~3) + ctx;
+}
+
+/**
  * @brief Offsets of CSV rows in device memory, accessed through a shrinkable span.
  *
  * Row offsets are stored this way to avoid reallocation/copies when discarding front or back
@@ -313,9 +331,9 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
     // corresponds to the current input context. Also stores the now known input
     // context per character block that will be needed by the second pass.
     for (uint32_t i = 0; i < num_blocks; i++) {
-      uint64_t ctx_next = cudf::io::csv::gpu::select_row_context(ctx, row_ctx[i]);
-      row_ctx[i]        = ctx;
-      ctx               = ctx_next;
+      auto const ctx_next = select_row_context(ctx, row_ctx[i]);
+      row_ctx[i]          = ctx;
+      ctx                 = ctx_next;
     }
     size_t total_rows = ctx >> 2;
     if (total_rows > skip_rows) {

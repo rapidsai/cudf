@@ -64,43 +64,6 @@ using rowctx64_t = uint64_t;
 using packed_rowctx_t = uint64_t;
 
 /**
- * @brief return a row context from a {count, id} pair
- *
- * The 32-bit row context consists of the 2-bit parser state stored in the lower 2-bits
- * and a 30-bit row count in the upper 30 bits.
- */
-inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint32_t out_ctx)
-{
-  return (row_count << 2) + out_ctx;
-}
-
-/**
- * @brief Unpack a row context  (select one of the 4 contexts in packed form)
- */
-inline __host__ __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx, uint32_t ctxid)
-{
-  return static_cast<rowctx32_t>((packed_ctx >> (ctxid * 20)) & ((1 << 20) - 1));
-}
-
-/**
- * @brief Select the output row context from a given input context and a packed row
- * context corresponding to a block of characters, and return the new output context with
- * updated total row count.
- * The input context is a 64-bit version of the 32-bit single row context as returned
- * by make_row_context(), so the maximum row count here is a 62-bit value.
- *
- * @param sel_ctx input context (2-bit context id, 62-bit row count)
- * @param packed_ctx row context of character block
- * @return total_row_count * 4 + output context id
- */
-inline rowctx64_t select_row_context(rowctx64_t sel_ctx, packed_rowctx_t packed_ctx)
-{
-  auto ctxid     = static_cast<uint32_t>(sel_ctx & 3);
-  rowctx32_t ctx = get_row_context(packed_ctx, ctxid);
-  return (sel_ctx & ~3) + ctx;
-}
-
-/**
  * @brief Launches kernel to gather row offsets
  *
  * This is done in two phases: the first phase returns the possible row counts
