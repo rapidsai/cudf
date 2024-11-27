@@ -2016,9 +2016,7 @@ def test_multi_agg():
     "agg",
     (
         [
-            *list(
-                itertools.combinations(["count", "max", "min", "nunique"], 2)
-            ),
+            *itertools.combinations(["count", "max", "min", "nunique"], 2),
             {"b": "min", "c": "mean"},
             {"b": "max", "c": "mean"},
             {"b": "count", "c": "mean"},
