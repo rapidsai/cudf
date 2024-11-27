@@ -30,14 +30,18 @@ namespace {
 /**
  * @brief A host-based UDF implementation used for unit tests.
  */
-template <typename cudf_aggregation, int test_location>
+template <typename cudf_aggregation, int test_location_line>
 struct host_udf_test : cudf::host_udf_base {
   static_assert(std::is_same_v<cudf_aggregation, cudf::reduce_aggregation> ||
                 std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation> ||
                 std::is_same_v<cudf_aggregation, cudf::groupby_aggregation>);
 
-  input_data_attributes input_attrs;
-  host_udf_test(input_data_attributes input_attrs_ = {}) : input_attrs(std::move(input_attrs_)) {}
+  bool* const test_run;  // to check if the test is accidentally skipped
+  input_data_attributes const input_attrs;
+  host_udf_test(bool* test_run_, input_data_attributes input_attrs_ = {})
+    : test_run{test_run_}, input_attrs(std::move(input_attrs_))
+  {
+  }
 
   [[nodiscard]] input_data_attributes get_required_data() const override { return input_attrs; }
 
@@ -47,7 +51,7 @@ struct host_udf_test : cudf::host_udf_base {
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr) const override
   {
-    SCOPED_TRACE("Original line of failure: " + std::to_string(test_location));
+    SCOPED_TRACE("Original line of failure: " + std::to_string(test_location_line));
 
     input_data_attributes check_attrs = input_attrs;
     if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
@@ -60,7 +64,7 @@ struct host_udf_test : cudf::host_udf_base {
       for (auto const& attr : check_attrs) {
         EXPECT_TRUE(input.count(attr) > 0);
         EXPECT_TRUE(std::holds_alternative<reduction_data_attribute>(attr.value));
-        switch (auto const attr_val = std::get<reduction_data_attribute>(attr.value)) {
+        switch (std::get<reduction_data_attribute>(attr.value)) {
           case reduction_data_attribute::INPUT_VALUES:
             EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
             break;
@@ -87,7 +91,7 @@ struct host_udf_test : cudf::host_udf_base {
       for (auto const& attr : check_attrs) {
         EXPECT_TRUE(input.count(attr) > 0);
         EXPECT_TRUE(std::holds_alternative<segmented_reduction_data_attribute>(attr.value));
-        switch (auto const attr_val = std::get<segmented_reduction_data_attribute>(attr.value)) {
+        switch (std::get<segmented_reduction_data_attribute>(attr.value)) {
           case segmented_reduction_data_attribute::INPUT_VALUES:
             EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
             break;
@@ -123,7 +127,7 @@ struct host_udf_test : cudf::host_udf_base {
         EXPECT_TRUE(std::holds_alternative<groupby_data_attribute>(attr.value) ||
                     std::holds_alternative<std::unique_ptr<cudf::aggregation>>(attr.value));
         if (std::holds_alternative<groupby_data_attribute>(attr.value)) {
-          switch (auto const attr_val = std::get<groupby_data_attribute>(attr.value)) {
+          switch (std::get<groupby_data_attribute>(attr.value)) {
             case groupby_data_attribute::INPUT_VALUES:
               EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
               break;
@@ -149,6 +153,7 @@ struct host_udf_test : cudf::host_udf_base {
       }
     }
 
+    *test_run = true;  // test is run successfully
     return get_empty_output(std::nullopt, stream, mr);
   }
 
@@ -170,7 +175,7 @@ struct host_udf_test : cudf::host_udf_base {
   [[nodiscard]] std::size_t do_hash() const override { return 0; }
   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
   {
-    return std::make_unique<host_udf_test>();
+    return std::make_unique<host_udf_test>(test_run, input_attrs);
   }
 };
 
@@ -190,8 +195,6 @@ cudf::host_udf_base::input_data_attributes get_subset(
     output.insert(elements[idx_distr(gen)]);
   }
 
-  printf("subset_size: %d\n", (int)subset_size);
-  printf("original size: %d\n", (int)attrs.size());
   return output;
 }
 
@@ -199,9 +202,8 @@ std::unique_ptr<cudf::aggregation> get_random_agg()
 {
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<std::size_t> distr(1, 4);
-  auto const agg_idx = distr(gen);
-  switch (agg_idx) {
+  std::uniform_int_distribution<int> distr(1, 4);
+  switch (distr(gen)) {
     case 1: return cudf::make_min_aggregation();
     case 2: return cudf::make_max_aggregation();
     case 3: return cudf::make_sum_aggregation();
@@ -225,40 +227,46 @@ struct HostUDFTest : cudf::test::BaseFixture {};
 
 TEST_F(HostUDFTest, ReductionAllInput)
 {
+  bool test_run   = false;
   auto const vals = int32s_col{1, 2, 3};
   auto const agg  = cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(
-    std::make_unique<host_udf_test<cudf::reduce_aggregation, __LINE__>>());
+    std::make_unique<host_udf_test<cudf::reduce_aggregation, __LINE__>>(&test_run));
   [[maybe_unused]] auto const reduced = cudf::reduce(vals,
                                                      *agg,
                                                      cudf::data_type{cudf::type_id::INT64},
                                                      cudf::get_default_stream(),
                                                      cudf::get_current_device_resource_ref());
+  EXPECT_TRUE(test_run);
 }
 
 TEST_F(HostUDFTest, ReductionSomeInput)
 {
   auto const vals = int32s_col{1, 2, 3};
   for (int i = 0; i < NUM_RANDOM_TESTS; ++i) {
+    bool test_run    = false;
     auto input_attrs = get_subset(cudf::host_udf_base::input_data_attributes{
       cudf::host_udf_base::reduction_data_attribute::INPUT_VALUES,
       cudf::host_udf_base::reduction_data_attribute::OUTPUT_DTYPE,
       cudf::host_udf_base::reduction_data_attribute::INIT_VALUE});
     auto const agg   = cudf::make_host_udf_aggregation<cudf::reduce_aggregation>(
-      std::make_unique<host_udf_test<cudf::reduce_aggregation, __LINE__>>(std::move(input_attrs)));
+      std::make_unique<host_udf_test<cudf::reduce_aggregation, __LINE__>>(&test_run,
+                                                                          std::move(input_attrs)));
     [[maybe_unused]] auto const reduced = cudf::reduce(vals,
                                                        *agg,
                                                        cudf::data_type{cudf::type_id::INT64},
                                                        cudf::get_default_stream(),
                                                        cudf::get_current_device_resource_ref());
+    EXPECT_TRUE(test_run);
   }
 }
 
 TEST_F(HostUDFTest, SegmentedReductionAllInput)
 {
+  bool test_run      = false;
   auto const vals    = int32s_col{1, 2, 3};
   auto const offsets = int32s_col{0, 3, 5, 10}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
-    std::make_unique<host_udf_test<cudf::segmented_reduce_aggregation, __LINE__>>());
+    std::make_unique<host_udf_test<cudf::segmented_reduce_aggregation, __LINE__>>(&test_run));
   [[maybe_unused]] auto const result = cudf::segmented_reduce(
     vals,
     cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
@@ -268,6 +276,7 @@ TEST_F(HostUDFTest, SegmentedReductionAllInput)
     std::nullopt,  // init value
     cudf::get_default_stream(),
     cudf::get_current_device_resource_ref());
+  EXPECT_TRUE(test_run);
 }
 
 TEST_F(HostUDFTest, SegmentedReductionSomeInput)
@@ -275,6 +284,7 @@ TEST_F(HostUDFTest, SegmentedReductionSomeInput)
   auto const vals    = int32s_col{1, 2, 3};
   auto const offsets = int32s_col{0, 3, 5, 10}.release();
   for (int i = 0; i < NUM_RANDOM_TESTS; ++i) {
+    bool test_run    = false;
     auto input_attrs = get_subset(cudf::host_udf_base::input_data_attributes{
       cudf::host_udf_base::segmented_reduction_data_attribute::INPUT_VALUES,
       cudf::host_udf_base::segmented_reduction_data_attribute::OUTPUT_DTYPE,
@@ -283,7 +293,7 @@ TEST_F(HostUDFTest, SegmentedReductionSomeInput)
       cudf::host_udf_base::segmented_reduction_data_attribute::OFFSETS});
     auto const agg   = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
       std::make_unique<host_udf_test<cudf::segmented_reduce_aggregation, __LINE__>>(
-        std::move(input_attrs)));
+        &test_run, std::move(input_attrs)));
     [[maybe_unused]] auto const result = cudf::segmented_reduce(
       vals,
       cudf::device_span<int const>(offsets->view().begin<int>(), offsets->size()),
@@ -293,15 +303,17 @@ TEST_F(HostUDFTest, SegmentedReductionSomeInput)
       std::nullopt,  // init value
       cudf::get_default_stream(),
       cudf::get_current_device_resource_ref());
+    EXPECT_TRUE(test_run);
   }
 }
 
 TEST_F(HostUDFTest, GroupbyAllInput)
 {
+  bool test_run   = false;
   auto const keys = int32s_col{0, 1, 2};
   auto const vals = int32s_col{0, 1, 2};
   auto agg        = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-    std::make_unique<host_udf_test<cudf::groupby_aggregation, __LINE__>>());
+    std::make_unique<host_udf_test<cudf::groupby_aggregation, __LINE__>>(&test_run));
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
@@ -309,9 +321,9 @@ TEST_F(HostUDFTest, GroupbyAllInput)
   requests[0].aggregations.push_back(std::move(agg));
   cudf::groupby::groupby gb_obj(
     cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
-
   [[maybe_unused]] auto const grp_result =
     gb_obj.aggregate(requests, cudf::test::get_default_stream());
+  EXPECT_TRUE(test_run);
 }
 
 TEST_F(HostUDFTest, GroupbySomeInput)
@@ -319,6 +331,7 @@ TEST_F(HostUDFTest, GroupbySomeInput)
   auto const keys = int32s_col{0, 1, 2};
   auto const vals = int32s_col{0, 1, 2};
   for (int i = 0; i < NUM_RANDOM_TESTS; ++i) {
+    bool test_run    = false;
     auto input_attrs = get_subset(cudf::host_udf_base::input_data_attributes{
       cudf::host_udf_base::groupby_data_attribute::INPUT_VALUES,
       cudf::host_udf_base::groupby_data_attribute::GROUPED_VALUES,
@@ -327,7 +340,8 @@ TEST_F(HostUDFTest, GroupbySomeInput)
       cudf::host_udf_base::groupby_data_attribute::GROUP_LABELS});
     input_attrs.insert(get_random_agg());
     auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-      std::make_unique<host_udf_test<cudf::groupby_aggregation, __LINE__>>(std::move(input_attrs)));
+      std::make_unique<host_udf_test<cudf::groupby_aggregation, __LINE__>>(&test_run,
+                                                                           std::move(input_attrs)));
 
     std::vector<cudf::groupby::aggregation_request> requests;
     requests.emplace_back();
@@ -335,8 +349,8 @@ TEST_F(HostUDFTest, GroupbySomeInput)
     requests[0].aggregations.push_back(std::move(agg));
     cudf::groupby::groupby gb_obj(
       cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
-
     [[maybe_unused]] auto const grp_result =
       gb_obj.aggregate(requests, cudf::test::get_default_stream());
+    EXPECT_TRUE(test_run);
   }
 }
