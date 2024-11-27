@@ -935,7 +935,7 @@ target_link_libraries(
           kvikio::kvikio
           $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
           nanoarrow
-          $<TARGET_NAME_IF_EXISTS:rmm::rmm_logger_impl>
+          rmm::rmm_logger_impl
 )
 
 # Add Conda library, and include paths if specified
