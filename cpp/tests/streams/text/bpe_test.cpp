@@ -27,6 +27,7 @@ struct TextBytePairEncoding : public cudf::test::BaseFixture {};
 
 TEST_F(TextBytePairEncoding, BytePairEncoding)
 {
+  auto stream = cudf::test::get_default_stream();
   // partial table based on values from https://huggingface.co/gpt2/raw/main/merges.txt
   auto mpt = cudf::test::strings_column_wrapper({
     "e n",    // 14
@@ -45,8 +46,7 @@ TEST_F(TextBytePairEncoding, BytePairEncoding)
     "s ent"   // 33832
   });
 
-  auto merge_pairs =
-    nvtext::load_merge_pairs(cudf::strings_column_view(mpt), cudf::test::get_default_stream());
+  auto merge_pairs = nvtext::load_merge_pairs(cudf::strings_column_view(mpt), stream);
 
   auto validity = cudf::test::iterators::null_at(4);
   cudf::test::strings_column_wrapper input(
@@ -54,6 +54,6 @@ TEST_F(TextBytePairEncoding, BytePairEncoding)
     validity);
   auto sv = cudf::strings_column_view(input);
 
-  auto results = nvtext::byte_pair_encoding(
-    sv, *merge_pairs, cudf::string_scalar(" "), cudf::test::get_default_stream());
+  auto results =
+    nvtext::byte_pair_encoding(sv, *merge_pairs, cudf::string_scalar(" ", true, stream), stream);
 }
