@@ -161,14 +161,14 @@ public final class ReductionAggregation {
   /**
    * Aggregate to compute the specified quantiles. Uses linear interpolation by default.
    */
-  public static ReductionAggregation quantile(double ... quantiles) {
+  public static ReductionAggregation quantile(double... quantiles) {
     return new ReductionAggregation(Aggregation.quantile(quantiles));
   }
 
   /**
    * Aggregate to compute various quantiles.
    */
-  public static ReductionAggregation quantile(QuantileMethod method, double ... quantiles) {
+  public static ReductionAggregation quantile(QuantileMethod method, double... quantiles) {
     return new ReductionAggregation(Aggregation.quantile(method, quantiles));
   }
 
@@ -256,7 +256,7 @@ public final class ReductionAggregation {
    * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
    */
   public static ReductionAggregation collectSet(NullPolicy nullPolicy,
-      NullEquality nullEquality, NaNEquality nanEquality) {
+                                                NullEquality nullEquality, NaNEquality nanEquality) {
     return new ReductionAggregation(Aggregation.collectSet(nullPolicy, nullEquality, nanEquality));
   }
 
@@ -284,6 +284,15 @@ public final class ReductionAggregation {
    */
   public static ReductionAggregation mergeSets(NullEquality nullEquality, NaNEquality nanEquality) {
     return new ReductionAggregation(Aggregation.mergeSets(nullEquality, nanEquality));
+  }
+
+  /**
+   * Execute a reduction using a host-side user-defined function (UDF).
+   * @param udfNativeHandle Pointer to the native host UDF instance
+   * @return A new ReductionAggregation instance
+   */
+  public static ReductionAggregation hostUDF(long udfNativeHandle) {
+    return new ReductionAggregation(Aggregation.hostUDF(udfNativeHandle));
   }
 
   /**

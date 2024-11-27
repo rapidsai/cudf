@@ -388,12 +388,10 @@ abstract class Aggregation {
 
     static final class HostUDFAggregation extends Aggregation {
         private final long udfNativeHandle;
-        private final long udfNativeHashCode;
 
-        private HostUDFAggregation(long udfNativeHandle, long udfNativeHashCode) {
+        private HostUDFAggregation(long udfNativeHandle) {
             super(Kind.HOST_UDF);
             this.udfNativeHandle = udfNativeHandle;
-            this.udfNativeHashCode = udfNativeHashCode;
         }
 
         @Override
@@ -403,7 +401,7 @@ abstract class Aggregation {
 
         @Override
         public int hashCode() {
-            return 31 * kind.hashCode() + Long.hashCode(udfNativeHashCode);
+            return 31 * kind.hashCode();
         }
 
         @Override
@@ -868,6 +866,15 @@ abstract class Aggregation {
      */
     static MergeSetsAggregation mergeSets(NullEquality nullEquality, NaNEquality nanEquality) {
         return new MergeSetsAggregation(nullEquality, nanEquality);
+    }
+
+    /**
+     * Host UDF aggregation, to execute a host-side user-defined function (UDF).
+     * @param udfNativeHandle Pointer to the native host UDF instance
+     * @return A new HostUDFAggregation instance
+     */
+    static HostUDFAggregation hostUDF(long udfNativeHandle) {
+        return new HostUDFAggregation(udfNativeHandle);
     }
 
     static final class LeadAggregation extends LeadLagAggregation {
