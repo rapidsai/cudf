@@ -24,6 +24,23 @@ from pylibcudf.table cimport Table
 from pylibcudf.types cimport DataType
 
 
+cdef class ParquetReaderOptions:
+    cdef parquet_reader_options
+    cdef SourceInfo source
+    cpdef void set_row_groups(self, list row_groups)
+    cpdef void set_num_rows(self, size_type nrows)
+    cpdef void set_skip_rows(self, int64_t skip_rows)
+    cpdef void set_columns(self, list col_names)
+    cpdef void set_filter(self, Expression filter)
+
+cdef class ParquetReaderOptionsBuilder:
+    cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val)
+    cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
+    cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
+    cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
+    cpdef build(self)
+
+
 cdef class ChunkedParquetReader:
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
