@@ -99,11 +99,16 @@ rmm::device_uvector<size_type> reduce_by_row(HashSet& set,
   return output_indices;
 }
 
+using row_hash_t =
+  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>;
+
 template rmm::device_uvector<size_type> reduce_by_row(
   hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-    false,
-    cudf::nullate::DYNAMIC,
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
+                  false,
+                  cudf::nullate::DYNAMIC,
+                  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
+                row_hash_t>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
@@ -111,9 +116,10 @@ template rmm::device_uvector<size_type> reduce_by_row(
 
 template rmm::device_uvector<size_type> reduce_by_row(
   hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-    true,
-    cudf::nullate::DYNAMIC,
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
+                  true,
+                  cudf::nullate::DYNAMIC,
+                  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
+                row_hash_t>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
@@ -121,9 +127,10 @@ template rmm::device_uvector<size_type> reduce_by_row(
 
 template rmm::device_uvector<size_type> reduce_by_row(
   hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-    false,
-    cudf::nullate::DYNAMIC,
-    cudf::experimental::row::equality::physical_equality_comparator>>& set,
+                  false,
+                  cudf::nullate::DYNAMIC,
+                  cudf::experimental::row::equality::physical_equality_comparator>,
+                row_hash_t>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
@@ -131,9 +138,10 @@ template rmm::device_uvector<size_type> reduce_by_row(
 
 template rmm::device_uvector<size_type> reduce_by_row(
   hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-    true,
-    cudf::nullate::DYNAMIC,
-    cudf::experimental::row::equality::physical_equality_comparator>>& set,
+                  true,
+                  cudf::nullate::DYNAMIC,
+                  cudf::experimental::row::equality::physical_equality_comparator>,
+                row_hash_t>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
