@@ -8,8 +8,6 @@ import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, Literal
 
-# TODO: The `numpy` import is needed for typing purposes during doc builds
-# only, need to figure out why the `np` alias is insufficient then remove.
 import cupy
 import numpy
 import numpy as np
@@ -19,9 +17,13 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+
+# TODO: The `numpy` import is needed for typing purposes during doc builds
+# only, need to figure out why the `np` alias is insufficient then remove.
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals.search import search_sorted
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -425,6 +427,8 @@ class Frame(BinaryOperand, Scannable):
         ) -> cupy.ndarray | numpy.ndarray:
             if na_value is not None:
                 col = col.fillna(na_value)
+            if isinstance(col.dtype, cudf.CategoricalDtype):
+                col = col._get_decategorized_column()  # type: ignore[attr-defined]
             array = get_array(col)
             casted_array = module.asarray(array, dtype=dtype)
             if copy and casted_array is array:
@@ -445,6 +449,9 @@ class Frame(BinaryOperand, Scannable):
                 dtype = next(self._dtypes)[1]
             else:
                 dtype = find_common_type([dtype for _, dtype in self._dtypes])
+
+            if isinstance(dtype, cudf.CategoricalDtype):
+                dtype = dtype.categories.dtype
 
             if not isinstance(dtype, numpy.dtype):
                 raise NotImplementedError(
@@ -1302,7 +1309,7 @@ class Frame(BinaryOperand, Scannable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = libcudf.search.search_sorted(
+        outcol = search_sorted(
             sources,
             values,
             side,
