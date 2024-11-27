@@ -1473,7 +1473,7 @@ class BaseIndex(Serializable):
             ._data
         )
 
-        if sort is {None, True} and len(other):
+        if sort in {None, True} and len(other):
             return intersection_result.sort_values()
         return intersection_result
 
