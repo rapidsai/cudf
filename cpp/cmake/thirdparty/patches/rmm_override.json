@@ -1,9 +1,0 @@
-{
-  "packages": {
-    "rmm": {
-      "version": "25.02",
-      "git_url": "https://github.com/vyasr/rmm.git",
-      "git_tag": "fix/logger_issues"
-    }
-  }
-}
