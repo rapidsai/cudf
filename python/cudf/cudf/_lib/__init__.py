@@ -10,7 +10,6 @@ from . import (
     groupby,
     interop,
     merge,
-    null_mask,
     nvtext,
     orc,
     parquet,

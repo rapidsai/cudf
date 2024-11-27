@@ -19,7 +19,6 @@ import pylibcudf as plc
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.null_mask import bitmask_or
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
@@ -1118,8 +1117,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         index = self.grouping.keys.unique().sort_values()
         num_groups = len(index)
-        _, has_null_group = bitmask_or([*index._columns])
-
+        has_null_group = any(col.has_nulls() for col in index._columns)
         if ascending:
             # Count ascending from 0 to num_groups - 1
             groups = range(num_groups)

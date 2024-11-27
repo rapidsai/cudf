@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "hash_functions.cuh"
-
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
@@ -30,6 +30,11 @@ namespace cudf::hashing::detail {
 template <typename Key>
 struct XXHash_64 : public cuco::xxhash_64<Key> {
   using result_type = typename cuco::xxhash_64<Key>::result_type;
+
+  __host__ __device__ constexpr XXHash_64(uint64_t seed = cudf::DEFAULT_HASH_SEED)
+    : cuco::xxhash_64<Key>{seed}
+  {
+  }
 
   __device__ result_type operator()(Key const& key) const
   {

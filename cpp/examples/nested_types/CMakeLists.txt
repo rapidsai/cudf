@@ -16,6 +16,9 @@ project(
 
 include(../fetch_dependencies.cmake)
 
+include(rapids-cmake)
+rapids_cmake_build_type("Release")
+
 # Configure your project here
 add_executable(deduplication deduplication.cpp)
 target_link_libraries(deduplication PRIVATE cudf::cudf)

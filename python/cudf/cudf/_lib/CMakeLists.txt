@@ -23,7 +23,6 @@ set(cython_sources
     groupby.pyx
     interop.pyx
     merge.pyx
-    null_mask.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx

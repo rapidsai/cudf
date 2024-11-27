@@ -45,7 +45,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -3191,9 +3191,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                 out.append(result._with_type_metadata(col.dtype))
             else:
-                out_mask = cudf._lib.null_mask.create_null_mask(
-                    len(source_col),
-                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
+                out_mask = as_buffer(
+                    plc.null_mask.create_null_mask(
+                        len(source_col), plc.null_mask.MaskState.ALL_NULL
+                    )
                 )
                 out.append(source_col.set_mask(out_mask))
 
