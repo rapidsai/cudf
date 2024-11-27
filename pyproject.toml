@@ -104,8 +104,16 @@ ignore = [
 ]
 fixable = ["ALL"]
 exclude = [
-    # TODO: Remove this in a follow-up where we fix __all__.
-    "__init__.py",
+  # TODO: Remove this in a follow-up where we fix __all__.
+  "__init__.py",
+  # TODO: https://github.com/rapidsai/cudf/issues/17461
+  "**/*.ipynb",
+]
+
+[tool.ruff.format]
+exclude = [
+  # TODO: https://github.com/rapidsai/cudf/issues/17461
+  "**/*.ipynb",
 ]
 
 [tool.ruff.lint.per-file-ignores]
