@@ -69,10 +69,7 @@ class ListColumn(ColumnBase):
 
     @cached_property
     def memory_usage(self):
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
         current_base_child = self.base_children[1]
         current_offset = self.offset
@@ -97,7 +94,7 @@ class ListColumn(ColumnBase):
         ) * current_base_child.dtype.itemsize
 
         if current_base_child.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+            n += plc.null_mask.bitmask_allocation_size_bytes(
                 current_base_child.size
             )
         return n
