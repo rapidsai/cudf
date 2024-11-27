@@ -641,7 +641,7 @@ __device__ void rowctx_merge_transform(device_span<packed_rowctx_t> ctxtree,
  *
  * @return Final row context and count (row_position*4 + context_id format)
  */
-__device__ rowctx32_t rowctx_inverse_merge_transform(device_span<uint64_t const> ctxtree,
+__device__ rowctx32_t rowctx_inverse_merge_transform(device_span<packed_rowctx_t const> ctxtree,
                                                      uint32_t t)
 {
   uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
@@ -718,10 +718,10 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
 
   // Initial state is neutral context (no state transitions), zero rows
   uint4 ctx_map = {
-    .x = 0,
-    .y = 0,
-    .z = 0,
-    .w = (ROW_CTX_NONE << 0) | (ROW_CTX_QUOTE << 2) | (ROW_CTX_COMMENT << 4) | (ROW_CTX_EOF << 6)};
+    0,
+    0,
+    0,
+    (ROW_CTX_NONE << 0) | (ROW_CTX_QUOTE << 2) | (ROW_CTX_COMMENT << 4) | (ROW_CTX_EOF << 6)};
   int c, c_prev = (cur > start && cur <= end) ? cur[-1] : terminator;
   // Loop through all 32 bytes and keep a bitmask of row starts for each possible input context
   for (uint32_t pos = 0; pos < 32; pos++, cur++, c_prev = c) {
