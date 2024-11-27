@@ -271,10 +271,9 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  */
 class bloom_filter_expression_converter : public equality_literals_collector {
  public:
-  bloom_filter_expression_converter(
-    ast::expression const& expr,
-    size_type num_input_columns,
-    std::vector<std::vector<ast::literal*>> const& equality_literals)
+  bloom_filter_expression_converter(ast::expression const& expr,
+                                    size_type num_input_columns,
+                                    std::vector<std::vector<ast::literal*>>& equality_literals)
   {
     // Set the num columns and equality literals
     _num_input_columns = num_input_columns;
@@ -594,7 +593,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
-  auto const equality_literals =
+  auto equality_literals =
     equality_literals_collector{filter.get(), num_input_columns}.get_equality_literals();
 
   // Collect schema indices of columns with equality predicate(s)
@@ -613,7 +612,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Read a vector of bloom filter bitset device buffers for all column with equality
   // predicate(s) across all row groups
-  auto bloom_filter_data =
+  auto const bloom_filter_data =
     read_bloom_filters(sources, row_group_indices, equality_col_schemas, num_row_groups, stream);
 
   // No bloom filter buffers, return the original row group indices
