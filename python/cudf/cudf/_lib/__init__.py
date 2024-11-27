@@ -11,7 +11,6 @@ from . import (
     interop,
     json,
     merge,
-    null_mask,
     nvtext,
     orc,
     parquet,
