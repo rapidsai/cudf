@@ -57,7 +57,7 @@ struct host_udf_test : cudf::host_udf_base {
                                             reduction_data_attribute::INIT_VALUE};
       }
       EXPECT_EQ(input.size(), check_attrs.size());
-      for (auto const attr : check_attrs) {
+      for (auto const& attr : check_attrs) {
         EXPECT_TRUE(input.count(attr) > 0);
         EXPECT_TRUE(std::holds_alternative<reduction_data_attribute>(attr.value));
         switch (auto const attr_val = std::get<reduction_data_attribute>(attr.value)) {
@@ -84,7 +84,7 @@ struct host_udf_test : cudf::host_udf_base {
                                             segmented_reduction_data_attribute::OFFSETS};
       }
       EXPECT_EQ(input.size(), check_attrs.size());
-      for (auto const attr : check_attrs) {
+      for (auto const& attr : check_attrs) {
         EXPECT_TRUE(input.count(attr) > 0);
         EXPECT_TRUE(std::holds_alternative<segmented_reduction_data_attribute>(attr.value));
         switch (auto const attr_val = std::get<segmented_reduction_data_attribute>(attr.value)) {
@@ -118,7 +118,7 @@ struct host_udf_test : cudf::host_udf_base {
                                             groupby_data_attribute::GROUP_LABELS};
       }
       EXPECT_EQ(input.size(), check_attrs.size());
-      for (auto const attr : check_attrs) {
+      for (auto const& attr : check_attrs) {
         EXPECT_TRUE(input.count(attr) > 0);
         EXPECT_TRUE(std::holds_alternative<groupby_data_attribute>(attr.value) ||
                     std::holds_alternative<std::unique_ptr<cudf::aggregation>>(attr.value));
@@ -144,7 +144,7 @@ struct host_udf_test : cudf::host_udf_base {
             default:;
           }
         } else {  // std::holds_alternative<std::unique_ptr<cudf::aggregation>>(attr.value)
-          EXPECT_TRUE(std::holds_alternative<std::unique_ptr<cudf::aggregation>>(input.at(attr)));
+          EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
         }
       }
     }
