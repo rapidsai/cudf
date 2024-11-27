@@ -5750,17 +5750,13 @@ class StringColumn(column.ColumnBase):
 
     @cached_property
     def memory_usage(self) -> int:
-        n = 0
-        if self.data is not None:
-            n += self.data.size
+        n = super().memory_usage
         if len(self.base_children) == 1:
             child0_size = (self.size + 1) * self.base_children[
                 0
             ].dtype.itemsize
 
             n += child0_size
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
 
     @property

@@ -25,11 +25,6 @@ import rmm
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
-from cudf._lib.null_mask import (
-    MaskState,
-    bitmask_allocation_size_bytes,
-    create_null_mask,
-)
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
@@ -383,7 +378,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.data is not None:
             n += self.data.size
         if self.nullable:
-            n += bitmask_allocation_size_bytes(self.size)
+            n += plc.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
 
     def _fill(
@@ -410,7 +405,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
 
         if not slr.is_valid() and not self.nullable:
-            mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
+            mask = as_buffer(
+                plc.null_mask.create_null_mask(
+                    self.size, plc.null_mask.MaskState.ALL_VALID
+                )
+            )
             self.set_base_mask(mask)
 
         libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
@@ -1553,7 +1552,11 @@ def column_empty(
         data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
     if masked:
-        mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
+        mask = as_buffer(
+            plc.null_mask.create_null_mask(
+                row_count, plc.null_mask.MaskState.ALL_NULL
+            )
+        )
     else:
         mask = None
 
@@ -2210,7 +2213,9 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
     typestr = desc["typestr"]
     typecode = typestr[1]
     if typecode == "t":
-        mask_size = bitmask_allocation_size_bytes(desc["shape"][0])
+        mask_size = plc.null_mask.bitmask_allocation_size_bytes(
+            desc["shape"][0]
+        )
         return as_buffer(data=desc["data"][0], size=mask_size, owner=obj)
     elif typecode == "b":
         col = as_column(cai_mask)
