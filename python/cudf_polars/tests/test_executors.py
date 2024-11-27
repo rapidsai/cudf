@@ -66,3 +66,19 @@ def test_unknown_executor():
         match="ValueError: Unknown executor 'unknown-executor'",
     ):
         assert_gpu_result_equal(df, executor="unknown-executor")
+
+
+@pytest.mark.parametrize("executor", [None, "pylibcudf", "dask-experimental"])
+def test_unknown_executor_options(executor):
+    df = pl.LazyFrame({})
+
+    with pytest.raises(
+        pl.exceptions.ComputeError,
+        match="Unsupported executor_options",
+    ):
+        df.collect(
+            engine=pl.GPUEngine(
+                executor=executor,
+                executor_options={"foo": None},
+            )
+        )

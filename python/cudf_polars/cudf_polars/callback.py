@@ -226,10 +226,14 @@ def validate_config_options(config: dict) -> None:
     assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
         config.get("parquet_options", {})
     )
+
+    # Validate executor_options
     executor = config.get("executor", "pylibcudf")
     if executor == "dask-experimental":
-        assert {"num_rows_threshold"}.issuperset(config.get("executor_options", {}))
-    elif unsupported := config.get("executor_options", {}):
+        unsupported = config.get("executor_options", {}).keys() - {"num_rows_threshold"}
+    else:
+        unsupported = config.get("executor_options", {}).keys()
+    if unsupported:
         raise ValueError(f"Unsupported executor_options for {executor}: {unsupported}")
 
 
