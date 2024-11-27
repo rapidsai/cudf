@@ -13,7 +13,13 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterator, MutableMapping
+from collections.abc import (
+    Callable,
+    Hashable,
+    Iterator,
+    MutableMapping,
+    Sequence,
+)
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
@@ -1131,7 +1137,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: BaseIndex | None = None,
         columns: Any = None,
-    ) -> DataFrame:
+    ) -> Self:
         out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
@@ -5727,7 +5733,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
 
         data = self
-        index_descr = []
+        index_descr: Sequence[dict[str, Any]] | Sequence[str] = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
         index = self.index
@@ -5934,7 +5940,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index=None,
         columns=None,
         nan_as_null=False,
-    ):
+    ) -> Self:
         """
         Convert an object implementing an array interface to DataFrame.
 
@@ -5987,6 +5993,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
+        # Mapping/MutableMapping are invariant in the key type, so
+        # dict[int, ColumnBase] (the inferred type of ca_data) is not
+        # a valid type to pass to a function accepting
+        # Mapping[Hashable, ColumnBase] even though int is Hashable.
+        # See: https://github.com/python/typing/issues/445
+        ca_data: dict[Hashable, ColumnBase]
         if array_data.ndim == 2:
             ca_data = {
                 k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
@@ -7035,7 +7047,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def stack(self, level=-1, dropna=no_default, future_stack=False):
+    def stack(
+        self, level=-1, dropna=no_default, future_stack=False
+    ) -> DataFrame | Series:
         """Stack the prescribed level(s) from columns to index
 
         Return a reshaped DataFrame or Series having a multi-level
@@ -7282,11 +7296,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         if has_unnamed_levels:
-            unnamed_level_values = list(
-                map(column_name_idx.get_level_values, unnamed_levels_indices)
-            )
             unnamed_level_values = pd.MultiIndex.from_arrays(
-                unnamed_level_values
+                list(
+                    map(
+                        column_name_idx.get_level_values,
+                        unnamed_levels_indices,
+                    )
+                )
             )
 
         def unnamed_group_generator():
