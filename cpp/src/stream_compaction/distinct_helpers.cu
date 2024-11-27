@@ -16,6 +16,9 @@
 
 #include "distinct_helpers.hpp"
 
+#include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/table/primitive_row_operators.cuh>
+
 #include <cuda/functional>
 #include <cuda/std/atomic>
 
@@ -99,49 +102,53 @@ rmm::device_uvector<size_type> reduce_by_row(HashSet& set,
   return output_indices;
 }
 
-using row_hash_t =
-  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>;
-
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-                  false,
-                  cudf::nullate::DYNAMIC,
-                  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
-                row_hash_t>& set,
+  distinct_set_t<cudf::row::primitive::row_equality_comparator,
+                 cudf::row::primitive::row_hasher<cudf::hashing::detail::XXHash_64>>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-                  true,
-                  cudf::nullate::DYNAMIC,
-                  cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
-                row_hash_t>& set,
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
+                   false,
+                   cudf::nullate::DYNAMIC,
+                   cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
+                 distinct_hasher_t>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-                  false,
-                  cudf::nullate::DYNAMIC,
-                  cudf::experimental::row::equality::physical_equality_comparator>,
-                row_hash_t>& set,
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
+                   true,
+                   cudf::nullate::DYNAMIC,
+                   cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
+                 distinct_hasher_t>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
-                  true,
-                  cudf::nullate::DYNAMIC,
-                  cudf::experimental::row::equality::physical_equality_comparator>,
-                row_hash_t>& set,
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
+                   false,
+                   cudf::nullate::DYNAMIC,
+                   cudf::experimental::row::equality::physical_equality_comparator>,
+                 distinct_hasher_t>& set,
+  size_type num_rows,
+  duplicate_keep_option keep,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+template rmm::device_uvector<size_type> reduce_by_row(
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
+                   true,
+                   cudf::nullate::DYNAMIC,
+                   cudf::experimental::row::equality::physical_equality_comparator>,
+                 distinct_hasher_t>& set,
   size_type num_rows,
   duplicate_keep_option keep,
   rmm::cuda_stream_view stream,

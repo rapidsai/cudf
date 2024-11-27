@@ -47,14 +47,18 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
+using distinct_hasher_t =
+  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>;
+
 template <typename RowEqual, typename RowHasher>
-using hash_set_type = cuco::static_set<size_type,
-                                       cuco::extent<int64_t>,
-                                       cuda::thread_scope_device,
-                                       RowEqual,
-                                       cuco::linear_probing<1, RowHasher>,
-                                       cudf::detail::cuco_allocator<char>,
-                                       cuco::storage<1>>;
+using distinct_set_t = cuco::static_set<size_type,
+                                        cuco::extent<int64_t>,
+                                        cuda::thread_scope_device,
+                                        RowEqual,
+                                        cuco::linear_probing<1, RowHasher>,
+                                        cudf::detail::cuco_allocator<char>,
+                                        cuco::storage<1>>;
 
 /**
  * @brief Perform a reduction on groups of rows that are compared equal and returns output indices

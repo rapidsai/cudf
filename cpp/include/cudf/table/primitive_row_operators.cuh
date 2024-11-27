@@ -141,8 +141,8 @@ class element_equality_comparator {
   __device__ bool operator()(size_type lhs_element_index,
                              size_type rhs_element_index) const noexcept
   {
-    return equality_compare(lhs.element<Element>(lhs_element_index),
-                            rhs.element<Element>(rhs_element_index));
+    return primitive::equality_compare(lhs.element<Element>(lhs_element_index),
+                                       rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
@@ -183,10 +183,11 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
-    return cudf::type_dispatcher(lhs.begin().type(),
-                                 element_equality_comparator{lhs.begin(), rhs.begin()},
-                                 lhs_row_index,
-                                 rhs_row_index);
+    return cudf::type_dispatcher<dispatch_storage_type>(
+      lhs.begin()->type(),
+      element_equality_comparator{*lhs.begin(), *rhs.begin()},
+      lhs_row_index,
+      rhs_row_index);
   }
 
  private:
@@ -214,18 +215,6 @@ class element_relational_comparator {
   }
 
   /**
-   * @brief Construct type-dispatched function object for performing a relational comparison between
-   * two elements in two columns.
-   *
-   * @param lhs The column containing the first element
-   * @param rhs The column containing the second element (may be the same as lhs)
-   */
-  __host__ __device__ element_relational_comparator(column_device_view lhs, column_device_view rhs)
-    : lhs{lhs}, rhs{rhs}
-  {
-  }
-
-  /**
    * @brief Performs a relational comparison between the specified elements
    *
    * @param lhs_element_index The index of the first element
@@ -233,13 +222,12 @@ class element_relational_comparator {
    * @return Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    */
-  template <typename Element,
-            CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>() >)>
+  template <typename Element, CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
   __device__ weak_ordering operator()(size_type lhs_element_index,
                                       size_type rhs_element_index) const noexcept
   {
-    return relational_compare(lhs.element<Element>(lhs_element_index),
-                              rhs.element<Element>(rhs_element_index));
+    return primitive::relational_compare(lhs.element<Element>(lhs_element_index),
+                                         rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
@@ -288,7 +276,7 @@ class row_lexicographic_comparator {
   row_lexicographic_comparator(table_device_view lhs,
                                table_device_view rhs,
                                order const* column_order = nullptr)
-    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order},
+    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
@@ -309,8 +297,8 @@ class row_lexicographic_comparator {
 
       auto comparator = element_relational_comparator{_lhs.column(i), _rhs.column(i)};
 
-      weak_ordering state =
-        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
+      weak_ordering state = cudf::type_dispatcher<dispatch_storage_type>(
+        _lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
@@ -330,7 +318,7 @@ class row_lexicographic_comparator {
  *
  * @tparam Hash Hash functor to use for hashing elements
  */
-template <class Hash>
+template <template <typename> class Hash>
 class element_hasher {
  public:
   /**
@@ -377,7 +365,7 @@ class element_hasher {
  *
  * @tparam Hash Hash functor to use for hashing elements.
  */
-template <class Hash>
+template <template <typename> class Hash>
 class row_hasher {
  public:
   row_hasher() = delete;

@@ -22,7 +22,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -55,6 +57,7 @@ rmm::device_uvector<cudf::size_type> dispatch_row_equal(
   nan_equality compare_nans,
   bool has_nulls,
   cudf::experimental::row::equality::self_comparator row_equal,
+  distinct_hasher_t const& d_hash,
   Func&& func)
 {
   if (compare_nans == nan_equality::ALL_EQUAL) {
@@ -62,13 +65,13 @@ rmm::device_uvector<cudf::size_type> dispatch_row_equal(
       nullate::DYNAMIC{has_nulls},
       compare_nulls,
       cudf::experimental::row::equality::nan_equal_physical_equality_comparator{});
-    return func(d_equal);
+    return func(d_equal, d_hash);
   } else {
     auto const d_equal = row_equal.equal_to<HasNested>(
       nullate::DYNAMIC{has_nulls},
       compare_nulls,
       cudf::experimental::row::equality::physical_equality_comparator{});
-    return func(d_equal);
+    return func(d_equal, d_hash);
   }
 }
 }  // namespace
@@ -86,6 +89,34 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
     return rmm::device_uvector<size_type>(0, stream, mr);
   }
 
+  auto const helper_func = [&](auto const& d_equal, auto const& d_hash) {
+    using RowEqual  = std::decay_t<decltype(d_equal)>;
+    using RowHasher = std::decay_t<decltype(d_hash)>;
+    auto set        = distinct_set_t<RowEqual, RowHasher>{
+      num_rows,
+      CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
+      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+      d_equal,
+      d_hash,
+      {},
+      {},
+      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
+      stream.value()};
+    return detail::reduce_by_row(set, num_rows, keep, stream, mr);
+  };
+
+  // fast code-path for single-column numeric types
+  if (cudf::nullable(input) and input.num_columns() == 1 and
+      cudf::is_numeric(input.column(0).type())) {
+    auto d_input_view = cudf::table_device_view::create(input, stream);
+    auto const d_equal =
+      cudf::row::primitive::row_equality_comparator{*d_input_view, *d_input_view};
+    auto const d_hasher =
+      cudf::row::primitive::row_hasher<cudf::hashing::detail::XXHash_64>{*d_input_view};
+
+    return helper_func(d_equal, d_hasher);
+  }
+
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
   auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
@@ -94,26 +125,13 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto const row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  auto const helper_func = [&](auto const& d_equal) {
-    using RowEqual  = std::decay_t<decltype(d_equal)>;
-    using RowHasher = std::decay_t<decltype(row_hash.device_hasher(has_nulls))>;
-    auto set        = hash_set_type<RowEqual, RowHasher>{
-      num_rows,
-      0.5,  // desired load factor
-      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-      d_equal,
-      {row_hash.device_hasher(has_nulls)},
-      {},
-      {},
-      cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-      stream.value()};
-    return detail::reduce_by_row(set, num_rows, keep, stream, mr);
-  };
-
+  auto const d_hash = row_hash.device_hasher(has_nulls);
   if (cudf::detail::has_nested_columns(input)) {
-    return dispatch_row_equal<true>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dispatch_row_equal<true>(
+      nulls_equal, nans_equal, has_nulls, row_equal, d_hash, helper_func);
   } else {
-    return dispatch_row_equal<false>(nulls_equal, nans_equal, has_nulls, row_equal, helper_func);
+    return dispatch_row_equal<false>(
+      nulls_equal, nans_equal, has_nulls, row_equal, d_hash, helper_func);
   }
 }
 
