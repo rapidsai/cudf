@@ -44,7 +44,7 @@ def test_pyarrow_conversion_dispatch(preserve_index, index):
     if not preserve_index and index is not None:
         df1.index.name = None
 
-    assert type(df1) == type(df2)
+    assert type(df1) is type(df2)
     assert_eq(df1, df2)
 
     # Check that preserve_index does not produce a RangeIndex
