@@ -17,7 +17,7 @@ repos:
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.16.2
+    rev: v0.16.6
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
