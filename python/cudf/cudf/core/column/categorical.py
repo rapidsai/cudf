@@ -888,7 +888,7 @@ class CategoricalColumn(column.ColumnBase):
         if len(replacement_col) == replacement_col.null_count:
             replacement_col = replacement_col.astype(self.categories.dtype)
 
-        if type(to_replace_col) != type(replacement_col):
+        if type(to_replace_col) is not type(replacement_col):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "

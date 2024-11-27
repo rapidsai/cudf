@@ -917,7 +917,6 @@ def test_groupby_apply_return_col_from_df():
     # tests a UDF that consists of purely colwise
     # ops, such as `lambda group: group.x + group.y`
     # which returns a column
-    func = lambda group: group.x + group.y  # noqa:E731
     df = cudf.DataFrame(
         {
             "id": range(10),

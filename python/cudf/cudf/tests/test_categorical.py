@@ -98,7 +98,7 @@ def test_categorical_compare_unordered():
     # test equal
     out = sr == sr
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr == pdsr)
 
@@ -134,7 +134,7 @@ def test_categorical_compare_ordered():
     # test equal
     out = sr1 == sr1
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr1 == pdsr1)
 

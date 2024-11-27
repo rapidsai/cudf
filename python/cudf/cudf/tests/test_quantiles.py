@@ -90,4 +90,4 @@ def test_quantile_type_int_float(interpolation):
     actual = gsr.quantile(0.5, interpolation=interpolation)
 
     assert expected == actual
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)

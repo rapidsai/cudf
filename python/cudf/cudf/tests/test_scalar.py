@@ -351,7 +351,7 @@ def test_scalar_implicit_float_conversion(value):
     got = float(cudf.Scalar(value))
 
     assert expect == got
-    assert type(expect) == type(got)
+    assert type(expect) is type(got)
 
 
 @pytest.mark.parametrize("value", [1, -1, 1.5, 0, "1", True, False])
@@ -360,7 +360,7 @@ def test_scalar_implicit_int_conversion(value):
     got = int(cudf.Scalar(value))
 
     assert expect == got
-    assert type(expect) == type(got)
+    assert type(expect) is type(got)
 
 
 @pytest.mark.parametrize("cls", [int, float, bool])
