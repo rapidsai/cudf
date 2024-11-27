@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
 import rmm
 
 import cudf
@@ -252,7 +253,7 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     """
     Convert PyArrow mask buffer to cuDF mask buffer
     """
-    mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(size)
+    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
     if mask_buf.size < mask_size:
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
