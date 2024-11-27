@@ -1,0 +1,26 @@
+name: Trigger Breaking Change Notifications
+
+on:
+  pull_request_target:
+    types:
+      - closed
+      - reopened
+      - labeled
+      - unlabeled
+
+jobs:
+  trigger-notifier:
+    if: contains(github.event.pull_request.labels.*.name, 'breaking')
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@branch-24.12
+    with:
+      sender_login: ${{ github.event.sender.login }}
+      sender_avatar: ${{ github.event.sender.avatar_url }}
+      repo: ${{ github.repository }}
+      pr_number: ${{ github.event.pull_request.number }}
+      pr_title: "${{ github.event.pull_request.title }}"
+      pr_body: "${{ github.event.pull_request.body || '_Empty PR description_' }}"
+      pr_base_ref: ${{ github.event.pull_request.base.ref }}
+      pr_author: ${{ github.event.pull_request.user.login }}
+      event_action: ${{ github.event.action }}
+      pr_merged: ${{ github.event.pull_request.merged }}

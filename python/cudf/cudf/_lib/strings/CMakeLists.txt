@@ -11,35 +11,5 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-
-set(cython_sources
-    attributes.pyx
-    capitalize.pyx
-    case.pyx
-    char_types.pyx
-    combine.pyx
-    contains.pyx
-    extract.pyx
-    find.pyx
-    find_multiple.pyx
-    findall.pyx
-    json.pyx
-    padding.pyx
-    repeat.pyx
-    replace.pyx
-    replace_re.pyx
-    strip.pyx
-    substring.pyx
-    translate.pyx
-    wrap.pyx
-)
-
-set(linked_libraries cudf::cudf)
-rapids_cython_create_modules(
-  CXX
-  SOURCE_FILES "${cython_sources}"
-  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_ ASSOCIATED_TARGETS cudf
-)
-
 add_subdirectory(convert)
 add_subdirectory(split)
