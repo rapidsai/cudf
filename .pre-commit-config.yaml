@@ -33,7 +33,7 @@ repos:
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.8.5
+    rev: 1.9.1
     hooks:
       - id: nbqa-isort
         # Use the cudf_kafka isort orderings in notebooks so that dask
