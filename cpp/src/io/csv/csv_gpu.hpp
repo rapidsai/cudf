@@ -44,26 +44,6 @@ constexpr uint32_t rowofs_block_dim = 512;
 constexpr uint32_t rowofs_block_bytes = rowofs_block_dim * 32;  // 16KB/threadblock
 
 /**
- * Row parsing context with row count
- * Format: row_count * 4 + id, where `row_count` is the number of rows
- * in a character block, and `id` is the row parser state at the end of the block.
- */
-using rowctx32_t = uint32_t;
-using rowctx64_t = uint64_t;
-
-/**
- * Packed row context format
- *
- * The 64-bit packed row context format represents the four possible output row context states
- * from each of the four possible input row context states.
- * Each rowctx32_t value is truncated to 20-bit (limiting the max number of rows
- * to 18-bit) and concatenated to form a 80-bit value, whose upper 16 bits are
- * always zero (EOF input state implies a zero row count) and therefore
- * stored as 64-bit.
- */
-using packed_rowctx_t = uint64_t;
-
-/**
  * @brief Launches kernel to gather row offsets
  *
  * This is done in two phases: the first phase returns the possible row counts

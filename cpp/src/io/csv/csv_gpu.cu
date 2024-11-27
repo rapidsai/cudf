@@ -399,6 +399,25 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 }
 
 /**
+ * Row parsing context with row count
+ * Format: row_count * 4 + id, where `row_count` is the number of rows
+ * in a character block, and `id` is the row parser state at the end of the block.
+ */
+using rowctx32_t = uint32_t;
+
+/**
+ * Packed row context format
+ *
+ * The 64-bit packed row context format represents the four possible output row context states
+ * from each of the four possible input row context states.
+ * Each rowctx32_t value is truncated to 20-bit (limiting the max number of rows
+ * to 18-bit) and concatenated to form a 80-bit value, whose upper 16 bits are
+ * always zero (EOF input state implies a zero row count) and therefore
+ * stored as 64-bit.
+ */
+using packed_rowctx_t = uint64_t;
+
+/**
  * @brief Unpack a row context  (select one of the 4 contexts in packed form)
  */
 __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx, uint32_t ctxid)
@@ -687,15 +706,10 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
                          int escapechar,
                          int commentchar)
 {
-  auto start         = data.begin();
-  using block_reduce = typename cub::BlockReduce<uint32_t, rowofs_block_dim>;
-  __shared__ union {
-    typename block_reduce::TempStorage bk_storage;
-    packed_rowctx_t ctxtree[rowofs_block_dim * 2];
-  } temp_storage;
-  auto const ctxtree_span =
-    device_span<packed_rowctx_t>(temp_storage.ctxtree, rowofs_block_dim * 2);
+  __shared__ packed_rowctx_t ctxtree[rowofs_block_dim * 2];
+  auto const ctxtree_span = device_span<packed_rowctx_t>(ctxtree, rowofs_block_dim * 2);
 
+  auto start      = data.begin();
   char const* end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
   uint32_t t      = threadIdx.x;
   size_t block_pos =
@@ -789,7 +803,9 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
     }
     __syncthreads();
     // Return the number of rows out of range
-    rows_out_of_range = block_reduce(temp_storage.bk_storage).Sum(rows_out_of_range);
+    using block_reduce = typename cub::BlockReduce<uint32_t, rowofs_block_dim>;
+    __shared__ typename block_reduce::TempStorage bk_storage;
+    rows_out_of_range = block_reduce(bk_storage).Sum(rows_out_of_range);
     if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
   } else {
     // Just store the row counts and output contexts
