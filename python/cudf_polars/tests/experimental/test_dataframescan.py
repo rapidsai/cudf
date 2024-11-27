@@ -41,3 +41,13 @@ def test_parallel_dataframescan(df, num_rows_threshold):
         assert count > 1
     else:
         assert count == 1
+
+
+def test_dataframescan_concat(df):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="dask-experimental",
+        executor_options={"num_rows_threshold": 1_000},
+    )
+    df2 = pl.concat([df, df])
+    assert_gpu_result_equal(df2, engine=engine)

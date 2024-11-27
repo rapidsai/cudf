@@ -8,13 +8,14 @@ import math
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import DataFrameScan, Union
-from cudf_polars.experimental.parallel import lower_ir_node
+from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.dispatch import lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.parallel import LowerIRTransformer, PartitionInfo
+    from cudf_polars.experimental.dispatch import LowerIRTransformer
 
 
 ##
@@ -45,6 +46,9 @@ def _(
             )
             for offset in range(0, nrows, length)
         ]
-        return rec(Union(ir.schema, None, *slices))
+        new_node = Union(ir.schema, None, *slices)
+        return new_node, {slice: PartitionInfo(count=1) for slice in slices} | {
+            new_node: PartitionInfo(count=count)
+        }
 
     return rec.state["default_mapper"](ir)
