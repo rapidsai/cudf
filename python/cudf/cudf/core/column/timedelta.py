@@ -10,12 +10,14 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column import ColumnBase, column
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import (
     _all_bools_with_nulls,
@@ -298,9 +300,12 @@ class TimeDeltaColumn(ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
         else:
-            return string._timedelta_to_str_typecast_functions[self.dtype](
-                self, format=format
-            )
+            with acquire_spill_lock():
+                return type(self).from_pylibcudf(  # type: ignore[return-value]
+                    plc.strings.convert.convert_durations.from_durations(
+                        self.to_pylibcudf(mode="read"), format
+                    )
+                )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self.strftime("%D days %H:%M:%S")

@@ -27,7 +27,7 @@ from cudf.core._internals.timezones import (
     get_tz_data,
 )
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column, string
+from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import (
@@ -523,9 +523,14 @@ class DatetimeColumn(column.ColumnBase):
             names = cudf.core.column.column_empty(
                 0, dtype="object", masked=False
             )
-        return string._datetime_to_str_typecast_functions[self.dtype](
-            self, format, names
-        )
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    self.to_pylibcudf(mode="read"),
+                    format,
+                    names.to_pylibcudf(mode="read"),
+                )
+            )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         format = _dtype_to_format_conversion.get(

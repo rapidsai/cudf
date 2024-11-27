@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
 from cudf.core._internals import unary
@@ -232,7 +231,7 @@ def _convert_str_col(col, errors, _downcast=None):
             return col.astype(dtype=cudf.dtype("float64"))
     else:
         if errors == "coerce":
-            col = libcudf.string_casting.stod(col)
+            col = col.astype(np.dtype(np.float64))
             non_numerics = is_float.unary_operator("not")
             col[non_numerics] = None
             return col

@@ -18,9 +18,9 @@ import pylibcudf as plc
 import cudf
 import cudf.api.types
 from cudf import _lib as libcudf
-from cudf._lib import string_casting as str_cast, strings as libstrings
+from cudf._lib import strings as libstrings
 from cudf._lib.column import Column
-from cudf._lib.types import size_type_dtype
+from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column, datetime
@@ -43,64 +43,10 @@ if TYPE_CHECKING:
         SeriesOrIndex,
     )
     from cudf.core.buffer import Buffer
+    from cudf.core.column.numerical import NumericalColumn
 
 
-def str_to_boolean(column: StringColumn):
-    """Takes in string column and returns boolean column"""
-    with acquire_spill_lock():
-        plc_column = plc.strings.attributes.count_characters(
-            column.to_pylibcudf(mode="read")
-        )
-        result = Column.from_pylibcudf(plc_column)
-    return (result > cudf.Scalar(0, dtype="int8")).fillna(False)
-
-
-_str_to_numeric_typecast_functions = {
-    cudf.api.types.dtype("int8"): str_cast.stoi8,
-    cudf.api.types.dtype("int16"): str_cast.stoi16,
-    cudf.api.types.dtype("int32"): str_cast.stoi,
-    cudf.api.types.dtype("int64"): str_cast.stol,
-    cudf.api.types.dtype("uint8"): str_cast.stoui8,
-    cudf.api.types.dtype("uint16"): str_cast.stoui16,
-    cudf.api.types.dtype("uint32"): str_cast.stoui,
-    cudf.api.types.dtype("uint64"): str_cast.stoul,
-    cudf.api.types.dtype("float32"): str_cast.stof,
-    cudf.api.types.dtype("float64"): str_cast.stod,
-    cudf.api.types.dtype("bool"): str_to_boolean,
-}
-
-_numeric_to_str_typecast_functions = {
-    cudf.api.types.dtype("int8"): str_cast.i8tos,
-    cudf.api.types.dtype("int16"): str_cast.i16tos,
-    cudf.api.types.dtype("int32"): str_cast.itos,
-    cudf.api.types.dtype("int64"): str_cast.ltos,
-    cudf.api.types.dtype("uint8"): str_cast.ui8tos,
-    cudf.api.types.dtype("uint16"): str_cast.ui16tos,
-    cudf.api.types.dtype("uint32"): str_cast.uitos,
-    cudf.api.types.dtype("uint64"): str_cast.ultos,
-    cudf.api.types.dtype("float32"): str_cast.ftos,
-    cudf.api.types.dtype("float64"): str_cast.dtos,
-    cudf.api.types.dtype("bool"): str_cast.from_booleans,
-}
-
-_datetime_to_str_typecast_functions = {
-    # TODO: support Date32 UNIX days
-    # cudf.api.types.dtype("datetime64[D]"): str_cast.int2timestamp,
-    cudf.api.types.dtype("datetime64[s]"): str_cast.int2timestamp,
-    cudf.api.types.dtype("datetime64[ms]"): str_cast.int2timestamp,
-    cudf.api.types.dtype("datetime64[us]"): str_cast.int2timestamp,
-    cudf.api.types.dtype("datetime64[ns]"): str_cast.int2timestamp,
-}
-
-_timedelta_to_str_typecast_functions = {
-    cudf.api.types.dtype("timedelta64[s]"): str_cast.int2timedelta,
-    cudf.api.types.dtype("timedelta64[ms]"): str_cast.int2timedelta,
-    cudf.api.types.dtype("timedelta64[us]"): str_cast.int2timedelta,
-    cudf.api.types.dtype("timedelta64[ns]"): str_cast.int2timedelta,
-}
-
-
-def _is_supported_regex_flags(flags):
+def _is_supported_regex_flags(flags: int) -> bool:
     return flags == 0 or (
         (flags & (re.MULTILINE | re.DOTALL) != 0)
         and (flags & ~(re.MULTILINE | re.DOTALL) == 0)
@@ -151,10 +97,7 @@ class StringMethods(ColumnMethods):
         3       51966
         dtype: int64
         """
-
-        out = str_cast.htoi(self._column)
-
-        return self._return_or_inplace(out, inplace=False)
+        return self._return_or_inplace(self._column.hex_to_integers())
 
     hex_to_int = htoi
 
@@ -184,10 +127,7 @@ class StringMethods(ColumnMethods):
         2            0
         dtype: int64
         """
-
-        out = str_cast.ip2int(self._column)
-
-        return self._return_or_inplace(out, inplace=False)
+        return self._return_or_inplace(self._column.ipv4_to_integers())
 
     ip_to_int = ip2int
 
@@ -1376,7 +1316,7 @@ class StringMethods(ColumnMethods):
         4     True
         dtype: bool
         """
-        return self._return_or_inplace(str_cast.is_hex(self._column))
+        return self._return_or_inplace(self._column.is_hex())
 
     def istimestamp(self, format: str) -> SeriesOrIndex:
         """
@@ -1400,9 +1340,7 @@ class StringMethods(ColumnMethods):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(
-            str_cast.istimestamp(self._column, format)
-        )
+        return self._return_or_inplace(self._column.is_timestamp(format))
 
     def isfloat(self) -> SeriesOrIndex:
         r"""
@@ -1953,7 +1891,7 @@ class StringMethods(ColumnMethods):
         3    False
         dtype: bool
         """
-        return self._return_or_inplace(str_cast.is_ipv4(self._column))
+        return self._return_or_inplace(self._column.is_ipv4())
 
     def lower(self) -> SeriesOrIndex:
         """
@@ -6008,26 +5946,38 @@ class StringColumn(column.ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(column.as_column(other, dtype=self.dtype)).any()
 
-    def as_numerical_column(
-        self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         out_dtype = cudf.api.types.dtype(dtype)
-        string_col = self
-        if out_dtype.kind in {"i", "u"}:
-            if not libstrings.is_integer(string_col).all():
+        if out_dtype == "b":
+            with acquire_spill_lock():
+                plc_column = plc.strings.attributes.count_characters(
+                    self.to_pylibcudf(mode="read")
+                )
+                result = Column.from_pylibcudf(plc_column)
+            return (result > cudf.Scalar(0, dtype="int8")).fillna(False)
+        elif out_dtype.kind in {"i", "u"}:
+            if not libstrings.is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
+            cast_func = plc.strings.convert.convert_integers.to_integers
         elif out_dtype.kind == "f":
-            if not libstrings.is_float(string_col).all():
+            if not libstrings.is_float(self).all():
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
                 )
-
-        result_col = _str_to_numeric_typecast_functions[out_dtype](string_col)
-        return result_col
+            cast_func = plc.strings.convert.convert_floats.to_floats
+        else:
+            raise ValueError(
+                f"dtype must be a numerical type, not {out_dtype}"
+            )
+        plc_dtype = dtype_to_pylibcudf_type(out_dtype)
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
+            )
 
     def strptime(
         self, dtype: Dtype, format: str
@@ -6062,23 +6012,28 @@ class StringColumn(column.ColumnBase):
                 raise NotImplementedError(
                     "Cannot parse date-like strings with different formats"
                 )
-            valid_ts = str_cast.istimestamp(self, format)
+            valid_ts = self.is_timestamp(format)
             valid = valid_ts | is_nat
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
 
-            casting_func = str_cast.timestamp2int
+            casting_func = plc.strings.convert.convert_datetime.to_timestamps
             add_back_nat = is_nat.any()
         elif dtype.kind == "m":  # type: ignore[union-attr]
-            casting_func = str_cast.timedelta2int
+            casting_func = plc.strings.convert.convert_durations.to_durations
             add_back_nat = False
 
+        with acquire_spill_lock():
+            plc_dtype = dtype_to_pylibcudf_type(self.dtype)
+            result_col = type(self).from_pylibcudf(
+                casting_func(self.to_pylibcudf(mode="read"), plc_dtype, format)
+            )
         result_col = casting_func(self, dtype, format)
 
         if add_back_nat:
             result_col[is_nat] = None
 
-        return result_col
+        return result_col  # type: ignore[return-value]
 
     def as_datetime_column(
         self, dtype: Dtype
@@ -6306,15 +6261,15 @@ class StringColumn(column.ColumnBase):
 
         return to_view.view(dtype)
 
+    @acquire_spill_lock()
     def _modify_characters(
         self, method: Callable[[plc.Column], plc.Column]
     ) -> Self:
         """
         Helper function for methods that modify characters e.g. to_lower
         """
-        with acquire_spill_lock():
-            plc_column = method(self.to_pylibcudf(mode="read"))
-            return cast(Self, Column.from_pylibcudf(plc_column))
+        plc_column = method(self.to_pylibcudf(mode="read"))
+        return cast(Self, Column.from_pylibcudf(plc_column))
 
     def to_lower(self) -> Self:
         return self._modify_characters(plc.strings.case.to_lower)
@@ -6334,11 +6289,51 @@ class StringColumn(column.ColumnBase):
     def is_title(self) -> Self:
         return self._modify_characters(plc.strings.capitalize.is_title)
 
+    @acquire_spill_lock()
     def replace_multiple(self, pattern: Self, replacements: Self) -> Self:
-        with acquire_spill_lock():
-            plc_result = plc.strings.replace.replace_multiple(
+        plc_result = plc.strings.replace.replace_multiple(
+            self.to_pylibcudf(mode="read"),
+            pattern.to_pylibcudf(mode="read"),
+            replacements.to_pylibcudf(mode="read"),
+        )
+        return cast(Self, Column.from_pylibcudf(plc_result))
+
+    @acquire_spill_lock()
+    def is_hex(self) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.strings.convert.convert_integers.is_hex(
                 self.to_pylibcudf(mode="read"),
-                pattern.to_pylibcudf(mode="read"),
-                replacements.to_pylibcudf(mode="read"),
             )
-            return cast(Self, Column.from_pylibcudf(plc_result))
+        )
+
+    @acquire_spill_lock()
+    def hex_to_integers(self) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.strings.convert.convert_integers.hex_to_integers(
+                self.to_pylibcudf(mode="read"), plc.DataType(plc.TypeId.INT64)
+            )
+        )
+
+    @acquire_spill_lock()
+    def is_ipv4(self) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.strings.convert.convert_ipv4.is_ipv4(
+                self.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def ipv4_to_integers(self) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.strings.convert.convert_ipv4.ipv4_to_integers(
+                self.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def is_timestamp(self, format: str) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.strings.convert.convert_datetime.is_timestamp(
+                self.to_pylibcudf(mode="read"), format
+            )
+        )
