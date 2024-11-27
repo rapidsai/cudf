@@ -22,7 +22,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/hashing/detail/xxhash_64_for_hllpp.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -346,14 +346,14 @@ std::unique_ptr<column> group_hllpp(column_view const& input,
   // 1. compute all the hashs
   auto hash_col =
     make_numeric_column(data_type{type_id::INT64}, input.size(), mask_state::ALL_VALID, stream, mr);
-  auto input_table    = cudf::table_view{{input}};
-  auto d_input_table  = cudf::table_device_view::create(input_table, stream);
-  bool const nullable = has_nested_nulls(input_table);
+  auto input_table   = cudf::table_view{{input}};
+  auto d_input_table = cudf::table_device_view::create(input_table, stream);
+  bool nullable      = has_nested_nulls(input_table);
   thrust::tabulate(
     rmm::exec_policy(stream),
     hash_col->mutable_view().begin<int64_t>(),
     hash_col->mutable_view().end<int64_t>(),
-    cudf::hashing::detail::xxhash_64_device_row_hasher(nullable, *d_input_table, SEED));
+    cudf::hashing::detail::xxhash_64_hllpp_row_hasher<bool>(nullable, *d_input_table, SEED));
   auto d_hashs = cudf::column_device_view::create(hash_col->view(), stream);
 
   // 2. execute partial group by
@@ -675,14 +675,14 @@ std::unique_ptr<scalar> reduce_hllpp(column_view const& input,
   // 1. compute all the hashs
   auto hash_col =
     make_numeric_column(data_type{type_id::INT64}, input.size(), mask_state::ALL_VALID, stream, mr);
-  auto input_table    = cudf::table_view{{input}};
-  auto d_input_table  = cudf::table_device_view::create(input_table, stream);
-  bool const nullable = input.has_nulls();
+  auto input_table   = cudf::table_view{{input}};
+  auto d_input_table = cudf::table_device_view::create(input_table, stream);
+  bool nullable      = has_nested_nulls(input_table);
   thrust::tabulate(
     rmm::exec_policy(stream),
     hash_col->mutable_view().begin<int64_t>(),
     hash_col->mutable_view().end<int64_t>(),
-    cudf::hashing::detail::xxhash_64_device_row_hasher(nullable, *d_input_table, SEED));
+    cudf::hashing::detail::xxhash_64_hllpp_row_hasher<bool>(nullable, *d_input_table, SEED));
   auto d_hashs = cudf::column_device_view::create(hash_col->view(), stream);
 
   // 2. generate long columns, the size of each long column is 1

@@ -27,11 +27,11 @@
 
 #include <thrust/tabulate.h>
 
-namespace cudf {
-namespace hashing {
-namespace detail {
-
-namespace {
+/**
+ * This file is for HyperLogLogPlusPlus, it returns seed when input is null.
+ * This is a temp file, TODO use xxhash_64 in JNI repo to handle NaN Inf like Spark does.
+ */
+namespace cudf::hashing::detail {
 
 using hash_value_type = uint64_t;
 
@@ -41,9 +41,9 @@ using hash_value_type = uint64_t;
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <typename Nullate>
-class device_row_hasher {
+class xxhash_64_hllpp_row_hasher {
  public:
-  device_row_hasher(Nullate nulls, table_device_view const& t, hash_value_type seed)
+  xxhash_64_hllpp_row_hasher(Nullate nulls, table_device_view const& t, hash_value_type seed)
     : _check_nulls(nulls), _table(t), _seed(seed)
   {
   }
@@ -71,9 +71,7 @@ class device_row_hasher {
                                           Nullate const _check_nulls,
                                           hash_value_type const _seed) const noexcept
     {
-      if (_check_nulls && col.is_null(row_index)) {
-        return std::numeric_limits<hash_value_type>::max();
-      }
+      if (_check_nulls && col.is_null(row_index)) { return _seed; }
       auto const hasher = XXHash_64<T>{_seed};
       return hasher(col.element<T>(row_index));
     }
@@ -93,45 +91,4 @@ class device_row_hasher {
   hash_value_type const _seed;
 };
 
-}  // namespace
-
-std::unique_ptr<column> xxhash_64(table_view const& input,
-                                  uint64_t seed,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
-{
-  auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
-                                    input.num_rows(),
-                                    mask_state::UNALLOCATED,
-                                    stream,
-                                    mr);
-
-  // Return early if there's nothing to hash
-  if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
-
-  bool const nullable   = has_nulls(input);
-  auto const input_view = table_device_view::create(input, stream);
-  auto output_view      = output->mutable_view();
-
-  // Compute the hash value for each row
-  thrust::tabulate(rmm::exec_policy(stream),
-                   output_view.begin<hash_value_type>(),
-                   output_view.end<hash_value_type>(),
-                   device_row_hasher(nullable, *input_view, seed));
-
-  return output;
-}
-
-}  // namespace detail
-
-std::unique_ptr<column> xxhash_64(table_view const& input,
-                                  uint64_t seed,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::xxhash_64(input, seed, stream, mr);
-}
-
-}  // namespace hashing
-}  // namespace cudf
+}  // namespace cudf::hashing::detail
