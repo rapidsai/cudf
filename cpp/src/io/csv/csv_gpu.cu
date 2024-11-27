@@ -660,6 +660,8 @@ __device__ rowctx32_t rowctx_inverse_merge_transform(device_span<packed_rowctx_t
   return brow4 + ctx;
 }
 
+constexpr auto ctxtree_size = rowofs_block_dim * 2;
+
 /**
  * @brief Gather row offsets from CSV character data split into 16KB chunks
  *
@@ -691,6 +693,7 @@ __device__ rowctx32_t rowctx_inverse_merge_transform(device_span<packed_rowctx_t
  */
 CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   gather_row_offsets_gpu(uint64_t* row_ctx,
+                         device_span<packed_rowctx_t> ctxtree,
                          device_span<uint64_t> offsets_out,
                          device_span<char const> const data,
                          size_t chunk_size,
@@ -706,8 +709,7 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
                          int escapechar,
                          int commentchar)
 {
-  __shared__ packed_rowctx_t ctxtree[rowofs_block_dim * 2];
-  auto const ctxtree_span = device_span<packed_rowctx_t>(ctxtree, rowofs_block_dim * 2);
+  auto const ctxtree_span = ctxtree.subspan(blockIdx.x * ctxtree_size, ctxtree_size);
 
   auto start      = data.begin();
   char const* end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
@@ -907,9 +909,11 @@ uint32_t gather_row_offsets(parse_options_view const& options,
                             rmm::cuda_stream_view stream)
 {
   uint32_t dim_grid = cudf::util::div_rounding_up_safe<size_t>(chunk_size, rowofs_block_bytes);
+  auto ctxtree      = rmm::device_uvector<packed_rowctx_t>(dim_grid * ctxtree_size, stream);
 
   gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream.value()>>>(
     row_ctx,
+    ctxtree,
     offsets_out,
     data,
     chunk_size,
