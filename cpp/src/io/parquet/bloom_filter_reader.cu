@@ -46,7 +46,7 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 /**
- * @brief Converts bloom filter membership results for column chunks to a device column.
+ * @brief Converts bloom filter membership results (for each column chunk) to a device column.
  *
  */
 struct bloom_filter_caster {
@@ -57,11 +57,11 @@ struct bloom_filter_caster {
   size_t num_equality_columns;
 
   template <typename T, bool timestamp_is_int96 = false>
-  std::unique_ptr<cudf::column> compute_column(cudf::size_type equality_col_idx,
-                                               cudf::data_type dtype,
-                                               ast::literal* const& literal,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr) const
+  std::unique_ptr<cudf::column> query_bloom_filter(cudf::size_type equality_col_idx,
+                                                   cudf::data_type dtype,
+                                                   ast::literal* const& literal,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr) const
   {
     using key_type    = T;
     using hasher_type = cudf::hashing::detail::XXHash_64<key_type>;
@@ -69,7 +69,8 @@ struct bloom_filter_caster {
     using word_type   = typename policy_type::word_type;
 
     // Check if the literal has the same type as the column
-    CUDF_EXPECTS(dtype.id() == literal->get_data_type().id(), "Mismatched data_types");
+    CUDF_EXPECTS(dtype.id() == literal->get_data_type().id(),
+                 "Mismatched data types between the column and the literal");
 
     // Filter properties
     auto constexpr word_size       = sizeof(word_type);
@@ -77,7 +78,7 @@ struct bloom_filter_caster {
 
     rmm::device_buffer results{num_row_groups, stream, mr};
 
-    // Query literal in bloom filters.
+    // Query literal in bloom filters from each column chunk (row group).
     thrust::for_each(
       rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_t>(0),
@@ -107,10 +108,9 @@ struct bloom_filter_caster {
                                policy_type>
           filter{reinterpret_cast<word_type*>(buffer_ptrs[filter_idx]),
                  num_filter_blocks,
-                 cuco::thread_scope_thread,  // Thread scope since the same literal is being search
-                                             // across (read-only) different bitsets per thread
-                 {hasher_type{0}}};          // Arrow policy with cudf::xxhash_64
-                                             // seeded with 0 for Arrow compatibility
+                 {},  // Thread scope as the same literal is being searched across different bitsets
+                      // per thread
+                 {}};  // Arrow policy with cudf::XXHash_64 seeded with 0 for Arrow compatibility
 
         // If int96_timestamp type, convert literal to string_view and query bloom
         // filter
@@ -144,14 +144,14 @@ struct bloom_filter_caster {
       CUDF_FAIL("Compound types don't support equality predicate");
     } else if constexpr (cudf::is_timestamp<T>()) {
       if (parquet_types[equality_col_idx] == Type::INT96) {
-        // For INT96 timestamps, convert to cudf::string_view of 12 bytes
-        return compute_column<cudf::string_view, true>(
+        // For INT96 timestamps, use cudf::string_view type and set timestamp_is_int96
+        return query_bloom_filter<cudf::string_view, true>(
           equality_col_idx, dtype, literal, stream, mr);
       } else {
-        return compute_column<T>(equality_col_idx, dtype, literal, stream, mr);
+        return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream, mr);
       }
     } else {
-      return compute_column<T>(equality_col_idx, dtype, literal, stream, mr);
+      return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream, mr);
     }
   }
 };
