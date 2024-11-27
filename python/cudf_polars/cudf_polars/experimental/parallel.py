@@ -1,113 +1,28 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Partitioned LogicalPlan nodes."""
+"""Multi-partition Dask execution."""
 
 from __future__ import annotations
 
 import itertools
 import operator
-from functools import reduce, singledispatch
+from functools import reduce
 from typing import TYPE_CHECKING, Any
 
+import cudf_polars.experimental.io  # noqa: F401
 from cudf_polars.dsl.ir import IR, Union
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
+from cudf_polars.experimental.dispatch import (
+    generate_ir_tasks,
+    lower_ir_node,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
-    from typing import TypeAlias
+    from collections.abc import MutableMapping
 
     from cudf_polars.containers import DataFrame
-    from cudf_polars.dsl.nodebase import Node
-    from cudf_polars.typing import GenericTransformer
-
-
-class PartitionInfo:
-    """
-    Partitioning information.
-
-    This class only tracks the partition count (for now).
-    """
-
-    __slots__ = ("count",)
-
-    def __init__(self, count: int):
-        self.count = count
-
-
-LowerIRTransformer: TypeAlias = (
-    "GenericTransformer[IR, tuple[IR, MutableMapping[IR, PartitionInfo]]]"
-)
-"""Protocol for Lowering IR nodes."""
-
-
-def get_key_name(node: Node) -> str:
-    """Generate the key name for a Node."""
-    return f"{type(node).__name__.lower()}-{hash(node)}"
-
-
-def _lower_ir_single(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Single-partition fall-back for lower_ir_node
-    # (Used by rec.state["default_mapper"])
-    if len(ir.children) == 0:
-        # Default leaf node has single partition
-        return ir, {
-            ir: PartitionInfo(count=1)
-        }  # pragma: no cover; Missed by pylibcudf executor
-
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=False)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    # Check that child partitioning is supported
-    if any(partition_info[c].count > 1 for c in children):
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support multiple partitions."
-        )  # pragma: no cover
-
-    # Return reconstructed node and partition-info dict
-    partition = PartitionInfo(count=1)
-    new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
-    return new_node, partition_info
-
-
-@singledispatch
-def lower_ir_node(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Rewrite an IR node and extract partitioning information.
-
-    Parameters
-    ----------
-    ir
-        IR node to rewrite.
-    rec
-        Recursive LowerIRTransformer callable.
-
-    Returns
-    -------
-    new_ir, partition_info
-        The rewritten node, and a mapping from unique nodes in
-        the full IR graph to associated partitioning information.
-
-    Notes
-    -----
-    This function is used by `lower_ir_graph`.
-
-    See Also
-    --------
-    lower_ir_graph
-    """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
-
-
-@lower_ir_node.register(IR)
-def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Single-partition default (see: _lower_ir_single)
-    return rec.state["default_mapper"](ir)
+    from cudf_polars.experimental.dispatch import LowerIRTransformer
 
 
 def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -143,64 +58,32 @@ def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     return mapper(ir)
 
 
-@singledispatch
-def generate_ir_tasks(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
-    """
-    Generate a task graph for evaluation of an IR node.
+def _lower_ir_single(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Single-partition fall-back for lower_ir_node
+    # (Used by rec.state["default_mapper"])
+    if len(ir.children) == 0:
+        # Default leaf node has single partition
+        return ir, {
+            ir: PartitionInfo(count=1)
+        }  # pragma: no cover; Missed by pylibcudf executor
 
-    Parameters
-    ----------
-    ir
-        IR node to generate tasks for.
-    partition_info
-        Partitioning information, obtained from :func:`lower_ir_graph`.
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=False)
+    partition_info = reduce(operator.or_, _partition_info)
 
-    Returns
-    -------
-    mapping
-        A (partial) dask task graph for the evaluation of an ir node.
-
-    Notes
-    -----
-    Task generation should only produce the tasks for the current node,
-    referring to child tasks by name.
-
-    See Also
-    --------
-    task_graph
-    """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
-
-
-@generate_ir_tasks.register(IR)
-def _(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
-    # Single-partition default behavior.
-    # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
-    if partition_info[ir].count > 1:
+    # Check that child partitioning is supported
+    if any(partition_info[c].count > 1 for c in children):
         raise NotImplementedError(
-            f"Failed to generate multiple output tasks for {ir}."
+            f"Class {type(ir)} does not support multiple partitions."
         )  # pragma: no cover
 
-    child_names = []
-    for child in ir.children:
-        child_names.append(get_key_name(child))
-        if partition_info[child].count > 1:
-            raise NotImplementedError(
-                f"Failed to generate tasks for {ir} with child {child}."
-            )  # pragma: no cover
-
-    key_name = get_key_name(ir)
-    return {
-        (key_name, 0): (
-            ir.do_evaluate,
-            *ir._non_child_args,
-            *((child_name, 0) for child_name in child_names),
-        )
-    }
+    # Return reconstructed node and partition-info dict
+    partition = PartitionInfo(count=1)
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = partition
+    return new_node, partition_info
 
 
 def task_graph(
@@ -241,7 +124,7 @@ def task_graph(
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
     if partition_count > 1:
-        graph[key_name] = (_concat, [(key_name, i) for i in range(partition_count)])
+        graph[key_name] = (_concat, list(partition_info[ir].keys(ir)))
         return graph, key_name
     else:
         return graph, (key_name, 0)
@@ -257,9 +140,44 @@ def evaluate_dask(ir: IR) -> DataFrame:
     return get(graph, key)
 
 
-def _concat(dfs: Sequence[DataFrame]) -> DataFrame:
-    # Concatenate a sequence of DataFrames vertically
-    return Union.do_evaluate(None, *dfs)
+##
+## IR
+##
+
+
+@lower_ir_node.register(IR)
+def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Single-partition default (see: _lower_ir_single)
+    return rec.state["default_mapper"](ir)
+
+
+@generate_ir_tasks.register(IR)
+def _(
+    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    # Single-partition default behavior.
+    # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
+    if partition_info[ir].count > 1:
+        raise NotImplementedError(
+            f"Failed to generate multiple output tasks for {ir}."
+        )  # pragma: no cover
+
+    child_names = []
+    for child in ir.children:
+        child_names.append(get_key_name(child))
+        if partition_info[child].count > 1:
+            raise NotImplementedError(
+                f"Failed to generate tasks for {ir} with child {child}."
+            )  # pragma: no cover
+
+    key_name = get_key_name(ir)
+    return {
+        (key_name, 0): (
+            ir.do_evaluate,
+            *ir._non_child_args,
+            *((child_name, 0) for child_name in child_names),
+        )
+    }
 
 
 ##
@@ -295,20 +213,7 @@ def _(
     key_name = get_key_name(ir)
     partition = itertools.count()
     return {
-        (key_name, next(partition)): (get_key_name(child), i)
+        (key_name, next(partition)): child_key
         for child in ir.children
-        for i in range(partition_info[child].count)
+        for child_key in partition_info[child].keys(child)
     }
-
-
-##
-## Other
-##
-
-
-def _register_other():
-    """Register multi-partition dispatch functions."""
-    import cudf_polars.experimental.io  # noqa: F401
-
-
-_register_other()
