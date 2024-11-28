@@ -476,23 +476,28 @@ class Scan(IR):
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                tbl_w_meta = plc.io.csv.read_csv(
-                    plc.io.SourceInfo([path]),
-                    delimiter=sep,
-                    quotechar=quote,
-                    lineterminator=eol,
-                    col_names=column_names,
-                    header=header,
-                    usecols=usecols,
-                    na_filter=True,
-                    na_values=null_values,
-                    keep_default_na=False,
-                    skiprows=skiprows,
-                    comment=comment,
-                    decimal=decimal,
-                    dtypes=schema,
-                    nrows=n_rows,
+                options = (
+                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
+                    .nrows(n_rows)
+                    .skiprows(skiprows)
+                    .lineterminator(str(eol))
+                    .quotechar(str(quote))
+                    .decimal(decimal)
+                    .keep_default_na(keep_default_na=False)
+                    .na_filter(na_filter=True)
+                    .build()
                 )
+                options.set_delimiter(str(sep))
+                if column_names is not None:
+                    options.set_names([str(name) for name in column_names])
+                options.set_header(header)
+                options.set_dtypes(schema)
+                if usecols is not None:
+                    options.set_use_cols_names([str(name) for name in usecols])
+                options.set_na_values(null_values)
+                if comment is not None:
+                    options.set_comment(comment)
+                tbl_w_meta = plc.io.csv.read_csv(options)
                 pieces.append(tbl_w_meta)
                 if read_partial:
                     n_rows -= tbl_w_meta.tbl.num_rows()
@@ -1599,13 +1604,15 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
+            self.options = (tuple(to_explode),)
         elif self.name == "rename":
-            old, new, _ = self.options
+            old, new, strict = self.options
             # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
                 raise NotImplementedError("Duplicate new names in rename.")
+            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -1623,13 +1630,15 @@ class MapFunction(IR):
             self.options = (
                 tuple(indices),
                 tuple(pivotees),
-                (variable_name, schema[variable_name]),
-                (value_name, schema[value_name]),
+                variable_name,
+                value_name,
             )
-        self._non_child_args = (name, self.options)
+        self._non_child_args = (schema, name, self.options)
 
     @classmethod
-    def do_evaluate(cls, name: str, options: Any, df: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, schema: Schema, name: str, options: Any, df: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if name == "rechunk":
             # No-op in our data model
@@ -1651,8 +1660,8 @@ class MapFunction(IR):
             (
                 indices,
                 pivotees,
-                (variable_name, variable_dtype),
-                (value_name, value_dtype),
+                variable_name,
+                value_name,
             ) = options
             npiv = len(pivotees)
             index_columns = [
@@ -1669,7 +1678,7 @@ class MapFunction(IR):
                         plc.interop.from_arrow(
                             pa.array(
                                 pivotees,
-                                type=plc.interop.to_arrow(variable_dtype),
+                                type=plc.interop.to_arrow(schema[variable_name]),
                             ),
                         )
                     ]
@@ -1677,7 +1686,10 @@ class MapFunction(IR):
                 df.num_rows,
             ).columns()
             value_column = plc.concatenate.concatenate(
-                [df.column_map[pivotee].astype(value_dtype).obj for pivotee in pivotees]
+                [
+                    df.column_map[pivotee].astype(schema[value_name]).obj
+                    for pivotee in pivotees
+                ]
             )
             return DataFrame(
                 [

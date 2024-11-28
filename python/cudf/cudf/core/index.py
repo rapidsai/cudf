@@ -16,6 +16,8 @@ import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.filling import sequence
@@ -32,6 +34,7 @@ from cudf.api.types import (
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals.search import search_sorted
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -1360,7 +1363,14 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         except ValueError:
             return _return_get_indexer_result(result.values)
 
-        scatter_map, indices = libcudf.join.join([lcol], [rcol], how="inner")
+        with acquire_spill_lock():
+            left_plc, right_plc = plc.join.inner_join(
+                plc.Table([lcol.to_pylibcudf(mode="read")]),
+                plc.Table([rcol.to_pylibcudf(mode="read")]),
+                plc.types.NullEquality.EQUAL,
+            )
+            scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
+            indices = libcudf.column.Column.from_pylibcudf(right_plc)
         result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
         result_series = cudf.Series._from_column(result)
 
