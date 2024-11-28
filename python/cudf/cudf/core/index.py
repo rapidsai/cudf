@@ -2218,7 +2218,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
         """  # noqa: E501
-        return self._get_dt_field("year")
+        return Index._from_column(self._column.year, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2237,7 +2237,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
         """  # noqa: E501
-        return self._get_dt_field("month")
+        return Index._from_column(self._column.month, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2256,7 +2256,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int16')
         """  # noqa: E501
-        return self._get_dt_field("day")
+        return Index._from_column(self._column.day, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2277,7 +2277,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.hour
         Index([0, 1, 2], dtype='int16')
         """
-        return self._get_dt_field("hour")
+        return Index._from_column(self._column.hour, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2298,7 +2298,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.minute
         Index([0, 1, 2], dtype='int16')
         """
-        return self._get_dt_field("minute")
+        return Index._from_column(self._column.minute, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2319,7 +2319,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.second
         Index([0, 1, 2], dtype='int16')
         """
-        return self._get_dt_field("second")
+        return Index._from_column(self._column.second, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2345,10 +2345,10 @@ class DatetimeIndex(Index):
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._column.get_dt_field("millisecond").astype("int32")
+                self._column.millisecond.astype("int32")
                 * cudf.Scalar(1000, dtype="int32")
             )
-            + self._column.get_dt_field("microsecond"),
+            + self._column.microsecond,
             name=self.name,
         )
 
@@ -2372,7 +2372,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.nanosecond
         Index([0, 1, 2], dtype='int16')
         """
-        return self._get_dt_field("nanosecond")
+        return Index._from_column(self._column.nanosecond, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2394,7 +2394,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.weekday
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
-        return self._get_dt_field("weekday")
+        return Index._from_column(self._column.weekday, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2416,7 +2416,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.dayofweek
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
-        return self._get_dt_field("weekday")
+        return Index._from_column(self._column.weekday, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2439,7 +2439,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.dayofyear
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
-        return self._get_dt_field("day_of_year")
+        return Index._from_column(self._column.day_of_year, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2462,7 +2462,7 @@ class DatetimeIndex(Index):
         >>> datetime_index.day_of_year
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
-        return self._get_dt_field("day_of_year")
+        return Index._from_column(self._column.day_of_year, name=self.name)
 
     @property  # type: ignore
     @_performance_tracking
@@ -2582,19 +2582,6 @@ class DatetimeIndex(Index):
         if not arrow_type and self._freq is not None:
             result.freq = self._freq._maybe_as_fast_pandas_offset()
         return result
-
-    @_performance_tracking
-    def _get_dt_field(self, field: str) -> Index:
-        """Return an Index of a numerical component of the DatetimeIndex."""
-        out_column = self._column.get_dt_field(field)
-        out_column = NumericalColumn(
-            data=out_column.base_data,
-            size=out_column.size,
-            dtype=out_column.dtype,
-            mask=out_column.base_mask,
-            offset=out_column.offset,
-        )
-        return Index._from_column(out_column, name=self.name)
 
     def _is_boolean(self) -> bool:
         return False
