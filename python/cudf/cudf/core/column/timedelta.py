@@ -11,9 +11,8 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
-from cudf.core._internals import unary
+from cudf.core._internals import binaryop, unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -217,10 +216,8 @@ class TimeDeltaColumn(ColumnBase):
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
-        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if cudf.get_option(
-            "mode.pandas_compatible"
-        ) and out_dtype == cudf.dtype(np.bool_):
+        result = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b":
             result = result.fillna(op == "__ne__")
         return result
 
