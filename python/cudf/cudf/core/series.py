@@ -1598,6 +1598,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """The dtype of the Series."""
         return self._column.dtype
 
+    @property  # type: ignore
+    @_performance_tracking
+    def dtypes(self):
+        """The dtype of the Series.
+
+        This is an alias for `Series.dtype`.
+        """
+        return self.dtype
+
     @classmethod
     @_performance_tracking
     def _concat(cls, objs, axis=0, index: bool = True):

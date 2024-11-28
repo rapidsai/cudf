@@ -7,7 +7,6 @@ import operator
 import os
 import urllib
 import warnings
-from collections.abc import Callable
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 from typing import TYPE_CHECKING, Any
