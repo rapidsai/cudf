@@ -45,7 +45,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -2487,11 +2487,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        partitioned_columns, output_offsets = libcudf.partitioning.partition(
-            [*(self.index._columns if keep_index else ()), *self._columns],
-            map_index,
-            map_size,
+        source_columns = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
         )
+
+        with acquire_spill_lock():
+            if map_size is None:
+                map_size = plc.stream_compaction.distinct_count(
+                    map_index.to_pylibcudf(mode="read"),
+                    plc.types.NullPolicy.EXCLUDE,
+                    plc.types.NanPolicy.NAN_IS_VALID,
+                )
+
+            if map_index.size > 0:
+                plc_lo, plc_hi = plc.reduce.minmax(
+                    map_index.to_pylibcudf(mode="read")
+                )
+                # TODO: Use pylibcudf Scalar once APIs are more developed
+                lo = libcudf.column.Column.from_pylibcudf(
+                    plc.Column.from_scalar(plc_lo, 1)
+                ).element_indexing(0)
+                hi = libcudf.column.Column.from_pylibcudf(
+                    plc.Column.from_scalar(plc_hi, 1)
+                ).element_indexing(0)
+                if lo < 0 or hi >= map_size:
+                    raise ValueError("Partition map has invalid values")
+
+            plc_table, output_offsets = plc.partitioning.partition(
+                plc.Table(
+                    [col.to_pylibcudf(mode="read") for col in source_columns]
+                ),
+                map_index.to_pylibcudf(mode="read"),
+                map_size,
+            )
+            partitioned_columns = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
+
         partitioned = self._from_columns_like_self(
             partitioned_columns,
             column_names=self._column_names,
@@ -3156,9 +3191,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                 out.append(result._with_type_metadata(col.dtype))
             else:
-                out_mask = cudf._lib.null_mask.create_null_mask(
-                    len(source_col),
-                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
+                out_mask = as_buffer(
+                    plc.null_mask.create_null_mask(
+                        len(source_col), plc.null_mask.MaskState.ALL_NULL
+                    )
                 )
                 out.append(source_col.set_mask(out_mask))
 
@@ -7216,13 +7252,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should tile itself by len(df) times
-        tiled_index = libcudf.reshape.tile(
-            [
-                as_column(unique_named_levels.get_level_values(i))
-                for i in range(unique_named_levels.nlevels)
-            ],
-            self.shape[0],
-        )
+        with acquire_spill_lock():
+            plc_table = plc.reshape.tile(
+                plc.Table(
+                    [
+                        as_column(
+                            unique_named_levels.get_level_values(i)
+                        ).to_pylibcudf(mode="read")
+                        for i in range(unique_named_levels.nlevels)
+                    ]
+                ),
+                self.shape[0],
+            )
+            tiled_index = [
+                libcudf.column.Column.from_pylibcudf(plc)
+                for plc in plc_table.columns()
+            ]
 
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
@@ -7236,7 +7281,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data=range(self._num_columns), index=named_levels
         )
 
-        column_indices: list[list[int]] = []
         if has_unnamed_levels:
             unnamed_level_values = list(
                 map(column_name_idx.get_level_values, unnamed_levels_indices)
@@ -7272,13 +7316,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else:
                     yield column_idx_df.sort_index().values
 
-        column_indices = list(unnamed_group_generator())
-
         # For each of the group constructed from the unnamed levels,
         # invoke `interleave_columns` to stack the values.
         stacked = []
 
-        for column_idx in column_indices:
+        for column_idx in unnamed_group_generator():
             # Collect columns based on indices, append None for -1 indices.
             columns = [
                 None if i == -1 else self._data.select_by_index(i).columns[0]
@@ -7297,12 +7339,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
             # homogenize the dtypes of the columns
-            homogenized = [
+            homogenized = (
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
-            ]
+            )
 
-            stacked.append(libcudf.reshape.interleave_columns(homogenized))
+            with acquire_spill_lock():
+                interleaved_col = libcudf.column.Column.from_pylibcudf(
+                    plc.reshape.interleave_columns(
+                        plc.Table(
+                            [
+                                col.to_pylibcudf(mode="read")
+                                for col in homogenized
+                            ]
+                        )
+                    )
+                )
+            stacked.append(interleaved_col)
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
@@ -7803,10 +7856,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
-
-        return self._constructor_sliced._from_column(
-            libcudf.reshape.interleave_columns([*self._columns])
-        )
+        with acquire_spill_lock():
+            result_col = libcudf.column.Column.from_pylibcudf(
+                plc.reshape.interleave_columns(
+                    plc.Table(
+                        [
+                            col.to_pylibcudf(mode="read")
+                            for col in self._columns
+                        ]
+                    )
+                )
+            )
+        return self._constructor_sliced._from_column(result_col)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
