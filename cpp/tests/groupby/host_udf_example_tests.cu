@@ -62,11 +62,32 @@ struct test_udf_simple_type : cudf::host_udf_base {
       // Empty set, which means we need everything.
       return {};
     } else {
+      // We need grouped values, group offsets, group labels, and also results from groups'
+      // MAX and SUM aggregations.
       return {groupby_data_attribute::GROUPED_VALUES,
               groupby_data_attribute::GROUP_OFFSETS,
               groupby_data_attribute::GROUP_LABELS,
               cudf::make_max_aggregation<cudf::groupby_aggregation>(),
               cudf::make_sum_aggregation<cudf::groupby_aggregation>()};
+    }
+  }
+
+  [[nodiscard]] output_type get_empty_output(
+    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
+    [[maybe_unused]] rmm::cuda_stream_view stream,
+    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  {
+    if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
+      CUDF_EXPECTS(output_dtype.has_value(),
+                   "Data type for the reduction result must be specified.");
+      return cudf::make_default_constructed_scalar(output_dtype.value(), stream, mr);
+    } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
+      CUDF_EXPECTS(output_dtype.has_value(),
+                   "Data type for the reduction result must be specified.");
+      return cudf::make_empty_column(output_dtype.value());
+    } else {
+      return cudf::make_empty_column(
+        cudf::data_type{cudf::type_to_id<typename groupby_fn::OutputType>()});
     }
   }
 
@@ -95,34 +116,16 @@ struct test_udf_simple_type : cudf::host_udf_base {
     }
   }
 
-  [[nodiscard]] output_type get_empty_output(
-    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
-    [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  [[nodiscard]] std::size_t do_hash() const override
   {
-    if constexpr (std::is_same_v<cudf_aggregation, cudf::reduce_aggregation>) {
-      CUDF_EXPECTS(output_dtype.has_value(),
-                   "Data type for the reduction result must be specified.");
-      return cudf::make_default_constructed_scalar(output_dtype.value(), stream, mr);
-    } else if constexpr (std::is_same_v<cudf_aggregation, cudf::segmented_reduce_aggregation>) {
-      CUDF_EXPECTS(output_dtype.has_value(),
-                   "Data type for the reduction result must be specified.");
-      return cudf::make_empty_column(output_dtype.value());
-    } else {
-      return cudf::make_empty_column(
-        cudf::data_type{cudf::type_to_id<typename groupby_fn::OutputType>()});
-    }
+    // Just return the same hash for all instances of this class.
+    return std::size_t{12345};
   }
 
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
   {
-    // Just check if the other object is also instance of the same derived class.
+    // Just check if the other object is also instance of this class.
     return dynamic_cast<test_udf_simple_type const*>(&other) != nullptr;
-  }
-
-  [[nodiscard]] std::size_t do_hash() const override
-  {
-    return std::hash<std::string>{}({"test_udf_simple_type"});
   }
 
   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
@@ -130,14 +133,14 @@ struct test_udf_simple_type : cudf::host_udf_base {
     return std::make_unique<test_udf_simple_type>();
   }
 
-  // For faster compile times, we only support a few input/output types.
+  // For quick compilation, we only instantiate a few input/output types.
   template <typename T>
   static constexpr bool is_valid_input_t()
   {
-    return std::is_same_v<T, double> || std::is_same_v<T, int32_t>;
+    return std::is_same_v<T, double>;
   }
 
-  // For faster compile times, we only support a few input/output types.
+  // For quick compilation, we only instantiate a few input/output types.
   template <typename T>
   static constexpr bool is_valid_output_t()
   {
@@ -154,7 +157,7 @@ struct test_udf_simple_type : cudf::host_udf_base {
               CUDF_ENABLE_IF(!is_valid_input_t<InputType>() || !is_valid_output_t<OutputType>())>
     output_type operator()(Args...) const
     {
-      CUDF_FAIL("Unsupported input type.");
+      CUDF_FAIL("Unsupported input/output type.");
     }
 
     template <typename InputType,
@@ -168,12 +171,11 @@ struct test_udf_simple_type : cudf::host_udf_base {
         std::get<cudf::column_view>(input.at(reduction_data_attribute::INPUT_VALUES));
       auto const output_dtype =
         std::get<cudf::data_type>(input.at(reduction_data_attribute::OUTPUT_DTYPE));
+      if (values.size() == 0) { return parent->get_empty_output(output_dtype, stream, mr); }
+
       auto const input_init_value =
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
           input.at(reduction_data_attribute::INIT_VALUE));
-
-      if (values.size() == 0) { return parent->get_empty_output(output_dtype, stream, mr); }
-
       auto const init_value = [&]() -> InputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
           auto const numeric_init_scalar =
@@ -220,7 +222,7 @@ struct test_udf_simple_type : cudf::host_udf_base {
               CUDF_ENABLE_IF(!is_valid_input_t<InputType>() || !is_valid_output_t<OutputType>())>
     output_type operator()(Args...) const
     {
-      CUDF_FAIL("Unsupported input type.");
+      CUDF_FAIL("Unsupported input/output type.");
     }
 
     template <typename InputType,
@@ -240,18 +242,14 @@ struct test_udf_simple_type : cudf::host_udf_base {
       auto const num_segments = static_cast<cudf::size_type>(offsets.size()) - 1;
 
       if (values.size() == 0) {
-        if (num_segments <= 0) {
-          return parent->get_empty_output(output_dtype, stream, mr);
-        } else {
-          return cudf::make_numeric_column(
-            output_dtype, num_segments, cudf::mask_state::ALL_NULL, stream, mr);
-        }
+        if (num_segments <= 0) { return parent->get_empty_output(output_dtype, stream, mr); }
+        return cudf::make_numeric_column(
+          output_dtype, num_segments, cudf::mask_state::ALL_NULL, stream, mr);
       }
 
       auto const input_init_value =
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
           input.at(segmented_reduction_data_attribute::INIT_VALUE));
-
       auto const init_value = [&]() -> InputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
           auto const numeric_init_scalar =
@@ -264,7 +262,6 @@ struct test_udf_simple_type : cudf::host_udf_base {
 
       auto const null_handling =
         std::get<cudf::null_policy>(input.at(segmented_reduction_data_attribute::NULL_POLICY));
-
       auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
       auto output              = cudf::make_numeric_column(
         output_dtype, num_segments, cudf::mask_state::UNALLOCATED, stream);
@@ -323,7 +320,7 @@ struct test_udf_simple_type : cudf::host_udf_base {
     template <typename InputType, typename... Args, CUDF_ENABLE_IF(!cudf::is_numeric<InputType>())>
     output_type operator()(Args...) const
     {
-      CUDF_FAIL("Unsupported input type.");
+      CUDF_FAIL("Unsupported input/output type.");
     }
 
     template <typename InputType, CUDF_ENABLE_IF(cudf::is_numeric<InputType>())>
@@ -443,11 +440,11 @@ TEST_F(HostUDFExampleTest, ReductionEmptyInput)
 
 TEST_F(HostUDFExampleTest, SegmentedReductionSimpleInput)
 {
-  auto const vals = doubles_col{
-    {0.0, 0.0 /*null*/, 2.0, 3.0, 0.0 /*null*/, 5.0, 0.0 /*null*/, 0.0 /*null*/, 8.0, 9.0},
-    {true, false, true, true, false, true, false, false, true, true}};
-  auto const offsets = int32s_col{0, 3, 5, 10}.release();
-  auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
+  double constexpr null = 0.0;
+  auto const vals       = doubles_col{{0.0, null, 2.0, 3.0, null, 5.0, null, null, 8.0, 9.0},
+                                      {true, false, true, true, false, true, false, false, true, true}};
+  auto const offsets    = int32s_col{0, 3, 5, 10}.release();
+  auto const agg        = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
     std::make_unique<test_udf_simple_type<cudf::segmented_reduce_aggregation>>());
 
   // Test without init value.
@@ -509,7 +506,7 @@ TEST_F(HostUDFExampleTest, SegmentedReductionSimpleInput)
 
 TEST_F(HostUDFExampleTest, SegmentedReductionEmptySegments)
 {
-  auto const vals    = int32s_col{};
+  auto const vals    = doubles_col{};
   auto const offsets = int32s_col{0, 0, 0, 0}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
     std::make_unique<test_udf_simple_type<cudf::segmented_reduce_aggregation>>());
@@ -528,7 +525,7 @@ TEST_F(HostUDFExampleTest, SegmentedReductionEmptySegments)
 
 TEST_F(HostUDFExampleTest, SegmentedReductionEmptyInput)
 {
-  auto const vals = int32s_col{};
+  auto const vals = doubles_col{};
   // Cannot be empty due to a bug in the libcudf: https://github.com/rapidsai/cudf/issues/17433.
   auto const offsets = int32s_col{0}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
@@ -548,11 +545,11 @@ TEST_F(HostUDFExampleTest, SegmentedReductionEmptyInput)
 
 TEST_F(HostUDFExampleTest, GroupbySimpleInput)
 {
-  auto const keys = int32s_col{0, 1, 2, 0, 1, 2, 0, 1, 2, 0};
-  auto const vals = doubles_col{
-    {0.0, 0.0 /*null*/, 2.0, 3.0, 0.0 /*null*/, 5.0, 0.0 /*null*/, 0.0 /*null*/, 8.0, 9.0},
-    {true, false, true, true, false, true, false, false, true, true}};
-  auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
+  double constexpr null = 0.0;
+  auto const keys       = int32s_col{0, 1, 2, 0, 1, 2, 0, 1, 2, 0};
+  auto const vals       = doubles_col{{0.0, null, 2.0, 3.0, null, 5.0, null, null, 8.0, 9.0},
+                                      {true, false, true, true, false, true, false, false, true, true}};
+  auto agg              = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
     std::make_unique<test_udf_simple_type<cudf::groupby_aggregation>>());
 
   std::vector<cudf::groupby::aggregation_request> requests;
@@ -571,6 +568,6 @@ TEST_F(HostUDFExampleTest, GroupbySimpleInput)
   // Group max: [ 9, null, 8 ]
   // Group sum: [ 12, null, 15 ]
   // Output: [ 1 * 90 - 9 * 12, null, 3 * 93 - 8 * 15 ]
-  auto const expected = doubles_col{{-18, 0, 159}, {true, false, true}};
+  auto const expected = doubles_col{{-18.0, null, 159.0}, {true, false, true}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
