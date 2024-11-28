@@ -3963,7 +3963,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2002
         dtype: int16
         """
-        return self._get_dt_field("year")
+        return self._return_result_like_self(self.series._column.year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3988,7 +3988,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    3
         dtype: int16
         """
-        return self._get_dt_field("month")
+        return self._return_result_like_self(self.series._column.month)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4013,7 +4013,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    3
         dtype: int16
         """
-        return self._get_dt_field("day")
+        return self._return_result_like_self(self.series._column.day)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4038,7 +4038,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("hour")
+        return self._return_result_like_self(self.series._column.hour)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4063,7 +4063,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("minute")
+        return self._return_result_like_self(self.series._column.minute)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4088,7 +4088,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("second")
+        return self._return_result_like_self(self.series._column.second)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4113,13 +4113,13 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int32
         """
-        micro = self.series._column.get_dt_field("microsecond")
+        micro = self.series._column.microsecond
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.get_dt_field("millisecond").astype(
-            "int32"
-        ) * cudf.Scalar(1000, dtype="int32")
+        extra = self.series._column.millisecond.astype("int32") * cudf.Scalar(
+            1000, dtype="int32"
+        )
         return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
@@ -4145,7 +4145,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("nanosecond")
+        return self._return_result_like_self(self.series._column.nanosecond)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4182,7 +4182,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    6
         dtype: int16
         """
-        return self._get_dt_field("weekday")
+        return self._return_result_like_self(self.series._column.weekday)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4219,7 +4219,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    6
         dtype: int16
         """
-        return self._get_dt_field("weekday")
+        return self._return_result_like_self(self.series._column.weekday)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4257,7 +4257,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8      8
         dtype: int16
         """
-        return self._get_dt_field("day_of_year")
+        return self._return_result_like_self(self.series._column.day_of_year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4295,7 +4295,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8      8
         dtype: int16
         """
-        return self._get_dt_field("day_of_year")
+        return self._return_result_like_self(self.series._column.day_of_year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4349,8 +4349,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         12     True
         dtype: bool
         """
-        res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
-        return self._return_result_like_self(res)
+        return self._return_result_like_self(
+            self.series._column.is_leap_year.fillna(False)
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -4377,10 +4378,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         1    4
         dtype: int8
         """
-        res = libcudf.datetime.extract_quarter(self.series._column).astype(
-            np.int8
+        return self._return_result_like_self(
+            self.series._column.quarter.astype(np.int8)
         )
-        return self._return_result_like_self(res)
 
     @_performance_tracking
     def day_name(self, locale: str | None = None) -> Series:
@@ -4732,12 +4732,6 @@ class DatetimeProperties(BaseDatelikeProperties):
         return self._return_result_like_self(self.series._column.is_year_end)
 
     @_performance_tracking
-    def _get_dt_field(self, field: str) -> Series:
-        return self._return_result_like_self(
-            self.series._column.get_dt_field(field)
-        )
-
-    @_performance_tracking
     def ceil(self, freq: str) -> Series:
         """
         Perform ceil operation on the data to the specified freq.
@@ -5043,7 +5037,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4       37
         dtype: int64
         """
-        return self._get_td_field("days")
+        return self._return_result_like_self(self.series._column.days)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5082,7 +5076,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._get_td_field("seconds")
+        return self._return_result_like_self(self.series._column.seconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5114,7 +5108,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._get_td_field("microseconds")
+        return self._return_result_like_self(self.series._column.microseconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5146,7 +5140,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234
         dtype: int64
         """
-        return self._get_td_field("nanoseconds")
+        return self._return_result_like_self(self.series._column.nanoseconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5179,12 +5173,6 @@ class TimedeltaProperties(BaseDatelikeProperties):
         ca = ColumnAccessor(self.series._column.components(), verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index
-        )
-
-    @_performance_tracking
-    def _get_td_field(self, field: str) -> Series:
-        return self._return_result_like_self(
-            getattr(self.series._column, field)
         )
 
 
