@@ -48,6 +48,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         CUDA
         CORRELATION
         COVARIANCE
+        EWMA
 
     cdef cppclass aggregation:
         Kind kind
@@ -68,6 +69,9 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         pass
 
     cdef cppclass scan_aggregation(aggregation):
+        pass
+
+    cdef cppclass segmented_reduce_aggregation(aggregation):
         pass
 
     cpdef enum class udf_type(bool):
@@ -170,3 +174,66 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         null_policy null_handling,
         null_order null_precedence,
         rank_percentage percentage) except +libcudf_exception_handler
+
+cdef extern from "cudf/detail/aggregation/aggregation.hpp" \
+        namespace "cudf::detail" nogil:
+
+    cdef cppclass std_var_aggregation(
+        rolling_aggregation,
+        groupby_aggregation,
+        reduce_aggregation,
+        segmented_reduce_aggregation
+    ):
+        size_type _ddof
+
+    cdef cppclass quantile_aggregation(groupby_aggregation, reduce_aggregation):
+        vector[double] _quantiles
+        interpolation _interpolation
+
+    cdef cppclass nunique_aggregation(
+        groupby_aggregation, reduce_aggregation, segmented_reduce_aggregation
+    ):
+        null_policy _null_handling
+
+    cdef cppclass nth_element_aggregation(
+        groupby_aggregation, reduce_aggregation, rolling_aggregation
+    ):
+        size_type _n
+        null_policy _null_handling
+
+    cdef cppclass ewma_aggregation(scan_aggregation):
+        double center_of_mass
+        ewm_history history
+
+    cdef cppclass rank_aggregation(
+        rolling_aggregation, groupby_scan_aggregation, reduce_aggregation
+    ):
+        rank_method _method
+        order _column_order
+        null_policy _null_handling
+        null_order _null_precedence
+        rank_percentage _percentage
+
+    cdef cppclass collect_list_aggregation(
+        rolling_aggregation, groupby_aggregation, reduce_aggregation
+    ):
+        null_policy _null_handling
+
+    cdef cppclass collect_set_aggregation(
+        rolling_aggregation, groupby_aggregation, reduce_aggregation
+    ):
+        null_policy _null_handling
+        null_equality _nulls_equal
+        nan_equality _nans_equal
+
+    cdef cppclass udf_aggregation(rolling_aggregation):
+        string _source
+        data_type _output_type
+
+    cdef cppclass correlation_aggregation(groupby_aggregation):
+        correlation_type _type
+        size_type _min_periods
+
+    cdef cppclass covariance_aggregation(groupby_aggregation):
+        size_type _min_periods
+        size_type _ddof
