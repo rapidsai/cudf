@@ -450,8 +450,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   stats_expression_converter stats_expr{filter.get(), static_cast<size_type>(output_dtypes.size())};
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
-  auto filtered_row_group_indices = collect_filtered_row_group_indices(
-    stats_table, stats_expr.get_stats_expr(), row_group_indices, stream, mr);
+  auto const filtered_row_group_indices = collect_filtered_row_group_indices(
+    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream, mr);
 
   // Span on row groups to apply bloom filtering on.
   auto const bloom_filter_input_row_groups =

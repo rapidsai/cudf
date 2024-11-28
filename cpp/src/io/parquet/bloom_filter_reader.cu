@@ -575,7 +575,7 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
   host_span<std::unique_ptr<datasource> const> sources,
-  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
@@ -588,8 +588,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Total number of row groups to process.
   auto const num_row_groups = std::accumulate(
-    row_group_indices.begin(),
-    row_group_indices.end(),
+    input_row_group_indices.begin(),
+    input_row_group_indices.end(),
     size_t{0},
     [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
@@ -613,14 +613,14 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Read a vector of bloom filter bitset device buffers for all column with equality
   // predicate(s) across all row groups
-  auto const bloom_filter_data =
-    read_bloom_filters(sources, row_group_indices, equality_col_schemas, num_row_groups, stream);
+  auto const bloom_filter_data = read_bloom_filters(
+    sources, input_row_group_indices, equality_col_schemas, num_row_groups, stream);
 
   // No bloom filter buffers, return the original row group indices
   if (bloom_filter_data.empty()) { return std::nullopt; }
 
   // Get parquet types for the predicate columns
-  auto const parquet_types = get_parquet_types(row_group_indices, equality_col_schemas);
+  auto const parquet_types = get_parquet_types(input_row_group_indices, equality_col_schemas);
 
   // Copy bloom filter bitset buffer pointers and sizes to device
   std::vector<void*> h_buffer_ptrs(bloom_filter_data.size());
@@ -674,7 +674,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // filtered row group indices
   return collect_filtered_row_group_indices(bloom_filter_membership_table,
                                             bloom_filter_expr.get_bloom_filter_expr(),
-                                            row_group_indices,
+                                            input_row_group_indices,
                                             stream,
                                             mr);
 }

@@ -375,7 +375,7 @@ class aggregate_reader_metadata {
    * @brief Filters the row groups using bloom filters
    *
    * @param sources Dataset sources
-   * @param row_group_indices Lists of row groups to read, one per source
+   * @param row_group_indices Lists of input row groups to read, one per source
    * @param output_dtypes Datatypes of of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on bloom filter membership
@@ -385,7 +385,7 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
     host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<std::vector<size_type> const> input_row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
