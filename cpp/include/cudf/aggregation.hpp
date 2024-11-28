@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -614,10 +615,10 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            data_type output_type);
 
 /**
- * @brief The base class for host-based UDF implementation.
+ * @brief The interface for host-based UDF implementation.
  *
- * An actual implementation of host-based UDF needs to be derived from this base class, defining
- * its own operations as well as all the required input data to the aggregation.
+ * An implementation of host-based UDF needs to be derived from this base class, defining
+ * its own version of the required functions.
  */
 struct host_udf_base {
   host_udf_base()          = default;
@@ -659,7 +660,7 @@ struct host_udf_base {
   };
 
   /**
-   * @brief The possible data that may be needed in the derived class for its operations.
+   * @brief Describe possible data that may be needed in the derived class for its operations.
    *
    * Such data can be either intermediate data such as sorted values or group labels etc, or the
    * results of other aggregations.
@@ -677,20 +678,14 @@ struct host_udf_base {
                                     segmented_reduction_data_attribute,
                                     groupby_data_attribute,
                                     std::unique_ptr<aggregation>>;
-    value_type value;  ///< The actual data attribute, wrapped in this struct
+    value_type value;  ///< The actual data attribute, wrapped by this struct
                        ///< as a wrapper is needed to define hash and equal_to functors.
 
     data_attribute()                 = default;  ///< Default constructor
     data_attribute(data_attribute&&) = default;  ///< Move constructor
 
     /**
-     * @brief Copy constructor.
-     * @param other The other data attribute to copy from.
-     */
-    data_attribute(data_attribute const& other) : value{copy_value(other.value)} {}
-
-    /**
-     * @brief Construct a new data attribute from aggregation attributes.
+     * @brief Construct a new data attribute from an aggregation attribute.
      * @param value_ An aggregation attribute
      */
     template <typename T,
@@ -721,22 +716,16 @@ struct host_udf_base {
     }
 
     /**
-     * @brief Copy the value, used in copy constructor.
-     * @param value The value to copy
-     * @return The copied value
+     * @brief Copy constructor.
+     * @param other The other data attribute to copy from
      */
-    static value_type copy_value(value_type const& value)
+    data_attribute(data_attribute const& other)
+      : value{std::visit(
+          cudf::detail::visitor_overload{
+            [](auto const& val) { return value_type{val}; },
+            [](std::unique_ptr<aggregation> const& val) { return value_type{val->clone()}; }},
+          other.value)}
     {
-      if (std::holds_alternative<reduction_data_attribute>(value)) {
-        return std::get<reduction_data_attribute>(value);
-      }
-      if (std::holds_alternative<segmented_reduction_data_attribute>(value)) {
-        return std::get<segmented_reduction_data_attribute>(value);
-      }
-      if (std::holds_alternative<groupby_data_attribute>(value)) {
-        return std::get<groupby_data_attribute>(value);
-      }
-      return std::get<std::unique_ptr<aggregation>>(value)->clone();
     }
 
     /**
@@ -750,23 +739,15 @@ struct host_udf_base {
        */
       std::size_t operator()(data_attribute const& attr) const
       {
-        auto const& value     = attr.value;
-        auto const hash_value = [&] {
-          if (std::holds_alternative<reduction_data_attribute>(value)) {
-            return std::hash<int>{}(static_cast<int>(std::get<reduction_data_attribute>(value)));
-          }
-          if (std::holds_alternative<segmented_reduction_data_attribute>(value)) {
-            return std::hash<int>{}(
-              static_cast<int>(std::get<segmented_reduction_data_attribute>(value)));
-          }
-          if (std::holds_alternative<groupby_data_attribute>(value)) {
-            return std::hash<int>{}(static_cast<int>(std::get<groupby_data_attribute>(value)));
-          }
-          return std::get<std::unique_ptr<aggregation>>(value)->do_hash();
-        }();
-        return value.index() ^ hash_value;
+        auto const& value = attr.value;
+        auto const hash_value =
+          std::visit(cudf::detail::visitor_overload{
+                       [](auto const& val) { return std::hash<int>{}(static_cast<int>(val)); },
+                       [](std::unique_ptr<aggregation> const& val) { return val->do_hash(); }},
+                     value);
+        return std::hash<std::size_t>{}(value.index()) ^ hash_value;
       }
-    };
+    };  // struct hash
 
     /**
      * @brief Equality comparison functor for `data_attribute`.
@@ -783,26 +764,25 @@ struct host_udf_base {
         auto const& lhs_val = lhs.value;
         auto const& rhs_val = rhs.value;
         if (lhs_val.index() != rhs_val.index()) { return false; }
-        if (std::holds_alternative<reduction_data_attribute>(lhs_val)) {
-          return std::get<reduction_data_attribute>(lhs_val) ==
-                 std::get<reduction_data_attribute>(rhs_val);
-        }
-        if (std::holds_alternative<segmented_reduction_data_attribute>(lhs_val)) {
-          return std::get<segmented_reduction_data_attribute>(lhs_val) ==
-                 std::get<segmented_reduction_data_attribute>(rhs_val);
-        }
-        if (std::holds_alternative<groupby_data_attribute>(lhs_val)) {
-          return std::get<groupby_data_attribute>(lhs_val) ==
-                 std::get<groupby_data_attribute>(rhs_val);
-        }
-        return std::get<std::unique_ptr<aggregation>>(lhs.value)->is_equal(
-          *std::get<std::unique_ptr<aggregation>>(rhs.value));
+        return std::visit(cudf::detail::visitor_overload{
+                            [](auto const& lhs_val, auto const& rhs_val) {
+                              if constexpr (std::is_same_v<decltype(lhs_val), decltype(rhs_val)>) {
+                                return lhs_val == rhs_val;
+                              }
+                              return false;
+                            },
+                            [](std::unique_ptr<aggregation> const& lhs_val,
+                               std::unique_ptr<aggregation> const& rhs_val) {
+                              return lhs_val->is_equal(*rhs_val);
+                            }},
+                          lhs_val,
+                          rhs_val);
       }
-    };
-  };
+    };  // struct equal_to
+  };    // struct data_attribute
 
   /**
-   * @brief Set of attributes for the data that is needed for computing the aggregation.
+   * @brief Set of attributes for the input data that is needed for computing the aggregation.
    */
   using input_data_attributes =
     std::unordered_set<data_attribute, data_attribute::hash, data_attribute::equal_to>;
@@ -840,6 +820,21 @@ struct host_udf_base {
   using output_type = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
 
   /**
+   * @brief Get the output when the input values column is empty.
+   *
+   * This is called in libcudf when the input values column is empty. In such situations libcudf
+   * tries to generate the output directly without unnecessarily evaluating the intermediate data.
+   *
+   * @param output_dtype The expected output data type for reduction (if specified)
+   * @param stream The CUDA stream to use for any kernel launches
+   * @param mr Device memory resource to use for any allocations
+   * @return The output result of the aggregation when input values is empty
+   */
+  [[nodiscard]] virtual output_type get_empty_output(std::optional<data_type> output_dtype,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::device_async_resource_ref mr) const = 0;
+
+  /**
    * @brief Perform the main computation for the host-based UDF.
    *
    * @param input The input data needed for performing all computation
@@ -852,19 +847,10 @@ struct host_udf_base {
                                                rmm::device_async_resource_ref mr) const = 0;
 
   /**
-   * @brief Get the output when the input values is empty.
-   *
-   * This may be called in the situations that libcudf tries to avoid unnecessarily evaluating the
-   * intermediate data when the input values is empty.
-   *
-   * @param output_dtype The expected output data type for reduction (if specified)
-   * @param stream The CUDA stream to use for any kernel launches
-   * @param mr Device memory resource to use for any allocations
-   * @return The output result of the aggregation when input values is empty
+   * @brief Computes hash value of the derived class's instance.
+   * @return The hash value of the instance
    */
-  [[nodiscard]] virtual output_type get_empty_output(std::optional<data_type> output_dtype,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr) const = 0;
+  [[nodiscard]] virtual std::size_t do_hash() const = 0;
 
   /**
    * @brief Compares two instances of the derived class for equality.
@@ -872,12 +858,6 @@ struct host_udf_base {
    * @return True if the two instances are equal
    */
   [[nodiscard]] virtual bool is_equal(host_udf_base const& other) const = 0;
-
-  /**
-   * @brief Computes hash value of the derived class's instance.
-   * @return The hash value of the instance
-   */
-  [[nodiscard]] virtual std::size_t do_hash() const = 0;
 
   /**
    * @brief Clones the instance.
