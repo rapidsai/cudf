@@ -9,7 +9,6 @@ from . import (
     filling,
     groupby,
     interop,
-    json,
     merge,
     nvtext,
     orc,
