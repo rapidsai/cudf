@@ -22,7 +22,6 @@ set(cython_sources
     filling.pyx
     groupby.pyx
     interop.pyx
-    json.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx
