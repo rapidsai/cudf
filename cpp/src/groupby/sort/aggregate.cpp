@@ -814,27 +814,22 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
                  "Invalid input data attribute for HOST_UDF groupby aggregation.");
     if (std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value)) {
       switch (std::get<host_udf_base::groupby_data_attribute>(attr.value)) {
-        case host_udf_base::groupby_data_attribute::INPUT_VALUES: {
+        case host_udf_base::groupby_data_attribute::INPUT_VALUES:
           udf_input.emplace(attr, values);
           break;
-        }
-        case host_udf_base::groupby_data_attribute::GROUPED_VALUES: {
+        case host_udf_base::groupby_data_attribute::GROUPED_VALUES:
           udf_input.emplace(attr, get_grouped_values());
           break;
-        }
-        case host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES: {
+        case host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES:
           udf_input.emplace(attr, get_sorted_values());
           break;
-        }
-        case host_udf_base::groupby_data_attribute::GROUP_OFFSETS: {
+        case host_udf_base::groupby_data_attribute::GROUP_OFFSETS:
           udf_input.emplace(attr, helper.group_offsets(stream));
           break;
-        }
-        case host_udf_base::groupby_data_attribute::GROUP_LABELS: {
+        case host_udf_base::groupby_data_attribute::GROUP_LABELS:
           udf_input.emplace(attr, helper.group_labels(stream));
           break;
-        }
-        default:;
+        default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF groupby aggregation.");
       }
     } else {  // data is result from another aggregation
       auto other_agg = std::get<std::unique_ptr<aggregation>>(attr.value)->clone();

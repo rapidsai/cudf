@@ -159,19 +159,16 @@ struct reduce_dispatch_functor {
           CUDF_EXPECTS(std::holds_alternative<host_udf_base::reduction_data_attribute>(attr.value),
                        "Invalid input data attribute for HOST_UDF reduction.");
           switch (std::get<host_udf_base::reduction_data_attribute>(attr.value)) {
-            case host_udf_base::reduction_data_attribute::INPUT_VALUES: {
+            case host_udf_base::reduction_data_attribute::INPUT_VALUES:
               udf_input.emplace(attr, col);
               break;
-            }
-            case host_udf_base::reduction_data_attribute::OUTPUT_DTYPE: {
+            case host_udf_base::reduction_data_attribute::OUTPUT_DTYPE:
               udf_input.emplace(attr, output_dtype);
               break;
-            }
-            case host_udf_base::reduction_data_attribute::INIT_VALUE: {
+            case host_udf_base::reduction_data_attribute::INIT_VALUE:
               udf_input.emplace(attr, init);
               break;
-            }
-            default:;
+            default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF reduction.");
           }
         }
         auto output = (*udf_ptr)(udf_input, stream, mr);
