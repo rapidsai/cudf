@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/label_bins.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>

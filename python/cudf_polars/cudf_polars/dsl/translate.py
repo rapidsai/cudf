@@ -529,10 +529,16 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
                         column.dtype,
                         pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
                     )
-            return expr.StringFunction(dtype, name, options, column, chars)
+            return expr.StringFunction(
+                dtype,
+                expr.StringFunction.Name.from_polars(name),
+                options,
+                column,
+                chars,
+            )
         return expr.StringFunction(
             dtype,
-            name,
+            expr.StringFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
@@ -549,7 +555,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
             )
         return expr.BooleanFunction(
             dtype,
-            name,
+            expr.BooleanFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )
@@ -569,7 +575,7 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
         }
         result_expr = expr.TemporalFunction(
             dtype,
-            name,
+            expr.TemporalFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n) for n in node.input),
         )

@@ -6,12 +6,11 @@
 
 from __future__ import annotations
 
+from enum import IntEnum, auto
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import pyarrow as pa
-
-from polars.polars import _expr_nodes as pl_expr
 
 import pylibcudf as plc
 
@@ -25,7 +24,10 @@ from cudf_polars.dsl.expressions.binaryop import BinOp
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from typing_extensions import Self
+
     import polars.type_aliases as pl_types
+    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.containers import DataFrame
 
@@ -33,13 +35,46 @@ __all__ = ["BooleanFunction"]
 
 
 class BooleanFunction(Expr):
+    class Name(IntEnum):
+        """Internal and picklable representation of polars' `BooleanFunction`."""
+
+        All = auto()
+        AllHorizontal = auto()
+        Any = auto()
+        AnyHorizontal = auto()
+        IsBetween = auto()
+        IsDuplicated = auto()
+        IsFinite = auto()
+        IsFirstDistinct = auto()
+        IsIn = auto()
+        IsInfinite = auto()
+        IsLastDistinct = auto()
+        IsNan = auto()
+        IsNotNan = auto()
+        IsNotNull = auto()
+        IsNull = auto()
+        IsUnique = auto()
+        Not = auto()
+
+        @classmethod
+        def from_polars(cls, obj: pl_expr.BooleanFunction) -> Self:
+            """Convert from polars' `BooleanFunction`."""
+            try:
+                function, name = str(obj).split(".", maxsplit=1)
+            except ValueError:
+                # Failed to unpack string
+                function = None
+            if function != "BooleanFunction":
+                raise ValueError("BooleanFunction required")
+            return getattr(cls, name)
+
     __slots__ = ("name", "options")
     _non_child = ("dtype", "name", "options")
 
     def __init__(
         self,
         dtype: plc.DataType,
-        name: pl_expr.BooleanFunction,
+        name: BooleanFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
     ) -> None:
@@ -47,7 +82,7 @@ class BooleanFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        if self.name == pl_expr.BooleanFunction.IsIn and not all(
+        if self.name is BooleanFunction.Name.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):
             # TODO: If polars IR doesn't put the casts in, we need to
@@ -111,12 +146,12 @@ class BooleanFunction(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if self.name in (
-            pl_expr.BooleanFunction.IsFinite,
-            pl_expr.BooleanFunction.IsInfinite,
+            BooleanFunction.Name.IsFinite,
+            BooleanFunction.Name.IsInfinite,
         ):
             # Avoid evaluating the child if the dtype tells us it's unnecessary.
             (child,) = self.children
-            is_finite = self.name == pl_expr.BooleanFunction.IsFinite
+            is_finite = self.name is BooleanFunction.Name.IsFinite
             if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
                 value = plc.interop.from_arrow(
                     pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
@@ -143,10 +178,10 @@ class BooleanFunction(Expr):
         ]
         # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
         # False
-        if self.name in (pl_expr.BooleanFunction.Any, pl_expr.BooleanFunction.All):
+        if self.name in (BooleanFunction.Name.Any, BooleanFunction.Name.All):
             (ignore_nulls,) = self.options
             (column,) = columns
-            is_any = self.name == pl_expr.BooleanFunction.Any
+            is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
             result = plc.reduce.reduce(column.obj, agg, self.dtype)
             if not ignore_nulls and column.obj.null_count() > 0:
@@ -166,27 +201,27 @@ class BooleanFunction(Expr):
                     # False || Null => Null   True && Null => Null
                     return Column(plc.Column.all_null_like(column.obj, 1))
             return Column(plc.Column.from_scalar(result, 1))
-        if self.name == pl_expr.BooleanFunction.IsNull:
+        if self.name is BooleanFunction.Name.IsNull:
             (column,) = columns
             return Column(plc.unary.is_null(column.obj))
-        elif self.name == pl_expr.BooleanFunction.IsNotNull:
+        elif self.name is BooleanFunction.Name.IsNotNull:
             (column,) = columns
             return Column(plc.unary.is_valid(column.obj))
-        elif self.name == pl_expr.BooleanFunction.IsNan:
+        elif self.name is BooleanFunction.Name.IsNan:
             (column,) = columns
             return Column(
                 plc.unary.is_nan(column.obj).with_mask(
                     column.obj.null_mask(), column.obj.null_count()
                 )
             )
-        elif self.name == pl_expr.BooleanFunction.IsNotNan:
+        elif self.name is BooleanFunction.Name.IsNotNan:
             (column,) = columns
             return Column(
                 plc.unary.is_not_nan(column.obj).with_mask(
                     column.obj.null_mask(), column.obj.null_count()
                 )
             )
-        elif self.name == pl_expr.BooleanFunction.IsFirstDistinct:
+        elif self.name is BooleanFunction.Name.IsFirstDistinct:
             (column,) = columns
             return self._distinct(
                 column,
@@ -198,7 +233,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == pl_expr.BooleanFunction.IsLastDistinct:
+        elif self.name is BooleanFunction.Name.IsLastDistinct:
             (column,) = columns
             return self._distinct(
                 column,
@@ -210,7 +245,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == pl_expr.BooleanFunction.IsUnique:
+        elif self.name is BooleanFunction.Name.IsUnique:
             (column,) = columns
             return self._distinct(
                 column,
@@ -222,7 +257,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == pl_expr.BooleanFunction.IsDuplicated:
+        elif self.name is BooleanFunction.Name.IsDuplicated:
             (column,) = columns
             return self._distinct(
                 column,
@@ -234,7 +269,7 @@ class BooleanFunction(Expr):
                     pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
                 ),
             )
-        elif self.name == pl_expr.BooleanFunction.AllHorizontal:
+        elif self.name is BooleanFunction.Name.AllHorizontal:
             return Column(
                 reduce(
                     partial(
@@ -245,7 +280,7 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 )
             )
-        elif self.name == pl_expr.BooleanFunction.AnyHorizontal:
+        elif self.name is BooleanFunction.Name.AnyHorizontal:
             return Column(
                 reduce(
                     partial(
@@ -256,10 +291,10 @@ class BooleanFunction(Expr):
                     (c.obj for c in columns),
                 )
             )
-        elif self.name == pl_expr.BooleanFunction.IsIn:
+        elif self.name is BooleanFunction.Name.IsIn:
             needles, haystack = columns
             return Column(plc.search.contains(haystack.obj, needles.obj))
-        elif self.name == pl_expr.BooleanFunction.Not:
+        elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
             return Column(
                 plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT)

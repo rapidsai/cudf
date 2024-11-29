@@ -14,6 +14,8 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.types import size_type_dtype
@@ -22,6 +24,7 @@ from cudf.api.types import is_integer, is_list_like, is_object_dtype, is_scalar
 from cudf.core import column
 from cudf.core._base_index import _return_get_indexer_result
 from cudf.core.algorithms import factorize
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import (
@@ -1919,10 +1922,18 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             for lcol, rcol in zip(target._columns, self._columns)
         ]
         join_keys = map(list, zip(*join_keys))
-        scatter_map, indices = libcudf.join.join(
-            *join_keys,
-            how="inner",
-        )
+        with acquire_spill_lock():
+            plc_tables = [
+                plc.Table([col.to_pylibcudf(mode="read") for col in cols])
+                for cols in join_keys
+            ]
+            left_plc, right_plc = plc.join.inner_join(
+                plc_tables[0],
+                plc_tables[1],
+                plc.types.NullEquality.EQUAL,
+            )
+            scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
+            indices = libcudf.column.Column.from_pylibcudf(right_plc)
         result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
         result_series = cudf.Series._from_column(result)
 
