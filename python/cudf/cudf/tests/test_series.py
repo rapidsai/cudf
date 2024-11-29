@@ -2934,3 +2934,9 @@ def test_empty_astype_always_castable(type1, type2, as_dtype, copy):
         assert ser._column is result._column
     else:
         assert ser._column is not result._column
+
+
+def test_dtype_dtypes_equal():
+    ser = cudf.Series([0])
+    assert ser.dtype is ser.dtypes
+    assert ser.dtypes is ser.to_pandas().dtypes
