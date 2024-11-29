@@ -103,6 +103,8 @@ ignore = [
     "E203",
     # line-too-long (due to Copyright header)
     "E501",
+    # type-comparison, disabled because we compare types to numpy dtypes
+    "E721",
     # String contains ambiguous character
     "RUF001",
     # Parenthesize `a and b` expressions when chaining `and` and `or`

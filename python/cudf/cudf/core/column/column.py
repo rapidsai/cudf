@@ -1016,7 +1016,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # astype("interval") (the string only) should no-op
             result = self
         else:
-            was_object = dtype is object or dtype == np.dtype(object)
+            was_object = dtype == object or dtype == np.dtype(object)
             dtype = cudf.dtype(dtype)
             if self.dtype == dtype:
                 result = self
@@ -2117,7 +2117,7 @@ def as_column(
     }:
         if isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype)):
             dtype = dtype.to_pandas()
-        elif dtype is object:
+        elif dtype == object:
             # Unlike pandas, interpret object as "str" instead of "python object"
             dtype = "str"
         ser = pd.Series(arbitrary, dtype=dtype)

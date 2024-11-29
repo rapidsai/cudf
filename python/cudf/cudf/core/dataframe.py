@@ -1578,7 +1578,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns = [
             c
             for c, dt in self.dtypes.items()
-            if dt is not object and not isinstance(dt, cudf.CategoricalDtype)
+            if dt != object and not isinstance(dt, cudf.CategoricalDtype)
         ]
         return self[columns]
 
