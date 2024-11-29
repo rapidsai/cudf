@@ -18,7 +18,8 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 from cudf.api.types import is_scalar
 from cudf.core._internals import unary
 from cudf.core.buffer import as_buffer
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
+from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -27,8 +28,6 @@ from cudf.core.dtypes import (
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
-
-from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike

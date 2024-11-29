@@ -12,10 +12,13 @@ from typing_extensions import Self
 import pylibcudf
 
 import cudf
+import cudf.core.column.column as column
+import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import unary
-from cudf.core.column import ColumnBase, as_column, column, string
+from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
@@ -25,8 +28,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
 )
-
-from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
