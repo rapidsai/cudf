@@ -158,6 +158,7 @@ ignore = [
   "ISC002", # multi-line-implicit-string-concatenation
 ]
 fixable = ["ALL"]
+typing-modules = ["cudf_polars.typing"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["D"]

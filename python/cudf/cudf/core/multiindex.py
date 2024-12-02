@@ -567,7 +567,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 names=['a', 'b'])
         >>> midx.levels
         [Index([1, 2, 3], dtype='int64', name='a'), Index([10, 11, 12], dtype='int64', name='b')]
-        """  # noqa: E501
+        """
         return [
             idx.rename(name) for idx, name in zip(self._levels, self.names)
         ]

@@ -917,7 +917,6 @@ def test_groupby_apply_return_col_from_df():
     # tests a UDF that consists of purely colwise
     # ops, such as `lambda group: group.x + group.y`
     # which returns a column
-    func = lambda group: group.x + group.y  # noqa:E731
     df = cudf.DataFrame(
         {
             "id": range(10),
@@ -1222,7 +1221,7 @@ def test_groupby_column_numeral():
         pd.Series([0, 2, 0]),
         pd.Series([0, 2, 0], index=[0, 2, 1]),
     ],
-)  # noqa: E501
+)
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
     gdf = DataFrame.from_pandas(pdf)
@@ -2016,8 +2015,8 @@ def test_multi_agg():
 @pytest.mark.parametrize(
     "agg",
     (
-        list(itertools.combinations(["count", "max", "min", "nunique"], 2))
-        + [
+        [
+            *itertools.combinations(["count", "max", "min", "nunique"], 2),
             {"b": "min", "c": "mean"},
             {"b": "max", "c": "mean"},
             {"b": "count", "c": "mean"},
