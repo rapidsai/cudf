@@ -59,7 +59,7 @@ struct bloom_filter_caster {
   template <typename T, bool timestamp_is_int96 = false>
   std::unique_ptr<cudf::column> query_bloom_filter(cudf::size_type equality_col_idx,
                                                    cudf::data_type dtype,
-                                                   ast::literal* const& literal,
+                                                   ast::literal const* const literal,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr) const
   {
@@ -135,7 +135,7 @@ struct bloom_filter_caster {
   template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::size_type equality_col_idx,
                                            cudf::data_type dtype,
-                                           ast::literal* const& literal,
+                                           ast::literal* const literal,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
@@ -215,15 +215,15 @@ class equality_literals_collector : public ast::detail::expression_transformer {
       // First operand should be column reference, second should be literal.
       CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
                    "Only binary operations are supported on column reference");
-      CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+      auto const literal_ptr = dynamic_cast<ast::literal const*>(&operands[1].get());
+      CUDF_EXPECTS(literal_ptr != nullptr,
                    "Second operand of binary operation with column reference must be a literal");
       v->accept(*this);
 
       // Push to the corresponding column's literals list iff equality predicate is seen
       if (op == ast_operator::EQUAL) {
         auto const col_idx = v->get_column_index();
-        _equality_literals[col_idx].emplace_back(
-          const_cast<ast::literal*>(dynamic_cast<ast::literal const*>(&operands[1].get())));
+        _equality_literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
       }
     } else {
       auto new_operands = visit_operands(operands);
@@ -266,7 +266,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
 };
 
 /**
- * @brief Converts AST expression to bloom filter membership (BloomfilterAST) expression .
+ * @brief Converts AST expression to bloom filter membership (BloomfilterAST) expression.
  * This is used in row group filtering based on equality predicate.
  */
 class bloom_filter_expression_converter : public equality_literals_collector {
@@ -368,7 +368,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
  *
  * @param sources Dataset sources
  * @param num_chunks Number of total column chunks to read
- * @param bloom_filter_data Devicebuffers to hold bloom filter bitsets for each chunk
+ * @param bloom_filter_data Device buffers to hold bloom filter bitsets for each chunk
  * @param bloom_filter_offsets Bloom filter offsets for all chunks
  * @param bloom_filter_sizes Bloom filter sizes for all chunks
  * @param chunk_source_map Association between each column chunk and its source
@@ -657,7 +657,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                   if (cudf::is_compound(dtype) and dtype.id() != cudf::type_id::STRING) { return; }
 
                   // Add a column for all literals associated with an equality column
-                  for (ast::literal* const& literal : equality_literals[input_col_idx]) {
+                  for (auto const& literal : equality_literals[input_col_idx]) {
                     columns.emplace_back(cudf::type_dispatcher<dispatch_storage_type>(
                       dtype, bloom_filter_col, equality_col_idx, dtype, literal, stream, mr));
                   }

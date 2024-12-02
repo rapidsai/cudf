@@ -29,7 +29,8 @@ namespace cudf::hashing::detail {
 
 template <typename Key>
 struct XXHash_64 {
-  using result_type = std::uint64_t;
+  using argument_type = Key;
+  using result_type   = std::uint64_t;
 
   __host__ __device__ constexpr XXHash_64(uint64_t seed = cudf::DEFAULT_HASH_SEED) : _impl{seed} {}
 

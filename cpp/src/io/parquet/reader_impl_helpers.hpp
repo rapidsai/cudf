@@ -361,7 +361,7 @@ class aggregate_reader_metadata {
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Filtered row group indices, if any is filtered.
+   * @return Filtered row group indices, if any is filtered
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
     host_span<std::unique_ptr<datasource> const> sources,
@@ -381,7 +381,7 @@ class aggregate_reader_metadata {
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Filtered row group indices, if any is filtered.
+   * @return Filtered row group indices, if any is filtered
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
     host_span<std::unique_ptr<datasource> const> sources,
@@ -406,7 +406,7 @@ class aggregate_reader_metadata {
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of corrected row_start, row_count, list of row group indexes and its
-   *         starting row, and list of number of rows per source.
+   *         starting row, and list of number of rows per source
    */
   [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
   select_row_groups(host_span<std::unique_ptr<datasource> const> sources,
@@ -469,7 +469,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
 
   /**
-   * @brief Returns the AST to apply on Column chunk statistics.
+   * @brief Returns the AST to apply on Column chunk statistics
    *
    * @return AST operation expression
    */
@@ -506,7 +506,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  * collect filtered row group indices
  *
  * @param table Table of stats or bloom filter membership columns
- * @param ast_expr StatsAST or BloomfilterAST expression to filter with.
+ * @param ast_expr StatsAST or BloomfilterAST expression to filter with
  * @param input_row_group_indices Lists of input row groups to read, one per source
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to be used in cudf::compute_column
