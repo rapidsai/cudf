@@ -160,18 +160,18 @@ using std::is_scoped_enum;
 #endif
 
 // helpers to do bit operations on scoped enums
-template <typename... Ts, CUDF_ENABLE_IF(
-  ... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
+template <typename... Ts,
+          CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
 constexpr std::uint32_t BitAnd(Ts... bits)
 {
-    return (... & static_cast<std::uint32_t>(bits));
+  return (... & static_cast<std::uint32_t>(bits));
 }
 
-template <typename... Ts, CUDF_ENABLE_IF(
-  ... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
+template <typename... Ts,
+          CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
 constexpr std::uint32_t BitOr(Ts... bits)
 {
-    return (... | static_cast<std::uint32_t>(bits));
+  return (... | static_cast<std::uint32_t>(bits));
 }
 
 /**
@@ -216,28 +216,34 @@ enum class decode_kernel_mask {
   FIXED_WIDTH_NO_DICT_LIST   = (1 << 13),  // Run decode kernel for fixed width non-dictionary pages
   BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST =
     (1 << 14),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data for fixed width lists
-  BOOLEAN        = (1 << 15),  // Run decode kernel for boolean data
-  BOOLEAN_NESTED = (1 << 16),  // Run decode kernel for nested boolean data
-  BOOLEAN_LIST   = (1 << 17),  // Run decode kernel for list boolean data
-  STRING_NESTED              = (1 << 18),  // Run decode kernel for nested string data
-  STRING_LIST                = (1 << 19),  // Run decode kernel for list string data
-  STRING_DICT                = (1 << 20),  // Run decode kernel for dictionary string data
-  STRING_DICT_NESTED         = (1 << 21),  // Run decode kernel for nested dictionary string data
-  STRING_DICT_LIST           = (1 << 22),  // Run decode kernel for list dictionary string data
-  STRING_STREAM_SPLIT        = (1 << 23),  // Run decode kernel for BYTE_STREAM_SPLIT string data
-  STRING_STREAM_SPLIT_NESTED = (1 << 24),  // Run decode kernel for nested BYTE_STREAM_SPLIT string data
-  STRING_STREAM_SPLIT_LIST   = (1 << 25)   // Run decode kernel for list BYTE_STREAM_SPLIT string data
+  BOOLEAN             = (1 << 15),  // Run decode kernel for boolean data
+  BOOLEAN_NESTED      = (1 << 16),  // Run decode kernel for nested boolean data
+  BOOLEAN_LIST        = (1 << 17),  // Run decode kernel for list boolean data
+  STRING_NESTED       = (1 << 18),  // Run decode kernel for nested string data
+  STRING_LIST         = (1 << 19),  // Run decode kernel for list string data
+  STRING_DICT         = (1 << 20),  // Run decode kernel for dictionary string data
+  STRING_DICT_NESTED  = (1 << 21),  // Run decode kernel for nested dictionary string data
+  STRING_DICT_LIST    = (1 << 22),  // Run decode kernel for list dictionary string data
+  STRING_STREAM_SPLIT = (1 << 23),  // Run decode kernel for BYTE_STREAM_SPLIT string data
+  STRING_STREAM_SPLIT_NESTED =
+    (1 << 24),  // Run decode kernel for nested BYTE_STREAM_SPLIT string data
+  STRING_STREAM_SPLIT_LIST = (1 << 25)  // Run decode kernel for list BYTE_STREAM_SPLIT string data
 };
 
-constexpr uint32_t STRINGS_MASK_NON_DELTA = BitOr(decode_kernel_mask::STRING, 
-  decode_kernel_mask::STRING_NESTED, decode_kernel_mask::STRING_LIST, 
-  decode_kernel_mask::STRING_DICT, decode_kernel_mask::STRING_DICT_NESTED, 
-  decode_kernel_mask::STRING_DICT_LIST, decode_kernel_mask::STRING_STREAM_SPLIT, 
-  decode_kernel_mask::STRING_STREAM_SPLIT_NESTED, decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+constexpr uint32_t STRINGS_MASK_NON_DELTA = BitOr(decode_kernel_mask::STRING,
+                                                  decode_kernel_mask::STRING_NESTED,
+                                                  decode_kernel_mask::STRING_LIST,
+                                                  decode_kernel_mask::STRING_DICT,
+                                                  decode_kernel_mask::STRING_DICT_NESTED,
+                                                  decode_kernel_mask::STRING_DICT_LIST,
+                                                  decode_kernel_mask::STRING_STREAM_SPLIT,
+                                                  decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+                                                  decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 
 // mask representing all the ways in which a string can be encoded
-constexpr uint32_t STRINGS_MASK = BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY, 
-  decode_kernel_mask::DELTA_LENGTH_BA, STRINGS_MASK_NON_DELTA);
+constexpr uint32_t STRINGS_MASK = BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY,
+                                        decode_kernel_mask::DELTA_LENGTH_BA,
+                                        STRINGS_MASK_NON_DELTA);
 
 /**
  * @brief Nesting information specifically needed by the decode and preprocessing

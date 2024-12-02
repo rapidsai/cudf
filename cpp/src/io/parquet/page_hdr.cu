@@ -187,18 +187,18 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   if (is_string_col(chunk)) {
     // check for string before byte_stream_split so FLBA will go to the right kernel
     if (page.encoding == Encoding::PLAIN) {
-      return is_list(chunk) ? decode_kernel_mask::STRING_LIST
+      return is_list(chunk)     ? decode_kernel_mask::STRING_LIST
              : is_nested(chunk) ? decode_kernel_mask::STRING_NESTED
-                              : decode_kernel_mask::STRING;
+                                : decode_kernel_mask::STRING;
     } else if (page.encoding == Encoding::PLAIN_DICTIONARY ||
                page.encoding == Encoding::RLE_DICTIONARY) {
-      return is_list(chunk) ? decode_kernel_mask::STRING_DICT_LIST
+      return is_list(chunk)     ? decode_kernel_mask::STRING_DICT_LIST
              : is_nested(chunk) ? decode_kernel_mask::STRING_DICT_NESTED
-                              : decode_kernel_mask::STRING_DICT;
+                                : decode_kernel_mask::STRING_DICT;
     } else if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
-      return is_list(chunk) ? decode_kernel_mask::STRING_STREAM_SPLIT_LIST
+      return is_list(chunk)     ? decode_kernel_mask::STRING_STREAM_SPLIT_LIST
              : is_nested(chunk) ? decode_kernel_mask::STRING_STREAM_SPLIT_NESTED
-                              : decode_kernel_mask::STRING_STREAM_SPLIT;
+                                : decode_kernel_mask::STRING_STREAM_SPLIT;
     }
   }
 

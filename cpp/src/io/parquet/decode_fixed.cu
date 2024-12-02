@@ -15,17 +15,23 @@
  */
 #include "page_data.cuh"
 #include "page_decode.cuh"
-#include "parquet_gpu.hpp"
 #include "page_string_utils.cuh"
+#include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
-#include <cooperative_groups.h>
-
 #include <cudf/detail/utilities/cuda.cuh>
+
+#include <cooperative_groups.h>
 
 namespace cudf::io::parquet::detail {
 
 namespace {
+
+template <typename IntType>
+constexpr IntType constexpr_log2(IntType value)
+{
+  return (value <= 1) ? 0 : constexpr_log2(value >> 1) + 1;
+}
 
 // Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
 // Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
@@ -285,7 +291,7 @@ __device__ inline void gpuDecodeString(
   page_state_s* s, state_buf* const sb, int start, int end, int t, size_t& string_output_offset)
 {
   // nesting level that is storing actual leaf values
-  int const leaf_level_index = s->col.max_nesting_depth - 1;
+  int const leaf_level_index    = s->col.max_nesting_depth - 1;
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
   auto const& ni = s->nesting_info[leaf_level_index];
@@ -321,112 +327,111 @@ __device__ inline void gpuDecodeString(
     // before first_row) in the flat hierarchy case.
     bool const in_range = (thread_pos < target_pos) && (dst_pos >= 0);
 
-    //lookup input string pointer & length. store length. 
-    auto [thread_input_string, string_length] = [&](){
-      if (!in_range) {
-        return string_index_pair{nullptr, 0};
-      }
+    // lookup input string pointer & length. store length.
+    auto [thread_input_string, string_length] = [&]() {
+      if (!in_range) { return string_index_pair{nullptr, 0}; }
       string_index_pair string_pair = gpuGetStringData(s, sb, src_pos);
-      int32_t* str_len_ptr = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
-      *str_len_ptr = string_pair.second;
+      int32_t* str_len_ptr          = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
+      *str_len_ptr                  = string_pair.second;
       return string_pair;
     }();
 
-    //compute string offsets
+    // compute string offsets
     size_t thread_string_offset, block_total_string_length;
-    scanner(scan_storage).ExclusiveSum(string_length, thread_string_offset, block_total_string_length);
+    scanner(scan_storage)
+      .ExclusiveSum(string_length, thread_string_offset, block_total_string_length);
     __syncthreads();
 
-    //adjust for prior offset, get output string pointer
+    // adjust for prior offset, get output string pointer
     thread_string_offset += string_output_offset;
     string_output_offset += block_total_string_length;
     auto const thread_output_string = ni.string_out + thread_string_offset;
 
     if constexpr (split_decode_t) {
-
       if (in_range) {
         auto const split_string_length = s->dtype_len_in;
-        auto const stream_length = s->page.str_bytes / split_string_length;
+        auto const stream_length       = s->page.str_bytes / split_string_length;
 
         for (int ii = 0; ii < split_string_length; ii++) {
           thread_output_string[ii] = s->data_start[src_pos + ii * stream_length];
         }
       }
     } else {
+      // With a dictionary, performance is MUCH better for cache hits (reuse dict entry)
+      // On a cache hit, we load a 128-byte L1/L2 cache line
+      // If each thread (e.g. 128) copies a string (128/line): 128*128 = 16kb PER BLOCK
+      // This likely overflows the L2 cache and results in a lot of cache misses
+      // Plus, perf is O(longest_length), so we're bottlenecked for non-uniform data
 
-      //With a dictionary, performance MUCH faster for cache hits (reuse dict entry)
-      //On a cache hit, we load a 128-byte L1/L2 cache line
-      //If each thread (128) copies a separate string (128): 128*128 = 16kb PER BLOCK
-      //This likely overflows the L2 cache and results in a lot of cache misses
-      //Plus, perf is O(longest_string_len), so bottlenecked for non-uniform data (common)
+      // Instead, the (T = block_size) threads cooperatively copy the T strings
+      // N strings are copied at a time, with M = T / N threads per string
 
-      //Instead, the (128) threads cooperatively copy the (128) strings in the batch
-      //N strings are copied at a time, with M = 128 / N threads per string
-      //Choose M and N to be powers of 2 so that they divide the block size evenly. 
-      //For 128 threads: clamp N between 4 (1 string per warp) & 32 (warp size, cache hit)
-
-      //Per string, each thread copies B = Length / M bytes in one contiguous memcpy
-
-
-      //From testing, performance is best when copying an average of B = 4 bytes at once.
-
-      //So for an average string length of 16 bytes or less (because N clamped): M = 4, N = 32
-      //For an average length of 65 bytes or more (rounded): M = 32, N = 4 (1 string / warp at once)
-
-      //Performance: N strings at once, M = 128/N threads per string: proportional to N*(Avg_length/M)
-      //Note if M is large relative to Avg_length then many threads may do nothing: Slow
-      //And note that we must do at least N memcpy's per thread (one per string), so don't want M small either: N large
-
-      //Instead of saving string lengths, save shared memory by only saving outputs: 
-      //string length = outputs[i + 1] - outputs[i]. Hence the need for one extra output
+      // Instead of saving string lengths, save shared memory by only saving outputs:
+      // string length = outputs[i + 1] - outputs[i]. Hence the need for one extra output
       __shared__ uint8_t const* inputs[block_size];
       __shared__ uint8_t* outputs[block_size + 1];
 
-      //Save string pointers so threads can share the work on them
-      outputs[t]  = thread_output_string;
-      inputs[t] = reinterpret_cast<uint8_t const*>(thread_input_string);
-      if((t == 0) && (batch_size == block_size)) {
+      // Save string pointers so threads can share the work on them
+      outputs[t] = thread_output_string;
+      inputs[t]  = reinterpret_cast<uint8_t const*>(thread_input_string);
+      if ((t == 0) && (batch_size == block_size)) {
         outputs[batch_size] = ni.string_out + string_output_offset;
       }
       __syncthreads();
 
-      //For avg length < 16/32/64/128/etc., length power of 2 = 4/5/6/7 = 32 - __clz()
-      //We want to avg 4 chars / thread, so subtract 2 (4 = 2^2) from these
+      // Choose M, N to be powers of 2 to divide T evenly and allow bit shifts.
+      // For T threads: clamp N btw T/32 (1 string per warp) & 32 (cache miss if larger)
+      // Per string, each thread copies B = Length / M bytes in one contiguous memcpy
+
+      // Performance: O(N*Avg_Length/M), with floor of at least N memcpy's (of O(Avg_length/M))
+      // Note if M is large (vs. Avg_length) then many threads may do nothing: Slow
+      // Note if M is small then N is large, increasing the time floor of N memcpy's
+      // Determine M and N for each batch of strings based on their average length
       int const avg_string_length = block_total_string_length / batch_size;
-      int const num_threads_per_string_pow2_unclamped = 32 - __clz(avg_string_length) - 2;
 
-//log2(1 string per warp * # warps)
-      //For 128 threads, clamp power-of-2 between 2 (2^2 = 1 string per warp) and 5 (max 32 = 2^5)
-      static constexpr int min_threads_per_string_pow2 = 2; // log2(batch_size / max_strings_at_once) = log2(128 / 32)
+      // For avg length < 16/32/64/128/etc., length power-of-2 = 4/5/6/7 = 32 - __clz()
+      int const avg_string_length_log2 = 32 - __clz(avg_string_length);
 
-      //We want  and clamp to the edges (2/3/4/5)
-      //2^5 = 32: warp size
-      int const num_threads_per_string_pow2 = min(max(min_threads_per_string_pow2, num_threads_per_string_pow2_unclamped), 5);
+      // From testing, performance is best when copying an average of B = 4 bytes at once.
+      // So #-threads = avg_string_length / 4, so subtract 2 (4 = 2^2) from the log2
+      // This is the target (log2) for M, but we need to clamp its range
+      int const threads_per_string_log2_unclamped = avg_string_length_log2 - 2;
 
-      //So for avg length < 16/32/64/128, we copy 32/16/8/4 strings at once: 8/4/2/1 per warp
+      // Clamp M (#-threads-per-string):
+      // For T threads: clamp #-strings-at-once N btw T/32 (1/warp) & 32 (cache miss if larger)
+      // So, clamp #-threads-per-string M = T / N between 32 (all in warp) & T/32 (cache miss)
+      static constexpr int min_log2 = constexpr_log2(block_size / 32);  // is 2 for T = 128
+      static constexpr int max_log2 = 5;  // 32 = 2^5 (cache miss if larger)
+      int const threads_per_string_log2 =
+        min(max(min_log2, threads_per_string_log2_unclamped), max_log2);
+      int const threads_per_string = 1 << threads_per_string_log2;  // M
 
-      int const num_threads_per_string = 1 << num_threads_per_string_pow2;
+      // For block_size = T = 128:
+      // For an average string length of 16 bytes or less (because N clamped): M = 4, N = 32
+      // For an average length of 65 bytes or more (rounded): M = 32, N = 4 (1 string / warp at
+      // once)
+      int const strings_at_once  = block_size >> threads_per_string_log2;  // N
+      int const string_lane      = t & (threads_per_string - 1);
+      int const start_string_idx = t >> threads_per_string_log2;
 
-      int const num_strings_at_once = block_size >> num_threads_per_string_pow2;
-      int const string_lane = t & (num_threads_per_string - 1);
-      int const start_string_idx = t >> num_threads_per_string_pow2;
-
-      //loop over all strings in this batch
-      //want warps to do every 4th string, so that all string bytes are close in memory
-      for (int string_idx = start_string_idx; string_idx < batch_size; string_idx += num_strings_at_once) {
-        auto output_string = outputs[string_idx];
-        int const length = outputs[string_idx + 1] - output_string;
+      // loop over all strings in this batch
+      // threads work on consecutive strings so that all bytes are close in memory
+      for (int string_idx = start_string_idx; string_idx < batch_size;
+           string_idx += strings_at_once) {
+        auto output_string      = outputs[string_idx];
+        int const length        = outputs[string_idx + 1] - output_string;
         auto const input_string = inputs[string_idx];
 
-        //One-shot N chars per thread
-        int const chars_at_once = (length + num_threads_per_string - 1) >> num_threads_per_string_pow2;
-        int const start_index = string_lane * chars_at_once;
+        // One-shot N chars per thread
+        int const chars_at_once    = (length + threads_per_string - 1) >> threads_per_string_log2;
+        int const start_index      = string_lane * chars_at_once;
         int const substring_length = min(chars_at_once, length - start_index);
         if (substring_length > 0) {
           memcpy(&(output_string[start_index]), &(input_string[start_index]), substring_length);
         }
       }
-      //Make sure all threads have finished using shared memory before next loop iteration overwites
+
+      // Make sure all threads have finished using shared memory before next loop overwrites
       __syncthreads();
     }
 
@@ -544,7 +549,7 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
   if (t == 0) {
     // update valid value count for decoding and total # of values we've processed
     max_depth_ni.valid_count = max_depth_valid_count;
-    max_depth_ni.value_count = value_count; //Needed AT LEAST for strings!
+    max_depth_ni.value_count = value_count;  // Needed AT LEAST for strings!
     s->nz_count              = max_depth_valid_count;
     s->input_value_count     = value_count;
     s->input_row_count       = value_count;
@@ -1054,9 +1059,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 {
   constexpr bool has_dict_t = (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) ||
                               (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
-                              (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) || 
-                              (kernel_mask_t == decode_kernel_mask::STRING_DICT) || 
-                              (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) || 
+                              (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
+                              (kernel_mask_t == decode_kernel_mask::STRING_DICT) ||
+                              (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
                               (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST);
 
   constexpr bool has_bools_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN) ||
@@ -1067,7 +1072,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
     (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
     (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) || 
+    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
     (kernel_mask_t == decode_kernel_mask::STRING_NESTED) ||
     (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
     (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
@@ -1076,7 +1081,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST) ||
     (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
     (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) || 
+    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) ||
     (kernel_mask_t == decode_kernel_mask::STRING_LIST) ||
     (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST) ||
     (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
@@ -1084,19 +1089,20 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   constexpr bool split_decode_t =
     (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT) ||
     (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) || 
+    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) ||
     (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT) ||
     (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) ||
     (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 
-  constexpr bool has_strings_t = (static_cast<uint32_t>(kernel_mask_t) & STRINGS_MASK_NON_DELTA) != 0;
+  constexpr bool has_strings_t =
+    (static_cast<uint32_t>(kernel_mask_t) & STRINGS_MASK_NON_DELTA) != 0;
 
   constexpr int rolling_buf_size    = decode_block_size_t * 2;
   constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size_t>();
 
   __shared__ __align__(16) page_state_s state_g;
   constexpr bool use_dict_buffers = has_dict_t || has_bools_t || has_strings_t;
-  using state_buf_t = page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
+  using state_buf_t               = page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
                                            use_dict_buffers ? rolling_buf_size : 1,
                                            has_strings_t ? rolling_buf_size : 1>;
   __shared__ __align__(16) state_buf_t state_buffers;
@@ -1193,24 +1199,25 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // - valid_count: number of non-null values we have decoded so far. In each iteration of the
   //   loop below, we look at the number of valid items (which could be all for non-nullable),
   //   and valid_count is that running count.
-  int processed_count = 0;
-  int valid_count     = 0;
+  int processed_count         = 0;
+  int valid_count             = 0;
   size_t string_output_offset = 0;
 
   // Skip ahead in the decoding so that we don't repeat work (skipped_leaf_values = 0 for non-lists)
   auto const skipped_leaf_values = s->page.skipped_leaf_values;
   if constexpr (has_lists_t) {
     if (skipped_leaf_values > 0) {
-//if constexpr (has_strings_t) {if(t==0)printf("SKIPPING %d, has_dict_t %d\n", skipped_leaf_values, (int)has_dict_t);}
+      // if constexpr (has_strings_t) {if(t==0)printf("SKIPPING %d, has_dict_t %d\n",
+      // skipped_leaf_values, (int)has_dict_t);}
       if (should_process_nulls) {
         skip_decode<rolling_buf_size>(def_decoder, skipped_leaf_values, t);
       }
       processed_count = skip_decode<rolling_buf_size>(rep_decoder, skipped_leaf_values, t);
       if constexpr (has_dict_t) {
         skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
-      }
-      else if constexpr (has_strings_t) {
-        gpuInitStringDescriptors<true>(s, sb, skipped_leaf_values, cooperative_groups::this_thread_block());
+      } else if constexpr (has_strings_t) {
+        gpuInitStringDescriptors<true>(
+          s, sb, skipped_leaf_values, cooperative_groups::this_thread_block());
         if (t == 0) { s->dict_pos = processed_count; }
         __syncthreads();
       }
@@ -1260,7 +1267,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     }
     __syncthreads();
 
-    // We want to limit the number of dictionary/bool/string items we decode, 
+    // We want to limit the number of dictionary/bool/string items we decode,
     // that correspond to the rows we have processed in this iteration that are valid.
     // We know the number of valid rows to process with: next_valid_count - valid_count.
     if constexpr (has_dict_t) {
@@ -1282,11 +1289,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     // decode the values themselves
     if constexpr (has_strings_t) {
-      gpuDecodeString<decode_block_size_t, has_lists_t, split_decode_t>(s, sb, valid_count, next_valid_count, t, string_output_offset);
+      gpuDecodeString<decode_block_size_t, has_lists_t, split_decode_t>(
+        s, sb, valid_count, next_valid_count, t, string_output_offset);
     } else if constexpr (split_decode_t) {
-      gpuDecodeFixedWidthSplitValues<decode_block_size_t, has_lists_t>(s, sb, valid_count, next_valid_count, t);
+      gpuDecodeFixedWidthSplitValues<decode_block_size_t, has_lists_t>(
+        s, sb, valid_count, next_valid_count, t);
     } else {
-      gpuDecodeFixedWidthValues<decode_block_size_t, has_lists_t>(s, sb, valid_count, next_valid_count, t);
+      gpuDecodeFixedWidthValues<decode_block_size_t, has_lists_t>(
+        s, sb, valid_count, next_valid_count, t);
     }
     __syncthreads();
 
@@ -1297,14 +1307,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
     // latter case, offsets will be computed during string column creation.
     if (not s->col.is_large_string_col) {
-      auto& ni = s->nesting_info[s->col.max_nesting_depth - 1];
+      auto& ni        = s->nesting_info[s->col.max_nesting_depth - 1];
       int value_count = ni.value_count;
 
       // if no repetition we haven't calculated start/end bounds and instead just skipped
       // values until we reach first_row. account for that here.
       if constexpr (!has_lists_t) { value_count -= s->first_row; }
 
-      auto const offptr = reinterpret_cast<size_type*>(ni.data_out);
+      auto const offptr        = reinterpret_cast<size_type*>(ni.data_out);
       auto const initial_value = s->page.str_offset;
       block_excl_sum<decode_block_size_t>(offptr, value_count, initial_value);
     }
@@ -1411,7 +1421,8 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
       launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT>{});
       break;
     case decode_kernel_mask::STRING_STREAM_SPLIT_NESTED:
-      launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
+      launch_kernel(int_tag_t<128>{},
+                    kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_NESTED>{});
       break;
     case decode_kernel_mask::STRING_STREAM_SPLIT_LIST:
       launch_kernel(int_tag_t<128>{}, kernel_tag_t<decode_kernel_mask::STRING_STREAM_SPLIT_LIST>{});

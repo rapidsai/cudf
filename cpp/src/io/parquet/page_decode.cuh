@@ -186,11 +186,9 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @return A pair containing a pointer to the string and its length
  */
 template <typename state_buf>
-inline __device__ string_index_pair gpuGetStringData(page_state_s* s,
-                                                                        state_buf* sb,
-                                                                        int src_pos)
+inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf* sb, int src_pos)
 {
-  char const* ptr = nullptr;
+  char const* ptr     = nullptr;
   cudf::size_type len = 0;
 
   if (s->dict_base) {
