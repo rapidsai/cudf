@@ -16,6 +16,7 @@
 #include "join_common_utils.hpp"
 
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>

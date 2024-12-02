@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
+from cudf.core._internals import unary
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.index import ensure_index
@@ -171,7 +172,7 @@ def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
             downcast_dtype = cudf.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
-                    col = libcudf.unary.cast(col, downcast_dtype)
+                    col = unary.cast(col, downcast_dtype)
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
@@ -241,12 +242,11 @@ def _convert_str_col(col, errors, _downcast=None):
 
 def _proc_inf_empty_strings(col: ColumnBase) -> ColumnBase:
     """Handles empty and infinity strings"""
-    col = libstrings.to_lower(col)
+    col = col.to_lower()  # type: ignore[attr-defined]
     col = col.find_and_replace(as_column([""]), as_column(["NaN"]))
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
-    col = libstrings.replace_multi(
-        col,
+    col = col.replace_multiple(  # type: ignore[attr-defined]
         as_column(["+", "inf", "inity"]),
         as_column(["", "Inf", ""]),
     )

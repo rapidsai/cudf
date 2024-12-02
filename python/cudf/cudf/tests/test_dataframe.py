@@ -1306,6 +1306,18 @@ def test_dataframe_to_cupy_null_values():
         np.testing.assert_array_equal(refvalues[k], mat[:, i])
 
 
+@pytest.mark.parametrize("method", ["to_cupy", "to_numpy"])
+@pytest.mark.parametrize("value", [1, True, 1.5])
+@pytest.mark.parametrize("constructor", ["DataFrame", "Series"])
+def test_to_array_categorical(method, value, constructor):
+    data = [value]
+    expected = getattr(pd, constructor)(data, dtype="category").to_numpy()
+    result = getattr(
+        getattr(cudf, constructor)(data, dtype="category"), method
+    )()
+    assert_eq(result, expected)
+
+
 def test_dataframe_append_empty():
     pdf = pd.DataFrame(
         {

@@ -109,7 +109,7 @@ struct allnull_column_functor {
   rmm::device_async_resource_ref mr;
 
  private:
-  auto make_zeroed_offsets(size_type size) const
+  [[nodiscard]] auto make_zeroed_offsets(size_type size) const
   {
     auto offsets_buff =
       cudf::detail::make_zeroed_device_uvector_async<size_type>(size + 1, stream, mr);

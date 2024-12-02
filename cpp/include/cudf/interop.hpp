@@ -57,12 +57,14 @@ namespace CUDF_EXPORT cudf {
  * @throw cudf::logic_error if the any of the DLTensor fields are unsupported
  *
  * @param managed_tensor a 1D or 2D column-major (Fortran order) tensor
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return Table with a copy of the tensor data
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -79,12 +81,14 @@ std::unique_ptr<table> from_dlpack(
  * or if any of columns have non-zero null count
  *
  * @param input Table to convert to DLPack
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned DLPack tensor's device memory
  *
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

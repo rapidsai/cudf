@@ -56,7 +56,7 @@ class file_source : public datasource {
       cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
-                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
+                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
     } else {
       _cufile_in = detail::make_cufile_input(filepath);
     }

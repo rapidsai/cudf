@@ -21,7 +21,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/unary.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -244,49 +244,6 @@ struct binary_op_double_device_dispatcher {
   }
 };
 
-/**
- * @brief Simplified for_each kernel
- *
- * @param size number of elements to process.
- * @param f Functor object to call for each element.
- */
-template <typename Functor>
-CUDF_KERNEL void for_each_kernel(cudf::size_type size, Functor f)
-{
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
-
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-#pragma unroll
-  for (cudf::size_type i = start; i < size; i += step) {
-    f(i);
-  }
-}
-
-/**
- * @brief Launches Simplified for_each kernel with maximum occupancy grid dimensions.
- *
- * @tparam Functor
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param size number of elements to process.
- * @param f Functor object to call for each element.
- */
-template <typename Functor>
-void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
-{
-  int block_size;
-  int min_grid_size;
-  CUDF_CUDA_TRY(
-    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
-  // 2 elements per thread.
-  int const grid_size = util::div_rounding_up_safe(size, 2 * block_size);
-  for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
-}
-
 template <class BinaryOperator>
 void apply_binary_op(mutable_column_view& out,
                      column_view const& lhs,
@@ -303,16 +260,18 @@ void apply_binary_op(mutable_column_view& out,
   // Create binop functor instance
   if (common_dtype) {
     // Execute it on every element
-    for_each(stream,
-             out.size(),
-             binary_op_device_dispatcher<BinaryOperator>{
-               *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       out.size(),
+                       binary_op_device_dispatcher<BinaryOperator>{
+                         *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   } else {
     // Execute it on every element
-    for_each(stream,
-             out.size(),
-             binary_op_double_device_dispatcher<BinaryOperator>{
-               *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       out.size(),
+                       binary_op_double_device_dispatcher<BinaryOperator>{
+                         *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   }
 }
 

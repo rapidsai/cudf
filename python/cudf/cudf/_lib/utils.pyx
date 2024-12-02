@@ -229,7 +229,7 @@ cdef columns_from_unique_ptr(
     return columns
 
 
-cdef columns_from_pylibcudf_table(tbl):
+cpdef columns_from_pylibcudf_table(tbl):
     """Convert a pylibcudf table into list of columns.
 
     Parameters
@@ -245,7 +245,7 @@ cdef columns_from_pylibcudf_table(tbl):
     return [Column.from_pylibcudf(plc) for plc in tbl.columns()]
 
 
-cdef _data_from_columns(columns, column_names, index_names=None):
+cpdef _data_from_columns(columns, column_names, index_names=None):
     """Convert a list of columns into a dict with an index.
 
     This method is intended to provide the bridge between the columns returned
@@ -309,7 +309,7 @@ cdef data_from_unique_ptr(
     )
 
 
-cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
+cpdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
     return _data_from_columns(
         columns_from_pylibcudf_table(tbl),
         column_names,

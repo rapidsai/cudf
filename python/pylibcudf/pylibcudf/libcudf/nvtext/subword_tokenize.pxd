@@ -1,9 +1,9 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 from libc.stdint cimport uint16_t, uint32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 
@@ -31,7 +31,7 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[hashed_vocabulary] load_vocabulary_file(
         const string &filename_hashed_vocabulary
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef tokenizer_result subword_tokenize(
         const column_view & strings,
@@ -40,7 +40,7 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         uint32_t stride,
         bool do_lower,
         bool do_truncate
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef tokenizer_result subword_tokenize(
         const column_view &strings,
@@ -49,7 +49,7 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         uint32_t stride,
         bool do_lower,
         bool do_truncate
-    ) except +
+    ) except +libcudf_exception_handler
 
 cdef extern from "<utility>" namespace "std" nogil:
     cdef tokenizer_result move(tokenizer_result)

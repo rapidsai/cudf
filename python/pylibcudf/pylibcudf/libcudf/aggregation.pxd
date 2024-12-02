@@ -5,6 +5,7 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport (
     data_type,
     interpolation,
@@ -94,71 +95,78 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         ZERO_NORMALIZED
         ONE_NORMALIZED
 
-    cdef unique_ptr[T] make_sum_aggregation[T]() except +
+    cdef unique_ptr[T] make_sum_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_product_aggregation[T]() except +
+    cdef unique_ptr[T] make_product_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_min_aggregation[T]() except +
+    cdef unique_ptr[T] make_min_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_max_aggregation[T]() except +
+    cdef unique_ptr[T] make_max_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_count_aggregation[T](null_policy) except +
+    cdef unique_ptr[T] make_count_aggregation[T](
+        null_policy
+    ) except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_any_aggregation[T]() except +
+    cdef unique_ptr[T] make_any_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_all_aggregation[T]() except +
+    cdef unique_ptr[T] make_all_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_sum_of_squares_aggregation[T]() except +
+    cdef unique_ptr[T] make_sum_of_squares_aggregation[T]()\
+        except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_mean_aggregation[T]() except +
+    cdef unique_ptr[T] make_mean_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_variance_aggregation[T](
-        size_type ddof) except +
+        size_type ddof) except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_std_aggregation[T](size_type ddof) except +
+    cdef unique_ptr[T] make_std_aggregation[T](
+        size_type ddof
+    ) except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_median_aggregation[T]() except +
+    cdef unique_ptr[T] make_median_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_quantile_aggregation[T](
-        vector[double] q, interpolation i) except +
+        vector[double] q, interpolation i) except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_argmax_aggregation[T]() except +
+    cdef unique_ptr[T] make_argmax_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_argmin_aggregation[T]() except +
+    cdef unique_ptr[T] make_argmin_aggregation[T]() except +libcudf_exception_handler
 
-    cdef unique_ptr[T] make_nunique_aggregation[T](null_policy null_handling) except +
+    cdef unique_ptr[T] make_nunique_aggregation[T](
+        null_policy null_handling
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_nth_element_aggregation[T](
         size_type n,
         null_policy null_handling
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_collect_list_aggregation[T](
         null_policy null_handling
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_collect_set_aggregation[T](
         null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_udf_aggregation[T](
         udf_type type,
         string user_defined_aggregator,
-        data_type output_type) except +
+        data_type output_type) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_ewma_aggregation[T](
         double com, ewm_history adjust
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_correlation_aggregation[T](
-        correlation_type type, size_type min_periods) except +
+        correlation_type type, size_type min_periods) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_covariance_aggregation[T](
-        size_type min_periods, size_type ddof) except +
+        size_type min_periods, size_type ddof) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_rank_aggregation[T](
         rank_method method,
         order column_order,
         null_policy null_handling,
         null_order null_precedence,
-        rank_percentage percentage) except +
+        rank_percentage percentage) except +libcudf_exception_handler

@@ -56,7 +56,8 @@ void set_up_kvikio()
 {
   static std::once_flag flag{};
   std::call_once(flag, [] {
-    auto const compat_mode = kvikio::detail::getenv_or<bool>("KVIKIO_COMPAT_MODE", true);
+    auto const compat_mode =
+      kvikio::detail::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
     kvikio::defaults::compat_mode_reset(compat_mode);
 
     auto const nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 4u);
