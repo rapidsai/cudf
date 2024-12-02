@@ -30,7 +30,7 @@ template <typename Key>
 struct MurmurHash3_x64_128 {
   using result_type = cuda::std::array<uint64_t, 2>;
 
-  __host__ __device__ constexpr MurmurHash3_x64_128(uint64_t seed = cudf::DEFAULT_HASH_SEED)
+  CUDF_HOST_DEVICE constexpr MurmurHash3_x64_128(uint64_t seed = cudf::DEFAULT_HASH_SEED)
     : _impl{seed}
   {
   }
