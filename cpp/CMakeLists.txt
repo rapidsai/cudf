@@ -268,18 +268,9 @@ rapids_cpm_init()
 
 # Not using rapids-cmake since we never want to find, always download.
 CPMAddPackage(
-  NAME rapids_logger GITHUB_REPOSITORY vyasr/rmm GIT_SHALLOW TRUE SOURCE_SUBDIR rapids_logger
-  GIT_TAG feat/logger
+  NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW TRUE GIT_TAG main
 )
-option(LOGGING_COMPATIBILITY "Enable backwards compatible direct access to the spdlog logger" OFF)
-set(_logging_compat)
-if(LOGGING_COMPATIBILITY)
-  set(_logging_compat "CUDF_BACKWARDS_COMPATIBILITY")
-endif()
-rapids_make_logger(
-  cudf VISIBILITY_MACRO "__attribute__((visibility(\"default\")))" EXPORT_SET cudf-exports
-  SUPPORTS_LOGGING ${_logging_compat}
-)
+rapids_make_logger(cudf EXPORT_SET cudf-exports)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
