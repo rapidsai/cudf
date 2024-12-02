@@ -222,12 +222,9 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
                                  int8_t* d_results)
 {
   // string per warp
-  auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
-  if (idx >= (static_cast<std::size_t>(d_strings.size()) *
-              static_cast<std::size_t>(cudf::detail::warp_size))) {
-    return;
-  }
-  auto const str_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  if (str_idx >= d_strings.size()) { return; }
   auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
 
   if (d_strings.is_null(str_idx)) {
