@@ -221,7 +221,7 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups, once per source
    * @param column_schemas Schema indices of columns whose types will be collected
    *
-   * @return A list of parquet types for the columns matching the procided schema indices
+   * @return A list of parquet types for the columns matching the provided schema indices
    */
   [[nodiscard]] std::vector<Type> get_parquet_types(
     host_span<std::vector<size_type> const> row_group_indices,
