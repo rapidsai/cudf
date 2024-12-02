@@ -16,6 +16,9 @@ project(
 
 include(../fetch_dependencies.cmake)
 
+include(rapids-cmake)
+rapids_cmake_build_type("Release")
+
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
 add_executable(libcudf_apis libcudf_apis.cpp)

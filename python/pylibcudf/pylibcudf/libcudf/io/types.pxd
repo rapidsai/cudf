@@ -1,5 +1,4 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 cimport pylibcudf.libcudf.io.data_sink as cudf_io_data_sink
 cimport pylibcudf.libcudf.io.datasource as cudf_io_datasource
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
@@ -10,6 +9,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
 
@@ -72,7 +72,7 @@ cdef extern from "cudf/io/types.hpp" \
         vector[column_name_info] children
 
     cdef cppclass table_metadata:
-        table_metadata() except +
+        table_metadata() except +libcudf_exception_handler
 
         map[string, string] user_data
         vector[unordered_map[string, string]] per_file_user_data
@@ -97,8 +97,10 @@ cdef extern from "cudf/io/types.hpp" \
         string get_name()
 
     cdef cppclass table_input_metadata:
-        table_input_metadata() except +
-        table_input_metadata(const cudf_table_view.table_view& table) except +
+        table_input_metadata() except +libcudf_exception_handler
+        table_input_metadata(
+            const cudf_table_view.table_view& table
+        ) except +libcudf_exception_handler
 
         vector[column_in_metadata] column_metadata
 
@@ -107,7 +109,9 @@ cdef extern from "cudf/io/types.hpp" \
         size_type num_rows
 
         partition_info()
-        partition_info(size_type start_row, size_type num_rows) except +
+        partition_info(
+            size_type start_row, size_type num_rows
+        ) except +libcudf_exception_handler
 
     cdef cppclass host_buffer:
         const char* data
@@ -117,21 +121,33 @@ cdef extern from "cudf/io/types.hpp" \
         host_buffer(const char* data, size_t size)
 
     cdef cppclass source_info:
-        const vector[string]& filepaths() except +
+        const vector[string]& filepaths() except +libcudf_exception_handler
 
-        source_info() except +
-        source_info(const vector[string] &filepaths) except +
-        source_info(const vector[host_buffer] &host_buffers) except +
-        source_info(cudf_io_datasource.datasource *source) except +
-        source_info(const vector[cudf_io_datasource.datasource*] &datasources) except +
+        source_info() except +libcudf_exception_handler
+        source_info(
+            const vector[string] &filepaths
+        ) except +libcudf_exception_handler
+        source_info(
+            const vector[host_buffer] &host_buffers
+        ) except +libcudf_exception_handler
+        source_info(
+            cudf_io_datasource.datasource *source
+        ) except +libcudf_exception_handler
+        source_info(
+            const vector[cudf_io_datasource.datasource*] &datasources
+        ) except +libcudf_exception_handler
 
     cdef cppclass sink_info:
         const vector[string]& filepaths()
         const vector[cudf_io_data_sink.data_sink *]& user_sinks()
 
-        sink_info() except +
-        sink_info(string file_path) except +
-        sink_info(vector[string] file_path) except +
-        sink_info(vector[char] * buffer) except +
-        sink_info(cudf_io_data_sink.data_sink * user_sink) except +
-        sink_info(vector[cudf_io_data_sink.data_sink *] user_sink) except +
+        sink_info() except +libcudf_exception_handler
+        sink_info(string file_path) except +libcudf_exception_handler
+        sink_info(vector[string] file_path) except +libcudf_exception_handler
+        sink_info(vector[char] * buffer) except +libcudf_exception_handler
+        sink_info(
+            cudf_io_data_sink.data_sink * user_sink
+        ) except +libcudf_exception_handler
+        sink_info(
+            vector[cudf_io_data_sink.data_sink *] user_sink
+        ) except +libcudf_exception_handler

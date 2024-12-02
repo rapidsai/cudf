@@ -1,10 +1,17 @@
 # Usage
 
-## Jupyter Notebooks and IPython
+There are three ways to enable `cudf.pandas`. Here is a summary:
 
-Load the `cudf.pandas` extension at the beginning of your
-notebook. After that, just `import pandas` and operations will use the
-GPU:
+1. With Jupyter/IPython magics: `%load_ext cudf.pandas`
+2. When executing a Python script from the command line: `python -m cudf.pandas script.py`
+3. From a script or from the Python interpreter: `import cudf.pandas; cudf.pandas.install()`
+
+See the instructions below for more information about each method.
+
+## Jupyter Notebook or IPython Usage
+
+Load the `cudf.pandas` extension at the beginning of your notebook or IPython
+session. After that, just `import pandas` and operations will use the GPU:
 
 ```python
 %load_ext cudf.pandas
@@ -18,7 +25,7 @@ df.groupby("size").total_bill.mean()  # uses the GPU
 df.apply(list, axis=1)                # uses the CPU (fallback)
 ```
 
-## Command-line usage
+## Command Line Usage
 
 From the command line, run your Python scripts with `-m cudf.pandas`:
 
@@ -26,12 +33,24 @@ From the command line, run your Python scripts with `-m cudf.pandas`:
 python -m cudf.pandas script.py
 ```
 
-### Usage in tandem with
-[`multiprocessing`](https://docs.python.org/3/library/multiprocessing.html)
-or
-[`concurrent.futures`](https://docs.python.org/3/library/concurrent.futures.html)
-process pools
+This will make `import pandas` use `cudf.pandas` acceleration with zero code change.
 
+## Import Usage
+
+Another way to enable `cudf.pandas` is via explicit import. If you are running
+a script where you cannot control the command line flags, this is another
+option that enables `cudf.pandas` with minimal code changes. Be sure that
+`cudf.pandas.install()` is called _before_ importing `pandas`. This also works
+in Jupyter notebook or IPython environments.
+
+```python
+import cudf.pandas
+cudf.pandas.install()
+
+import pandas as pd
+```
+
+### Working with `multiprocessing` or `concurrent.futures`
 To use a pool of workers (for example
 [`multiprocessing.Pool`](https://docs.python.org/3/library/multiprocessing.html#multiprocessing.pool.Pool)
 or
@@ -56,7 +75,7 @@ with Pool(4) as pool:
     ...
 ```
 
-## Understanding performance - the `cudf.pandas` profiler
+## Profiling `cudf.pandas`
 
 `cudf.pandas` will attempt to use the GPU whenever possible and fall
 back to CPU for certain operations. Running your code with the
@@ -112,7 +131,7 @@ The output of the line profiler shows the source code and how much time each lin
 
 ![cudf-pandas-line-profile](../_static/cudf-pandas-line-profile.png)
 
-### Profiling from the command line
+### Profiling from the Command Line
 
 To profile a script being run from the command line, pass the
 `--profile` argument:

@@ -47,6 +47,9 @@ def pytest_configure(config: pytest.Config) -> None:
 EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
+    "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
+    "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
+    "tests/unit/io/test_delta.py::test_read_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_csv.py::test_scan_csv_slice_offset_zero": "Integer overflow in sliced read",
     "tests/unit/io/test_lazy_parquet.py::test_dsl2ir_cached_metadata[False]": "cudf-polars doesn't use metadata read by rust preprocessing",

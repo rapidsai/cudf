@@ -256,6 +256,7 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
+        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -268,6 +269,7 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
+        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -281,6 +283,8 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
+    config_options: dict[str, Any]
+    """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
     with_columns: list[str] | None
@@ -294,12 +298,16 @@ class Scan(IR):
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
+    PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
+    PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
+
     def __init__(
         self,
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
+        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -311,6 +319,7 @@ class Scan(IR):
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
+        self.config_options = config_options
         self.paths = paths
         self.with_columns = with_columns
         self.skip_rows = skip_rows
@@ -321,6 +330,7 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
+            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -339,7 +349,7 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if self.typ == "csv" and self.skip_rows != 0:  # pragma: no cover
+        if self.typ in {"csv"} and self.skip_rows != 0:  # pragma: no cover
             # This comes from slice pushdown, but that
             # optimization doesn't happen right now
             raise NotImplementedError("skipping rows in CSV reader")
@@ -402,6 +412,7 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
+            json.dumps(self.config_options),
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
@@ -416,6 +427,7 @@ class Scan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
+        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -464,23 +476,28 @@ class Scan(IR):
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                tbl_w_meta = plc.io.csv.read_csv(
-                    plc.io.SourceInfo([path]),
-                    delimiter=sep,
-                    quotechar=quote,
-                    lineterminator=eol,
-                    col_names=column_names,
-                    header=header,
-                    usecols=usecols,
-                    na_filter=True,
-                    na_values=null_values,
-                    keep_default_na=False,
-                    skiprows=skiprows,
-                    comment=comment,
-                    decimal=decimal,
-                    dtypes=schema,
-                    nrows=n_rows,
+                options = (
+                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
+                    .nrows(n_rows)
+                    .skiprows(skiprows)
+                    .lineterminator(str(eol))
+                    .quotechar(str(quote))
+                    .decimal(decimal)
+                    .keep_default_na(keep_default_na=False)
+                    .na_filter(na_filter=True)
+                    .build()
                 )
+                options.set_delimiter(str(sep))
+                if column_names is not None:
+                    options.set_names([str(name) for name in column_names])
+                options.set_header(header)
+                options.set_dtypes(schema)
+                if usecols is not None:
+                    options.set_use_cols_names([str(name) for name in usecols])
+                options.set_na_values(null_values)
+                if comment is not None:
+                    options.set_comment(comment)
+                tbl_w_meta = plc.io.csv.read_csv(options)
                 pieces.append(tbl_w_meta)
                 if read_partial:
                     n_rows -= tbl_w_meta.tbl.num_rows()
@@ -498,25 +515,80 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
-            filters = None
-            if predicate is not None and row_index is None:
-                # Can't apply filters during read if we have a row index.
-                filters = to_parquet_filter(predicate.value)
-            tbl_w_meta = plc.io.parquet.read_parquet(
-                plc.io.SourceInfo(paths),
-                columns=with_columns,
-                filters=filters,
-                nrows=n_rows,
-                skip_rows=skip_rows,
-            )
-            df = DataFrame.from_table(
-                tbl_w_meta.tbl,
-                # TODO: consider nested column names?
-                tbl_w_meta.column_names(include_children=False),
-            )
-            if filters is not None:
-                # Mask must have been applied.
-                return df
+            parquet_options = config_options.get("parquet_options", {})
+            if parquet_options.get("chunked", True):
+                reader = plc.io.parquet.ChunkedParquetReader(
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    # We handle skip_rows != 0 by reading from the
+                    # up to n_rows + skip_rows and slicing off the
+                    # first skip_rows entries.
+                    # TODO: Remove this workaround once
+                    # https://github.com/rapidsai/cudf/issues/16186
+                    # is fixed
+                    nrows=n_rows + skip_rows,
+                    skip_rows=0,
+                    chunk_read_limit=parquet_options.get(
+                        "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
+                    ),
+                    pass_read_limit=parquet_options.get(
+                        "pass_read_limit", cls.PARQUET_DEFAULT_PASS_LIMIT
+                    ),
+                )
+                chk = reader.read_chunk()
+                rows_left_to_skip = skip_rows
+
+                def slice_skip(tbl: plc.Table):
+                    nonlocal rows_left_to_skip
+                    if rows_left_to_skip > 0:
+                        table_rows = tbl.num_rows()
+                        chunk_skip = min(rows_left_to_skip, table_rows)
+                        # TODO: Check performance impact of skipping this
+                        # call and creating an empty table manually when the
+                        # slice would be empty (chunk_skip == table_rows).
+                        (tbl,) = plc.copying.slice(tbl, [chunk_skip, table_rows])
+                        rows_left_to_skip -= chunk_skip
+                    return tbl
+
+                tbl = slice_skip(chk.tbl)
+                # TODO: Nested column names
+                names = chk.column_names(include_children=False)
+                concatenated_columns = tbl.columns()
+                while reader.has_next():
+                    tbl = slice_skip(reader.read_chunk().tbl)
+
+                    for i in range(tbl.num_columns()):
+                        concatenated_columns[i] = plc.concatenate.concatenate(
+                            [concatenated_columns[i], tbl._columns[i]]
+                        )
+                        # Drop residual columns to save memory
+                        tbl._columns[i] = None
+
+                df = DataFrame.from_table(
+                    plc.Table(concatenated_columns),
+                    names=names,
+                )
+            else:
+                filters = None
+                if predicate is not None and row_index is None:
+                    # Can't apply filters during read if we have a row index.
+                    filters = to_parquet_filter(predicate.value)
+                tbl_w_meta = plc.io.parquet.read_parquet(
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    filters=filters,
+                    nrows=n_rows,
+                    skip_rows=skip_rows,
+                )
+                df = DataFrame.from_table(
+                    tbl_w_meta.tbl,
+                    # TODO: consider nested column names?
+                    tbl_w_meta.column_names(include_children=False),
+                )
+                if filters is not None:
+                    # Mask must have been applied.
+                    return df
+
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
@@ -733,7 +805,9 @@ class Reduce(IR):
 
     @classmethod
     def do_evaluate(
-        cls, exprs: tuple[expr.NamedExpr, ...], df: DataFrame
+        cls,
+        exprs: tuple[expr.NamedExpr, ...],
+        df: DataFrame,
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
         """Evaluate and return a dataframe."""
         columns = broadcast(*(e.evaluate(df) for e in exprs))
@@ -1530,13 +1604,15 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
+            self.options = (tuple(to_explode),)
         elif self.name == "rename":
-            old, new, _ = self.options
+            old, new, strict = self.options
             # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
                 raise NotImplementedError("Duplicate new names in rename.")
+            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -1554,13 +1630,15 @@ class MapFunction(IR):
             self.options = (
                 tuple(indices),
                 tuple(pivotees),
-                (variable_name, schema[variable_name]),
-                (value_name, schema[value_name]),
+                variable_name,
+                value_name,
             )
-        self._non_child_args = (name, self.options)
+        self._non_child_args = (schema, name, self.options)
 
     @classmethod
-    def do_evaluate(cls, name: str, options: Any, df: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, schema: Schema, name: str, options: Any, df: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if name == "rechunk":
             # No-op in our data model
@@ -1582,8 +1660,8 @@ class MapFunction(IR):
             (
                 indices,
                 pivotees,
-                (variable_name, variable_dtype),
-                (value_name, value_dtype),
+                variable_name,
+                value_name,
             ) = options
             npiv = len(pivotees)
             index_columns = [
@@ -1600,7 +1678,7 @@ class MapFunction(IR):
                         plc.interop.from_arrow(
                             pa.array(
                                 pivotees,
-                                type=plc.interop.to_arrow(variable_dtype),
+                                type=plc.interop.to_arrow(schema[variable_name]),
                             ),
                         )
                     ]
@@ -1608,7 +1686,10 @@ class MapFunction(IR):
                 df.num_rows,
             ).columns()
             value_column = plc.concatenate.concatenate(
-                [df.column_map[pivotee].astype(value_dtype).obj for pivotee in pivotees]
+                [
+                    df.column_map[pivotee].astype(schema[value_name]).obj
+                    for pivotee in pivotees
+                ]
             )
             return DataFrame(
                 [

@@ -14,44 +14,27 @@
 
 set(cython_sources
     aggregation.pyx
-    avro.pyx
     binaryop.pyx
     column.pyx
-    concat.pyx
     copying.pyx
     csv.pyx
-    datetime.pyx
     filling.pyx
     groupby.pyx
-    hash.pyx
     interop.pyx
-    join.pyx
-    json.pyx
-    labeling.pyx
-    lists.pyx
     merge.pyx
-    null_mask.pyx
     orc.pyx
     parquet.pyx
-    partitioning.pyx
-    quantiles.pyx
     reduce.pyx
     replace.pyx
-    reshape.pyx
-    rolling.pyx
     round.pyx
     scalar.pyx
-    search.pyx
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
     strings_udf.pyx
     text.pyx
-    timezone.pyx
     transform.pyx
-    transpose.pyx
     types.pyx
-    unary.pyx
     utils.pyx
 )
 set(linked_libraries cudf::cudf)

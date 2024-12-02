@@ -918,6 +918,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Extract a particular date time component from a timestamp.
+   * @param component what should be extracted
+   * @return a column with the extracted information in it.
+   */
+  public final ColumnVector extractDateTimeComponent(DateTimeComponent component) {
+    assert type.isTimestampType();
+    return new ColumnVector(extractDateTimeComponent(getNativeView(), component.getNativeId()));
+  }
+
+  /**
    * Get year from a timestamp.
    * <p>
    * Postconditions - A new vector is allocated with the result. The caller owns the vector and
@@ -925,8 +935,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector year() {
-    assert type.isTimestampType();
-    return new ColumnVector(year(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.YEAR);
   }
 
   /**
@@ -937,8 +946,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector month() {
-    assert type.isTimestampType();
-    return new ColumnVector(month(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.MONTH);
   }
 
   /**
@@ -949,8 +957,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector day() {
-    assert type.isTimestampType();
-    return new ColumnVector(day(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.DAY);
   }
 
   /**
@@ -961,8 +968,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector hour() {
-    assert type.hasTimeResolution();
-    return new ColumnVector(hour(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.HOUR);
   }
 
   /**
@@ -973,8 +979,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector minute() {
-    assert type.hasTimeResolution();
-    return new ColumnVector(minute(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.MINUTE);
   }
 
   /**
@@ -985,8 +990,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector second() {
-    assert type.hasTimeResolution();
-    return new ColumnVector(second(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.SECOND);
   }
 
   /**
@@ -997,8 +1001,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
    */
   public final ColumnVector weekDay() {
-    assert type.isTimestampType();
-    return new ColumnVector(weekDay(getNativeView()));
+    return extractDateTimeComponent(DateTimeComponent.WEEKDAY);
   }
 
   /**
@@ -1046,11 +1049,60 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Add the specified number of months to the timestamp.
+   * @param months must be a INT16 scalar indicating the number of months to add. A negative number
+   *               of months works too.
+   * @return the updated timestamp
+   */
+  public final ColumnVector addCalendricalMonths(Scalar months) {
+    return new ColumnVector(addScalarCalendricalMonths(getNativeView(), months.getScalarHandle()));
+  }
+
+  /**
    * Check to see if the year for this timestamp is a leap year or not.
    * @return BOOL8 vector of results
    */
   public final ColumnVector isLeapYear() {
     return new ColumnVector(isLeapYear(getNativeView()));
+  }
+
+  /**
+   * Extract the number of days in the month
+   * @return INT16 column of the number of days in the corresponding month
+   */
+  public final ColumnVector daysInMonth() {
+    assert type.isTimestampType();
+    return new ColumnVector(daysInMonth(getNativeView()));
+  }
+
+  /**
+   * Round the timestamp up to the given frequency keeping the type the same.
+   * @param freq what part of the timestamp to round.
+   * @return a timestamp with the same type, but rounded up.
+   */
+  public final ColumnVector dateTimeCeil(DateTimeRoundingFrequency freq) {
+    assert type.isTimestampType();
+    return new ColumnVector(dateTimeCeil(getNativeView(), freq.getNativeId()));
+  }
+
+  /**
+   * Round the timestamp down to the given frequency keeping the type the same.
+   * @param freq what part of the timestamp to round.
+   * @return a timestamp with the same type, but rounded down.
+   */
+  public final ColumnVector dateTimeFloor(DateTimeRoundingFrequency freq) {
+    assert type.isTimestampType();
+    return new ColumnVector(dateTimeFloor(getNativeView(), freq.getNativeId()));
+  }
+
+  /**
+   * Round the timestamp (half up) to the given frequency keeping the type the same.
+   * @param freq what part of the timestamp to round.
+   * @return a timestamp with the same type, but rounded (half up).
+   */
+  public final ColumnVector dateTimeRound(DateTimeRoundingFrequency freq) {
+    assert type.isTimestampType();
+    return new ColumnVector(dateTimeRound(getNativeView(), freq.getNativeId()));
   }
 
   /**
@@ -4721,19 +4773,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long unaryOperation(long viewHandle, int op);
 
-  private static native long year(long viewHandle) throws CudfException;
-
-  private static native long month(long viewHandle) throws CudfException;
-
-  private static native long day(long viewHandle) throws CudfException;
-
-  private static native long hour(long viewHandle) throws CudfException;
-
-  private static native long minute(long viewHandle) throws CudfException;
-
-  private static native long second(long viewHandle) throws CudfException;
-
-  private static native long weekDay(long viewHandle) throws CudfException;
+  private static native long extractDateTimeComponent(long viewHandle, int component);
 
   private static native long lastDayOfMonth(long viewHandle) throws CudfException;
 
@@ -4743,7 +4783,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long addCalendricalMonths(long tsViewHandle, long monthsViewHandle);
 
+  private static native long addScalarCalendricalMonths(long tsViewHandle, long scalarHandle);
+
   private static native long isLeapYear(long viewHandle) throws CudfException;
+
+  private static native long daysInMonth(long viewHandle) throws CudfException;
+
+  private static native long dateTimeCeil(long viewHandle, int freq);
+
+  private static native long dateTimeFloor(long viewHandle, int freq);
+
+  private static native long dateTimeRound(long viewHandle, int freq);
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 

@@ -368,6 +368,14 @@ def _process_dataset(
     file_list = paths
     if len(paths) == 1 and ioutils.is_directory(paths[0]):
         paths = ioutils.stringify_pathlike(paths[0])
+    elif (
+        filters is None
+        and isinstance(dataset_kwargs, dict)
+        and dataset_kwargs.get("partitioning") is None
+    ):
+        # Skip dataset processing if we have no filters
+        # or hive/directory partitioning to deal with.
+        return paths, row_groups, [], {}
 
     # Convert filters to ds.Expression
     if filters is not None:

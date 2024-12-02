@@ -729,7 +729,10 @@ struct set_final_row_count {
     if (i < pages.size() - 1 && (pages[i + 1].chunk_idx == page.chunk_idx)) { return; }
     size_t const page_start_row = chunk.start_row + page.chunk_row;
     size_t const chunk_last_row = chunk.start_row + chunk.num_rows;
-    page.num_rows               = chunk_last_row - page_start_row;
+    // Mark `is_num_rows_adjusted` to signal string decoders that the `num_rows` of this page has
+    // been adjusted.
+    page.is_num_rows_adjusted = page.num_rows != (chunk_last_row - page_start_row);
+    page.num_rows             = chunk_last_row - page_start_row;
   }
 };
 

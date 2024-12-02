@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column, column_view
 from pylibcudf.libcudf.table.table cimport table, table_view
 from pylibcudf.libcudf.utilities.span cimport host_span
@@ -15,7 +15,13 @@ cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
     # constructable from a vector. In case they are needed in the future,
     # host_span versions can be added, e.g:
     #
-    # cdef unique_ptr[column] concatenate(host_span[column_view] columns) except +
+    # cdef unique_ptr[column] concatenate(
+    #    host_span[column_view] columns
+    # ) except +libcudf_exception_handler
 
-    cdef unique_ptr[column] concatenate(const vector[column_view] columns) except +
-    cdef unique_ptr[table] concatenate(const vector[table_view] tables) except +
+    cdef unique_ptr[column] concatenate(
+        const vector[column_view] columns
+    ) except +libcudf_exception_handler
+    cdef unique_ptr[table] concatenate(
+        const vector[table_view] tables
+    ) except +libcudf_exception_handler

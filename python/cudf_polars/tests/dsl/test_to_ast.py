@@ -60,7 +60,7 @@ def df():
 )
 def test_compute_column(expr, df):
     q = df.select(expr)
-    ir = Translator(q._ldf.visit()).translate_ir()
+    ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     assert isinstance(ir, ir_nodes.Select)
     table = ir.children[0].evaluate(cache={})

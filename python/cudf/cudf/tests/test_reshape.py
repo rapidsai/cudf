@@ -835,3 +835,20 @@ def test_crosstab_simple():
     expected = pd.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
     actual = cudf.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize("index", [["ix"], ["ix", "foo"]])
+@pytest.mark.parametrize("columns", [["col"], ["col", "baz"]])
+def test_pivot_list_like_index_columns(index, columns):
+    data = {
+        "bar": ["x", "y", "z", "w"],
+        "col": ["a", "b", "a", "b"],
+        "foo": [1, 2, 3, 4],
+        "ix": [1, 1, 2, 2],
+        "baz": [0, 0, 0, 0],
+    }
+    pd_df = pd.DataFrame(data)
+    cudf_df = cudf.DataFrame(data)
+    result = cudf_df.pivot(columns=columns, index=index)
+    expected = pd_df.pivot(columns=columns, index=index)
+    assert_eq(result, expected)

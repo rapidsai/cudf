@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/comp/comp.hpp"
+#include "io/comp/io_uncomp.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -3250,6 +3253,61 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), *wrapped);
     }
   }
+}
+
+struct JsonCompressedIOTest : public cudf::test::BaseFixture,
+                              public testing::WithParamInterface<cudf::io::compression_type> {};
+
+// Parametrize qualifying JSON tests for multiple compression types
+INSTANTIATE_TEST_SUITE_P(JsonCompressedIOTest,
+                         JsonCompressedIOTest,
+                         ::testing::Values(cudf::io::compression_type::GZIP,
+                                           cudf::io::compression_type::SNAPPY,
+                                           cudf::io::compression_type::NONE));
+
+TEST_P(JsonCompressedIOTest, BasicJsonLines)
+{
+  cudf::io::compression_type const comptype = GetParam();
+  std::string data                          = to_records_orient(
+    {{{"0", "1"}, {"1", "1.1"}}, {{"0", "2"}, {"1", "2.2"}}, {{"0", "3"}, {"1", "3.3"}}}, "\n");
+
+  std::vector<std::uint8_t> cdata;
+  if (comptype != cudf::io::compression_type::NONE) {
+    cdata = cudf::io::detail::compress(
+      comptype,
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()),
+      cudf::get_default_stream());
+    auto decomp_out_buffer = cudf::io::detail::decompress(
+      comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
+    std::string const expected = R"({"0":1, "1":1.1}
+{"0":2, "1":2.2}
+{"0":3, "1":3.3})";
+    EXPECT_EQ(
+      expected,
+      std::string(reinterpret_cast<char*>(decomp_out_buffer.data()), decomp_out_buffer.size()));
+  } else
+    cdata = std::vector<uint8_t>(reinterpret_cast<uint8_t*>(data.data()),
+                                 reinterpret_cast<uint8_t*>(data.data()) + data.size());
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<uint8_t>(cdata.data(), cdata.size())})
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<double>()})
+      .compression(comptype)
+      .lines(true);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 3);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT32);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2, 3}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3}});
 }
 
 CUDF_TEST_PROGRAM_MAIN()
