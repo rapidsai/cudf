@@ -236,8 +236,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     ) -> Self:
         raise NotImplementedError
 
-    def clip(self, lo: ScalarLike, hi: ScalarLike) -> ColumnBase:
-        return libcudf.replace.clip(self, lo, hi)
+    @acquire_spill_lock()
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
+        plc_column = plc.replace.clamp(
+            self.to_pylibcudf(mode="read"),
+            cudf.Scalar(lo, self.dtype).device_value.c_value,
+            cudf.Scalar(hi, self.dtype).device_value.c_value,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
         if self is other:
@@ -685,6 +691,18 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return cudf.Scalar(fill_value, dtype=self.dtype)
         return as_column(fill_value)
 
+    @acquire_spill_lock()
+    def replace(
+        self, values_to_replace: Self, replacement_values: Self
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.replace.find_and_replace_all(
+                self.to_pylibcudf(mode="read"),
+                values_to_replace.to_pylibcudf(mode="read"),
+                replacement_values.to_pylibcudf(mode="read"),
+            )
+        )
+
     def fillna(
         self,
         fill_value: ScalarLike | ColumnLike,
@@ -703,11 +721,32 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 return self.copy()
             else:
                 fill_value = self._validate_fillna_value(fill_value)
-        return libcudf.replace.replace_nulls(
-            input_col=self.nans_to_nulls(),
-            replacement=fill_value,
-            method=method,
-        )._with_type_metadata(self.dtype)
+
+        if fill_value is None and method is None:
+            raise ValueError("Must specify a fill 'value' or 'method'.")
+
+        if fill_value and method:
+            raise ValueError("Cannot specify both 'value' and 'method'.")
+
+        input_col = self.nans_to_nulls()
+
+        with acquire_spill_lock():
+            if method:
+                plc_replace = (
+                    plc.replace.ReplacePolicy.PRECEDING
+                    if method == "ffill"
+                    else plc.replace.ReplacePolicy.FOLLOWING
+                )
+            elif is_scalar(fill_value):
+                plc_replace = cudf.Scalar(fill_value).device_value.c_value
+            else:
+                plc_replace = fill_value.to_pylibcudf(mode="read")
+            plc_column = plc.replace.replace_nulls(
+                input_col.to_pylibcudf(mode="read"),
+                plc_replace,
+            )
+            result = type(self).from_pylibcudf(plc_column)
+        return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
