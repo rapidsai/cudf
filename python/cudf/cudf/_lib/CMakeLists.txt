@@ -18,7 +18,6 @@ set(cython_sources
     column.pyx
     copying.pyx
     csv.pyx
-    datetime.pyx
     filling.pyx
     groupby.pyx
     interop.pyx
@@ -26,7 +25,6 @@ set(cython_sources
     orc.pyx
     parquet.pyx
     reduce.pyx
-    replace.pyx
     round.pyx
     scalar.pyx
     sort.pyx
