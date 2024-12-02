@@ -100,6 +100,8 @@ option(
   "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
   ON
 )
+option(CUDF_NANOARROW_DEBUG "Enable debug in nanoarrow" OFF)
+mark_as_advanced(CUDF_NANOARROW_DEBUG)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
