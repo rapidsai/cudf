@@ -280,24 +280,23 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   }
 }
 
-
-template <int block_size, bool split_decode_t, bool has_lists_t, typename state_buf>
+template <int block_size, bool has_lists_t, bool split_decode_t, typename state_buf>
 __device__ inline void gpuDecodeString(
   page_state_s* s, state_buf* const sb, int start, int end, int t, size_t& string_output_offset)
 {
-  constexpr int num_warps      = block_size / cudf::detail::warp_size;
-  constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
-
   // nesting level that is storing actual leaf values
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   int const skipped_leaf_values = s->page.skipped_leaf_values;
 
-  auto& ni = s->nesting_info[leaf_level_index];
+  auto const& ni = s->nesting_info[leaf_level_index];
+
+  using scanner = cub::BlockScan<size_t, block_size>;
+  __shared__ typename scanner::TempStorage scan_storage;
 
   // decode values
   int pos = start;
   while (pos < end) {
-    int const batch_size = min(max_batch_size, end - pos);
+    int const batch_size = min(block_size, end - pos);
 
     int const target_pos = pos + batch_size;
     int const thread_pos = pos + t;
@@ -321,99 +320,118 @@ __device__ inline void gpuDecodeString(
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
     // before first_row) in the flat hierarchy case.
     bool const in_range = (thread_pos < target_pos) && (dst_pos >= 0);
-    auto [source_string_ptr, string_length] = [&](){
+
+    //lookup input string pointer & length. store length. 
+    auto [thread_input_string, string_length] = [&](){
       if (!in_range) {
-        return cuda::std::pair<char const*, size_t>(nullptr, 0);
-      } else {
-        return gpuGetStringData(s, sb, src_pos);
+        return string_index_pair{nullptr, 0};
       }
+      string_index_pair string_pair = gpuGetStringData(s, sb, src_pos);
+      int32_t* str_len_ptr = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
+      *str_len_ptr = string_pair.second;
+      return string_pair;
     }();
 
     //compute string offsets
-    using block_scan = cub::BlockScan<size_t, block_size>;
-    __shared__ typename block_scan::TempStorage scan_storage;
     size_t thread_string_offset, block_total_string_length;
-    block_scan(scan_storage).ExclusiveSum(string_length, thread_string_offset, block_total_string_length);
+    scanner(scan_storage).ExclusiveSum(string_length, thread_string_offset, block_total_string_length);
+    __syncthreads();
+
+    //adjust for prior offset, get output string pointer
     thread_string_offset += string_output_offset;
+    string_output_offset += block_total_string_length;
+    auto const thread_output_string = ni.string_out + thread_string_offset;
 
     if constexpr (split_decode_t) {
+
       if (in_range) {
         auto const split_string_length = s->dtype_len_in;
         auto const stream_length = s->page.str_bytes / split_string_length;
 
-        auto str_len_ptr = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
-        *str_len_ptr = string_length;
-
-        auto const output_string_ptr = ni.string_out + thread_string_offset;
         for (int ii = 0; ii < split_string_length; ii++) {
-          output_string_ptr[ii] = s->data_start[src_pos + ii * stream_length];
+          thread_output_string[ii] = s->data_start[src_pos + ii * stream_length];
         }
       }
     } else {
-      // do a character parallel string copy when the average string is longer than a block
-      auto const use_char_ll = false; //block_total_string_length >= block_size * block_size;
-      if (use_char_ll) {
 
-      } else {
+      //With a dictionary, performance MUCH faster for cache hits (reuse dict entry)
+      //On a cache hit, we load a 128-byte L1/L2 cache line
+      //If each thread (128) copies a separate string (128): 128*128 = 16kb PER BLOCK
+      //This likely overflows the L2 cache and results in a lot of cache misses
+      //Plus, perf is O(longest_string_len), so bottlenecked for non-uniform data (common)
 
-        if (in_range) {
-          int32_t* str_len_ptr  = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
-          *str_len_ptr = string_length;
+      //Instead, the (128) threads cooperatively copy the (128) strings in the batch
+      //N strings are copied at a time, with M = 128 / N threads per string
+      //Choose M and N to be powers of 2 so that they divide the block size evenly. 
+      //For 128 threads: clamp N between 4 (1 string per warp) & 32 (warp size, cache hit)
 
-          uint8_t* output_string_ptr = ni.string_out + thread_string_offset;
-          memcpy(output_string_ptr, source_string_ptr, string_length);
-/*
-if((t==0)) {
-char temp_buffer[24];
-memcpy(temp_buffer, source_string_ptr, string_length);
-temp_buffer[string_length] = '\0';
-printf("DECODED t %d, dst_pos %d, src_pos %d, thread_pos %d: WROTE string %s of length %d to %p (offset %d), and wrote offset %d at %p\n", 
-  t, dst_pos, src_pos, thread_pos, temp_buffer, (int)string_length, (void*)output_string_ptr, (int)thread_string_offset, (int)*str_len_ptr, (void*)str_len_ptr);
-}*/
+      //Per string, each thread copies B = Length / M bytes in one contiguous memcpy
+
+
+      //From testing, performance is best when copying an average of B = 4 bytes at once.
+
+      //So for an average string length of 16 bytes or less (because N clamped): M = 4, N = 32
+      //For an average length of 65 bytes or more (rounded): M = 32, N = 4 (1 string / warp at once)
+
+      //Performance: N strings at once, M = 128/N threads per string: proportional to N*(Avg_length/M)
+      //Note if M is large relative to Avg_length then many threads may do nothing: Slow
+      //And note that we must do at least N memcpy's per thread (one per string), so don't want M small either: N large
+
+      //Instead of saving string lengths, save shared memory by only saving outputs: 
+      //string length = outputs[i + 1] - outputs[i]. Hence the need for one extra output
+      __shared__ uint8_t const* inputs[block_size];
+      __shared__ uint8_t* outputs[block_size + 1];
+
+      //Save string pointers so threads can share the work on them
+      outputs[t]  = thread_output_string;
+      inputs[t] = reinterpret_cast<uint8_t const*>(thread_input_string);
+      if((t == 0) && (batch_size == block_size)) {
+        outputs[batch_size] = ni.string_out + string_output_offset;
+      }
+      __syncthreads();
+
+      //For avg length < 16/32/64/128/etc., length power of 2 = 4/5/6/7 = 32 - __clz()
+      //We want to avg 4 chars / thread, so subtract 2 (4 = 2^2) from these
+      int const avg_string_length = block_total_string_length / batch_size;
+      int const num_threads_per_string_pow2_unclamped = 32 - __clz(avg_string_length) - 2;
+
+//log2(1 string per warp * # warps)
+      //For 128 threads, clamp power-of-2 between 2 (2^2 = 1 string per warp) and 5 (max 32 = 2^5)
+      static constexpr int min_threads_per_string_pow2 = 2; // log2(batch_size / max_strings_at_once) = log2(128 / 32)
+
+      //We want  and clamp to the edges (2/3/4/5)
+      //2^5 = 32: warp size
+      int const num_threads_per_string_pow2 = min(max(min_threads_per_string_pow2, num_threads_per_string_pow2_unclamped), 5);
+
+      //So for avg length < 16/32/64/128, we copy 32/16/8/4 strings at once: 8/4/2/1 per warp
+
+      int const num_threads_per_string = 1 << num_threads_per_string_pow2;
+
+      int const num_strings_at_once = block_size >> num_threads_per_string_pow2;
+      int const string_lane = t & (num_threads_per_string - 1);
+      int const start_string_idx = t >> num_threads_per_string_pow2;
+
+      //loop over all strings in this batch
+      //want warps to do every 4th string, so that all string bytes are close in memory
+      for (int string_idx = start_string_idx; string_idx < batch_size; string_idx += num_strings_at_once) {
+        auto output_string = outputs[string_idx];
+        int const length = outputs[string_idx + 1] - output_string;
+        auto const input_string = inputs[string_idx];
+
+        //One-shot N chars per thread
+        int const chars_at_once = (length + num_threads_per_string - 1) >> num_threads_per_string_pow2;
+        int const start_index = string_lane * chars_at_once;
+        int const substring_length = min(chars_at_once, length - start_index);
+        if (substring_length > 0) {
+          memcpy(&(output_string[start_index]), &(input_string[start_index]), substring_length);
         }
       }
+      //Make sure all threads have finished using shared memory before next loop iteration overwites
+      __syncthreads();
     }
 
-    string_output_offset += block_total_string_length;
     pos += batch_size;
   }
-
-
-
-/*
-//OLD //24*128 = 3072 bytes!!!
-  __shared__ uint8_t const* pointers[block_size];
-  __shared__ size_t offsets[block_size];
-  __shared__ int dsts[block_size];
-  __shared__ int lengths[block_size];
-
-  offsets[t]  = thread_string_offset;
-  pointers[t] = reinterpret_cast<uint8_t const*>(source_string_ptr);
-  dsts[t]     = dst_pos;
-  lengths[t]  = string_length;
-  __syncthreads();
-
-    bool const in_range = (thread_pos < target_pos) && (dst_pos >= 0);
-
-  for (int ss = 0; ss < block_size && ss + start < target_pos; ++ss) {
-    if (dsts[ss] >= 0) {
-      // Save string offsets, unless is large column (> 2GB): no room in int32_t, save lengths for now
-      auto str_len_ptr = reinterpret_cast<int32_t*>(ni.data_out) + dsts[ss];
-      *str_len_ptr     = s->col.is_large_string_col ? lengths[ss] : s->page.str_offset + offsets[ss];
-
-      auto output_string_ptr = ni.string_out + offsets[ss];
-      if (lengths[ss] > 2*block_size) {
-        //WHAT IS THIS
-        wideStrcpy(output_string_ptr, pointers[ss], lengths[ss], t);
-      } else {
-        for (int i = t; i < lengths[ss]; i += block_size) {
-          output_string_ptr[i] = pointers[ss][i];
-        }
-      }
-    }
-  }
-*/
-
 }
 
 template <int decode_block_size, typename level_t, typename state_buf>
@@ -1264,7 +1282,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     // decode the values themselves
     if constexpr (has_strings_t) {
-      gpuDecodeString<decode_block_size_t, split_decode_t, has_lists_t>(s, sb, valid_count, next_valid_count, t, string_output_offset);
+      gpuDecodeString<decode_block_size_t, has_lists_t, split_decode_t>(s, sb, valid_count, next_valid_count, t, string_output_offset);
     } else if constexpr (split_decode_t) {
       gpuDecodeFixedWidthSplitValues<decode_block_size_t, has_lists_t>(s, sb, valid_count, next_valid_count, t);
     } else {
@@ -1288,13 +1306,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
       auto const offptr = reinterpret_cast<size_type*>(ni.data_out);
       auto const initial_value = s->page.str_offset;
-/*
-if(t==0)
-  printf("TO OFFSETS: skipped_leaf_values %d, s->first_row %d, processed_count %d, value_count %d, "
-    "s->page.str_offset %d, initial_value %d\n", 
-    skipped_leaf_values, s->first_row, processed_count, value_count, 
-    (int)s->page.str_offset, (int)initial_value);
-*/
       block_excl_sum<decode_block_size_t>(offptr, value_count, initial_value);
     }
   }

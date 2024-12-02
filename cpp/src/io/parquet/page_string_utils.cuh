@@ -72,21 +72,6 @@ inline __device__ void wideStrcpy(uint8_t* dst, uint8_t const* src, size_t len, 
 }
 
 /**
- * @brief char-parallel string copy.
- */
-inline __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t lane_id)
-{
-  using cudf::detail::warp_size;
-  if (len > 64) {
-    wideStrcpy(dst, src, len, lane_id);
-  } else {
-    for (int i = lane_id; i < len; i += warp_size) {
-      dst[i] = src[i];
-    }
-  }
-}
-
-/**
  * @brief Perform exclusive scan on an array of any length using a single block of threads.
  */
 template <int block_size>
