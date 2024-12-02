@@ -149,12 +149,12 @@ struct reduce_dispatch_functor {
   }
 };
 
-static std::unique_ptr<scalar> reduce(column_view const& col,
-                                      reduce_aggregation const& agg,
-                                      data_type output_dtype,
-                                      std::optional<std::reference_wrapper<scalar const>> init,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::device_async_resource_ref mr)
+std::unique_ptr<scalar> reduce(column_view const& col,
+                               reduce_aggregation const& agg,
+                               data_type output_dtype,
+                               std::optional<std::reference_wrapper<scalar const>> init,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(col, init.value().get()),
                "column and initial value must be the same type",
