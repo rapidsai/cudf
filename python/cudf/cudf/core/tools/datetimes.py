@@ -11,6 +11,8 @@ import pandas as pd
 import pandas.tseries.offsets as pd_offset
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_integers import (
@@ -18,6 +20,7 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.index import ensure_index
 
 if TYPE_CHECKING:
@@ -649,7 +652,13 @@ class DateOffset:
         if not self._is_no_op:
             if "months" in self._scalars:
                 rhs = self._generate_months_column(len(datetime_col), op)
-                datetime_col = libcudf.datetime.add_months(datetime_col, rhs)
+                with acquire_spill_lock():
+                    datetime_col = type(datetime_col).from_pylibcudf(
+                        plc.datetime.add_calendrical_months(
+                            datetime_col.to_pylibcudf(mode="read"),
+                            rhs.to_pylibcudf(mode="read"),
+                        )
+                    )
 
             for unit, value in self._scalars.items():
                 if unit != "months":
@@ -985,7 +994,17 @@ def date_range(
 
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.
-        res = libcudf.datetime.date_range(start.device_value, periods, offset)
+        months = offset.kwds.get("years", 0) * 12 + offset.kwds.get(
+            "months", 0
+        )
+        with acquire_spill_lock():
+            res = libcudf.column.Column.from_pylibcudf(
+                plc.filling.calendrical_month_sequence(
+                    periods,
+                    start.device_value.c_value,
+                    months,
+                )
+            )
         if _periods_not_specified:
             # As mentioned in [1], this is a post processing step to trim extra
             # elements when `periods` is an estimated value. Only offset
