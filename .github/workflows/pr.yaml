@@ -61,6 +61,7 @@ jobs:
       files_yaml: |
         test_cpp:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -71,6 +72,7 @@ jobs:
           - '!python/**'
         test_cudf_pandas:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!docs/**'
@@ -79,6 +81,7 @@ jobs:
           - '!notebooks/**'
         test_java:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -88,12 +91,14 @@ jobs:
           - '!python/**'
         test_notebooks:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
           - '!java/**'
         test_python:
           - '**'
+          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'

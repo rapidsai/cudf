@@ -22,6 +22,7 @@ Attributes
    Series.values
    Series.data
    Series.dtype
+   Series.dtypes
    Series.shape
    Series.ndim
    Series.nullable

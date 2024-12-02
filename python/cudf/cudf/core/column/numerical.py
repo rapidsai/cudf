@@ -482,7 +482,7 @@ class NumericalColumn(NumericalBaseColumn):
         to_replace: ColumnLike,
         replacement: ColumnLike,
         all_nan: bool = False,
-    ) -> NumericalColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *value*.
         """
@@ -547,7 +547,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = self.astype(common_type)
+        replaced = cast(Self, self.astype(common_type))
         df = cudf.DataFrame._from_data(
             {
                 "old": to_replace_col.astype(common_type),
@@ -563,9 +563,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
             df = df.dropna(subset=["old"])
 
-        return libcudf.replace.replace(
-            replaced, df._data["old"], df._data["new"]
-        )
+        return replaced.replace(df._data["old"], df._data["new"])
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
