@@ -1006,7 +1006,7 @@ inline __device__ void bool_plain_decode(page_state_s* s, state_buf* sb, int t, 
       int const bit_in_byte_index = bit_pos & 7;
 
       uint8_t const* const read_from = s->data_start + byte_offset;
-      bool const read_bit            = *read_from & (1 << bit_in_byte_index);
+      bool const read_bit            = (*read_from) & (1 << bit_in_byte_index);
 
       int const write_to_index     = rolling_index<state_buf::dict_buf_size>(bit_pos);
       sb->dict_idx[write_to_index] = read_bit;
@@ -1207,8 +1207,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   auto const skipped_leaf_values = s->page.skipped_leaf_values;
   if constexpr (has_lists_t) {
     if (skipped_leaf_values > 0) {
-      // if constexpr (has_strings_t) {if(t==0)printf("SKIPPING %d, has_dict_t %d\n",
-      // skipped_leaf_values, (int)has_dict_t);}
       if (should_process_nulls) {
         skip_decode<rolling_buf_size>(def_decoder, skipped_leaf_values, t);
       }
