@@ -185,8 +185,8 @@ class TimeDeltaColumn(ColumnBase):
                 this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
                     if other.is_valid():
-                        other = other.value.astype(common_dtype).astype(
-                            out_dtype
+                        other = cudf.Scalar(
+                            other.value.astype(common_dtype).astype(out_dtype)
                         )
                     else:
                         other = cudf.Scalar(None, out_dtype)
