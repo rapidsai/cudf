@@ -20,14 +20,14 @@
 #include <cudf/reduction.hpp>
 
 namespace cudf {
-
 namespace detail {
-static std::unique_ptr<column> scan(column_view const& input,
-                                    scan_aggregation const& agg,
-                                    scan_type inclusive,
-                                    null_policy null_handling,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr)
+namespace {
+std::unique_ptr<column> scan(column_view const& input,
+                             scan_aggregation const& agg,
+                             scan_type inclusive,
+                             null_policy null_handling,
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
 {
   if (agg.kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
@@ -50,6 +50,7 @@ static std::unique_ptr<column> scan(column_view const& input,
            : detail::scan_inclusive(input, agg, null_handling, stream, mr);
 }
 
+}  // namespace
 }  // namespace detail
 
 std::unique_ptr<column> scan(column_view const& input,

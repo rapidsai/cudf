@@ -45,6 +45,42 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
+namespace {
+
+/**
+ * @brief Creates column views with only valid elements in both input column views
+ *
+ * @param column_0 The first column
+ * @param column_1 The second column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return tuple with new null mask (if null masks of input differ) and new column views
+ */
+auto column_view_with_common_nulls(column_view const& column_0,
+                                   column_view const& column_1,
+                                   rmm::cuda_stream_view stream)
+{
+  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}}, stream);
+  if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
+  auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
+    return column_view(col.type(),
+                       col.size(),
+                       col.head(),
+                       static_cast<cudf::bitmask_type const*>(nullmask),
+                       null_count,
+                       col.offset(),
+                       std::vector(col.child_begin(), col.child_end()));
+  };
+  auto new_column_0 = null_count == column_0.null_count()
+                        ? column_0
+                        : column_view_with_new_nullmask(column_0, new_nullmask.data(), null_count);
+  auto new_column_1 = null_count == column_1.null_count()
+                        ? column_1
+                        : column_view_with_new_nullmask(column_1, new_nullmask.data(), null_count);
+  return std::make_tuple(std::move(new_nullmask), new_column_0, new_column_1);
+}
+
+}  // namespace
+
 /**
  * @brief Functor to dispatch aggregation with
  *
@@ -562,38 +598,6 @@ void aggregate_result_functor::operator()<aggregation::MERGE_HISTOGRAM>(aggregat
     agg,
     detail::group_merge_histogram(
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
-}
-
-/**
- * @brief Creates column views with only valid elements in both input column views
- *
- * @param column_0 The first column
- * @param column_1 The second column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return tuple with new null mask (if null masks of input differ) and new column views
- */
-static auto column_view_with_common_nulls(column_view const& column_0,
-                                          column_view const& column_1,
-                                          rmm::cuda_stream_view stream)
-{
-  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}}, stream);
-  if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
-  auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
-    return column_view(col.type(),
-                       col.size(),
-                       col.head(),
-                       static_cast<cudf::bitmask_type const*>(nullmask),
-                       null_count,
-                       col.offset(),
-                       std::vector(col.child_begin(), col.child_end()));
-  };
-  auto new_column_0 = null_count == column_0.null_count()
-                        ? column_0
-                        : column_view_with_new_nullmask(column_0, new_nullmask.data(), null_count);
-  auto new_column_1 = null_count == column_1.null_count()
-                        ? column_1
-                        : column_view_with_new_nullmask(column_1, new_nullmask.data(), null_count);
-  return std::make_tuple(std::move(new_nullmask), new_column_0, new_column_1);
 }
 
 /**

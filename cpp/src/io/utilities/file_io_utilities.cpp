@@ -33,6 +33,24 @@
 namespace cudf {
 namespace io {
 namespace detail {
+namespace {
+
+[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
+{
+  auto const fd = open(filepath.c_str(), flags, mode);
+  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
+
+  return fd;
+}
+
+[[nodiscard]] size_t get_file_size(int file_descriptor)
+{
+  struct stat st {};
+  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
+  return static_cast<size_t>(st.st_size);
+}
+
+}  // namespace
 
 void force_init_cuda_context()
 {
@@ -58,21 +76,6 @@ void force_init_cuda_context()
   std::array<char, 1024> error_msg_buffer{};
   auto const error_msg = strerror_r(err, error_msg_buffer.data(), 1024);
   CUDF_FAIL("Cannot open file; failed with errno: " + std::string{error_msg});
-}
-
-[[nodiscard]] static int open_file_checked(std::string const& filepath, int flags, mode_t mode)
-{
-  auto const fd = open(filepath.c_str(), flags, mode);
-  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
-
-  return fd;
-}
-
-[[nodiscard]] static size_t get_file_size(int file_descriptor)
-{
-  struct stat st {};
-  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
-  return static_cast<size_t>(st.st_size);
 }
 
 file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)

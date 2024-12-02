@@ -33,13 +33,13 @@
 namespace cudf {
 namespace transformation {
 namespace jit {
-
-static void unary_operation(mutable_column_view output,
-                            column_view input,
-                            std::string const& udf,
-                            data_type output_type,
-                            bool is_ptx,
-                            rmm::cuda_stream_view stream)
+namespace {
+void unary_operation(mutable_column_view output,
+                     column_view input,
+                     std::string const& udf,
+                     data_type output_type,
+                     bool is_ptx,
+                     rmm::cuda_stream_view stream)
 {
   std::string const kernel_name =
     jitify2::reflection::Template("cudf::transformation::jit::kernel")  //
@@ -62,6 +62,7 @@ static void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(output),
              cudf::jit::get_data_ptr(input));
 }
+}  // namespace
 
 }  // namespace jit
 }  // namespace transformation

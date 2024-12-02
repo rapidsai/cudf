@@ -26,12 +26,36 @@
 
 namespace cudf {
 namespace jit {
-constexpr char percent_escape[] = "_";  // NOLINT
+namespace {
 
-inline static bool is_white(char const c)
+inline bool is_white(char const c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+
+std::string remove_comments(std::string const& src)
 {
-  return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+  std::string output;
+  auto f = src.cbegin();
+  while (f < src.cend()) {
+    auto l = std::find(f, src.cend(), '/');
+    output.append(f, l);  // push chunk instead of 1 char at a time
+    f = std::next(l);     // skip over '/'
+    if (l < src.cend()) {
+      char const n = f < src.cend() ? *f : '?';
+      if (n == '/') {                        // found "//"
+        f = std::find(f, src.cend(), '\n');  // skip to end of line
+      } else if (n == '*') {                 // found "/*"
+        auto term = std::string("*/");       // skip to end of next "*/"
+        f         = std::search(std::next(f), src.cend(), term.cbegin(), term.cend()) + term.size();
+      } else {
+        output.push_back('/');  // lone '/' should be pushed into output
+      }
+    }
+  }
+  return output;
 }
+
+}  // namespace
+
+constexpr char percent_escape[] = "_";  // NOLINT
 
 std::string ptx_parser::escape_percent(std::string const& src)
 {
@@ -317,29 +341,6 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   auto const input_arg = parse_param_list(std::string(f, l));
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
-}
-
-static std::string remove_comments(std::string const& src)
-{
-  std::string output;
-  auto f = src.cbegin();
-  while (f < src.cend()) {
-    auto l = std::find(f, src.cend(), '/');
-    output.append(f, l);  // push chunk instead of 1 char at a time
-    f = std::next(l);     // skip over '/'
-    if (l < src.cend()) {
-      char const n = f < src.cend() ? *f : '?';
-      if (n == '/') {                        // found "//"
-        f = std::find(f, src.cend(), '\n');  // skip to end of line
-      } else if (n == '*') {                 // found "/*"
-        auto term = std::string("*/");       // skip to end of next "*/"
-        f         = std::search(std::next(f), src.cend(), term.cbegin(), term.cend()) + term.size();
-      } else {
-        output.push_back('/');  // lone '/' should be pushed into output
-      }
-    }
-  }
-  return output;
 }
 
 // The interface

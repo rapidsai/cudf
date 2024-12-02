@@ -27,25 +27,9 @@
 #include <tuple>
 
 namespace cudf::io::parquet::detail {
+namespace {
 
-/**
- * @brief Base class for parquet field functors.
- *
- * Holds the field value used by all of the specialized functors.
- */
-class parquet_field {
- private:
-  int _field_val;
-
- protected:
-  parquet_field(int f) : _field_val(f) {}
-
- public:
-  virtual ~parquet_field() = default;
-  [[nodiscard]] int field() const { return _field_val; }
-};
-
-static std::string field_type_string(FieldType type)
+std::string field_type_string(FieldType type)
 {
   switch (type) {
     case FieldType::BOOLEAN_TRUE: return "bool(true)";
@@ -65,19 +49,85 @@ static std::string field_type_string(FieldType type)
   }
 }
 
-static void assert_field_type(int type, FieldType expected)
+void assert_field_type(int type, FieldType expected)
 {
   CUDF_EXPECTS(type == static_cast<int>(expected),
                "expected " + field_type_string(expected) + " field, got " +
                  field_type_string(static_cast<FieldType>(type)) + " field instead");
 }
 
-static void assert_bool_field_type(int type)
+void assert_bool_field_type(int type)
 {
   auto const field_type = static_cast<FieldType>(type);
   CUDF_EXPECTS(field_type == FieldType::BOOLEAN_TRUE || field_type == FieldType::BOOLEAN_FALSE,
                "expected bool field, got " + field_type_string(field_type) + " field instead");
 }
+
+template <int index>
+struct FunctionSwitchImpl {
+  template <typename... Operator>
+  static inline void run(CompactProtocolReader* cpr,
+                         int field_type,
+                         int const& field,
+                         std::tuple<Operator...>& ops)
+  {
+    if (field == std::get<index>(ops).field()) {
+      std::get<index>(ops)(cpr, field_type);
+    } else {
+      FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
+    }
+  }
+};
+
+template <>
+struct FunctionSwitchImpl<0> {
+  template <typename... Operator>
+  static inline void run(CompactProtocolReader* cpr,
+                         int field_type,
+                         int const& field,
+                         std::tuple<Operator...>& ops)
+  {
+    if (field == std::get<0>(ops).field()) {
+      std::get<0>(ops)(cpr, field_type);
+    } else {
+      cpr->skip_struct_field(field_type);
+    }
+  }
+};
+
+template <typename... Operator>
+inline void function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
+{
+  constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
+  int field           = 0;
+  while (true) {
+    int const current_byte = cpr->getb();
+    if (!current_byte) { break; }
+    int const field_delta = current_byte >> 4;
+    int const field_type  = current_byte & 0xf;
+    field                 = field_delta ? field + field_delta : cpr->get_i16();
+    FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
+  }
+}
+
+}  // namespace
+
+/**
+ * @brief Base class for parquet field functors.
+ *
+ * Holds the field value used by all of the specialized functors.
+ */
+class parquet_field {
+ private:
+  int _field_val;
+
+ protected:
+  parquet_field(int f) : _field_val(f) {}
+
+ public:
+  virtual ~parquet_field() = default;
+  [[nodiscard]] int field() const { return _field_val; }
+};
 
 /**
  * @brief Abstract base class for list functors.
@@ -491,53 +541,6 @@ void CompactProtocolReader::skip_struct_field(int t, int depth)
       }
       break;
     default: break;
-  }
-}
-
-template <int index>
-struct FunctionSwitchImpl {
-  template <typename... Operator>
-  static inline void run(CompactProtocolReader* cpr,
-                         int field_type,
-                         int const& field,
-                         std::tuple<Operator...>& ops)
-  {
-    if (field == std::get<index>(ops).field()) {
-      std::get<index>(ops)(cpr, field_type);
-    } else {
-      FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
-    }
-  }
-};
-
-template <>
-struct FunctionSwitchImpl<0> {
-  template <typename... Operator>
-  static inline void run(CompactProtocolReader* cpr,
-                         int field_type,
-                         int const& field,
-                         std::tuple<Operator...>& ops)
-  {
-    if (field == std::get<0>(ops).field()) {
-      std::get<0>(ops)(cpr, field_type);
-    } else {
-      cpr->skip_struct_field(field_type);
-    }
-  }
-};
-
-template <typename... Operator>
-inline static void function_builder(CompactProtocolReader* cpr, std::tuple<Operator...>& op)
-{
-  constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
-  int field           = 0;
-  while (true) {
-    int const current_byte = cpr->getb();
-    if (!current_byte) { break; }
-    int const field_delta = current_byte >> 4;
-    int const field_type  = current_byte & 0xf;
-    field                 = field_delta ? field + field_delta : cpr->get_i16();
-    FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
   }
 }
 
