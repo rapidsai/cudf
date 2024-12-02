@@ -23,13 +23,13 @@ def df():
     )
 
 
-@pytest.mark.parametrize("num_rows_threshold", [1_000, 1_000_000])
-def test_parallel_dataframescan(df, num_rows_threshold):
+@pytest.mark.parametrize("max_rows_per_partition", [1_000, 1_000_000])
+def test_parallel_dataframescan(df, max_rows_per_partition):
     total_row_count = len(df.collect())
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
-        executor_options={"num_rows_threshold": num_rows_threshold},
+        executor_options={"max_rows_per_partition": max_rows_per_partition},
     )
     assert_gpu_result_equal(df, engine=engine)
 
@@ -37,7 +37,7 @@ def test_parallel_dataframescan(df, num_rows_threshold):
     qir = Translator(df._ldf.visit(), engine).translate_ir()
     ir, info = lower_ir_graph(qir)
     count = info[ir].count
-    if num_rows_threshold < total_row_count:
+    if max_rows_per_partition < total_row_count:
         assert count > 1
     else:
         assert count == 1
@@ -47,7 +47,7 @@ def test_dataframescan_concat(df):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
-        executor_options={"num_rows_threshold": 1_000},
+        executor_options={"max_rows_per_partition": 1_000},
     )
     df2 = pl.concat([df, df])
     assert_gpu_result_equal(df2, engine=engine)

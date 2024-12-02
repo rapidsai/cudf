@@ -230,7 +230,9 @@ def validate_config_options(config: dict) -> None:
     # Validate executor_options
     executor = config.get("executor", "pylibcudf")
     if executor == "dask-experimental":
-        unsupported = config.get("executor_options", {}).keys() - {"num_rows_threshold"}
+        unsupported = config.get("executor_options", {}).keys() - {
+            "max_rows_per_partition"
+        }
     else:
         unsupported = config.get("executor_options", {}).keys()
     if unsupported:

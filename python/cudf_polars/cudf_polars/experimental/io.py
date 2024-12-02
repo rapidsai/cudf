@@ -18,17 +18,12 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
 
 
-##
-## DataFrameScan
-##
-
-
 @lower_ir_node.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     rows_per_partition = ir.config_options.get("executor_options", {}).get(
-        "num_rows_threshold", 1_000_000
+        "max_rows_per_partition", 1_000_000
     )
 
     nrows = max(ir.df.shape()[0], 1)
@@ -51,4 +46,4 @@ def _(
             new_node: PartitionInfo(count=count)
         }
 
-    return rec.state["default_mapper"](ir)
+    return ir, {ir: PartitionInfo(count=1)}
