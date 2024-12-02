@@ -318,54 +318,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       }),
       std::uint8_t{0},
       thrust::bit_xor<std::uint8_t>());
-    /*
-    auto token_bitmask = cudf::detail::make_zeroed_device_uvector_async<std::uint8_t>(tokens.size(),
-    stream, mr); thrust::for_each(rmm::exec_policy(stream), thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + tokens.size(),
-      [tokens = tokens.begin(), token_bitmask = token_bitmask.begin()] __device__(auto idx) {
-        auto token = tokens[idx];
-        auto token_bits = token_bitmask[idx];
-        switch(token) {
-          case token_t::StructBegin: [[fallthrough]];
-          case token_t::StructEnd: {
-            token_bits |= (std::uint8_t{1} << 5);
-            break;
-          }
-          case token_t::ListBegin: [[fallthrough]];
-          case token_t::ListEnd: {
-            token_bits |= (std::uint8_t{1} << 4);
-            break;
-          }
-          case token_t::StructMemberBegin: [[fallthrough]];
-          case token_t::StructMemberEnd: {
-            token_bits |= (std::uint8_t{1} << 3);
-            break;
-          }
-          case token_t::FieldNameBegin: [[fallthrough]];
-          case token_t::FieldNameEnd: {
-            token_bits |= (std::uint8_t{1} << 2);
-            break;
-          }
-          case token_t::StringBegin: [[fallthrough]];
-          case token_t::StringEnd: {
-            token_bits |= (std::uint8_t{1} << 1);
-            break;
-          }
-          case token_t::ValueBegin: [[fallthrough]];
-          case token_t::ValueEnd: {
-            token_bits |= std::uint8_t{1};
-            break;
-          }
-          default: break;
-        }
-        token_bitmask[idx] = token_bits;
-      });
-    auto not_ok = thrust::reduce(rmm::exec_policy(stream), token_bitmask.begin(),
-    token_bitmask.end(), 0,
-      [] __device__(std::uint8_t a, std::uint8_t b) -> std::uint8_t {
-        return a ^ b;
-      });
-    */
     CUDF_EXPECTS(!not_ok, "Some begin token does not have a matching end token");
   }
 
