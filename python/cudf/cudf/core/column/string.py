@@ -6185,7 +6185,7 @@ class StringColumn(column.ColumnBase):
             df = df.dropna(subset=["old"])
         else:
             res = self
-        return libcudf.replace.replace(res, df._data["old"], df._data["new"])
+        return res.replace(df._data["old"], df._data["new"])
 
     def normalize_binop_value(self, other) -> column.ColumnBase | cudf.Scalar:
         if (
