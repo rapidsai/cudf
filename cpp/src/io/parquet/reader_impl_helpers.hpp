@@ -355,7 +355,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters the row groups based on predicate filter
    *
-   * @param sources Lists of input datasources.
+   * @param sources Lists of input datasources
    * @param row_group_indices Lists of row groups to read, one per source
    * @param output_dtypes Datatypes of of output columns
    * @param output_column_schemas schema indices of output columns
@@ -397,7 +397,7 @@ class aggregate_reader_metadata {
    * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
    * values based on the input row group list.
    *
-   * @param sources Lists of input datasources.
+   * @param sources Lists of input datasources
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
