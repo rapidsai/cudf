@@ -203,6 +203,8 @@ def _(
 def _lower_ir_pwise(
     ir: IR, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Lower a partition-wise (i.e. embarrassingly-parallel) IR node
+
     # Lower children
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
@@ -228,6 +230,7 @@ lower_ir_node.register(Cache, _lower_ir_pwise)
 def _generate_ir_tasks_pwise(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
+    # Generate partition-wise (i.e. embarrassingly-parallel) tasks
     child_names = [get_key_name(c) for c in ir.children]
     return {
         key: (
