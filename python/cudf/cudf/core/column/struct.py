@@ -101,10 +101,7 @@ class StructColumn(ColumnBase):
 
     @cached_property
     def memory_usage(self) -> int:
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         for child in self.children:
             n += child.memory_usage
 
