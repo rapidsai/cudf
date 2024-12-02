@@ -1392,7 +1392,7 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([3, 1, 2])
         >>> idx.argsort()
         array([1, 2, 0], dtype=int32)
-        """  # noqa: E501
+        """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
         if kind != "quicksort":

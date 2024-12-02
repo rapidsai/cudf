@@ -13,7 +13,6 @@ from . import (
     orc,
     parquet,
     reduce,
-    replace,
     round,
     sort,
     stream_compaction,
