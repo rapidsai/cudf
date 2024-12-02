@@ -13,11 +13,12 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+import cudf.core.column.column as column
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype

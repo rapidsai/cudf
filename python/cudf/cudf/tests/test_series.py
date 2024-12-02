@@ -282,8 +282,8 @@ def test_series_concat_list_series_with_index(data, others, ignore_index):
     other_ps = others
     other_gs = [cudf.from_pandas(obj) for obj in others]
 
-    expected = pd.concat([psr] + other_ps, ignore_index=ignore_index)
-    actual = cudf.concat([gsr] + other_gs, ignore_index=ignore_index)
+    expected = pd.concat([psr, *other_ps], ignore_index=ignore_index)
+    actual = cudf.concat([gsr, *other_gs], ignore_index=ignore_index)
 
     assert_eq(expected, actual)
 
@@ -1942,7 +1942,7 @@ def test_diff_many_dtypes(data):
 @pytest.mark.parametrize("num_rows", [1, 100])
 @pytest.mark.parametrize("num_bins", [1, 10])
 @pytest.mark.parametrize("right", [True, False])
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "bool"])
 @pytest.mark.parametrize("series_bins", [True, False])
 def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
     rng = np.random.default_rng(seed=0)

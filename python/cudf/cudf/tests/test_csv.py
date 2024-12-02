@@ -916,10 +916,10 @@ def test_csv_reader_nrows(tmpdir):
         str(fname), dtype=dtypes, skiprows=skip_rows + 1, nrows=read_rows
     )
     assert df.shape == (read_rows, 2)
-    assert str(skip_rows) in list(df)[0]
+    assert str(skip_rows) in next(iter(df))
     assert str(2 * skip_rows) in list(df)[1]
     for row in range(0, read_rows // sample_skip, sample_skip):
-        assert df[list(df)[0]][row] == row + skip_rows + 1
+        assert df[next(iter(df))][row] == row + skip_rows + 1
         assert df[list(df)[1]][row] == 2 * (row + skip_rows + 1)
     assert df[list(df)[1]][read_rows - 1] == 2 * (read_rows + skip_rows)
 

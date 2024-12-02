@@ -366,7 +366,7 @@ class SpillableBufferOwner(BufferOwner):
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
             f"spillable={self.spillable} exposed={self.exposed} "
             f"num-spill-locks={len(self._spill_locks)} "
-            f"ptr={ptr_info} owner={repr(self._owner)}>"
+            f"ptr={ptr_info} owner={self._owner!r}>"
         )
 
 
