@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 import functools
+import json
 import operator
 import os
 import urllib
@@ -29,10 +30,6 @@ try:
 except ImportError:
     fsspec_parquet = None
 
-try:
-    import ujson as json  # type: ignore[import-untyped]
-except ImportError:
-    import json
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
@@ -1546,8 +1543,8 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
             types.append(col.dtype.to_arrow())
         else:
             # A boolean element takes 8 bits in cudf and 1 bit in
-            # pyarrow. To make sure the cudf format is interperable
-            # in arrow, we use `int8` type when converting from a
+            # pyarrow. To make sure the cudf format is interoperable
+            # with arrow, we use `int8` type when converting from a
             # cudf boolean array.
             if col.dtype.type == np.bool_:
                 types.append(pa.int8())
