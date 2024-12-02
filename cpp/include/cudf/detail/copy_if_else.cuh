@@ -44,10 +44,11 @@ __launch_bounds__(block_size) CUDF_KERNEL
                            mutable_column_device_view out,
                            size_type* __restrict__ const valid_count)
 {
-  auto tidx                      = cudf::detail::grid_1d::global_thread_id<block_size>();
-  auto const stride              = cudf::detail::grid_1d::grid_stride<block_size>();
-  int const warp_id              = tidx / cudf::detail::warp_size;
-  size_type const warps_per_grid = gridDim.x * block_size / cudf::detail::warp_size;
+  auto tidx = cudf::detail::grid_1d::global_thread_id<block_size>();
+
+  auto const stride         = cudf::detail::grid_1d::grid_stride<block_size>();
+  auto const warp_id        = tidx / cudf::detail::warp_size;
+  auto const warps_per_grid = stride / cudf::detail::warp_size;
 
   // begin/end indices for the column data
   size_type const begin = 0;
