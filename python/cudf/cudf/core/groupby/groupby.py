@@ -19,7 +19,6 @@ import pylibcudf as plc
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.null_mask import bitmask_or
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
@@ -772,9 +771,22 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys = map(list, zip(*join_keys))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
-                left_order, right_order = libcudf.join.join(
-                    *join_keys, how="inner"
-                )
+                with acquire_spill_lock():
+                    plc_tables = [
+                        plc.Table(
+                            [col.to_pylibcudf(mode="read") for col in cols]
+                        )
+                        for cols in join_keys
+                    ]
+                    left_plc, right_plc = plc.join.inner_join(
+                        plc_tables[0],
+                        plc_tables[1],
+                        plc.types.NullEquality.EQUAL,
+                    )
+                    left_order = libcudf.column.Column.from_pylibcudf(left_plc)
+                    right_order = libcudf.column.Column.from_pylibcudf(
+                        right_plc
+                    )
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
@@ -1105,8 +1117,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         index = self.grouping.keys.unique().sort_values()
         num_groups = len(index)
-        _, has_null_group = bitmask_or([*index._columns])
-
+        has_null_group = any(col.has_nulls() for col in index._columns)
         if ascending:
             # Count ascending from 0 to num_groups - 1
             groups = range(num_groups)

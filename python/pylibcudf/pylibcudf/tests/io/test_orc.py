@@ -1,4 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
+
 import pyarrow as pa
 import pytest
 from utils import _convert_types, assert_table_and_meta_eq, make_source
@@ -49,6 +50,67 @@ def test_read_orc_basic(
     # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
         offset=skiprows, length=nrows if nrows != -1 else None
+    )
+
+    assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
+
+
+@pytest.mark.parametrize(
+    "compression",
+    [
+        plc.io.types.CompressionType.NONE,
+        plc.io.types.CompressionType.SNAPPY,
+    ],
+)
+@pytest.mark.parametrize(
+    "statistics",
+    [
+        plc.io.types.StatisticsFreq.STATISTICS_NONE,
+        plc.io.types.StatisticsFreq.STATISTICS_COLUMN,
+    ],
+)
+@pytest.mark.parametrize("stripe_size_bytes", [None, 65536])
+@pytest.mark.parametrize("stripe_size_rows", [None, 512])
+@pytest.mark.parametrize("row_index_stride", [None, 512])
+def test_roundtrip_pa_table(
+    compression,
+    statistics,
+    stripe_size_bytes,
+    stripe_size_rows,
+    row_index_stride,
+    tmp_path,
+):
+    pa_table = pa.table({"a": [1.0, 2.0, None], "b": [True, None, False]})
+    plc_table = plc.interop.from_arrow(pa_table)
+
+    tmpfile_name = tmp_path / "test.orc"
+
+    sink = plc.io.SinkInfo([str(tmpfile_name)])
+
+    tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+    user_data = {"a": "", "b": ""}
+    options = (
+        plc.io.orc.OrcWriterOptions.builder(sink, plc_table)
+        .metadata(tbl_meta)
+        .key_value_metadata(user_data)
+        .compression(compression)
+        .enable_statistics(statistics)
+        .build()
+    )
+    if stripe_size_bytes is not None:
+        options.set_stripe_size_bytes(stripe_size_bytes)
+    if stripe_size_rows is not None:
+        options.set_stripe_size_rows(stripe_size_rows)
+    if row_index_stride is not None:
+        options.set_row_index_stride(row_index_stride)
+
+    plc.io.orc.write_orc(options)
+
+    read_table = pa.orc.read_table(str(tmpfile_name))
+
+    res = plc.io.types.TableWithMetadata(
+        plc.interop.from_arrow(read_table),
+        [(name, []) for name in pa_table.schema.names],
     )
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)

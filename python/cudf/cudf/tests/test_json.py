@@ -277,6 +277,12 @@ def test_cudf_json_writer_read(gdf_writer_types):
             """{"a":{"L": [{"M": null}, {}]}, "b":1.1}\n""",
             """{"a":{"L": [{}, {}]}, "b":1.1}\n""",
         ),
+        # empty structs
+        ("""{"A": null}\n {"A": {}}\n {}""", """{}\n{"A":{}}\n{}\n"""),
+        (
+            """{"A": {"B": null}}\n {"A": {"B": {}}}\n {"A": {}}""",
+            """{"A":{}}\n{"A":{"B":{}}}\n{"A":{}}\n""",
+        ),
     ],
 )
 def test_cudf_json_roundtrip(jsonl_string, expected):
