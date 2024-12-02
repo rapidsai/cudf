@@ -25,6 +25,33 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
 
 
+@lower_ir_node.register(IR)
+def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Default logic - Requires single partition
+
+    if len(ir.children) == 0:
+        # Default leaf node has single partition
+        return ir, {
+            ir: PartitionInfo(count=1)
+        }  # pragma: no cover; Missed by pylibcudf executor
+
+    # Lower children
+    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+    partition_info = reduce(operator.or_, _partition_info)
+
+    # Check that child partitioning is supported
+    if any(partition_info[c].count > 1 for c in children):
+        raise NotImplementedError(
+            f"Class {type(ir)} does not support multiple partitions."
+        )  # pragma: no cover
+
+    # Return reconstructed node and partition-info dict
+    partition = PartitionInfo(count=1)
+    new_node = ir.reconstruct(children)
+    partition_info[new_node] = partition
+    return new_node, partition_info
+
+
 def lower_ir_graph(ir: IR) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -105,32 +132,6 @@ def evaluate_dask(ir: IR) -> DataFrame:
 
     graph, key = task_graph(ir, partition_info)
     return get(graph, key)
-
-
-@lower_ir_node.register(IR)
-def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Single-partition fall-back for lower_ir_node
-    if len(ir.children) == 0:
-        # Default leaf node has single partition
-        return ir, {
-            ir: PartitionInfo(count=1)
-        }  # pragma: no cover; Missed by pylibcudf executor
-
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-
-    # Check that child partitioning is supported
-    if any(partition_info[c].count > 1 for c in children):
-        raise NotImplementedError(
-            f"Class {type(ir)} does not support multiple partitions."
-        )  # pragma: no cover
-
-    # Return reconstructed node and partition-info dict
-    partition = PartitionInfo(count=1)
-    new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
-    return new_node, partition_info
 
 
 @generate_ir_tasks.register(IR)
