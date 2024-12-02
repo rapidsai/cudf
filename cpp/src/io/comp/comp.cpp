@@ -48,9 +48,9 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
   zs.avail_out = 0;
   zs.next_out  = nullptr;
 
-  int const windowbits    = 15;
-  int const gzip_encoding = 16;
-  int ret                 = deflateInit2(
+  constexpr int windowbits    = 15;
+  constexpr int gzip_encoding = 16;
+  int ret                     = deflateInit2(
     &zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, windowbits | gzip_encoding, 8, Z_DEFAULT_STRATEGY);
   CUDF_EXPECTS(ret == Z_OK, "GZIP DEFLATE compression initialization failed.");
 
