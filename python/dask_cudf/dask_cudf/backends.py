@@ -738,9 +738,6 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_orc(*args, **kwargs):
-        from dask_expr import from_legacy_dataframe
-
         from dask_cudf._legacy.io.orc import read_orc as legacy_read_orc
 
-        ddf = legacy_read_orc(*args, **kwargs)
-        return from_legacy_dataframe(ddf)
+        return legacy_read_orc(*args, **kwargs)
