@@ -17,7 +17,6 @@ set(cython_sources
     binaryop.pyx
     column.pyx
     copying.pyx
-    csv.pyx
     filling.pyx
     groupby.pyx
     interop.pyx
