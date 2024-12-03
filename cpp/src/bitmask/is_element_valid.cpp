@@ -30,9 +30,9 @@ bool is_element_valid_sync(column_view const& col_view,
   CUDF_EXPECTS(element_index >= 0 and element_index < col_view.size(), "invalid index.");
   if (!col_view.nullable()) { return true; }
 
-  bitmask_type word;
+  bitmask_type word = 0;
   // null_mask() returns device ptr to bitmask without offset
-  size_type index = element_index + col_view.offset();
+  size_type const index = element_index + col_view.offset();
   CUDF_CUDA_TRY(cudaMemcpyAsync(&word,
                                 col_view.null_mask() + word_index(index),
                                 sizeof(bitmask_type),

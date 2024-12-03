@@ -41,7 +41,7 @@ void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view k
       cudf::experimental::prefetch::detail::prefetch_noexcept(
         key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {
-      strings_column_view scv{col};
+      strings_column_view const scv{col};
       if (data_ptr == nullptr) {
         // Do not call chars_size if the data_ptr is nullptr.
         return;
@@ -56,6 +56,53 @@ void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view k
                 << std::endl;
     }
   }
+}
+
+// Struct to use custom hash combine and fold expression
+struct HashValue {
+  std::size_t hash;
+  explicit HashValue(std::size_t h) : hash{h} {}
+  HashValue operator^(HashValue const& other) const
+  {
+    return HashValue{cudf::hashing::detail::hash_combine(hash, other.hash)};
+  }
+};
+
+template <typename... Ts>
+constexpr auto hash(Ts&&... ts)
+{
+  return (... ^ HashValue(std::hash<Ts>{}(ts))).hash;
+}
+
+std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false)
+{
+  std::size_t const init = (is_parent_empty or c.is_empty())
+                             ? hash(c.type(), 0)
+                             : hash(c.type(), c.size(), c.head(), c.null_mask(), c.offset());
+  return std::accumulate(c.child_begin(),
+                         c.child_end(),
+                         init,
+                         [&c, is_parent_empty](std::size_t hash, auto const& child) {
+                           return cudf::hashing::detail::hash_combine(
+                             hash, shallow_hash_impl(child, c.is_empty() or is_parent_empty));
+                         });
+}
+
+bool shallow_equivalent_impl(column_view const& lhs,
+                             column_view const& rhs,
+                             bool is_parent_empty = false)
+{
+  bool const is_empty = (lhs.is_empty() and rhs.is_empty()) or is_parent_empty;
+  return (lhs.type() == rhs.type()) and
+         (is_empty or ((lhs.size() == rhs.size()) and (lhs.head() == rhs.head()) and
+                       (lhs.null_mask() == rhs.null_mask()) and (lhs.offset() == rhs.offset()))) and
+         std::equal(lhs.child_begin(),
+                    lhs.child_end(),
+                    rhs.child_begin(),
+                    rhs.child_end(),
+                    [is_empty](auto const& lhs_child, auto const& rhs_child) {
+                      return shallow_equivalent_impl(lhs_child, rhs_child, is_empty);
+                    });
 }
 
 }  // namespace
@@ -103,58 +150,12 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
                null_mask(), offset() + begin, offset() + end, cudf::get_default_stream());
 }
 
-// Struct to use custom hash combine and fold expression
-struct HashValue {
-  std::size_t hash;
-  explicit HashValue(std::size_t h) : hash{h} {}
-  HashValue operator^(HashValue const& other) const
-  {
-    return HashValue{cudf::hashing::detail::hash_combine(hash, other.hash)};
-  }
-};
-
-template <typename... Ts>
-constexpr auto hash(Ts&&... ts)
-{
-  return (... ^ HashValue(std::hash<Ts>{}(ts))).hash;
-}
-
-std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false)
-{
-  std::size_t const init = (is_parent_empty or c.is_empty())
-                             ? hash(c.type(), 0)
-                             : hash(c.type(), c.size(), c.head(), c.null_mask(), c.offset());
-  return std::accumulate(c.child_begin(),
-                         c.child_end(),
-                         init,
-                         [&c, is_parent_empty](std::size_t hash, auto const& child) {
-                           return cudf::hashing::detail::hash_combine(
-                             hash, shallow_hash_impl(child, c.is_empty() or is_parent_empty));
-                         });
-}
-
-std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl(input); }
-
-bool shallow_equivalent_impl(column_view const& lhs,
-                             column_view const& rhs,
-                             bool is_parent_empty = false)
-{
-  bool const is_empty = (lhs.is_empty() and rhs.is_empty()) or is_parent_empty;
-  return (lhs.type() == rhs.type()) and
-         (is_empty or ((lhs.size() == rhs.size()) and (lhs.head() == rhs.head()) and
-                       (lhs.null_mask() == rhs.null_mask()) and (lhs.offset() == rhs.offset()))) and
-         std::equal(lhs.child_begin(),
-                    lhs.child_end(),
-                    rhs.child_begin(),
-                    rhs.child_end(),
-                    [is_empty](auto const& lhs_child, auto const& rhs_child) {
-                      return shallow_equivalent_impl(lhs_child, rhs_child, is_empty);
-                    });
-}
 bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
 {
   return shallow_equivalent_impl(lhs, rhs);
 }
+
+std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl(input); }
 
 }  // namespace detail
 
