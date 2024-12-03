@@ -850,7 +850,7 @@ uint32_t __host__ gather_row_offsets(parse_options_view const& options,
                                      size_t skip_rows,
                                      rmm::cuda_stream_view stream)
 {
-  uint32_t dim_grid = cudf::util::div_rounding_up_safe<size_t>(chunk_size, rowofs_block_bytes);
+  uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
   auto ctxtree      = rmm::device_uvector<packed_rowctx_t>(dim_grid * bk_ctxtree_size, stream);
 
   gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream.value()>>>(
