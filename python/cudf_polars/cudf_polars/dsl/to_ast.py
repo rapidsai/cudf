@@ -8,8 +8,6 @@ from __future__ import annotations
 from functools import partial, reduce, singledispatch
 from typing import TYPE_CHECKING, TypeAlias
 
-from polars.polars import _expr_nodes as pl_expr
-
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
 
@@ -185,7 +183,7 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
-    if node.name == pl_expr.BooleanFunction.IsIn:
+    if node.name is expr.BooleanFunction.Name.IsIn:
         needles, haystack = node.children
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             # 16 is an arbitrary limit
@@ -204,14 +202,14 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         raise NotImplementedError(
             f"Parquet filters don't support {node.name} on columns"
         )
-    if node.name == pl_expr.BooleanFunction.IsNull:
+    if node.name is expr.BooleanFunction.Name.IsNull:
         return plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, self(node.children[0]))
-    elif node.name == pl_expr.BooleanFunction.IsNotNull:
+    elif node.name is expr.BooleanFunction.Name.IsNotNull:
         return plc_expr.Operation(
             plc_expr.ASTOperator.NOT,
             plc_expr.Operation(plc_expr.ASTOperator.IS_NULL, self(node.children[0])),
         )
-    elif node.name == pl_expr.BooleanFunction.Not:
+    elif node.name is expr.BooleanFunction.Name.Not:
         return plc_expr.Operation(plc_expr.ASTOperator.NOT, self(node.children[0]))
     raise NotImplementedError(f"AST conversion does not support {node.name}")
 

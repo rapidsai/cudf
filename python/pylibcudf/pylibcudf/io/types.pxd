@@ -3,6 +3,7 @@ from libc.stdint cimport uint8_t, int32_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp cimport bool
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.types cimport (
     column_encoding,
@@ -22,16 +23,16 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
-
+from pylibcudf.libcudf.types cimport size_type
 
 cdef class PartitionInfo:
     cdef partition_info c_obj
 
 cdef class ColumnInMetadata:
-    cdef column_in_metadata c_obj
+    cdef column_in_metadata* c_obj
+    cdef TableInputMetadata owner
 
-    @staticmethod
-    cdef ColumnInMetadata from_metadata(column_in_metadata metadata)
+    cdef TableInputMetadata table
 
     cpdef ColumnInMetadata set_name(self, str name)
 
@@ -43,7 +44,7 @@ cdef class ColumnInMetadata:
 
     cpdef ColumnInMetadata set_int96_timestamps(self, bool req)
 
-    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t req)
+    cpdef ColumnInMetadata set_decimal_precision(self, uint8_t precision)
 
     cpdef ColumnInMetadata child(self, size_type i)
 
@@ -57,8 +58,14 @@ cdef class ColumnInMetadata:
 
     cpdef str get_name(self)
 
+    @staticmethod
+    cdef ColumnInMetadata from_libcudf(
+        column_in_metadata* metadata, TableInputMetadata owner
+    )
+
 cdef class TableInputMetadata:
     cdef table_input_metadata c_obj
+    cdef list column_metadata
 
 cdef class TableWithMetadata:
     cdef public Table tbl

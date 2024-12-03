@@ -4,13 +4,18 @@ import os
 from glob import glob
 
 import dask.dataframe as dd
-from dask.base import tokenize
-from dask.utils import apply, parse_bytes
+from dask.utils import parse_bytes
 
 import cudf
 
 
-def read_text(path, chunksize="256 MiB", **kwargs):
+def _read_text(source, **kwargs):
+    # Wrapper for cudf.read_text operation
+    fn, byte_range = source
+    return cudf.read_text(fn, byte_range=byte_range, **kwargs)
+
+
+def read_text(path, chunksize="256 MiB", byte_range=None, **kwargs):
     if isinstance(chunksize, str):
         chunksize = parse_bytes(chunksize)
 
@@ -27,28 +32,25 @@ def read_text(path, chunksize="256 MiB", **kwargs):
         msg = f"A file in: {filenames} does not exist."
         raise FileNotFoundError(msg)
 
-    name = "read-text-" + tokenize(path, tokenize, **kwargs)
+    if chunksize and byte_range:
+        raise ValueError("Cannot specify both chunksize and byte_range.")
 
     if chunksize:
-        dsk = {}
-        i = 0
+        sources = []
         for fn in filenames:
             size = os.path.getsize(fn)
             for start in range(0, size, chunksize):
-                kwargs1 = kwargs.copy()
-                kwargs1["byte_range"] = (
+                byte_range = (
                     start,
                     chunksize,
                 )  # specify which chunk of the file we care about
-
-                dsk[(name, i)] = (apply, cudf.read_text, [fn], kwargs1)
-                i += 1
+                sources.append((fn, byte_range))
     else:
-        dsk = {
-            (name, i): (apply, cudf.read_text, [fn], kwargs)
-            for i, fn in enumerate(filenames)
-        }
+        sources = [(fn, byte_range) for fn in filenames]
 
-    meta = cudf.Series([], dtype="O")
-    divisions = [None] * (len(dsk) + 1)
-    return dd.core.new_dd_object(dsk, name, meta, divisions)
+    return dd.from_map(
+        _read_text,
+        sources,
+        meta=cudf.Series([], dtype="O"),
+        **kwargs,
+    )

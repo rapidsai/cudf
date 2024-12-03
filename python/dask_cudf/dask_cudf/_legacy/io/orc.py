@@ -7,14 +7,14 @@ from fsspec.utils import stringify_path
 from pyarrow import orc as orc
 
 from dask import dataframe as dd
-from dask.base import tokenize
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
 
 import cudf
 
 
-def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
+def _read_orc_stripe(source, fs, columns=None, kwargs=None):
     """Pull out specific columns from specific stripe"""
+    path, stripe = source
     if kwargs is None:
         kwargs = {}
     with fs.open(path, "rb") as f:
@@ -67,7 +67,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
     """
 
     storage_options = storage_options or {}
-    fs, fs_token, paths = get_fs_token_paths(
+    fs, _, paths = get_fs_token_paths(
         path, mode="rb", storage_options=storage_options
     )
     schema = None
@@ -100,27 +100,23 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
             **kwargs,
         )
 
-    name = "read-orc-" + tokenize(fs_token, path, columns, filters, **kwargs)
-    dsk = {}
-    N = 0
+    sources = []
     for path, n in zip(paths, nstripes_per_file):
         for stripe in (
             range(n)
             if filters is None
             else cudf.io.orc._filter_stripes(filters, path)
         ):
-            dsk[(name, N)] = (
-                _read_orc_stripe,
-                fs,
-                path,
-                stripe,
-                columns,
-                kwargs,
-            )
-            N += 1
+            sources.append((path, stripe))
 
-    divisions = [None] * (len(dsk) + 1)
-    return dd.core.new_dd_object(dsk, name, meta, divisions)
+    return dd.from_map(
+        _read_orc_stripe,
+        sources,
+        args=[fs],
+        columns=columns,
+        kwargs=kwargs,
+        meta=meta,
+    )
 
 
 def write_orc_partition(df, path, fs, filename, compression="snappy"):

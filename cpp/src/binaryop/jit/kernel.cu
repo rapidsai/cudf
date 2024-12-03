@@ -51,15 +51,10 @@ CUDF_KERNEL void kernel_v_v(cudf::size_type size,
                             TypeLhs* lhs_data,
                             TypeRhs* rhs_data)
 {
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
+  auto const start = threadIdx.x + static_cast<cudf::thread_index_type>(blockIdx.x) * blockDim.x;
+  auto const step  = static_cast<cudf::thread_index_type>(blockDim.x) * gridDim.x;
 
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-  for (cudf::size_type i = start; i < size; i += step) {
+  for (auto i = start; i < size; i += step) {
     out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[i]);
   }
 }
@@ -75,15 +70,10 @@ CUDF_KERNEL void kernel_v_v_with_validity(cudf::size_type size,
                                           cudf::bitmask_type const* rhs_mask,
                                           cudf::size_type rhs_offset)
 {
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
+  auto const start = threadIdx.x + static_cast<cudf::thread_index_type>(blockIdx.x) * blockDim.x;
+  auto const step  = static_cast<cudf::thread_index_type>(blockDim.x) * gridDim.x;
 
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-  for (cudf::size_type i = start; i < size; i += step) {
+  for (auto i = start; i < size; i += step) {
     bool output_valid = false;
     out_data[i]       = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(
       lhs_data[i],

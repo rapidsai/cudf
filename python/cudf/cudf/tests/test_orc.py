@@ -606,7 +606,7 @@ def normalized_equals(value1, value2):
 def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 100000:
@@ -681,7 +681,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 200000:
