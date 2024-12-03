@@ -297,16 +297,19 @@ DLManagedTensor* to_dlpack(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
+                                   rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_dlpack(managed_tensor, cudf::get_default_stream(), mr);
+  return detail::from_dlpack(managed_tensor, stream, mr);
 }
 
-DLManagedTensor* to_dlpack(table_view const& input, rmm::device_async_resource_ref mr)
+DLManagedTensor* to_dlpack(table_view const& input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_dlpack(input, cudf::get_default_stream(), mr);
+  return detail::to_dlpack(input, stream, mr);
 }
 
 }  // namespace cudf

@@ -25,11 +25,6 @@ import rmm
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
-from cudf._lib.null_mask import (
-    MaskState,
-    bitmask_allocation_size_bytes,
-    create_null_mask,
-)
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import (
     apply_boolean_mask,
@@ -241,8 +236,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     ) -> Self:
         raise NotImplementedError
 
-    def clip(self, lo: ScalarLike, hi: ScalarLike) -> ColumnBase:
-        return libcudf.replace.clip(self, lo, hi)
+    @acquire_spill_lock()
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
+        plc_column = plc.replace.clamp(
+            self.to_pylibcudf(mode="read"),
+            cudf.Scalar(lo, self.dtype).device_value.c_value,
+            cudf.Scalar(hi, self.dtype).device_value.c_value,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
         if self is other:
@@ -383,7 +384,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.data is not None:
             n += self.data.size
         if self.nullable:
-            n += bitmask_allocation_size_bytes(self.size)
+            n += plc.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
 
     def _fill(
@@ -400,21 +401,35 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # the scalar is None when calling `is_valid`.
         slr = cudf.Scalar(fill_value, dtype=self.dtype)
 
-        if not inplace:
-            return libcudf.filling.fill(self, begin, end, slr.device_value)
-
-        if is_string_dtype(self.dtype):
-            return self._mimic_inplace(
-                libcudf.filling.fill(self, begin, end, slr.device_value),
-                inplace=True,
-            )
+        if not inplace or is_string_dtype(self.dtype):
+            with acquire_spill_lock():
+                result = type(self).from_pylibcudf(
+                    plc.filling.fill(
+                        self.to_pylibcudf(mode="read"),
+                        begin,
+                        end,
+                        slr.device_value.c_value,
+                    )
+                )
+            if is_string_dtype(self.dtype):
+                return self._mimic_inplace(result, inplace=True)
+            return result  # type: ignore[return-value]
 
         if not slr.is_valid() and not self.nullable:
-            mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
+            mask = as_buffer(
+                plc.null_mask.create_null_mask(
+                    self.size, plc.null_mask.MaskState.ALL_VALID
+                )
+            )
             self.set_base_mask(mask)
 
-        libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
-
+        with acquire_spill_lock():
+            plc.filling.fill_in_place(
+                self.to_pylibcudf(mode="write"),
+                begin,
+                end,
+                slr.device_value.c_value,
+            )
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
@@ -686,6 +701,18 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return cudf.Scalar(fill_value, dtype=self.dtype)
         return as_column(fill_value)
 
+    @acquire_spill_lock()
+    def replace(
+        self, values_to_replace: Self, replacement_values: Self
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.replace.find_and_replace_all(
+                self.to_pylibcudf(mode="read"),
+                values_to_replace.to_pylibcudf(mode="read"),
+                replacement_values.to_pylibcudf(mode="read"),
+            )
+        )
+
     def fillna(
         self,
         fill_value: ScalarLike | ColumnLike,
@@ -704,11 +731,32 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 return self.copy()
             else:
                 fill_value = self._validate_fillna_value(fill_value)
-        return libcudf.replace.replace_nulls(
-            input_col=self.nans_to_nulls(),
-            replacement=fill_value,
-            method=method,
-        )._with_type_metadata(self.dtype)
+
+        if fill_value is None and method is None:
+            raise ValueError("Must specify a fill 'value' or 'method'.")
+
+        if fill_value and method:
+            raise ValueError("Cannot specify both 'value' and 'method'.")
+
+        input_col = self.nans_to_nulls()
+
+        with acquire_spill_lock():
+            if method:
+                plc_replace = (
+                    plc.replace.ReplacePolicy.PRECEDING
+                    if method == "ffill"
+                    else plc.replace.ReplacePolicy.FOLLOWING
+                )
+            elif is_scalar(fill_value):
+                plc_replace = cudf.Scalar(fill_value).device_value.c_value
+            else:
+                plc_replace = fill_value.to_pylibcudf(mode="read")
+            plc_column = plc.replace.replace_nulls(
+                input_col.to_pylibcudf(mode="read"),
+                plc_replace,
+            )
+            result = type(self).from_pylibcudf(plc_column)
+        return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def isnull(self) -> ColumnBase:
         """Identify missing values in a Column."""
@@ -757,7 +805,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("value must be a scalar")
         else:
             value = as_column(value, dtype=self.dtype, length=1)
-        mask = libcudf.search.contains(value, self)
+        mask = value.contains(self)
         return apply_boolean_mask(
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
         )[0]
@@ -914,7 +962,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # self.isin(other) asks "which values of self are in other"
         # contains(haystack, needles) asks "which needles are in haystack"
         # hence this argument ordering.
-        result = libcudf.search.contains(rhs, self)
+        result = rhs.contains(self)
         if self.null_count > 0:
             # If one of the needles is null, then the result contains
             # nulls, these nulls should be replaced by whether or not the
@@ -955,6 +1003,23 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
             [self], [False], None
         )
+
+    def contains(self, other: ColumnBase) -> ColumnBase:
+        """
+        Check whether column contains multiple values.
+
+        Parameters
+        ----------
+        other : Column
+            A column of values to search for
+        """
+        with acquire_spill_lock():
+            return Column.from_pylibcudf(
+                plc.search.contains(
+                    self.to_pylibcudf(mode="read"),
+                    other.to_pylibcudf(mode="read"),
+                )
+            )
 
     def sort_values(
         self: Self,
@@ -1190,7 +1255,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 "Column searchsorted expects values to be column of same dtype"
             )
-        return libcudf.search.search_sorted(
+        return cudf.core._internals.search.search_sorted(  # type: ignore[return-value]
             [self],
             [value],
             side=side,
@@ -1407,8 +1472,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ]
         dtype: int8
         """
-        from cudf._lib.join import join as cpp_join
-
         if na_sentinel is None or na_sentinel.value is cudf.NA:
             na_sentinel = cudf.Scalar(-1)
 
@@ -1430,15 +1493,21 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         except ValueError:
             return _return_sentinel_column()
 
-        left_gather_map, right_gather_map = cpp_join(
-            [self], [cats], how="left"
+        left_rows, right_rows = plc.join.left_join(
+            plc.Table([self.to_pylibcudf(mode="read")]),
+            plc.Table([cats.to_pylibcudf(mode="read")]),
+            plc.types.NullEquality.EQUAL,
         )
+        left_gather_map = type(self).from_pylibcudf(left_rows)
+        right_gather_map = type(self).from_pylibcudf(right_rows)
+
         codes = libcudf.copying.gather(
             [as_column(range(len(cats)), dtype=dtype)],
             right_gather_map,
             nullify=True,
         )
         del right_gather_map
+        del right_rows
         # reorder `codes` so that its values correspond to the
         # values of `self`:
         (codes,) = libcudf.sort.sort_by_key(
@@ -1532,7 +1601,11 @@ def column_empty(
         data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
     if masked:
-        mask = create_null_mask(row_count, state=MaskState.ALL_NULL)
+        mask = as_buffer(
+            plc.null_mask.create_null_mask(
+                row_count, plc.null_mask.MaskState.ALL_NULL
+            )
+        )
     else:
         mask = None
 
@@ -1750,11 +1823,18 @@ def as_column(
     * range objects
     """
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
-        column = libcudf.filling.sequence(
-            len(arbitrary),
-            as_device_scalar(arbitrary.start, dtype=cudf.dtype("int64")),
-            as_device_scalar(arbitrary.step, dtype=cudf.dtype("int64")),
-        )
+        with acquire_spill_lock():
+            column = Column.from_pylibcudf(
+                plc.filling.sequence(
+                    len(arbitrary),
+                    as_device_scalar(
+                        arbitrary.start, dtype=np.dtype(np.int64)
+                    ).c_value,
+                    as_device_scalar(
+                        arbitrary.step, dtype=np.dtype(np.int64)
+                    ).c_value,
+                )
+            )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
             dtype = cudf.dtype(
                 f'i{cudf.get_option("default_integer_bitwidth")//8}'
@@ -2189,7 +2269,9 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
     typestr = desc["typestr"]
     typecode = typestr[1]
     if typecode == "t":
-        mask_size = bitmask_allocation_size_bytes(desc["shape"][0])
+        mask_size = plc.null_mask.bitmask_allocation_size_bytes(
+            desc["shape"][0]
+        )
         return as_buffer(data=desc["data"][0], size=mask_size, owner=obj)
     elif typecode == "b":
         col = as_column(cai_mask)

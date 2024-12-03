@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import Column, DataFrame
 
-__all__ = ["Expr", "NamedExpr", "Col", "AggInfo", "ExecutionContext", "ColRef"]
+__all__ = ["AggInfo", "Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
 
 
 class AggInfo(NamedTuple):

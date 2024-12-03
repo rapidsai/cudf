@@ -18,7 +18,8 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 from cudf.api.types import is_scalar
 from cudf.core._internals import unary
 from cudf.core.buffer import as_buffer
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
+from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -27,8 +28,6 @@ from cudf.core.dtypes import (
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
-
-from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
@@ -435,7 +434,7 @@ def _get_decimal_type(
     `op` for the given dtypes.
 
     For precision & scale calculations see : https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-    """  # noqa: E501
+    """
 
     # This should at some point be hooked up to libcudf's
     # binary_operation_fixed_point_scale
@@ -506,8 +505,8 @@ def _get_decimal_type(
     # if we've reached this point, we cannot create a decimal type without
     # overflow; raise an informative error
     raise ValueError(
-        f"Performing {op} between columns of type {repr(lhs_dtype)} and "
-        f"{repr(rhs_dtype)} would result in overflow"
+        f"Performing {op} between columns of type {lhs_dtype!r} and "
+        f"{rhs_dtype!r} would result in overflow"
     )
 
 

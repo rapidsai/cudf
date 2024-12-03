@@ -76,6 +76,9 @@ cdef class DataType:
     def __hash__(self):
         return hash((self.c_obj.id(), self.c_obj.scale()))
 
+    def __reduce__(self):
+        return (type(self), (self.c_obj.id(), self.c_obj.scale()))
+
     @staticmethod
     cdef DataType from_libcudf(data_type dt):
         """Create a DataType from a libcudf data_type.
