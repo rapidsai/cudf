@@ -40,7 +40,7 @@ import cudf
 from dask_cudf import QUERY_PLANNING_ON, _deprecated_api
 
 # Dask-expr imports CudfEngine from this module
-from dask_cudf._legacy.io.parquet import CudfEngine  # noqa: F401
+from dask_cudf._legacy.io.parquet import CudfEngine
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping

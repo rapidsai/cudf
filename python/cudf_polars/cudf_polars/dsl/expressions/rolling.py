@@ -13,7 +13,7 @@ from cudf_polars.dsl.expressions.base import Expr
 if TYPE_CHECKING:
     import pylibcudf as plc
 
-__all__ = ["RollingWindow", "GroupedRollingWindow"]
+__all__ = ["GroupedRollingWindow", "RollingWindow"]
 
 
 class RollingWindow(Expr):
