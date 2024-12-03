@@ -18,6 +18,8 @@ from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_reader as cpp_chunked_parquet_reader,
     parquet_writer_options,
     parquet_writer_options_builder,
+    parquet_reader_options,
+    parquet_reader_options_builder,
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
@@ -25,7 +27,7 @@ from pylibcudf.types cimport DataType
 
 
 cdef class ParquetReaderOptions:
-    cdef parquet_reader_options
+    cdef parquet_reader_options c_obj
     cdef SourceInfo source
     cpdef void set_row_groups(self, list row_groups)
     cpdef void set_num_rows(self, size_type nrows)
@@ -34,6 +36,8 @@ cdef class ParquetReaderOptions:
     cpdef void set_filter(self, Expression filter)
 
 cdef class ParquetReaderOptionsBuilder:
+    cdef parquet_reader_options_builder c_obj
+    cdef SourceInfo source
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val)
     cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
     cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)

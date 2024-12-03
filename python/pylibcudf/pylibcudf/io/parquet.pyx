@@ -38,8 +38,71 @@ __all__ = [
     "ParquetWriterOptions",
     "ParquetWriterOptionsBuilder",
     "read_parquet",
-    "write_parquet"
+    "write_parquet",
+    "ParquetReaderOptions",
+    "ParquetReaderOptionsBuilder",
+
 ]
+
+
+cdef class ParquetReaderOptions:
+    @staticmethod
+    def builder(SourceInfo source):
+        cdef ParquetReaderOptionsBuilder parquet_builder = (
+            ParquetReaderOptionsBuilder.__new__(ParquetReaderOptionsBuilder)
+        )
+        parquet_builder.c_obj = parquet_reader_options.builder(source.c_obj)
+        parquet_builder.source = source
+        return parquet_builder
+
+    cpdef void set_row_groups(self, list row_groups):
+        cdef vector[vector[size_type]] outer
+        cdef vector[size_type] inner
+        for row_group in row_groups:
+            for x in row_group:
+                inner.push_back(x)
+
+        self.c_obj.set_row_groups(outer)
+
+    cpdef void set_num_rows(self, size_type nrows):
+        self.c_obj.set_num_rows(nrows)
+
+    cpdef void set_skip_rows(self, int64_t skip_rows):
+        self.c_obj.set_skip_rows(skip_rows)
+
+    cpdef void set_columns(self, list col_names):
+        cdef vector[string] vec
+        for name in col_names:
+            vec.push_back(name.encode())
+        self.c_obj.set_columns(vec)
+
+    cpdef void set_filter(self, Expression filter):
+        self.c_obj.set_filter(filter.c_obj.get()[0])
+
+cdef class ParquetReaderOptionsBuilder:
+    cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
+        self.c_obj.convert_strings_to_categories(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val):
+        self.c_obj.use_pandas_metadata(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val):
+        self.c_obj.allow_mismatched_pq_schemas(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val):
+        self.c_obj.use_arrow_schema(val)
+        return self
+
+    cpdef build(self):
+        cdef ParquetReaderOptions parquet_options = ParquetReaderOptions.__new__(
+            ParquetReaderOptions
+        )
+        parquet_options.c_obj = move(self.c_obj.build())
+        parquet_options.source = self.source
+        return parquet_options
 
 
 cdef parquet_reader_options _setup_parquet_reader_options(
