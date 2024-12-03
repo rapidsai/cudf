@@ -69,8 +69,7 @@ table_view table_view::select(std::vector<size_type> const& column_indices) cons
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view()
 {
-  std::vector<column_view> const cols{begin(), end()};
-  return table_view{cols};
+  return table_view{std::vector<column_view>{begin(), end()}};
 }
 
 table_view::table_view(std::vector<table_view> const& views)
