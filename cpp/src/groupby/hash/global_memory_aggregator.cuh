@@ -206,8 +206,10 @@ struct update_target_element_gmem<
     auto old                 = cudf::detail::atomic_cas(
       &target.element<Target>(target_index), cudf::detail::ARGMAX_SENTINEL, source_argmax_index);
     if (old != cudf::detail::ARGMAX_SENTINEL) {
-      while (source_column.element<Source>(source_argmax_index) >
-             source_column.element<Source>(old)) {
+      while (
+        source_column.element<Source>(source_argmax_index) > source_column.element<Source>(old) ||
+        (source_column.element<Source>(source_argmax_index) == source_column.element<Source>(old) &&
+         source_argmax_index < old)) {
         old =
           cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_argmax_index);
       }
@@ -234,8 +236,10 @@ struct update_target_element_gmem<
     auto old                 = cudf::detail::atomic_cas(
       &target.element<Target>(target_index), cudf::detail::ARGMIN_SENTINEL, source_argmin_index);
     if (old != cudf::detail::ARGMIN_SENTINEL) {
-      while (source_column.element<Source>(source_argmin_index) <
-             source_column.element<Source>(old)) {
+      while (
+        source_column.element<Source>(source_argmin_index) < source_column.element<Source>(old) ||
+        (source_column.element<Source>(source_argmin_index) == source_column.element<Source>(old) &&
+         source_argmin_index < old)) {
         old =
           cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_argmin_index);
       }

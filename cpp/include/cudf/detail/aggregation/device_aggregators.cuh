@@ -325,7 +325,9 @@ struct update_target_element<
     auto old     = cudf::detail::atomic_cas(
       &target.element<Target>(target_index), ARGMAX_SENTINEL, source_index);
     if (old != ARGMAX_SENTINEL) {
-      while (source.element<Source>(source_index) > source.element<Source>(old)) {
+      while (source.element<Source>(source_index) > source.element<Source>(old) ||
+             (source.element<Source>(source_index) == source.element<Source>(old) &&
+              source_index < old)) {
         old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
@@ -349,7 +351,9 @@ struct update_target_element<
     auto old     = cudf::detail::atomic_cas(
       &target.element<Target>(target_index), ARGMIN_SENTINEL, source_index);
     if (old != ARGMIN_SENTINEL) {
-      while (source.element<Source>(source_index) < source.element<Source>(old)) {
+      while (source.element<Source>(source_index) < source.element<Source>(old) ||
+             (source.element<Source>(source_index) == source.element<Source>(old) &&
+              source_index < old)) {
         old = cudf::detail::atomic_cas(&target.element<Target>(target_index), old, source_index);
       }
     }
