@@ -9,12 +9,13 @@ import contextlib
 import os
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import nvtx
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
+import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
@@ -32,8 +33,26 @@ if TYPE_CHECKING:
 __all__: list[str] = ["execute_with_cudf"]
 
 
+_SUPPORTED_PREFETCHES = {
+    "column_view::get_data",
+    "mutable_column_view::get_data",
+    "gather",
+    "hash_join",
+}
+
+
+def _env_get_int(name, default):
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):  # pragma: no cover
+        return default  # pragma: no cover
+
+
 @cache
-def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
+def default_memory_resource(
+    device: int,
+    cuda_managed_memory: bool,  # noqa: FBT001
+) -> rmm.mr.DeviceMemoryResource:
     """
     Return the default memory resource for cudf-polars.
 
@@ -42,15 +61,35 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
     device
         Disambiguating device id when selecting the device. Must be
         the active device when this function is called.
+    cuda_managed_memory
+        Whether to use managed memory or not.
 
     Returns
     -------
     rmm.mr.DeviceMemoryResource
         The default memory resource that cudf-polars uses. Currently
-        an async pool resource.
+        a managed memory resource, if `cuda_managed_memory` is `True`.
+        else, an async pool resource is returned.
     """
     try:
-        return rmm.mr.CudaAsyncMemoryResource()
+        if (
+            cuda_managed_memory
+            and pylibcudf.utils._is_concurrent_managed_access_supported()
+        ):
+            # Allocating 80% of the available memory for the pool.
+            # Leaving a 20% headroom to avoid OOM errors.
+            free_memory, _ = rmm.mr.available_device_memory()
+            free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
+            for key in _SUPPORTED_PREFETCHES:
+                pylibcudf.experimental.enable_prefetching(key)
+            mr = rmm.mr.PrefetchResourceAdaptor(
+                rmm.mr.PoolMemoryResource(
+                    rmm.mr.ManagedMemoryResource(),
+                    initial_pool_size=free_memory,
+                )
+            )
+        else:
+            mr = rmm.mr.CudaAsyncMemoryResource()
     except RuntimeError as e:  # pragma: no cover
         msg, *_ = e.args
         if (
@@ -64,6 +103,8 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
             ) from None
         else:
             raise
+    else:
+        return mr
 
 
 @contextlib.contextmanager
@@ -89,10 +130,15 @@ def set_memory_resource(
     at entry. If a memory resource is provided, it must be valid to
     use with the currently active device.
     """
+    previous = rmm.mr.get_current_device_resource()
     if mr is None:
         device: int = gpu.getDevice()
-        mr = default_memory_resource(device)
-    previous = rmm.mr.get_current_device_resource()
+        mr = default_memory_resource(
+            device=device,
+            cuda_managed_memory=bool(
+                _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) != 0
+            ),
+        )
     rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
@@ -135,6 +181,7 @@ def _callback(
     *,
     device: int | None,
     memory_resource: int | None,
+    executor: Literal["pylibcudf", "dask-experimental"] | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -145,7 +192,14 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        return ir.evaluate(cache={}).to_polars()
+        if executor is None or executor == "pylibcudf":
+            return ir.evaluate(cache={}).to_polars()
+        elif executor == "dask-experimental":
+            from cudf_polars.experimental.parallel import evaluate_dask
+
+            return evaluate_dask(ir).to_polars()
+        else:
+            raise ValueError(f"Unknown executor '{executor}'")
 
 
 def validate_config_options(config: dict) -> None:
@@ -162,7 +216,9 @@ def validate_config_options(config: dict) -> None:
     ValueError
         If the configuration contains unsupported options.
     """
-    if unsupported := (config.keys() - {"raise_on_fail", "parquet_options"}):
+    if unsupported := (
+        config.keys() - {"raise_on_fail", "parquet_options", "executor"}
+    ):
         raise ValueError(
             f"Engine configuration contains unsupported settings: {unsupported}"
         )
@@ -197,6 +253,7 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
+    executor = config.config.get("executor", None)
     validate_config_options(config.config)
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
@@ -226,5 +283,6 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
                     ir,
                     device=device,
                     memory_resource=memory_resource,
+                    executor=executor,
                 )
             )

@@ -64,7 +64,7 @@ def query_parser(text):
     Returns
     -------
     info: a `dict` of the parsed info
-    """  # noqa
+    """
     # convert any '@' to
     text = text.replace("@", ENVREF_PREFIX)
     tree = ast.parse(text)
@@ -248,7 +248,7 @@ def query_execute(df, expr, callenv):
     nrows = len(df)
     out = column_empty(nrows, dtype=np.bool_, for_numba=True)
     # run kernel
-    args = [out] + colarrays + envargs
+    args = [out, *colarrays, *envargs]
     with _CUDFNumbaConfig():
         kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)

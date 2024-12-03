@@ -77,7 +77,7 @@ def _check_types(
         ):
             return
 
-    if type(left) != type(right):
+    if type(left) is not type(right):
         raise_assert_detail(
             obj, "Class types are different", f"{type(left)}", f"{type(right)}"
         )
@@ -149,7 +149,7 @@ def assert_column_equal(
         ):
             pass
         else:
-            if type(left) != type(right) or left.dtype != right.dtype:
+            if type(left) is not type(right) or left.dtype != right.dtype:
                 msg1 = f"{left.dtype}"
                 msg2 = f"{right.dtype}"
                 raise_assert_detail(obj, "Dtypes are different", msg1, msg2)

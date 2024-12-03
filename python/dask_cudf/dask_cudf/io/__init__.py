@@ -1,9 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from dask_cudf import _deprecated_api, QUERY_PLANNING_ON
+from dask_cudf import QUERY_PLANNING_ON, _deprecated_api
 
-from . import csv, orc, json, parquet, text  # noqa: F401
-
+from . import csv, json, orc, parquet, text  # noqa: F401
 
 read_csv = _deprecated_api(
     "dask_cudf.io.read_csv", new_api="dask_cudf.read_csv"

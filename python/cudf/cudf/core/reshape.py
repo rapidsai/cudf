@@ -1011,7 +1011,7 @@ def _pivot(
     ca = ColumnAccessor(
         result,
         multiindex=True,
-        level_names=(None,) + columns._column_names,
+        level_names=(None, *columns._column_names),
         verify=False,
     )
     return cudf.DataFrame._from_data(ca, index=index_labels)

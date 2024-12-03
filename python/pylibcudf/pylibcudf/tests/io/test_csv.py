@@ -10,6 +10,7 @@ from utils import (
     _convert_types,
     assert_table_and_meta_eq,
     make_source,
+    sink_to_str,
     write_source_str,
 )
 
@@ -76,14 +77,16 @@ def test_read_csv_basic(
         offset=skiprows, length=nrows if nrows != -1 else None
     )
 
-    res = plc.io.csv.read_csv(
-        plc.io.SourceInfo([source]),
-        delimiter=delimiter,
-        compression=compression_type,
-        col_names=column_names,
-        nrows=nrows,
-        skiprows=skiprows,
+    options = (
+        plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([source]))
+        .compression(compression_type)
+        .nrows(nrows)
+        .skiprows(skiprows)
+        .build()
     )
+    options.set_delimiter(delimiter)
+    options.set_names([str(name) for name in column_names])
+    res = plc.io.csv.read_csv(options)
 
     assert_table_and_meta_eq(
         pa_table,
@@ -109,15 +112,15 @@ def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
     file_size = os.stat(source).st_size
     tbls_w_meta = []
     for segment in range((file_size + chunk_size - 1) // chunk_size):
-        tbls_w_meta.append(
-            plc.io.csv.read_csv(
-                plc.io.SourceInfo([source]),
-                byte_range_offset=segment * chunk_size,
-                byte_range_size=chunk_size,
-                header=-1,
-                col_names=pa_table.column_names,
-            )
+        options = (
+            plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([source]))
+            .byte_range_offset(segment * chunk_size)
+            .byte_range_size(chunk_size)
+            .build()
         )
+        options.set_header(-1)
+        options.set_names([str(name) for name in pa_table.column_names])
+        tbls_w_meta.append(plc.io.csv.read_csv(options))
     if isinstance(source, io.IOBase):
         source.seek(0)
     exp = pd.read_csv(source, names=pa_table.column_names, header=None)
@@ -160,9 +163,16 @@ def test_read_csv_dtypes(csv_table_data, source_or_sink, usecols):
 
     new_schema = pa.schema(new_fields)
 
-    res = plc.io.csv.read_csv(
-        plc.io.SourceInfo([source]), dtypes=dtypes, usecols=usecols
-    )
+    options = plc.io.csv.CsvReaderOptions.builder(
+        plc.io.SourceInfo([source])
+    ).build()
+    options.set_dtypes(dtypes)
+    if usecols is not None:
+        if all(isinstance(col, int) for col in usecols):
+            options.set_use_cols_indexes(list(usecols))
+        else:
+            options.set_use_cols_names([str(name) for name in usecols])
+    res = plc.io.csv.read_csv(options)
     new_table = pa_table.cast(new_schema)
 
     assert_table_and_meta_eq(new_table, res)
@@ -170,7 +180,7 @@ def test_read_csv_dtypes(csv_table_data, source_or_sink, usecols):
 
 @pytest.mark.parametrize("skip_blanks", [True, False])
 @pytest.mark.parametrize("decimal, quotechar", [(".", "'"), ("_", '"')])
-@pytest.mark.parametrize("lineterminator", ["\n", "\r\n"])
+@pytest.mark.parametrize("lineterminator", ["\n", "\t"])
 def test_read_csv_parse_options(
     source_or_sink, decimal, quotechar, skip_blanks, lineterminator
 ):
@@ -187,19 +197,25 @@ def test_read_csv_parse_options(
 
     write_source_str(source_or_sink, buffer)
 
-    plc_table_w_meta = plc.io.csv.read_csv(
-        plc.io.SourceInfo([source_or_sink]),
-        comment="#",
-        decimal=decimal,
-        skip_blank_lines=skip_blanks,
-        quotechar=quotechar,
+    options = (
+        plc.io.csv.CsvReaderOptions.builder(
+            plc.io.SourceInfo([source_or_sink])
+        )
+        .lineterminator(lineterminator)
+        .quotechar(quotechar)
+        .decimal(decimal)
+        .skip_blank_lines(skip_blanks)
+        .build()
     )
+    options.set_comment("#")
+    plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
         StringIO(buffer),
         comment="#",
         decimal=decimal,
         skip_blank_lines=skip_blanks,
         quotechar=quotechar,
+        lineterminator=lineterminator,
     )
     assert_table_and_meta_eq(pa.Table.from_pandas(df), plc_table_w_meta)
 
@@ -215,12 +231,17 @@ def test_read_csv_na_values(
 
     write_source_str(source_or_sink, buffer)
 
-    plc_table_w_meta = plc.io.csv.read_csv(
-        plc.io.SourceInfo([source_or_sink]),
-        na_filter=na_filter,
-        na_values=na_values if na_filter else None,
-        keep_default_na=keep_default_na,
+    options = (
+        plc.io.csv.CsvReaderOptions.builder(
+            plc.io.SourceInfo([source_or_sink])
+        )
+        .keep_default_na(keep_default_na)
+        .na_filter(na_filter)
+        .build()
     )
+    if na_filter and na_values is not None:
+        options.set_na_values(na_values)
+    plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
         StringIO(buffer),
         na_filter=na_filter,
@@ -240,9 +261,11 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
         **_COMMON_CSV_SOURCE_KWARGS,
     )
 
-    plc_table_w_meta = plc.io.csv.read_csv(
-        plc.io.SourceInfo([source]), header=header
-    )
+    options = plc.io.csv.CsvReaderOptions.builder(
+        plc.io.SourceInfo([source])
+    ).build()
+    options.set_header(header)
+    plc_table_w_meta = plc.io.csv.read_csv(options)
     if header > 0:
         if header < len(pa_table):
             names_row = pa_table.take([header - 1]).to_pylist()[0].values()
@@ -258,7 +281,7 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
         new_tbl_dict = {}
         for i, (name, vals) in enumerate(tbl_dict.items()):
             str_vals = [str(val) for val in vals]
-            new_tbl_dict[str(i)] = [name] + str_vals
+            new_tbl_dict[str(i)] = [name, *str_vals]
         pa_table = pa.table(new_tbl_dict)
 
     assert_table_and_meta_eq(
@@ -282,3 +305,87 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
 # list true_values = None,
 # list false_values = None,
 # bool dayfirst = False,
+
+
+@pytest.mark.parametrize("sep", [",", "*"])
+@pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
+@pytest.mark.parametrize("header", [True, False])
+@pytest.mark.parametrize("rows_per_chunk", [8, 100])
+def test_write_csv(
+    table_data_with_non_nested_pa_types,
+    source_or_sink,
+    sep,
+    lineterminator,
+    header,
+    rows_per_chunk,
+):
+    plc_tbl_w_meta, pa_table = table_data_with_non_nested_pa_types
+    sink = source_or_sink
+
+    plc.io.csv.write_csv(
+        (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
+            )
+            .names(plc_tbl_w_meta.column_names())
+            .na_rep("")
+            .include_header(header)
+            .rows_per_chunk(rows_per_chunk)
+            .line_terminator(lineterminator)
+            .inter_column_delimiter(sep)
+            .true_value("True")
+            .false_value("False")
+            .build()
+        )
+    )
+
+    # Convert everything to string to make comparisons easier
+    str_result = sink_to_str(sink)
+
+    pd_result = pa_table.to_pandas().to_csv(
+        sep=sep,
+        lineterminator=lineterminator,
+        header=header,
+        index=False,
+    )
+
+    assert str_result == pd_result
+
+
+@pytest.mark.parametrize("na_rep", ["", "NA"])
+def test_write_csv_na_rep(na_rep):
+    names = ["a", "b"]
+    pa_tbl = pa.Table.from_arrays(
+        [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
+        names=names,
+    )
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl_w_meta = plc.io.types.TableWithMetadata(
+        plc_tbl, column_names=[(name, []) for name in names]
+    )
+
+    sink = io.StringIO()
+
+    plc.io.csv.write_csv(
+        (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
+            )
+            .names(plc_tbl_w_meta.column_names())
+            .na_rep(na_rep)
+            .include_header(True)
+            .rows_per_chunk(8)
+            .line_terminator("\n")
+            .inter_column_delimiter(",")
+            .true_value("True")
+            .false_value("False")
+            .build()
+        )
+    )
+
+    # Convert everything to string to make comparisons easier
+    str_result = sink_to_str(sink)
+
+    pd_result = pa_tbl.to_pandas().to_csv(na_rep=na_rep, index=False)
+
+    assert str_result == pd_result

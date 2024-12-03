@@ -28,8 +28,11 @@ if [[ $(arch) == "aarch64" ]]; then
     DESELECTED_TESTS+=("tests/unit/operations/test_join.py::test_join_4_columns_with_validity")
 else
     # Ensure that we don't run dbgen when it uses newer symbols than supported by the glibc version in the CI image.
+    # Allow errors since any of these commands could produce empty results that would cause the script to fail.
+    set +e
     glibc_minor_version=$(ldd --version | head -1 | grep -o "[0-9]\.[0-9]\+" | tail -1 | cut -d '.' -f2)
     latest_glibc_symbol_found=$(nm py-polars/tests/benchmark/data/pdsh/dbgen/dbgen | grep GLIBC | grep -o "[0-9]\.[0-9]\+" | sort --version-sort | tail -1 | cut -d "." -f 2)
+    set -e
     if [[ ${glibc_minor_version} -lt ${latest_glibc_symbol_found} ]]; then
         DESELECTED_TESTS+=("tests/benchmark/test_pdsh.py::test_pdsh")
     fi
