@@ -806,6 +806,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         right_order, len(result), nullify=False
                     )
                 )
+
         if not self._as_index:
             result = result.reset_index()
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
