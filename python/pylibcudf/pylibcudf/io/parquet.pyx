@@ -2,7 +2,7 @@
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -22,6 +22,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     read_parquet as cpp_read_parquet,
     write_parquet as cpp_write_parquet,
     parquet_writer_options,
+    merge_row_group_metadata as cpp_merge_row_group_metadata,
 )
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
@@ -38,8 +39,42 @@ __all__ = [
     "ParquetWriterOptions",
     "ParquetWriterOptionsBuilder",
     "read_parquet",
-    "write_parquet"
+    "write_parquet",
+    "merge_row_group_metadata",
 ]
+
+
+cdef class BufferArrayFromVector:
+    @staticmethod
+    cdef BufferArrayFromVector from_unique_ptr(
+        unique_ptr[vector[uint8_t]] in_vec
+    ):
+        cdef BufferArrayFromVector buf = BufferArrayFromVector()
+        buf.in_vec = move(in_vec)
+        buf.length = dereference(buf.in_vec).size()
+        return buf
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        cdef Py_ssize_t itemsize = sizeof(uint8_t)
+
+        self.shape[0] = self.length
+        self.strides[0] = 1
+
+        buffer.buf = dereference(self.in_vec).data()
+
+        buffer.format = NULL  # byte
+        buffer.internal = NULL
+        buffer.itemsize = itemsize
+        buffer.len = self.length * itemsize   # product(shape) * itemsize
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
 
 
 cdef parquet_reader_options _setup_parquet_reader_options(
@@ -577,3 +612,34 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
         c_result = cpp_write_parquet(c_options)
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
+
+
+cpdef BufferArrayFromVector merge_row_group_metadata(list metdata_list):
+    """
+    Merges multiple raw metadata blobs that were previously
+    created by write_parquet into a single metadata blob.
+
+    For details, see :cpp:func:`merge_row_group_metadata`.
+
+    Parameters
+    ----------
+    metdata_list : list
+        List of input file metadata
+
+    Returns
+    -------
+    BufferArrayFromVector
+        A parquet-compatible blob that contains the data for all row groups in the list
+    """
+    cdef vector[unique_ptr[vector[uint8_t]]] list_c
+    cdef vector[uint8_t] blob_c
+    cdef unique_ptr[vector[uint8_t]] output_c
+
+    for blob in metdata_list:
+        blob_c = blob
+        list_c.push_back(move(make_unique[vector[uint8_t]](blob_c)))
+
+    with nogil:
+        output_c = move(cpp_merge_row_group_metadata(list_c))
+
+    return BufferArrayFromVector.from_unique_ptr(move(output_c))
