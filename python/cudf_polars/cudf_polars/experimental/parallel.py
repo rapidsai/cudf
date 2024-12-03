@@ -9,8 +9,9 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-import cudf_polars.experimental.io  # noqa: F401
-from cudf_polars.dsl.ir import IR, Cache, Projection, Union
+import cudf_polars.experimental.io
+import cudf_polars.experimental.select  # noqa: F401
+from cudf_polars.dsl.ir import IR, Cache, HStack, Projection, Select, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
 from cudf_polars.experimental.dispatch import (
@@ -226,6 +227,7 @@ def _lower_ir_pwise(
 
 lower_ir_node.register(Projection, _lower_ir_pwise)
 lower_ir_node.register(Cache, _lower_ir_pwise)
+lower_ir_node.register(HStack, _lower_ir_pwise)
 
 
 def _generate_ir_tasks_pwise(
@@ -245,3 +247,5 @@ def _generate_ir_tasks_pwise(
 
 generate_ir_tasks.register(Projection, _generate_ir_tasks_pwise)
 generate_ir_tasks.register(Cache, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
+generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)
