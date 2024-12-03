@@ -10,7 +10,7 @@ from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 # This module provides backward compatibility for legacy import patterns.
 if dd.DASK_EXPR_ENABLED:
-    from dask_cudf._expr.collection import (  # noqa: E402
+    from dask_cudf._expr.collection import (
         DataFrame,
         Index,
         Series,
@@ -19,7 +19,7 @@ else:
     from dask_cudf._legacy.core import DataFrame, Index, Series  # noqa: F401
 
 
-concat = dd.concat  # noqa: F401
+concat = dd.concat
 
 
 @_dask_cudf_performance_tracking

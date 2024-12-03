@@ -427,6 +427,8 @@ class Frame(BinaryOperand, Scannable):
         ) -> cupy.ndarray | numpy.ndarray:
             if na_value is not None:
                 col = col.fillna(na_value)
+            if isinstance(col.dtype, cudf.CategoricalDtype):
+                col = col._get_decategorized_column()  # type: ignore[attr-defined]
             array = get_array(col)
             casted_array = module.asarray(array, dtype=dtype)
             if copy and casted_array is array:
@@ -447,6 +449,9 @@ class Frame(BinaryOperand, Scannable):
                 dtype = next(self._dtypes)[1]
             else:
                 dtype = find_common_type([dtype for _, dtype in self._dtypes])
+
+            if isinstance(dtype, cudf.CategoricalDtype):
+                dtype = dtype.categories.dtype
 
             if not isinstance(dtype, numpy.dtype):
                 raise NotImplementedError(
@@ -1387,7 +1392,7 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([3, 1, 2])
         >>> idx.argsort()
         array([1, 2, 0], dtype=int32)
-        """  # noqa: E501
+        """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
         if kind != "quicksort":
@@ -1896,7 +1901,16 @@ class Frame(BinaryOperand, Scannable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        return libcudf.filling.repeat(columns, repeats)
+        with acquire_spill_lock():
+            plc_table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in columns]
+            )
+            if isinstance(repeats, ColumnBase):
+                repeats = repeats.to_pylibcudf(mode="read")
+            return [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc.filling.repeat(plc_table, repeats).columns()
+            ]
 
     @_performance_tracking
     @_warn_no_dask_cudf
