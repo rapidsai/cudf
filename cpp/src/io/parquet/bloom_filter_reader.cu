@@ -40,6 +40,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <future>
+#include <limits>
 #include <numeric>
 #include <optional>
 
@@ -476,7 +477,7 @@ std::future<void> read_bloom_filter_data_async(
     }
   };
 
-  return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
+  return std::async(std::launch::async, sync_fn, std::move(read_tasks));
 }
 
 }  // namespace
@@ -595,6 +596,10 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     input_row_group_indices.end(),
     size_t{0},
     [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(num_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of row groups exceed the size_type's limit");
 
   // Collect equality literals for each input table column
   auto const equality_literals =

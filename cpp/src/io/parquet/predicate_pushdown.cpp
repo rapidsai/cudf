@@ -32,6 +32,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -415,18 +416,22 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   } else {
     input_row_group_indices = row_group_indices;
   }
-  auto const total_row_groups = std::accumulate(input_row_group_indices.begin(),
-                                                input_row_group_indices.end(),
-                                                0,
-                                                [](size_type sum, auto const& per_file_row_groups) {
-                                                  return sum + per_file_row_groups.size();
-                                                });
+  auto const total_row_groups = std::accumulate(
+    input_row_group_indices.begin(),
+    input_row_group_indices.end(),
+    size_t{0},
+    [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of row groups exceed the size_type's limit");
 
   // Converts Column chunk statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
-  stats_caster stats_col{total_row_groups, per_file_metadata, input_row_group_indices};
+  stats_caster stats_col{
+    static_cast<size_type>(total_row_groups), per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
     auto const& dtype     = output_dtypes[col_idx];
