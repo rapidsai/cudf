@@ -39,6 +39,38 @@
 #include <utility>
 
 namespace cudf::io {
+namespace {
+
+compression_type infer_compression_type(compression_type compression, source_info const& info)
+{
+  if (compression != compression_type::AUTO) { return compression; }
+
+  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
+
+  auto filepath = info.filepaths()[0];
+
+  // Attempt to infer from the file extension
+  auto const pos = filepath.find_last_of('.');
+
+  if (pos == std::string::npos) { return {}; }
+
+  auto str_tolower = [](auto const& begin, auto const& end) {
+    std::string out;
+    std::transform(begin, end, std::back_inserter(out), ::tolower);
+    return out;
+  };
+
+  auto const ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
+
+  if (ext == "gz") { return compression_type::GZIP; }
+  if (ext == "zip") { return compression_type::ZIP; }
+  if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "xz") { return compression_type::XZ; }
+
+  return compression_type::NONE;
+}
+
+}  // namespace
 
 // Returns builder for csv_reader_options
 csv_reader_options_builder csv_reader_options::builder(source_info src)
@@ -170,35 +202,6 @@ table_with_metadata read_avro(avro_reader_options const& options, rmm::device_as
   return avro::read_avro(std::move(datasources[0]), options, cudf::get_default_stream(), mr);
 }
 
-compression_type infer_compression_type(compression_type compression, source_info const& info)
-{
-  if (compression != compression_type::AUTO) { return compression; }
-
-  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
-
-  auto filepath = info.filepaths()[0];
-
-  // Attempt to infer from the file extension
-  auto const pos = filepath.find_last_of('.');
-
-  if (pos == std::string::npos) { return {}; }
-
-  auto str_tolower = [](auto const& begin, auto const& end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  auto const ext = str_tolower(filepath.begin() + pos + 1, filepath.end());
-
-  if (ext == "gz") { return compression_type::GZIP; }
-  if (ext == "zip") { return compression_type::ZIP; }
-  if (ext == "bz2") { return compression_type::BZIP2; }
-  if (ext == "xz") { return compression_type::XZ; }
-
-  return compression_type::NONE;
-}
-
 table_with_metadata read_json(json_reader_options options,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
@@ -287,7 +290,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
     CUDF_FAIL("Unsupported source type");
   }
 
-  orc::metadata metadata(source.get(), stream);
+  orc::metadata const metadata(source.get(), stream);
 
   // Initialize statistics to return
   raw_orc_statistics result;

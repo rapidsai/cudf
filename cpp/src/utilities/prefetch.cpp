@@ -33,14 +33,14 @@ prefetch_config& prefetch_config::instance()
 
 bool prefetch_config::get(std::string_view key)
 {
-  std::shared_lock<std::shared_mutex> lock(config_mtx);
+  std::shared_lock<std::shared_mutex> const lock(config_mtx);
   auto const it = config_values.find(key.data());
   return it == config_values.end() ? false : it->second;  // default to not prefetching
 }
 
 void prefetch_config::set(std::string_view key, bool value)
 {
-  std::lock_guard<std::shared_mutex> lock(config_mtx);
+  std::lock_guard<std::shared_mutex> const lock(config_mtx);
   config_values[key.data()] = value;
 }
 

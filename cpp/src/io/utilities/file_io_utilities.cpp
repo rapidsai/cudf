@@ -33,6 +33,24 @@
 namespace cudf {
 namespace io {
 namespace detail {
+namespace {
+
+[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
+{
+  auto const fd = open(filepath.c_str(), flags, mode);
+  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
+
+  return fd;
+}
+
+[[nodiscard]] size_t get_file_size(int file_descriptor)
+{
+  struct stat st {};
+  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
+  return static_cast<size_t>(st.st_size);
+}
+
+}  // namespace
 
 void force_init_cuda_context()
 {
@@ -55,24 +73,9 @@ void force_init_cuda_context()
     CUDF_EXPECTS(std::filesystem::exists(path), "Cannot open file; it does not exist");
   }
 
-  std::array<char, 1024> error_msg_buffer;
+  std::array<char, 1024> error_msg_buffer{};
   auto const error_msg = strerror_r(err, error_msg_buffer.data(), 1024);
   CUDF_FAIL("Cannot open file; failed with errno: " + std::string{error_msg});
-}
-
-[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
-{
-  auto const fd = open(filepath.c_str(), flags, mode);
-  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
-
-  return fd;
-}
-
-[[nodiscard]] size_t get_file_size(int file_descriptor)
-{
-  struct stat st;
-  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
-  return static_cast<size_t>(st.st_size);
 }
 
 file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
@@ -125,7 +128,7 @@ class cufile_shim {
 void cufile_shim::modify_cufile_json() const
 {
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
-  static temp_directory tmp_config_dir{"cudf_cufile_config"};
+  static temp_directory const tmp_config_dir{"cudf_cufile_config"};
 
   // Modify the config file based on the policy
   auto const config_file_path = getenv_or<std::string>(json_path_env_var, "/etc/cufile.json");
@@ -253,7 +256,7 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
                                                   uint8_t* dst,
                                                   rmm::cuda_stream_view stream)
 {
-  int device;
+  int device = 0;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
 
   auto read_slice = [device, gds_read = shim->read, file_handle = cf_file.handle()](
@@ -285,7 +288,7 @@ cufile_output_impl::cufile_output_impl(std::string const& filepath)
 
 std::future<void> cufile_output_impl::write_async(void const* data, size_t offset, size_t size)
 {
-  int device;
+  int device = 0;
   CUDF_CUDA_TRY(cudaGetDevice(&device));
 
   auto write_slice = [device, gds_write = shim->write, file_handle = cf_file.handle()](
