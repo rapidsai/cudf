@@ -149,7 +149,7 @@ def cut(
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
-                    f"Bin edges must be unique: {repr(bins)}.\n"
+                    f"Bin edges must be unique: {bins!r}.\n"
                     f"You can drop duplicate edges by setting the 'duplicates'"
                     "kwarg"
                 )

@@ -1274,7 +1274,7 @@ def test_index_append_list(data, other):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 @pytest.mark.parametrize("name", [1, "a", None])
 def test_index_basic(data, dtype, name):
@@ -1399,7 +1399,7 @@ def test_multiindex_append(data, other):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_empty(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
@@ -1410,7 +1410,7 @@ def test_index_empty(data, dtype):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_size(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
@@ -1421,7 +1421,7 @@ def test_index_size(data, dtype):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_drop_duplicates(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
@@ -1437,7 +1437,7 @@ def test_dropna_bad_how():
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_tolist(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
@@ -1455,7 +1455,7 @@ def test_index_tolist(data, dtype):
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_iter_error(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
@@ -1473,7 +1473,7 @@ def test_index_iter_error(data, dtype):
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3, 4, 5]])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_values_host(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)

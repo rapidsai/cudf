@@ -3,15 +3,15 @@
 import warnings
 from importlib import import_module
 
-from dask import config
 import dask.dataframe as dd
-from dask.dataframe import from_delayed  # noqa: E402
+from dask import config
+from dask.dataframe import from_delayed
 
-import cudf  # noqa: E402
+import cudf
 
-from . import backends  # noqa: E402, F401
-from ._version import __git_commit__, __version__  # noqa: E402, F401
-from .core import concat, from_cudf, DataFrame, Index, Series  # noqa: F401
+from . import backends  # noqa: F401
+from ._version import __git_commit__, __version__  # noqa: F401
+from .core import DataFrame, Index, Series, concat, from_cudf
 
 QUERY_PLANNING_ON = dd.DASK_EXPR_ENABLED
 
@@ -56,17 +56,17 @@ def _deprecated_api(old_api, new_api=None, rec=None):
 
 
 if QUERY_PLANNING_ON:
+    from . import io
     from ._expr.expr import _patch_dask_expr
-    from . import io  # noqa: F401
 
     groupby_agg = _deprecated_api("dask_cudf.groupby_agg")
     read_text = DataFrame.read_text
     _patch_dask_expr()
 
 else:
+    from . import io  # noqa: F401
     from ._legacy.groupby import groupby_agg  # noqa: F401
     from ._legacy.io import read_text  # noqa: F401
-    from . import io  # noqa: F401
 
 
 to_orc = _deprecated_api(
@@ -78,10 +78,10 @@ to_orc = _deprecated_api(
 
 __all__ = [
     "DataFrame",
-    "Series",
     "Index",
-    "from_cudf",
+    "Series",
     "concat",
+    "from_cudf",
     "from_delayed",
 ]
 
