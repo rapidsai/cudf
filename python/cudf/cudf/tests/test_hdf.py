@@ -16,7 +16,7 @@ pytest.importorskip("tables")
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = set(NUMERIC_TYPES + ["datetime64[ns]"] + ["bool"]) - set(
+    types = set([*NUMERIC_TYPES, "datetime64[ns]", "bool"]) - set(
         UNSIGNED_TYPES
     )
     typer = {"col_" + val: val for val in types}

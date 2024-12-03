@@ -15,7 +15,7 @@ def assert_plots_equal(expect, got):
         for expect_ch, got_ch in zip(
             expect.get_children(), got.get_children()
         ):
-            assert type(expect_ch) == type(got_ch)
+            assert type(expect_ch) is type(got_ch)
             if isinstance(expect_ch, Line2D):
                 assert_equal(expect_ch.get_xdata(), got_ch.get_xdata())
                 assert_equal(expect_ch.get_ydata(), got_ch.get_ydata())

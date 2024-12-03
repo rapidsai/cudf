@@ -885,12 +885,9 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              arch: x86_64
+              cuda: "12.*"
             packages:
-              # Currently, CUDA + aarch64 builds of pytorch do not exist on conda-forge.
-              - pytorch>=2.1.0
-              # We only install these on x86_64 to avoid pulling pytorch as a
-              # dependency of transformers.
+              - pytorch>=2.4.0
               - *tokenizers
               - *transformers
           - matrix:

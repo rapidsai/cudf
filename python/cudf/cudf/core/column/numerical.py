@@ -12,11 +12,14 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+import cudf.core.column.column as column
+import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import unary
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column, string
+from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
@@ -26,8 +29,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
 )
-
-from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -227,7 +228,7 @@ class NumericalColumn(NumericalBaseColumn):
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
             # in terms of `notnull` or `NULL_NOT_EQUALS`.
-            if type(other) is int and self.dtype.kind in "iu":  # noqa: E721
+            if type(other) is int and self.dtype.kind in "iu":
                 truthiness = None
                 iinfo = np.iinfo(self.dtype)
                 if iinfo.min > other:
