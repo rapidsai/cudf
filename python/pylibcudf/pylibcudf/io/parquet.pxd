@@ -52,20 +52,7 @@ cdef class ChunkedParquetReader:
     cpdef TableWithMetadata read_chunk(self)
 
 
-cpdef read_parquet(
-    SourceInfo source_info,
-    list columns = *,
-    list row_groups = *,
-    Expression filters = *,
-    bool convert_strings_to_categories = *,
-    bool use_pandas_metadata = *,
-    int64_t skip_rows = *,
-    size_type nrows = *,
-    bool allow_mismatched_pq_schemas = *,
-    # disabled see comment in parquet.pyx for more
-    # ReaderColumnSchema reader_column_schema = *,
-    # DataType timestamp_type = *
-)
+cpdef read_parquet(ParquetReaderOptions options)
 
 cdef class ParquetWriterOptions:
     cdef parquet_writer_options c_obj
