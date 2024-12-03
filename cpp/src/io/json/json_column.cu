@@ -477,7 +477,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         if (json_col.child_columns.empty()) {
           // EMPTY type could not used because gather throws exception on EMPTY type.
           auto empty_col = make_empty_column(
-            child_schema_element.value_or(schema_element{data_type{type_id::INT16}}), stream, mr);
+            child_schema_element.value_or(schema_element{data_type{type_id::INT8}}), stream, mr);
           auto children_metadata = std::vector<column_name_info>{
             make_column_name_info(
               child_schema_element.value_or(schema_element{data_type{type_id::INT8}}),
@@ -505,10 +505,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
         null_count == 0 ? rmm::device_buffer{0, stream, mr} : std::move(result_bitmask),
         stream,
         mr);
-      // The null_mask is set after creation of list column is to skip the purge_nonempty_nulls and
-      // null validation applied in make_lists_column factory, which is not needed for json
-      // parent column cannot be null when its children is non-empty in JSON
-      // if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
+      // Since some rows in child column may need to be nullified due to mixed types, we can not
+      // skip the purge_nonempty_nulls call in make_lists_column factory
       return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;

@@ -809,10 +809,10 @@ std::
         auto this_ref = std::ref(ref.get().child_columns.at(list_child_name));
         if (options.is_enabled_experimental()) {
           for (auto const& child_id : child_ids) {
-            if (is_pruned[child_id])
-              std::cout << "pruned.child " << column_names[root] << std::endl;
-            // store this child_id for mixed_type nullify parent list_id.
-            is_mixed_pruned[child_id] = is_pruned[child_id];
+            if (is_pruned[child_id]) {
+              // store this child_id for mixed_type nullify parent list_id.
+              is_mixed_pruned[child_id] = is_pruned[child_id];
+            }
           }
         }
         // Mixed type handling
@@ -946,7 +946,7 @@ void scatter_offsets(tree_meta_t const& tree,
              (!d_ignore_vals[col_ids[parent_node_id]]);
     });
   // For children of list and in ignore_vals, find it's parent node id, and set corresponding
-  // parent's null mask to null.
+  // parent's null mask to null. Setting mixed type list rows to null.
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -964,7 +964,6 @@ void scatter_offsets(tree_meta_t const& tree,
       if (parent_node_id == parent_node_sentinel or d_ignore_vals[col_ids[parent_node_id]]) return;
       if (column_categories[col_ids[parent_node_id]] == NC_LIST and
           d_is_mixed_pruned[col_ids[node_id]]) {
-        // printf("clearing bit %d %d\n", parent_node_id, row_offsets[parent_node_id]);
         clear_bit(d_columns_data[col_ids[parent_node_id]].validity, row_offsets[parent_node_id]);
       }
     });
