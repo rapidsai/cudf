@@ -78,7 +78,7 @@ dependencies:
 - python-confluent-kafka>=2.5.0,<2.6.0a0
 - python-xxhash
 - python>=3.10,<3.13
-- pytorch>=2.1.0
+- pytorch>=2.4.0
 - rapids-build-backend>=0.3.0,<0.4.0.dev0
 - rapids-dask-dependency==25.2.*,>=0.0.0a0
 - rich

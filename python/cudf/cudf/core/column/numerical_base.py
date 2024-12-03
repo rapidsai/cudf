@@ -12,7 +12,7 @@ import pylibcudf as plc
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 
