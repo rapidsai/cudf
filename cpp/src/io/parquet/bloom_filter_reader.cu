@@ -29,6 +29,7 @@
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -68,9 +69,11 @@ struct bloom_filter_caster {
     using policy_type = cuco::arrow_filter_policy<key_type, hasher_type>;
     using word_type   = typename policy_type::word_type;
 
-    // Check if the literal has the same type as the column
-    CUDF_EXPECTS(dtype.id() == literal->get_data_type().id(),
-                 "Mismatched data types between the column and the literal");
+    // Check if the literal has the same type as the predicate column
+    CUDF_EXPECTS(
+      cudf::have_same_types(cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
+                            cudf::column_view{literal->get_data_type(), 0, {}, {}, 0, 0, {}}),
+      "Mismatched predicate column and literal types");
 
     // Filter properties
     auto constexpr word_size       = sizeof(word_type);
