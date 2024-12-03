@@ -42,24 +42,24 @@ if TYPE_CHECKING:
 
 __all__ = [
     "IR",
+    "Cache",
+    "ConditionalJoin",
+    "DataFrameScan",
+    "Distinct",
     "ErrorNode",
+    "Filter",
+    "GroupBy",
+    "HConcat",
+    "HStack",
+    "Join",
+    "MapFunction",
+    "Projection",
     "PythonScan",
     "Scan",
-    "Cache",
-    "DataFrameScan",
     "Select",
-    "GroupBy",
-    "Join",
-    "ConditionalJoin",
-    "HStack",
-    "Distinct",
-    "Sort",
     "Slice",
-    "Filter",
-    "Projection",
-    "MapFunction",
+    "Sort",
     "Union",
-    "HConcat",
 ]
 
 
@@ -130,7 +130,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    __slots__ = ("schema", "_non_child_args")
+    __slots__ = ("_non_child_args", "schema")
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     # Concrete classes should set this up with the arguments that will
@@ -253,16 +253,16 @@ class Scan(IR):
     """Input from files."""
 
     __slots__ = (
-        "typ",
-        "reader_options",
         "cloud_options",
         "config_options",
-        "paths",
-        "with_columns",
-        "skip_rows",
         "n_rows",
-        "row_index",
+        "paths",
         "predicate",
+        "reader_options",
+        "row_index",
+        "skip_rows",
+        "typ",
+        "with_columns",
     )
     _non_child = (
         "schema",
@@ -688,7 +688,7 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("df", "projection", "predicate")
+    __slots__ = ("df", "predicate", "projection")
     _non_child = ("schema", "df", "projection", "predicate")
     df: Any
     """Polars LazyFrame object."""
@@ -819,11 +819,11 @@ class GroupBy(IR):
     """Perform a groupby."""
 
     __slots__ = (
+        "agg_infos",
         "agg_requests",
         "keys",
         "maintain_order",
         "options",
-        "agg_infos",
     )
     _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
     keys: tuple[expr.NamedExpr, ...]
@@ -993,7 +993,7 @@ class GroupBy(IR):
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
-    __slots__ = ("predicate", "options", "ast_predicate")
+    __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
     predicate: expr.Expr
     options: tuple
@@ -1053,7 +1053,7 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "right_on", "options")
+    __slots__ = ("left_on", "options", "right_on")
     _non_child = ("schema", "left_on", "right_on", "options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
@@ -1337,7 +1337,7 @@ class HStack(IR):
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
-    __slots__ = ("keep", "subset", "zlice", "stable")
+    __slots__ = ("keep", "stable", "subset", "zlice")
     _non_child = ("schema", "keep", "subset", "zlice", "stable")
     keep: plc.stream_compaction.DuplicateKeepOption
     """Which distinct value to keep."""
@@ -1424,7 +1424,7 @@ class Distinct(IR):
 class Sort(IR):
     """Sort a dataframe."""
 
-    __slots__ = ("by", "order", "null_order", "stable", "zlice")
+    __slots__ = ("by", "null_order", "order", "stable", "zlice")
     _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
     by: tuple[expr.NamedExpr, ...]
     """Sort keys."""
@@ -1505,7 +1505,7 @@ class Sort(IR):
 class Slice(IR):
     """Slice a dataframe."""
 
-    __slots__ = ("offset", "length")
+    __slots__ = ("length", "offset")
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""

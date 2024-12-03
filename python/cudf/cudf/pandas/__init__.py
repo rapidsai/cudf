@@ -12,7 +12,7 @@ from .fast_slow_proxy import is_proxy_object
 from .magics import load_ipython_extension
 from .profiler import Profiler
 
-__all__ = ["Profiler", "load_ipython_extension", "install", "is_proxy_object"]
+__all__ = ["Profiler", "install", "is_proxy_object", "load_ipython_extension"]
 
 
 LOADED = False
@@ -57,7 +57,7 @@ def install():
     current_mr = rmm.mr.get_current_device_resource()
     if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
         warnings.warn(
-            f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={str(rmm_mode)}",
+            f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={rmm_mode!s}",
             UserWarning,
         )
         return

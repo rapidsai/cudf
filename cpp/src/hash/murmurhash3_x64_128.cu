@@ -24,6 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/array>
 #include <thrust/for_each.h>
 
 namespace cudf {
@@ -31,7 +32,7 @@ namespace hashing {
 namespace detail {
 namespace {
 
-using hash_value_type = thrust::pair<uint64_t, uint64_t>;
+using hash_value_type = cuda::std::array<uint64_t, 2>;
 
 /**
  * @brief Computes the hash value of a row in the given table.
@@ -58,7 +59,7 @@ class murmur_device_row_hasher {
    */
   __device__ void operator()(size_type row_index) const noexcept
   {
-    auto h = cudf::detail::accumulate(
+    auto const h = cudf::detail::accumulate(
       _input.begin(),
       _input.end(),
       hash_value_type{_seed, 0},
@@ -66,8 +67,8 @@ class murmur_device_row_hasher {
         return cudf::type_dispatcher(
           column.type(), element_hasher_adapter{}, column, row_index, nulls, hash);
       });
-    _output1[row_index] = h.first;
-    _output2[row_index] = h.second;
+    _output1[row_index] = h[0];
+    _output2[row_index] = h[1];
   }
 
   /**
@@ -78,13 +79,13 @@ class murmur_device_row_hasher {
     template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index,
-                                          Nullate const _check_nulls,
-                                          hash_value_type const _seed) const noexcept
+                                          Nullate const check_nulls,
+                                          hash_value_type const seed) const noexcept
     {
-      if (_check_nulls && col.is_null(row_index)) {
+      if (check_nulls && col.is_null(row_index)) {
         return {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
       }
-      auto const hasher = MurmurHash3_x64_128<T>{_seed.first};
+      auto const hasher = MurmurHash3_x64_128<T>{seed[0]};
       return hasher(col.element<T>(row_index));
     }
 
