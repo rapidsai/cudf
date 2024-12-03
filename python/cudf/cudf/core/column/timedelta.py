@@ -11,11 +11,13 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+import cudf.core.column.column as column
+import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column.column import ColumnBase
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import (
     _all_bools_with_nulls,
@@ -468,7 +470,7 @@ class TimeDeltaColumn(ColumnBase):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """  # noqa: E501
+        """
 
         date_meta = {
             "seconds": ["m", "s"],
