@@ -444,42 +444,54 @@ def write_parquet(
     """
 
     # Create the write options
-    cdef table_input_metadata tbl_meta
+    # cdef table_input_metadata tbl_meta
 
-    cdef vector[map[string, string]] user_data
-    cdef table_view tv
-    cdef vector[unique_ptr[data_sink]] _data_sinks
-    cdef sink_info sink = make_sinks_info(
-        filepaths_or_buffers, _data_sinks
-    )
+    # cdef vector[map[string, string]] user_data
+    # cdef table_view tv
+    # cdef vector[unique_ptr[data_sink]] _data_sinks
+    # cdef sink_info sink = make_sinks_info(
+    #     filepaths_or_buffers, _data_sinks
+    # )
 
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
-        tv = table_view_from_table(table)
-        tbl_meta = table_input_metadata(tv)
+        # tv = table_view_from_table(table)
+        # tbl_meta = table_input_metadata(tv)
+        columns = table._columns if table._index is None else [
+            *table.index._columns, *table._columns
+        ]
+        plc_table = plc.Table([col.to_pylibcudf(mode="read") for col in columns])
+        tbl_meta = TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.column_metadata[level].set_name(
-                str.encode(
-                    _index_level_name(idx_name, level, table._column_names)
-                )
+                # str.encode(
+                #     _index_level_name(idx_name, level, table._column_names)
+                # )
+                _index_level_name(idx_name, level, table._column_names)
             )
         num_index_cols_meta = len(table._index.names)
     else:
-        tv = table_view_from_table(table, ignore_index=True)
-        tbl_meta = table_input_metadata(tv)
+        # tv = table_view_from_table(table, ignore_index=True)
+        # tbl_meta = table_input_metadata(tv)
+        plc_table = plc.Table(
+            [col.to_pylibcudf(mode="read") for col in table._columns]
+        )
+        tbl_meta = TableInputMetadata(plc_table)
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         if not isinstance(name, str):
             if cudf.get_option("mode.pandas_compatible"):
-                tbl_meta.column_metadata[i].set_name(str(name).encode())
+                # tbl_meta.column_metadata[i].set_name(str(name).encode())
+                tbl_meta.column_metadata[i].set_name(str(name))
             else:
                 raise ValueError(
                     "Writing a Parquet file requires string column names"
                 )
         else:
-            tbl_meta.column_metadata[i].set_name(name.encode())
+            # tbl_meta.column_metadata[i].set_name(name.encode())
+            tbl_meta.column_metadata[i].set_name(name)
 
         _set_col_metadata(
             table[name]._column,
@@ -492,19 +504,22 @@ def write_parquet(
             output_as_binary
         )
 
-    cdef map[string, string] tmp_user_data
+    # cdef map[string, string] tmp_user_data
+    tmp_user_data = {}
     if partitions_info is not None:
         for start_row, num_row in partitions_info:
             partitioned_df = table.iloc[start_row: start_row + num_row].copy(
                 deep=False
             )
-            pandas_metadata = generate_pandas_metadata(partitioned_df, index)
-            tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+            # pandas_metadata = generate_pandas_metadata(partitioned_df, index)
+            # tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+            tmp_user_data["pandas"] = generate_pandas_metadata(partitioned_df, index)
             user_data.push_back(tmp_user_data)
             tmp_user_data.clear()
     else:
-        pandas_metadata = generate_pandas_metadata(table, index)
-        tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+        # pandas_metadata = generate_pandas_metadata(table, index)
+        # tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+        tmp_user_data["pandas"] = generate_pandas_metadata(table, index)
         user_data.push_back(tmp_user_data)
 
     if header_version not in ("1.0", "2.0"):
@@ -522,19 +537,61 @@ def write_parquet(
     comp_type = _get_comp_type(compression)
     stat_freq = _get_stat_freq(statistics)
 
-    cdef unique_ptr[vector[uint8_t]] out_metadata_c
-    cdef vector[string] c_column_chunks_file_paths
-    cdef bool _int96_timestamps = int96_timestamps
-    cdef vector[partition_info] partitions
+    # cdef unique_ptr[vector[uint8_t]] out_metadata_c
+    # cdef vector[string] c_column_chunks_file_paths
+    # cdef bool _int96_timestamps = int96_timestamps
+    # cdef vector[partition_info] partitions
 
     # Perform write
-    cdef parquet_writer_options args = move(
-        parquet_writer_options.builder(sink, tv)
+    # cdef parquet_writer_options args = move(
+    #     parquet_writer_options.builder(sink, tv)
+    #     .metadata(tbl_meta)
+    #     .key_value_metadata(move(user_data))
+    #     .compression(comp_type)
+    #     .stats_level(stat_freq)
+    #     .int96_timestamps(_int96_timestamps)
+    #     .write_v2_headers(header_version == "2.0")
+    #     .dictionary_policy(dict_policy)
+    #     .utc_timestamps(False)
+    #     .write_arrow_schema(write_arrow_schema)
+    #     .build()
+    # )
+    # if partitions_info is not None:
+    #     partitions.reserve(len(partitions_info))
+    #     for part in partitions_info:
+    #         partitions.push_back(
+    #             partition_info(part[0], part[1])
+    #         )
+    #     args.set_partitions(move(partitions))
+    # if metadata_file_path is not None:
+    #     if is_list_like(metadata_file_path):
+    #         for path in metadata_file_path:
+    #             c_column_chunks_file_paths.push_back(str.encode(path))
+    #     else:
+    #         c_column_chunks_file_paths.push_back(
+    #             str.encode(metadata_file_path)
+    #         )
+    #     args.set_column_chunks_file_paths(move(c_column_chunks_file_paths))
+    # if row_group_size_bytes is not None:
+    #     args.set_row_group_size_bytes(row_group_size_bytes)
+    # if row_group_size_rows is not None:
+    #     args.set_row_group_size_rows(row_group_size_rows)
+    # if max_page_size_bytes is not None:
+    #     args.set_max_page_size_bytes(max_page_size_bytes)
+    # if max_page_size_rows is not None:
+    #     args.set_max_page_size_rows(max_page_size_rows)
+    # if max_dictionary_size is not None:
+    #     args.set_max_dictionary_size(max_dictionary_size)
+
+    options = move(
+        plc.io.parquet.ParquetWriterOptions.builder(
+            plc.io.SinkInfo([filepaths_or_buffers]), plc_table
+        )
         .metadata(tbl_meta)
-        .key_value_metadata(move(user_data))
+        .key_value_metadata(user_data)
         .compression(comp_type)
         .stats_level(stat_freq)
-        .int96_timestamps(_int96_timestamps)
+        .int96_timestamps(int96_timestamps)
         .write_v2_headers(header_version == "2.0")
         .dictionary_policy(dict_policy)
         .utc_timestamps(False)
@@ -542,21 +599,14 @@ def write_parquet(
         .build()
     )
     if partitions_info is not None:
-        partitions.reserve(len(partitions_info))
-        for part in partitions_info:
-            partitions.push_back(
-                partition_info(part[0], part[1])
-            )
-        args.set_partitions(move(partitions))
+        options.set_partitions(
+            [plc.io.types.PartitionInfo(part[0], part[1]) for part in partitions_info]
+        )
     if metadata_file_path is not None:
         if is_list_like(metadata_file_path):
-            for path in metadata_file_path:
-                c_column_chunks_file_paths.push_back(str.encode(path))
+            options.set_column_chunks_file_paths(metadata_file_path)
         else:
-            c_column_chunks_file_paths.push_back(
-                str.encode(metadata_file_path)
-            )
-        args.set_column_chunks_file_paths(move(c_column_chunks_file_paths))
+            options.set_column_chunks_file_paths([metadata_file_path])
     if row_group_size_bytes is not None:
         args.set_row_group_size_bytes(row_group_size_bytes)
     if row_group_size_rows is not None:
@@ -568,14 +618,15 @@ def write_parquet(
     if max_dictionary_size is not None:
         args.set_max_dictionary_size(max_dictionary_size)
 
-    with nogil:
-        out_metadata_c = move(parquet_writer(args))
+    # with nogil:
+    #     out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
-        out_metadata_py = BufferArrayFromVector.from_unique_ptr(
-            move(out_metadata_c)
-        )
-        return np.asarray(out_metadata_py)
+        # out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+        #     move(out_metadata_c)
+        # )
+        # return np.asarray(out_metadata_py)
+        return np.asarray(plc.io.parquet.write_parquet(options).obj)
     else:
         return None
 
@@ -626,10 +677,13 @@ cdef class ParquetWriter:
     cudf.io.parquet.write_parquet
     """
     cdef bool initialized
-    cdef unique_ptr[cpp_parquet_chunked_writer] writer
-    cdef table_input_metadata tbl_meta
-    cdef sink_info sink
-    cdef vector[unique_ptr[data_sink]] _data_sink
+    cdef ParquetChunkedWriter writer
+    cdef SinkInfo sink
+    # cdef unique_ptr[cpp_parquet_chunked_writer] writer
+    # cdef table_input_metadata tbl_meta
+    cdef TableInputMetadata tbl_meta
+    # cdef sink_info sink
+    # cdef vector[unique_ptr[data_sink]] _data_sink
     cdef str statistics
     cdef object compression
     cdef object index
@@ -655,7 +709,8 @@ cdef class ParquetWriter:
             if is_list_like(filepath_or_buffer)
             else [filepath_or_buffer]
         )
-        self.sink = make_sinks_info(filepaths_or_buffers, self._data_sink)
+        # self.sink = make_sinks_info(filepaths_or_buffers, self._data_sink)
+        self.sink = plc.io.SinkInfo(filepaths_or_buffers)
         self.statistics = statistics
         self.compression = compression
         self.index = index
@@ -676,51 +731,68 @@ cdef class ParquetWriter:
                 num_partitions=len(partitions_info) if partitions_info else 1
             )
 
-        cdef table_view tv
+        # cdef table_view tv
         if self.index is not False and (
             table._index.name is not None or
                 isinstance(table._index, cudf.core.multiindex.MultiIndex)):
-            tv = table_view_from_table(table)
+            # tv = table_view_from_table(table)
+            columns = table._columns if table._index is None else [
+                *table.index._columns, *table._columns
+            ]
+            plc_table = plc.Table([col.to_pylibcudf(mode="read") for col in columns])
         else:
-            tv = table_view_from_table(table, ignore_index=True)
+            # tv = table_view_from_table(table, ignore_index=True)
+            plc_table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in table._columns]
+            )
 
-        cdef vector[partition_info] partitions
-        if partitions_info is not None:
-            for part in partitions_info:
-                partitions.push_back(
-                    partition_info(part[0], part[1])
-                )
+        # cdef vector[partition_info] partitions
+        # if partitions_info is not None:
+        #     for part in partitions_info:
+        #         partitions.push_back(
+        #             partition_info(part[0], part[1])
+        #         )
 
-        with nogil:
-            self.writer.get()[0].write(tv, partitions)
+        # with nogil:
+        #     self.writer.get()[0].write(tv, partitions_info)
+        self.writer.write(plc_table, partitions_info)
 
     def close(self, object metadata_file_path=None):
-        cdef unique_ptr[vector[uint8_t]] out_metadata_c
-        cdef vector[string] column_chunks_file_paths
+        # cdef unique_ptr[vector[uint8_t]] out_metadata_c
+        # cdef vector[string] column_chunks_file_paths
 
         if not self.initialized:
             return None
 
         # Update metadata-collection options
+        # if metadata_file_path is not None:
+        #     if is_list_like(metadata_file_path):
+        #         for path in metadata_file_path:
+        #             column_chunks_file_paths.push_back(str.encode(path))
+        #     else:
+        #         column_chunks_file_paths.push_back(
+        #             str.encode(metadata_file_path)
+        #         )
+        column_chunks_file_paths=[]
         if metadata_file_path is not None:
             if is_list_like(metadata_file_path):
-                for path in metadata_file_path:
-                    column_chunks_file_paths.push_back(str.encode(path))
+                column_chunks_file_paths = list(metadata_file_path)
             else:
-                column_chunks_file_paths.push_back(
-                    str.encode(metadata_file_path)
-                )
+                column_chunks_file_paths = [metadata_file_path]
 
-        with nogil:
-            out_metadata_c = move(
-                self.writer.get()[0].close(column_chunks_file_paths)
-            )
+        # with nogil:
+        #     out_metadata_c = move(
+        #         self.writer.get()[0].close(column_chunks_file_paths)
+        #     )
+        self.writer.close(column_chunks_file_paths)
 
+        # if metadata_file_path is not None:
+        #     out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+        #         move(out_metadata_c)
+        #     )
+        #     return np.asarray(out_metadata_py)
         if metadata_file_path is not None:
-            out_metadata_py = BufferArrayFromVector.from_unique_ptr(
-                move(out_metadata_c)
-            )
-            return np.asarray(out_metadata_py)
+            return np.asarray(self.writer.close(column_chunks_file_paths).obj)
         return None
 
     def __enter__(self):
