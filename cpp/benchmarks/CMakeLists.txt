@@ -360,8 +360,6 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
-ConfigureBench(STRINGS_BENCH string/factory.cu)
-
 ConfigureNVBench(
   STRINGS_NVBENCH
   string/case.cpp
@@ -377,6 +375,7 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/factory.cpp
   string/filter.cpp
   string/find.cpp
   string/find_multiple.cpp

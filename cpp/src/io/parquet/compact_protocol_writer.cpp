@@ -291,7 +291,7 @@ uint32_t CompactProtocolFieldWriter::put_uint(uint64_t v)
 
 uint32_t CompactProtocolFieldWriter::put_int(int64_t v)
 {
-  int64_t s = (v < 0);
+  int64_t const s = (v < 0);
   return put_uint(((v ^ -s) << 1) + s);
 }
 

@@ -1062,10 +1062,7 @@ def to_parquet(
             )
 
         partition_info = (
-            [
-                (i, j - i)
-                for i, j in zip(partition_offsets, partition_offsets[1:])
-            ]
+            [(i, j - i) for i, j in itertools.pairwise(partition_offsets)]
             if partition_offsets is not None
             else None
         )
@@ -1485,7 +1482,7 @@ class ParquetDatasetWriter:
         )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
-        partition_info = [(i, j - i) for i, j in zip(offsets, offsets[1:])]
+        partition_info = [(i, j - i) for i, j in itertools.pairwise(offsets)]
 
         for path, part_info, meta_path in zip(
             paths,
