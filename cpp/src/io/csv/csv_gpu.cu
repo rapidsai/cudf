@@ -495,7 +495,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
  * @param t thread id (leaf node id)
  */
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
-inline __device__ void ctx_merge(uint64_t* ctxtree, packed_rowctx_t* ctxb, uint32_t t)
+inline __device__ void ctx_merge(device_span<uint64_t> ctxtree, packed_rowctx_t* ctxb, uint32_t t)
 {
   uint64_t tmp = shuffle_xor(*ctxb, lanemask);
   if (!(t & tmask)) {
@@ -518,7 +518,7 @@ inline __device__ void ctx_merge(uint64_t* ctxtree, packed_rowctx_t* ctxb, uint3
  */
 template <uint32_t rmask>
 inline __device__ void ctx_unmerge(
-  uint32_t base, uint64_t* ctxtree, uint32_t* ctx, uint32_t* brow4, uint32_t t)
+  uint32_t base, device_span<uint64_t const> ctxtree, uint32_t* ctx, uint32_t* brow4, uint32_t t)
 {
   rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
   ctxb_sum   = get_row_context(ctxtree[base], *ctx);
@@ -550,7 +550,7 @@ inline __device__ void ctx_unmerge(
  * @param[in] ctxb packed row context for the current character block
  * @param t thread id (leaf node id)
  */
-static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
+static inline __device__ void rowctx_merge_transform(device_span<uint64_t> ctxtree,
                                                      packed_rowctx_t ctxb,
                                                      uint32_t t)
 {
@@ -584,8 +584,8 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
  *
  * @return Final row context and count (row_position*4 + context_id format)
  */
-static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxtree[1024],
-                                                                   uint32_t t)
+static inline __device__ rowctx32_t
+rowctx_inverse_merge_transform(device_span<uint64_t const> ctxtree, uint32_t t)
 {
   uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
   rowctx32_t brow4 = 0;               // output row in block *4
@@ -602,6 +602,8 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
 
   return brow4 + ctx;
 }
+
+constexpr auto bk_ctxtree_size = rowofs_block_dim * 2;
 
 /**
  * @brief Gather row offsets from CSV character data split into 16KB chunks
@@ -634,6 +636,7 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  */
 CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   gather_row_offsets_gpu(uint64_t* row_ctx,
+                         device_span<uint64_t> ctxtree,
                          device_span<uint64_t> offsets_out,
                          device_span<char const> const data,
                          size_t chunk_size,
@@ -649,12 +652,8 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
                          int escapechar,
                          int commentchar)
 {
-  auto start         = data.begin();
-  using block_reduce = typename cub::BlockReduce<uint32_t, rowofs_block_dim>;
-  __shared__ union {
-    typename block_reduce::TempStorage bk_storage;
-    __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
-  } temp_storage;
+  auto start            = data.begin();
+  auto const bk_ctxtree = ctxtree.subspan(blockIdx.x * bk_ctxtree_size, bk_ctxtree_size);
 
   char const* end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
   uint32_t t      = threadIdx.x;
@@ -723,16 +722,16 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   // Convert the long-form {rowmap,outctx}[inctx] version into packed version
   // {rowcount,ouctx}[inctx], then merge the row contexts of the 32-character blocks into
   // a single 16K-character block context
-  rowctx_merge_transform(temp_storage.ctxtree, pack_rowmaps(ctx_map), t);
+  rowctx_merge_transform(bk_ctxtree, pack_rowmaps(ctx_map), t);
 
   // If this is the second phase, get the block's initial parser state and row counter
   if (offsets_out.data()) {
-    if (t == 0) { temp_storage.ctxtree[0] = row_ctx[blockIdx.x]; }
+    if (t == 0) { bk_ctxtree[0] = row_ctx[blockIdx.x]; }
     __syncthreads();
 
     // Walk back the transform tree with the known initial parser state
-    rowctx32_t ctx             = rowctx_inverse_merge_transform(temp_storage.ctxtree, t);
-    uint64_t row               = (temp_storage.ctxtree[0] >> 2) + (ctx >> 2);
+    rowctx32_t ctx             = rowctx_inverse_merge_transform(bk_ctxtree, t);
+    uint64_t row               = (bk_ctxtree[0] >> 2) + (ctx >> 2);
     uint32_t rows_out_of_range = 0;
     uint32_t rowmap            = select_rowmap(ctx_map, ctx & 3);
     // Output row positions
@@ -749,11 +748,14 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
     }
     __syncthreads();
     // Return the number of rows out of range
-    rows_out_of_range = block_reduce(temp_storage.bk_storage).Sum(rows_out_of_range);
+
+    using block_reduce = typename cub::BlockReduce<uint32_t, rowofs_block_dim>;
+    __shared__ typename block_reduce::TempStorage bk_storage;
+    rows_out_of_range = block_reduce(bk_storage).Sum(rows_out_of_range);
     if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
   } else {
     // Just store the row counts and output contexts
-    if (t == 0) { row_ctx[blockIdx.x] = temp_storage.ctxtree[1]; }
+    if (t == 0) { row_ctx[blockIdx.x] = bk_ctxtree[1]; }
   }
 }
 
@@ -829,7 +831,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   // Calculate actual block count to use based on records count
   auto const block_size = csvparse_block_dim;
   auto const num_rows   = row_offsets.size() - 1;
-  auto const grid_size  = (num_rows + block_size - 1) / block_size;
+  auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
@@ -849,9 +851,11 @@ uint32_t __host__ gather_row_offsets(parse_options_view const& options,
                                      rmm::cuda_stream_view stream)
 {
   uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
+  auto ctxtree      = rmm::device_uvector<packed_rowctx_t>(dim_grid * bk_ctxtree_size, stream);
 
   gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream.value()>>>(
     row_ctx,
+    ctxtree,
     offsets_out,
     data,
     chunk_size,
