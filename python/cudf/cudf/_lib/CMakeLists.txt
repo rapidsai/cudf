@@ -18,14 +18,12 @@ set(cython_sources
     column.pyx
     copying.pyx
     csv.pyx
-    filling.pyx
     groupby.pyx
     interop.pyx
     merge.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx
-    replace.pyx
     round.pyx
     scalar.pyx
     sort.pyx

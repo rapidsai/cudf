@@ -237,7 +237,7 @@ class CategoricalDtype(_BaseDtype):
         >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
         >>> cudf_dtype
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        """  # noqa: E501
+        """
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
@@ -254,7 +254,7 @@ class CategoricalDtype(_BaseDtype):
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         >>> dtype.to_pandas()
         CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
-        """  # noqa: E501
+        """
         if self._categories is None:
             categories = None
         elif self._categories.dtype.kind == "f":
@@ -399,7 +399,7 @@ class ListDtype(_BaseDtype):
         ListDtype(float32)
         >>> deep_nested_type.element_type.element_type.element_type
         'float32'
-        """  # noqa: E501
+        """
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
         elif isinstance(self._typ.value_type, pa.StructType):
@@ -420,7 +420,7 @@ class ListDtype(_BaseDtype):
         ListDtype(ListDtype(ListDtype(float32)))
         >>> deep_nested_type.leaf_type
         'float32'
-        """  # noqa: E501
+        """
         if isinstance(self.element_type, ListDtype):
             return self.element_type.leaf_type
         else:
@@ -486,7 +486,7 @@ class ListDtype(_BaseDtype):
 
     def __repr__(self):
         if isinstance(self.element_type, (ListDtype, StructDtype)):
-            return f"{type(self).__name__}({repr(self.element_type)})"
+            return f"{type(self).__name__}({self.element_type!r})"
         else:
             return f"{type(self).__name__}({self.element_type})"
 
@@ -556,7 +556,7 @@ class StructDtype(_BaseDtype):
     >>> nested_struct_dtype = cudf.StructDtype({"dict_data": struct_dtype, "c": "uint8"})
     >>> nested_struct_dtype
     StructDtype({'dict_data': StructDtype({'a': dtype('int64'), 'b': dtype('O')}), 'c': dtype('uint8')})
-    """  # noqa: E501
+    """
 
     name = "struct"
 
@@ -730,7 +730,7 @@ decimal_dtype_template = textwrap.dedent(
         >>> decimal{size}_dtype = cudf.Decimal{size}Dtype(precision=9, scale=2)
         >>> decimal{size}_dtype
         Decimal{size}Dtype(precision=9, scale=2)
-    """  # noqa: E501
+    """
 )
 
 
@@ -743,7 +743,7 @@ class DecimalDtype(_BaseDtype):
 
     @property
     def str(self):
-        return f"{str(self.name)}({self.precision}, {self.scale})"
+        return f"{self.name!s}({self.precision}, {self.scale})"
 
     @property
     def precision(self):
@@ -950,7 +950,7 @@ class IntervalDtype(StructDtype):
             # This means equality isn't transitive but mimics pandas
             return other in (self.name, str(self))
         return (
-            type(self) == type(other)
+            type(self) is type(other)
             and self.subtype == other.subtype
             and self.closed == other.closed
         )

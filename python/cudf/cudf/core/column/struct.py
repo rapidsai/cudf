@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
