@@ -1,5 +1,5 @@
 # break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1398
-break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1491
+break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1484
 break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1602
 # break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1827
 # break /home/coder/cudf/cpp/examples/orc_io/orc_io.cpp:114
