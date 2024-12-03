@@ -20,7 +20,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.filling import sequence
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -3402,11 +3401,14 @@ def interval_range(
     start = start.astype(common_dtype)
     freq = freq.astype(common_dtype)
 
-    bin_edges = sequence(
-        size=periods + 1,
-        init=start.device_value,
-        step=freq.device_value,
-    )
+    with acquire_spill_lock():
+        bin_edges = libcudf.column.Column.from_pylibcudf(
+            plc.filling.sequence(
+                size=periods + 1,
+                init=start.device_value.c_value,
+                step=freq.device_value.c_value,
+            )
+        )
     return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
 
 

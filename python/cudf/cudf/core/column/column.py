@@ -401,14 +401,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # the scalar is None when calling `is_valid`.
         slr = cudf.Scalar(fill_value, dtype=self.dtype)
 
-        if not inplace:
-            return libcudf.filling.fill(self, begin, end, slr.device_value)
-
-        if is_string_dtype(self.dtype):
-            return self._mimic_inplace(
-                libcudf.filling.fill(self, begin, end, slr.device_value),
-                inplace=True,
-            )
+        if not inplace or is_string_dtype(self.dtype):
+            with acquire_spill_lock():
+                result = type(self).from_pylibcudf(
+                    plc.filling.fill(
+                        self.to_pylibcudf(mode="read"),
+                        begin,
+                        end,
+                        slr.device_value.c_value,
+                    )
+                )
+            if is_string_dtype(self.dtype):
+                return self._mimic_inplace(result, inplace=True)
+            return result  # type: ignore[return-value]
 
         if not slr.is_valid() and not self.nullable:
             mask = as_buffer(
@@ -418,8 +423,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
             self.set_base_mask(mask)
 
-        libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
-
+        with acquire_spill_lock():
+            plc.filling.fill_in_place(
+                self.to_pylibcudf(mode="write"),
+                begin,
+                end,
+                slr.device_value.c_value,
+            )
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
@@ -1813,11 +1823,18 @@ def as_column(
     * range objects
     """
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
-        column = libcudf.filling.sequence(
-            len(arbitrary),
-            as_device_scalar(arbitrary.start, dtype=cudf.dtype("int64")),
-            as_device_scalar(arbitrary.step, dtype=cudf.dtype("int64")),
-        )
+        with acquire_spill_lock():
+            column = Column.from_pylibcudf(
+                plc.filling.sequence(
+                    len(arbitrary),
+                    as_device_scalar(
+                        arbitrary.start, dtype=np.dtype(np.int64)
+                    ).c_value,
+                    as_device_scalar(
+                        arbitrary.step, dtype=np.dtype(np.int64)
+                    ).c_value,
+                )
+            )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
             dtype = cudf.dtype(
                 f'i{cudf.get_option("default_integer_bitwidth")//8}'
