@@ -33,7 +33,7 @@ bool is_element_valid_sync(column_view const& col_view,
   if (!col_view.nullable()) { return true; }
 
   // null_mask() returns device ptr to bitmask without offset
-  size_type index = element_index + col_view.offset();
+  size_type const index = element_index + col_view.offset();
 
   auto const word = cudf::detail::make_host_vector_sync(
     device_span<bitmask_type const>{col_view.null_mask() + word_index(index), 1}, stream)[0];
