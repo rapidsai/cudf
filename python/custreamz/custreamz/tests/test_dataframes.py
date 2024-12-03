@@ -216,13 +216,7 @@ def test_set_index():
     assert_eq(b[0], df.set_index(df.y + 1))
 
 
-def test_binary_stream_operators(request, stream):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(stream, DaskStream),
-            reason="https://github.com/dask/distributed/issues/8953",
-        )
-    )
+def test_binary_stream_operators(stream):
     df = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
 
     expected = df.x + df.y
@@ -248,13 +242,7 @@ def test_index(stream):
     assert_eq(L[1], df.index + 5)
 
 
-def test_pair_arithmetic(request, stream):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(stream, DaskStream),
-            reason="https://github.com/dask/distributed/issues/8953",
-        )
-    )
+def test_pair_arithmetic(stream):
     df = cudf.DataFrame({"x": list(range(10)), "y": [1] * 10})
 
     a = DataFrame(example=df.iloc[:0], stream=stream)
@@ -267,13 +255,7 @@ def test_pair_arithmetic(request, stream):
     assert_eq(cudf.concat(L), (df.x + df.y) * 2)
 
 
-def test_getitem(request, stream):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(stream, DaskStream),
-            reason="https://github.com/dask/distributed/issues/8953",
-        )
-    )
+def test_getitem(stream):
     df = cudf.DataFrame({"x": list(range(10)), "y": [1] * 10})
 
     a = DataFrame(example=df.iloc[:0], stream=stream)
@@ -350,13 +332,7 @@ def test_repr_html(stream):
         assert "1" in html
 
 
-def test_setitem(request, stream):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(stream, DaskStream),
-            reason="https://github.com/dask/distributed/issues/8953",
-        )
-    )
+def test_setitem(stream):
     df = cudf.DataFrame({"x": list(range(10)), "y": [1] * 10})
 
     sdf = DataFrame(example=df.iloc[:0], stream=stream)
@@ -380,13 +356,7 @@ def test_setitem(request, stream):
     assert_eq(L[-1], df.mean())
 
 
-def test_setitem_overwrites(request, stream):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(stream, DaskStream),
-            reason="https://github.com/dask/distributed/issues/8953",
-        )
-    )
+def test_setitem_overwrites(stream):
     df = cudf.DataFrame({"x": list(range(10))})
     sdf = DataFrame(example=df.iloc[:0], stream=stream)
     stream = sdf.stream
@@ -443,14 +413,8 @@ def test_setitem_overwrites(request, stream):
     ],
 )
 def test_rolling_count_aggregations(
-    request, op, window, m, pre_get, post_get, kwargs, stream
+    op, window, m, pre_get, post_get, kwargs, stream
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(stream, DaskStream) and len(kwargs) == 0,
-            reason="https://github.com/dask/distributed/issues/8953",
-        )
-    )
     index = pd.DatetimeIndex(
         pd.date_range("2000-01-01", "2000-01-03", freq="1h")
     )
@@ -844,13 +808,7 @@ def test_reductions_with_start_state(stream):
     assert output2[0] == 360
 
 
-def test_rolling_aggs_with_start_state(request, stream):
-    request.applymarker(
-        pytest.mark.xfail(
-            isinstance(stream, DaskStream),
-            reason="https://github.com/dask/distributed/issues/8953",
-        )
-    )
+def test_rolling_aggs_with_start_state(stream):
     example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output0 = (
