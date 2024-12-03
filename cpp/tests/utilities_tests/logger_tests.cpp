@@ -33,9 +33,11 @@ class LoggerTest : public cudf::test::BaseFixture {
       new_sink{std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)}
   {
     cudf::default_logger().sinks().push_back(std::make_shared<cudf::ostream_sink_mt>(oss));
+    cudf::default_logger().set_pattern("%v");
   }
   ~LoggerTest() override
   {
+    cudf::default_logger().set_pattern("[%6t][%H:%M:%S:%f][%-6l] %v");
     cudf::default_logger().set_level(prev_level);
     cudf::default_logger().sinks().pop_back();
   }
@@ -58,7 +60,7 @@ TEST_F(LoggerTest, DefaultLevel)
   cudf::default_logger().warn("warn");
   cudf::default_logger().error("error");
   cudf::default_logger().critical("critical");
-  ASSERT_EQ(this->sink_content(), "warn\nerror\ncritical\n");
+  ASSERT_EQ(this->sink_content(), "info\nwarn\nerror\ncritical\n");
 }
 
 TEST_F(LoggerTest, CustomLevel)
