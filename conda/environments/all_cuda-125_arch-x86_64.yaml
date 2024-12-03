@@ -86,7 +86,6 @@ dependencies:
 - s3fs>=2022.3.0
 - scikit-build-core>=0.10.0
 - scipy
-- spdlog>=1.14.1,<1.15
 - sphinx
 - sphinx-autobuild
 - sphinx-copybutton

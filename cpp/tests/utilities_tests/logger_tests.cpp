@@ -18,19 +18,14 @@
 
 #include <cudf/logger.hpp>
 
-#include <spdlog/sinks/ostream_sink.h>
-
 #include <string>
 
 class LoggerTest : public cudf::test::BaseFixture {
   std::ostringstream oss;
   cudf::level_enum prev_level;
-  spdlog::sink_ptr new_sink;
 
  public:
-  LoggerTest()
-    : prev_level{cudf::default_logger().level()},
-      new_sink{std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)}
+  LoggerTest() : prev_level{cudf::default_logger().level()}
   {
     cudf::default_logger().sinks().push_back(std::make_shared<cudf::ostream_sink_mt>(oss));
     cudf::default_logger().set_pattern("%v");
