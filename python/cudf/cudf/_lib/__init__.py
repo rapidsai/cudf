@@ -14,7 +14,6 @@ from . import (
     parquet,
     reduce,
     round,
-    sort,
     stream_compaction,
     string_casting,
     strings,

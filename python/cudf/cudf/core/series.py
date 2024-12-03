@@ -3401,7 +3401,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_performance_tracking
-    def digitize(self, bins, right=False):
+    def digitize(self, bins: np.ndarray, right: bool = False) -> Self:
         """Return the indices of the bins to which each value belongs.
 
         Notes
@@ -3432,9 +3432,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    2
         dtype: int32
         """
-        return Series._from_column(
-            cudf.core.column.numerical.digitize(self._column, bins, right),
-            name=self.name,
+        return type(self)._from_column(
+            self._column.digitize(bins, right), name=self.name
         )
 
     @_performance_tracking

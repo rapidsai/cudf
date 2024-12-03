@@ -27,7 +27,6 @@ set(cython_sources
     reduce.pyx
     round.pyx
     scalar.pyx
-    sort.pyx
     stream_compaction.pyx
     string_casting.pyx
     strings_udf.pyx

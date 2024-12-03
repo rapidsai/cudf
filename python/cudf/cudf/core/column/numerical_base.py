@@ -11,6 +11,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.core._internals import sort
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
@@ -144,7 +145,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         else:
             # get sorted indices and exclude nulls
-            indices = libcudf.sort.order_by(
+            indices = sort.order_by(
                 [self], [True], "first", stable=True
             ).slice(self.null_count, len(self))
             with acquire_spill_lock():
