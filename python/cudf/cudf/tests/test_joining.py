@@ -1527,7 +1527,7 @@ def test_categorical_typecast_outer():
         result = left.merge(right, how="outer", on="key")
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "str"])
 def test_categorical_typecast_inner_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1538,7 +1538,7 @@ def test_categorical_typecast_inner_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype.categories.dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "str"])
 def test_categorical_typecast_left_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1549,7 +1549,7 @@ def test_categorical_typecast_left_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "str"])
 def test_categorical_typecast_outer_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 

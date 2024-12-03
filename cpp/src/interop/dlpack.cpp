@@ -115,8 +115,8 @@ DLDataType data_type_to_DLDataType(data_type type)
 
 // Context object to own memory allocated for DLManagedTensor
 struct dltensor_context {
-  int64_t shape[2];    // NOLINT
-  int64_t strides[2];  // NOLINT
+  int64_t shape[2]{};    // NOLINT
+  int64_t strides[2]{};  // NOLINT
   rmm::device_buffer buffer;
 
   static void deleter(DLManagedTensor* arg)

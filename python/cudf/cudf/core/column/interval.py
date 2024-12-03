@@ -7,7 +7,8 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import StructColumn, as_column
+from cudf.core.column.column import as_column
+from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
 
 if TYPE_CHECKING:

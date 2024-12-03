@@ -430,7 +430,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
-  stats_caster stats_col{
+  stats_caster const stats_col{
     static_cast<size_type>(total_row_groups), per_file_metadata, input_row_group_indices};
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
@@ -452,7 +452,13 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   auto stats_table = cudf::table(std::move(columns));
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
-  stats_expression_converter stats_expr{filter.get(), static_cast<size_type>(output_dtypes.size())};
+  stats_expression_converter const stats_expr{filter.get(),
+                                              static_cast<size_type>(output_dtypes.size())};
+  auto stats_ast     = stats_expr.get_stats_expr();
+  auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
+  auto predicate     = predicate_col->view();
+  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
+               "Filter expression must return a boolean column");
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
   auto const filtered_row_group_indices = collect_filtered_row_group_indices(

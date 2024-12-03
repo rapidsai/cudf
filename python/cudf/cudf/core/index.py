@@ -20,7 +20,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.filling import sequence
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -1619,7 +1618,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         Returns
         -------
         cupy.ndarray: The indices sorted based on input.
-        """  # noqa: E501
+        """
         return super().argsort(
             axis=axis,
             kind=kind,
@@ -2218,7 +2217,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]')
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
-        """  # noqa: E501
+        """
         return Index._from_column(self._column.year, name=self.name)
 
     @property  # type: ignore
@@ -2237,7 +2236,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
-        """  # noqa: E501
+        """
         return Index._from_column(self._column.month, name=self.name)
 
     @property  # type: ignore
@@ -2256,7 +2255,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]')
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int16')
-        """  # noqa: E501
+        """
         return Index._from_column(self._column.day, name=self.name)
 
     @property  # type: ignore
@@ -2340,7 +2339,7 @@ class DatetimeIndex(Index):
               dtype='datetime64[ns]')
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
-        """  # noqa: E501
+        """
         return Index._from_column(
             (
                 # Need to manually promote column to int32 because
@@ -2615,7 +2614,7 @@ class DatetimeIndex(Index):
         ... ])
         >>> gIndex.ceil("T")
         DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
-        """  # noqa: E501
+        """
         return type(self)._from_column(self._column.ceil(freq), name=self.name)
 
     @_performance_tracking
@@ -2646,7 +2645,7 @@ class DatetimeIndex(Index):
         ... ])
         >>> gIndex.floor("T")
         DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
-        """  # noqa: E501
+        """
         return type(self)._from_column(
             self._column.floor(freq), name=self.name
         )
@@ -2686,7 +2685,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
         >>> dt_idx.round('T')
         DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
-        """  # noqa: E501
+        """
         return type(self)._from_column(
             self._column.round(freq), name=self.name
         )
@@ -2737,7 +2736,7 @@ class DatetimeIndex(Index):
         ``ambiguous`` and ``nonexistent`` arguments. Any
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
-        """  # noqa: E501
+        """
         result_col = self._column.tz_localize(tz, ambiguous, nonexistent)
         return DatetimeIndex._from_column(
             result_col, name=self.name, freq=self._freq
@@ -2774,7 +2773,7 @@ class DatetimeIndex(Index):
                        '2018-03-02 14:00:00+00:00',
                        '2018-03-03 14:00:00+00:00'],
                       dtype='datetime64[ns, Europe/London]')
-        """  # noqa: E501
+        """
         result_col = self._column.tz_convert(tz)
         return DatetimeIndex._from_column(result_col, name=self.name)
 
@@ -3118,7 +3117,7 @@ class CategoricalIndex(Index):
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
     CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
-    """  # noqa: E501
+    """
 
     @_performance_tracking
     def __init__(
@@ -3402,11 +3401,14 @@ def interval_range(
     start = start.astype(common_dtype)
     freq = freq.astype(common_dtype)
 
-    bin_edges = sequence(
-        size=periods + 1,
-        init=start.device_value,
-        step=freq.device_value,
-    )
+    with acquire_spill_lock():
+        bin_edges = libcudf.column.Column.from_pylibcudf(
+            plc.filling.sequence(
+                size=periods + 1,
+                init=start.device_value.c_value,
+                step=freq.device_value.c_value,
+            )
+        )
     return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
 
 
