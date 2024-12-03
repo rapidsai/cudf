@@ -18,6 +18,8 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
+import cudf.core.column.column as column
+import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import unary
@@ -28,7 +30,7 @@ from cudf.core._internals.timezones import (
     get_tz_data,
 )
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column, string
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.dtypes import _get_base_dtype
 from cudf.utils.utils import (
