@@ -916,10 +916,10 @@ def test_csv_reader_nrows(tmpdir):
         str(fname), dtype=dtypes, skiprows=skip_rows + 1, nrows=read_rows
     )
     assert df.shape == (read_rows, 2)
-    assert str(skip_rows) in list(df)[0]
+    assert str(skip_rows) in next(iter(df))
     assert str(2 * skip_rows) in list(df)[1]
     for row in range(0, read_rows // sample_skip, sample_skip):
-        assert df[list(df)[0]][row] == row + skip_rows + 1
+        assert df[next(iter(df))][row] == row + skip_rows + 1
         assert df[list(df)[1]][row] == 2 * (row + skip_rows + 1)
     assert df[list(df)[1]][read_rows - 1] == 2 * (read_rows + skip_rows)
 
@@ -2277,3 +2277,20 @@ def test_read_header_none_pandas_compat_column_type():
         result = cudf.read_csv(StringIO(data), header=None).columns
     expected = pd.read_csv(StringIO(data), header=None).columns
     pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize("buffer", ["1", '"one"'])
+def test_read_single_unterminated_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (1, 1))
+
+
+@pytest.mark.parametrize("buffer", ["\n", "\r\n"])
+def test_read_empty_only_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (0, 0))
+
+
+def test_read_empty_only_row_custom_terminator():
+    gdf = cudf.read_csv(StringIO("*"), header=None, lineterminator="*")
+    assert_eq(gdf.shape, (0, 0))

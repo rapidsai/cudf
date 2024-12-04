@@ -2,6 +2,7 @@
 
 from libcpp cimport int
 from libcpp.memory cimport unique_ptr
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.scalar.scalar cimport string_scalar
@@ -22,19 +23,19 @@ cdef extern from "cudf/strings/combine.hpp" namespace "cudf::strings" nogil:
         table_view strings_columns,
         string_scalar separator,
         string_scalar narep,
-        separator_on_nulls separate_nulls) except +
+        separator_on_nulls separate_nulls) except +libcudf_exception_handler
 
     cdef unique_ptr[column] concatenate(
         table_view strings_columns,
         column_view separators,
         string_scalar separator_narep,
         string_scalar col_narep,
-        separator_on_nulls separate_nulls) except +
+        separator_on_nulls separate_nulls) except +libcudf_exception_handler
 
     cdef unique_ptr[column] join_strings(
         column_view input,
         string_scalar separator,
-        string_scalar narep) except +
+        string_scalar narep) except +libcudf_exception_handler
 
     cdef unique_ptr[column] join_list_elements(
         column_view lists_strings_column,
@@ -42,11 +43,11 @@ cdef extern from "cudf/strings/combine.hpp" namespace "cudf::strings" nogil:
         string_scalar separator_narep,
         string_scalar string_narep,
         separator_on_nulls separate_nulls,
-        output_if_empty_list empty_list_policy) except +
+        output_if_empty_list empty_list_policy) except +libcudf_exception_handler
 
     cdef unique_ptr[column] join_list_elements(
         column_view lists_strings_column,
         string_scalar separator,
         string_scalar narep,
         separator_on_nulls separate_nulls,
-        output_if_empty_list empty_list_policy) except +
+        output_if_empty_list empty_list_policy) except +libcudf_exception_handler

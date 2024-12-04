@@ -12,9 +12,13 @@ from typing_extensions import Self
 import pylibcudf
 
 import cudf
+import cudf.core.column.column as column
+import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
-from cudf.core.column import ColumnBase, as_column, column, string
+from cudf.core._internals import unary
+from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
@@ -24,8 +28,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
 )
-
-from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -110,8 +112,8 @@ class NumericalColumn(NumericalBaseColumn):
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
-        return libcudf.search.contains(
-            self, column.as_column([search_item], dtype=self.dtype)
+        return self.contains(
+            column.as_column([search_item], dtype=self.dtype)
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
@@ -125,7 +127,7 @@ class NumericalColumn(NumericalBaseColumn):
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
-            nan_col = libcudf.unary.is_nan(self)
+            nan_col = unary.is_nan(self)
             return nan_col.indices_of(True)
         else:
             return super().indices_of(value)
@@ -184,7 +186,7 @@ class NumericalColumn(NumericalBaseColumn):
         unaryop = unaryop.upper()
         unaryop = _unaryop_map.get(unaryop, unaryop)
         unaryop = pylibcudf.unary.UnaryOperator[unaryop]
-        return libcudf.unary.unary_operation(self, unaryop)
+        return unary.unary_operation(self, unaryop)
 
     def __invert__(self):
         if self.dtype.kind in "ui":
@@ -225,7 +227,7 @@ class NumericalColumn(NumericalBaseColumn):
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
             # in terms of `notnull` or `NULL_NOT_EQUALS`.
-            if type(other) is int and self.dtype.kind in "iu":  # noqa: E721
+            if type(other) is int and self.dtype.kind in "iu":
                 truthiness = None
                 iinfo = np.iinfo(self.dtype)
                 if iinfo.min > other:
@@ -388,13 +390,13 @@ class NumericalColumn(NumericalBaseColumn):
     def as_decimal_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
-        return libcudf.unary.cast(self, dtype)
+        return unary.cast(self, dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype)
+        return unary.cast(self, dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
@@ -421,7 +423,7 @@ class NumericalColumn(NumericalBaseColumn):
     def nan_count(self) -> int:
         if self.dtype.kind != "f":
             return 0
-        nan_col = libcudf.unary.is_nan(self)
+        nan_col = unary.is_nan(self)
         return nan_col.sum()
 
     def _process_values_for_isin(
@@ -481,7 +483,7 @@ class NumericalColumn(NumericalBaseColumn):
         to_replace: ColumnLike,
         replacement: ColumnLike,
         all_nan: bool = False,
-    ) -> NumericalColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *value*.
         """
@@ -511,25 +513,42 @@ class NumericalColumn(NumericalBaseColumn):
         ):
             return self.copy()
 
-        to_replace_col = _normalize_find_and_replace_input(
-            self.dtype, to_replace
-        )
+        try:
+            to_replace_col = _normalize_find_and_replace_input(
+                self.dtype, to_replace
+            )
+        except TypeError:
+            # if `to_replace` cannot be normalized to the current dtype,
+            # that means no value of `to_replace` is present in self,
+            # Hence there is no point of proceeding further.
+            return self.copy()
+
         if all_nan:
             replacement_col = column.as_column(replacement, dtype=self.dtype)
         else:
-            replacement_col = _normalize_find_and_replace_input(
-                self.dtype, replacement
-            )
-        if len(replacement_col) == 1 and len(to_replace_col) > 1:
-            replacement_col = column.as_column(
-                replacement[0], length=len(to_replace_col), dtype=self.dtype
-            )
-        elif len(replacement_col) == 1 and len(to_replace_col) == 0:
-            return self.copy()
+            try:
+                replacement_col = _normalize_find_and_replace_input(
+                    self.dtype, replacement
+                )
+            except TypeError:
+                # Some floating values can never be converted into signed or unsigned integers
+                # for those cases, we just need a column of `replacement` constructed
+                # with its own type for the final type determination below at `find_common_type`
+                # call.
+                replacement_col = column.as_column(
+                    replacement,
+                    dtype=self.dtype if len(replacement) <= 0 else None,
+                )
         common_type = find_common_type(
             (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
-        replaced = self.astype(common_type)
+        if len(replacement_col) == 1 and len(to_replace_col) > 1:
+            replacement_col = column.as_column(
+                replacement[0], length=len(to_replace_col), dtype=common_type
+            )
+        elif len(replacement_col) == 1 and len(to_replace_col) == 0:
+            return self.copy()
+        replaced = cast(Self, self.astype(common_type))
         df = cudf.DataFrame._from_data(
             {
                 "old": to_replace_col.astype(common_type),
@@ -545,9 +564,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
             df = df.dropna(subset=["old"])
 
-        return libcudf.replace.replace(
-            replaced, df._data["old"], df._data["new"]
-        )
+        return replaced.replace(df._data["old"], df._data["new"])
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
@@ -718,6 +735,8 @@ def _normalize_find_and_replace_input(
     if isinstance(col_to_normalize, list):
         if normalized_column.null_count == len(normalized_column):
             normalized_column = normalized_column.astype(input_column_dtype)
+        if normalized_column.can_cast_safely(input_column_dtype):
+            return normalized_column.astype(input_column_dtype)
         col_to_normalize_dtype = min_column_type(
             normalized_column, input_column_dtype
         )
@@ -728,7 +747,7 @@ def _normalize_find_and_replace_input(
             if np.isinf(col_to_normalize[0]):
                 return normalized_column
             col_to_normalize_casted = np.array(col_to_normalize[0]).astype(
-                input_column_dtype
+                col_to_normalize_dtype
             )
 
             if not np.isnan(col_to_normalize_casted) and (
@@ -739,8 +758,8 @@ def _normalize_find_and_replace_input(
                     f"{col_to_normalize[0]} "
                     f"to {input_column_dtype.name}"
                 )
-            else:
-                col_to_normalize_dtype = input_column_dtype
+        if normalized_column.can_cast_safely(col_to_normalize_dtype):
+            return normalized_column.astype(col_to_normalize_dtype)
     elif hasattr(col_to_normalize, "dtype"):
         col_to_normalize_dtype = col_to_normalize.dtype
     else:
@@ -755,6 +774,8 @@ def _normalize_find_and_replace_input(
             f"{col_to_normalize_dtype.name} "
             f"to {input_column_dtype.name}"
         )
+    if not normalized_column.can_cast_safely(input_column_dtype):
+        return normalized_column
     return normalized_column.astype(input_column_dtype)
 
 

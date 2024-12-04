@@ -45,7 +45,7 @@ class file_sink : public data_sink {
       cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath, "w");
       CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
-                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
+                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
     } else {
       _cufile_out = detail::make_cufile_output(filepath);
     }
@@ -86,7 +86,7 @@ class file_sink : public data_sink {
   {
     if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
 
-    size_t offset = _bytes_written;
+    size_t const offset = _bytes_written;
     _bytes_written += size;
 
     if (!_kvikio_file.closed()) {
@@ -170,7 +170,7 @@ class void_sink : public data_sink {
   size_t bytes_written() override { return _bytes_written; }
 
  private:
-  size_t _bytes_written;
+  size_t _bytes_written{};
 };
 
 class user_sink_wrapper : public data_sink {

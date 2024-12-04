@@ -99,9 +99,9 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // place each class and append the variable length data
   for (int32_t idx = 0; idx < classes_count; ++idx) {
     auto const& h_class = h_prog.class_at(idx);
-    reclass_device d_class{h_class.builtins,
-                           static_cast<int32_t>(h_class.literals.size()),
-                           reinterpret_cast<reclass_range*>(d_end)};
+    reclass_device const d_class{h_class.builtins,
+                                 static_cast<int32_t>(h_class.literals.size()),
+                                 reinterpret_cast<reclass_range*>(d_end)};
     *classes++ = d_class;
     memcpy(h_end, h_class.literals.data(), h_class.literals.size() * sizeof(reclass_range));
     h_end += h_class.literals.size() * sizeof(reclass_range);

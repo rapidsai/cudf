@@ -14,6 +14,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf.core._internals import unary
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -667,13 +668,8 @@ class CategoricalColumn(column.ColumnBase):
             return self if inplace else self.copy()
 
         fill_code = self._encode(fill_value)
-        fill_scalar = cudf._lib.scalar.as_device_scalar(
-            fill_code, self.codes.dtype
-        )
-
         result = self if inplace else self.copy()
-
-        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        result.codes._fill(fill_code, begin, end, inplace=True)
         return result
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
@@ -842,9 +838,9 @@ class CategoricalColumn(column.ColumnBase):
         """
         raise NotImplementedError("cudf.Categorical is not yet implemented")
 
-    def clip(self, lo: ScalarLike, hi: ScalarLike) -> "column.ColumnBase":
+    def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         return (
-            self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
+            self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)  # type: ignore[return-value]
         )
 
     def data_array_view(
@@ -887,7 +883,7 @@ class CategoricalColumn(column.ColumnBase):
         if len(replacement_col) == replacement_col.null_count:
             replacement_col = replacement_col.astype(self.categories.dtype)
 
-        if type(to_replace_col) != type(replacement_col):
+        if type(to_replace_col) is not type(replacement_col):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "
@@ -988,10 +984,8 @@ class CategoricalColumn(column.ColumnBase):
         replacement_col = catmap._data["index"].astype(replaced.codes.dtype)
 
         replaced_codes = column.as_column(replaced.codes)
-        output = libcudf.replace.replace(
-            replaced_codes, to_replace_col, replacement_col
-        )
-        codes = as_unsigned_codes(len(new_cats["cats"]), output)
+        output = replaced_codes.replace(to_replace_col, replacement_col)
+        codes = as_unsigned_codes(len(new_cats["cats"]), output)  # type: ignore[arg-type]
 
         result = type(self)(
             data=self.data,  # type: ignore[arg-type]
@@ -1018,12 +1012,12 @@ class CategoricalColumn(column.ColumnBase):
         """
         Identify missing values in a CategoricalColumn.
         """
-        result = libcudf.unary.is_null(self)
+        result = unary.is_null(self)
 
         if self.categories.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of an underlying float column
-            categories = libcudf.unary.is_nan(self.categories)
+            categories = unary.is_nan(self.categories)
             if categories.any():
                 code = self._encode(np.nan)
                 result = result | (self.codes == cudf.Scalar(code))
@@ -1034,12 +1028,12 @@ class CategoricalColumn(column.ColumnBase):
         """
         Identify non-missing values in a CategoricalColumn.
         """
-        result = libcudf.unary.is_valid(self)
+        result = unary.is_valid(self)
 
         if self.categories.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of an underlying float column
-            categories = libcudf.unary.is_nan(self.categories)
+            categories = unary.is_nan(self.categories)
             if categories.any():
                 code = self._encode(np.nan)
                 result = result & (self.codes != cudf.Scalar(code))
@@ -1203,9 +1197,7 @@ class CategoricalColumn(column.ColumnBase):
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype, masked=True)
         else:
-            # Filter out inputs that have 0 length, then concatenate.
-            codes = [o for o in codes if len(o)]
-            codes_col = libcudf.concat.concat_columns(objs)
+            codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 
         codes_col = as_unsigned_codes(
             len(cats),

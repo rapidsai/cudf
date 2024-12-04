@@ -44,7 +44,7 @@ def test_tokenize():
 
     actual = strings.str.tokenize()
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -71,7 +71,7 @@ def test_tokenize_delimiter():
 
     actual = strings.str.tokenize(delimiter="o")
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -106,7 +106,7 @@ def test_detokenize():
             "the siamésé cat jumped under the sofa",
         ]
     )
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     indices = cudf.Series(
@@ -122,7 +122,7 @@ def test_detokenize():
             "the+the+the+the",
         ]
     )
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -150,7 +150,7 @@ def test_token_count(delimiter, expected_token_counts):
 
     actual = strings.str.token_count(delimiter)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual, check_dtype=False)
 
 
@@ -208,7 +208,7 @@ def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
     )
 
     actual = tokenizer.tokenize(strings, delimiter, default_id)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -232,7 +232,7 @@ def test_normalize_spaces():
 
     actual = strings.str.normalize_spaces()
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -252,7 +252,7 @@ def test_normalize_characters():
     )
 
     actual = strings.str.normalize_characters()
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     expected = cudf.Series(
@@ -266,7 +266,7 @@ def test_normalize_characters():
         ]
     )
     actual = strings.str.normalize_characters(do_lower=False)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -309,7 +309,7 @@ def test_ngrams(n, separator, expected_values):
 
     actual = strings.str.ngrams(n=n, separator=separator)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -364,7 +364,7 @@ def test_character_ngrams(n, expected_values, expected_index, as_list):
 
     actual = strings.str.character_ngrams(n=n, as_list=as_list)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -379,12 +379,12 @@ def test_hash_character_ngrams():
         ]
     )
     actual = strings.str.hash_character_ngrams(5, True)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     actual = strings.str.hash_character_ngrams(5)
     expected = expected.explode()
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -417,7 +417,7 @@ def test_ngrams_tokenize(n, separator, expected_values):
 
     actual = strings.str.ngrams_tokenize(n=n, separator=separator)
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -844,7 +844,7 @@ def test_porter_stemmer_measure():
 
     actual = strings.str.porter_stemmer_measure()
 
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -856,14 +856,14 @@ def test_is_vowel_consonant():
         [False, False, True, False, False, False, True, False, None, False]
     )
     actual = strings.str.is_vowel(2)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     expected = cudf.Series(
         [True, False, True, False, False, False, True, True, None, False]
     )
     actual = strings.str.is_consonant(1)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     indices = cudf.Series([2, 1, 0, 0, 1, 2, 0, 3, 0, 0])
@@ -871,14 +871,14 @@ def test_is_vowel_consonant():
         [False, True, False, False, True, False, True, True, None, False]
     )
     actual = strings.str.is_vowel(indices)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
     expected = cudf.Series(
         [False, False, True, True, False, True, False, False, None, False]
     )
     actual = strings.str.is_consonant(indices)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
 
@@ -1097,5 +1097,5 @@ def test_byte_pair_encoding(separator, input, results):
     expected = cudf.Series([results, None, "", results])
 
     actual = encoder(strings, separator)
-    assert type(expected) == type(actual)
+    assert type(expected) is type(actual)
     assert_eq(expected, actual)

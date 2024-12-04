@@ -15,6 +15,7 @@
  */
 
 #include "../io/json/json_utils.cuh"
+#include "io/comp/comp.hpp"
 #include "large_strings_fixture.hpp"
 
 #include <cudf_test/table_utilities.hpp>
@@ -25,10 +26,19 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-struct JsonLargeReaderTest : public cudf::test::StringsLargeTest {};
+struct JsonLargeReaderTest : public cudf::test::StringsLargeTest,
+                             public testing::WithParamInterface<cudf::io::compression_type> {};
 
-TEST_F(JsonLargeReaderTest, MultiBatch)
+// Parametrize qualifying JSON tests for multiple compression types
+INSTANTIATE_TEST_SUITE_P(JsonLargeReaderTest,
+                         JsonLargeReaderTest,
+                         ::testing::Values(cudf::io::compression_type::GZIP,
+                                           cudf::io::compression_type::NONE));
+
+TEST_P(JsonLargeReaderTest, MultiBatch)
 {
+  cudf::io::compression_type const comptype = GetParam();
+
   std::string json_string = R"(
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
@@ -48,11 +58,26 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
     json_string += json_string;
   }
 
+  std::vector<std::uint8_t> cdata;
+  if (comptype != cudf::io::compression_type::NONE) {
+    cdata = cudf::io::detail::compress(
+      comptype,
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
+                                     json_string.size()),
+      cudf::get_default_stream());
+  } else
+    cdata = std::vector<uint8_t>(
+      reinterpret_cast<uint8_t const*>(json_string.data()),
+      reinterpret_cast<uint8_t const*>(json_string.data()) + json_string.size());
+
   constexpr int num_sources = 2;
   std::vector<cudf::host_span<std::byte>> hostbufs(
     num_sources,
     cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(json_string.data()),
                                json_string.size()));
+  std::vector<cudf::host_span<std::byte>> chostbufs(
+    num_sources,
+    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(cdata.data()), cdata.size()));
 
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options json_lines_options =
@@ -62,14 +87,20 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
       .lines(true)
       .compression(cudf::io::compression_type::NONE)
       .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
+  cudf::io::json_reader_options cjson_lines_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{
+        cudf::host_span<cudf::host_span<std::byte>>(chostbufs.data(), chostbufs.size())})
+      .lines(true)
+      .compression(comptype)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL);
 
   // Read full test data via existing, nested JSON lines reader
-  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(json_lines_options);
+  cudf::io::table_with_metadata current_reader_table = cudf::io::read_json(cjson_lines_options);
 
-  std::vector<std::unique_ptr<cudf::io::datasource>> datasources;
-  for (auto& hb : hostbufs) {
-    datasources.emplace_back(cudf::io::datasource::create(hb));
-  }
+  auto datasources  = cudf::io::datasource::create(json_lines_options.get_source().host_buffers());
+  auto cdatasources = cudf::io::datasource::create(cjson_lines_options.get_source().host_buffers());
+
   // Test for different chunk sizes
   std::vector<std::size_t> chunk_sizes{batch_size_upper_bound / 4,
                                        batch_size_upper_bound / 2,
@@ -79,7 +110,9 @@ TEST_F(JsonLargeReaderTest, MultiBatch)
   for (auto chunk_size : chunk_sizes) {
     auto const tables =
       split_byte_range_reading<std::int64_t>(datasources,
+                                             cdatasources,
                                              json_lines_options,
+                                             cjson_lines_options,
                                              chunk_size,
                                              cudf::get_default_stream(),
                                              cudf::get_current_device_resource_ref());

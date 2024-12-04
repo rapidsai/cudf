@@ -109,14 +109,18 @@ def test_rewrite_ir_node():
     df = pl.LazyFrame({"a": [1, 2, 1], "b": [1, 3, 4]})
     q = df.group_by("a").agg(pl.col("b").sum()).sort("b")
 
-    orig = Translator(q._ldf.visit()).translate_ir()
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     new_df = pl.DataFrame({"a": [1, 1, 2], "b": [-1, -2, -4]})
 
     def replace_df(node, rec):
         if isinstance(node, ir.DataFrameScan):
             return ir.DataFrameScan(
-                node.schema, new_df._df, node.projection, node.predicate
+                node.schema,
+                new_df._df,
+                node.projection,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
@@ -144,13 +148,17 @@ def test_rewrite_scan_node(tmp_path):
     def replace_scan(node, rec):
         if isinstance(node, ir.Scan):
             return ir.DataFrameScan(
-                node.schema, right._df, node.with_columns, node.predicate
+                node.schema,
+                right._df,
+                node.with_columns,
+                node.predicate,
+                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
     mapper = CachingVisitor(replace_scan)
 
-    orig = Translator(q._ldf.visit()).translate_ir()
+    orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
 
     result = new.evaluate(cache={}).to_polars()
@@ -174,7 +182,7 @@ def test_rewrite_names_and_ops():
         .collect()
     )
 
-    qir = Translator(q._ldf.visit()).translate_ir()
+    qir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
     @singledispatch
     def _transform(e: expr.Expr, fn: ExprTransformer) -> expr.Expr:

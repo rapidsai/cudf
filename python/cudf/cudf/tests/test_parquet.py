@@ -2313,7 +2313,7 @@ def test_parquet_writer_criteo(tmpdir):
 
     cont_names = ["I" + str(x) for x in range(1, 14)]
     cat_names = ["C" + str(x) for x in range(1, 27)]
-    cols = ["label"] + cont_names + cat_names
+    cols = ["label", *cont_names, *cat_names]
 
     df = cudf.read_csv(fname, sep="\t", names=cols, byte_range=(0, 1000000000))
     df = df.drop(columns=cont_names)
@@ -3771,10 +3771,10 @@ def test_parquet_chunked_reader(
     chunk_read_limit, pass_read_limit, use_pandas_metadata, row_groups
 ):
     df = pd.DataFrame(
-        {"a": [1, 2, 3, 4] * 1000000, "b": ["av", "qw", "hi", "xyz"] * 1000000}
+        {"a": [1, 2, 3, None] * 10000, "b": ["av", "qw", None, "xyz"] * 10000}
     )
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, row_group_size=10000)
     actual = read_parquet_chunked(
         [buffer],
         chunk_read_limit=chunk_read_limit,
@@ -3784,6 +3784,108 @@ def test_parquet_chunked_reader(
     )
     expected = cudf.read_parquet(
         buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("num_rows", [997, 2997, None])
+def test_parquet_chunked_reader_structs(
+    chunk_read_limit,
+    pass_read_limit,
+    num_rows,
+):
+    data = [
+        {
+            "a": "g",
+            "b": {
+                "b_a": 10,
+                "b_b": {"b_b_b": None, "b_b_a": 2},
+            },
+            "c": None,
+        },
+        {"a": None, "b": {"b_a": None, "b_b": None}, "c": [15, 16]},
+        {"a": "j", "b": None, "c": [8, 10]},
+        {"a": None, "b": {"b_a": None, "b_b": None}, "c": None},
+        None,
+        {
+            "a": None,
+            "b": {"b_a": None, "b_b": {"b_b_b": 1}},
+            "c": [18, 19],
+        },
+        {"a": None, "b": None, "c": None},
+    ] * 1000
+
+    pa_struct = pa.Table.from_pydict({"struct": data})
+    df = cudf.DataFrame.from_arrow(pa_struct)
+    buffer = BytesIO()
+    df.to_parquet(buffer)
+
+    # Number of rows to read
+    nrows = num_rows if num_rows is not None else len(df)
+
+    actual = read_parquet_chunked(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        nrows=nrows,
+    )
+    expected = cudf.read_parquet(
+        buffer,
+        nrows=nrows,
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
+@pytest.mark.parametrize("num_rows", [4997, 9997, None])
+@pytest.mark.parametrize(
+    "str_encoding",
+    [
+        "PLAIN",
+        "DELTA_BYTE_ARRAY",
+        "DELTA_LENGTH_BYTE_ARRAY",
+    ],
+)
+def test_parquet_chunked_reader_string_decoders(
+    chunk_read_limit,
+    pass_read_limit,
+    num_rows,
+    str_encoding,
+):
+    df = pd.DataFrame(
+        {
+            "i64": [1, 2, 3, None] * 10000,
+            "str": ["av", "qw", "asd", "xyz"] * 10000,
+            "list": list(
+                [["ad", "cd"], ["asd", "fd"], None, ["asd", None]] * 10000
+            ),
+        }
+    )
+    buffer = BytesIO()
+    # Write 4 Parquet row groups with string column encoded
+    df.to_parquet(
+        buffer,
+        row_group_size=10000,
+        use_dictionary=False,
+        column_encoding={"str": str_encoding},
+    )
+
+    # Number of rows to read
+    nrows = num_rows if num_rows is not None else len(df)
+
+    # Check with num_rows specified
+    actual = read_parquet_chunked(
+        [buffer],
+        chunk_read_limit=chunk_read_limit,
+        pass_read_limit=pass_read_limit,
+        nrows=nrows,
+    )
+    expected = cudf.read_parquet(
+        buffer,
+        nrows=nrows,
     )
     assert_eq(expected, actual)
 
@@ -4054,6 +4156,31 @@ def test_parquet_reader_with_mismatched_schemas_error():
             columns=["struct.b.b_b"],
             allow_mismatched_pq_schemas=True,
         )
+
+
+def test_parquet_roundtrip_zero_rows_no_column_mask():
+    expected = cudf.DataFrame._from_data(
+        {
+            "int": cudf.core.column.column_empty(0, "int64"),
+            "float": cudf.core.column.column_empty(0, "float64"),
+            "datetime": cudf.core.column.column_empty(0, "datetime64[ns]"),
+            "timedelta": cudf.core.column.column_empty(0, "timedelta64[ns]"),
+            "bool": cudf.core.column.column_empty(0, "bool"),
+            "decimal": cudf.core.column.column_empty(
+                0, cudf.Decimal64Dtype(1)
+            ),
+            "struct": cudf.core.column.column_empty(
+                0, cudf.StructDtype({"a": "int64"})
+            ),
+            "list": cudf.core.column.column_empty(
+                0, cudf.ListDtype("float64")
+            ),
+        }
+    )
+    with BytesIO() as bio:
+        expected.to_parquet(bio)
+        result = cudf.read_parquet(bio)
+    assert_eq(result, expected)
 
 
 def test_parquet_reader_mismatched_nullability():

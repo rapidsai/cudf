@@ -536,8 +536,8 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
 
     assert_eq(expect, got)
 
-    expect = ps.str.cat(others=[ps.index] + [ps.index], sep=sep, na_rep=na_rep)
-    got = gs.str.cat(others=[gs.index] + [gs.index], sep=sep, na_rep=na_rep)
+    expect = ps.str.cat(others=[ps.index, ps.index], sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=[gs.index, gs.index], sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
@@ -1272,7 +1272,7 @@ def test_string_slice_from():
     gs = cudf.Series(["hello world", "holy accéntéd", "batman", None, ""])
     d_starts = cudf.Series([2, 3, 0, -1, -1], dtype=np.int32)
     d_stops = cudf.Series([-1, -1, 0, -1, -1], dtype=np.int32)
-    got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column)
+    got = gs.str.slice_from(starts=d_starts, stops=d_stops)
     expected = cudf.Series(["llo world", "y accéntéd", "", None, ""])
     assert_eq(got, expected)
 

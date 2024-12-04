@@ -13,7 +13,13 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterator, MutableMapping
+from collections.abc import (
+    Callable,
+    Hashable,
+    Iterator,
+    MutableMapping,
+    Sequence,
+)
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
@@ -25,6 +31,8 @@ from nvtx import annotate
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
+
+import pylibcudf as plc
 
 import cudf
 import cudf.core.common
@@ -43,6 +51,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -1128,7 +1137,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: BaseIndex | None = None,
         columns: Any = None,
-    ) -> DataFrame:
+    ) -> Self:
         out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
@@ -1415,8 +1424,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         new_columns = (
                             value
                             if key == arg
-                            else column.column_empty_like(
-                                col, masked=True, newsize=length
+                            else column.column_empty(
+                                row_count=length, dtype=col.dtype
                             )
                             for key, col in self._column_labels_and_values
                         )
@@ -1784,11 +1793,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Concatenate the Tables
-        out = cls._from_data(
-            *libcudf.concat.concat_tables(
-                tables, ignore_index=ignore_index or are_all_range_index
+        ignore = ignore_index or are_all_range_index
+        index_names = None if ignore else tables[0]._index_names
+        column_names = tables[0]._column_names
+        with acquire_spill_lock():
+            plc_tables = [
+                plc.Table(
+                    [
+                        c.to_pylibcudf(mode="read")
+                        for c in (
+                            table._columns
+                            if ignore
+                            else itertools.chain(
+                                table._index._columns, table._columns
+                            )
+                        )
+                    ]
+                )
+                for table in tables
+            ]
+
+            concatted = libcudf.utils.data_from_pylibcudf_table(
+                plc.concatenate.concatenate(plc_tables),
+                column_names=column_names,
+                index_names=index_names,
             )
-        )
+        out = cls._from_data(*concatted)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
@@ -2218,7 +2248,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         n1 n2
         a  b   1  3
            c   2  4
-        """  # noqa: E501
+        """
 
         orient = orient.lower()
         if orient == "index":
@@ -2375,7 +2405,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.to_dict('records', into=dd)
         [defaultdict(<class 'list'>, {'col1': 1, 'col2': 0.5}),
          defaultdict(<class 'list'>, {'col1': 2, 'col2': 0.75})]
-        """  # noqa: E501
+        """
         orient = orient.lower()
 
         if orient == "series":
@@ -2463,11 +2493,46 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        partitioned_columns, output_offsets = libcudf.partitioning.partition(
-            [*(self.index._columns if keep_index else ()), *self._columns],
-            map_index,
-            map_size,
+        source_columns = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
         )
+
+        with acquire_spill_lock():
+            if map_size is None:
+                map_size = plc.stream_compaction.distinct_count(
+                    map_index.to_pylibcudf(mode="read"),
+                    plc.types.NullPolicy.EXCLUDE,
+                    plc.types.NanPolicy.NAN_IS_VALID,
+                )
+
+            if map_index.size > 0:
+                plc_lo, plc_hi = plc.reduce.minmax(
+                    map_index.to_pylibcudf(mode="read")
+                )
+                # TODO: Use pylibcudf Scalar once APIs are more developed
+                lo = libcudf.column.Column.from_pylibcudf(
+                    plc.Column.from_scalar(plc_lo, 1)
+                ).element_indexing(0)
+                hi = libcudf.column.Column.from_pylibcudf(
+                    plc.Column.from_scalar(plc_hi, 1)
+                ).element_indexing(0)
+                if lo < 0 or hi >= map_size:
+                    raise ValueError("Partition map has invalid values")
+
+            plc_table, output_offsets = plc.partitioning.partition(
+                plc.Table(
+                    [col.to_pylibcudf(mode="read") for col in source_columns]
+                ),
+                map_index.to_pylibcudf(mode="read"),
+                map_size,
+            )
+            partitioned_columns = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
+
         partitioned = self._from_columns_like_self(
             partitioned_columns,
             column_names=self._column_names,
@@ -2968,7 +3033,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if len(keys) == 0:
             raise ValueError("No valid columns to be added to index.")
         if append:
-            keys = [self.index] + keys
+            keys = [self.index, *keys]
 
         # Preliminary type check
         labels_not_found = []
@@ -3034,7 +3099,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):  # noqa: D102
+    ):
         if isinstance(value, (pd.Series, pd.DataFrame)):
             value = cudf.from_pandas(value)
         if isinstance(value, cudf.Series):
@@ -3132,9 +3197,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                 out.append(result._with_type_metadata(col.dtype))
             else:
-                out_mask = cudf._lib.null_mask.create_null_mask(
-                    len(source_col),
-                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
+                out_mask = as_buffer(
+                    plc.null_mask.create_null_mask(
+                        len(source_col), plc.null_mask.MaskState.ALL_NULL
+                    )
                 )
                 out.append(source_col.set_mask(out_mask))
 
@@ -3319,10 +3385,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if num_cols != 0:
                     ca = self._data._from_columns_like_self(
                         (
-                            column.column_empty_like(
-                                col_data, masked=True, newsize=length
-                            )
-                            for col_data in self._columns
+                            column.column_empty(row_count=length, dtype=dtype)
+                            for _, dtype in self._dtypes
                         ),
                         verify=False,
                     )
@@ -3514,7 +3578,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  Yum Yum   cup     4.0
         2  Indomie   cup     3.5
         4  Indomie  pack     5.0
-        """  # noqa: E501
+        """
         outdf = super().drop_duplicates(
             subset=subset,
             keep=keep,
@@ -4089,7 +4153,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if any(c.dtype != source_columns[0].dtype for c in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_columns = libcudf.transpose.transpose(source_columns)
+        result_table = plc.transpose.transpose(
+            plc.table.Table(
+                [col.to_pylibcudf(mode="read") for col in source_columns]
+            )
+        )
+        result_columns = [
+            libcudf.column.Column.from_pylibcudf(col, data_ptr_exposed=True)
+            for col in result_table.columns()
+        ]
 
         if isinstance(source_dtype, cudf.CategoricalDtype):
             result_columns = [
@@ -4786,7 +4858,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if na_action not in {"ignore", None}:
             raise ValueError(
-                f"na_action must be 'ignore' or None. Got {repr(na_action)}"
+                f"na_action must be 'ignore' or None. Got {na_action!r}"
             )
 
         if na_action == "ignore":
@@ -4962,7 +5034,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def partition_by_hash(self, columns, nparts, keep_index=True):
+    def partition_by_hash(
+        self, columns, nparts: int, keep_index: bool = True
+    ) -> list[DataFrame]:
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -4986,13 +5060,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             cols = [*self._columns]
 
-        output_columns, offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts
-        )
+        with acquire_spill_lock():
+            plc_table, offsets = plc.partitioning.hash_partition(
+                plc.Table([col.to_pylibcudf(mode="read") for col in cols]),
+                key_indices,
+                nparts,
+            )
+            output_columns = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
+
         outdf = self._from_columns_like_self(
             output_columns,
             self._column_names,
-            self._index_names if keep_index else None,
+            self._index_names if keep_index else None,  # type: ignore[arg-type]
         )
         # Slice into partitions. Notice, `hash_partition` returns the start
         # offset of each partition thus we skip the first offset
@@ -5649,7 +5731,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
 
         data = self
-        index_descr = []
+        index_descr: Sequence[dict[str, Any]] | Sequence[str] = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
         index = self.index
@@ -5856,7 +5938,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index=None,
         columns=None,
         nan_as_null=False,
-    ):
+    ) -> Self:
         """
         Convert an object implementing an array interface to DataFrame.
 
@@ -5909,6 +5991,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
+        # Mapping/MutableMapping are invariant in the key type, so
+        # dict[int, ColumnBase] (the inferred type of ca_data) is not
+        # a valid type to pass to a function accepting
+        # Mapping[Hashable, ColumnBase] even though int is Hashable.
+        # See: https://github.com/python/typing/issues/445
+        ca_data: dict[Hashable, ColumnBase]
         if array_data.ndim == 2:
             ca_data = {
                 k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
@@ -6055,7 +6143,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             non-numeric types and result is expected to be a Series in case of
             Pandas. cuDF will return a DataFrame as it doesn't support mixed
             types under Series.
-        """  # noqa: E501
+        """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
@@ -6101,8 +6189,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         quant_index=False,
                     )._column
                     if len(res) == 0:
-                        res = column.column_empty_like(
-                            qs, dtype=ser.dtype, masked=True, newsize=len(qs)
+                        res = column.column_empty(
+                            row_count=len(qs), dtype=ser.dtype
                         )
                     result[k] = res
             result = DataFrame._from_data(result)
@@ -6754,7 +6842,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  False  2.0
         4   True  1.0
         5  False  2.0
-        """  # noqa: E501
+        """
 
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
@@ -6957,7 +7045,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def stack(self, level=-1, dropna=no_default, future_stack=False):
+    def stack(
+        self, level=-1, dropna=no_default, future_stack=False
+    ) -> DataFrame | Series:
         """Stack the prescribed level(s) from columns to index
 
         Return a reshaped DataFrame or Series having a multi-level
@@ -7174,13 +7264,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should tile itself by len(df) times
-        tiled_index = libcudf.reshape.tile(
-            [
-                as_column(unique_named_levels.get_level_values(i))
-                for i in range(unique_named_levels.nlevels)
-            ],
-            self.shape[0],
-        )
+        with acquire_spill_lock():
+            plc_table = plc.reshape.tile(
+                plc.Table(
+                    [
+                        as_column(
+                            unique_named_levels.get_level_values(i)
+                        ).to_pylibcudf(mode="read")
+                        for i in range(unique_named_levels.nlevels)
+                    ]
+                ),
+                self.shape[0],
+            )
+            tiled_index = [
+                libcudf.column.Column.from_pylibcudf(plc)
+                for plc in plc_table.columns()
+            ]
 
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
@@ -7194,13 +7293,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data=range(self._num_columns), index=named_levels
         )
 
-        column_indices: list[list[int]] = []
         if has_unnamed_levels:
-            unnamed_level_values = list(
-                map(column_name_idx.get_level_values, unnamed_levels_indices)
-            )
             unnamed_level_values = pd.MultiIndex.from_arrays(
-                unnamed_level_values
+                list(
+                    map(
+                        column_name_idx.get_level_values,
+                        unnamed_levels_indices,
+                    )
+                )
             )
 
         def unnamed_group_generator():
@@ -7230,13 +7330,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else:
                     yield column_idx_df.sort_index().values
 
-        column_indices = list(unnamed_group_generator())
-
         # For each of the group constructed from the unnamed levels,
         # invoke `interleave_columns` to stack the values.
         stacked = []
 
-        for column_idx in column_indices:
+        for column_idx in unnamed_group_generator():
             # Collect columns based on indices, append None for -1 indices.
             columns = [
                 None if i == -1 else self._data.select_by_index(i).columns[0]
@@ -7255,12 +7353,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
             # homogenize the dtypes of the columns
-            homogenized = [
+            homogenized = (
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
-            ]
+            )
 
-            stacked.append(libcudf.reshape.interleave_columns(homogenized))
+            with acquire_spill_lock():
+                interleaved_col = libcudf.column.Column.from_pylibcudf(
+                    plc.reshape.interleave_columns(
+                        plc.Table(
+                            [
+                                col.to_pylibcudf(mode="read")
+                                for col in homogenized
+                            ]
+                        )
+                    )
+                )
+            stacked.append(interleaved_col)
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
@@ -7761,10 +7870,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
-
-        return self._constructor_sliced._from_column(
-            libcudf.reshape.interleave_columns([*self._columns])
-        )
+        with acquire_spill_lock():
+            result_col = libcudf.column.Column.from_pylibcudf(
+                plc.reshape.interleave_columns(
+                    plc.Table(
+                        [
+                            col.to_pylibcudf(mode="read")
+                            for col in self._columns
+                        ]
+                    )
+                )
+            )
+        return self._constructor_sliced._from_column(result_col)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):

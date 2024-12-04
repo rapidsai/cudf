@@ -13,18 +13,20 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 
+NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
+
 
 @pytest.fixture(
     params=[(None, None), ("row-index", 0), ("index", 10)],
-    ids=["no-row-index", "zero-offset-row-index", "offset-row-index"],
+    ids=["no_row_index", "zero_offset_row_index", "offset_row_index"],
 )
 def row_index(request):
     return request.param
 
 
 @pytest.fixture(
-    params=[None, 2, 3],
-    ids=["all-rows", "n_rows-with-skip", "n_rows-no-skip"],
+    params=[None, 3],
+    ids=["all_rows", "some_rows"],
 )
 def n_rows(request):
     return request.param
@@ -51,21 +53,15 @@ def columns(request, row_index):
 
 
 @pytest.fixture(
-    params=[None, pl.col("c").is_not_null()], ids=["no-mask", "c-is-not-null"]
+    params=[None, pl.col("c").is_not_null()], ids=["no_mask", "c_is_not_null"]
 )
 def mask(request):
     return request.param
 
 
 @pytest.fixture(
-    params=[
-        None,
-        (1, 1),
-    ],
-    ids=[
-        "no-slice",
-        "slice-second",
-    ],
+    params=[None, (1, 1)],
+    ids=["no_slice", "slice_second"],
 )
 def slice(request):
     # For use in testing that we handle
@@ -92,12 +88,16 @@ def make_source(df, path, format):
         ("csv", pl.scan_csv),
         ("ndjson", pl.scan_ndjson),
         ("parquet", pl.scan_parquet),
+        ("chunked_parquet", pl.scan_parquet),
     ],
 )
 def test_scan(
     tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, slice, request
 ):
     name, offset = row_index
+    is_chunked = format == "chunked_parquet"
+    if is_chunked:
+        format = "parquet"
     make_source(df, tmp_path / "file", format)
     request.applymarker(
         pytest.mark.xfail(
@@ -111,13 +111,15 @@ def test_scan(
         row_index_offset=offset,
         n_rows=n_rows,
     )
+    engine = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": is_chunked})
+
     if slice is not None:
         q = q.slice(*slice)
     if mask is not None:
         q = q.filter(mask)
     if columns is not None:
         q = q.select(*columns)
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_negative_slice_pushdown_raises(tmp_path):
@@ -153,7 +155,7 @@ def test_scan_row_index_projected_out(tmp_path):
 
     q = pl.scan_parquet(tmp_path / "df.pq").with_row_index().select(pl.col("a"))
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
 
 def test_scan_csv_column_renames_projection_schema(tmp_path):
@@ -321,6 +323,56 @@ def test_scan_parquet_only_row_index_raises(df, tmp_path):
     make_source(df, tmp_path / "file", "parquet")
     q = pl.scan_parquet(tmp_path / "file", row_index_name="index").select("index")
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.fixture(
+    scope="module", params=["no_slice", "skip_to_end", "skip_partial", "partial"]
+)
+def chunked_slice(request):
+    return request.param
+
+
+@pytest.fixture(scope="module")
+def large_df(df, tmpdir_factory, chunked_slice):
+    # Something big enough that we get more than a single chunk,
+    # empirically determined
+    df = pl.concat([df] * 1000)
+    df = pl.concat([df] * 10)
+    df = pl.concat([df] * 10)
+    path = str(tmpdir_factory.mktemp("data") / "large.pq")
+    make_source(df, path, "parquet")
+    n_rows = len(df)
+    q = pl.scan_parquet(path)
+    if chunked_slice == "no_slice":
+        return q
+    elif chunked_slice == "skip_to_end":
+        return q.slice(int(n_rows * 0.6), n_rows)
+    elif chunked_slice == "skip_partial":
+        return q.slice(int(n_rows * 0.6), int(n_rows * 0.2))
+    else:
+        return q.slice(0, int(n_rows * 0.6))
+
+
+@pytest.mark.parametrize(
+    "chunk_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"chunk_{x}"
+)
+@pytest.mark.parametrize(
+    "pass_read_limit", [0, 1, 2, 4, 8, 16], ids=lambda x: f"pass_{x}"
+)
+def test_scan_parquet_chunked(
+    request, chunked_slice, large_df, chunk_read_limit, pass_read_limit
+):
+    assert_gpu_result_equal(
+        large_df,
+        engine=pl.GPUEngine(
+            raise_on_fail=True,
+            parquet_options={
+                "chunked": True,
+                "chunk_read_limit": chunk_read_limit,
+                "pass_read_limit": pass_read_limit,
+            },
+        ),
+    )
 
 
 def test_scan_hf_url_raises():

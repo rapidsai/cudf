@@ -15,48 +15,40 @@
  */
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/filling.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/random.h>
-#include <thrust/tuple.h>
+
+#include <nvbench/nvbench.cuh>
 
 struct url_string_generator {
-  char* chars;
+  cudf::column_device_view d_strings;
   double esc_seq_chance;
   thrust::minstd_rand engine;
-  thrust::uniform_real_distribution<float> esc_seq_dist;
-  url_string_generator(char* c, double esc_seq_chance, thrust::minstd_rand& engine)
-    : chars(c), esc_seq_chance(esc_seq_chance), engine(engine), esc_seq_dist(0, 1)
-  {
-  }
+  thrust::uniform_real_distribution<float> esc_seq_dist{0, 1};
 
-  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
+  __device__ void operator()(cudf::size_type idx)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
-    engine.discard(begin);
-    for (auto i = begin; i < end; ++i) {
-      if (esc_seq_dist(engine) < esc_seq_chance and i < end - 3) {
+    engine.discard(idx);
+    auto d_str = d_strings.element<cudf::string_view>(idx);
+    auto chars = const_cast<char*>(d_str.data());
+    for (auto i = 0; i < d_str.size_bytes() - 3; ++i) {
+      if (esc_seq_dist(engine) < esc_seq_chance) {
         chars[i]     = '%';
         chars[i + 1] = '2';
         chars[i + 2] = '0';
         i += 2;
-      } else {
-        chars[i] = 'a';
       }
     }
   }
@@ -64,50 +56,44 @@ struct url_string_generator {
 
 auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, double esc_seq_chance)
 {
-  std::vector<std::string> strings{std::string(chars_per_row, 'a')};
-  auto col_1a     = cudf::test::strings_column_wrapper(strings.begin(), strings.end());
-  auto table_a    = cudf::repeat(cudf::table_view{{col_1a}}, num_rows);
-  auto result_col = std::move(table_a->release()[0]);  // string column with num_rows  aaa...
-  auto chars_data = static_cast<char*>(result_col->mutable_view().head());
-  auto offset_col = result_col->child(cudf::strings_column_view::offsets_column_index).view();
-  auto offset_itr = cudf::detail::offsetalator_factory::make_input_iterator(offset_col);
+  auto str_row    = std::string(chars_per_row, 'a');
+  auto result_col = cudf::make_column_from_scalar(cudf::string_scalar(str_row), num_rows);
+  auto d_strings  = cudf::column_device_view::create(result_col->view());
 
   auto engine = thrust::default_random_engine{};
   thrust::for_each_n(thrust::device,
-                     thrust::make_zip_iterator(offset_itr, offset_itr + 1),
+                     thrust::counting_iterator<cudf::size_type>(0),
                      num_rows,
-                     url_string_generator{chars_data, esc_seq_chance, engine});
+                     url_string_generator{*d_strings, esc_seq_chance, engine});
   return result_col;
 }
 
-class UrlDecode : public cudf::benchmark {};
-
-void BM_url_decode(benchmark::State& state, int esc_seq_pct)
+static void bench_url_decode(nvbench::state& state)
 {
-  cudf::size_type const num_rows      = state.range(0);
-  cudf::size_type const chars_per_row = state.range(1);
+  auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width   = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const esc_seq_pct = static_cast<cudf::size_type>(state.get_int64("esc_seq_pct"));
 
-  auto column       = generate_column(num_rows, chars_per_row, esc_seq_pct / 100.0);
-  auto strings_view = cudf::strings_column_view(column->view());
+  auto column = generate_column(num_rows, row_width, esc_seq_pct / 100.0);
+  auto input  = cudf::strings_column_view(column->view());
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    auto result = cudf::strings::url_decode(strings_view);
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto chars_size = input.chars_size(stream);
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+
+  {
+    auto result = cudf::strings::url_decode(input);
+    auto sv     = cudf::strings_column_view(result->view());
+    state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
   }
 
-  state.SetBytesProcessed(state.iterations() * num_rows *
-                          (chars_per_row + sizeof(cudf::size_type)));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { cudf::strings::url_decode(input); });
 }
 
-#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                      \
-  BENCHMARK_DEFINE_F(UrlDecode, esc_seq_pct)                    \
-  (::benchmark::State & st) { BM_url_decode(st, esc_seq_pct); } \
-  BENCHMARK_REGISTER_F(UrlDecode, esc_seq_pct)                  \
-    ->Args({100000000, 10})                                     \
-    ->Args({10000000, 100})                                     \
-    ->Args({1000000, 1000})                                     \
-    ->Unit(benchmark::kMillisecond)                             \
-    ->UseManualTime();
-
-URLD_BENCHMARK_DEFINE(10)
-URLD_BENCHMARK_DEFINE(50)
+NVBENCH_BENCH(bench_url_decode)
+  .set_name("url_decode")
+  .add_int64_axis("row_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("esc_seq_pct", {10, 50});

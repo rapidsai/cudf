@@ -14,7 +14,7 @@ from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.column import ColumnBase, as_column, column_empty_like
+from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils.dtypes import min_unsigned_type
 
@@ -421,8 +421,8 @@ def concat(
                         # if join is inner and it contains an empty df
                         # we return an empty df, hence creating an empty
                         # column with dtype metadata retained.
-                        result_data[name] = cudf.core.column.column_empty_like(
-                            col, newsize=0
+                        result_data[name] = column_empty(
+                            row_count=0, dtype=col.dtype
                         )
                     else:
                         result_data[name] = col
@@ -458,8 +458,8 @@ def concat(
                     else:
                         col_label = (k, name)
                     if empty_inner:
-                        result_data[col_label] = (
-                            cudf.core.column.column_empty_like(col, newsize=0)
+                        result_data[col_label] = column_empty(
+                            row_count=0, dtype=col.dtype
                         )
                     else:
                         result_data[col_label] = col
@@ -961,7 +961,11 @@ def _merge_sorted(
     )
 
 
-def _pivot(col_accessor: ColumnAccessor, index, columns) -> cudf.DataFrame:
+def _pivot(
+    col_accessor: ColumnAccessor,
+    index: cudf.Index | cudf.MultiIndex,
+    columns: cudf.Index | cudf.MultiIndex,
+) -> cudf.DataFrame:
     """
     Reorganize the values of the DataFrame according to the given
     index and columns.
@@ -991,9 +995,7 @@ def _pivot(col_accessor: ColumnAccessor, index, columns) -> cudf.DataFrame:
             ]
             new_size = nrows * len(names)
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target_col = cudf.core.column.column_empty_like(
-                col, masked=True, newsize=new_size
-            )
+            target_col = column_empty(row_count=new_size, dtype=col.dtype)
             target_col[scatter_map] = col
             target = cudf.Index._from_column(target_col)
             result.update(
@@ -1009,15 +1011,15 @@ def _pivot(col_accessor: ColumnAccessor, index, columns) -> cudf.DataFrame:
     ca = ColumnAccessor(
         result,
         multiindex=True,
-        level_names=(None,) + columns._column_names,
+        level_names=(None, *columns._column_names),
         verify=False,
     )
-    return cudf.DataFrame._from_data(
-        ca, index=cudf.Index(index_labels, name=index.name)
-    )
+    return cudf.DataFrame._from_data(ca, index=index_labels)
 
 
-def pivot(data, columns=None, index=no_default, values=no_default):
+def pivot(
+    data: cudf.DataFrame, columns=None, index=no_default, values=no_default
+) -> cudf.DataFrame:
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -1027,10 +1029,10 @@ def pivot(data, columns=None, index=no_default, values=no_default):
 
     Parameters
     ----------
-    columns : column name, optional
-        Column used to construct the columns of the result.
-    index : column name, optional
-        Column used to construct the index of the result.
+    columns : scalar or list of scalars, optional
+        Column label(s) used to construct the columns of the result.
+    index : scalar or list of scalars, optional
+        Column label(s) used to construct the index of the result.
     values : column name or list of column names, optional
         Column(s) whose values are rearranged to produce the result.
         If not specified, all remaining columns of the DataFrame
@@ -1069,24 +1071,46 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     """
     values_is_list = True
     if values is no_default:
+        already_selected = set(
+            itertools.chain(
+                [index] if is_scalar(index) else index,
+                [columns] if is_scalar(columns) else columns,
+            )
+        )
         cols_to_select = [
-            col for col in data._column_names if col not in (index, columns)
+            col for col in data._column_names if col not in already_selected
         ]
     elif not isinstance(values, (list, tuple)):
         cols_to_select = [values]
         values_is_list = False
     else:
-        cols_to_select = values
+        cols_to_select = values  # type: ignore[assignment]
     if index is no_default:
-        index = data.index
+        index_data = data.index
     else:
-        index = cudf.Index(data.loc[:, index])
-    columns = cudf.Index(data.loc[:, columns])
+        index_data = data.loc[:, index]
+        if index_data.ndim == 2:
+            index_data = cudf.MultiIndex.from_frame(index_data)
+            if not is_scalar(index) and len(index) == 1:
+                # pandas converts single level MultiIndex to Index
+                index_data = index_data.get_level_values(0)
+        else:
+            index_data = cudf.Index(index_data)
+
+    column_data = data.loc[:, columns]
+    if column_data.ndim == 2:
+        column_data = cudf.MultiIndex.from_frame(column_data)
+    else:
+        column_data = cudf.Index(column_data)
 
     # Create a DataFrame composed of columns from both
     # columns and index
     ca = ColumnAccessor(
-        dict(enumerate(itertools.chain(index._columns, columns._columns))),
+        dict(
+            enumerate(
+                itertools.chain(index_data._columns, column_data._columns)
+            )
+        ),
         verify=False,
     )
     columns_index = cudf.DataFrame._from_data(ca)
@@ -1095,7 +1119,9 @@ def pivot(data, columns=None, index=no_default, values=no_default):
     if len(columns_index) != len(columns_index.drop_duplicates()):
         raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
-    result = _pivot(data._data.select_by_label(cols_to_select), index, columns)
+    result = _pivot(
+        data._data.select_by_label(cols_to_select), index_data, column_data
+    )
 
     # MultiIndex to Index
     if not values_is_list:
@@ -1272,7 +1298,9 @@ def _one_hot_encode_column(
     """
     if isinstance(column.dtype, cudf.CategoricalDtype):
         if column.size == column.null_count:
-            column = column_empty_like(categories, newsize=column.size)
+            column = column_empty(
+                row_count=column.size, dtype=categories.dtype
+            )
         else:
             column = column._get_decategorized_column()  # type: ignore[attr-defined]
 

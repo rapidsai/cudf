@@ -368,6 +368,14 @@ def _process_dataset(
     file_list = paths
     if len(paths) == 1 and ioutils.is_directory(paths[0]):
         paths = ioutils.stringify_pathlike(paths[0])
+    elif (
+        filters is None
+        and isinstance(dataset_kwargs, dict)
+        and dataset_kwargs.get("partitioning") is None
+    ):
+        # Skip dataset processing if we have no filters
+        # or hive/directory partitioning to deal with.
+        return paths, row_groups, [], {}
 
     # Convert filters to ds.Expression
     if filters is not None:
@@ -1054,10 +1062,7 @@ def to_parquet(
             )
 
         partition_info = (
-            [
-                (i, j - i)
-                for i, j in zip(partition_offsets, partition_offsets[1:])
-            ]
+            [(i, j - i) for i, j in itertools.pairwise(partition_offsets)]
             if partition_offsets is not None
             else None
         )
@@ -1477,7 +1482,7 @@ class ParquetDatasetWriter:
         )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
-        partition_info = [(i, j - i) for i, j in zip(offsets, offsets[1:])]
+        partition_info = [(i, j - i) for i, j in itertools.pairwise(offsets)]
 
         for path, part_info, meta_path in zip(
             paths,

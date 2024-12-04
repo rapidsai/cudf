@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
@@ -101,10 +101,7 @@ class StructColumn(ColumnBase):
 
     @cached_property
     def memory_usage(self) -> int:
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         for child in self.children:
             n += child.memory_usage
 

@@ -56,9 +56,9 @@ pytest_unmark_spilling = pytest.mark.skipif(
 # If spilling is enabled globally, we skip many test permutations
 # to reduce running time.
 if get_global_manager() is not None:
-    ALL_TYPES = ["float32"]  # noqa: F811
-    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
-    NUMERIC_TYPES = ["float32"]  # noqa: F811
+    ALL_TYPES = ["float32"]
+    DATETIME_TYPES = ["datetime64[ms]"]
+    NUMERIC_TYPES = ["float32"]
     # To save time, we skip tests marked "xfail"
     pytest_xfail = pytest.mark.skipif
 
@@ -452,8 +452,8 @@ def test_dataframe_basic():
     df = cudf.concat([df, df2])
     assert len(df) == 11
 
-    hkeys = np.asarray(np.arange(10, dtype=np.float64).tolist() + [123])
-    hvals = np.asarray(rnd_vals.tolist() + [321])
+    hkeys = np.asarray([*np.arange(10, dtype=np.float64).tolist(), 123])
+    hvals = np.asarray([*rnd_vals.tolist(), 321])
 
     np.testing.assert_equal(df["keys"].to_numpy(), hkeys)
     np.testing.assert_equal(df["vals"].to_numpy(), hvals)
@@ -1118,7 +1118,7 @@ def test_dataframe_to_string_wide(monkeypatch):
         1   1   1   1   1   1   1   1   1  ...    1    1    1    1    1    1    1    1
         2   2   2   2   2   2   2   2   2  ...    2    2    2    2    2    2    2    2
 
-        [3 rows x 100 columns]"""  # noqa: E501
+        [3 rows x 100 columns]"""
     )
     assert got == expect
 
@@ -1304,6 +1304,18 @@ def test_dataframe_to_cupy_null_values():
     mat = df.to_numpy()
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(refvalues[k], mat[:, i])
+
+
+@pytest.mark.parametrize("method", ["to_cupy", "to_numpy"])
+@pytest.mark.parametrize("value", [1, True, 1.5])
+@pytest.mark.parametrize("constructor", ["DataFrame", "Series"])
+def test_to_array_categorical(method, value, constructor):
+    data = [value]
+    expected = getattr(pd, constructor)(data, dtype="category").to_numpy()
+    result = getattr(
+        getattr(cudf, constructor)(data, dtype="category"), method
+    )()
+    assert_eq(result, expected)
 
 
 def test_dataframe_append_empty():
@@ -2185,7 +2197,7 @@ def test_dataframe_shape_empty():
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 20])
-@pytest.mark.parametrize("dtype", dtypes + ["object"])
+@pytest.mark.parametrize("dtype", [*dtypes, "object"])
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     # In case of `bool` dtype: pandas <= 1.2.5 type-casts
@@ -2830,7 +2842,7 @@ def test_arrow_round_trip(preserve_index, index):
     assert_eq(gdf_out, pdf_out)
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "bool"])
 def test_cuda_array_interface(dtype):
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
@@ -3695,7 +3707,7 @@ def test_sort_index_axis_1_ignore_index_true_columnaccessor_state_names():
     assert result._data.names == tuple(result._data.keys())
 
 
-@pytest.mark.parametrize("dtype", dtypes + ["category"])
+@pytest.mark.parametrize("dtype", [*dtypes, "category"])
 def test_dataframe_0_row_dtype(dtype):
     if dtype == "category":
         data = pd.Series(["a", "b", "c", "d", "e"], dtype="category")
@@ -7898,10 +7910,10 @@ def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
 
     with _hide_concat_empty_dtype_warning():
         expected = pd.concat(
-            [pdf] + other_pd, sort=sort, ignore_index=ignore_index
+            [pdf, *other_pd], sort=sort, ignore_index=ignore_index
         )
         actual = cudf.concat(
-            [gdf] + other_gd, sort=sort, ignore_index=ignore_index
+            [gdf, *other_gd], sort=sort, ignore_index=ignore_index
         )
 
     # In some cases, Pandas creates an empty Index([], dtype="object") for
@@ -8014,10 +8026,10 @@ def test_dataframe_concat_lists(df, other, sort, ignore_index):
 
     with _hide_concat_empty_dtype_warning():
         expected = pd.concat(
-            [pdf] + other_pd, sort=sort, ignore_index=ignore_index
+            [pdf, *other_pd], sort=sort, ignore_index=ignore_index
         )
         actual = cudf.concat(
-            [gdf] + other_gd, sort=sort, ignore_index=ignore_index
+            [gdf, *other_gd], sort=sort, ignore_index=ignore_index
         )
 
     if expected.shape != df.shape:
@@ -10880,7 +10892,7 @@ def test_dataframe_from_ndarray_dup_columns():
 @pytest.mark.parametrize("contains", ["a", 0, None, np.nan, cudf.NA])
 @pytest.mark.parametrize("other_names", [[], ["b", "c"], [1, 2]])
 def test_dataframe_contains(name, contains, other_names):
-    column_names = [name] + other_names
+    column_names = [name, *other_names]
     gdf = cudf.DataFrame({c: [0] for c in column_names})
     pdf = pd.DataFrame({c: [0] for c in column_names})
 

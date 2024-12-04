@@ -36,6 +36,8 @@ if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERS
   )
 endif()
 
+rapids_cmake_write_version_file(include/cudf/version_config.hpp)
+
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
 # `Threads::Threads` is the same value in first run and subsequent runs.
@@ -77,6 +79,7 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -88,7 +91,9 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
-option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
+option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
+option(CUDF_IWYU "Enable IWYU during compilation" OFF)
+option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
 
 option(
   CUDF_KVIKIO_REMOTE_IO
@@ -156,9 +161,7 @@ endif()
 
 # ##################################################################################################
 # * linter configuration ---------------------------------------------------------------------------
-if(CUDF_STATIC_LINTERS)
-  # For simplicity, for now we assume that all linters can be installed into an environment where
-  # any linter is being run. We could relax this requirement if desired.
+if(CUDF_CLANG_TIDY)
   find_program(
     CLANG_TIDY_EXE
     NAMES "clang-tidy"
@@ -185,7 +188,9 @@ if(CUDF_STATIC_LINTERS)
         "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
     )
   endif()
+endif()
 
+if(CUDF_IWYU)
   find_program(IWYU_EXE NAMES include-what-you-use iwyu REQUIRED)
 endif()
 
@@ -198,38 +203,43 @@ function(enable_static_checkers target)
     _LINT "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
   )
 
-  if(CUDF_STATIC_LINTERS)
-    if(_LINT_CLANG_TIDY)
-      # clang will complain about unused link libraries on the compile line unless we specify
-      # -Qunused-arguments.
+  if(_LINT_CLANG_TIDY)
+    # clang will complain about unused link libraries on the compile line unless we specify
+    # -Qunused-arguments.
+    if(CUDF_CLANG_TIDY_AUTOFIX)
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY
+                             "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments;--fix"
+      )
+    else()
       set_target_properties(
         ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
       )
     endif()
-    if(_LINT_IWYU)
-      # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
-      # relevant since they don't show up in any other build so it's better to suppress them until
-      # we can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not
-      # appear to be sufficient, we must also ensure that it is set to the underlying target's CXX
-      # compile flags. To do this completely cleanly we should modify the flags on the target rather
-      # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
-      # the linters on real builds.
-      foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
-        list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
-        if(_flag_index EQUAL -1)
-          list(APPEND CUDF_CXX_FLAGS ${_flag})
-        endif()
-      endforeach()
-      set(CUDF_CXX_FLAGS
-          "${CUDF_CXX_FLAGS}"
-          PARENT_SCOPE
-      )
-      set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
-    endif()
-    foreach(file IN LISTS _LINT_SKIPPED_FILES)
-      set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
-    endforeach()
   endif()
+  if(_LINT_IWYU)
+    # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
+    # relevant since they don't show up in any other build so it's better to suppress them until we
+    # can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not appear to
+    # be sufficient, we must also ensure that it is set to the underlying target's CXX compile
+    # flags. To do this completely cleanly we should modify the flags on the target rather than the
+    # global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run the linters
+    # on real builds.
+    foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
+      list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
+      if(_flag_index EQUAL -1)
+        list(APPEND CUDF_CXX_FLAGS ${_flag})
+      endif()
+    endforeach()
+    set(CUDF_CXX_FLAGS
+        "${CUDF_CXX_FLAGS}"
+        PARENT_SCOPE
+    )
+    set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+  endif()
+  foreach(file IN LISTS _LINT_SKIPPED_FILES)
+    set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
+  endforeach()
 endfunction()
 
 # ##################################################################################################
@@ -238,6 +248,7 @@ rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules ${CMAKE_MODULE_PATH})
 rapids_find_package(
   CUDAToolkit REQUIRED
   BUILD_EXPORT_SET cudf-exports
@@ -460,6 +471,7 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
+  src/io/comp/comp.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
@@ -807,9 +819,18 @@ set_target_properties(
 
 # Note: This must come before the target_compile_options below so that the function can modify the
 # flags if necessary.
-enable_static_checkers(
-  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
-)
+if(CUDF_CLANG_TIDY OR CUDF_IWYU)
+  set(linters)
+  if(CUDF_CLANG_TIDY)
+    list(APPEND linters CLANG_TIDY)
+  endif()
+  if(CUDF_IWYU)
+    list(APPEND linters IWYU)
+  endif()
+  enable_static_checkers(
+    cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp ${linters}
+  )
+endif()
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
@@ -899,7 +920,11 @@ target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCU
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
 
 # Enable cuFile support
-if(TARGET CUDA::cuFile)
+set(_cufile_suffix)
+if(CUDA_STATIC_CUFILE)
+  set(_cufile_suffix _static)
+endif()
+if(TARGET CUDA::cuFile${_cufile_suffix})
   target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
 endif()
 
@@ -909,9 +934,16 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile> nanoarrow
+  PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+         spdlog::spdlog_header_only
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          cuco::cuco
+          ZLIB::ZLIB
+          nvcomp::nvcomp
+          kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
+          nanoarrow
+          rmm::rmm_logger_impl
 )
 
 # Add Conda library, and include paths if specified
@@ -990,7 +1022,7 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE Threads::Threads cudf cudftest_default_stream
+    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
                            $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
@@ -1125,6 +1157,9 @@ install(
   TARGETS cudf
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
+)
+install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
 )
 
 set(_components_export_string)
