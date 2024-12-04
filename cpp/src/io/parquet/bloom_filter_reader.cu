@@ -499,7 +499,7 @@ aggregate_reader_metadata::apply_bloom_filters(
     cudf::detail::make_device_uvector_async(h_bloom_filter_spans, stream, mr);
 
   // Create a bloom filter query table caster.
-  bloom_filter_caster bloom_filter_col{
+  bloom_filter_caster const bloom_filter_col{
     bloom_filter_spans, parquet_types, total_row_groups, equality_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
