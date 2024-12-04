@@ -11,6 +11,10 @@ break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1602
 # break /home/coder/cudf/cpp/src/io/orc/stripe_init.cu:459
 # break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1891
 
+define biu62
+    cuda block (0,62,0) thread (0,0,0)
+end
+
 define biu63
     cuda block (0,63,0) thread (0,0,0)
 end
