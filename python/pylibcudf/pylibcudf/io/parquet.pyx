@@ -23,6 +23,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     write_parquet as cpp_write_parquet,
     parquet_writer_options,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
+    chunked_parquet_writer_options,
 )
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
@@ -250,18 +251,24 @@ cpdef read_parquet(
 cdef class ParquetChunkedWriter:
     cpdef memoryview close(self, list metadata_file_path):
         cdef vector[string] column_chunks_file_paths
-        for path in metadata_file_path:
-            column_chunks_file_paths.push_back(str.encode(path))
+        cdef unique_ptr[vector[uint8_t]] out_metadata_c
+        if metadata_file_path != []:
+            for path in metadata_file_path:
+                column_chunks_file_paths.push_back(str.encode(path))
         with nogil:
-            self.c_obj.get()[0].close(column_chunks_file_paths)
+            out_metadata_c = move(self.c_obj.get()[0].close(column_chunks_file_paths))
+        return memoryview(HostBuffer.from_unique_ptr(move(out_metadata_c)))
 
-    cpdef void write(self, Table table, list partitions_info=None):
+    cpdef void write(self, Table table, object partitions_info):
+        if partitions_info is None:
+            with nogil:
+                self.c_obj.get()[0].write(table.view())
+            return
         cdef vector[partition_info] partitions
-        if partitions_info is not None:
-            for part in partitions_info:
-                partitions.push_back(
-                    partition_info(part[0], part[1])
-                )
+        for part in partitions_info:
+            partitions.push_back(
+                partition_info(part[0], part[1])
+            )
         with nogil:
             self.c_obj.get()[0].write(table.view(), partitions)
 
@@ -271,28 +278,30 @@ cdef class ParquetChunkedWriter:
             ParquetChunkedWriter
         )
         parquet_writer.c_obj.reset(new cpp_parquet_chunked_writer(options.c_obj))
-        return orc_writer
+        return parquet_writer
 
 
 cdef class ChunkedParquetWriterOptions:
     @staticmethod
-    def builder(SinkInfo sink, Table table):
+    def builder(SinkInfo sink):
         cdef ChunkedParquetWriterOptionsBuilder parquet_builder = (
             ChunkedParquetWriterOptionsBuilder.__new__(
                 ChunkedParquetWriterOptionsBuilder
             )
         )
-        parquet_builder.c_obj = chunked_parquet_writer_options.builder(sink.c_obj, table.view())
-        parquet_builder.table = table
+        parquet_builder.c_obj = chunked_parquet_writer_options.builder(sink.c_obj)
         parquet_builder.sink = sink
         return parquet_builder
 
-    cpdef void set_dictionary_policy(self, dictionary_policy policy):
+    cpdef void set_dictionary_policy(self, dictionary_policy_t policy):
         self.c_obj.set_dictionary_policy(policy)
 
 
 cdef class ChunkedParquetWriterOptionsBuilder:
-    cpdef ChunkedParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata):
+    cpdef ChunkedParquetWriterOptionsBuilder metadata(
+        self,
+        TableInputMetadata metadata
+    ):
         self.c_obj.metadata(metadata.c_obj)
         return self
 
@@ -305,7 +314,10 @@ cdef class ChunkedParquetWriterOptionsBuilder:
         )
         return self
 
-    cpdef ChunkedParquetWriterOptionsBuilder compression(self, compression_type compression):
+    cpdef ChunkedParquetWriterOptionsBuilder compression(
+        self,
+        compression_type compression
+    ):
         self.c_obj.compression(compression)
         return self
 
@@ -313,7 +325,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
         self.c_obj.stats_level(sf)
         return self
 
-    cpdef ChunkedParquetWriterOptionsBuilder row_group_size_bytes(self, size_t val)
+    cpdef ChunkedParquetWriterOptionsBuilder row_group_size_bytes(self, size_t val):
         self.c_obj.row_group_size_bytes(val)
         return self
 
@@ -339,8 +351,8 @@ cdef class ChunkedParquetWriterOptionsBuilder:
 
     cpdef ChunkedParquetWriterOptions build(self):
         """Create a ChunkedParquetWriterOptions object"""
-        cdef ChunkedParquetWriterOptions parquet_options = ChunkedParquetWriterOptions.__new__(
-            ChunkedParquetWriterOptions
+        cdef ChunkedParquetWriterOptions parquet_options = (
+            ChunkedParquetWriterOptions.__new__(ChunkedParquetWriterOptions)
         )
         parquet_options.c_obj = move(self.c_obj.build())
         parquet_options.sink = self.sink
@@ -674,6 +686,6 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
     cdef unique_ptr[vector[uint8_t]] c_result
 
     with nogil:
-        c_result = cpp_write_parquet(options.c_obj)
+        c_result = cpp_write_parquet(move(options.c_obj))
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))

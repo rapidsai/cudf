@@ -15,6 +15,7 @@ from pylibcudf.io.types cimport (
     TableWithMetadata,
 )
 from pylibcudf.libcudf.io.parquet cimport (
+    parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_reader as cpp_chunked_parquet_reader,
     parquet_writer_options,
     parquet_writer_options_builder,
@@ -50,26 +51,30 @@ cpdef read_parquet(
 
 
 cdef class ParquetChunkedWriter:
-    cdef unique_ptr[parquet_chunked_writer] c_obj
-    cpdef memoryview close(self, list column_chunks_file_paths):
-    cpdef void write(self, Table table, list partitions=*)
+    cdef unique_ptr[cpp_parquet_chunked_writer] c_obj
+    cpdef memoryview close(self, list column_chunks_file_paths)
+    cpdef void write(self, Table table, object partitions)
 
 
 cdef class ChunkedParquetWriterOptions:
-    cpdef void set_dictionary_policy(self, dictionary_policy policy):
-        self.c_obj.set_dictionary_policy(policy)
+    cdef chunked_parquet_writer_options c_obj
+    cdef SinkInfo sink
+
+    cpdef void set_dictionary_policy(self, dictionary_policy policy)
 
 
 cdef class ChunkedParquetWriterOptionsBuilder:
-    cdef parquet_writer_options_builder c_obj
-    cdef Table table_ref
-    cdef SinkInfo sink_ref
+    cdef chunked_parquet_writer_options_builder c_obj
+    cdef SinkInfo sink
 
     cpdef ChunkedParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
 
     cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
 
-    cpdef ChunkedParquetWriterOptionsBuilder compression(self, compression_type compression)
+    cpdef ChunkedParquetWriterOptionsBuilder compression(
+        self,
+        compression_type compression
+    )
 
     cpdef ChunkedParquetWriterOptionsBuilder stats_level(self, statistics_freq sf)
 
@@ -85,7 +90,7 @@ cdef class ChunkedParquetWriterOptionsBuilder:
 
     cpdef ChunkedParquetWriterOptionsBuilder write_arrow_schema(self, bool enabled)
 
-    cpdef ParquetWriterOptions build(self)
+    cpdef ChunkedParquetWriterOptions build(self)
 
 
 cdef class ParquetWriterOptions:
