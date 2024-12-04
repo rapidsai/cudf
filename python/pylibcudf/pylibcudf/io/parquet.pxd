@@ -24,20 +24,6 @@ from pylibcudf.table cimport Table
 from pylibcudf.types cimport DataType
 
 
-cdef class BufferArrayFromVector:
-    cdef Py_ssize_t length
-    cdef unique_ptr[vector[uint8_t]] in_vec
-
-    # these two things declare part of the buffer interface
-    cdef Py_ssize_t shape[1]
-    cdef Py_ssize_t strides[1]
-
-    @staticmethod
-    cdef BufferArrayFromVector from_unique_ptr(
-        unique_ptr[vector[uint8_t]] vec
-    )
-
-
 cdef class ChunkedParquetReader:
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
@@ -106,4 +92,4 @@ cdef class ParquetWriterOptionsBuilder:
 
 cpdef memoryview write_parquet(ParquetWriterOptions options)
 
-cpdef BufferArrayFromVector merge_row_group_metadata(list metdata_list)
+cpdef memoryview merge_row_group_metadata(list metdata_list)

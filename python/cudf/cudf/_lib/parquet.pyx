@@ -767,7 +767,7 @@ cpdef merge_filemetadata(object filemetadata_list):
     cudf.io.parquet.merge_row_group_metadata
     """
     return np.asarray(
-        plc.io.parquet.merge_row_group_metadata(filemetadata_list)
+        plc.io.parquet.merge_row_group_metadata(filemetadata_list).obj
     )
 
 

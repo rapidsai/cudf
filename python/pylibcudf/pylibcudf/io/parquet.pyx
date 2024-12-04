@@ -43,40 +43,6 @@ __all__ = [
     "merge_row_group_metadata",
 ]
 
-
-cdef class BufferArrayFromVector:
-    @staticmethod
-    cdef BufferArrayFromVector from_unique_ptr(
-        unique_ptr[vector[uint8_t]] in_vec
-    ):
-        cdef BufferArrayFromVector buf = BufferArrayFromVector()
-        buf.in_vec = move(in_vec)
-        buf.length = dereference(buf.in_vec).size()
-        return buf
-
-    def __getbuffer__(self, Py_buffer *buffer, int flags):
-        cdef Py_ssize_t itemsize = sizeof(uint8_t)
-
-        self.shape[0] = self.length
-        self.strides[0] = 1
-
-        buffer.buf = dereference(self.in_vec).data()
-
-        buffer.format = NULL  # byte
-        buffer.internal = NULL
-        buffer.itemsize = itemsize
-        buffer.len = self.length * itemsize   # product(shape) * itemsize
-        buffer.ndim = 1
-        buffer.obj = self
-        buffer.readonly = 0
-        buffer.shape = self.shape
-        buffer.strides = self.strides
-        buffer.suboffsets = NULL
-
-    def __releasebuffer__(self, Py_buffer *buffer):
-        pass
-
-
 cdef parquet_reader_options _setup_parquet_reader_options(
     SourceInfo source_info,
     list columns = None,
@@ -614,7 +580,7 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 
 
-cpdef BufferArrayFromVector merge_row_group_metadata(list metdata_list):
+cpdef memoryview merge_row_group_metadata(list metdata_list):
     """
     Merges multiple raw metadata blobs that were previously
     created by write_parquet into a single metadata blob.
@@ -628,7 +594,7 @@ cpdef BufferArrayFromVector merge_row_group_metadata(list metdata_list):
 
     Returns
     -------
-    BufferArrayFromVector
+    memoryview
         A parquet-compatible blob that contains the data for all row groups in the list
     """
     cdef vector[unique_ptr[vector[uint8_t]]] list_c
@@ -642,4 +608,4 @@ cpdef BufferArrayFromVector merge_row_group_metadata(list metdata_list):
     with nogil:
         output_c = move(cpp_merge_row_group_metadata(list_c))
 
-    return BufferArrayFromVector.from_unique_ptr(move(output_c))
+    return memoryview(HostBuffer.from_unique_ptr(move(output_c)))
