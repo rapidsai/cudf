@@ -1372,7 +1372,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> ColumnBase | ScalarLike:
+    ) -> ColumnBase | cudf.Scalar:
         raise NotImplementedError
 
     def _reduce(
