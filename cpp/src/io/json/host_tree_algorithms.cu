@@ -950,7 +950,7 @@ void scatter_offsets(tree_meta_t const& tree,
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
-    list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()),
+    thrust::distance(thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin(), list_children_end),
     [node_ids          = node_ids.begin(),
      parent_node_ids   = tree.parent_node_ids.begin(),
      column_categories = d_column_tree.node_categories.begin(),
