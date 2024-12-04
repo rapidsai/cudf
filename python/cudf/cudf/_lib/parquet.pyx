@@ -14,8 +14,6 @@ except ImportError:
 
 import numpy as np
 
-from cython.operator cimport dereference
-
 from cudf.api.types import is_list_like
 
 from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
@@ -24,15 +22,12 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from pylibcudf.expressions cimport Expression
 from pylibcudf.io.parquet cimport ChunkedParquetReader
-from pylibcudf.libcudf.io.parquet cimport (
-    merge_row_group_metadata as parquet_merge_metadata
-)
 from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     compression_type,
@@ -52,6 +47,7 @@ from pylibcudf cimport Table
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
 from pylibcudf.io.types cimport TableInputMetadata, SinkInfo, ColumnInMetadata
 from pylibcudf.io.parquet cimport ParquetChunkedWriter
+from cython.operator cimport dereference
 
 
 cdef class BufferArrayFromVector:
@@ -433,9 +429,7 @@ def write_parquet(
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
-        columns = table._columns if table._index is None else [
-            *table.index._columns, *table._columns
-        ]
+        columns = [*table.index._columns, *table._columns]
         plc_table = plc.Table([col.to_pylibcudf(mode="read") for col in columns])
         tbl_meta = TableInputMetadata(plc_table)
         for level, idx_name in enumerate(table._index.names):
@@ -634,9 +628,7 @@ cdef class ParquetWriter:
         if self.index is not False and (
             table._index.name is not None or
                 isinstance(table._index, cudf.core.multiindex.MultiIndex)):
-            columns = table._columns if table._index is None else [
-                *table.index._columns, *table._columns
-            ]
+            columns = [*table.index._columns, *table._columns]
             plc_table = plc.Table([col.to_pylibcudf(mode="read") for col in columns])
         else:
             plc_table = plc.Table(
@@ -748,19 +740,9 @@ cpdef merge_filemetadata(object filemetadata_list):
     --------
     cudf.io.parquet.merge_row_group_metadata
     """
-    cdef vector[unique_ptr[vector[uint8_t]]] list_c
-    cdef vector[uint8_t] blob_c
-    cdef unique_ptr[vector[uint8_t]] output_c
-
-    for blob_py in filemetadata_list:
-        blob_c = blob_py
-        list_c.push_back(move(make_unique[vector[uint8_t]](blob_c)))
-
-    with nogil:
-        output_c = move(parquet_merge_metadata(list_c))
-
-    out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))
-    return np.asarray(out_metadata_py)
+    return np.asarray(
+        plc.io.parquet.merge_row_group_metadata(filemetadata_list).obj
+    )
 
 
 cdef statistics_freq _get_stat_freq(str statistics):

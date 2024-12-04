@@ -2,7 +2,7 @@
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -24,6 +24,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     parquet_writer_options,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_writer_options,
+    merge_row_group_metadata as cpp_merge_row_group_metadata,
 )
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
@@ -43,8 +44,8 @@ __all__ = [
     "write_parquet",
     "ChunkedParquetWriterOptions",
     "ChunkedParquetWriterOptionsBuilder"
+    "merge_row_group_metadata",
 ]
-
 
 cdef parquet_reader_options _setup_parquet_reader_options(
     SourceInfo source_info,
@@ -268,7 +269,7 @@ cdef class ParquetChunkedWriter:
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
         if metadata_file_path:
             for path in metadata_file_path:
-                column_chunks_file_paths.push_back(str.encode(path))
+                column_chunks_file_paths.push_back(path.encode())
         with nogil:
             out_metadata_c = move(self.c_obj.get()[0].close(column_chunks_file_paths))
         return memoryview(HostBuffer.from_unique_ptr(move(out_metadata_c)))
@@ -862,3 +863,32 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
         c_result = cpp_write_parquet(move(options.c_obj))
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
+
+
+cpdef memoryview merge_row_group_metadata(list metdata_list):
+    """
+    Merges multiple raw metadata blobs that were previously
+    created by write_parquet into a single metadata blob.
+
+    For details, see :cpp:func:`merge_row_group_metadata`.
+
+    Parameters
+    ----------
+    metdata_list : list
+        List of input file metadata
+
+    Returns
+    -------
+    memoryview
+        A parquet-compatible blob that contains the data for all row groups in the list
+    """
+    cdef vector[unique_ptr[vector[uint8_t]]] list_c
+    cdef unique_ptr[vector[uint8_t]] output_c
+
+    for blob in metdata_list:
+        list_c.push_back(move(make_unique[vector[uint8_t]](<vector[uint8_t]> blob)))
+
+    with nogil:
+        output_c = move(cpp_merge_row_group_metadata(list_c))
+
+    return memoryview(HostBuffer.from_unique_ptr(move(output_c)))
