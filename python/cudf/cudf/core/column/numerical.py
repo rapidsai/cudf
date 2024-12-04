@@ -16,7 +16,7 @@ import cudf.core.column.column as column
 import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
-from cudf.core._internals import unary
+from cudf.core._internals import binaryop, unary
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
@@ -292,7 +292,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         lhs, rhs = (other, self) if reflect else (self, other)
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        return binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def nans_to_nulls(self: Self) -> Self:
         # Only floats can contain nan.
@@ -301,11 +301,9 @@ class NumericalColumn(NumericalBaseColumn):
         newmask = libcudf.transform.nans_to_nulls(self)
         return self.set_mask(newmask)
 
-    def normalize_binop_value(
-        self, other: ScalarLike
-    ) -> ColumnBase | cudf.Scalar:
+    def normalize_binop_value(self, other: ScalarLike) -> Self | cudf.Scalar:
         if isinstance(other, ColumnBase):
-            if not isinstance(other, NumericalColumn):
+            if not isinstance(other, type(self)):
                 return NotImplemented
             return other
         if isinstance(other, cudf.Scalar):

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reduction.hpp>
@@ -120,6 +121,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
     CUDF_FAIL(
       "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
   }
+
+  if (segmented_values.is_empty() && offsets.empty()) {
+    return cudf::make_empty_column(output_dtype);
+  }
+
   CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
 
   return cudf::detail::aggregation_dispatcher(
