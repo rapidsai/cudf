@@ -455,9 +455,12 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTable)
   using namespace numeric;
 
   auto const precision = []() {
-    if constexpr (std::is_same_v<T, int32_t>) return 9;
-    else if constexpr (std::is_same_v<T, int64_t>) return 18;
-    else return 38;
+    if constexpr (std::is_same_v<T, int32_t>)
+      return 9;
+    else if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return 38;
   }();
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
@@ -485,11 +488,14 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableLarge)
   using namespace numeric;
 
   auto const precision = []() {
-    if constexpr (std::is_same_v<T, int32_t>) return 9;
-    else if constexpr (std::is_same_v<T, int64_t>) return 18;
-    else return 38;
+    if constexpr (std::is_same_v<T, int32_t>)
+      return 9;
+    else if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return 38;
   }();
-  
+
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
@@ -518,17 +524,20 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNulls)
   using namespace numeric;
 
   auto const precision = []() {
-    if constexpr (std::is_same_v<T, int32_t>) return 9;
-    else if constexpr (std::is_same_v<T, int64_t>) return 18;
-    else return 38;
-  }();  
+    if constexpr (std::is_same_v<T, int32_t>)
+      return 9;
+    else if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return 38;
+  }();
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6, 0, 0};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0},
-                                                 {true, true, true, true, true, true, false, false},
-                                            scale_type{scale});
+                                   {true, true, true, true, true, true, false, false},
+                                   scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = get_decimal_arrow_array(data, validity, precision, scale);
@@ -551,19 +560,22 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNullsLarge)
   using namespace numeric;
 
   auto const precision = []() {
-    if constexpr (std::is_same_v<T, int32_t>) return 9;
-    else if constexpr (std::is_same_v<T, int64_t>) return 18;
-    else return 38;
+    if constexpr (std::is_same_v<T, int32_t>)
+      return 9;
+    else if constexpr (std::is_same_v<T, int64_t>)
+      return 18;
+    else
+      return 38;
   }();
 
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto every_other = [](auto i) { return i % 2 ? 0 : 1; };
-    auto validity    = cudf::detail::make_counting_transform_iterator(0, every_other);
-    auto iota        = thrust::make_counting_iterator(1);
-    auto const data  = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
+    auto every_other    = [](auto i) { return i % 2 ? 0 : 1; };
+    auto validity       = cudf::detail::make_counting_transform_iterator(0, every_other);
+    auto iota           = thrust::make_counting_iterator(1);
+    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = get_decimal_arrow_array(

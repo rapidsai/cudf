@@ -295,9 +295,9 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto iota = thrust::make_counting_iterator(1);
-    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});    
+    auto iota           = thrust::make_counting_iterator(1);
+    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
@@ -354,7 +354,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableNulls)
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
-    auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+    auto const col = fp_wrapper<T>({1, 2, 3, 4, 5, 6}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
@@ -368,7 +368,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableNulls)
     nanoarrow::UniqueArray input_array;
     NANOARROW_THROW_NOT_OK(
       ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
-    input_array->length     = expected.num_rows();    
+    input_array->length = expected.num_rows();
 
     auto arr = get_nanoarrow_array<T>(data, validity);
     arr.move(input_array->children[0]);
@@ -395,7 +395,6 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableNulls)
   }
 }
 
-
 TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
 {
   using T = TypeParam;
@@ -412,11 +411,14 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
     auto every_other = [](auto i) { return i % 2 ? 0 : 1; };
-    auto validity = cudf::detail::make_counting_transform_iterator(0, every_other);
+    auto validity    = cudf::detail::make_counting_transform_iterator(0, every_other);
     std::vector<uint8_t> validity_vec(validity, validity + NUM_ELEMENTS);
-    auto iota = thrust::make_counting_iterator(1);
-    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, cudf::detail::make_counting_transform_iterator(0, every_other), scale_type{scale});
+    auto iota           = thrust::make_counting_iterator(1);
+    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col      = fp_wrapper<T>(iota,
+                                   iota + NUM_ELEMENTS,
+                                   cudf::detail::make_counting_transform_iterator(0, every_other),
+                                   scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
@@ -430,7 +432,7 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
     nanoarrow::UniqueArray input_array;
     NANOARROW_THROW_NOT_OK(
       ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
-    input_array->length     = expected.num_rows();    
+    input_array->length = expected.num_rows();
 
     auto arr = get_nanoarrow_array<T>(data, validity_vec);
     arr.move(input_array->children[0]);

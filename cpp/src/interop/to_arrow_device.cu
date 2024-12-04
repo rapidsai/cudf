@@ -134,7 +134,6 @@ struct dispatch_to_arrow_device {
   }
 };
 
-
 template <>
 int dispatch_to_arrow_device::operator()<bool>(cudf::column&& column,
                                                rmm::cuda_stream_view stream,
@@ -349,7 +348,6 @@ struct dispatch_to_arrow_device_view {
                            out);
   }
 };
-
 
 template <>
 int dispatch_to_arrow_device_view::operator()<bool>(ArrowArray* out) const

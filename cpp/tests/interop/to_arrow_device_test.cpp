@@ -708,8 +708,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint32Table)
   using namespace numeric;
 
   for (auto const scale : {6, 4, 2, 0, -1, -3, -5}) {
-    auto const expect_data =
-      std::vector<int32_t>{-1000, 2400, -3456, 4650, 5154, 6800};
+    auto const expect_data = std::vector<int32_t>{-1000, 2400, -3456, 4650, 5154, 6800};
     auto col = fp_wrapper<int32_t>({-1000, 2400, -3456, 4650, 5154, 6800}, scale_type{scale});
     std::vector<std::unique_ptr<cudf::column>> table_cols;
     table_cols.emplace_back(col.release());
@@ -770,10 +769,8 @@ TEST_F(ToArrowDeviceTest, FixedPoint64Table)
     ArrowSchemaInit(expected_schema.get());
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
     ArrowSchemaInit(expected_schema->children[0]);
-    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
-                                                     NANOARROW_TYPE_DECIMAL64,
-                                                     18,
-                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      expected_schema->children[0], NANOARROW_TYPE_DECIMAL64, 18, -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
 

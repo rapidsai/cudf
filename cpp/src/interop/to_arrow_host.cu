@@ -18,6 +18,7 @@
 #include "decimal_conversion_utilities.cuh"
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -132,7 +133,6 @@ struct dispatch_to_arrow_host {
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
-
 };
 
 int get_column(cudf::column_view column,
