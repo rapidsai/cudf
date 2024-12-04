@@ -109,14 +109,8 @@ struct empty_column_functor {
       child_columns.push_back(cudf::type_dispatcher(
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name)));
     }
-    // Do not use `cudf::make_structs_column` since we do not need to call `superimpose_nulls` on
-    // the children columns. Look issue #17356
-    return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
-                                    0,
-                                    rmm::device_buffer{},
-                                    rmm::device_buffer{},
-                                    0,
-                                    std::move(child_columns));
+    return make_structs_column(0, std::move(child_columns), 0, {}, stream, mr);
+
   }
 };
 
