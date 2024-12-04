@@ -31,9 +31,9 @@
 
 using StringType = cudf::string_view;
 
-class BloomFilterTest : public cudf::test::BaseFixture {};
+class ParquetBloomFilterTest : public cudf::test::BaseFixture {};
 
-TEST_F(BloomFilterTest, TestStrings)
+TEST_F(ParquetBloomFilterTest, TestStrings)
 {
   using key_type    = StringType;
   using hasher_type = cudf::hashing::detail::XXHash_64<key_type>;
@@ -43,8 +43,8 @@ TEST_F(BloomFilterTest, TestStrings)
   std::size_t constexpr num_filter_blocks = 4;
   auto stream                             = cudf::get_default_stream();
 
-  // strings data
-  auto data = cudf::test::strings_column_wrapper(
+  // strings keys to insert
+  auto keys = cudf::test::strings_column_wrapper(
     {"seventh",    "fifteenth",   "second",      "tenth",      "fifth",       "first",
      "seventh",    "tenth",       "ninth",       "ninth",      "seventeenth", "eighteenth",
      "thirteenth", "fifth",       "fourth",      "twelfth",    "second",      "second",
@@ -54,7 +54,8 @@ TEST_F(BloomFilterTest, TestStrings)
      "seventh",    "tenth",       "fourteenth",  "first",      "fifth",       "fifth",
      "tenth",      "thirteenth",  "fourteenth",  "third",      "third",       "sixth",
      "first",      "third"});
-  auto d_column = cudf::column_device_view::create(data);
+
+  auto d_keys = cudf::column_device_view::create(keys);
 
   // Spawn a bloom filter
   cuco::bloom_filter<key_type,
@@ -69,15 +70,16 @@ TEST_F(BloomFilterTest, TestStrings)
            stream};
 
   // Add strings to the bloom filter
-  filter.add(d_column->begin<key_type>(), d_column->end<key_type>(), stream);
+  filter.add(d_keys->begin<key_type>(), d_keys->end<key_type>(), stream);
 
   // Number of words in the filter
   cudf::size_type const num_words = filter.block_extent() * filter.words_per_block;
 
-  auto const output = cudf::column_view{
+  // Filter bitset as a column
+  auto const bitset = cudf::column_view{
     cudf::data_type{cudf::type_id::UINT32}, num_words, filter.data(), nullptr, 0, 0, {}};
 
-  // Expected filter bitset words computed using Arrow implementation here:
+  // Expected filter bitset words computed using Arrow's implementation here:
   // https://godbolt.org/z/oKfqcPWbY
   auto expected = cudf::test::fixed_width_column_wrapper<word_type>(
     {4194306U,    4194305U,    2359296U,  1073774592U, 524544U,    1024U,      268443648U,
@@ -87,5 +89,5 @@ TEST_F(BloomFilterTest, TestStrings)
      2216738864U, 587333888U,  4219272U,  873463873U});
 
   // Check the bitset for equality
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(bitset, expected);
 }
