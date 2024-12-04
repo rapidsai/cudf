@@ -52,8 +52,7 @@ namespace {
  *
  */
 struct bloom_filter_caster {
-  cudf::device_span<void* const> buffer_ptrs;
-  cudf::device_span<size_t const> buffer_sizes;
+  cudf::device_span<cudf::device_span<cuda::std::byte> const> bloom_filter_spans;
   host_span<Type const> parquet_types;
   size_t num_row_groups;
   size_t num_equality_columns;
@@ -87,34 +86,35 @@ struct bloom_filter_caster {
       rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator<size_t>(0),
       thrust::make_counting_iterator(num_row_groups),
-      [buffer_ptrs          = buffer_ptrs.data(),
-       buffer_sizes         = buffer_sizes.data(),
+      [filter_span          = bloom_filter_spans.data(),
        d_scalar             = literal->get_value(),
        col_idx              = equality_col_idx,
        num_equality_columns = num_equality_columns,
        results = reinterpret_cast<bool*>(results.data())] __device__(auto row_group_idx) {
         // Filter bitset buffer index
-        auto const filter_idx = col_idx + (num_equality_columns * row_group_idx);
+        auto const filter_idx  = col_idx + (num_equality_columns * row_group_idx);
+        auto const filter_size = filter_span[filter_idx].size();
 
         // If no bloom filter, then fill in `true` as membership cannot be determined
-        if (buffer_sizes[filter_idx] == 0) {
+        if (filter_size == 0) {
           results[row_group_idx] = true;
           return;
         }
 
         // Number of filter blocks
-        auto const num_filter_blocks = buffer_sizes[filter_idx] / (word_size * words_per_block);
+        auto const num_filter_blocks = filter_size / (word_size * words_per_block);
 
         // Create a bloom filter view.
         cuco::bloom_filter_ref<key_type,
                                cuco::extent<std::size_t>,
                                cuco::thread_scope_thread,
                                policy_type>
-          filter{reinterpret_cast<word_type*>(buffer_ptrs[filter_idx]),
+          filter{reinterpret_cast<word_type*>(filter_span[filter_idx].data()),
                  num_filter_blocks,
                  {},  // Thread scope as the same literal is being searched across different bitsets
                       // per thread
-                 {}};  // Arrow policy with cudf::XXHash_64 seeded with 0 for Arrow compatibility
+                 {}};  // Arrow policy with cudf::hashing::detail::XXHash_64 seeded with 0 for Arrow
+                       // compatibility
 
         // If int96_timestamp type, convert literal to string_view and query bloom
         // filter
@@ -621,7 +621,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Read a vector of bloom filter bitset device buffers for all column with equality
   // predicate(s) across all row groups
-  auto const bloom_filter_data = read_bloom_filters(
+  auto bloom_filter_data = read_bloom_filters(
     sources, input_row_group_indices, equality_col_schemas, num_row_groups, stream);
 
   // No bloom filter buffers, return the original row group indices
@@ -630,23 +630,25 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Get parquet types for the predicate columns
   auto const parquet_types = get_parquet_types(input_row_group_indices, equality_col_schemas);
 
-  // Copy bloom filter bitset buffer pointers and sizes to device
-  std::vector<void*> h_buffer_ptrs(bloom_filter_data.size());
-  std::vector<size_t> h_buffer_sizes(bloom_filter_data.size());
-  std::for_each(thrust::make_counting_iterator<size_t>(0),
-                thrust::make_counting_iterator<size_t>(bloom_filter_data.size()),
-                [&](auto i) {
-                  auto const& buffer = bloom_filter_data[i];
-                  // Bitset ptr must be non-const to be used in cuco::bloom_filter.
-                  h_buffer_ptrs[i]  = const_cast<void*>(buffer.data());
-                  h_buffer_sizes[i] = buffer.size();
-                });
-  auto buffer_ptrs  = cudf::detail::make_device_uvector_async(h_buffer_ptrs, stream, mr);
-  auto buffer_sizes = cudf::detail::make_device_uvector_async(h_buffer_sizes, stream, mr);
+  // Create spans from bloom filter bitset buffers
+  std::vector<cudf::device_span<cuda::std::byte>> h_bloom_filter_spans;
+  h_bloom_filter_spans.reserve(bloom_filter_data.size());
+  std::transform(thrust::make_counting_iterator<size_t>(0),
+                 thrust::make_counting_iterator<size_t>(bloom_filter_data.size()),
+                 std::back_inserter(h_bloom_filter_spans),
+                 [&](auto const filter_idx) {
+                   return cudf::device_span<cuda::std::byte>{
+                     static_cast<cuda::std::byte*>(bloom_filter_data[filter_idx].data()),
+                     bloom_filter_data[filter_idx].size()};
+                 });
+
+  // Copy bloom filter bitset spans to device
+  auto const bloom_filter_spans =
+    cudf::detail::make_device_uvector_async(h_bloom_filter_spans, stream, mr);
 
   // Create a bloom filter query table caster.
   bloom_filter_caster bloom_filter_col{
-    buffer_ptrs, buffer_sizes, parquet_types, num_row_groups, equality_col_schemas.size()};
+    bloom_filter_spans, parquet_types, num_row_groups, equality_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.
