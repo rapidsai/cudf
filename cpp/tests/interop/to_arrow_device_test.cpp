@@ -48,7 +48,6 @@ get_nanoarrow_cudf_table(cudf::size_type length)
                          .release());
   auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(
     test_data.int64_data.begin(), test_data.int64_data.end(), test_data.validity.begin());
-  auto dict_col = cudf::dictionary::encode(col4);
   columns.emplace_back(cudf::dictionary::encode(col4));
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(test_data.bool_data.begin(),
                                                                     test_data.bool_data.end(),
@@ -103,7 +102,7 @@ get_nanoarrow_cudf_table(cudf::size_type length)
     schema->children[1]->flags = 0;
   }
 
-  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(schema->children[2], NANOARROW_TYPE_UINT32));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(schema->children[2], NANOARROW_TYPE_INT32));
   NANOARROW_THROW_NOT_OK(ArrowSchemaAllocateDictionary(schema->children[2]));
   NANOARROW_THROW_NOT_OK(
     ArrowSchemaInitFromType(schema->children[2]->dictionary, NANOARROW_TYPE_INT64));
@@ -181,7 +180,7 @@ get_nanoarrow_tables(cudf::size_type length)
 
   populate_from_col<int64_t>(arrow->children[0], table->get_column(0).view());
   populate_from_col<cudf::string_view>(arrow->children[1], table->get_column(1).view());
-  populate_dict_from_col<int64_t, uint32_t>(
+  populate_dict_from_col<int64_t, int32_t>(
     arrow->children[2], cudf::dictionary_column_view(table->get_column(2).view()));
 
   populate_from_col<bool>(arrow->children[3], table->get_column(3).view());
