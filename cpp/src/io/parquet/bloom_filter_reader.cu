@@ -84,8 +84,8 @@ struct bloom_filter_caster {
     // Query literal in bloom filters from each column chunk (row group).
     thrust::for_each(
       rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator<size_t>(0),
-      thrust::make_counting_iterator(total_row_groups),
+      thrust::counting_iterator<size_t>{0},
+      thrust::counting_iterator{total_row_groups},
       [filter_span          = bloom_filter_spans.data(),
        d_scalar             = literal->get_value(),
        col_idx              = equality_col_idx,
