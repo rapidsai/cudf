@@ -2,7 +2,6 @@
 import numpy as np
 
 from . import (
-    binaryop,
     copying,
     csv,
     groupby,
