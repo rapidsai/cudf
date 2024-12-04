@@ -110,7 +110,6 @@ struct empty_column_functor {
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name)));
     }
     return make_structs_column(0, std::move(child_columns), 0, {}, stream, mr);
-
   }
 };
 
