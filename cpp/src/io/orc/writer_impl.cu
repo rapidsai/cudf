@@ -877,9 +877,11 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 {
   auto const num_columns = orc_table.num_columns();
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, segmentation.num_rowgroups(), stream);
-
+  stream.synchronize();
+  CUDF_LOG_ERROR("0");
   auto const aligned_rowgroups = calculate_aligned_rowgroup_bounds(orc_table, segmentation, stream);
-
+  stream.synchronize();
+  CUDF_LOG_ERROR("1");
   // Initialize column chunks' descriptions
   std::map<size_type, segmented_valid_cnt_input> validity_check_inputs;
 
@@ -906,6 +908,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
       }
     }
   }
+  stream.synchronize();
+  CUDF_LOG_ERROR("2");
   chunks.host_to_device_async(stream);
   // TODO (future): pass columns separately from chunks (to skip this step)
   // and remove info from chunks that is common for the entire column
@@ -919,7 +923,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
       auto const rg_idx              = idx % chunks.size().second;
       chunks[col_idx][rg_idx].column = &cols[col_idx];
     });
-
+  stream.synchronize();
+  CUDF_LOG_ERROR("3");
   auto validity_check_indices = [&](size_t col_idx) {
     std::vector<size_type> indices;
     for (auto const& stripe : segmentation.stripes) {
@@ -937,6 +942,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                                                validity_check_indices(column.index())};
     }
   }
+  stream.synchronize();
+  CUDF_LOG_ERROR("4");
   for (auto& cnt_in : validity_check_inputs) {
     auto const valid_counts =
       cudf::detail::segmented_valid_count(cnt_in.second.mask, cnt_in.second.indices, stream);
@@ -948,7 +955,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
       "to int8 type."
       " Please see https://github.com/rapidsai/cudf/issues/6763 for more information.");
   }
-
+  stream.synchronize();
+  CUDF_LOG_ERROR("5");
   hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(
     num_columns, segmentation.num_rowgroups(), stream);
   // per-stripe, per-stream owning buffers
@@ -1035,7 +1043,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
       }
     }
   }
-
+  stream.synchronize();
+  CUDF_LOG_ERROR("6");
   chunk_streams.host_to_device_async(stream);
 
   if (orc_table.num_rows() > 0) {
@@ -1049,11 +1058,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
                                     chunk_streams,
                                     stream);
     }
-
+    stream.synchronize();
+    CUDF_LOG_ERROR("7");
     gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
   }
+  stream.synchronize();
+  CUDF_LOG_ERROR("8");
   chunk_streams.device_to_host_sync(stream);
-
+  stream.synchronize();
+  CUDF_LOG_ERROR("9");
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
 
@@ -2324,17 +2337,19 @@ auto convert_table_to_orc_data(table_view const& input,
   auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
   auto const compressed_block_align   = comp_block_alignment(compression_kind);
   stream.synchronize();
-  CUDF_LOG_ERROR("8");
-  auto streams  = create_streams(orc_table.columns,
+  CUDF_LOG_ERROR("00");
+  auto streams = create_streams(orc_table.columns,
                                 segmentation,
                                 decimal_column_sizes(dec_chunk_sizes.rg_sizes),
                                 enable_dictionary,
                                 compression_kind,
                                 write_mode);
+  stream.synchronize();
+  CUDF_LOG_ERROR("01");
   auto enc_data = encode_columns(
     orc_table, std::move(dec_chunk_sizes), segmentation, streams, uncompressed_block_align, stream);
   stream.synchronize();
-  CUDF_LOG_ERROR("9");
+  CUDF_LOG_ERROR("02");
   stripe_dicts.on_encode_complete(stream);
 
   auto const num_rows = input.num_rows();
@@ -2371,8 +2386,7 @@ auto convert_table_to_orc_data(table_view const& input,
     util::round_up_unsafe<size_t>(max_compressed_block_size, compressed_block_align);
   auto const padded_block_header_size =
     util::round_up_unsafe<size_t>(block_header_size, compressed_block_align);
-  stream.synchronize();
-  CUDF_LOG_ERROR("14");
+
   for (auto& ss : strm_descs.host_view().flat_view()) {
     size_t stream_size = ss.stream_size;
     if (compression_kind != NONE) {
