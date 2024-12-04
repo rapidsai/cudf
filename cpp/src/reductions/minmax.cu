@@ -235,10 +235,8 @@ struct minmax_functor {
     // compute minimum and maximum values
     auto dev_result = reduce<T>(col, stream);
     // copy the minmax_pair to the host to call get_element
-    using OutputType = minmax_pair<T>;
-    OutputType host_result;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
+    using OutputType       = minmax_pair<T>;
+    OutputType host_result = dev_result.value(stream);
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();
     return {detail::get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),
