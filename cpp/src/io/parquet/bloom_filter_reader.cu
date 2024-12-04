@@ -366,7 +366,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
 };
 
 /**
- * @brief Asynchronously reads bloom filters data to device.
+ * @brief Reads bloom filters data to device.
  *
  * @param sources Dataset sources
  * @param num_chunks Number of total column chunks to read
@@ -375,17 +375,14 @@ class bloom_filter_expression_converter : public equality_literals_collector {
  * @param bloom_filter_sizes Bloom filter sizes for all chunks
  * @param chunk_source_map Association between each column chunk and its source
  * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return A future object for reading synchronization
  */
-std::future<void> read_bloom_filter_data_async(
-  host_span<std::unique_ptr<datasource> const> sources,
-  size_t num_chunks,
-  cudf::host_span<rmm::device_buffer> bloom_filter_data,
-  cudf::host_span<std::optional<int64_t>> bloom_filter_offsets,
-  cudf::host_span<std::optional<int32_t>> bloom_filter_sizes,
-  std::vector<size_type> const& chunk_source_map,
-  rmm::cuda_stream_view stream)
+void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources,
+                            size_t num_chunks,
+                            cudf::host_span<rmm::device_buffer> bloom_filter_data,
+                            cudf::host_span<std::optional<int64_t>> bloom_filter_offsets,
+                            cudf::host_span<std::optional<int32_t>> bloom_filter_sizes,
+                            std::vector<size_type> const& chunk_source_map,
+                            rmm::cuda_stream_view stream)
 {
   // Read tasks for bloom filter data
   std::vector<std::future<size_t>> read_tasks;
@@ -421,9 +418,9 @@ std::future<void> read_bloom_filter_data_async(
 
       // Get the hardcoded words_per_block value from `cuco::arrow_filter_policy` using a temporary
       // `std::byte` key type.
-      auto constexpr words_per_block =
-        cuco::arrow_filter_policy<std::byte,
-                                  cudf::hashing::detail::XXHash_64<std::byte>>::words_per_block;
+      auto constexpr words_per_block = cuco::arrow_filter_policy<
+        cuda::std::byte,
+        cudf::hashing::detail::XXHash_64<cuda::std::byte>>::words_per_block;
 
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
@@ -475,7 +472,7 @@ std::future<void> read_bloom_filter_data_async(
     }
   };
 
-  return std::async(std::launch::async, sync_fn, std::move(read_tasks));
+  std::async(std::launch::async, sync_fn, std::move(read_tasks)).wait();
 }
 
 }  // namespace
@@ -532,15 +529,14 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
     // Vector to hold bloom filter data
     std::vector<rmm::device_buffer> bloom_filter_data(num_chunks);
 
-    // Wait on bloom filter data read tasks
-    read_bloom_filter_data_async(sources,
-                                 num_chunks,
-                                 bloom_filter_data,
-                                 bloom_filter_offsets,
-                                 bloom_filter_sizes,
-                                 chunk_source_map,
-                                 stream)
-      .wait();
+    // Read bloom filter data
+    read_bloom_filter_data(sources,
+                           num_chunks,
+                           bloom_filter_data,
+                           bloom_filter_offsets,
+                           bloom_filter_sizes,
+                           chunk_source_map,
+                           stream);
 
     // Return bloom filter data
     return bloom_filter_data;
