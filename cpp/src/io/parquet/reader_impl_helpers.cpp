@@ -1049,7 +1049,6 @@ aggregate_reader_metadata::select_row_groups(
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
   }
-
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
