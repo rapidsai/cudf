@@ -265,4 +265,4 @@ def _(
             }
         return new_node, partition_info
 
-    return ir, {ir: PartitionInfo(count=1)}
+    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
