@@ -26,6 +26,8 @@ main() {
     LIBS=${LIBS#[}
     LIBS=${LIBS%]}
 
+    ANY_FAILURES=0
+
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
@@ -56,10 +58,6 @@ main() {
         rapids-logger "Check GPU usage"
         nvidia-smi
 
-        EXITCODE=0
-        trap "EXITCODE=1" ERR
-        set +e
-
         rapids-logger "pytest ${lib}"
 
         NUM_PROCESSES=8
@@ -72,12 +70,20 @@ main() {
             fi
         done
 
+        EXITCODE=0
+        trap "EXITCODE=1" ERR
+        set +e
+
         TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh ${lib}
 
+        set -e
         rapids-logger "Test script exiting with value: ${EXITCODE}"
+        if [[ ${EXITCODE} != 0 ]]; then
+            ANY_FAILURES=1
+        fi
     done
 
-    exit ${EXITCODE}
+    exit ${ANY_FAILURES}
 }
 
 main "$@"
