@@ -4,8 +4,6 @@
 
 from __future__ import annotations
 
-import operator
-from functools import reduce
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import Select
@@ -40,19 +38,16 @@ _PARTWISE = (
 def _(
     ir: Select, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Lower children
-    children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-    partition_info = reduce(operator.or_, _partition_info)
-    new_node = ir.reconstruct(children)
+    (child,) = ir.children
+    child, partition_info = rec(child)
+    new_node = ir.reconstruct([child])
 
     # Search the expression graph for "complex" operations
     for ne in ir.exprs:
         for expr in traversal(ne.value):
             if type(expr).__name__ not in _PARTWISE:
-                # TODO: Lower Scan node into something else if an
-                # aggregattion is required. We assume that anything
-                # left as a Scan is partitionwise or single-partition.
-                if any(partition_info[c].count > 1 for c in children):
+                # TODO: Handle non-partition-wise expressions.
+                if partition_info[child].count > 1:
                     raise NotImplementedError(
                         f"Expr {type(expr)} does not support multiple partitions."
                     )
@@ -61,7 +56,5 @@ def _(
                     return new_node, partition_info
 
     # Remaining Select ops are partition-wise
-    partition_info[new_node] = PartitionInfo(
-        count=max(partition_info[c].count for c in children)
-    )
+    partition_info[new_node] = PartitionInfo(count=partition_info[child].count)
     return new_node, partition_info
