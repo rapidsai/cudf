@@ -11,8 +11,9 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
-@pytest.mark.parametrize("max_rows_per_partition", [5, 10, 15])
-def test_join(how, max_rows_per_partition):
+@pytest.mark.parametrize("reverse", [True, False])
+@pytest.mark.parametrize("max_rows_per_partition", [1, 5, 10, 15])
+def test_join(how, reverse, max_rows_per_partition):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="dask-experimental",
@@ -32,6 +33,9 @@ def test_join(how, max_rows_per_partition):
             "zz": [1, 2] * 3,
         }
     )
+    if reverse:
+        left, right = right, left
+
     q = left.join(right, on="y", how=how)
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
