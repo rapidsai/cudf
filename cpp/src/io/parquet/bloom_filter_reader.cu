@@ -55,7 +55,9 @@ struct bloom_filter_caster {
   size_t total_row_groups;
   size_t num_equality_columns;
 
-  template <typename T, bool timestamp_is_int96 = false>
+  enum class is_int96_timestamp : bool { YES, NO };
+
+  template <typename T, is_int96_timestamp IS_INT96_TIMESTAMP = is_int96_timestamp::NO>
   std::unique_ptr<cudf::column> query_bloom_filter(cudf::size_type equality_col_idx,
                                                    cudf::data_type dtype,
                                                    ast::literal const* const literal,
@@ -116,7 +118,8 @@ struct bloom_filter_caster {
 
         // If int96_timestamp type, convert literal to string_view and query bloom
         // filter
-        if constexpr (cuda::std::is_same_v<T, cudf::string_view> and timestamp_is_int96) {
+        if constexpr (cuda::std::is_same_v<T, cudf::string_view> and
+                      IS_INT96_TIMESTAMP == is_int96_timestamp::YES) {
           auto const int128_key = static_cast<__int128_t>(d_scalar.value<int64_t>());
           cudf::string_view probe_key{reinterpret_cast<char const*>(&int128_key), 12};
           results[row_group_idx] = filter.contains(probe_key);
@@ -146,8 +149,8 @@ struct bloom_filter_caster {
       CUDF_FAIL("Compound types don't support equality predicate");
     } else if constexpr (cudf::is_timestamp<T>()) {
       if (parquet_types[equality_col_idx] == Type::INT96) {
-        // For INT96 timestamps, use cudf::string_view type and set timestamp_is_int96
-        return query_bloom_filter<cudf::string_view, true>(
+        // For INT96 timestamps, use cudf::string_view type and set is_int96_timestamp to YES
+        return query_bloom_filter<cudf::string_view, bloom_filter_caster::is_int96_timestamp::YES>(
           equality_col_idx, dtype, literal, stream, mr);
       } else {
         return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream, mr);
