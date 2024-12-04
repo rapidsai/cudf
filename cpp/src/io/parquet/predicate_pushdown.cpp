@@ -419,7 +419,7 @@ std::reference_wrapper<ast::expression const> combined_expression_converter::vis
           _operators.emplace_back(ast_operator::LESS_EQUAL, vmin, operands[1].get());
         auto const& op2 =
           _operators.emplace_back(ast_operator::GREATER_EQUAL, vmax, operands[1].get());
-        _operators.emplace_back(ast::ast_operator::LOGICAL_AND, op1, op2);
+        auto const& stats_op = _operators.emplace_back(ast::ast_operator::LOGICAL_AND, op1, op2);
 
         // Use this input column's bloom filter membership column as well if available.
         if (_has_bloom_filters) {
@@ -433,9 +433,12 @@ std::reference_wrapper<ast::expression const> combined_expression_converter::vis
           col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
 
           // Evaluate boolean is_true(value) expression as NOT(NOT(value))
-          auto const& value = _col_ref.emplace_back(col_literal_offset);
-          auto const& op    = _operators.emplace_back(ast_operator::NOT, value);
-          _operators.emplace_back(ast_operator::NOT, op);
+          auto const& value           = _col_ref.emplace_back(col_literal_offset);
+          auto const& op              = _operators.emplace_back(ast_operator::NOT, value);
+          auto const& bloom_filter_op = _operators.emplace_back(ast_operator::NOT, op);
+
+          // Logical and between stats and bloom filter operators
+          _operators.emplace_back(ast_operator::LOGICAL_AND, stats_op, bloom_filter_op);
         }
         break;
       }
