@@ -62,11 +62,12 @@ struct scalar_empty_like_functor_impl<cudf::list_view> {
     auto ls = static_cast<list_scalar const*>(&input);
 
     // TODO:  add a manual constructor for lists_column_view.
-    column_view offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0};
+    column_view const offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0};
     std::vector<column_view> children;
     children.push_back(offsets);
     children.push_back(ls->view());
-    column_view lcv{cudf::data_type{cudf::type_id::LIST}, 0, nullptr, nullptr, 0, 0, children};
+    column_view const lcv{
+      cudf::data_type{cudf::type_id::LIST}, 0, nullptr, nullptr, 0, 0, children};
 
     return empty_like(lcv);
   }
@@ -81,8 +82,9 @@ struct scalar_empty_like_functor_impl<cudf::struct_view> {
     // TODO: add a manual constructor for structs_column_view
     // TODO: add cudf::get_element() support for structs
     cudf::table_view tbl = ss->view();
-    std::vector<column_view> children(tbl.begin(), tbl.end());
-    column_view scv{cudf::data_type{cudf::type_id::STRUCT}, 0, nullptr, nullptr, 0, 0, children};
+    std::vector<column_view> const children(tbl.begin(), tbl.end());
+    column_view const scv{
+      cudf::data_type{cudf::type_id::STRUCT}, 0, nullptr, nullptr, 0, 0, children};
 
     return empty_like(scv);
   }
@@ -120,7 +122,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     is_fixed_width(input.type()), "Expects only fixed-width type column", cudf::data_type_error);
-  mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
+  mask_state const allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
   return std::make_unique<column>(input.type(),
                                   size,

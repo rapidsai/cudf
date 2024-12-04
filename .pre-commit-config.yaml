@@ -2,7 +2,7 @@
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
         exclude: |
@@ -17,11 +17,11 @@ repos:
             ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.16.2
+    rev: v0.16.6
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.10.0'
+    rev: 'v1.13.0'
     hooks:
       - id: mypy
         additional_dependencies: [types-cachetools]
@@ -33,7 +33,7 @@ repos:
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.8.5
+    rev: 1.9.1
     hooks:
       - id: nbqa-isort
         # Use the cudf_kafka isort orderings in notebooks so that dask
@@ -52,7 +52,7 @@ repos:
             ^cpp/include/cudf_test/cxxopts.hpp
           )
   - repo: https://github.com/sirosen/texthooks
-    rev: 0.6.6
+    rev: 0.6.7
     hooks:
       - id: fix-smartquotes
         exclude: |
@@ -133,7 +133,7 @@ repos:
         pass_filenames: false
         verbose: true
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
+    rev: v2.3.0
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
@@ -144,7 +144,7 @@ repos:
             ^CHANGELOG.md$
           )
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.8
+    rev: v0.8.0
     hooks:
       - id: ruff
         args: ["--fix"]

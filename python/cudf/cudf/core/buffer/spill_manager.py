@@ -54,7 +54,7 @@ def get_rmm_memory_resource_stack(
     """
 
     if hasattr(mr, "upstream_mr"):
-        return [mr] + get_rmm_memory_resource_stack(mr.upstream_mr)
+        return [mr, *get_rmm_memory_resource_stack(mr.upstream_mr)]
     return [mr]
 
 
@@ -275,7 +275,7 @@ class SpillManager:
         print(
             f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
             "failed, spill-on-demand couldn't find any device memory to "
-            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
+            f"spill:\n{self!r}\ntraceback:\n{get_traceback()}\n"
             f"{self.statistics}"
         )
         return False  # Since we didn't find anything to spill, we give up
