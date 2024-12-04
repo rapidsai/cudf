@@ -14,8 +14,6 @@ except ImportError:
 
 import numpy as np
 
-from cython.operator cimport dereference
-
 from cudf.api.types import is_list_like
 
 from cudf._lib.utils cimport _data_from_columns, data_from_pylibcudf_io
@@ -25,7 +23,7 @@ from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -35,7 +33,6 @@ from pylibcudf.io.parquet cimport ChunkedParquetReader
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
-    merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_writer_options,
     write_parquet as parquet_writer,
@@ -64,6 +61,7 @@ import pylibcudf as plc
 from pylibcudf cimport Table
 
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
+from cython.operator cimport dereference
 
 
 cdef class BufferArrayFromVector:
@@ -808,19 +806,9 @@ cpdef merge_filemetadata(object filemetadata_list):
     --------
     cudf.io.parquet.merge_row_group_metadata
     """
-    cdef vector[unique_ptr[vector[uint8_t]]] list_c
-    cdef vector[uint8_t] blob_c
-    cdef unique_ptr[vector[uint8_t]] output_c
-
-    for blob_py in filemetadata_list:
-        blob_c = blob_py
-        list_c.push_back(move(make_unique[vector[uint8_t]](blob_c)))
-
-    with nogil:
-        output_c = move(parquet_merge_metadata(list_c))
-
-    out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))
-    return np.asarray(out_metadata_py)
+    return np.asarray(
+        plc.io.parquet.merge_row_group_metadata(filemetadata_list).obj
+    )
 
 
 cdef statistics_freq _get_stat_freq(str statistics):

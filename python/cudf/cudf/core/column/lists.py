@@ -188,8 +188,8 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def normalize_binop_value(self, other):
-        if not isinstance(other, ListColumn):
+    def normalize_binop_value(self, other) -> Self:
+        if not isinstance(other, type(self)):
             return NotImplemented
         return other
 

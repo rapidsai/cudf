@@ -41,7 +41,7 @@ namespace dictionary {
  *
  * The null mask and null count are copied from the input column to the output column.
  *
- * @throw cudf::logic_error if indices type is not an unsigned integer type
+ * @throw cudf::logic_error if indices type is not a signed integer type
  * @throw cudf::logic_error if the column to encode is already a DICTIONARY type
  *
  * @code{.pseudo}
@@ -58,7 +58,7 @@ namespace dictionary {
  */
 std::unique_ptr<column> encode(
   column_view const& column,
-  data_type indices_type            = data_type{type_id::UINT32},
+  data_type indices_type            = data_type{type_id::INT32},
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
