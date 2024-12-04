@@ -598,12 +598,10 @@ cpdef memoryview merge_row_group_metadata(list metdata_list):
         A parquet-compatible blob that contains the data for all row groups in the list
     """
     cdef vector[unique_ptr[vector[uint8_t]]] list_c
-    cdef vector[uint8_t] blob_c
     cdef unique_ptr[vector[uint8_t]] output_c
 
     for blob in metdata_list:
-        blob_c = blob
-        list_c.push_back(move(make_unique[vector[uint8_t]](blob_c)))
+        list_c.push_back(move(make_unique[vector[uint8_t]](<vector[uint8_t]> blob)))
 
     with nogil:
         output_c = move(cpp_merge_row_group_metadata(list_c))

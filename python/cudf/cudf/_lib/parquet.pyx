@@ -29,7 +29,6 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from pylibcudf.expressions cimport Expression
-from pylibcudf.io.parquet cimport BufferArrayFromVector
 from pylibcudf.io.parquet cimport ChunkedParquetReader
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.parquet cimport (
@@ -62,6 +61,47 @@ import pylibcudf as plc
 from pylibcudf cimport Table
 
 from cudf.utils.ioutils import _ROW_GROUP_SIZE_BYTES_DEFAULT
+from cython.operator cimport dereference
+
+
+cdef class BufferArrayFromVector:
+    cdef Py_ssize_t length
+    cdef unique_ptr[vector[uint8_t]] in_vec
+
+    # these two things declare part of the buffer interface
+    cdef Py_ssize_t shape[1]
+    cdef Py_ssize_t strides[1]
+
+    @staticmethod
+    cdef BufferArrayFromVector from_unique_ptr(
+        unique_ptr[vector[uint8_t]] in_vec
+    ):
+        cdef BufferArrayFromVector buf = BufferArrayFromVector()
+        buf.in_vec = move(in_vec)
+        buf.length = dereference(buf.in_vec).size()
+        return buf
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        cdef Py_ssize_t itemsize = sizeof(uint8_t)
+
+        self.shape[0] = self.length
+        self.strides[0] = 1
+
+        buffer.buf = dereference(self.in_vec).data()
+
+        buffer.format = NULL  # byte
+        buffer.internal = NULL
+        buffer.itemsize = itemsize
+        buffer.len = self.length * itemsize   # product(shape) * itemsize
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
 
 
 def _parse_metadata(meta):
