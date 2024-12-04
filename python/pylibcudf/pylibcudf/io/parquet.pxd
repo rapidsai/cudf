@@ -53,7 +53,7 @@ cpdef read_parquet(
 cdef class ParquetChunkedWriter:
     cdef unique_ptr[cpp_parquet_chunked_writer] c_obj
     cpdef memoryview close(self, list column_chunks_file_paths)
-    cpdef void write(self, Table table, object partitions)
+    cpdef void write(self, Table table, object partitions_info=*)
 
 
 cdef class ChunkedParquetWriterOptions:

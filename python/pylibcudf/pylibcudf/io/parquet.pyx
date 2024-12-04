@@ -266,14 +266,14 @@ cdef class ParquetChunkedWriter:
         """
         cdef vector[string] column_chunks_file_paths
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
-        if metadata_file_path != []:
+        if metadata_file_path:
             for path in metadata_file_path:
                 column_chunks_file_paths.push_back(str.encode(path))
         with nogil:
             out_metadata_c = move(self.c_obj.get()[0].close(column_chunks_file_paths))
         return memoryview(HostBuffer.from_unique_ptr(move(out_metadata_c)))
 
-    cpdef void write(self, Table table, object partitions_info):
+    cpdef void write(self, Table table, object partitions_info=None):
         """
         Writes table to output.
 
@@ -281,7 +281,7 @@ cdef class ParquetChunkedWriter:
         ----------
         table: Table
             Table that needs to be written
-        partitions_info: object
+        partitions_info: object, default None
             Optional partitions to divide the table into.
             If specified, must be same size as number of sinks.
 

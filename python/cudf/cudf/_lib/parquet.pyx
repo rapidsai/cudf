@@ -533,9 +533,9 @@ def write_parquet(
         options.set_max_page_size_rows(max_page_size_rows)
     if max_dictionary_size is not None:
         options.set_max_dictionary_size(max_dictionary_size)
-    x = plc.io.parquet.write_parquet(options)
+    blob = plc.io.parquet.write_parquet(options)
     if metadata_file_path is not None:
-        return np.asarray(x.obj)
+        return np.asarray(blob.obj)
     else:
         return None
 
@@ -656,9 +656,9 @@ cdef class ParquetWriter:
                 column_chunks_file_paths = list(metadata_file_path)
             else:
                 column_chunks_file_paths = [metadata_file_path]
-        x = self.writer.close(column_chunks_file_paths)
+        blob = self.writer.close(column_chunks_file_paths)
         if metadata_file_path is not None:
-            return np.asarray(x.obj)
+            return np.asarray(blob.obj)
         return None
 
     def __enter__(self):
