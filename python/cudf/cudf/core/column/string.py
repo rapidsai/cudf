@@ -19,11 +19,11 @@ import cudf
 import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
-from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
@@ -6200,7 +6200,7 @@ class StringColumn(column.ColumnBase):
 
     def _binaryop(
         self, other: ColumnBinaryOperand, op: str
-    ) -> "column.ColumnBase":
+    ) -> column.ColumnBase:
         reflect, op = self._check_reflected_op(op)
         # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
         # support binary operations between empty or all null string columns
@@ -6229,7 +6229,7 @@ class StringColumn(column.ColumnBase):
         if other is NotImplemented:
             return NotImplemented
 
-        if isinstance(other, (StringColumn, str, cudf.Scalar)):
+        if isinstance(other, (StringColumn, cudf.Scalar)):
             if isinstance(other, cudf.Scalar) and other.dtype != "O":
                 if op in {
                     "__eq__",
@@ -6279,9 +6279,7 @@ class StringColumn(column.ColumnBase):
                 "NULL_NOT_EQUALS",
             }:
                 lhs, rhs = (other, self) if reflect else (self, other)
-                return libcudf.binaryop.binaryop(
-                    lhs=lhs, rhs=rhs, op=op, dtype="bool"
-                )
+                return binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype="bool")
         return NotImplemented
 
     @copy_docstring(column.ColumnBase.view)
