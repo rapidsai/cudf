@@ -916,7 +916,7 @@ if(CUDF_LARGE_STRINGS_DISABLED)
 endif()
 
 # Define logging level
-target_compile_definitions(cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=LIBCUDF_LOGGING_LEVEL")
+target_compile_definitions(cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=${LIBCUDF_LOGGING_LEVEL}")
 
 # Enable remote IO through KvikIO
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
