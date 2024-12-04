@@ -372,28 +372,26 @@ class aggregate_reader_metadata {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Computes bloom filter membership for the row groups based on predicate filter
+   * @brief Filters the row groups using bloom filters
    *
    * @param sources Dataset sources
    * @param row_group_indices Lists of input row groups to read, one per source
    * @param output_dtypes Datatypes of of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on bloom filter membership
-   * @param total_row_groups Total number of row groups across all input sources.
+   * @param total_row_groups Total number of row groups across all data sources
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A pair of list of bloom filter membership columns and a list of pointers to (equality
-   * predicate) literals associated with each input column.
+   * @return Filtered row group indices, if any is filtered
    */
-  [[nodiscard]] std::pair<std::vector<std::unique_ptr<cudf::column>>,
-                          std::vector<std::vector<ast::literal*>>>
-  apply_bloom_filters(host_span<std::unique_ptr<datasource> const> sources,
-                      host_span<std::vector<size_type> const> input_row_group_indices,
-                      host_span<data_type const> output_dtypes,
-                      host_span<int const> output_column_schemas,
-                      std::reference_wrapper<ast::expression const> filter,
-                      size_t total_row_groups,
-                      rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
+    host_span<std::unique_ptr<datasource> const> sources,
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    size_t total_row_groups,
+    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of row groups
@@ -443,71 +441,6 @@ class aggregate_reader_metadata {
                  bool include_index,
                  bool strings_to_categorical,
                  type_id timestamp_type_id);
-};
-
-/**
- * @brief Converts AST expression to a CombinedAST (StatsAST and BloomfilterAST) for comparing with
- * column statistics and testing bloom filter membership altogether. This is used in row group
- * filtering based on predicate.
- *
- * statistics min value of a column is referenced by column_index*2
- * statistics max value of a column is referenced by column_index*2+1
- * bloom filter membership of each (column, literal) pair is appended to the end of stats.
- *
- */
-class combined_expression_converter : public ast::detail::expression_transformer {
- public:
-  combined_expression_converter() = default;
-  combined_expression_converter(ast::expression const& expr,
-                                size_type num_input_columns,
-                                std::vector<std::vector<ast::literal*>> const& equality_literals,
-                                bool has_bloom_filters);
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override
-  {
-    CUDF_FAIL("Column name reference is not supported in CombinedAST");
-  }
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
-  /**
-   * @brief Returns the AST to apply Column chunk statistics and bloom filter membership
-   *
-   * @return AST operation expression
-   */
-  [[nodiscard]] std::reference_wrapper<ast::expression const> get_converted_expr() const
-  {
-    return _converted_expr.value().get();
-  }
-
- protected:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
-  std::optional<std::reference_wrapper<ast::expression const>> _converted_expr;
-  size_type _num_columns;
-  std::list<ast::column_reference> _col_ref;
-  std::list<ast::operation> _operators;
-  std::vector<std::vector<ast::literal*>> _equality_literals;
-  size_type _num_input_columns;
-
- private:
-  bool _has_bloom_filters;
-  std::vector<cudf::size_type> _col_literals_offsets;
 };
 
 /**

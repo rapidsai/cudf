@@ -246,6 +246,150 @@ struct stats_caster {
   }
 };
 
+/**
+ * @brief Converts AST expression to StatsAST for comparing with column statistics
+ * This is used in row group filtering based on predicate.
+ * statistics min value of a column is referenced by column_index*2
+ * statistics max value of a column is referenced by column_index*2+1
+ *
+ */
+class stats_expression_converter : public ast::detail::expression_transformer {
+ public:
+  stats_expression_converter(ast::expression const& expr, size_type const& num_columns)
+    : _num_columns{num_columns}
+  {
+    expr.accept(*this);
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
+  {
+    _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+    return expr;
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override
+  {
+    CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
+                 "Statistics AST supports only left table");
+    CUDF_EXPECTS(expr.get_column_index() < _num_columns,
+                 "Column index cannot be more than number of columns in the table");
+    _stats_expr = std::reference_wrapper<ast::expression const>(expr);
+    return expr;
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override
+  {
+    CUDF_FAIL("Column name reference is not supported in statistics AST");
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override
+  {
+    using cudf::ast::ast_operator;
+    auto const operands = expr.get_operands();
+    auto const op       = expr.get_operator();
+
+    if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
+      // First operand should be column reference, second should be literal.
+      CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
+                   "Only binary operations are supported on column reference");
+      CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
+                   "Second operand of binary operation with column reference must be a literal");
+      v->accept(*this);
+      auto const col_index = v->get_column_index();
+      switch (op) {
+        /* transform to stats conditions. op(col, literal)
+        col1 == val --> vmin <= val && vmax >= val
+        col1 != val --> !(vmin == val && vmax == val)
+        col1 >  val --> vmax > val
+        col1 <  val --> vmin < val
+        col1 >= val --> vmax >= val
+        col1 <= val --> vmin <= val
+        */
+        case ast_operator::EQUAL: {
+          auto const& vmin = _col_ref.emplace_back(col_index * 2);
+          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
+          auto const& op1 =
+            _operators.emplace_back(ast_operator::LESS_EQUAL, vmin, operands[1].get());
+          auto const& op2 =
+            _operators.emplace_back(ast_operator::GREATER_EQUAL, vmax, operands[1].get());
+          _operators.emplace_back(ast::ast_operator::LOGICAL_AND, op1, op2);
+          break;
+        }
+        case ast_operator::NOT_EQUAL: {
+          auto const& vmin = _col_ref.emplace_back(col_index * 2);
+          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
+          auto const& op1  = _operators.emplace_back(ast_operator::NOT_EQUAL, vmin, vmax);
+          auto const& op2 =
+            _operators.emplace_back(ast_operator::NOT_EQUAL, vmax, operands[1].get());
+          _operators.emplace_back(ast_operator::LOGICAL_OR, op1, op2);
+          break;
+        }
+        case ast_operator::LESS: [[fallthrough]];
+        case ast_operator::LESS_EQUAL: {
+          auto const& vmin = _col_ref.emplace_back(col_index * 2);
+          _operators.emplace_back(op, vmin, operands[1].get());
+          break;
+        }
+        case ast_operator::GREATER: [[fallthrough]];
+        case ast_operator::GREATER_EQUAL: {
+          auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
+          _operators.emplace_back(op, vmax, operands[1].get());
+          break;
+        }
+        default: CUDF_FAIL("Unsupported operation in Statistics AST");
+      };
+    } else {
+      auto new_operands = visit_operands(operands);
+      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
+        _operators.emplace_back(op, new_operands.front(), new_operands.back());
+      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
+        _operators.emplace_back(op, new_operands.front());
+      }
+    }
+    _stats_expr = std::reference_wrapper<ast::expression const>(_operators.back());
+    return std::reference_wrapper<ast::expression const>(_operators.back());
+  }
+
+  /**
+   * @brief Returns the AST to apply on Column chunk statistics.
+   *
+   * @return AST operation expression
+   */
+  [[nodiscard]] std::reference_wrapper<ast::expression const> get_stats_expr() const
+  {
+    return _stats_expr.value().get();
+  }
+
+ private:
+  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
+  {
+    std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
+    for (auto const& operand : operands) {
+      auto const new_operand = operand.get().accept(*this);
+      transformed_operands.push_back(new_operand);
+    }
+    return transformed_operands;
+  }
+  std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
+  size_type _num_columns;
+  std::list<ast::column_reference> _col_ref;
+  std::list<ast::operation> _operators;
+};
+
 }  // namespace
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
@@ -256,9 +400,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Number of input table columns
-  auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
-
   auto mr = cudf::get_current_device_resource_ref();
   // Create row group indices.
   std::vector<std::vector<size_type>> all_row_group_indices;
@@ -309,183 +450,39 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
   }
+  auto stats_table = cudf::table(std::move(columns));
 
-  // Apply bloom filter membership to row groups for each equality predicate column, literal pair
-  // and get corresponding boolean columns.
-  auto [bloom_filter_membership_cols, equality_literals] =
-    apply_bloom_filters(sources,
-                        input_row_group_indices,
-                        output_dtypes,
-                        output_column_schemas,
-                        filter,
-                        total_row_groups,
-                        stream);
+  // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
+  stats_expression_converter const stats_expr{filter.get(),
+                                              static_cast<size_type>(output_dtypes.size())};
+  auto stats_ast     = stats_expr.get_stats_expr();
+  auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
+  auto predicate     = predicate_col->view();
+  CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
+               "Filter expression must return a boolean column");
 
-  // Check if we have any bloom filter membership columns
-  auto const has_bloom_filters = not bloom_filter_membership_cols.empty();
+  // Filter stats table with StatsAST expression and collect filtered row group indices
+  auto const filtered_row_group_indices = collect_filtered_row_group_indices(
+    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream, mr);
 
-  // Append bloom filter membership columns to stats columns to get combined columns if needed
-  if (has_bloom_filters) {
-    columns.insert(columns.end(),
-                   std::make_move_iterator(bloom_filter_membership_cols.begin()),
-                   std::make_move_iterator(bloom_filter_membership_cols.end()));
-  }
+  // Span of row groups to apply bloom filtering on.
+  auto const bloom_filter_input_row_groups =
+    filtered_row_group_indices.has_value()
+      ? host_span<std::vector<size_type> const>(filtered_row_group_indices.value())
+      : input_row_group_indices;
 
-  auto combined_table = cudf::table(std::move(columns));
+  // Apply bloom filtering on the bloom filter input row groups
+  auto const bloom_filtered_row_groups = apply_bloom_filters(sources,
+                                                             bloom_filter_input_row_groups,
+                                                             output_dtypes,
+                                                             output_column_schemas,
+                                                             filter,
+                                                             total_row_groups,
+                                                             stream);
 
-  // Convert AST to a CombinedAST (StatsAST and BloomfilterAST) expression
-  combined_expression_converter combined_expr{
-    filter.get(), num_input_columns, equality_literals, has_bloom_filters};
-
-  // Filter combined table with the AST expression and collect filtered row group indices
-  return collect_filtered_row_group_indices(
-    combined_table, combined_expr.get_converted_expr(), input_row_group_indices, stream, mr);
-}
-
-// Convert AST expression to a CombinedAST (StatsAST and BloomfilterAST)
-combined_expression_converter::combined_expression_converter(
-  ast::expression const& expr,
-  size_type num_input_columns,
-  std::vector<std::vector<ast::literal*>> const& equality_literals,
-  bool has_bloom_filters)
-  : _has_bloom_filters{has_bloom_filters}
-{
-  // Set the num columns and copy equality literals
-  _num_input_columns = num_input_columns;
-  _equality_literals = equality_literals;
-
-  // Compute and store columns literals offsets
-  _col_literals_offsets.reserve(_num_input_columns + 1);
-  _col_literals_offsets.emplace_back(0);
-
-  std::transform(equality_literals.begin(),
-                 equality_literals.end(),
-                 std::back_inserter(_col_literals_offsets),
-                 [&](auto const& col_literal_map) {
-                   return _col_literals_offsets.back() +
-                          static_cast<cudf::size_type>(col_literal_map.size());
-                 });
-
-  // Add this visitor
-  expr.accept(*this);
-}
-
-std::reference_wrapper<ast::expression const> combined_expression_converter::visit(
-  ast::literal const& expr)
-{
-  _converted_expr = std::reference_wrapper<ast::expression const>(expr);
-  return expr;
-}
-
-std::reference_wrapper<ast::expression const> combined_expression_converter::visit(
-  ast::column_reference const& expr)
-{
-  CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-               "CombinedAST (Stats and Bloomfilter) supports only left table");
-  CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
-               "Column index cannot be more than number of columns in the table");
-  _converted_expr = std::reference_wrapper<ast::expression const>(expr);
-  return expr;
-}
-
-std::reference_wrapper<ast::expression const> combined_expression_converter::visit(
-  ast::operation const& expr)
-{
-  using cudf::ast::ast_operator;
-  auto const operands = expr.get_operands();
-  auto const op       = expr.get_operator();
-
-  if (auto* v = dynamic_cast<ast::column_reference const*>(&operands[0].get())) {
-    // First operand should be column reference, second should be literal.
-    CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
-                 "Only binary operations are supported on column reference");
-    CUDF_EXPECTS(dynamic_cast<ast::literal const*>(&operands[1].get()) != nullptr,
-                 "Second operand of binary operation with column reference must be a literal");
-    v->accept(*this);
-    auto const col_index = v->get_column_index();
-    switch (op) {
-      /* transform to stats conditions. op(col, literal)
-      col1 == val --> vmin <= val && vmax >= val && bloom_filter[col1, val].contains(val)
-      col1 != val --> !(vmin == val && vmax == val)
-      col1 >  val --> vmax > val
-      col1 <  val --> vmin < val
-      col1 >= val --> vmax >= val
-      col1 <= val --> vmin <= val
-      */
-      case ast_operator::EQUAL: {
-        auto const& vmin = _col_ref.emplace_back(col_index * 2);
-        auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
-        auto const& op1 =
-          _operators.emplace_back(ast_operator::LESS_EQUAL, vmin, operands[1].get());
-        auto const& op2 =
-          _operators.emplace_back(ast_operator::GREATER_EQUAL, vmax, operands[1].get());
-        auto const& stats_op = _operators.emplace_back(ast::ast_operator::LOGICAL_AND, op1, op2);
-
-        // Use this input column's bloom filter membership column as well if available.
-        if (_has_bloom_filters) {
-          auto const& equality_literals = _equality_literals[col_index];
-          auto col_literal_offset = (_num_input_columns * 2) + _col_literals_offsets[col_index];
-          auto const literal_iter =
-            std::find(equality_literals.cbegin(),
-                      equality_literals.cend(),
-                      dynamic_cast<ast::literal const*>(&operands[1].get()));
-          CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
-          col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
-
-          // Evaluate boolean is_true(value) expression as NOT(NOT(value))
-          auto const& value           = _col_ref.emplace_back(col_literal_offset);
-          auto const& op              = _operators.emplace_back(ast_operator::NOT, value);
-          auto const& bloom_filter_op = _operators.emplace_back(ast_operator::NOT, op);
-
-          // Logical and between stats and bloom filter operators
-          _operators.emplace_back(ast_operator::LOGICAL_AND, stats_op, bloom_filter_op);
-        }
-        break;
-      }
-      case ast_operator::NOT_EQUAL: {
-        auto const& vmin = _col_ref.emplace_back(col_index * 2);
-        auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
-        auto const& op1  = _operators.emplace_back(ast_operator::NOT_EQUAL, vmin, vmax);
-        auto const& op2 = _operators.emplace_back(ast_operator::NOT_EQUAL, vmax, operands[1].get());
-        _operators.emplace_back(ast_operator::LOGICAL_OR, op1, op2);
-        break;
-      }
-      case ast_operator::LESS: [[fallthrough]];
-      case ast_operator::LESS_EQUAL: {
-        auto const& vmin = _col_ref.emplace_back(col_index * 2);
-        _operators.emplace_back(op, vmin, operands[1].get());
-        break;
-      }
-      case ast_operator::GREATER: [[fallthrough]];
-      case ast_operator::GREATER_EQUAL: {
-        auto const& vmax = _col_ref.emplace_back(col_index * 2 + 1);
-        _operators.emplace_back(op, vmax, operands[1].get());
-        break;
-      }
-      default: CUDF_FAIL("Unsupported operation in CombinedAST");
-    };
-  } else {
-    auto new_operands = visit_operands(operands);
-    if (cudf::ast::detail::ast_operator_arity(op) == 2) {
-      _operators.emplace_back(op, new_operands.front(), new_operands.back());
-    } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-      _operators.emplace_back(op, new_operands.front());
-    }
-  }
-  _converted_expr = std::reference_wrapper<ast::expression const>(_operators.back());
-  return std::reference_wrapper<ast::expression const>(_operators.back());
-}
-
-std::vector<std::reference_wrapper<ast::expression const>>
-combined_expression_converter::visit_operands(
-  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
-{
-  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
-  for (auto const& operand : operands) {
-    auto const new_operand = operand.get().accept(*this);
-    transformed_operands.push_back(new_operand);
-  }
-  return transformed_operands;
+  // Return bloom filtered row group indices iff collected
+  return bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups
+                                               : filtered_row_group_indices;
 }
 
 // convert column named expression to column index reference expression
