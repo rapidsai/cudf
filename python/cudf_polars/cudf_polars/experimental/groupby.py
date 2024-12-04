@@ -23,10 +23,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
-class GroupByTree(GroupBy):
-    """Groupby tree-reduction operation."""
-
-
 _GB_AGG_SUPPORTED = ("sum", "count", "mean")
 
 
@@ -130,7 +126,7 @@ def _(
     child_count = partition_info[children[0]].count
     partition_info[gb_pwise] = PartitionInfo(count=child_count)
 
-    gb_tree = GroupByTree(
+    gb_tree = GroupBy(
         ir.schema,
         ir.keys,
         agg_requests_tree,
@@ -174,19 +170,32 @@ def _tree_node(do_evaluate, batch, *args):
     return do_evaluate(*args, _concat(batch))
 
 
-@generate_ir_tasks.register(GroupByTree)
+@generate_ir_tasks.register(GroupBy)
 def _(
-    ir: GroupByTree, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: GroupBy, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     child = ir.children[0]
     child_count = partition_info[child].count
     child_name = get_key_name(child)
-    name = get_key_name(ir)
+    output_count = partition_info[ir].count
+
+    if output_count == child_count:
+        return {
+            key: (
+                ir.do_evaluate,
+                *ir._non_child_args,
+                (child_name, i),
+            )
+            for i, key in enumerate(partition_info[ir].keys(ir))
+        }
+    elif output_count != 1:  # pragma: no cover
+        raise ValueError(f"Expected single partition, got {output_count}")
 
     # Simple tree reduction.
     j = 0
     graph: MutableMapping[Any, Any] = {}
     split_every = 32
+    name = get_key_name(ir)
     keys: list[Any] = [(child_name, i) for i in range(child_count)]
     while len(keys) > split_every:
         new_keys: list[Any] = []
