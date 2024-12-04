@@ -54,13 +54,7 @@ def copy_column(Column input_column):
     Deep copied column
     """
     return Column.from_pylibcudf(
-        pylibcudf.copying.copy_range(
-            input_column.to_pylibcudf(mode="read"),
-            pylibcudf.copying.allocate_like(input_column.to_pylibcudf(mode="read"), 1),
-            0,
-            input_column.size,
-            0
-        )
+        input_column.to_pylibcudf(mode="read").copy()
     )
 
 
