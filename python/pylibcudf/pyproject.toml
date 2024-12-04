@@ -18,7 +18,7 @@ authors = [
 license = { text = "Apache 2.0" }
 requires-python = ">=3.10"
 dependencies = [
-    "cuda-python>=11.7.1,<12.0a0,<=11.8.3",
+    "cuda-python>=11.7.1,<12.0a0",
     "libcudf==25.2.*,>=0.0.0a0",
     "nvtx>=0.2.1",
     "packaging",
