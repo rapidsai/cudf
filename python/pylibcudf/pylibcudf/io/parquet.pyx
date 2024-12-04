@@ -2,7 +2,7 @@
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -22,6 +22,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     read_parquet as cpp_read_parquet,
     write_parquet as cpp_write_parquet,
     parquet_writer_options,
+    merge_row_group_metadata as cpp_merge_row_group_metadata,
 )
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
@@ -38,9 +39,9 @@ __all__ = [
     "ParquetWriterOptions",
     "ParquetWriterOptionsBuilder",
     "read_parquet",
-    "write_parquet"
+    "write_parquet",
+    "merge_row_group_metadata",
 ]
-
 
 cdef parquet_reader_options _setup_parquet_reader_options(
     SourceInfo source_info,
@@ -577,3 +578,32 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
         c_result = cpp_write_parquet(c_options)
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
+
+
+cpdef memoryview merge_row_group_metadata(list metdata_list):
+    """
+    Merges multiple raw metadata blobs that were previously
+    created by write_parquet into a single metadata blob.
+
+    For details, see :cpp:func:`merge_row_group_metadata`.
+
+    Parameters
+    ----------
+    metdata_list : list
+        List of input file metadata
+
+    Returns
+    -------
+    memoryview
+        A parquet-compatible blob that contains the data for all row groups in the list
+    """
+    cdef vector[unique_ptr[vector[uint8_t]]] list_c
+    cdef unique_ptr[vector[uint8_t]] output_c
+
+    for blob in metdata_list:
+        list_c.push_back(move(make_unique[vector[uint8_t]](<vector[uint8_t]> blob)))
+
+    with nogil:
+        output_c = move(cpp_merge_row_group_metadata(list_c))
+
+    return memoryview(HostBuffer.from_unique_ptr(move(output_c)))
