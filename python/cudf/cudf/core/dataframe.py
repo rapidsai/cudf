@@ -1424,8 +1424,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         new_columns = (
                             value
                             if key == arg
-                            else column.column_empty_like(
-                                col, masked=True, newsize=length
+                            else column.column_empty(
+                                row_count=length, dtype=col.dtype
                             )
                             for key, col in self._column_labels_and_values
                         )
@@ -3385,10 +3385,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if num_cols != 0:
                     ca = self._data._from_columns_like_self(
                         (
-                            column.column_empty_like(
-                                col_data, masked=True, newsize=length
-                            )
-                            for col_data in self._columns
+                            column.column_empty(row_count=length, dtype=dtype)
+                            for _, dtype in self._dtypes
                         ),
                         verify=False,
                     )
@@ -6191,8 +6189,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         quant_index=False,
                     )._column
                     if len(res) == 0:
-                        res = column.column_empty_like(
-                            qs, dtype=ser.dtype, masked=True, newsize=len(qs)
+                        res = column.column_empty(
+                            row_count=len(qs), dtype=ser.dtype
                         )
                     result[k] = res
             result = DataFrame._from_data(result)
