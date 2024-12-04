@@ -91,3 +91,5 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptions build(self)
 
 cpdef memoryview write_parquet(ParquetWriterOptions options)
+
+cpdef memoryview merge_row_group_metadata(list metdata_list)
