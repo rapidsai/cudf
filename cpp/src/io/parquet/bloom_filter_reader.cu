@@ -485,13 +485,12 @@ aggregate_reader_metadata::apply_bloom_filters(
   // Create spans from bloom filter bitset buffers
   std::vector<cudf::device_span<cuda::std::byte>> h_bloom_filter_spans;
   h_bloom_filter_spans.reserve(bloom_filter_data.size());
-  std::transform(thrust::make_counting_iterator<size_t>(0),
-                 thrust::make_counting_iterator<size_t>(bloom_filter_data.size()),
+  std::transform(bloom_filter_data.begin(),
+                 bloom_filter_data.end(),
                  std::back_inserter(h_bloom_filter_spans),
-                 [&](auto const filter_idx) {
+                 [&](auto& buffer) {
                    return cudf::device_span<cuda::std::byte>{
-                     static_cast<cuda::std::byte*>(bloom_filter_data[filter_idx].data()),
-                     bloom_filter_data[filter_idx].size()};
+                     static_cast<cuda::std::byte*>(buffer.data()), buffer.size()};
                  });
 
   // Copy bloom filter bitset spans to device
