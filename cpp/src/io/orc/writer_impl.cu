@@ -2302,33 +2302,25 @@ auto convert_table_to_orc_data(table_view const& input,
                                data_sink const& out_sink,
                                rmm::cuda_stream_view stream)
 {
-  CUDF_LOG_ERROR("0");
   auto const input_tview = table_device_view::create(input, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("1");
+
   auto orc_table = make_orc_table_view(input, *input_tview, table_meta, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("2");
+
   // This is unused but it holds memory buffers for later access thus needs to be kept alive.
   [[maybe_unused]] auto const pd_masks = init_pushdown_null_masks(orc_table, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("3");
+
   auto rowgroup_bounds = calculate_rowgroup_bounds(orc_table, row_index_stride, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("4");
+
   [[maybe_unused]] auto const rg_char_counts_data =
     set_rowgroup_char_counts(orc_table, rowgroup_bounds, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("5");
+
   // Decide stripe boundaries based on rowgroups and char counts
   auto segmentation =
     calculate_segmentation(orc_table.columns, std::move(rowgroup_bounds), max_stripe_size, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("6");
+
   auto stripe_dicts    = build_dictionaries(orc_table, segmentation, sort_dictionaries, stream);
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("7");
+
   auto const uncompressed_block_align = uncomp_block_alignment(compression_kind);
   auto const compressed_block_align   = comp_block_alignment(compression_kind);
   stream.synchronize();
@@ -2344,19 +2336,16 @@ auto convert_table_to_orc_data(table_view const& input,
   stream.synchronize();
   CUDF_LOG_ERROR("9");
   stripe_dicts.on_encode_complete(stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("10");
+
   auto const num_rows = input.num_rows();
-  stream.synchronize();
-  CUDF_LOG_ERROR("11");
+
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);
   auto const num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(
     segmentation.num_stripes(), num_data_streams, stream);
   auto stripes = gather_stripes(num_index_streams, segmentation, &enc_data, &strm_descs, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("12");
+
   if (num_rows == 0) {
     return std::tuple{std::move(enc_data),
                       std::move(segmentation),
@@ -2371,8 +2360,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       std::move(stripe_dicts.views),
                       cudf::detail::make_pinned_vector_async<uint8_t>(0, stream)};
   }
-  stream.synchronize();
-  CUDF_LOG_ERROR("13");
+
   // Allocate intermediate output stream buffer
   size_t compressed_bfr_size   = 0;
   size_t num_compressed_blocks = 0;
@@ -2399,8 +2387,7 @@ auto convert_table_to_orc_data(table_view const& input,
         (padded_block_header_size + padded_max_compressed_block_size) * num_blocks;
     }
   }
-  stream.synchronize();
-  CUDF_LOG_ERROR("15");
+
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
   cudf::detail::hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
@@ -2429,8 +2416,7 @@ auto convert_table_to_orc_data(table_view const& input,
     strm_descs.device_to_host_async(stream);
     comp_results.device_to_host_sync(stream);
   }
-  stream.synchronize();
-  CUDF_LOG_ERROR("16");
+
   auto const max_out_stream_size = [&]() {
     uint32_t max_stream_size = 0;
     for (auto const& ss : strm_descs.host_view().flat_view()) {
@@ -2440,14 +2426,11 @@ auto convert_table_to_orc_data(table_view const& input,
     }
     return max_stream_size;
   }();
-  stream.synchronize();
-  CUDF_LOG_ERROR("17");
+
   auto bounce_buffer = cudf::detail::make_pinned_vector_async<uint8_t>(max_out_stream_size, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("18");
+
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
-  stream.synchronize();
-  CUDF_LOG_ERROR("19");
+
   return std::tuple{std::move(enc_data),
                     std::move(segmentation),
                     std::move(orc_table),
