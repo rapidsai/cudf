@@ -471,19 +471,16 @@ def write_parquet(
             column_type_length,
             output_as_binary
         )
-    user_data = []
-    tmp_user_data = {}
     if partitions_info is not None:
-        for start_row, num_row in partitions_info:
-            partitioned_df = table.iloc[start_row: start_row + num_row].copy(
-                deep=False
-            )
-            tmp_user_data["pandas"] = generate_pandas_metadata(partitioned_df, index)
-            user_data.append(tmp_user_data)
-            tmp_user_data = {}
+        user_data = [
+            {"pandas": generate_pandas_metadata(
+                table.iloc[start_row:start_row + num_row].copy(deep=False),
+                index
+            )}
+            for start_row, num_row in partitions_info
+        ]
     else:
-        tmp_user_data["pandas"] = generate_pandas_metadata(table, index)
-        user_data.append(tmp_user_data)
+        user_data = [{"pandas": generate_pandas_metadata(table, index)}]
 
     if header_version not in ("1.0", "2.0"):
         raise ValueError(
@@ -716,10 +713,7 @@ cdef class ParquetWriter:
         index = (
             False if isinstance(table._index, cudf.RangeIndex) else self.index
         )
-        pandas_metadata = generate_pandas_metadata(table, index)
-        tmp_user_data={}
-        tmp_user_data["pandas"] = pandas_metadata
-        user_data = [tmp_user_data]*num_partitions
+        user_data = [{"pandas" : generate_pandas_metadata(table, index)}]*num_partitions
         cdef compression_type comp_type = _get_comp_type(self.compression)
         cdef statistics_freq stat_freq = _get_stat_freq(self.statistics)
         cdef dictionary_policy dict_policy = (
