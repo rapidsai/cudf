@@ -256,7 +256,7 @@ class ListColumn(ColumnBase):
             data=None,
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
-            mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
+            mask=as_column(mask_col).as_mask(),
             offset=0,
             null_count=0,
             children=(offset_col, data_col),

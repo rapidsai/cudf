@@ -32,7 +32,6 @@ from cudf._lib.stream_compaction import (
     drop_duplicates,
     drop_nulls,
 )
-from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -373,10 +372,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
+    @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
-        return libcudf.transform.mask_to_bools(
-            self.base_mask, self.offset, self.offset + len(self)
+        plc_column = plc.transform.mask_to_bools(
+            self.base_mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+            self.offset,
+            self.offset + len(self),
         )
+        return type(self).from_pylibcudf(plc_column)
 
     @cached_property
     def memory_usage(self) -> int:
@@ -981,11 +984,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         -------
         Buffer
         """
-
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return bools_to_mask(self)
+        with acquire_spill_lock():
+            mask, _ = plc.transform.bools_to_mask(
+                self.to_pylibcudf(mode="read")
+            )
+            return as_buffer(mask)
 
     @property
     def is_unique(self) -> bool:
@@ -1513,6 +1519,18 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             codes, [left_gather_map], [True], ["last"], stable=True
         )
         return codes.fillna(na_sentinel.value)
+
+    def one_hot_encode(
+        self, categories: ColumnBase
+    ) -> abc.Generator[ColumnBase]:
+        plc_table = plc.transform.one_hot_encode(
+            self.to_pylibcudf(mode="read"),
+            categories.to_pylibcudf(mode="read"),
+        )
+        return (
+            type(self).from_pylibcudf(col, data_ptr_exposed=True)
+            for col in plc_table.columns()
+        )
 
 
 def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
@@ -2093,8 +2111,7 @@ def as_column(
                     )
                 # Consider NaT as NA in the mask
                 # but maintain NaT as a value
-                bool_mask = as_column(~is_nat)
-                mask = as_buffer(bools_to_mask(bool_mask))
+                mask = as_column(~is_nat).as_mask()
             buffer = as_buffer(arbitrary.view("|u1"))
             col = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
             if dtype:
@@ -2264,8 +2281,7 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
         )
         return as_buffer(data=desc["data"][0], size=mask_size, owner=obj)
     elif typecode == "b":
-        col = as_column(cai_mask)
-        return bools_to_mask(col)
+        return as_column(cai_mask).as_mask()
     else:
         raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
 
