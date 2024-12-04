@@ -182,7 +182,6 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 # * hashing tests ---------------------------------------------------------------------------------
 ConfigureTest(
   HASHING_TEST
-  hashing/bloom_filter_test.cu
   hashing/md5_test.cpp
   hashing/murmurhash3_x86_32_test.cpp
   hashing/murmurhash3_x64_128_test.cpp
@@ -315,14 +314,15 @@ ConfigureTest(
 )
 ConfigureTest(
   PARQUET_TEST
-  io/parquet_test.cpp
+  io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
-  io/parquet_writer_test.cpp
+  io/parquet_test.cpp
   io/parquet_v2_test.cpp
+  io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
 )
