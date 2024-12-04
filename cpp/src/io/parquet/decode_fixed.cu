@@ -323,13 +323,13 @@ __device__ inline void gpuDecodeString(
       return thread_pos;
     }();
 
-    // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
-    // before first_row) in the flat hierarchy case.
-    bool const in_range = (thread_pos < target_pos) && (dst_pos >= 0);
-
     // lookup input string pointer & length. store length.
     auto [thread_input_string, string_length] = [&]() {
+      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
+      // before first_row) in the flat hierarchy case.
+      bool const in_range = (thread_pos < target_pos) && (dst_pos >= 0);
       if (!in_range) { return string_index_pair{nullptr, 0}; }
+
       string_index_pair string_pair = gpuGetStringData(s, sb, src_pos);
       int32_t* str_len_ptr          = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
       *str_len_ptr                  = string_pair.second;
@@ -348,7 +348,7 @@ __device__ inline void gpuDecodeString(
     auto const thread_output_string = ni.string_out + thread_string_offset;
 
     if constexpr (split_decode_t) {
-      if (in_range) {
+      if (string_length > 0) {
         auto const split_string_length = s->dtype_len_in;
         auto const stream_length       = s->page.str_bytes / split_string_length;
 
@@ -365,18 +365,14 @@ __device__ inline void gpuDecodeString(
 
       // Instead, the (T = block_size) threads cooperatively copy the T strings
       // N strings are copied at a time, with M = T / N threads per string
-
-      // Instead of saving string lengths, save shared memory by only saving outputs:
-      // string length = outputs[i + 1] - outputs[i]. Hence the need for one extra output
       __shared__ uint8_t const* inputs[block_size];
-      __shared__ uint8_t* outputs[block_size + 1];
+      __shared__ uint8_t* outputs[block_size];
+      __shared__ int lengths[block_size];
 
-      // Save string pointers so threads can share the work on them
+      // Save string pointers & lengths so threads can share the work on them
       outputs[t] = thread_output_string;
       inputs[t]  = reinterpret_cast<uint8_t const*>(thread_input_string);
-      if ((t == 0) && (batch_size == block_size)) {
-        outputs[batch_size] = ni.string_out + string_output_offset;
-      }
+      lengths[t] = string_length;
       __syncthreads();
 
       // Choose M, N to be powers of 2 to divide T evenly and allow bit shifts.
@@ -389,21 +385,39 @@ __device__ inline void gpuDecodeString(
       // Determine M and N for each batch of strings based on their average length
       int const avg_string_length = block_total_string_length / batch_size;
 
-      // For avg length < 16/32/64/128/etc., length power-of-2 = 4/5/6/7 = 32 - __clz()
-      int const avg_string_length_log2 = 32 - __clz(avg_string_length);
+      int const threads_per_string_log2 = [&](int avg) {  // log2(M)
+        // From testing, performance is best when copying an average of B = 4 bytes at once.
+        // So #-threads-per-string M = avg_string_length / 4
+        // Help the compiler make the code fast by keeping everything a power of 2
+        // For avg length < 4/8/16/..., length power-of-2 = 2/3/4/.../. Divide by 4: 0/1/...
+        // This is the target (log2) for M, but we need to clamp its range
 
-      // From testing, performance is best when copying an average of B = 4 bytes at once.
-      // So #-threads = avg_string_length / 4, so subtract 2 (4 = 2^2) from the log2
-      // This is the target (log2) for M, but we need to clamp its range
-      int const threads_per_string_log2_unclamped = avg_string_length_log2 - 2;
+        // Clamp M (#-threads-per-string):
+        // For T threads: clamp #-strings-at-once N btw T/32 (1/warp) & 32 (cache miss if larger)
+        // So, clamp #-threads-per-string M = T / N between 32 (all in warp) & T/32 (cache miss)
+        // Writing an equation M(T) is slower than just handling each T case separately
+        auto caster = [](int value) { return static_cast<int>(value != 0); };  // branchless
 
-      // Clamp M (#-threads-per-string):
-      // For T threads: clamp #-strings-at-once N btw T/32 (1/warp) & 32 (cache miss if larger)
-      // So, clamp #-threads-per-string M = T / N between 32 (all in warp) & T/32 (cache miss)
-      static constexpr int min_log2 = constexpr_log2(block_size / 32);  // is 2 for T = 128
-      static constexpr int max_log2 = 5;  // 32 = 2^5 (cache miss if larger)
-      int const threads_per_string_log2 =
-        min(max(min_log2, threads_per_string_log2_unclamped), max_log2);
+        if constexpr (block_size > 512) {
+          return 5;  // max of 32 strings at a time, no matter what
+        } else if constexpr (block_size > 256) {
+          return (avg < 64) ? 4 : 5;
+        } else if constexpr (block_size > 128) {
+          //(avg < 32) ? 3 : ((avg < 64) ? 4 : 5);
+          return 3 + caster(avg >> 5) + caster(avg >> 6);
+        } else if constexpr (block_size > 64) {
+          //(avg < 16) ? 2 : ((avg < 32) ? 3 : ((avg < 64) ? 4 : 5));
+          return 2 + caster(avg >> 4) + caster(avg >> 5) + caster(avg >> 6);
+        } else if constexpr (block_size > 32) {
+          //(avg < 8) ? 1 : ((avg < 16) ? 2 : ((avg < 32) ? 3 : ((avg < 64) ? 4 : 5)));
+          return 1 + caster(avg >> 3) + caster(avg >> 4) + caster(avg >> 5) + caster(avg >> 6);
+        } else {  // One warp
+          //(avg<4) ? 0 : ((avg<8) ? 1 : ((avg<16) ? 2 : ((avg<32) ? 3 : ((avg<64) ? 4 : 5))));
+          return caster(avg >> 2) + caster(avg >> 3) + caster(avg >> 4) + caster(avg >> 5) +
+                 caster(avg >> 6);
+        }
+      }(avg_string_length);
+
       int const threads_per_string = 1 << threads_per_string_log2;  // M
 
       // For block_size = T = 128:
@@ -418,9 +432,10 @@ __device__ inline void gpuDecodeString(
       // threads work on consecutive strings so that all bytes are close in memory
       for (int string_idx = start_string_idx; string_idx < batch_size;
            string_idx += strings_at_once) {
-        auto output_string      = outputs[string_idx];
-        int const length        = outputs[string_idx + 1] - output_string;
         auto const input_string = inputs[string_idx];
+        if (inputs[t] == nullptr) { continue; }
+        auto output_string = outputs[string_idx];
+        int const length   = lengths[string_idx];
 
         // One-shot N chars per thread
         int const chars_at_once    = (length + threads_per_string - 1) >> threads_per_string_log2;
