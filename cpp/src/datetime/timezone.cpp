@@ -62,7 +62,7 @@ struct dst_transition_s {
 #pragma pack(pop)
 
 struct timezone_file {
-  timezone_file_header header;
+  timezone_file_header header{};
   bool is_header_from_64bit = false;
 
   std::vector<int64_t> transition_times;

@@ -668,13 +668,8 @@ class CategoricalColumn(column.ColumnBase):
             return self if inplace else self.copy()
 
         fill_code = self._encode(fill_value)
-        fill_scalar = cudf._lib.scalar.as_device_scalar(
-            fill_code, self.codes.dtype
-        )
-
         result = self if inplace else self.copy()
-
-        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        result.codes._fill(fill_code, begin, end, inplace=True)
         return result
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
@@ -888,7 +883,7 @@ class CategoricalColumn(column.ColumnBase):
         if len(replacement_col) == replacement_col.null_count:
             replacement_col = replacement_col.astype(self.categories.dtype)
 
-        if type(to_replace_col) != type(replacement_col):
+        if type(to_replace_col) is not type(replacement_col):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "
