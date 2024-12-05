@@ -19,7 +19,7 @@ dependencies:
 - cramjam
 - cubinlinker
 - cuda-nvtx=11.8
-- cuda-python>=11.7.1,<12.0a0,<=11.8.3
+- cuda-python>=11.7.1,<12.0a0
 - cuda-sanitizer-api=11.8.86
 - cuda-version=11.8
 - cudatoolkit

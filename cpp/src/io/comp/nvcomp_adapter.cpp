@@ -70,7 +70,7 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
   }
 }
 
-std::string compression_type_name(compression_type compression)
+[[maybe_unused]] std::string compression_type_name(compression_type compression)
 {
   switch (compression) {
     case compression_type::SNAPPY: return "Snappy";
