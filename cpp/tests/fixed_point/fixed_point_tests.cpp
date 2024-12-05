@@ -577,10 +577,12 @@ TEST_F(FixedPointTest, Decimal32FloatVector)
   float_vector_test(0.15, 20, -2, std::multiplies<>());
 }
 
+namespace {
 struct cast_to_int32_fn {
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
   int32_t __host__ __device__ operator()(decimal32 fp) { return static_cast<int32_t>(fp); }
 };
+}  // namespace
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointColumnWrapper)
 {
