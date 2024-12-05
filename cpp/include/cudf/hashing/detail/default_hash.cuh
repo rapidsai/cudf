@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
+#include <cudf/hashing/detail/xxhash_32.cuh>
 
 namespace cudf::hashing::detail {
 
@@ -30,6 +30,6 @@ namespace cudf::hashing::detail {
  * @tparam Key The key type for use by the hash class
  */
 template <typename Key>
-using default_hash = MurmurHash3_x86_32<Key>;
+using default_hash = XXHash_32<Key>;
 
 }  // namespace cudf::hashing::detail
