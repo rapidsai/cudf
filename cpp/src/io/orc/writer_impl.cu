@@ -500,13 +500,13 @@ file_segmentation calculate_segmentation(host_span<orc_column_view const> column
  * @brief Returns the maximum size of RLE encoded values of an integer type.
  **/
 template <typename T>
-size_t max_varint_size()
+constexpr size_t max_varint_size()
 {
   // varint encodes 7 bits in each byte
   return cudf::util::div_rounding_up_unsafe(sizeof(T) * 8, 7);
 }
 
-size_t RLE_stream_size(TypeKind kind, size_t count)
+constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
 {
   using cudf::util::div_rounding_up_unsafe;
   constexpr auto byte_rle_max_len = 128;
