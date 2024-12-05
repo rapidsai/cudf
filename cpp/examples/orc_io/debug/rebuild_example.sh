@@ -27,9 +27,6 @@ rm -rf orc_io/build
 ./build.sh
 popd
 
-
-# Build the example after source changes
-# cmake --build ~/cudf/cpp/examples/orc_io/build -j 16
-
-# build-cudf-python -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=native -j 16
-# build-cudf-python-wheel -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=native -j 16
+# Build Python package
+# build-pylibcudf-python -j 16
+# build-cudf-python -j 16

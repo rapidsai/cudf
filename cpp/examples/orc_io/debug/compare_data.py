@@ -86,34 +86,34 @@ class CompareManager:
             if k == 0:
                 print("-------------------------------------------------")
 
-        lastRowGroupFirstRowIdx = 630000
-        if len(b1) <= lastRowGroupFirstRowIdx:
-            print("--> Small data frame. diff.txt is not calcualted.")
-            return
+        # lastRowGroupFirstRowIdx = 630000
+        # if len(b1) <= lastRowGroupFirstRowIdx:
+        #     print("--> Small data frame. diff.txt is not calcualted.")
+        #     return
 
-        with open("diff.txt", "w") as f:
-            secDiffCount = 0
-            nanoDiffCount = 0
-            for i in range(lastRowGroupFirstRowIdx, len(b1)):
-                ts1 = pdDf["b"][i]
-                ts2 = cfDf["b"][i]
-                res1 = self.getTime(ts1)
-                res2 = self.getTime(ts2)
+        # with open("diff.txt", "w") as f:
+        #     secDiffCount = 0
+        #     nanoDiffCount = 0
+        #     for i in range(lastRowGroupFirstRowIdx, len(b1)):
+        #         ts1 = pdDf["b"][i]
+        #         ts2 = cfDf["b"][i]
+        #         res1 = self.getTime(ts1)
+        #         res2 = self.getTime(ts2)
 
-                if abs(res1[2] - res2[2]) > 1:
-                    secDiffCount += 1
+        #         if abs(res1[2] - res2[2]) > 1:
+        #             secDiffCount += 1
 
-                if abs(res1[3] - res2[3]) > 1e-7:
-                    nanoDiffCount += 1
+        #         if abs(res1[3] - res2[3]) > 1e-7:
+        #             nanoDiffCount += 1
 
-                f.write(
-                    "{}: {} ({}+{}) vs {} ({}+{})\n".format(
-                        i, ts1, res1[2], res1[3], ts2, res2[2], res2[3]
-                    )
-                )
+        #         f.write(
+        #             "{}: {} ({}+{}) vs {} ({}+{})\n".format(
+        #                 i, ts1, res1[2], res1[3], ts2, res2[2], res2[3]
+        #             )
+        #         )
 
-            print("secDiffCount: {}".format(secDiffCount))
-            print("nanoDiffCount: {}".format(nanoDiffCount))
+        #     print("secDiffCount: {}".format(secDiffCount))
+        #     print("nanoDiffCount: {}".format(nanoDiffCount))
 
 
 if __name__ == "__main__":
