@@ -53,7 +53,7 @@ cdef class ParquetReaderOptions:
     @staticmethod
     def builder(SourceInfo source):
         """
-        Create a CsvWriterOptionsBuilder object
+        Create a ParquetReaderOptionsBuilder object
 
         For details, see :cpp:func:`cudf::io::parquet_reader_options::builder`
 
