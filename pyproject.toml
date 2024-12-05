@@ -18,12 +18,13 @@ exclude = [
 skip = "./.git,./.github,./cpp/build,.*egg-info.*,./.mypy_cache,./cpp/tests,./python/cudf/cudf/tests,./java/src/test,./cpp/include/cudf_test/cxxopts.hpp"
 # ignore short words, and typename parameters like OffsetT
 ignore-regex = "\\b(.{1,4}|[A-Z]\\w*T)\\b"
-ignore-words-list = "inout,unparseable,falsy,couldn,Couldn"
+ignore-words-list = "inout,unparseable,falsy,couldn,Couldn,thirdparty"
 builtin = "clear"
 quiet-level = 3
 
 [tool.ruff]
 line-length = 79
+target-version = "py310"
 
 [tool.ruff.lint]
 typing-modules = ["cudf._typing"]
@@ -94,17 +95,35 @@ select = [
     "UP035",
     # usage of legacy `np.random` function calls
     "NPY002",
+    # Ruff-specific rules
+    "RUF",
 ]
 ignore = [
     # whitespace before :
     "E203",
     # line-too-long (due to Copyright header)
     "E501",
+    # type-comparison, disabled because we compare types to numpy dtypes
+    "E721",
+    # String contains ambiguous character
+    "RUF001",
+    # Parenthesize `a and b` expressions when chaining `and` and `or`
+    # together, to make the precedence clear
+    "RUF021",
+    # Mutable class attributes should be annotated with
+    # `typing.ClassVar`
+    "RUF012",
 ]
 fixable = ["ALL"]
 exclude = [
-    # TODO: Remove this in a follow-up where we fix __all__.
-    "__init__.py",
+    # TODO: https://github.com/rapidsai/cudf/issues/17461
+    "**/*.ipynb",
+]
+
+[tool.ruff.format]
+exclude = [
+    # TODO: https://github.com/rapidsai/cudf/issues/17461
+    "**/*.ipynb",
 ]
 
 [tool.ruff.lint.per-file-ignores]

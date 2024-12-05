@@ -536,8 +536,8 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
 
     assert_eq(expect, got)
 
-    expect = ps.str.cat(others=[ps.index] + [ps.index], sep=sep, na_rep=na_rep)
-    got = gs.str.cat(others=[gs.index] + [gs.index], sep=sep, na_rep=na_rep)
+    expect = ps.str.cat(others=[ps.index, ps.index], sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=[gs.index, gs.index], sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
