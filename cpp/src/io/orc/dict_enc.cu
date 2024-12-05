@@ -18,6 +18,7 @@
 
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 
