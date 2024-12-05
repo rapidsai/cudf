@@ -251,7 +251,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         how: Literal["half_even", "half_up"] = "half_even",
     ) -> NumericalBaseColumn:
         if not cudf.api.types.is_integer(decimals):
-            raise TypeError(f"Argument 'decimals' must an integer")
+            raise TypeError("Argument 'decimals' must an integer")
         if how not in {"half_even", "half_up"}:
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
