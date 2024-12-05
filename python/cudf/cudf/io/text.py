@@ -45,7 +45,7 @@ def read_text(
         if compression_offsets is not None:
             if len(compression_offsets) != 2:
                 raise ValueError(
-                    "compression offsets need to consist of two elements"
+                    "Compression offsets need to consist of two elements"
                 )
             datasource = plc.io.text.make_source_from_bgzip_file(
                 filepath_or_buffer,
