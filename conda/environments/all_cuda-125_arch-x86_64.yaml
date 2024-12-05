@@ -57,7 +57,7 @@ dependencies:
 - numba-cuda>=0.0.13,<0.0.18
 - numpy>=1.23,<3.0a0
 - numpydoc
-- nvcomp==4.1.0.6
+- nvcomp==4.1.1.1
 - nvtx>=0.2.1
 - openpyxl
 - packaging
