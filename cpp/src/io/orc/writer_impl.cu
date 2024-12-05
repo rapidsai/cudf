@@ -622,7 +622,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                             gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind) {
       add_stream(index_type, kind, type_kind, RLE_column_size(type_kind));
     };
-    CUDF_LOG_ERROR("kind: %d", (int)kind);
+    CUDF_LOG_ERROR("kind: {}", (int)kind);
     if (is_nullable) { add_RLE_stream(gpu::CI_PRESENT, PRESENT, TypeKind::BOOLEAN); }
     switch (kind) {
       case TypeKind::BOOLEAN:
