@@ -1,6 +1,7 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t, uint16_t, uintptr_t
+
 from pylibcudf.libcudf.strings_udf cimport (
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
