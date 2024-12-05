@@ -10,6 +10,7 @@ from utils import (
     _convert_types,
     assert_table_and_meta_eq,
     make_source,
+    sink_to_str,
     write_source_str,
 )
 
@@ -282,3 +283,87 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
 # list true_values = None,
 # list false_values = None,
 # bool dayfirst = False,
+
+
+@pytest.mark.parametrize("sep", [",", "*"])
+@pytest.mark.parametrize("lineterminator", ["\n", "\n\n"])
+@pytest.mark.parametrize("header", [True, False])
+@pytest.mark.parametrize("rows_per_chunk", [8, 100])
+def test_write_csv(
+    table_data_with_non_nested_pa_types,
+    source_or_sink,
+    sep,
+    lineterminator,
+    header,
+    rows_per_chunk,
+):
+    plc_tbl_w_meta, pa_table = table_data_with_non_nested_pa_types
+    sink = source_or_sink
+
+    plc.io.csv.write_csv(
+        (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
+            )
+            .names(plc_tbl_w_meta.column_names())
+            .na_rep("")
+            .include_header(header)
+            .rows_per_chunk(rows_per_chunk)
+            .line_terminator(lineterminator)
+            .inter_column_delimiter(sep)
+            .true_value("True")
+            .false_value("False")
+            .build()
+        )
+    )
+
+    # Convert everything to string to make comparisons easier
+    str_result = sink_to_str(sink)
+
+    pd_result = pa_table.to_pandas().to_csv(
+        sep=sep,
+        lineterminator=lineterminator,
+        header=header,
+        index=False,
+    )
+
+    assert str_result == pd_result
+
+
+@pytest.mark.parametrize("na_rep", ["", "NA"])
+def test_write_csv_na_rep(na_rep):
+    names = ["a", "b"]
+    pa_tbl = pa.Table.from_arrays(
+        [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
+        names=names,
+    )
+    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl_w_meta = plc.io.types.TableWithMetadata(
+        plc_tbl, column_names=[(name, []) for name in names]
+    )
+
+    sink = io.StringIO()
+
+    plc.io.csv.write_csv(
+        (
+            plc.io.csv.CsvWriterOptions.builder(
+                plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
+            )
+            .names(plc_tbl_w_meta.column_names())
+            .na_rep(na_rep)
+            .include_header(True)
+            .rows_per_chunk(8)
+            .line_terminator("\n")
+            .inter_column_delimiter(",")
+            .true_value("True")
+            .false_value("False")
+            .build()
+        )
+    )
+
+    # Convert everything to string to make comparisons easier
+    str_result = sink_to_str(sink)
+
+    pd_result = pa_tbl.to_pandas().to_csv(na_rep=na_rep, index=False)
+
+    assert str_result == pd_result
