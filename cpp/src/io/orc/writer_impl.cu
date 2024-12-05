@@ -527,7 +527,9 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
     case TypeKind::DOUBLE:
       return div_rounding_up_unsafe(count, gpu::encode_block_size) *
              (gpu::encode_block_size * max_varint_size<int64_t>() + 2);
-    default: CUDF_FAIL("Unsupported ORC type for RLE stream size");
+    default:
+      CUDF_LOG_ERROR("Unsupported ORC type for RLE stream size {}", (int)kind);
+      CUDF_FAIL("Unsupported ORC type for RLE stream size");
   }
 }
 
