@@ -497,11 +497,14 @@ class GroupBy(Serializable, Reducible, Scannable):
         col = cudf.core.column.column_empty(
             len(self.obj), "int8", masked=False
         )
-        return (
-            cudf.Series._from_column(col)
+        result = (
+            cudf.Series._from_column(col, name=getattr(self.obj, "name", None))
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
+        if not self._as_index:
+            result = result.rename("size").reset_index()
+        return result
 
     @_performance_tracking
     def cumcount(self, ascending: bool = True):
