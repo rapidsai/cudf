@@ -608,7 +608,6 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
     auto add_stream =
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
-        CUDF_LOG_ERROR("add_stream");
         auto const max_alignment_padding = uncomp_block_alignment(compression_kind) - 1;
         const auto base                  = column.index() * gpu::CI_NUM_STREAMS;
         ids[base + index_type]           = streams.size();
@@ -621,10 +620,9 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
     auto add_RLE_stream = [&](
                             gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind) {
-      CUDF_LOG_ERROR("kind2: {}", (int)type_kind);
       add_stream(index_type, kind, type_kind, RLE_column_size(type_kind));
     };
-    CUDF_LOG_ERROR("kind1: {}", (int)kind);
+    CUDF_LOG_ERROR("kind: %d", (int)kind);
     if (is_nullable) { add_RLE_stream(gpu::CI_PRESENT, PRESENT, TypeKind::BOOLEAN); }
     switch (kind) {
       case TypeKind::BOOLEAN:
@@ -636,7 +634,6 @@ orc_streams create_streams(host_span<orc_column_view> columns,
       case TypeKind::INT:
       case TypeKind::LONG:
       case TypeKind::DATE:
-        CUDF_LOG_ERROR("INT");
         add_RLE_stream(gpu::CI_DATA, DATA, kind);
         column.set_orc_encoding(DIRECT_V2);
         break;
