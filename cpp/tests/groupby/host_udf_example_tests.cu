@@ -16,7 +16,6 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -525,9 +524,8 @@ TEST_F(HostUDFExampleTest, SegmentedReductionEmptySegments)
 
 TEST_F(HostUDFExampleTest, SegmentedReductionEmptyInput)
 {
-  auto const vals = doubles_col{};
-  // Cannot be empty due to a bug in the libcudf: https://github.com/rapidsai/cudf/issues/17433.
-  auto const offsets = int32s_col{0}.release();
+  auto const vals    = doubles_col{};
+  auto const offsets = int32s_col{}.release();
   auto const agg     = cudf::make_host_udf_aggregation<cudf::segmented_reduce_aggregation>(
     std::make_unique<test_udf_simple_type<cudf::segmented_reduce_aggregation>>());
   auto const result = cudf::segmented_reduce(
