@@ -947,10 +947,12 @@ void scatter_offsets(tree_meta_t const& tree,
     });
   // For children of list and in ignore_vals, find it's parent node id, and set corresponding
   // parent's null mask to null. Setting mixed type list rows to null.
+  auto const num_list_children = thrust::distance(
+    thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()), list_children_end);
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
-    thrust::distance(thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin(), list_children_end),
+    num_list_children,
     [node_ids          = node_ids.begin(),
      parent_node_ids   = tree.parent_node_ids.begin(),
      column_categories = d_column_tree.node_categories.begin(),
@@ -959,13 +961,13 @@ void scatter_offsets(tree_meta_t const& tree,
      d_is_mixed_pruned = d_is_mixed_pruned.begin(),
      d_ignore_vals     = d_ignore_vals.begin(),
      d_columns_data    = d_columns_data.begin()] __device__(size_type i) {
-    auto const node_id        = node_ids[i];
-    auto const parent_node_id = parent_node_ids[node_id];
-    if (parent_node_id == parent_node_sentinel or d_ignore_vals[col_ids[parent_node_id]]) return;
-    if (column_categories[col_ids[parent_node_id]] == NC_LIST and
-        d_is_mixed_pruned[col_ids[node_id]]) {
-      clear_bit(d_columns_data[col_ids[parent_node_id]].validity, row_offsets[parent_node_id]);
-    }
+      auto const node_id        = node_ids[i];
+      auto const parent_node_id = parent_node_ids[node_id];
+      if (parent_node_id == parent_node_sentinel or d_ignore_vals[col_ids[parent_node_id]]) return;
+      if (column_categories[col_ids[parent_node_id]] == NC_LIST and
+          d_is_mixed_pruned[col_ids[node_id]]) {
+        clear_bit(d_columns_data[col_ids[parent_node_id]].validity, row_offsets[parent_node_id]);
+      }
     });
 
   auto const num_list_children =
@@ -985,18 +987,18 @@ void scatter_offsets(tree_meta_t const& tree,
      row_offsets     = row_offsets.begin(),
      d_columns_data  = d_columns_data.begin(),
      num_list_children] __device__(size_type i) {
-    auto const node_id        = node_ids[i];
-    auto const parent_node_id = parent_node_ids[node_id];
-    // scatter to list_offset
-    if (i == 0 or parent_node_ids[node_ids[i - 1]] != parent_node_id) {
-      d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id]] =
-        row_offsets[node_id];
-    }
-    // last value of list child_offset is its size.
-    if (i == num_list_children - 1 or parent_node_ids[node_ids[i + 1]] != parent_node_id) {
-      d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id] + 1] =
-        row_offsets[node_id] + 1;
-    }
+      auto const node_id        = node_ids[i];
+      auto const parent_node_id = parent_node_ids[node_id];
+      // scatter to list_offset
+      if (i == 0 or parent_node_ids[node_ids[i - 1]] != parent_node_id) {
+        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id]] =
+          row_offsets[node_id];
+      }
+      // last value of list child_offset is its size.
+      if (i == num_list_children - 1 or parent_node_ids[node_ids[i + 1]] != parent_node_id) {
+        d_columns_data[parent_col_ids[i]].child_offsets[row_offsets[parent_node_id] + 1] =
+          row_offsets[node_id] + 1;
+      }
     });
 
   // 5. scan on offsets.
