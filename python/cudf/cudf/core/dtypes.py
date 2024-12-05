@@ -196,9 +196,7 @@ class CategoricalDtype(_BaseDtype):
         Index(['b', 'a'], dtype='object')
         """
         if self._categories is None:
-            col = cudf.core.column.column_empty(
-                0, dtype="object", masked=False
-            )
+            col = cudf.core.column.column_empty(0, dtype="object")
         else:
             col = self._categories
         return cudf.Index._from_column(col)

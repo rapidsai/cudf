@@ -494,9 +494,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the size of each group.
         """
-        col = cudf.core.column.column_empty(
-            len(self.obj), "int8", masked=False
-        )
+        col = cudf.core.column.column_empty(len(self.obj), "int8")
         result = (
             cudf.Series._from_column(col, name=getattr(self.obj, "name", None))
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
@@ -524,7 +522,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         return (
             cudf.Series._from_column(
                 cudf.core.column.column_empty(
-                    len(self.obj), "int8", masked=False
+                    len(self.obj),
+                    "int8",
                 ),
                 index=self.obj.index,
             )

@@ -139,7 +139,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             result = cast(
                 NumericalBaseColumn,
                 cudf.core.column.column_empty(
-                    row_count=len(q), dtype=self.dtype, masked=True
+                    row_count=len(q), dtype=self.dtype
                 ),
             )
         else:
