@@ -22,7 +22,7 @@ from cudf._lib.utils cimport data_from_pylibcudf_io
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+from cudf._lib.types import dtype_to_pylibcudf_type
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from cudf.core.buffer import acquire_spill_lock
 from pylibcudf.io.types cimport TableInputMetadata, SinkInfo, ColumnInMetadata
@@ -77,11 +77,7 @@ cpdef read_orc(object filepaths_or_buffers,
         get_skiprows_arg(skip_rows),
         get_num_rows_arg(num_rows),
         use_index,
-        plc.types.DataType(
-            SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[
-                cudf.dtype(timestamp_type)
-            ]
-        )
+        dtype_to_pylibcudf_type(cudf.dtype(timestamp_type))
     )
 
     names = tbl_w_meta.column_names(include_children=False)

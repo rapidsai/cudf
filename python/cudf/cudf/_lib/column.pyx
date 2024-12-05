@@ -31,12 +31,12 @@ from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from cudf._lib.types cimport (
     dtype_from_column_view,
-    dtype_to_data_type,
     dtype_to_pylibcudf_type,
 )
 
 from cudf._lib.types import dtype_from_pylibcudf_column
 
+from pylibcudf cimport DataType as plc_DataType
 cimport pylibcudf.libcudf.copying as cpp_copying
 cimport pylibcudf.libcudf.types as libcudf_types
 cimport pylibcudf.libcudf.unary as libcudf_unary
@@ -362,7 +362,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
+        cdef plc_DataType dtype = dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
@@ -399,7 +399,7 @@ cdef class Column:
         self._data = None
 
         return mutable_column_view(
-            dtype,
+            dtype.c_obj,
             self.size,
             data,
             mask,
@@ -425,7 +425,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
+        cdef plc_DataType dtype = dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
@@ -451,7 +451,7 @@ cdef class Column:
         cdef libcudf_types.size_type c_null_count = null_count
 
         return column_view(
-            dtype,
+            dtype.c_obj,
             self.size,
             data,
             mask,

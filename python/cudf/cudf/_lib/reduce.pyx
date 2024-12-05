@@ -6,9 +6,9 @@ from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.types cimport dtype_to_pylibcudf_type, is_decimal_type_id
+from cudf._lib.types cimport dtype_to_pylibcudf_type
 
-import pylibcudf
+import pylibcudf as plc
 
 from cudf._lib.aggregation import make_aggregation
 
@@ -49,13 +49,17 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
         return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
-    result = pylibcudf.reduce.reduce(
+    result = plc.reduce.reduce(
         incol.to_pylibcudf(mode="read"),
         make_aggregation(reduction_op, kwargs).c_obj,
         dtype_to_pylibcudf_type(col_dtype),
     )
 
-    if is_decimal_type_id(result.type().id()):
+    if result.type().id() in {
+        plc.types.TypeId.DECIMAL128,
+        plc.types.TypeId.DECIMAL32,
+        plc.types.TypeId.DECIMAL64
+    }:
         scale = -result.type().scale()
         precision = _reduce_precision(col_dtype, reduction_op, len(incol))
         return DeviceScalar.from_pylibcudf(
@@ -84,11 +88,11 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
         Flag for including nulls in relevant scan
     """
     return Column.from_pylibcudf(
-        pylibcudf.reduce.scan(
+        plc.reduce.scan(
             incol.to_pylibcudf(mode="read"),
             make_aggregation(scan_op, kwargs).c_obj,
-            pylibcudf.reduce.ScanType.INCLUSIVE if inclusive
-            else pylibcudf.reduce.ScanType.EXCLUSIVE,
+            plc.reduce.ScanType.INCLUSIVE if inclusive
+            else plc.reduce.ScanType.EXCLUSIVE,
         )
     )
 
@@ -107,7 +111,7 @@ def minmax(Column incol):
     -------
     A pair of ``(min, max)`` values of ``incol``
     """
-    min, max = pylibcudf.reduce.minmax(incol.to_pylibcudf(mode="read"))
+    min, max = plc.reduce.minmax(incol.to_pylibcudf(mode="read"))
     return (
         cudf.Scalar.from_device_scalar(DeviceScalar.from_pylibcudf(min)),
         cudf.Scalar.from_device_scalar(DeviceScalar.from_pylibcudf(max)),
