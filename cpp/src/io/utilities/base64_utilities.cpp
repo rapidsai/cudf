@@ -86,7 +86,7 @@ std::string base64_encode(std::string_view string_to_encode)
   num_iterations += (input_length % 3) ? 1 : 0;
 
   std::string encoded;
-  size_t encoded_length = (input_length + 2) / 3 * 4;
+  size_t const encoded_length = (input_length + 2) / 3 * 4;
   encoded.reserve(encoded_length);
 
   // altered: modify base64 encoder loop using STL and Thrust.
@@ -135,7 +135,7 @@ std::string base64_decode(std::string_view encoded_string)
     return std::string{};
   }
 
-  size_t input_length = encoded_string.length();
+  size_t const input_length = encoded_string.length();
   std::string decoded;
 
   // altered: compute number of decoding iterations = floor (multiple of 4)
@@ -147,7 +147,7 @@ std::string base64_decode(std::string_view encoded_string)
   // two bytes smaller, depending on the amount of trailing equal signs
   // in the encoded string. This approximation is needed to reserve
   // enough space in the string to be returned.
-  size_t approx_decoded_length = input_length / 4 * 3;
+  size_t const approx_decoded_length = input_length / 4 * 3;
   decoded.reserve(approx_decoded_length);
 
   //

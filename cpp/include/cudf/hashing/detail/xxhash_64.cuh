@@ -31,7 +31,7 @@ template <typename Key>
 struct XXHash_64 {
   using result_type = std::uint64_t;
 
-  __host__ __device__ constexpr XXHash_64(uint64_t seed = cudf::DEFAULT_HASH_SEED) : _impl{seed} {}
+  CUDF_HOST_DEVICE constexpr XXHash_64(uint64_t seed = cudf::DEFAULT_HASH_SEED) : _impl{seed} {}
 
   __device__ constexpr result_type operator()(Key const& key) const { return this->_impl(key); }
 
