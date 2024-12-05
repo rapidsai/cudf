@@ -545,11 +545,10 @@ std::unique_ptr<column> contains(strings_column_view const& input,
 
   // benchmark measurements showed this to be faster for smaller strings
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    bool result = false;
-    for (size_type i = 0; !result && (i <= (d_string.size_bytes() - d_target.size_bytes())); ++i) {
-      result = d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0;
+    for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
+      if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
     }
-    return result;
+    return false;
   };
   return contains_fn(input, target, pfn, stream, mr);
 }
@@ -560,11 +559,10 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
                                  rmm::device_async_resource_ref mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    bool result = false;
-    for (size_type i = 0; !result && (i <= (d_string.size_bytes() - d_target.size_bytes())); ++i) {
-      result = d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0;
+    for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
+      if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
     }
-    return result;
+    return false;
   };
   return contains_fn(strings, targets, pfn, stream, mr);
 }
