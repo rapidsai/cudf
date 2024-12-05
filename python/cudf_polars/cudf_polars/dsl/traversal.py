@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 
 
 __all__: list[str] = [
-    "traversal",
-    "reuse_if_unchanged",
-    "make_recursive",
     "CachingVisitor",
+    "make_recursive",
+    "reuse_if_unchanged",
+    "traversal",
 ]
 
 

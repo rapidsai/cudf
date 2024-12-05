@@ -669,7 +669,7 @@ def test_statistics_expose(manager: SpillManager):
     # Expose the first buffer
     buffers[0].owner.mark_exposed()
     assert len(manager.statistics.exposes) == 1
-    stat = list(manager.statistics.exposes.values())[0]
+    stat = next(iter(manager.statistics.exposes.values()))
     assert stat.count == 1
     assert stat.total_nbytes == buffers[0].nbytes
     assert stat.spilled_nbytes == 0

@@ -2313,7 +2313,7 @@ def test_parquet_writer_criteo(tmpdir):
 
     cont_names = ["I" + str(x) for x in range(1, 14)]
     cat_names = ["C" + str(x) for x in range(1, 27)]
-    cols = ["label"] + cont_names + cat_names
+    cols = ["label", *cont_names, *cat_names]
 
     df = cudf.read_csv(fname, sep="\t", names=cols, byte_range=(0, 1000000000))
     df = df.drop(columns=cont_names)
@@ -4156,6 +4156,31 @@ def test_parquet_reader_with_mismatched_schemas_error():
             columns=["struct.b.b_b"],
             allow_mismatched_pq_schemas=True,
         )
+
+
+def test_parquet_roundtrip_zero_rows_no_column_mask():
+    expected = cudf.DataFrame._from_data(
+        {
+            "int": cudf.core.column.column_empty(0, "int64"),
+            "float": cudf.core.column.column_empty(0, "float64"),
+            "datetime": cudf.core.column.column_empty(0, "datetime64[ns]"),
+            "timedelta": cudf.core.column.column_empty(0, "timedelta64[ns]"),
+            "bool": cudf.core.column.column_empty(0, "bool"),
+            "decimal": cudf.core.column.column_empty(
+                0, cudf.Decimal64Dtype(1)
+            ),
+            "struct": cudf.core.column.column_empty(
+                0, cudf.StructDtype({"a": "int64"})
+            ),
+            "list": cudf.core.column.column_empty(
+                0, cudf.ListDtype("float64")
+            ),
+        }
+    )
+    with BytesIO() as bio:
+        expected.to_parquet(bio)
+        result = cudf.read_parquet(bio)
+    assert_eq(result, expected)
 
 
 def test_parquet_reader_mismatched_nullability():

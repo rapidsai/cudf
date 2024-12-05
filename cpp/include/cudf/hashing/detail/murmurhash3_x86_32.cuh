@@ -33,7 +33,7 @@ template <typename Key>
 struct MurmurHash3_x86_32 {
   using result_type = hash_value_type;
 
-  __host__ __device__ constexpr MurmurHash3_x86_32(uint32_t seed = cudf::DEFAULT_HASH_SEED)
+  CUDF_HOST_DEVICE constexpr MurmurHash3_x86_32(uint32_t seed = cudf::DEFAULT_HASH_SEED)
     : _impl{seed}
   {
   }

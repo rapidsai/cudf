@@ -28,9 +28,9 @@ pytestmark = pytest.mark.spilling
 # If spilling is enabled globally, we skip many test permutations
 # to reduce running time.
 if get_global_manager() is not None:
-    ALL_TYPES = ["float32"]  # noqa: F811
-    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
-    NUMERIC_TYPES = ["float32"]  # noqa: F811
+    ALL_TYPES = ["float32"]
+    DATETIME_TYPES = ["datetime64[ms]"]
+    NUMERIC_TYPES = ["float32"]
     # To save time, we skip tests marked "pytest.mark.xfail"
     pytest_xfail = pytest.mark.skipif
 

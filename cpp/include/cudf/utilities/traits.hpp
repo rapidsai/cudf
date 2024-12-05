@@ -218,6 +218,29 @@ constexpr inline bool is_index_type()
 bool is_index_type(data_type type);
 
 /**
+ * @brief Indicates whether the type `T` is a signed numeric type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is signed numeric
+ */
+template <typename T>
+constexpr inline bool is_signed()
+{
+  return std::is_signed_v<T>;
+}
+
+/**
+ * @brief Indicates whether `type` is a signed numeric `data_type`.
+ *
+ * "Signed Numeric" types include fundamental integral types such as `INT*`
+ * but can also be `FLOAT*` types.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is signed numeric
+ */
+bool is_signed(data_type type);
+
+/**
  * @brief Indicates whether the type `T` is a unsigned numeric type.
  *
  * @tparam T  The type to verify

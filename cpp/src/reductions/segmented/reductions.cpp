@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reduction.hpp>
@@ -26,6 +27,8 @@
 namespace cudf {
 namespace reduction {
 namespace detail {
+namespace {
+
 struct segmented_reduce_dispatch_functor {
   column_view const& col;
   device_span<size_type const> offsets;
@@ -162,6 +165,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
       "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
       "aggregation types");
   }
+
+  if (segmented_values.is_empty() && offsets.empty()) {
+    return cudf::make_empty_column(output_dtype);
+  }
+
   CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
 
   return cudf::detail::aggregation_dispatcher(
@@ -170,6 +178,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
       segmented_values, offsets, output_dtype, null_handling, init, stream, mr},
     agg);
 }
+}  // namespace
 }  // namespace detail
 }  // namespace reduction
 
