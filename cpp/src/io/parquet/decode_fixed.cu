@@ -27,12 +27,6 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-template <typename IntType>
-constexpr IntType constexpr_log2(IntType value)
-{
-  return (value <= 1) ? 0 : constexpr_log2(value >> 1) + 1;
-}
-
 // Unlike cub's algorithm, this provides warp-wide and block-wide results simultaneously.
 // Also, this provides the ability to compute warp_bits & lane_mask manually, which we need for
 // lists.
@@ -324,12 +318,11 @@ __device__ inline void gpuDecodeString(
     }();
 
     // lookup input string pointer & length. store length.
+    bool const in_range                       = (thread_pos < target_pos) && (dst_pos >= 0);
     auto [thread_input_string, string_length] = [&]() {
       // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
       // before first_row) in the flat hierarchy case.
-      bool const in_range = (thread_pos < target_pos) && (dst_pos >= 0);
       if (!in_range) { return string_index_pair{nullptr, 0}; }
-
       string_index_pair string_pair = gpuGetStringData(s, sb, src_pos);
       int32_t* str_len_ptr          = reinterpret_cast<int32_t*>(ni.data_out) + dst_pos;
       *str_len_ptr                  = string_pair.second;
@@ -348,7 +341,7 @@ __device__ inline void gpuDecodeString(
     auto const thread_output_string = ni.string_out + thread_string_offset;
 
     if constexpr (split_decode_t) {
-      if (string_length > 0) {
+      if (in_range) {
         auto const split_string_length = s->dtype_len_in;
         auto const stream_length       = s->page.str_bytes / split_string_length;
 
@@ -421,21 +414,20 @@ __device__ inline void gpuDecodeString(
       int const threads_per_string = 1 << threads_per_string_log2;  // M
 
       // For block_size = T = 128:
-      // For an average string length of 16 bytes or less (because N clamped): M = 4, N = 32
-      // For an average length of 65 bytes or more (rounded): M = 32, N = 4 (1 string / warp at
-      // once)
-      int const strings_at_once  = block_size >> threads_per_string_log2;  // N
-      int const string_lane      = t & (threads_per_string - 1);
-      int const start_string_idx = t >> threads_per_string_log2;
+      // For an avg string length of 16 bytes or less (because N clamped): M = 4, N = 32
+      // For an avg length of 65+ bytes (rounded): M = 32, N = 4 (1 string / warp at once)
+      int const strings_at_once = block_size >> threads_per_string_log2;  // N
+      int const string_lane     = t & (threads_per_string - 1);
+      int const start_str_idx   = t >> threads_per_string_log2;
 
       // loop over all strings in this batch
       // threads work on consecutive strings so that all bytes are close in memory
-      for (int string_idx = start_string_idx; string_idx < batch_size;
-           string_idx += strings_at_once) {
-        auto const input_string = inputs[string_idx];
-        if (inputs[t] == nullptr) { continue; }
-        auto output_string = outputs[string_idx];
-        int const length   = lengths[string_idx];
+      for (int str_idx = start_str_idx; str_idx < batch_size; str_idx += strings_at_once) {
+        auto const input_string = inputs[str_idx];
+        if (input_string == nullptr) { continue; }
+
+        auto output_string = outputs[str_idx];
+        int const length   = lengths[str_idx];
 
         // One-shot N chars per thread
         int const chars_at_once    = (length + threads_per_string - 1) >> threads_per_string_log2;
