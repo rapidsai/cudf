@@ -61,7 +61,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
 
   // lane id within the current warp
   constexpr size_type leader_lane{0};
-  int const lane_id = threadIdx.x % cudf::detail::warp_size;
+  auto const lane_id = threadIdx.x % cudf::detail::warp_size;
 
   size_type warp_valid_count{0};
 
