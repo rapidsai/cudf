@@ -566,6 +566,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                            CompressionKind compression_kind,
                            single_write_mode write_mode)
 {
+  CUDF_LOG_ERROR("0");
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
   // First n + 1 streams are row index streams
@@ -573,10 +574,10 @@ orc_streams create_streams(host_span<orc_column_view> columns,
   std::transform(columns.begin(), columns.end(), std::back_inserter(streams), [](auto const& col) {
     return Stream{ROW_INDEX, col.id()};
   });
-
+  CUDF_LOG_ERROR("1");
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
   std::vector<TypeKind> types(streams.size(), INVALID_TYPE_KIND);
-
+  CUDF_LOG_ERROR("2");
   for (auto& column : columns) {
     auto const is_nullable = [&]() -> bool {
       if (write_mode == single_write_mode::YES) {
@@ -602,7 +603,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                  RLE_stream_size(type_kind, segmentation.rowgroups[rg_idx][column.index()].size());
         });
     };
-
+    CUDF_LOG_ERROR("3");
     auto const kind = column.orc_kind();
 
     auto add_stream =
@@ -621,7 +622,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
                             gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind) {
       add_stream(index_type, kind, type_kind, RLE_column_size(type_kind));
     };
-
+    CUDF_LOG_ERROR("kind: %d", (int)kind);
     if (is_nullable) { add_RLE_stream(gpu::CI_PRESENT, PRESENT, TypeKind::BOOLEAN); }
     switch (kind) {
       case TypeKind::BOOLEAN:
@@ -706,7 +707,9 @@ orc_streams create_streams(host_span<orc_column_view> columns,
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
+    CUDF_LOG_ERROR("4");
   }
+  CUDF_LOG_ERROR("5");
   return {std::move(streams), std::move(ids), std::move(types)};
 }
 
