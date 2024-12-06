@@ -527,7 +527,7 @@ class Scan(IR):
                 # https://github.com/rapidsai/cudf/issues/16186
                 # is fixed
                 nrows = n_rows + skip_rows
-                if nrows != -1:
+                if nrows > -1:
                     options.set_num_rows(nrows)
                 if with_columns is not None:
                     options.set_columns(with_columns)

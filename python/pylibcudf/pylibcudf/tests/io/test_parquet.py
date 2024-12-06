@@ -34,7 +34,7 @@ def test_read_parquet_basic(
     options = plc.io.parquet.ParquetReaderOptions.builder(
         plc.io.SourceInfo([source])
     ).build()
-    if nrows != -1:
+    if nrows > -1:
         options.set_num_rows(nrows)
     if skiprows != 0:
         options.set_skip_rows(skiprows)
@@ -48,7 +48,7 @@ def test_read_parquet_basic(
 
     # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
-        offset=skiprows, length=nrows if nrows != -1 else None
+        offset=skiprows, length=nrows if nrows > -1 else None
     )
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)

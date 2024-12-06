@@ -219,7 +219,7 @@ cdef object _process_metadata(object df,
             else:
                 start = range_index_meta["start"] + skip_rows
                 stop = range_index_meta["stop"]
-                if nrows != -1:
+                if nrows > -1:
                     stop = start + nrows
                 idx = cudf.RangeIndex(
                     start=start,
@@ -280,7 +280,7 @@ def read_parquet_chunked(
     )
     if row_groups is not None:
         options.set_row_groups(row_groups)
-    if nrows != -1:
+    if nrows > -1:
         options.set_num_rows(nrows)
     if skip_rows != 0:
         options.set_skip_rows(skip_rows)
@@ -360,7 +360,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     )
     if row_groups is not None:
         options.set_row_groups(row_groups)
-    if nrows != -1:
+    if nrows > -1:
         options.set_num_rows(nrows)
     if skip_rows != 0:
         options.set_skip_rows(skip_rows)
