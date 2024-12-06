@@ -12,8 +12,8 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.aggregation import make_aggregation
 from cudf.api.types import is_integer, is_number
+from cudf.core._internals.aggregation import make_aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
