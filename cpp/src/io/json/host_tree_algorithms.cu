@@ -970,9 +970,6 @@ void scatter_offsets(tree_meta_t const& tree,
       }
     });
 
-  auto const num_list_children =
-    list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin());
-
   thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
                              parent_col_ids.begin(),
                              parent_col_ids.begin() + num_list_children,
