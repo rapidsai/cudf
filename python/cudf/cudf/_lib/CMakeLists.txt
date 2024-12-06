@@ -21,7 +21,6 @@ set(cython_sources
     orc.pyx
     parquet.pyx
     reduce.pyx
-    round.pyx
     scalar.pyx
     stream_compaction.pyx
     string_casting.pyx
