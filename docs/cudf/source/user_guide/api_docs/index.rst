@@ -19,6 +19,7 @@ This page provides a list of all publicly accessible modules, methods and classe
     general_utilities
     window
     io
+    subword_tokenizer
     tokenize_vocabulary
     string_handling
     list_handling
