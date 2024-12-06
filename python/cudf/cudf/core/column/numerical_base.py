@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 
@@ -246,12 +246,21 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         return cov / lhs_std / rhs_std
 
     def round(
-        self, decimals: int = 0, how: str = "half_even"
+        self,
+        decimals: int = 0,
+        how: Literal["half_even", "half_up"] = "half_even",
     ) -> NumericalBaseColumn:
         if not cudf.api.types.is_integer(decimals):
-            raise TypeError("Values in decimals must be integers")
-        """Round the values in the Column to the given number of decimals."""
-        return libcudf.round.round(self, decimal_places=decimals, how=how)
+            raise TypeError("Argument 'decimals' must an integer")
+        if how not in {"half_even", "half_up"}:
+            raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
+        plc_how = plc.round.RoundingMethod[how.upper()]
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                plc.round.round(
+                    self.to_pylibcudf(mode="read"), decimals, plc_how
+                )
+            )
 
     def _scan(self, op: str) -> ColumnBase:
         return libcudf.reduce.scan(
