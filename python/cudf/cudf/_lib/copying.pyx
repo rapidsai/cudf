@@ -3,8 +3,6 @@
 import pickle
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 import pylibcudf
 
 import cudf
@@ -18,10 +16,6 @@ from cudf._lib.scalar cimport DeviceScalar
 
 from cudf._lib.reduce import minmax
 
-from libcpp.memory cimport make_unique
-
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
@@ -59,12 +53,9 @@ def copy_column(Column input_column):
     -------
     Deep copied column
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view input_column_view = input_column.view()
-    with nogil:
-        c_result = move(make_unique[column](input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        input_column.to_pylibcudf(mode="read").copy()
+    )
 
 
 @acquire_spill_lock()
