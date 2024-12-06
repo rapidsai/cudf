@@ -460,7 +460,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   struct index_element_fn {
     template <typename IndexType,
-              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>)>
+              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_signed_v<IndexType>)>
     __device__ size_type operator()(column_device_view const& indices, size_type index)
     {
       return static_cast<size_type>(indices.element<IndexType>(index));
@@ -468,10 +468,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
     template <typename IndexType,
               typename... Args,
-              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>))>
+              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_signed_v<IndexType>))>
     __device__ size_type operator()(Args&&... args)
     {
-      CUDF_UNREACHABLE("dictionary indices must be an unsigned integral type");
+      CUDF_UNREACHABLE("dictionary indices must be a signed integral type");
     }
   };
 
