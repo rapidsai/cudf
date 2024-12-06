@@ -5313,7 +5313,7 @@ class StringMethods(ColumnMethods):
         if can_convert_to_column(position):
             position = column.as_column(position)
         return self._return_or_inplace(
-            self._column.is_letter(False, column.as_column(position))  # type: ignore[arg-type]
+            self._column.is_letter(False, position)  # type: ignore[arg-type]
         )
 
     def is_vowel(self, position) -> SeriesOrIndex:
@@ -5350,7 +5350,7 @@ class StringMethods(ColumnMethods):
         if can_convert_to_column(position):
             position = column.as_column(position)
         return self._return_or_inplace(
-            self._column.is_letter(True, column.as_column(position))  # type: ignore[arg-type]
+            self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
     def edit_distance(self, targets) -> SeriesOrIndex:
@@ -5657,7 +5657,7 @@ class StringMethods(ColumnMethods):
                 raise ValueError(
                     f"Expecting a Series with dtype uint32, got {type(seeds)}"
                 )
-        return self._return_or_inplace(self._column.word_minhash(seeds_column))  # type: ignore[arg-type]
+        return self._return_or_inplace(self._column.word_minhash(seeds_column))  # type: ignore[attr-defined]
 
     def word_minhash64(self, seeds: ColumnLike | None = None) -> SeriesOrIndex:
         """
@@ -5692,7 +5692,7 @@ class StringMethods(ColumnMethods):
                     f"Expecting a Series with dtype uint64, got {type(seeds)}"
                 )
         return self._return_or_inplace(
-            self._column.word_minhash64(seeds_column)  # type: ignore[arg-type]
+            self._column.word_minhash64(seeds_column)  # type: ignore[attr-defined]
         )
 
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
@@ -6333,22 +6333,6 @@ class StringColumn(column.ColumnBase):
         )
 
     @acquire_spill_lock()
-    def word_minhash(self, seeds: NumericalColumn) -> ListColumn:
-        result = plc.nvtext.minhash.word_minhash(
-            self.to_pylibcudf(mode="read"),
-            seeds.to_pylibcudf(mode="read"),
-        )
-        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
-
-    @acquire_spill_lock()
-    def word_minhash64(self, seeds: NumericalColumn) -> ListColumn:
-        result = plc.nvtext.minhash.word_minhash64(
-            self.to_pylibcudf(mode="read"),
-            seeds.to_pylibcudf(mode="read"),
-        )
-        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
-
-    @acquire_spill_lock()
     def jaccard_index(self, other: Self, width: int) -> NumericalColumn:
         result = plc.nvtext.jaccard.jaccard_index(
             self.to_pylibcudf(mode="read"),
@@ -6473,7 +6457,7 @@ class StringColumn(column.ColumnBase):
     @acquire_spill_lock()
     def porter_stemmer_measure(self) -> NumericalColumn:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.tokenize.porter_stemmer_measure(
+            plc.nvtext.stemmer.porter_stemmer_measure(
                 self.to_pylibcudf(mode="read")
             )
         )

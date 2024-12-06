@@ -437,6 +437,22 @@ class ListColumn(ColumnBase):
             )
         )
 
+    @acquire_spill_lock()
+    def word_minhash64(self, seeds: NumericalColumn) -> ListColumn:
+        result = plc.nvtext.minhash.word_minhash64(
+            self.to_pylibcudf(mode="read"),
+            seeds.to_pylibcudf(mode="read"),
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def word_minhash(self, seeds: NumericalColumn) -> Self:
+        result = plc.nvtext.minhash.word_minhash(
+            self.to_pylibcudf(mode="read"),
+            seeds.to_pylibcudf(mode="read"),
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
 
 class ListMethods(ColumnMethods):
     """
