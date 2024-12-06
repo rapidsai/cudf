@@ -50,9 +50,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OTEL_SERVICE_NAME: 'pr-cudf'
+      SHARED_ACTIONS_REF: empty-certs
+      TELEMETRY_ENABLED: '1'
     steps:
       - name: Telemetry setup
-        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
+        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@empty-certs
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -327,16 +329,12 @@ jobs:
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
 
   telemetry-summarize:
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     needs: pr-builder
     if: always()
     continue-on-error: true
+    env:
+      SHARED_ACTIONS_REF: empty-certs
     steps:
-      - name: Load stashed telemetry env vars
-        uses: rapidsai/shared-actions/telemetry-dispatch-load-base-env-vars@main
-        with:
-            load_service_name: true
       - name: Telemetry summarize
-        uses: rapidsai/shared-actions/telemetry-dispatch-write-summary@main
-        with:
-          cert_concat: "${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}"
+        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@empty-certs
