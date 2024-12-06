@@ -13,13 +13,11 @@
 # =============================================================================
 
 set(cython_sources
-    aggregation.pyx
     column.pyx
     copying.pyx
     csv.pyx
     groupby.pyx
     interop.pyx
-    merge.pyx
     parquet.pyx
     reduce.pyx
     round.pyx
