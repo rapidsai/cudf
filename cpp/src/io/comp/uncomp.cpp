@@ -127,7 +127,7 @@ struct zip_archive_s {
 
 bool ParseGZArchive(gz_archive_s* dst, uint8_t const* raw, size_t len)
 {
-  gz_file_header_s const* fhdr;
+  gz_file_header_s const* fhdr = nullptr;
 
   if (!dst) return false;
   memset(dst, 0, sizeof(gz_archive_s));
@@ -138,7 +138,7 @@ bool ParseGZArchive(gz_archive_s* dst, uint8_t const* raw, size_t len)
   raw += sizeof(gz_file_header_s);
   len -= sizeof(gz_file_header_s);
   if (fhdr->flags & GZIPHeaderFlag::fextra) {
-    uint32_t xlen;
+    uint32_t xlen = 0;
 
     if (len < 2) return false;
     xlen = raw[0] | (raw[1] << 8);
@@ -151,8 +151,8 @@ bool ParseGZArchive(gz_archive_s* dst, uint8_t const* raw, size_t len)
     len -= xlen;
   }
   if (fhdr->flags & GZIPHeaderFlag::fname) {
-    size_t l = 0;
-    uint8_t c;
+    size_t l  = 0;
+    uint8_t c = 0;
     do {
       if (l >= len) return false;
       c = raw[l];
@@ -163,8 +163,8 @@ bool ParseGZArchive(gz_archive_s* dst, uint8_t const* raw, size_t len)
     len -= l;
   }
   if (fhdr->flags & GZIPHeaderFlag::fcomment) {
-    size_t l = 0;
-    uint8_t c;
+    size_t l  = 0;
+    uint8_t c = 0;
     do {
       if (l >= len) return false;
       c = raw[l];
@@ -219,7 +219,7 @@ bool OpenZipArchive(zip_archive_s* dst, uint8_t const* raw, size_t len)
 
 int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, uint8_t const* comp_data, size_t comp_len)
 {
-  int zerr;
+  int zerr = 0;
   z_stream strm;
 
   memset(&strm, 0, sizeof(strm));
@@ -291,7 +291,7 @@ size_t decompress_zlib(host_span<uint8_t const> src, host_span<uint8_t> dst)
  */
 size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  gz_archive_s gz;
+  gz_archive_s gz{};
   auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
   CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header");
   return decompress_zlib({gz.comp_data, gz.comp_len}, dst);
@@ -303,12 +303,12 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
-  uint32_t uncompressed_size, bytes_left, dst_pos;
+  uint32_t uncompressed_size = 0, bytes_left = 0, dst_pos = 0;
   auto cur       = src.begin();
   auto const end = src.end();
   // Read uncompressed length (varint)
   {
-    uint32_t l        = 0, c;
+    uint32_t l = 0, c = 0;
     uncompressed_size = 0;
     do {
       c              = *cur++;
@@ -328,7 +328,7 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 
     if (blen & 3) {
       // Copy
-      uint32_t offset;
+      uint32_t offset = 0;
       if (blen & 2) {
         // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
         if (cur + 2 > end) break;
@@ -441,7 +441,7 @@ source_properties get_source_properties(compression_type compression, host_span<
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::GZIP: {
-      gz_archive_s gz;
+      gz_archive_s gz{};
       auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
       CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header while fetching source properties");
       compression = compression_type::GZIP;
@@ -452,26 +452,28 @@ source_properties get_source_properties(compression_type compression, host_span<
       [[fallthrough]];
     }
     case compression_type::ZIP: {
-      zip_archive_s za;
+      zip_archive_s za{};
       if (OpenZipArchive(&za, raw, src.size())) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
           auto const* cdfh = reinterpret_cast<zip_cdfh_s const*>(
             reinterpret_cast<uint8_t const*>(za.cdfh) + cdfh_ofs);
-          int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
+          int const cdfh_len =
+            sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
           if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x0201'4b50) {
             // Bad cdir
             break;
           }
           // For now, only accept with non-zero file sizes and DEFLATE
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
-            size_t lfh_ofs  = cdfh->hdr_ofs;
-            auto const* lfh = reinterpret_cast<zip_lfh_s const*>(raw + lfh_ofs);
+            size_t const lfh_ofs = cdfh->hdr_ofs;
+            auto const* lfh      = reinterpret_cast<zip_lfh_s const*>(raw + lfh_ofs);
             if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x0403'4b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
-                size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
-                size_t file_end   = file_start + lfh->comp_size;
+                size_t const file_start =
+                  lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
+                size_t const file_end = file_start + lfh->comp_size;
                 if (file_end <= src.size()) {
                   // Pick the first valid file of non-zero size (only 1 file expected in archive)
                   compression = compression_type::ZIP;
@@ -510,7 +512,7 @@ source_properties get_source_properties(compression_type compression, host_span<
       auto const end = src.end();
       // Read uncompressed length (varint)
       {
-        uint32_t l = 0, c;
+        uint32_t l = 0, c = 0;
         do {
           c              = *cur++;
           auto const lo7 = c & 0x7f;

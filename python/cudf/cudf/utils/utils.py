@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
 import rmm
 
 import cudf
@@ -209,7 +210,7 @@ class GetAttrGetItemMixin:
 
     # Tracking of protected keys by each subclass is necessary to make the
     # `__getattr__`->`__getitem__` call safe. See
-    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
+    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
     # for an explanation. In brief, defining the `_PROTECTED_KEYS` allows this
     # class to avoid calling `__getitem__` inside `__getattr__` when
     # `__getitem__` will internally again call `__getattr__`, resulting in an
@@ -252,7 +253,7 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     """
     Convert PyArrow mask buffer to cuDF mask buffer
     """
-    mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(size)
+    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
     if mask_buf.size < mask_size:
         dbuf = rmm.DeviceBuffer(size=mask_size)
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))

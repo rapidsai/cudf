@@ -13,22 +13,14 @@
 # =============================================================================
 
 set(cython_sources
-    aggregation.pyx
-    binaryop.pyx
     column.pyx
     copying.pyx
     csv.pyx
-    datetime.pyx
-    filling.pyx
     groupby.pyx
     interop.pyx
-    json.pyx
-    merge.pyx
-    null_mask.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx
-    replace.pyx
     round.pyx
     scalar.pyx
     sort.pyx

@@ -13,11 +13,12 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
+import cudf.core.column.column as column
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
@@ -69,10 +70,7 @@ class ListColumn(ColumnBase):
 
     @cached_property
     def memory_usage(self):
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
         current_base_child = self.base_children[1]
         current_offset = self.offset
@@ -97,7 +95,7 @@ class ListColumn(ColumnBase):
         ) * current_base_child.dtype.itemsize
 
         if current_base_child.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+            n += plc.null_mask.bitmask_allocation_size_bytes(
                 current_base_child.size
             )
         return n
@@ -190,8 +188,8 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def normalize_binop_value(self, other):
-        if not isinstance(other, ListColumn):
+    def normalize_binop_value(self, other) -> Self:
+        if not isinstance(other, type(self)):
             return NotImplemented
         return other
 

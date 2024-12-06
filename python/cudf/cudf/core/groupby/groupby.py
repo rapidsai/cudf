@@ -19,7 +19,6 @@ import pylibcudf as plc
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.null_mask import bitmask_or
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
@@ -498,11 +497,14 @@ class GroupBy(Serializable, Reducible, Scannable):
         col = cudf.core.column.column_empty(
             len(self.obj), "int8", masked=False
         )
-        return (
-            cudf.Series._from_column(col)
+        result = (
+            cudf.Series._from_column(col, name=getattr(self.obj, "name", None))
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
+        if not self._as_index:
+            result = result.rename("size").reset_index()
+        return result
 
     @_performance_tracking
     def cumcount(self, ascending: bool = True):
@@ -1118,8 +1120,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         index = self.grouping.keys.unique().sort_values()
         num_groups = len(index)
-        _, has_null_group = bitmask_or([*index._columns])
-
+        has_null_group = any(col.has_nulls() for col in index._columns)
         if ascending:
             # Count ascending from 0 to num_groups - 1
             groups = range(num_groups)
@@ -1469,9 +1470,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 RuntimeWarning,
             )
 
-        chunks = [
-            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
-        ]
+        chunks = [grouped_values[s:e] for s, e in itertools.pairwise(offsets)]
         chunk_results = [function(chk, *args) for chk in chunks]
         return self._post_process_chunk_results(
             chunk_results, group_names, group_keys, grouped_values

@@ -93,6 +93,7 @@ option(
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
 option(CUDF_IWYU "Enable IWYU during compilation" OFF)
+option(CUDF_CLANG_TIDY_AUTOFIX "Enable clang-tidy autofixes" OFF)
 
 option(
   CUDF_KVIKIO_REMOTE_IO
@@ -205,9 +206,16 @@ function(enable_static_checkers target)
   if(_LINT_CLANG_TIDY)
     # clang will complain about unused link libraries on the compile line unless we specify
     # -Qunused-arguments.
-    set_target_properties(
-      ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
-    )
+    if(CUDF_CLANG_TIDY_AUTOFIX)
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY
+                             "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments;--fix"
+      )
+    else()
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
+      )
+    endif()
   endif()
   if(_LINT_IWYU)
     # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
@@ -926,9 +934,16 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}> nanoarrow
+  PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+         spdlog::spdlog_header_only
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          cuco::cuco
+          ZLIB::ZLIB
+          nvcomp::nvcomp
+          kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
+          nanoarrow
+          rmm::rmm_logger_impl
 )
 
 # Add Conda library, and include paths if specified
@@ -1007,7 +1022,7 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE Threads::Threads cudf cudftest_default_stream
+    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
                            $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 

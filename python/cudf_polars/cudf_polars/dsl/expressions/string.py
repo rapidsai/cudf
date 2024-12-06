@@ -92,7 +92,7 @@ class StringFunction(Expr):
                 raise ValueError("StringFunction required")
             return getattr(cls, name)
 
-    __slots__ = ("name", "options", "_regex_program")
+    __slots__ = ("_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
 
     def __init__(

@@ -11,11 +11,12 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf import _lib as libcudf
+import cudf.core.column.column as column
+import cudf.core.column.string as string
 from cudf.api.types import is_scalar
-from cudf.core._internals import unary
+from cudf.core._internals import binaryop, unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column.column import ColumnBase
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import (
     _all_bools_with_nulls,
@@ -186,8 +187,8 @@ class TimeDeltaColumn(ColumnBase):
                 this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
                     if other.is_valid():
-                        other = other.value.astype(common_dtype).astype(
-                            out_dtype
+                        other = cudf.Scalar(
+                            other.value.astype(common_dtype).astype(out_dtype)
                         )
                     else:
                         other = cudf.Scalar(None, out_dtype)
@@ -217,10 +218,8 @@ class TimeDeltaColumn(ColumnBase):
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
-        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if cudf.get_option(
-            "mode.pandas_compatible"
-        ) and out_dtype == cudf.dtype(np.bool_):
+        result = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b":
             result = result.fillna(op == "__ne__")
         return result
 
@@ -468,7 +467,7 @@ class TimeDeltaColumn(ColumnBase):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """  # noqa: E501
+        """
 
         date_meta = {
             "seconds": ["m", "s"],

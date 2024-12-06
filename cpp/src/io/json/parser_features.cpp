@@ -68,6 +68,77 @@ void json_reader_options::set_dtypes(schema_element types)
 }  // namespace cudf::io
 
 namespace cudf::io::json::detail {
+namespace {
+
+// example schema and its path.
+// "a": int             {"a", int}
+// "a": [ int ]         {"a", list}, {"element", int}
+// "a": { "b": int}     {"a", struct}, {"b", int}
+// "a": [ {"b": int }]  {"a", list}, {"element", struct}, {"b", int}
+// "a": [ null]         {"a", list}, {"element", str}
+// back() is root.
+// front() is leaf.
+/**
+ * @brief Get the path data type of a column by path if present in input schema
+ *
+ * @param path path of the json column
+ * @param root root of input schema element
+ * @return data type of the column if present, otherwise std::nullopt
+ */
+std::optional<data_type> get_path_data_type(
+  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path, schema_element const& root)
+{
+  if (path.empty() || path.size() == 1) {
+    return root.type;
+  } else {
+    if (path.back().second == NC_STRUCT && root.type.id() == type_id::STRUCT) {
+      auto const child_name      = path.first(path.size() - 1).back().first;
+      auto const child_schema_it = root.child_types.find(child_name);
+      return (child_schema_it != std::end(root.child_types))
+               ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
+               : std::optional<data_type>{};
+    } else if (path.back().second == NC_LIST && root.type.id() == type_id::LIST) {
+      auto const child_schema_it = root.child_types.find(list_child_name);
+      return (child_schema_it != std::end(root.child_types))
+               ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
+               : std::optional<data_type>{};
+    }
+    return std::optional<data_type>{};
+  }
+}
+
+std::optional<schema_element> child_schema_element(std::string const& col_name,
+                                                   cudf::io::json_reader_options const& options)
+{
+  return std::visit(
+    cudf::detail::visitor_overload{
+      [col_name](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
+        auto column_index = atol(col_name.data());
+        return (static_cast<std::size_t>(column_index) < user_dtypes.size())
+                 ? std::optional<schema_element>{{user_dtypes[column_index]}}
+                 : std::optional<schema_element>{};
+      },
+      [col_name](
+        std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
+        return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                 ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
+                 : std::optional<schema_element>{};
+      },
+      [col_name](
+        std::map<std::string, schema_element> const& user_dtypes) -> std::optional<schema_element> {
+        return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                 ? user_dtypes.find(col_name)->second
+                 : std::optional<schema_element>{};
+      },
+      [col_name](schema_element const& user_dtypes) -> std::optional<schema_element> {
+        return (user_dtypes.child_types.find(col_name) != std::end(user_dtypes.child_types))
+                 ? user_dtypes.child_types.find(col_name)->second
+                 : std::optional<schema_element>{};
+      }},
+    options.get_dtypes());
+}
+
+}  // namespace
 
 /// Created an empty column of the specified schema
 struct empty_column_functor {
@@ -209,74 +280,6 @@ column_name_info make_column_name_info(schema_element const& schema, std::string
     default: break;
   }
   return info;
-}
-
-std::optional<schema_element> child_schema_element(std::string const& col_name,
-                                                   cudf::io::json_reader_options const& options)
-{
-  return std::visit(
-    cudf::detail::visitor_overload{
-      [col_name](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
-        auto column_index = atol(col_name.data());
-        return (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                 ? std::optional<schema_element>{{user_dtypes[column_index]}}
-                 : std::optional<schema_element>{};
-      },
-      [col_name](
-        std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
-        return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                 ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
-                 : std::optional<schema_element>{};
-      },
-      [col_name](
-        std::map<std::string, schema_element> const& user_dtypes) -> std::optional<schema_element> {
-        return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                 ? user_dtypes.find(col_name)->second
-                 : std::optional<schema_element>{};
-      },
-      [col_name](schema_element const& user_dtypes) -> std::optional<schema_element> {
-        return (user_dtypes.child_types.find(col_name) != std::end(user_dtypes.child_types))
-                 ? user_dtypes.child_types.find(col_name)->second
-                 : std::optional<schema_element>{};
-      }},
-    options.get_dtypes());
-}
-
-// example schema and its path.
-// "a": int             {"a", int}
-// "a": [ int ]         {"a", list}, {"element", int}
-// "a": { "b": int}     {"a", struct}, {"b", int}
-// "a": [ {"b": int }]  {"a", list}, {"element", struct}, {"b", int}
-// "a": [ null]         {"a", list}, {"element", str}
-// back() is root.
-// front() is leaf.
-/**
- * @brief Get the path data type of a column by path if present in input schema
- *
- * @param path path of the json column
- * @param root root of input schema element
- * @return data type of the column if present, otherwise std::nullopt
- */
-std::optional<data_type> get_path_data_type(
-  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path, schema_element const& root)
-{
-  if (path.empty() || path.size() == 1) {
-    return root.type;
-  } else {
-    if (path.back().second == NC_STRUCT && root.type.id() == type_id::STRUCT) {
-      auto const child_name      = path.first(path.size() - 1).back().first;
-      auto const child_schema_it = root.child_types.find(child_name);
-      return (child_schema_it != std::end(root.child_types))
-               ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
-               : std::optional<data_type>{};
-    } else if (path.back().second == NC_LIST && root.type.id() == type_id::LIST) {
-      auto const child_schema_it = root.child_types.find(list_child_name);
-      return (child_schema_it != std::end(root.child_types))
-               ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
-               : std::optional<data_type>{};
-    }
-    return std::optional<data_type>{};
-  }
 }
 
 std::optional<data_type> get_path_data_type(
