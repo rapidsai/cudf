@@ -16,7 +16,6 @@ from . import (
     string_casting,
     strings,
     strings_udf,
-    text,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max
