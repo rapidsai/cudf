@@ -1,12 +1,16 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libcpp.memory cimport make_unique, unique_ptr
+from libc.stdint cimport uintptr_t
+from libcpp.memory cimport make_unique, unique_ptr, make_shared, shared_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
-from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.scalar.scalar cimport scalar, string_scalar
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
+from pylibcudf.libcudf.copying cimport get_element as cpp_get_element
+from pylibcudf.null_mask cimport bitmask_allocation_size_bytes
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
@@ -200,36 +204,95 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_column_view(const column_view& cv, Column owner):
-        """Create a Column from a libcudf column_view.
-
-        This method accepts shared ownership of the underlying data from the
-        owner and relies on the offset from the view.
-
-        This method is for pylibcudf's functions to use to ingest outputs of
-        calling libcudf algorithms, and should generally not be needed by users
-        (even direct pylibcudf Cython users).
-        """
+    cdef Column from_column_view(const column_view& cv, object owner):
+        column_owner = isinstance(owner, Column)
         cdef DataType dtype = DataType.from_libcudf(cv.type())
         cdef size_type size = cv.size()
         cdef size_type null_count = cv.null_count()
+        cdef size_type offset = cv.offset()
+        cdef size_type base_size = size + offset
+        cdef size_type dtype_itemsize = dtype_itemsize_from_column_view(cv)
+        cdef base_nbytes = base_size * dtype_itemsize
+        cdef string_scalar* str_ptr
+        cdef const scalar* ptr
 
-        children = []
-        if cv.num_children() != 0:
-            for i in range(cv.num_children()):
-                children.append(
-                    Column.from_column_view(cv.child(i), owner.child(i))
+        is_string_column = (cv.type().id() == type_id.STRING)
+        if is_string_column:
+            if cv.num_children() == 0:
+                base_nbytes = 0
+            else:
+                # get the size from offset child column (device to host copy)
+                offsets_column_index = 0
+                offset_child_column = cv.child(offsets_column_index)
+                if offset_child_column.size() == 0:
+                    base_nbytes = 0
+                else:
+                    ptr = (<Scalar> get_element(
+                        offset_child_column, offset_child_column.size()-1
+                    )).get()
+                    str_ptr = <string_scalar*>ptr
+                    base_nbytes = dereference(str_ptr).size()
+
+        if column_owner:
+            children = []
+            if cv.num_children() != 0:
+                for i in range(cv.num_children()):
+                    children.append(
+                        Column.from_column_view(cv.child(i), owner.child(i))
+                    )
+            return Column(
+                dtype,
+                size,
+                owner._data,
+                owner._mask,
+                null_count,
+                offset,
+                children,
+            )
+        else:
+            if owner is not None:
+                try:
+                    owner = Column.from_cuda_array_interface_obj(owner)
+                    return Column.from_column_view(cv, owner)
+                except Exception as e:
+                    raise AttributeError(
+                        "Argument 'owner' must have attribute __cuda_array_interface__"
+                    ) from e
+            else:
+                data_ptr = <uintptr_t>(cv.head[void]())
+                mask_ptr = <uintptr_t>(cv.null_mask())
+                mask = None
+                if data_ptr:
+                    buffer_size = (
+                        base_nbytes
+                        if is_string_column
+                        else ((size + offset) * dtype_itemsize)
+                    )
+                    data = DeviceBuffer(ptr=data_ptr, size=buffer_size)
+                else:
+                    data = DeviceBuffer(ptr=data_ptr, size=0)
+                if mask_ptr:
+                    mask = DeviceBuffer(
+                        ptr=mask_ptr,
+                        size=bitmask_allocation_size_bytes(
+                            base_size
+                        )
+                    )
+                children = []
+                if cv.num_children() != 0:
+                    for i in range(cv.num_children()):
+                        children.append(
+                            Column.from_column_view(cv.child(i), None)
+                        )
+                return Column(
+                    dtype,
+                    size,
+                    data,
+                    mask,
+                    null_count,
+                    offset,
+                    children,
                 )
-
-        return Column(
-            dtype,
-            size,
-            owner._data,
-            owner._mask,
-            null_count,
-            cv.offset(),
-            children,
-        )
 
     @staticmethod
     def from_scalar(Scalar slr, size_type size):
@@ -405,6 +468,53 @@ cdef class ListColumnView:
         (even direct pylibcudf Cython users).
         """
         return lists_column_view(self._column.view())
+
+
+cdef get_element(column_view cv, size_type index):
+
+    cdef unique_ptr[scalar] c_output
+    with nogil:
+        c_output = move(
+            cpp_get_element(cv, index)
+        )
+
+    return Scalar.from_libcudf(move(c_output))
+
+
+cdef size_type dtype_itemsize_from_lists_column_view(const column_view cv):
+    # lists_column_view have no default constructor, so we heap
+    # allocate it to get around Cython's limitation of requiring
+    # default constructors for stack allocated objects
+    cdef shared_ptr[lists_column_view] lv = make_shared[lists_column_view](cv)
+    cdef column_view child = lv.get()[0].child()
+
+    if child.type().id() == type_id.LIST:
+        return dtype_itemsize_from_lists_column_view(child)
+    elif child.type().id() == type_id.EMPTY:
+        return 1
+    else:
+        return dtype_itemsize_from_column_view(child)
+
+
+cdef size_type dtype_itemsize_from_column_view(const column_view& cv):
+    cdef type_id tid = cv.type().id()
+    if tid == type_id.LIST:
+        return dtype_itemsize_from_lists_column_view(cv)
+    elif tid == type_id.STRUCT:
+        return sum(
+            [
+                dtype_itemsize_from_column_view(cv.child(i))
+                for i in range(cv.num_children())
+            ]
+        )
+    elif tid == type_id.DECIMAL32:
+        return 4
+    elif tid == type_id.DECIMAL64:
+        return 8
+    elif tid == type_id.DECIMAL128:
+        return 16
+    else:
+        return 1
 
 
 @functools.cache

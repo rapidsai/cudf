@@ -47,6 +47,7 @@ from pylibcudf.libcudf.column.column_factories cimport (
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
 from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.column cimport Column as plc_Column
 
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -639,15 +640,120 @@ cdef class Column:
 
         dtype = dtype_from_pylibcudf_column(col)
 
+        data=as_buffer(
+            col.data().obj, exposed=data_ptr_exposed
+        ) if col.data() is not None else None
+        mask=as_buffer(
+            col.null_mask().obj, exposed=data_ptr_exposed
+        ) if col.null_mask() is not None else None
+
+        if hasattr(col.data.obj, "owner"):
+            size = col.size()
+            offset = col.offset()
+            dtype_itemsize = getattr(dtype, "itemsize", 1)
+
+            data_ptr = col.data().obj.ptr
+            mask_ptr = col.null_mask().obj.ptr
+            data = None
+            base_size = size + offset
+            data_owner = col.data.obj.owner
+            mask_owner = col.null_mask.obj.owner
+            base_nbytes = base_size * dtype_itemsize
+
+            is_string_column = (col.type().id() == libcudf_types.type_id.STRING)
+            if is_string_column:
+                if col.num_children() == 0:
+                    base_nbytes = 0
+                else:
+                    # get the size from offset child column (device to host copy)
+                    offsets_column_index = 0
+                    offset_child_column = <plc_Column>col.child(offsets_column_index)
+                    if offset_child_column.size() == 0:
+                        base_nbytes = 0
+                    else:
+                        chars_size = get_element(
+                            offset_child_column.view(),
+                            offset_child_column.size()-1
+                        ).value
+                        base_nbytes = chars_size
+
+            if (isinstance(data_owner, ExposureTrackedBuffer)):
+                data = as_buffer(
+                    data=data_ptr,
+                    size=base_nbytes,
+                    owner=data_owner,
+                    exposed=False,
+                )
+            elif (
+                # This is an optimization of the most common case where
+                # from_column_view creates a "view" that is identical to
+                # the owner.
+                isinstance(data_owner, SpillableBuffer) and
+                # We check that `data_owner` is spill locked (not spillable)
+                # and that it points to the same memory as `data_ptr`.
+                not data_owner.spillable and
+                data_owner.memory_info() == (data_ptr, base_nbytes, "gpu")
+            ):
+                data = data_owner
+            else:
+                # At this point we don't know the relationship between data_ptr
+                # and data_owner thus we mark both of them exposed.
+                # TODO: try to discover their relationship and create a
+                #       SpillableBufferSlice instead.
+                data = as_buffer(
+                    data=data_ptr,
+                    size=base_nbytes,
+                    owner=data_owner,
+                    exposed=True,
+                )
+                if isinstance(data_owner, ExposureTrackedBuffer):
+                    # accessing the pointer marks it exposed permanently.
+                    data_owner.mark_exposed()
+                elif isinstance(data_owner, SpillableBuffer):
+                    if data_owner.is_spilled:
+                        raise ValueError(
+                            f"{data_owner} is spilled, which invalidates "
+                            f"the exposed data_ptr ({hex(data_ptr)})"
+                        )
+                    # accessing the pointer marks it exposed permanently.
+                    data_owner.mark_exposed()
+
+            if mask_owner is None:
+                # if we reached here, it means `owner` is a `Column`
+                # that does not have a null mask, but `cv` thinks it
+                # should have a null mask. This can happen in the
+                # following sequence of events:
+                #
+                # 1) `cv` is constructed as a view into a
+                #    `cudf::column` that is nullable (i.e., it has
+                #    a null mask), but contains no nulls.
+                # 2) `owner`, a `Column`, is constructed from the
+                #    same `cudf::column`. Because `cudf::column`
+                #    is memory owning, `owner` takes ownership of
+                #    the memory owned by the
+                #    `cudf::column`. Because the column has a null
+                #    count of 0, it may choose to discard the null
+                #    mask.
+                # 3) Now, `cv` points to a discarded null mask.
+                #
+                # TL;DR: we should not include a null mask in the
+                # result:
+                mask = None
+            else:
+                mask = as_buffer(
+                    data=mask_ptr,
+                    size=pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                        base_size
+                    ),
+                    owner=mask_owner,
+                    exposed=True
+                )
+
         return cudf.core.column.build_column(
-            data=as_buffer(
-                col.data().obj, exposed=data_ptr_exposed
-            ) if col.data() is not None else None,
+            data=data,
             dtype=dtype,
             size=col.size(),
-            mask=as_buffer(
-                col.null_mask().obj, exposed=data_ptr_exposed
-            ) if col.null_mask() is not None else None,
+            mask=mask,
             offset=col.offset(),
             null_count=col.null_count(),
             children=tuple([
