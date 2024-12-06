@@ -67,7 +67,7 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
                                       size_type source_size_bits,
                                       size_type* count_ptr)
 {
-  auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
 
   auto const last_bit_index  = source_size_bits - 1;
   auto const last_word_index = cudf::word_index(last_bit_index);
@@ -75,7 +75,7 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
   size_type thread_count = 0;
 
   for (size_type destination_word_index = tid; destination_word_index < destination.size();
-       destination_word_index += blockDim.x * gridDim.x) {
+       destination_word_index += cudf::detail::grid_1d::grid_stride()) {
     bitmask_type destination_word =
       detail::get_mask_offset_word(source[0],
                                    destination_word_index,
@@ -214,8 +214,7 @@ CUDF_KERNEL void subtract_set_bits_range_boundaries_kernel(bitmask_type const* b
 {
   constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
 
-  size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
-  size_type range_id  = tid;
+  auto range_id = cudf::detail::grid_1d::global_thread_id();
 
   while (range_id < num_ranges) {
     size_type const first_bit_index = *(first_bit_indices + range_id);
@@ -243,7 +242,7 @@ CUDF_KERNEL void subtract_set_bits_range_boundaries_kernel(bitmask_type const* b
     // Update the null count with the computed delta.
     size_type updated_null_count = *(null_counts + range_id) + delta;
     *(null_counts + range_id)    = updated_null_count;
-    range_id += blockDim.x * gridDim.x;
+    range_id += cudf::detail::grid_1d::grid_stride();
   }
 }
 

@@ -13,15 +13,11 @@
 # =============================================================================
 
 set(cython_sources
-    aggregation.pyx
-    binaryop.pyx
     column.pyx
     copying.pyx
     csv.pyx
-    filling.pyx
     groupby.pyx
     interop.pyx
-    merge.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx

@@ -625,7 +625,7 @@ def test_concat_series_dataframe_input_str(objs):
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 def test_concat_empty_dataframes(df, other, ignore_index):
-    other_pd = [df] + other
+    other_pd = [df, *other]
 
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
@@ -1224,7 +1224,7 @@ def test_concat_join_empty_dataframes(
     request, df, other, ignore_index, join, sort
 ):
     axis = 0
-    other_pd = [df] + other
+    other_pd = [df, *other]
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
 
@@ -1312,7 +1312,7 @@ def test_concat_join_empty_dataframes_axis_1(
     df, other, ignore_index, axis, join, sort
 ):
     # no duplicate columns
-    other_pd = [df] + other
+    other_pd = [df, *other]
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
 

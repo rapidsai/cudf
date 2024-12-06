@@ -213,8 +213,9 @@ def _create_array_collection_with_meta(expr):
     name = result._name
     meta = result._meta
     divisions = result.divisions
-    chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
-        (d,) for d in meta.shape[1:]
+    chunks = (
+        (np.nan,) * (len(divisions) - 1),
+        *tuple((d,) for d in meta.shape[1:]),
     )
     if len(chunks) > 1:
         if isinstance(dsk, HighLevelGraph):
@@ -224,11 +225,11 @@ def _create_array_collection_with_meta(expr):
             layer = dsk
         if isinstance(layer, Blockwise):
             layer.new_axes["j"] = chunks[1][0]
-            layer.output_indices = layer.output_indices + ("j",)
+            layer.output_indices = (*layer.output_indices, "j")
         else:
             suffix = (0,) * (len(chunks) - 1)
             for i in range(len(chunks[0])):
-                layer[(name, i) + suffix] = layer.pop((name, i))
+                layer[(name, i, *suffix)] = layer.pop((name, i))
 
     return da.Array(dsk, name=name, chunks=chunks, meta=meta)
 

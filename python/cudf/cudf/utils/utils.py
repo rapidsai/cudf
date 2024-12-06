@@ -210,7 +210,7 @@ class GetAttrGetItemMixin:
 
     # Tracking of protected keys by each subclass is necessary to make the
     # `__getattr__`->`__getitem__` call safe. See
-    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
+    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
     # for an explanation. In brief, defining the `_PROTECTED_KEYS` allows this
     # class to avoid calling `__getitem__` inside `__getattr__` when
     # `__getitem__` will internally again call `__getattr__`, resulting in an

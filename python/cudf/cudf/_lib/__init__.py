@@ -2,13 +2,10 @@
 import numpy as np
 
 from . import (
-    binaryop,
     copying,
     csv,
-    filling,
     groupby,
     interop,
-    merge,
     nvtext,
     orc,
     parquet,
