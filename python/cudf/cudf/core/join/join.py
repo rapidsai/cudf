@@ -244,15 +244,9 @@ class Merge:
         # sort the gather maps with those two columns as key.
         key_order = list(
             itertools.chain.from_iterable(
-                libcudf.copying.gather(
-                    [
-                        cudf.core.column.as_column(
-                            range(n), dtype=size_type_dtype
-                        )
-                    ],
-                    map_,
-                    nullify=null,
-                )
+                cudf.core.column.as_column(
+                    range(n), dtype=size_type_dtype
+                ).take(map_, nullify=null, check_bounds=False)
                 for map_, n, null in zip(maps, lengths, nullify)
             )
         )

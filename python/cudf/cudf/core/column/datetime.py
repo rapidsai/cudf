@@ -354,9 +354,7 @@ class DatetimeColumn(column.ColumnBase):
 
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
-        return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
-            False
-        )
+        return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
     @property
     def is_leap_year(self) -> ColumnBase:

@@ -23,6 +23,7 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype, is_scalar
 from cudf.core import column
 from cudf.core._base_index import _return_get_indexer_result
+from cudf.core._internals import copying
 from cudf.core.algorithms import factorize
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column_accessor import ColumnAccessor
@@ -200,10 +201,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 if lo.value == -1:
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(size_type_dtype).min
-            result_col = libcudf.copying.gather(
-                [level._column], code, nullify=True
-            )
-            source_data[i] = result_col[0]._with_type_metadata(level.dtype)
+            result_col = level._column.take(code, nullify=True)
+            source_data[i] = result_col._with_type_metadata(level.dtype)
 
         super().__init__(ColumnAccessor(source_data))
         self._levels = new_levels
@@ -1934,7 +1933,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             )
             scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
             indices = libcudf.column.Column.from_pylibcudf(right_plc)
-        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result = copying.scatter([indices], scatter_map, [result])[0]
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
