@@ -26,16 +26,6 @@
 
 using TestingTypes = cudf::test::NumericTypes;
 
-// namespace {
-//// To print meanvar for debug.
-//// Needs to be in the cudf namespace for ADL
-// template <typename T>
-// std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
-//{
-//   return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
-// };
-// }  // namespace
-
 template <typename T>
 struct NumericOptionalIteratorTest : public IteratorTest<T> {};
 

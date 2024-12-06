@@ -39,13 +39,6 @@ struct valid_bit_functor {
     return cudf::bit_is_set(_null_mask, element_index);
   }
 };
-
-// std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& bits)
-//{
-//   for (auto _bit : bits)
-//     stream << int(_bit);
-//   return stream;
-// }
 }  // namespace
 
 struct SetBitmaskTest : public cudf::test::BaseFixture {
