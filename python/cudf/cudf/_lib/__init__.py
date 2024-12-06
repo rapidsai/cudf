@@ -6,7 +6,6 @@ from . import (
     csv,
     groupby,
     interop,
-    merge,
     orc,
     parquet,
     reduce,
