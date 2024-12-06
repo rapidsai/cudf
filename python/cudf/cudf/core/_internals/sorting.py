@@ -45,7 +45,6 @@ def is_sorted(
         Returns True, if sorted as expected by ``ascending`` and
         ``null_position``, False otherwise.
     """
-    breakpoint()
     if ascending is None:
         column_order = [plc.types.Order.ASCENDING] * len(source_columns)
     else:
@@ -191,7 +190,6 @@ def sort_by_key(
     list[Column]
         list of value columns sorted by keys
     """
-    breakpoint()
     order = ordering(ascending, na_position)
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
