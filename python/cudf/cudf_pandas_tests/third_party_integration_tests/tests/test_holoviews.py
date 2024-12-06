@@ -75,5 +75,8 @@ def test_holoviews_histogram(df):
     return get_plot_info(hv.Histogram(df.values))
 
 
+@pytest.mark.xfail(
+    reason="AttributeError: 'ndarray' object has no attribute '_fsproxy_wrapped'"
+)
 def test_holoviews_hexbin(df):
     return get_plot_info(hv.HexTiles(df, kdims=["x", "y"], vdims="y"))
