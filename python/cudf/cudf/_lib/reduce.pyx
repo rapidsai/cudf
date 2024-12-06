@@ -10,7 +10,7 @@ from cudf._lib.types cimport dtype_to_pylibcudf_type, is_decimal_type_id
 
 import pylibcudf
 
-from cudf._lib.aggregation import make_aggregation
+from cudf.core._internals.aggregation import make_aggregation
 
 
 @acquire_spill_lock()
