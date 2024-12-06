@@ -51,7 +51,7 @@ jobs:
     env:
       OTEL_SERVICE_NAME: 'pr-cudf'
       SHARED_ACTIONS_REF: empty-certs
-      TELEMETRY_ENABLED: '1'
+      TELEMETRY_ENABLED: true
     steps:
       - name: Telemetry setup
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@empty-certs
