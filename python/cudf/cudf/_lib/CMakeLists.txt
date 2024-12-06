@@ -13,24 +13,19 @@
 # =============================================================================
 
 set(cython_sources
-    aggregation.pyx
-    binaryop.pyx
     column.pyx
     copying.pyx
     csv.pyx
     groupby.pyx
     interop.pyx
-    merge.pyx
     orc.pyx
     parquet.pyx
     reduce.pyx
-    round.pyx
     scalar.pyx
     sort.pyx
     stream_compaction.pyx
     string_casting.pyx
     strings_udf.pyx
-    text.pyx
     transform.pyx
     types.pyx
     utils.pyx
