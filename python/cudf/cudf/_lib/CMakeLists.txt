@@ -13,7 +13,6 @@
 # =============================================================================
 
 set(cython_sources
-    aggregation.pyx
     column.pyx
     copying.pyx
     csv.pyx
