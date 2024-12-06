@@ -34,6 +34,7 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
   cudf::size_type const num_rows    = state.get_int64("NumRows");
   auto const keep                   = get_keep(state.get_string("keep"));
   cudf::size_type const cardinality = state.get_int64("cardinality");
+  auto const null_probability       = state.get_float64("null_probability");
 
   if (cardinality > num_rows) {
     state.skip("cardinality > num_rows");
@@ -42,7 +43,7 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
 
   data_profile profile = data_profile_builder()
                            .cardinality(cardinality)
-                           .null_probability(0.01)
+                           .null_probability(null_probability)
                            .distribution(cudf::type_to_id<Type>(),
                                          distribution_id::UNIFORM,
                                          static_cast<Type>(0),
@@ -65,6 +66,7 @@ using data_type = nvbench::type_list<int32_t, int64_t>;
 NVBENCH_BENCH_TYPES(nvbench_distinct, NVBENCH_TYPE_AXES(data_type))
   .set_name("distinct")
   .set_type_axes_names({"Type"})
+  .add_float64_axis("null_probability", {0.01})
   .add_string_axis("keep", {"any", "first", "last", "none"})
   .add_int64_axis("cardinality", {100, 100'000, 10'000'000, 1'000'000'000})
   .add_int64_axis("NumRows", {100, 100'000, 10'000'000, 1'000'000'000});

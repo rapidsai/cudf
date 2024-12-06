@@ -47,18 +47,18 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
-template <typename RowHasher>
-using hash_set_type =
-  cuco::static_set<size_type,
-                   cuco::extent<int64_t>,
-                   cuda::thread_scope_device,
-                   RowHasher,
-                   cuco::linear_probing<1,
-                                        cudf::experimental::row::hash::device_row_hasher<
-                                          cudf::hashing::detail::default_hash,
-                                          cudf::nullate::DYNAMIC>>,
-                   cudf::detail::cuco_allocator<char>,
-                   cuco::storage<1>>;
+using distinct_hasher_t =
+  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>;
+
+template <typename RowEqual, typename RowHasher>
+using distinct_set_t = cuco::static_set<size_type,
+                                        cuco::extent<int64_t>,
+                                        cuda::thread_scope_device,
+                                        RowEqual,
+                                        cuco::linear_probing<1, RowHasher>,
+                                        cudf::detail::cuco_allocator<char>,
+                                        cuco::storage<1>>;
 
 /**
  * @brief Perform a reduction on groups of rows that are compared equal and returns output indices
@@ -87,8 +87,8 @@ using hash_set_type =
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the output indices
  */
-template <typename RowHasher>
-rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+template <typename HashSet>
+rmm::device_uvector<size_type> reduce_by_row(HashSet& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
