@@ -18,7 +18,6 @@ set(cython_sources
     csv.pyx
     groupby.pyx
     interop.pyx
-    orc.pyx
     parquet.pyx
     reduce.pyx
     scalar.pyx
