@@ -35,8 +35,8 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
   auto const keep                   = get_keep(state.get_string("keep"));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   auto const null_probability       = state.get_float64("null_probability");
-  ￼ if (cardinality > num_rows)
-  {
+
+  if (cardinality > num_rows) {
     state.skip("cardinality > num_rows");
     return;
   }
