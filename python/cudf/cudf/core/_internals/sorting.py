@@ -43,7 +43,6 @@ def is_sorted(
         Returns True, if sorted as expected by ``ascending`` and
         ``null_position``, False otherwise.
     """
-
     if ascending is None:
         column_order = [plc.types.Order.ASCENDING] * len(source_columns)
     else:
@@ -141,8 +140,9 @@ def order_by(
     Column of indices that sorts the table
     """
     order = ordering(ascending, list(itertools.repeat(na_position)))
-    func = getattr(plc.sorting, f"{'stable_' if stable else ''}sorted_order")
-
+    func = (
+        plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
+    )
     return Column.from_pylibcudf(
         func(
             plc.Table(
@@ -188,7 +188,9 @@ def sort_by_key(
         list of value columns sorted by keys
     """
     order = ordering(ascending, na_position)
-    func = getattr(plc.sorting, f"{'stable_' if stable else ''}sort_by_key")
+    func = (
+        plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
+    )
     return [
         Column.from_pylibcudf(col)
         for col in func(

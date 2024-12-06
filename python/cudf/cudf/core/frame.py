@@ -23,7 +23,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import sort
+from cudf.core._internals import sorting
 from cudf.core._internals.search import search_sorted
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -1434,7 +1434,7 @@ class Frame(BinaryOperand, Scannable):
         else:
             ascending_lst = list(ascending)
 
-        return sort.order_by(
+        return sorting.order_by(
             list(to_sort),
             ascending_lst,
             na_position,

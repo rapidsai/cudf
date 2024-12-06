@@ -23,7 +23,7 @@ from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import sort
+from cudf.core._internals import sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -794,7 +794,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                (right_order,) = sort.sort_by_key(
+                (right_order,) = sorting.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],

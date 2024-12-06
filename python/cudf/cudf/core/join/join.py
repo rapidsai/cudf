@@ -9,7 +9,7 @@ import pylibcudf as plc
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.types import size_type_dtype
-from cudf.core._internals import sort
+from cudf.core._internals import sorting
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.copy_types import GatherMap
 from cudf.core.join._join_helpers import (
@@ -257,7 +257,7 @@ class Merge:
                 for map_, n, null in zip(maps, lengths, nullify)
             )
         )
-        return sort.sort_by_key(
+        return sorting.sort_by_key(
             list(maps),
             # If how is right, right map is primary sort key.
             key_order[:: -1 if self.how == "right" else 1],
@@ -427,7 +427,7 @@ class Merge:
             else:
                 to_sort = [*result._columns]
                 index_names = None
-            result_columns = sort.sort_by_key(
+            result_columns = sorting.sort_by_key(
                 to_sort,
                 by,
                 [True] * len(by),
