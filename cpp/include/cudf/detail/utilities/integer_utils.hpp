@@ -1,7 +1,7 @@
 /*
  * Copyright 2019 BlazingDB, Inc.
  *     Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,6 +131,41 @@ constexpr I div_rounding_up_safe(std::integral_constant<bool, true>, I dividend,
   return quotient + (remainder != 0);
 }
 
+/**
+ * @brief Computes x + y, saturating at numeric_limits<T>::min() and max().
+ *
+ * @tparam T the integer type
+ * @param x Left operand
+ * @param y Right operand
+ * @return x + y, if in range for T, otherwise whichever of
+ * numeric_limits<T>::min() or max() is closer to the infinite range
+ * result.
+ *
+ * @note polyfill for the C++26 routine std::add_sat.
+ */
+template <typename T>
+[[nodiscard]] constexpr T add_sat(T x, T y) noexcept
+{
+  if constexpr (std::is_signed_v<T>) {
+    using U  = std::make_unsigned_t<T>;
+    U ux     = static_cast<U>(x);
+    U uy     = static_cast<U>(y);
+    U result = ux + uy;
+    ux = (ux >> std::numeric_limits<T>::digits) + static_cast<U>(std::numeric_limits<T>::max());
+    // Note: this cast is implementation defined (until C++20) but all
+    // the platforms we care about do the twos-complement thing.
+    return static_cast<T>((ux ^ uy) | ~(uy ^ result)) >= 0 ? ux : result;
+  } else if constexpr (std::is_unsigned_v<T>) {
+    T result = x + y;
+    // Only way we can overflow is in the positive direction
+    // in which case result will be less than both of x and y.
+    // To saturate, we bit-or with T{-1} in this case.
+    return result | (-static_cast<T>(result < x));
+  } else {
+    static_assert(std::integral_constant<T, false>(),
+                  "Saturating addition only for signed or unsigned integers.");
+  }
+}
 }  // namespace detail
 
 /**
