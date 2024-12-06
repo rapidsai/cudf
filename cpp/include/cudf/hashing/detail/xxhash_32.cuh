@@ -62,14 +62,14 @@ XXHash_32<bool>::result_type __device__ inline XXHash_32<bool>::operator()(bool 
 template <>
 XXHash_32<float>::result_type __device__ inline XXHash_32<float>::operator()(float const& key) const
 {
-  return this->compute(normalize_nans(key));
+  return this->compute(normalize_nans_and_zeros(key));
 }
 
 template <>
 XXHash_32<double>::result_type __device__ inline XXHash_32<double>::operator()(
   double const& key) const
 {
-  return this->compute(normalize_nans(key));
+  return this->compute(normalize_nans_and_zeros(key));
 }
 
 template <>
