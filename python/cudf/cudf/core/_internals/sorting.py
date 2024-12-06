@@ -10,6 +10,8 @@ from cudf._lib.column import Column
 from cudf.core.buffer import acquire_spill_lock
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from cudf.core.column import ColumnBase
 
 
@@ -43,6 +45,7 @@ def is_sorted(
         Returns True, if sorted as expected by ``ascending`` and
         ``null_position``, False otherwise.
     """
+    breakpoint()
     if ascending is None:
         column_order = [plc.types.Order.ASCENDING] * len(source_columns)
     else:
@@ -77,7 +80,8 @@ def is_sorted(
 
 
 def ordering(
-    column_order: list[bool], null_precedence: list[Literal["first", "last"]]
+    column_order: list[bool],
+    null_precedence: Iterable[Literal["first", "last"]],
 ) -> tuple[list[plc.types.Order], list[plc.types.NullOrder]]:
     """
     Construct order and null order vectors
@@ -139,7 +143,7 @@ def order_by(
     -------
     Column of indices that sorts the table
     """
-    order = ordering(ascending, list(itertools.repeat(na_position)))
+    order = ordering(ascending, itertools.repeat(na_position))
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
@@ -187,6 +191,7 @@ def sort_by_key(
     list[Column]
         list of value columns sorted by keys
     """
+    breakpoint()
     order = ordering(ascending, na_position)
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
