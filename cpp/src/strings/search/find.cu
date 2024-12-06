@@ -70,13 +70,11 @@ struct finder_fn {
     if (d_strings.is_null(idx)) { return -1; }
     auto const d_str = d_strings.element<string_view>(idx);
     if (d_str.empty() && (start > 0)) { return -1; }
+    if (stop >= 0 && start > stop) { return -1; }
     auto const d_target = d_targets[idx];
 
-    auto const length = d_str.length();
-    auto const begin  = (start > length) ? length : start;
-    auto const end    = (stop < 0) || (stop > length) ? length : stop;
-    return forward ? d_str.find(d_target, begin, end - begin)
-                   : d_str.rfind(d_target, begin, end - begin);
+    auto const count = (stop < 0) ? stop : (stop - start);
+    return forward ? d_str.find(d_target, start, count) : d_str.rfind(d_target, start, count);
   }
 };
 
@@ -367,7 +365,7 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
        i += cudf::detail::warp_size * bytes_per_warp) {
     // check the target matches this part of the d_str data
     // this is definitely faster for very long strings > 128B
-    for (auto j = 0; j < bytes_per_warp; j++) {
+    for (auto j = 0; !found && (j < bytes_per_warp); j++) {
       if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
           d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
         found = true;
@@ -531,7 +529,6 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   results->set_null_count(strings.null_count());
   return results;
 }
-
 }  // namespace
 
 std::unique_ptr<column> contains(strings_column_view const& input,
@@ -541,13 +538,17 @@ std::unique_ptr<column> contains(strings_column_view const& input,
 {
   // use warp parallel when the average string width is greater than the threshold
   if ((input.null_count() < input.size()) &&
-      ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+      ((input.chars_size(stream) / (input.size() - input.null_count())) >
+       AVG_CHAR_BYTES_THRESHOLD)) {
     return contains_warp_parallel(input, target, stream, mr);
   }
 
   // benchmark measurements showed this to be faster for smaller strings
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) != string_view::npos;
+    for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
+      if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
+    }
+    return false;
   };
   return contains_fn(input, target, pfn, stream, mr);
 }
@@ -558,7 +559,10 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
                                  rmm::device_async_resource_ref mr)
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) != string_view::npos;
+    for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
+      if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
+    }
+    return false;
   };
   return contains_fn(strings, targets, pfn, stream, mr);
 }
