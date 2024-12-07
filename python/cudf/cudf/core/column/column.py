@@ -435,7 +435,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return self
 
     @acquire_spill_lock()
-    def shift(self, offset: int, fill_value: cudf.Scalar) -> Self:
+    def shift(self, offset: int, fill_value: ScalarLike) -> Self:
+        if not isinstance(fill_value, cudf.Scalar):
+            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
@@ -1545,16 +1547,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # reorder `codes` so that its values correspond to the
         # values of `self`:
         (codes,) = libcudf.sort.sort_by_key(
-            codes, [left_gather_map], [True], ["last"], stable=True
+            [codes], [left_gather_map], [True], ["last"], stable=True
         )
         return codes.fillna(na_sentinel.value)
 
     @acquire_spill_lock()
-    def copy_if_else(self, other: Self, boolean_mask: NumericalColumn) -> Self:
+    def copy_if_else(
+        self, other: Self | cudf.Scalar, boolean_mask: NumericalColumn
+    ) -> Self:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.copying.copy_if_else(
                 self.to_pylibcudf(mode="read"),
-                other.to_pylibcudf(mode="read"),
+                other.device_value.c_value
+                if isinstance(other, cudf.Scalar)
+                else other.to_pylibcudf(mode="read"),
                 boolean_mask.to_pylibcudf(mode="read"),
             )
         )

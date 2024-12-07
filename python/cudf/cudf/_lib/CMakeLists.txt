@@ -13,21 +13,8 @@
 # =============================================================================
 
 set(cython_sources
-    column.pyx
-    copying.pyx
-    csv.pyx
-    groupby.pyx
-    interop.pyx
-    parquet.pyx
-    reduce.pyx
-    scalar.pyx
-    sort.pyx
-    stream_compaction.pyx
-    string_casting.pyx
-    strings_udf.pyx
-    transform.pyx
-    types.pyx
-    utils.pyx
+    column.pyx csv.pyx groupby.pyx interop.pyx parquet.pyx reduce.pyx scalar.pyx sort.pyx
+    stream_compaction.pyx string_casting.pyx strings_udf.pyx transform.pyx types.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
 

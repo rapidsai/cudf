@@ -3036,16 +3036,24 @@ class IndexedFrame(Frame):
                 keep_index=keep_index,
             )
 
-        columns_to_slice = [
-            *(
-                self.index._columns
-                if keep_index and not has_range_index
-                else []
-            ),
-            *self._columns,
-        ]
+        columns_to_slice = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index and not has_range_index
+            else self._columns
+        )
+        with acquire_spill_lock():
+            plc_tables = plc.copying.slice(
+                plc.Table(
+                    [col.to_pylibcudf(mode="read") for col in columns_to_slice]
+                ),
+                [start, stop],
+            )
+            sliced = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_tables[0].columns()
+            ]
         result = self._from_columns_like_self(
-            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
+            sliced,
             self._column_names,
             None if has_range_index or not keep_index else self.index.names,
         )

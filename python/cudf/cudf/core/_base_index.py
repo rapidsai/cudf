@@ -2059,7 +2059,7 @@ class BaseIndex(Serializable):
         if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(size_type_dtype)
 
-        GatherMap(gather_map, len(self), not check_bounds or nullify)
+        GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
             copying.gather(self._columns, gather_map, nullify=nullify),
             self._column_names,

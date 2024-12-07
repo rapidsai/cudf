@@ -714,7 +714,7 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
     ],
 )
 def test_list_scalar_device_construction(data):
-    res = cudf.Series([data])._column.get_element(0)
+    res = cudf.Series([data])._column.element_indexing(0)
     assert res == data
 
 
@@ -727,7 +727,7 @@ def test_list_scalar_device_construction_null(nesting_level):
     arrow_type = pa.infer_type(data)
     arrow_arr = pa.array([None], type=arrow_type)
 
-    res = cudf.Series(arrow_arr)._column.get_element(0)
+    res = cudf.Series(arrow_arr)._column.element_indexing(0)
     assert res is cudf.NA
 
 

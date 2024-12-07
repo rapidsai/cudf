@@ -1442,7 +1442,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_performance_tracking
-    def _split(self, splits) -> list[Self]:
+    def _split(self, splits: list[int]) -> list[Self]:
         """Split a frame with split points in ``splits``. Returns a list of
         Frames of length `len(splits) + 1`.
         """

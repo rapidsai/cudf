@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import itertools
 from typing import Any
 
 import pylibcudf as plc
@@ -242,14 +241,12 @@ class Merge:
         # To reorder maps so that they are in order of the input
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
-        key_order = list(
-            itertools.chain.from_iterable(
-                cudf.core.column.as_column(
-                    range(n), dtype=size_type_dtype
-                ).take(map_, nullify=null, check_bounds=False)
-                for map_, n, null in zip(maps, lengths, nullify)
+        key_order = [
+            cudf.core.column.as_column(range(n), dtype=size_type_dtype).take(
+                map_, nullify=null, check_bounds=False
             )
-        )
+            for map_, n, null in zip(maps, lengths, nullify)
+        ]
         return libcudf.sort.sort_by_key(
             list(maps),
             # If how is right, right map is primary sort key.
