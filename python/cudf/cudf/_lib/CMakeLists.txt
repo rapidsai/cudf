@@ -18,10 +18,8 @@ set(cython_sources
     csv.pyx
     groupby.pyx
     interop.pyx
-    orc.pyx
     parquet.pyx
     reduce.pyx
-    round.pyx
     scalar.pyx
     sort.pyx
     stream_compaction.pyx
