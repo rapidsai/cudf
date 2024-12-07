@@ -33,9 +33,6 @@ def assert_plots_equal(expect, got):
 pytestmark = pytest.mark.assert_eq(fn=assert_plots_equal)
 
 
-@pytest.mark.xfail(
-    reason="AttributeError: 'ndarray' object has no attribute '_fsproxy_wrapped'"
-)
 def test_line():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [2, 4, 6, 8, 10]})
     (data,) = plt.plot(df["x"], df["y"], marker="o", linestyle="-")
