@@ -20,7 +20,7 @@ from cudf._lib.scalar import as_device_scalar
 
 import pylibcudf
 
-from cudf._lib.aggregation import make_aggregation
+from cudf.core._internals.aggregation import make_aggregation
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.

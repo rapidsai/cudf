@@ -28,21 +28,19 @@
 
 static void bench_find_string(nvbench::state& state)
 {
-  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const hit_rate  = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
   auto const api       = state.get_string("api");
-
-  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
+  auto const tgt_type  = state.get_string("target");
 
   auto const stream = cudf::get_default_stream();
-  auto const col    = create_string_column(n_rows, row_width, hit_rate);
+  auto const col    = create_string_column(num_rows, max_width, hit_rate);
   auto const input  = cudf::strings_column_view(col->view());
 
-  cudf::string_scalar target("0987 5W43");
+  auto target        = cudf::string_scalar("0987 5W43");
+  auto targets_col   = cudf::make_column_from_scalar(target, num_rows);
+  auto const targets = cudf::strings_column_view(targets_col->view());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   auto const chars_size = input.chars_size(stream);
@@ -55,23 +53,44 @@ static void bench_find_string(nvbench::state& state)
   }
 
   if (api == "find") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { cudf::strings::find(input, target); });
+    if (tgt_type == "scalar") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::find(input, target); });
+    } else if (tgt_type == "column") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::find(input, targets); });
+    }
   } else if (api == "contains") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { cudf::strings::contains(input, target); });
+    if (tgt_type == "scalar") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::contains(input, target); });
+    } else if (tgt_type == "column") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::contains(input, targets); });
+    }
   } else if (api == "starts_with") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { cudf::strings::starts_with(input, target); });
+    if (tgt_type == "scalar") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::starts_with(input, target); });
+    } else if (tgt_type == "column") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::starts_with(input, targets); });
+    }
   } else if (api == "ends_with") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { cudf::strings::ends_with(input, target); });
+    if (tgt_type == "scalar") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::ends_with(input, target); });
+    } else if (tgt_type == "column") {
+      state.exec(nvbench::exec_tag::sync,
+                 [&](nvbench::launch& launch) { cudf::strings::ends_with(input, targets); });
+    }
   }
 }
 
 NVBENCH_BENCH(bench_find_string)
   .set_name("find_string")
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_int64_axis("hit_rate", {20, 80})  // percentage
   .add_string_axis("api", {"find", "contains", "starts_with", "ends_with"})
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
-  .add_int64_axis("num_rows", {260'000, 1'953'000, 16'777'216})
-  .add_int64_axis("hit_rate", {20, 80});  // percentage
+  .add_string_axis("target", {"scalar", "column"});
