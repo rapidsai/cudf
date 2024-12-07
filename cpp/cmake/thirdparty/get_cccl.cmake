@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -35,12 +35,6 @@ function(find_and_configure_cccl)
 
   # Find or install CCCL with our custom set of patches
   rapids_cpm_cccl(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
-
-  # Remove this after upgrading to a CCCL that has a proper CMake option. See
-  # https://github.com/NVIDIA/cccl/pull/2844
-  target_compile_definitions(
-    cudf PRIVATE THRUST_FORCE_64_BIT_OFFSET_TYPE=0 THRUST_FORCE_32_BIT_OFFSET_TYPE=1
-  )
 
 endfunction()
 
