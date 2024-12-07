@@ -11,12 +11,11 @@ import numpy as np
 import pyarrow as pa
 
 import cudf
-from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf.api.types import is_scalar
-from cudf.core._internals import unary
+from cudf.core._internals import binaryop, unary
 from cudf.core.buffer import as_buffer
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.numerical_base import NumericalBaseColumn
@@ -30,6 +29,8 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
 
@@ -141,7 +142,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             rhs = rhs.astype(
                 type(output_type)(rhs.dtype.precision, rhs.dtype.scale)
             )
-            result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
+            result = binaryop.binaryop(lhs, rhs, op, output_type)
             # libcudf doesn't support precision, so result.dtype doesn't
             # maintain output_type.precision
             result.dtype.precision = output_type.precision
@@ -153,7 +154,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "__le__",
             "__ge__",
         }:
-            result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
+            result = binaryop.binaryop(lhs, rhs, op, bool)
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "
@@ -177,7 +178,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "integer values"
         )
 
-    def normalize_binop_value(self, other):
+    def normalize_binop_value(self, other) -> Self | cudf.Scalar:
         if isinstance(other, ColumnBase):
             if isinstance(other, cudf.core.column.NumericalColumn):
                 if other.dtype.kind not in "iu":
@@ -209,7 +210,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             other = Decimal(other)
             metadata = other.as_tuple()
             precision = max(len(metadata.digits), metadata.exponent)
-            scale = -metadata.exponent
+            scale = -cast(int, metadata.exponent)
             return cudf.Scalar(
                 other, dtype=self.dtype.__class__(precision, scale)
             )
