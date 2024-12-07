@@ -17,13 +17,14 @@ import pylibcudf as plc
 
 import cudf
 import cudf.api.types
-from cudf import _lib as libcudf
+import cudf.core.column.column as column
+import cudf.core.column.datetime as datetime
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
@@ -548,7 +549,7 @@ class StringMethods(ColumnMethods):
         2    <NA>
         3     c-d
         dtype: object
-        """  # noqa E501
+        """
         if sep is None:
             sep = ""
 
@@ -694,7 +695,7 @@ class StringMethods(ColumnMethods):
 
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
-        """  # noqa W605
+        """
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
@@ -830,7 +831,7 @@ class StringMethods(ColumnMethods):
             value is set.
             The `flags` parameter currently only supports re.DOTALL and
             re.MULTILINE.
-        """  # noqa W605
+        """
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
@@ -3675,7 +3676,7 @@ class StringMethods(ColumnMethods):
             -   Some characters need to be escaped when passing
                 in pat. e.g. ``'$'`` has a special meaning in regex
                 and must be escaped when finding this literal character.
-        """  # noqa W605
+        """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
             pat = pat.pattern
@@ -6160,7 +6161,7 @@ class StringColumn(column.ColumnBase):
         to_replace_col = column.as_column(to_replace)
         replacement_col = column.as_column(replacement)
 
-        if type(to_replace_col) != type(replacement_col):
+        if type(to_replace_col) is not type(replacement_col):
             raise TypeError(
                 f"to_replace and value should be of same types,"
                 f"got to_replace dtype: {to_replace_col.dtype} and "
@@ -6185,7 +6186,7 @@ class StringColumn(column.ColumnBase):
             df = df.dropna(subset=["old"])
         else:
             res = self
-        return libcudf.replace.replace(res, df._data["old"], df._data["new"])
+        return res.replace(df._data["old"], df._data["new"])
 
     def normalize_binop_value(self, other) -> column.ColumnBase | cudf.Scalar:
         if (
@@ -6199,7 +6200,7 @@ class StringColumn(column.ColumnBase):
 
     def _binaryop(
         self, other: ColumnBinaryOperand, op: str
-    ) -> "column.ColumnBase":
+    ) -> column.ColumnBase:
         reflect, op = self._check_reflected_op(op)
         # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
         # support binary operations between empty or all null string columns
@@ -6228,7 +6229,7 @@ class StringColumn(column.ColumnBase):
         if other is NotImplemented:
             return NotImplemented
 
-        if isinstance(other, (StringColumn, str, cudf.Scalar)):
+        if isinstance(other, (StringColumn, cudf.Scalar)):
             if isinstance(other, cudf.Scalar) and other.dtype != "O":
                 if op in {
                     "__eq__",
@@ -6278,9 +6279,7 @@ class StringColumn(column.ColumnBase):
                 "NULL_NOT_EQUALS",
             }:
                 lhs, rhs = (other, self) if reflect else (self, other)
-                return libcudf.binaryop.binaryop(
-                    lhs=lhs, rhs=rhs, op=op, dtype="bool"
-                )
+                return binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype="bool")
         return NotImplemented
 
     @copy_docstring(column.ColumnBase.view)

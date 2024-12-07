@@ -517,7 +517,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    a
         dtype: category
         Categories (3, object): ['a', 'b', 'c']
-        """  # noqa: E501
+        """
         col = as_column(categorical)
         if codes is not None:
             codes = as_column(codes)
@@ -942,7 +942,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             labels, axis, index, columns, level, inplace, errors
         )
 
-    def tolist(self):  # noqa: D102
+    def tolist(self):
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicity conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -1087,7 +1100,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             DataFrame, followed by the original Series values. When `drop` is
             True, a `Series` is returned. In either case, if ``inplace=True``,
             no value is returned.
-""",  # noqa: E501
+""",
             example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
@@ -1196,7 +1209,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         12      c
         13   <NA>
         15      d
-        """  # noqa: E501
+        """
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
@@ -2122,7 +2135,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
-        """  # noqa: E501
+        """
         return self._column.data
 
     @property  # type: ignore
@@ -4590,7 +4603,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         7    False
         8    False
         dtype: bool
-        """  # noqa: E501
+        """
         return self._return_result_like_self(self.series._column.is_month_end)
 
     @property  # type: ignore
@@ -5169,7 +5182,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """  # noqa: E501
+        """
         ca = ColumnAccessor(self.series._column.components(), verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index

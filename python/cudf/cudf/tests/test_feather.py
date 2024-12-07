@@ -16,7 +16,7 @@ from cudf.testing._utils import NUMERIC_TYPES
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     rng = np.random.default_rng(seed=0)
-    types = NUMERIC_TYPES + ["bool"]
+    types = [*NUMERIC_TYPES, "bool"]
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types

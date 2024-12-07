@@ -13,7 +13,13 @@ import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterator, MutableMapping
+from collections.abc import (
+    Callable,
+    Hashable,
+    Iterator,
+    MutableMapping,
+    Sequence,
+)
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import cupy
@@ -1131,7 +1137,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: BaseIndex | None = None,
         columns: Any = None,
-    ) -> DataFrame:
+    ) -> Self:
         out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
@@ -1418,8 +1424,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         new_columns = (
                             value
                             if key == arg
-                            else column.column_empty_like(
-                                col, masked=True, newsize=length
+                            else column.column_empty(
+                                row_count=length, dtype=col.dtype
                             )
                             for key, col in self._column_labels_and_values
                         )
@@ -2242,7 +2248,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         n1 n2
         a  b   1  3
            c   2  4
-        """  # noqa: E501
+        """
 
         orient = orient.lower()
         if orient == "index":
@@ -2399,7 +2405,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.to_dict('records', into=dd)
         [defaultdict(<class 'list'>, {'col1': 1, 'col2': 0.5}),
          defaultdict(<class 'list'>, {'col1': 2, 'col2': 0.75})]
-        """  # noqa: E501
+        """
         orient = orient.lower()
 
         if orient == "series":
@@ -3027,7 +3033,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if len(keys) == 0:
             raise ValueError("No valid columns to be added to index.")
         if append:
-            keys = [self.index] + keys
+            keys = [self.index, *keys]
 
         # Preliminary type check
         labels_not_found = []
@@ -3093,7 +3099,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):  # noqa: D102
+    ):
         if isinstance(value, (pd.Series, pd.DataFrame)):
             value = cudf.from_pandas(value)
         if isinstance(value, cudf.Series):
@@ -3379,10 +3385,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if num_cols != 0:
                     ca = self._data._from_columns_like_self(
                         (
-                            column.column_empty_like(
-                                col_data, masked=True, newsize=length
-                            )
-                            for col_data in self._columns
+                            column.column_empty(row_count=length, dtype=dtype)
+                            for _, dtype in self._dtypes
                         ),
                         verify=False,
                     )
@@ -3574,7 +3578,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  Yum Yum   cup     4.0
         2  Indomie   cup     3.5
         4  Indomie  pack     5.0
-        """  # noqa: E501
+        """
         outdf = super().drop_duplicates(
             subset=subset,
             keep=keep,
@@ -4854,7 +4858,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if na_action not in {"ignore", None}:
             raise ValueError(
-                f"na_action must be 'ignore' or None. Got {repr(na_action)}"
+                f"na_action must be 'ignore' or None. Got {na_action!r}"
             )
 
         if na_action == "ignore":
@@ -5727,7 +5731,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
 
         data = self
-        index_descr = []
+        index_descr: Sequence[dict[str, Any]] | Sequence[str] = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
         index = self.index
@@ -5934,7 +5938,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index=None,
         columns=None,
         nan_as_null=False,
-    ):
+    ) -> Self:
         """
         Convert an object implementing an array interface to DataFrame.
 
@@ -5987,6 +5991,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
+        # Mapping/MutableMapping are invariant in the key type, so
+        # dict[int, ColumnBase] (the inferred type of ca_data) is not
+        # a valid type to pass to a function accepting
+        # Mapping[Hashable, ColumnBase] even though int is Hashable.
+        # See: https://github.com/python/typing/issues/445
+        ca_data: dict[Hashable, ColumnBase]
         if array_data.ndim == 2:
             ca_data = {
                 k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
@@ -6133,7 +6143,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             non-numeric types and result is expected to be a Series in case of
             Pandas. cuDF will return a DataFrame as it doesn't support mixed
             types under Series.
-        """  # noqa: E501
+        """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
@@ -6179,8 +6189,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         quant_index=False,
                     )._column
                     if len(res) == 0:
-                        res = column.column_empty_like(
-                            qs, dtype=ser.dtype, masked=True, newsize=len(qs)
+                        res = column.column_empty(
+                            row_count=len(qs), dtype=ser.dtype
                         )
                     result[k] = res
             result = DataFrame._from_data(result)
@@ -6832,7 +6842,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  False  2.0
         4   True  1.0
         5  False  2.0
-        """  # noqa: E501
+        """
 
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
@@ -7035,7 +7045,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def stack(self, level=-1, dropna=no_default, future_stack=False):
+    def stack(
+        self, level=-1, dropna=no_default, future_stack=False
+    ) -> DataFrame | Series:
         """Stack the prescribed level(s) from columns to index
 
         Return a reshaped DataFrame or Series having a multi-level
@@ -7282,11 +7294,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         if has_unnamed_levels:
-            unnamed_level_values = list(
-                map(column_name_idx.get_level_values, unnamed_levels_indices)
-            )
             unnamed_level_values = pd.MultiIndex.from_arrays(
-                unnamed_level_values
+                list(
+                    map(
+                        column_name_idx.get_level_values,
+                        unnamed_levels_indices,
+                    )
+                )
             )
 
         def unnamed_group_generator():

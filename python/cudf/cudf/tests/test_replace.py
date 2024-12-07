@@ -31,7 +31,7 @@ from cudf.testing._utils import (
     [
         cudf.Series([5, 1, 2, 3, None, 243, None, 4]),
         cudf.Series(["one", "two", "three", None, "one"], dtype="category"),
-        cudf.Series(list(range(400)) + [None]),
+        cudf.Series([*list(range(400)), None]),
     ],
 )
 @pytest.mark.parametrize(
@@ -128,7 +128,7 @@ def test_series_replace():
     assert_eq(a8, sr8.to_numpy())
 
     # large input containing null
-    sr9 = cudf.Series(list(range(400)) + [None])
+    sr9 = cudf.Series([*list(range(400)), None])
     sr10 = sr9.replace([22, 323, 27, 0], None)
     assert sr10.null_count == 5
     assert len(sr10.dropna().to_numpy()) == (401 - 5)

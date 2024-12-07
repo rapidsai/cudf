@@ -217,7 +217,8 @@ def validate_config_options(config: dict) -> None:
         If the configuration contains unsupported options.
     """
     if unsupported := (
-        config.keys() - {"raise_on_fail", "parquet_options", "executor"}
+        config.keys()
+        - {"raise_on_fail", "parquet_options", "executor", "executor_options"}
     ):
         raise ValueError(
             f"Engine configuration contains unsupported settings: {unsupported}"
@@ -225,6 +226,17 @@ def validate_config_options(config: dict) -> None:
     assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
         config.get("parquet_options", {})
     )
+
+    # Validate executor_options
+    executor = config.get("executor", "pylibcudf")
+    if executor == "dask-experimental":
+        unsupported = config.get("executor_options", {}).keys() - {
+            "max_rows_per_partition"
+        }
+    else:
+        unsupported = config.get("executor_options", {}).keys()
+    if unsupported:
+        raise ValueError(f"Unsupported executor_options for {executor}: {unsupported}")
 
 
 def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:

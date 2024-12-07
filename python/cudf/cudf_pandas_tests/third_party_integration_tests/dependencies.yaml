@@ -213,7 +213,7 @@ dependencies:
       - output_types: conda
         packages:
           - numpy
-          - pytorch>=2.1.0
+          - pytorch>=2.4.0
   test_seaborn:
     common:
       - output_types: conda

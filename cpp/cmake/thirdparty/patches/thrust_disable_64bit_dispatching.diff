@@ -1,25 +1,22 @@
 diff --git a/thrust/thrust/system/cuda/detail/dispatch.h b/thrust/thrust/system/cuda/detail/dispatch.h
-index 2a3cc4e33..8fb337b26 100644
+index 3d004aa55..71ce86bea 100644
 --- a/thrust/thrust/system/cuda/detail/dispatch.h
 +++ b/thrust/thrust/system/cuda/detail/dispatch.h
-@@ -44,8 +44,7 @@
-   }                                                                                   \
-   else                                                                                \
-   {                                                                                   \
--    auto THRUST_PP_CAT2(count, _fixed) = static_cast<thrust::detail::int64_t>(count); \
--    status                             = call arguments;                              \
-+    throw std::runtime_error("THRUST_INDEX_TYPE_DISPATCH 64-bit count is unsupported in libcudf"); \
-   }
+@@ -63,7 +63,7 @@
+   _THRUST_INDEX_TYPE_DISPATCH_GUARD_UNDERFLOW(count1)                \
+   _THRUST_INDEX_TYPE_DISPATCH_GUARD_UNDERFLOW(count2)
  
- /**
-@@ -66,9 +65,7 @@
-   }                                                                                          \
-   else                                                                                       \
-   {                                                                                          \
--    auto THRUST_PP_CAT2(count1, _fixed) = static_cast<thrust::detail::int64_t>(count1);      \
--    auto THRUST_PP_CAT2(count2, _fixed) = static_cast<thrust::detail::int64_t>(count2);      \
--    status                              = call arguments;                                    \
-+    throw std::runtime_error("THRUST_DOUBLE_INDEX_TYPE_DISPATCH 64-bit count is unsupported in libcudf"); \
-   }
- /**
-  * Dispatch between 32-bit and 64-bit index based versions of the same algorithm
+-#if defined(THRUST_FORCE_64_BIT_OFFSET_TYPE)
++#if 0
+ //! @brief Always dispatches to 64 bit offset version of an algorithm
+ #  define THRUST_INDEX_TYPE_DISPATCH(status, call, count, arguments) \
+     _THRUST_INDEX_TYPE_DISPATCH_GUARD_UNDERFLOW(count)               \
+@@ -89,7 +89,7 @@
+     _THRUST_INDEX_TYPE_DISPATCH_GUARD_UNDERFLOW(count)                                     \
+     _THRUST_INDEX_TYPE_DISPATCH(std::uint64_t, status, call_64, count, arguments)
+ 
+-#elif defined(THRUST_FORCE_32_BIT_OFFSET_TYPE)
++#elif 1
+ 
+ //! @brief Ensures that the size of the input does not overflow the offset type
+ #  define _THRUST_INDEX_TYPE_DISPATCH_GUARD_OVERFLOW(index_type, count)                       \
