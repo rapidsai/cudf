@@ -1,6 +1,9 @@
 # break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1398
-break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1484
-break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1602
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:646
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:700
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1493
+break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1605
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1444
 # break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1827
 # break /home/coder/cudf/cpp/examples/orc_io/orc_io.cpp:114
 # break /home/coder/cudf/cpp/src/io/orc/reader_impl.cu:85
