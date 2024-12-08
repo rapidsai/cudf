@@ -373,24 +373,23 @@ __device__ inline size_type string_view::find_impl(char const* str,
                                                    size_type pos,
                                                    size_type count) const
 {
-  auto const nchars = length();
-  if (!str || pos < 0 || pos > nchars) return npos;
-  if (count < 0) count = nchars;
+  if (!str || pos < 0) { return npos; }
+  if (pos > 0 && pos > length()) { return npos; }
 
   // use iterator to help reduce character/byte counting
-  auto itr        = begin() + pos;
+  auto const itr  = begin() + pos;
   auto const spos = itr.byte_offset();
-  auto const epos = ((pos + count) < nchars) ? (itr + count).byte_offset() : size_bytes();
+  auto const epos =
+    (count >= 0) && ((pos + count) < length()) ? (itr + count).byte_offset() : size_bytes();
 
   auto const find_length = (epos - spos) - bytes + 1;
+  auto const d_target    = string_view{str, bytes};
 
   auto ptr = data() + (forward ? spos : (epos - bytes));
   for (size_type idx = 0; idx < find_length; ++idx) {
-    bool match = true;
-    for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
-      match = (ptr[jdx] == str[jdx]);
+    if (d_target.compare(ptr, bytes) == 0) {
+      return forward ? pos : character_offset(epos - bytes - idx);
     }
-    if (match) { return forward ? pos : character_offset(epos - bytes - idx); }
     // use pos to record the current find position
     pos += strings::detail::is_begin_utf8_char(*ptr);
     forward ? ++ptr : --ptr;

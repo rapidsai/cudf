@@ -15,13 +15,37 @@ from pylibcudf.io.types cimport (
     TableWithMetadata,
 )
 from pylibcudf.libcudf.io.parquet cimport (
+    parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_reader as cpp_chunked_parquet_reader,
     parquet_writer_options,
     parquet_writer_options_builder,
+    parquet_reader_options,
+    parquet_reader_options_builder,
+    chunked_parquet_writer_options,
+    chunked_parquet_writer_options_builder,
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 from pylibcudf.types cimport DataType
+
+
+cdef class ParquetReaderOptions:
+    cdef parquet_reader_options c_obj
+    cdef SourceInfo source
+    cpdef void set_row_groups(self, list row_groups)
+    cpdef void set_num_rows(self, size_type nrows)
+    cpdef void set_skip_rows(self, int64_t skip_rows)
+    cpdef void set_columns(self, list col_names)
+    cpdef void set_filter(self, Expression filter)
+
+cdef class ParquetReaderOptionsBuilder:
+    cdef parquet_reader_options_builder c_obj
+    cdef SourceInfo source
+    cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val)
+    cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val)
+    cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val)
+    cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val)
+    cpdef build(self)
 
 
 cdef class ChunkedParquetReader:
@@ -31,20 +55,51 @@ cdef class ChunkedParquetReader:
     cpdef TableWithMetadata read_chunk(self)
 
 
-cpdef read_parquet(
-    SourceInfo source_info,
-    list columns = *,
-    list row_groups = *,
-    Expression filters = *,
-    bool convert_strings_to_categories = *,
-    bool use_pandas_metadata = *,
-    int64_t skip_rows = *,
-    size_type nrows = *,
-    bool allow_mismatched_pq_schemas = *,
-    # disabled see comment in parquet.pyx for more
-    # ReaderColumnSchema reader_column_schema = *,
-    # DataType timestamp_type = *
-)
+cpdef read_parquet(ParquetReaderOptions options)
+
+
+cdef class ParquetChunkedWriter:
+    cdef unique_ptr[cpp_parquet_chunked_writer] c_obj
+    cpdef memoryview close(self, list column_chunks_file_paths)
+    cpdef void write(self, Table table, object partitions_info=*)
+
+
+cdef class ChunkedParquetWriterOptions:
+    cdef chunked_parquet_writer_options c_obj
+    cdef SinkInfo sink
+
+    cpdef void set_dictionary_policy(self, dictionary_policy policy)
+
+
+cdef class ChunkedParquetWriterOptionsBuilder:
+    cdef chunked_parquet_writer_options_builder c_obj
+    cdef SinkInfo sink
+
+    cpdef ChunkedParquetWriterOptionsBuilder metadata(self, TableInputMetadata metadata)
+
+    cpdef ChunkedParquetWriterOptionsBuilder key_value_metadata(self, list metadata)
+
+    cpdef ChunkedParquetWriterOptionsBuilder compression(
+        self,
+        compression_type compression
+    )
+
+    cpdef ChunkedParquetWriterOptionsBuilder stats_level(self, statistics_freq sf)
+
+    cpdef ChunkedParquetWriterOptionsBuilder row_group_size_bytes(self, size_t val)
+
+    cpdef ChunkedParquetWriterOptionsBuilder row_group_size_rows(self, size_type val)
+
+    cpdef ChunkedParquetWriterOptionsBuilder max_page_size_bytes(self, size_t val)
+
+    cpdef ChunkedParquetWriterOptionsBuilder max_page_size_rows(self, size_type val)
+
+    cpdef ChunkedParquetWriterOptionsBuilder max_dictionary_size(self, size_t val)
+
+    cpdef ChunkedParquetWriterOptionsBuilder write_arrow_schema(self, bool enabled)
+
+    cpdef ChunkedParquetWriterOptions build(self)
+
 
 cdef class ParquetWriterOptions:
     cdef parquet_writer_options c_obj
