@@ -123,7 +123,7 @@ def test_predict(device: str) -> np.ndarray:
 
     predt0 = reg.predict(X_df)
 
-    predt1 = booster.inplace_predict(X_df).get()
+    predt1 = booster.inplace_predict(X_df)
     np.testing.assert_allclose(predt0, predt1)
 
     predt2 = booster.predict(xgb.DMatrix(X_df))
