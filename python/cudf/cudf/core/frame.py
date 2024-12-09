@@ -110,13 +110,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 header["column_label_dtype"] = label_dtype.str
 
         header["columns"], column_frames = serialize_columns(self._columns)
-        column_names, column_names_numpy_type = zip(
-            *[
-                (cname.item(), type(cname).__name__)
-                if isinstance(cname, np.generic)
-                else (cname, "")
-                for cname in self._column_names
-            ]
+        column_names, column_names_numpy_type = (
+            zip(
+                *[
+                    (cname.item(), type(cname).__name__)
+                    if isinstance(cname, np.generic)
+                    else (cname, "")
+                    for cname in self._column_names
+                ]
+            )
+            if self._column_names
+            else ((), ())
         )
         header |= {
             "column_names": column_names,
