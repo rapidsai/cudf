@@ -97,6 +97,8 @@ int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
                                                            ArrowSchema* out)
 {
   using DeviceType = int64_t;
+  // Arrow decimal 64 maxes at precision of 18, cudf::detail::max_precision<int64_t>() produces 19.
+  // decimal32 has precision 1 - 9, decimal64 has precision 10 - 18, decimal128 is 19 - 38
   return decimals_to_arrow<DeviceType>(input, cudf::detail::max_precision<DeviceType>() - 1, out);
 }
 
