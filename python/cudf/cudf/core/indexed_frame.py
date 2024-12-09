@@ -3507,7 +3507,7 @@ class IndexedFrame(Frame):
 
         col = _post_process_output_col(ans_col, retty)
 
-        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        col.set_base_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(col, index=self.index)
 
         return result

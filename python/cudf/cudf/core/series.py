@@ -17,7 +17,6 @@ import pandas as pd
 from typing_extensions import Self, assert_never
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -526,7 +525,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
             mask = None
             if not valid_codes.all():
-                mask = libcudf.transform.bools_to_mask(valid_codes)
+                mask = valid_codes.as_mask()
             col = CategoricalColumn(
                 data=col.data,
                 size=codes.size,
