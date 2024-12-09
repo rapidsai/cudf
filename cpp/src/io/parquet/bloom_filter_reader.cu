@@ -246,7 +246,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    *
    * @return Vectors of equality literals, one per input table column
    */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> const get_equality_literals() const
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() const
   {
     return _equality_literals;
   }
