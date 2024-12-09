@@ -3,36 +3,44 @@ from __future__ import annotations
 
 import datetime
 import functools
+import json
 import operator
 import os
 import urllib
 import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import fsspec
 import fsspec.implementations.local
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
 import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 try:
     import fsspec.parquet as fsspec_parquet
-
 except ImportError:
     fsspec_parquet = None
 
+
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Hashable
 
     from cudf.core.column import ColumnBase
 
+
+PARQUET_META_TYPE_MAP = {
+    str(cudf_dtype): str(pandas_dtype)
+    for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
+}
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
 _ROW_GROUP_SIZE_BYTES_DEFAULT = np.iinfo(np.uint64).max
@@ -1485,6 +1493,153 @@ List[str, bytes, BytesIO]
 doc_get_reader_filepath_or_buffer = docfmt_partial(
     docstring=_docstring_get_reader_filepath_or_buffer
 )
+
+
+def _index_level_name(
+    index_name: Hashable, level: int, column_names: list[Hashable]
+) -> Hashable:
+    """
+    Return the name of an index level or a default name
+    if `index_name` is None or is already a column name.
+
+    Parameters
+    ----------
+    index_name : name of an Index object
+    level : level of the Index object
+
+    Returns
+    -------
+    name : str
+    """
+    if index_name is not None and index_name not in column_names:
+        return index_name
+    else:
+        return f"__index_level_{level}__"
+
+
+def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
+    col_names: list[Hashable] = []
+    types = []
+    index_levels = []
+    index_descriptors = []
+    columns_to_convert = list(table._columns)
+    # Columns
+    for name, col in table._column_labels_and_values:
+        if cudf.get_option("mode.pandas_compatible"):
+            # in pandas-compat mode, non-string column names are stringified.
+            col_names.append(str(name))
+        else:
+            col_names.append(name)
+
+        if isinstance(col.dtype, cudf.CategoricalDtype):
+            raise ValueError(
+                "'category' column dtypes are currently not "
+                + "supported by the gpu accelerated parquet writer"
+            )
+        elif isinstance(
+            col.dtype,
+            (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
+        ):
+            types.append(col.dtype.to_arrow())
+        else:
+            # A boolean element takes 8 bits in cudf and 1 bit in
+            # pyarrow. To make sure the cudf format is interoperable
+            # with arrow, we use `int8` type when converting from a
+            # cudf boolean array.
+            if col.dtype.type == np.bool_:
+                types.append(pa.int8())
+            else:
+                types.append(np_to_pa_dtype(col.dtype))
+
+    # Indexes
+    materialize_index = False
+    if index is not False:
+        for level, name in enumerate(table.index.names):
+            if isinstance(table.index, cudf.MultiIndex):
+                idx = table.index.get_level_values(level)
+            else:
+                idx = table.index
+
+            if isinstance(idx, cudf.RangeIndex):
+                if index is None:
+                    descr: dict[str, Any] | Hashable = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index.start,
+                        "stop": table.index.stop,
+                        "step": table.index.step,
+                    }
+                else:
+                    materialize_index = True
+                    # When `index=True`, RangeIndex needs to be materialized.
+                    materialized_idx = idx._as_int_index()
+                    descr = _index_level_name(
+                        index_name=materialized_idx.name,
+                        level=level,
+                        column_names=col_names,
+                    )
+                    index_levels.append(materialized_idx)
+                    columns_to_convert.append(materialized_idx._values)
+                    col_names.append(descr)
+                    types.append(np_to_pa_dtype(materialized_idx.dtype))
+            else:
+                descr = _index_level_name(
+                    index_name=idx.name, level=level, column_names=col_names
+                )
+                columns_to_convert.append(idx._values)
+                col_names.append(descr)
+                if isinstance(idx.dtype, cudf.CategoricalDtype):
+                    raise ValueError(
+                        "'category' column dtypes are currently not "
+                        + "supported by the gpu accelerated parquet writer"
+                    )
+                elif isinstance(idx.dtype, cudf.ListDtype):
+                    types.append(col.dtype.to_arrow())
+                else:
+                    # A boolean element takes 8 bits in cudf and 1 bit in
+                    # pyarrow. To make sure the cudf format is interperable
+                    # in arrow, we use `int8` type when converting from a
+                    # cudf boolean array.
+                    if idx.dtype.type == np.bool_:
+                        types.append(pa.int8())
+                    else:
+                        types.append(np_to_pa_dtype(idx.dtype))
+
+                index_levels.append(idx)
+            index_descriptors.append(descr)
+
+    df_meta = table.head(0)
+    if materialize_index:
+        df_meta.index = df_meta.index._as_int_index()
+    metadata = pa.pandas_compat.construct_metadata(
+        columns_to_convert=columns_to_convert,
+        # It is OKAY to do `.head(0).to_pandas()` because
+        # this method will extract `.columns` metadata only
+        df=df_meta.to_pandas(),
+        column_names=col_names,
+        index_levels=index_levels,
+        index_descriptors=index_descriptors,
+        preserve_index=index,
+        types=types,
+    )
+
+    md_dict = json.loads(metadata[b"pandas"])
+
+    # correct metadata for list and struct and nullable numeric types
+    for col_meta in md_dict["columns"]:
+        if (
+            col_meta["name"] in table._column_names
+            and table._data[col_meta["name"]].nullable
+            and col_meta["numpy_type"] in PARQUET_META_TYPE_MAP
+            and col_meta["pandas_type"] != "decimal"
+        ):
+            col_meta["numpy_type"] = PARQUET_META_TYPE_MAP[
+                col_meta["numpy_type"]
+            ]
+        if col_meta["numpy_type"] in ("list", "struct"):
+            col_meta["numpy_type"] = "object"
+
+    return json.dumps(md_dict)
 
 
 def is_url(url):

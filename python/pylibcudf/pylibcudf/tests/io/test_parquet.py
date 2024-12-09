@@ -31,19 +31,24 @@ def test_read_parquet_basic(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
-    res = plc.io.parquet.read_parquet(
-        plc.io.SourceInfo([source]),
-        nrows=nrows,
-        skip_rows=skiprows,
-        columns=columns,
-    )
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([source])
+    ).build()
+    if nrows > -1:
+        options.set_num_rows(nrows)
+    if skiprows != 0:
+        options.set_skip_rows(skiprows)
+    if columns is not None:
+        options.set_columns(columns)
+
+    res = plc.io.parquet.read_parquet(options)
 
     if columns is not None:
         pa_table = pa_table.select(columns)
 
     # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
-        offset=skiprows, length=nrows if nrows != -1 else None
+        offset=skiprows, length=nrows if nrows > -1 else None
     )
 
     assert_table_and_meta_eq(pa_table, res, check_field_nullability=False)
@@ -95,9 +100,12 @@ def test_read_parquet_filters(
         binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
     )
 
-    plc_table_w_meta = plc.io.parquet.read_parquet(
-        plc.io.SourceInfo([source]), filters=plc_filters
-    )
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([source])
+    ).build()
+    options.set_filter(plc_filters)
+
+    plc_table_w_meta = plc.io.parquet.read_parquet(options)
     exp = read_table(source, filters=pa_filters)
     assert_table_and_meta_eq(
         exp, plc_table_w_meta, check_field_nullability=False

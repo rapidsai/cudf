@@ -7,7 +7,6 @@ from . import (
     groupby,
     interop,
     nvtext,
-    orc,
     parquet,
     reduce,
     sort,

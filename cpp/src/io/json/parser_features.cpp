@@ -159,7 +159,17 @@ struct empty_column_functor {
     std::unique_ptr<column> child = cudf::type_dispatcher(
       schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name));
     auto offsets = make_empty_column(data_type(type_to_id<size_type>()));
-    return make_lists_column(0, std::move(offsets), std::move(child), 0, {}, stream, mr);
+    std::vector<std::unique_ptr<column>> child_columns;
+    child_columns.push_back(std::move(offsets));
+    child_columns.push_back(std::move(child));
+    // Do not use `cudf::make_lists_column` since we do not need to call `purge_nonempty_nulls` on
+    // the child column as it does not have non-empty nulls. Look issue #17356
+    return std::make_unique<column>(cudf::data_type{type_id::LIST},
+                                    0,
+                                    rmm::device_buffer{},
+                                    rmm::device_buffer{},
+                                    0,
+                                    std::move(child_columns));
   }
 
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::struct_view>)>
@@ -173,6 +183,13 @@ struct empty_column_functor {
     return make_structs_column(0, std::move(child_columns), 0, {}, stream, mr);
   }
 };
+
+std::unique_ptr<column> make_empty_column(schema_element const& schema,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr)
+{
+  return cudf::type_dispatcher(schema.type, empty_column_functor{stream, mr}, schema);
+}
 
 /// Created all null column of the specified schema
 struct allnull_column_functor {
@@ -198,10 +215,9 @@ struct allnull_column_functor {
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     CUDF_EXPECTS(schema.child_types.size() == 1, "Dictionary column should have only one child");
-    auto const& child_name        = schema.child_types.begin()->first;
-    std::unique_ptr<column> child = cudf::type_dispatcher(schema.child_types.at(child_name).type,
-                                                          empty_column_functor{stream, mr},
-                                                          schema.child_types.at(child_name));
+    auto const& child_name = schema.child_types.begin()->first;
+    std::unique_ptr<column> child =
+      make_empty_column(schema.child_types.at(child_name), stream, mr);
     return make_fixed_width_column(schema.type, size, mask_state::ALL_NULL, stream, mr);
     auto indices   = make_zeroed_offsets(size - 1);
     auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
@@ -221,14 +237,22 @@ struct allnull_column_functor {
   std::unique_ptr<column> operator()(schema_element const& schema, size_type size) const
   {
     CUDF_EXPECTS(schema.child_types.size() == 1, "List column should have only one child");
-    auto const& child_name        = schema.child_types.begin()->first;
-    std::unique_ptr<column> child = cudf::type_dispatcher(schema.child_types.at(child_name).type,
-                                                          empty_column_functor{stream, mr},
-                                                          schema.child_types.at(child_name));
-    auto offsets                  = make_zeroed_offsets(size);
+    auto const& child_name = schema.child_types.begin()->first;
+    std::unique_ptr<column> child =
+      make_empty_column(schema.child_types.at(child_name), stream, mr);
+    auto offsets   = make_zeroed_offsets(size);
     auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
-    return make_lists_column(
-      size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
+    std::vector<std::unique_ptr<column>> child_columns;
+    child_columns.push_back(std::move(offsets));
+    child_columns.push_back(std::move(child));
+    // Do not use `cudf::make_lists_column` since we do not need to call `purge_nonempty_nulls` on
+    // the child column as it does not have non-empty nulls. Look issue #17356
+    return std::make_unique<column>(cudf::data_type{type_id::LIST},
+                                    size,
+                                    rmm::device_buffer{},
+                                    std::move(null_mask),
+                                    size,
+                                    std::move(child_columns));
   }
 
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::struct_view>)>
@@ -240,8 +264,14 @@ struct allnull_column_functor {
         schema.child_types.at(child_name).type, *this, schema.child_types.at(child_name), size));
     }
     auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
-    return make_structs_column(
-      size, std::move(child_columns), size, std::move(null_mask), stream, mr);
+    // Do not use `cudf::make_structs_column` since we do not need to call `superimpose_nulls` on
+    // the children columns. Look issue #17356
+    return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
+                                    size,
+                                    rmm::device_buffer{},
+                                    std::move(null_mask),
+                                    size,
+                                    std::move(child_columns));
   }
 };
 
