@@ -205,7 +205,7 @@ cdef object _process_metadata(object df,
             else:
                 start = range_index_meta["start"] + skip_rows
                 stop = range_index_meta["stop"]
-                if nrows != -1:
+                if nrows > -1:
                     stop = start + nrows
                 idx = cudf.RangeIndex(
                     start=start,
@@ -256,16 +256,27 @@ def read_parquet_chunked(
     # (see read_parquet)
     allow_range_index = columns is not None and len(columns) != 0
 
+    options = (
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(filepaths_or_buffers)
+        )
+        .use_pandas_metadata(use_pandas_metadata)
+        .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+        .build()
+    )
+    if row_groups is not None:
+        options.set_row_groups(row_groups)
+    if nrows > -1:
+        options.set_num_rows(nrows)
+    if skip_rows != 0:
+        options.set_skip_rows(skip_rows)
+    if columns is not None:
+        options.set_columns(columns)
+
     reader = ChunkedParquetReader(
-        plc.io.SourceInfo(filepaths_or_buffers),
-        columns,
-        row_groups,
-        use_pandas_metadata=use_pandas_metadata,
+        options,
         chunk_read_limit=chunk_read_limit,
         pass_read_limit=pass_read_limit,
-        skip_rows=skip_rows,
-        nrows=nrows,
-        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
     )
 
     tbl_w_meta = reader.read_chunk()
@@ -325,19 +336,26 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     if columns is not None and len(columns) == 0 or filters:
         allow_range_index = False
 
-    # Read Parquet
-
-    tbl_w_meta = plc.io.parquet.read_parquet(
-        plc.io.SourceInfo(filepaths_or_buffers),
-        columns,
-        row_groups,
-        filters,
-        convert_strings_to_categories = False,
-        use_pandas_metadata = use_pandas_metadata,
-        skip_rows = skip_rows,
-        nrows = nrows,
-        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
+    options = (
+        plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(filepaths_or_buffers)
+        )
+        .use_pandas_metadata(use_pandas_metadata)
+        .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+        .build()
     )
+    if row_groups is not None:
+        options.set_row_groups(row_groups)
+    if nrows > -1:
+        options.set_num_rows(nrows)
+    if skip_rows != 0:
+        options.set_skip_rows(skip_rows)
+    if columns is not None:
+        options.set_columns(columns)
+    if filters is not None:
+        options.set_filter(filters)
+
+    tbl_w_meta = plc.io.parquet.read_parquet(options)
 
     df = cudf.DataFrame._from_data(
         *data_from_pylibcudf_io(tbl_w_meta)
