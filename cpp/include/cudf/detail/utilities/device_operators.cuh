@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,11 @@ struct DeviceSum {
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+#ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support device operator identity");
+#else
+    CUDF_UNREACHABLE("fixed_point does not yet support device operator identity");
+#endif
     return T{};
   }
 };
@@ -141,7 +145,11 @@ struct DeviceMin {
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+#ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support DeviceMin identity");
+#else
+    CUDF_UNREACHABLE("fixed_point does not yet support DeviceMin identity");
+#endif
     return cuda::std::numeric_limits<T>::max();
   }
 
@@ -189,7 +197,11 @@ struct DeviceMax {
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+#ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support DeviceMax identity");
+#else
+    CUDF_UNREACHABLE("fixed_point does not yet support DeviceMax identity");
+#endif
     return cuda::std::numeric_limits<T>::lowest();
   }
 
@@ -225,7 +237,11 @@ struct DeviceProduct {
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+#ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support DeviceProduct identity");
+#else
+    CUDF_UNREACHABLE("fixed_point does not yet support DeviceProduct identity");
+#endif
     return T{1, numeric::scale_type{0}};
   }
 };
