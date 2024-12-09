@@ -93,14 +93,14 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
 
 struct dispatch_to_arrow_device {
   template <typename T,
-            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_width<T>())>
+            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
   int operator()(cudf::column&&, rmm::cuda_stream_view, rmm::device_async_resource_ref, ArrowArray*)
   {
     CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
   // cover rep layout compatible and decimal types
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_width<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_point<T>())>
   int operator()(cudf::column&& column,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr,
@@ -295,13 +295,13 @@ struct dispatch_to_arrow_device_view {
   rmm::device_async_resource_ref mr;
 
   template <typename T,
-            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_width<T>())>
+            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
   int operator()(ArrowArray*) const
   {
     CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_width<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_point<T>())>
   int operator()(ArrowArray* out) const
   {
     nanoarrow::UniqueArray tmp;

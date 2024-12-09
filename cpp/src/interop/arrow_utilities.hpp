@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
