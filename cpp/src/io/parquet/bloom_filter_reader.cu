@@ -440,7 +440,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Bloom filter header size
       auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
-      auto const bitset_size            = static_cast<size_t>(header.num_bytes);
+      auto const bitset_size              = static_cast<size_t>(header.num_bytes);
 
       // Check if we already read in the filter bitset in the initial read.
       if (initial_read_size >= bloom_filter_header_size + bitset_size) {
@@ -594,14 +594,11 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;
   thrust::copy_if(thrust::host,
-                  output_column_schemas.begin(), 
+                  output_column_schemas.begin(),
                   output_column_schemas.end(),
                   equality_literals.begin(),
                   std::back_inserter(equality_col_schemas),
                   [](auto& eq_literals) { not return eq_literals.empty(); });
-
-  // Read bloom filters and add literal membership columns.
-  std::vector<std::unique_ptr<cudf::column>> bloom_filter_membership_columns;
 
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return std::nullopt; }
@@ -632,13 +629,14 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto const bloom_filter_spans =
     cudf::detail::make_device_uvector_async(h_bloom_filter_spans, stream, mr);
 
-  // Create a bloom filter query table caster.
+  // Create a bloom filter query table caster
   bloom_filter_caster const bloom_filter_col{
     bloom_filter_spans, parquet_types, total_row_groups, equality_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.
   // The table contains #sources * #column_chunks_per_src rows.
+  std::vector<std::unique_ptr<cudf::column>> bloom_filter_membership_columns;
   size_t equality_col_idx = 0;
   std::for_each(
     thrust::make_counting_iterator<size_t>(0),
@@ -659,6 +657,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
       }
       equality_col_idx++;
     });
+
+  // Create a table from columns
   auto bloom_filter_membership_table = cudf::table(std::move(bloom_filter_membership_columns));
 
   // Convert AST to BloomfilterAST expression with reference to bloom filter membership
