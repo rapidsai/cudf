@@ -18,7 +18,6 @@ set(cython_sources
     csv.pyx
     groupby.pyx
     interop.pyx
-    orc.pyx
     parquet.pyx
     reduce.pyx
     scalar.pyx
@@ -26,7 +25,6 @@ set(cython_sources
     stream_compaction.pyx
     string_casting.pyx
     strings_udf.pyx
-    transform.pyx
     types.pyx
     utils.pyx
 )
@@ -47,4 +45,3 @@ target_link_libraries(interop PUBLIC nanoarrow)
 
 add_subdirectory(io)
 add_subdirectory(nvtext)
-add_subdirectory(strings)

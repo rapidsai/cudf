@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib import strings as libstrings
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
 from cudf.core._internals import unary
 from cudf.core.column import as_column
@@ -18,10 +17,16 @@ from cudf.core.index import ensure_index
 from cudf.utils.dtypes import can_convert_to_column
 
 if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
+    from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.string import StringColumn
 
 
-def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
+def to_numeric(
+    arg,
+    errors: Literal["raise", "coerce", "ignore"] = "raise",
+    downcast: Literal["integer", "signed", "unsigned", "float", None] = None,
+    dtype_backend=None,
+):
     """
     Convert argument into numerical types.
 
@@ -130,7 +135,9 @@ def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
         else:
             try:
                 col = _convert_str_col(
-                    col._get_decategorized_column(), errors, downcast
+                    col._get_decategorized_column(),  # type: ignore[attr-defined]
+                    errors,
+                    downcast,
                 )
             except ValueError as e:
                 if errors == "ignore":
@@ -139,7 +146,7 @@ def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
                     raise e
     elif is_string_dtype(dtype):
         try:
-            col = _convert_str_col(col, errors, downcast)
+            col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
         except ValueError as e:
             if errors == "ignore":
                 return arg
@@ -186,7 +193,11 @@ def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
         return col.values
 
 
-def _convert_str_col(col, errors, _downcast=None):
+def _convert_str_col(
+    col: StringColumn,
+    errors: Literal["raise", "coerce", "ignore"],
+    _downcast: Literal["integer", "signed", "unsigned", "float", None] = None,
+) -> NumericalColumn:
     """
     Converts a string column to numeric column
 
@@ -212,13 +223,21 @@ def _convert_str_col(col, errors, _downcast=None):
     if not is_string_dtype(col):
         raise TypeError("col must be string dtype.")
 
-    is_integer = libstrings.is_integer(col)
-    if is_integer.all():
-        return col.astype(dtype=cudf.dtype("i8"))
+    if col.is_integer().all():
+        return col.astype(dtype=cudf.dtype("i8"))  # type: ignore[return-value]
 
-    col = _proc_inf_empty_strings(col)
+    # TODO: This can be handled by libcudf in
+    # future see StringColumn.as_numerical_column
+    converted_col = (
+        col.to_lower()
+        .find_and_replace(as_column([""]), as_column(["NaN"]))
+        .replace_multiple(
+            as_column(["+", "inf", "inity"]),  # type: ignore[arg-type]
+            as_column(["", "Inf", ""]),  # type: ignore[arg-type]
+        )
+    )
 
-    is_float = libstrings.is_float(col)
+    is_float = converted_col.is_float()
     if is_float.all():
         if _downcast in {"unsigned", "signed", "integer"}:
             warnings.warn(
@@ -227,27 +246,14 @@ def _convert_str_col(col, errors, _downcast=None):
                     "limited by float32 precision."
                 )
             )
-            return col.astype(dtype=cudf.dtype("float32"))
+            return converted_col.astype(dtype=cudf.dtype("float32"))  # type: ignore[return-value]
         else:
-            return col.astype(dtype=cudf.dtype("float64"))
+            return converted_col.astype(dtype=cudf.dtype("float64"))  # type: ignore[return-value]
     else:
         if errors == "coerce":
-            col = libcudf.string_casting.stod(col)
+            converted_col = libcudf.string_casting.stod(converted_col)
             non_numerics = is_float.unary_operator("not")
-            col[non_numerics] = None
-            return col
+            converted_col[non_numerics] = None
+            return converted_col  # type: ignore[return-value]
         else:
             raise ValueError("Unable to convert some strings to numerics.")
-
-
-def _proc_inf_empty_strings(col: ColumnBase) -> ColumnBase:
-    """Handles empty and infinity strings"""
-    col = col.to_lower()  # type: ignore[attr-defined]
-    col = col.find_and_replace(as_column([""]), as_column(["NaN"]))
-    # TODO: This can be handled by libcudf in
-    # future see StringColumn.as_numerical_column
-    col = col.replace_multiple(  # type: ignore[attr-defined]
-        as_column(["+", "inf", "inity"]),
-        as_column(["", "Inf", ""]),
-    )
-    return col
