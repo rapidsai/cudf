@@ -373,15 +373,9 @@ std::unique_ptr<table> copy_if(table_view const& input,
 
   // As it is InclusiveSum, last value in block_offsets will be output_size
   // unless num_blocks == 1, in which case output_size is just block_counts[0]
-  cudf::size_type output_size{0};
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    &output_size,
-    grid.num_blocks > 1 ? block_offsets.begin() + grid.num_blocks : block_counts.begin(),
-    sizeof(cudf::size_type),
-    cudaMemcpyDefault,
-    stream.value()));
-
-  stream.synchronize();
+  auto const src_span = device_span<cudf::size_type const>{
+    grid.num_blocks > 1 ? block_offsets.begin() + grid.num_blocks : block_counts.begin(), 1};
+  auto const output_size = cudf::detail::make_host_vector_sync(src_span, stream)[0];
 
   if (output_size == input.num_rows()) {
     return std::make_unique<table>(input, stream, mr);
