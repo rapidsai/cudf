@@ -14,7 +14,7 @@ jobs:
   pr-builder:
     needs:
       - changed-files
-      #- checks
+      - checks
       - conda-cpp-build
       - conda-cpp-checks
       - conda-cpp-tests
@@ -100,15 +100,15 @@ jobs:
           - '!img/**'
           - '!java/**'
           - '!notebooks/**'
-  #checks:
-  #  secrets: inherit
-  #  needs: telemetry-setup
-  #  uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
-  #  with:
-  #    enable_check_generated_files: false
-  #    ignored_pr_jobs: "telemetry-summarize"
+  checks:
+    secrets: inherit
+    needs: telemetry-setup
+    uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.12
+    with:
+      enable_check_generated_files: false
+      ignored_pr_jobs: "telemetry-summarize"
   conda-cpp-build:
-    #needs: checks
+    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-24.12
     with:
@@ -162,7 +162,7 @@ jobs:
       container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/test_java.sh"
   static-configure:
-    #needs: checks
+    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.12
     with:
@@ -193,7 +193,7 @@ jobs:
       container_image: "rapidsai/ci-conda:cuda12.5.1-ubuntu22.04-py3.11"
       run_script: "ci/build_docs.sh"
   wheel-build-libcudf:
-    #needs: checks
+    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.12
     with:
@@ -202,8 +202,7 @@ jobs:
       build_type: pull-request
       script: "ci/build_wheel_libcudf.sh"
   wheel-build-pylibcudf:
-    #needs: [checks, wheel-build-libcudf]
-    needs: wheel-build-libcudf
+    needs: [checks, wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.12
     with:
