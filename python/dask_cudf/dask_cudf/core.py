@@ -41,4 +41,4 @@ from_cudf.__doc__ = textwrap.dedent(
         arguments (described below) excepting that it operates on cuDF
         rather than pandas objects.\n
         """
-) + textwrap.dedent(dd.from_pandas.__doc__ or "")
+) + textwrap.dedent(dd.from_pandas.__doc__)
