@@ -79,6 +79,8 @@ using distinct_set_t =
  * the `reduction_init_value()` function. Then, the reduction result for each row group is written
  * into the output array at the index of an unspecified row in the group.
  *
+ * @tparam RowEqual The type of row equality comparator
+ *
  * @param set The auxiliary set to perform reduction
  * @param set_size The number of elements in set
  * @param num_rows The number of all input rows
