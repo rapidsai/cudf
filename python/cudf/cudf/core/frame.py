@@ -902,16 +902,17 @@ class Frame(BinaryOperand, Scannable):
         if len(dict_indices):
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            indices_columns = libcudf.interop.from_arrow(dict_indices_table)
+            plc_indices = plc.interop.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
-            for name, codes in zip(
-                dict_indices_table.column_names, indices_columns
+            for name, plc_codes in zip(
+                dict_indices_table.column_names, plc_indices.columns()
             ):
+                codes = libcudf.column.Column.from_pylibcudf(plc_codes)
                 categories = cudf_dictionaries_columns[name]
                 codes = as_unsigned_codes(len(categories), codes)
                 cudf_category_frame[name] = CategoricalColumn(
@@ -927,9 +928,9 @@ class Frame(BinaryOperand, Scannable):
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
-            name: col
-            for name, col in zip(
-                data.column_names, libcudf.interop.from_arrow(data)
+            name: libcudf.column.Column.from_pylibcudf(plc_col)
+            for name, plc_col in zip(
+                data.column_names, plc.interop.from_arrow(data).columns()
             )
         }
 
@@ -988,7 +989,7 @@ class Frame(BinaryOperand, Scannable):
         return cls._from_data({name: result[name] for name in column_names})
 
     @_performance_tracking
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Table:
         """
         Convert to arrow Table
 
