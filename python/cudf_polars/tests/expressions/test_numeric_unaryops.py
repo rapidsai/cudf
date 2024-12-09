@@ -94,4 +94,4 @@ def test_log(ldf, natural):
 @pytest.mark.parametrize("col", ["a", "b"])
 def test_negate(ldf, col):
     q = ldf.select(-pl.col(col))
-    assert_gpu_result_equal(q, check_exact=False)
+    assert_gpu_result_equal(q)
