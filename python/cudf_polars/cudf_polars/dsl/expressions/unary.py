@@ -123,6 +123,7 @@ class UnaryFunction(Expr):
             "drop_nulls",
             "fill_null",
             "mask_nans",
+            "negate",
             "round",
             "set_sorted",
             "unique",
@@ -260,6 +261,16 @@ class UnaryFunction(Expr):
                 )
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
             return Column(plc.replace.replace_nulls(column.obj, arg))
+        elif self.name == "negate":
+            column = self.children[0].evaluate(df, context=context, mapping=mapping)
+            return Column(
+                plc.binaryop.binary_operation(
+                    plc.interop.from_arrow(pa.scalar(-1)),
+                    column.obj,
+                    plc.binaryop.BinaryOperator.MUL,
+                    self.dtype,
+                )
+            )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context, mapping=mapping)
             if column.obj.type().id() != self.dtype.id():
