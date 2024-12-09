@@ -25,7 +25,6 @@ set(cython_sources
     stream_compaction.pyx
     string_casting.pyx
     strings_udf.pyx
-    transform.pyx
     types.pyx
     utils.pyx
 )
