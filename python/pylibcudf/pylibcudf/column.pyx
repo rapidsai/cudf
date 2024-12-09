@@ -243,8 +243,8 @@ cdef class Column:
             return Column(
                 dtype,
                 size,
-                owner._data,
-                owner._mask,
+                (<Column>owner)._data,
+                (<Column>owner)._mask,
                 null_count,
                 offset,
                 children,
