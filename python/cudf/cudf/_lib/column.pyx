@@ -652,8 +652,8 @@ cdef class Column:
             offset = col.offset()
             dtype_itemsize = getattr(dtype, "itemsize", 1)
 
-            data_ptr = col.data().obj.ptr
-            mask_ptr = col.null_mask().obj.ptr
+            data_ptr = col.data().obj.data[0]
+            mask_ptr = col.null_mask().obj.data[0]
             data = None
             base_size = size + offset
             data_owner = col.data().obj.owner
