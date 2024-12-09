@@ -679,10 +679,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0
+              - cuda-python>=12.6.2,<13.0a0
           - matrix: {cuda: "11.*"}
             packages: &run_pylibcudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0
+              - cuda-python>=11.8.5,<12.0a0
           - {matrix: null, packages: *run_pylibcudf_packages_all_cu11}
   run_cudf:
     common:
@@ -705,10 +705,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cuda-python>=12.0,<13.0a0
+              - cuda-python>=12.6.2,<13.0a0
           - matrix: {cuda: "11.*"}
             packages: &run_cudf_packages_all_cu11
-              - cuda-python>=11.7.1,<12.0a0
+              - cuda-python>=11.8.5,<12.0a0
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:

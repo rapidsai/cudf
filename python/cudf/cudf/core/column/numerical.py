@@ -7,9 +7,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+from numba.np import numpy_support
 from typing_extensions import Self
 
-import pylibcudf
+import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
@@ -17,11 +18,13 @@ import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop, unary
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
+from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     find_common_type,
     min_column_type,
@@ -179,13 +182,27 @@ class NumericalColumn(NumericalBaseColumn):
         if out:
             self._mimic_inplace(out, inplace=True)
 
+    @acquire_spill_lock()
+    def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
+        plc_column = plc.transform.transform(
+            self.to_pylibcudf(mode="read"),
+            compiled_op[0],
+            plc.column._datatype_from_dtype_desc(np_dtype.str[1:]),
+            True,
+        )
+        return type(self).from_pylibcudf(plc_column)
+
     def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
         if callable(unaryop):
-            return libcudf.transform.transform(self, unaryop)
+            nb_type = numpy_support.from_dtype(self.dtype)
+            nb_signature = (nb_type,)
+            compiled_op = cudautils.compile_udf(unaryop, nb_signature)
+            np_dtype = np.dtype(compiled_op[1])
+            return self.transform(compiled_op, np_dtype)
 
         unaryop = unaryop.upper()
         unaryop = _unaryop_map.get(unaryop, unaryop)
-        unaryop = pylibcudf.unary.UnaryOperator[unaryop]
+        unaryop = plc.unary.UnaryOperator[unaryop]
         return unary.unary_operation(self, unaryop)
 
     def __invert__(self):
@@ -298,8 +315,11 @@ class NumericalColumn(NumericalBaseColumn):
         # Only floats can contain nan.
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
-        newmask = libcudf.transform.nans_to_nulls(self)
-        return self.set_mask(newmask)
+        with acquire_spill_lock():
+            mask, _ = plc.transform.nans_to_nulls(
+                self.to_pylibcudf(mode="read")
+            )
+            return self.set_mask(as_buffer(mask))
 
     def normalize_binop_value(self, other: ScalarLike) -> Self | cudf.Scalar:
         if isinstance(other, ColumnBase):
