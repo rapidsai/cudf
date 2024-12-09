@@ -19,15 +19,6 @@ from dask.typing import no_default
 
 import cudf
 
-_LEGACY_WORKAROUND = (
-    "To enable the 'legacy' dask-cudf API, set the "
-    "global 'dataframe.query-planning' config to "
-    "`False` before dask is imported. This can also "
-    "be done by setting an environment variable: "
-    "`DASK_DATAFRAME__QUERY_PLANNING=False` "
-)
-
-
 ##
 ## Custom collection classes
 ##
@@ -103,9 +94,8 @@ class DataFrame(DXDataFrame, CudfFrameBase):
             divisions = None
             warnings.warn(
                 "Ignoring divisions='quantile'. This option is now "
-                "deprecated. Please use the legacy API and raise an "
-                "issue on github if this feature is necessary."
-                f"\n{_LEGACY_WORKAROUND}",
+                "deprecated. Please raise an issue on github if this "
+                "feature is necessary.",
                 FutureWarning,
             )
 
@@ -135,9 +125,7 @@ class DataFrame(DXDataFrame, CudfFrameBase):
 
             if kwargs.pop("as_index") is not True:
                 raise NotImplementedError(
-                    f"{msg} Please reset the index after aggregating, or "
-                    "use the legacy API if `as_index=False` is required.\n"
-                    f"{_LEGACY_WORKAROUND}"
+                    f"{msg} Please reset the index after aggregating."
                 )
             else:
                 warnings.warn(msg, FutureWarning)

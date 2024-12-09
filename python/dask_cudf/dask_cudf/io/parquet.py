@@ -37,7 +37,7 @@ except ImportError:
 
 import cudf
 
-from dask_cudf import QUERY_PLANNING_ON, _deprecated_api
+from dask_cudf import _deprecated_api
 
 # Dask-expr imports CudfEngine from this module
 from dask_cudf._legacy.io.parquet import CudfEngine
@@ -832,15 +832,8 @@ def read_parquet_expr(
     )
 
 
-if QUERY_PLANNING_ON:
-    read_parquet = read_parquet_expr
-    read_parquet.__doc__ = read_parquet_expr.__doc__
-else:
-    read_parquet = _deprecated_api(
-        "The legacy dask_cudf.io.parquet.read_parquet API",
-        new_api="dask_cudf.read_parquet",
-        rec="",
-    )
+read_parquet = read_parquet_expr
+read_parquet.__doc__ = read_parquet_expr.__doc__
 to_parquet = _deprecated_api(
     "dask_cudf.io.parquet.to_parquet",
     new_api="dask_cudf._legacy.io.parquet.to_parquet",

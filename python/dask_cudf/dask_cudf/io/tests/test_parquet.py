@@ -16,11 +16,6 @@ import cudf
 
 import dask_cudf
 from dask_cudf._legacy.io.parquet import create_metadata_file
-from dask_cudf.tests.utils import (
-    require_dask_expr,
-    skip_dask_expr,
-    xfail_dask_expr,
-)
 
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
@@ -450,7 +445,6 @@ def test_create_metadata_file(tmpdir, partition_on):
     dd.assert_eq(ddf1, ddf2)
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
     # NOTE: This test demonstrates that the CudfEngine
@@ -531,19 +525,6 @@ def test_cudf_list_struct_write(tmpdir):
     dd.assert_eq(df, new_ddf)
 
 
-@skip_dask_expr("Not necessary in dask-expr")
-def test_check_file_size(tmpdir):
-    # Test simple file-size check to help warn users
-    # of upstream change to `split_row_groups` default
-    fn = str(tmpdir.join("test.parquet"))
-    cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
-    with pytest.warns(match="large parquet file"):
-        # Need to use `dask_cudf._legacy.io` path
-        # TODO: Remove outdated `check_file_size` functionality
-        dask_cudf._legacy.io.read_parquet(fn, check_file_size=1).compute()
-
-
-@xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="2024.3.0")
 def test_null_partition(tmpdir):
     import pyarrow as pa
     from pyarrow.dataset import HivePartitioning
@@ -626,7 +607,6 @@ def test_timezone_column(tmpdir):
     dd.assert_eq(got, expect)
 
 
-@require_dask_expr()
 @pytest.mark.skipif(
     not dask_cudf.backends.PYARROW_GE_15,
     reason="Requires pyarrow 15",
@@ -677,17 +657,8 @@ def test_deprecated_api_paths(tmpdir):
     with pytest.warns(match="dask_cudf.io.to_parquet is now deprecated"):
         dask_cudf.io.to_parquet(df, tmpdir)
 
-    if dask_cudf.QUERY_PLANNING_ON:
-        df2 = dask_cudf.io.read_parquet(tmpdir)
-        dd.assert_eq(df, df2, check_divisions=False)
+    df2 = dask_cudf.io.read_parquet(tmpdir)
+    dd.assert_eq(df, df2, check_divisions=False)
 
-        df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
-        dd.assert_eq(df, df2, check_divisions=False)
-    else:
-        with pytest.warns(match="legacy dask_cudf.io.read_parquet"):
-            df2 = dask_cudf.io.read_parquet(tmpdir)
-            dd.assert_eq(df, df2, check_divisions=False)
-
-        with pytest.warns(match="legacy dask_cudf.io.parquet.read_parquet"):
-            df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
-            dd.assert_eq(df, df2, check_divisions=False)
+    df2 = dask_cudf.io.parquet.read_parquet(tmpdir)
+    dd.assert_eq(df, df2, check_divisions=False)

@@ -15,12 +15,6 @@ from dask.utils import M
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import (
-    QUERY_PLANNING_ON,
-    require_dask_expr,
-    skip_dask_expr,
-    xfail_dask_expr,
-)
 
 rng = np.random.default_rng(seed=0)
 
@@ -393,44 +387,6 @@ def test_setitem_scalar_datetime():
     np.testing.assert_array_equal(got["z"], df["z"])
 
 
-@skip_dask_expr("Not relevant for dask-expr")
-@pytest.mark.parametrize(
-    "func",
-    [
-        lambda: pd.DataFrame(
-            {"A": rng.random(10), "B": rng.random(10)},
-            index=list("abcdefghij"),
-        ),
-        lambda: pd.DataFrame(
-            {
-                "A": rng.random(10),
-                "B": list("a" * 10),
-                "C": pd.Series(
-                    [str(20090101 + i) for i in range(10)],
-                    dtype="datetime64[ns]",
-                ),
-            },
-            index=list("abcdefghij"),
-        ),
-        lambda: pd.Series(list("abcdefghijklmnop")),
-        lambda: pd.Series(
-            rng.random(10),
-            index=pd.Index(
-                [str(20090101 + i) for i in range(10)], dtype="datetime64[ns]"
-            ),
-        ),
-    ],
-)
-def test_repr(func):
-    pdf = func()
-    gdf = cudf.from_pandas(pdf)
-    gddf = dd.from_pandas(gdf, npartitions=3, sort=False)
-
-    assert repr(gddf)
-    if hasattr(pdf, "_repr_html_"):
-        assert gddf._repr_html_()
-
-
 @pytest.mark.skip(reason="datetime indexes not fully supported in cudf")
 @pytest.mark.parametrize("start", ["1d", "5d", "1w", "12h"])
 @pytest.mark.parametrize("stop", ["1d", "3d", "8h"])
@@ -784,7 +740,6 @@ def test_dataframe_set_index():
         assert_eq(ddf.compute(), pddf.compute())
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_series_describe():
     random.seed(0)
     sr = cudf.datasets.randomdata(20)["x"]
@@ -800,7 +755,6 @@ def test_series_describe():
     )
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
@@ -814,7 +768,6 @@ def test_dataframe_describe():
     )
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 def test_zero_std_describe():
     num = 84886781
     df = cudf.DataFrame(
@@ -932,14 +885,9 @@ def test_implicit_array_conversion_cupy():
 
     result = ds.map_partitions(func, meta=s.values)
 
-    if QUERY_PLANNING_ON:
-        # Check Array and round-tripped DataFrame
-        dask.array.assert_eq(result, func(s))
-        dd.assert_eq(result.to_dask_dataframe(), s, check_index=False)
-    else:
-        # Legacy version still carries numpy metadata
-        # See: https://github.com/dask/dask/issues/11017
-        dask.array.assert_eq(result.compute(), func(s))
+    # Check Array and round-tripped DataFrame
+    dask.array.assert_eq(result, func(s))
+    dd.assert_eq(result.to_dask_dataframe(), s, check_index=False)
 
 
 def test_implicit_array_conversion_cupy_sparse():
@@ -981,7 +929,6 @@ def test_series_isin_error():
         ddf.isin([1, 5, "a"]).compute()
 
 
-@require_dask_expr()
 def test_to_backend_simplify():
     # Check that column projection is not blocked by to_backend
     with dask.config.set({"dataframe.backend": "pandas"}):

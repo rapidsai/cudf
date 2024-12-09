@@ -9,11 +9,16 @@ from dask.dataframe import from_delayed
 
 import cudf
 
-from . import backends  # noqa: F401
+from . import backends, io  # noqa: F401
+from ._expr.expr import _patch_dask_expr
 from ._version import __git_commit__, __version__  # noqa: F401
 from .core import DataFrame, Index, Series, concat, from_cudf
 
-QUERY_PLANNING_ON = dd.DASK_EXPR_ENABLED
+if not (QUERY_PLANNING_ON := dd.DASK_EXPR_ENABLED):
+    raise ValueError(
+        "The legacy DataFrame API is not supported in dask_cudf>24.12. "
+        "Please enable query-planning, or downgrade to dask_cudf<=24.12"
+    )
 
 
 def read_csv(*args, **kwargs):
@@ -55,18 +60,9 @@ def _deprecated_api(old_api, new_api=None, rec=None):
     return inner_func
 
 
-if QUERY_PLANNING_ON:
-    from . import io
-    from ._expr.expr import _patch_dask_expr
-
-    groupby_agg = _deprecated_api("dask_cudf.groupby_agg")
-    read_text = DataFrame.read_text
-    _patch_dask_expr()
-
-else:
-    from . import io  # noqa: F401
-    from ._legacy.groupby import groupby_agg  # noqa: F401
-    from ._legacy.io import read_text  # noqa: F401
+groupby_agg = _deprecated_api("dask_cudf.groupby_agg")
+read_text = DataFrame.read_text
+_patch_dask_expr()
 
 
 to_orc = _deprecated_api(

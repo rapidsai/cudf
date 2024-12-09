@@ -11,7 +11,6 @@ import pyarrow as pa
 from packaging.version import Version
 from pandas.api.types import is_scalar
 
-import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.dataframe.backends import (
@@ -28,6 +27,7 @@ from dask.dataframe.dispatch import (
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
+    partd_encode_dispatch,
     pyarrow_schema_dispatch,
     to_pyarrow_table_dispatch,
     tolist_dispatch,
@@ -464,28 +464,21 @@ def sizeof_cudf_series_index(obj):
     return obj.memory_usage()
 
 
-# TODO: Remove try/except when cudf is pinned to dask>=2023.10.0
-try:
-    from dask.dataframe.dispatch import partd_encode_dispatch
+@partd_encode_dispatch.register(cudf.DataFrame)
+def _simple_cudf_encode(_):
+    # Basic pickle-based encoding for a partd k-v store
+    import pickle
 
-    @partd_encode_dispatch.register(cudf.DataFrame)
-    def _simple_cudf_encode(_):
-        # Basic pickle-based encoding for a partd k-v store
-        import pickle
+    import partd
 
-        import partd
+    def join(dfs):
+        if not dfs:
+            return cudf.DataFrame()
+        else:
+            return cudf.concat(dfs)
 
-        def join(dfs):
-            if not dfs:
-                return cudf.DataFrame()
-            else:
-                return cudf.concat(dfs)
-
-        dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-        return partial(partd.Encode, dumps, pickle.loads, join)
-
-except ImportError:
-    pass
+    dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+    return partial(partd.Encode, dumps, pickle.loads, join)
 
 
 def _default_backend(func, *args, **kwargs):
@@ -557,80 +550,14 @@ def to_cudf_dispatch_from_cudf(data, **kwargs):
     return data
 
 
-# Define "cudf" backend engine to be registered with Dask
-class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
-    """Backend-entrypoint class for Dask-DataFrame
+# Define the "cudf" backend for "legacy" Dask DataFrame
+class LegacyCudfBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Backend-entrypoint class for legacy Dask-DataFrame
 
     This class is registered under the name "cudf" for the
-    ``dask.dataframe.backends`` entrypoint in ``setup.cfg``.
-    Dask-DataFrame will use the methods defined in this class
-    in place of ``dask.dataframe.<creation-method>`` when the
-    "dataframe.backend" configuration is set to "cudf":
-
-    Examples
-    --------
-    >>> import dask
-    >>> import dask.dataframe as dd
-    >>> with dask.config.set({"dataframe.backend": "cudf"}):
-    ...     ddf = dd.from_dict({"a": range(10)})
-    >>> type(ddf)
-    <class 'dask_cudf._legacy.core.DataFrame'>
+    ``dask.dataframe.backends`` entrypoint in ``pyproject.toml``.
+    This "legacy" backend is only used for CSV support.
     """
-
-    @classmethod
-    def to_backend_dispatch(cls):
-        return to_cudf_dispatch
-
-    @classmethod
-    def to_backend(cls, data: dd.core._Frame, **kwargs):
-        if isinstance(data._meta, (cudf.DataFrame, cudf.Series, cudf.Index)):
-            # Already a cudf-backed collection
-            _unsupported_kwargs("cudf", "cudf", kwargs)
-            return data
-        return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
-
-    @staticmethod
-    def from_dict(
-        data,
-        npartitions,
-        orient="columns",
-        dtype=None,
-        columns=None,
-        constructor=cudf.DataFrame,
-    ):
-        return _default_backend(
-            dd.from_dict,
-            data,
-            npartitions=npartitions,
-            orient=orient,
-            dtype=dtype,
-            columns=columns,
-            constructor=constructor,
-        )
-
-    @staticmethod
-    def read_parquet(*args, engine=None, **kwargs):
-        from dask_cudf._legacy.io.parquet import CudfEngine
-
-        _raise_unsupported_parquet_kwargs(**kwargs)
-        return _default_backend(
-            dd.read_parquet,
-            *args,
-            engine=CudfEngine,
-            **kwargs,
-        )
-
-    @staticmethod
-    def read_json(*args, **kwargs):
-        from dask_cudf._legacy.io.json import read_json
-
-        return read_json(*args, **kwargs)
-
-    @staticmethod
-    def read_orc(*args, **kwargs):
-        from dask_cudf._legacy.io import read_orc
-
-        return read_orc(*args, **kwargs)
 
     @staticmethod
     def read_csv(*args, **kwargs):
@@ -638,24 +565,13 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
         return read_csv(*args, **kwargs)
 
-    @staticmethod
-    def read_hdf(*args, **kwargs):
-        # HDF5 reader not yet implemented in cudf
-        warnings.warn(
-            "read_hdf is not yet implemented in cudf/dask_cudf. "
-            "Moving to cudf from pandas. Expect poor performance!"
-        )
-        return _default_backend(dd.read_hdf, *args, **kwargs).to_backend(
-            "cudf"
-        )
 
-
-# Define "cudf" backend entrypoint for dask-expr
-class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
+# Define the "cudf" backend for expr-based Dask DataFrame
+class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
     """Backend-entrypoint class for Dask-Expressions
 
     This class is registered under the name "cudf" for the
-    ``dask-expr.dataframe.backends`` entrypoint in ``setup.cfg``.
+    ``dask_expr.dataframe.backends`` entrypoint in ``pyproject.toml``.
     Dask-DataFrame will use the methods defined in this class
     in place of ``dask_expr.<creation-method>`` when the
     "dataframe.backend" configuration is set to "cudf":
