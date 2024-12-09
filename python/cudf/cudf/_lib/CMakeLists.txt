@@ -12,31 +12,8 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-    aggregation.pyx
-    binaryop.pyx
-    column.pyx
-    copying.pyx
-    csv.pyx
-    datetime.pyx
-    filling.pyx
-    groupby.pyx
-    interop.pyx
-    json.pyx
-    merge.pyx
-    orc.pyx
-    parquet.pyx
-    reduce.pyx
-    replace.pyx
-    round.pyx
-    scalar.pyx
-    sort.pyx
-    string_casting.pyx
-    strings_udf.pyx
-    text.pyx
-    transform.pyx
-    types.pyx
-    utils.pyx
+set(cython_sources column.pyx copying.pyx csv.pyx groupby.pyx interop.pyx parquet.pyx reduce.pyx
+                   scalar.pyx sort.pyx string_casting.pyx strings_udf.pyx types.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
 
@@ -55,4 +32,3 @@ target_link_libraries(interop PUBLIC nanoarrow)
 
 add_subdirectory(io)
 add_subdirectory(nvtext)
-add_subdirectory(strings)

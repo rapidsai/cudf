@@ -2,26 +2,16 @@
 import numpy as np
 
 from . import (
-    binaryop,
     copying,
     csv,
-    datetime,
-    filling,
     groupby,
     interop,
-    json,
-    merge,
     nvtext,
-    orc,
     parquet,
     reduce,
-    replace,
-    round,
     sort,
     string_casting,
-    strings,
     strings_udf,
-    text,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

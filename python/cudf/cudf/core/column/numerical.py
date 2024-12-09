@@ -7,26 +7,30 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+from numba.np import numpy_support
 from typing_extensions import Self
 
-import pylibcudf
+import pylibcudf as plc
 
 import cudf
+import cudf.core.column.column as column
+import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
-from cudf.core._internals import unary
-from cudf.core.column import ColumnBase, as_column, column, string
+from cudf.core._internals import binaryop, unary
+from cudf.core.buffer import acquire_spill_lock, as_buffer
+from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.errors import MixedTypeError
+from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     find_common_type,
     min_column_type,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
 )
-
-from .numerical_base import NumericalBaseColumn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -178,13 +182,27 @@ class NumericalColumn(NumericalBaseColumn):
         if out:
             self._mimic_inplace(out, inplace=True)
 
+    @acquire_spill_lock()
+    def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
+        plc_column = plc.transform.transform(
+            self.to_pylibcudf(mode="read"),
+            compiled_op[0],
+            plc.column._datatype_from_dtype_desc(np_dtype.str[1:]),
+            True,
+        )
+        return type(self).from_pylibcudf(plc_column)
+
     def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
         if callable(unaryop):
-            return libcudf.transform.transform(self, unaryop)
+            nb_type = numpy_support.from_dtype(self.dtype)
+            nb_signature = (nb_type,)
+            compiled_op = cudautils.compile_udf(unaryop, nb_signature)
+            np_dtype = np.dtype(compiled_op[1])
+            return self.transform(compiled_op, np_dtype)
 
         unaryop = unaryop.upper()
         unaryop = _unaryop_map.get(unaryop, unaryop)
-        unaryop = pylibcudf.unary.UnaryOperator[unaryop]
+        unaryop = plc.unary.UnaryOperator[unaryop]
         return unary.unary_operation(self, unaryop)
 
     def __invert__(self):
@@ -226,7 +244,7 @@ class NumericalColumn(NumericalBaseColumn):
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
             # in terms of `notnull` or `NULL_NOT_EQUALS`.
-            if type(other) is int and self.dtype.kind in "iu":  # noqa: E721
+            if type(other) is int and self.dtype.kind in "iu":
                 truthiness = None
                 iinfo = np.iinfo(self.dtype)
                 if iinfo.min > other:
@@ -291,20 +309,21 @@ class NumericalColumn(NumericalBaseColumn):
 
         lhs, rhs = (other, self) if reflect else (self, other)
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        return binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def nans_to_nulls(self: Self) -> Self:
         # Only floats can contain nan.
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
-        newmask = libcudf.transform.nans_to_nulls(self)
-        return self.set_mask(newmask)
+        with acquire_spill_lock():
+            mask, _ = plc.transform.nans_to_nulls(
+                self.to_pylibcudf(mode="read")
+            )
+            return self.set_mask(as_buffer(mask))
 
-    def normalize_binop_value(
-        self, other: ScalarLike
-    ) -> ColumnBase | cudf.Scalar:
+    def normalize_binop_value(self, other: ScalarLike) -> Self | cudf.Scalar:
         if isinstance(other, ColumnBase):
-            if not isinstance(other, NumericalColumn):
+            if not isinstance(other, type(self)):
                 return NotImplemented
             return other
         if isinstance(other, cudf.Scalar):
@@ -482,7 +501,7 @@ class NumericalColumn(NumericalBaseColumn):
         to_replace: ColumnLike,
         replacement: ColumnLike,
         all_nan: bool = False,
-    ) -> NumericalColumn:
+    ) -> Self:
         """
         Return col with *to_replace* replaced with *value*.
         """
@@ -547,7 +566,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
-        replaced = self.astype(common_type)
+        replaced = cast(Self, self.astype(common_type))
         df = cudf.DataFrame._from_data(
             {
                 "old": to_replace_col.astype(common_type),
@@ -563,9 +582,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
             df = df.dropna(subset=["old"])
 
-        return libcudf.replace.replace(
-            replaced, df._data["old"], df._data["new"]
-        )
+        return replaced.replace(df._data["old"], df._data["new"])
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike

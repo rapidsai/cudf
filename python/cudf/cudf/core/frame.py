@@ -1379,7 +1379,7 @@ class Frame(BinaryOperand, Scannable):
         >>> idx = cudf.Index([3, 1, 2])
         >>> idx.argsort()
         array([1, 2, 0], dtype=int32)
-        """  # noqa: E501
+        """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
         if kind != "quicksort":
@@ -1444,7 +1444,14 @@ class Frame(BinaryOperand, Scannable):
 
     @_performance_tracking
     def _encode(self):
-        columns, indices = libcudf.transform.table_encode(list(self._columns))
+        plc_table, plc_column = plc.transform.encode(
+            plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
+        )
+        columns = [
+            libcudf.column.Column.from_pylibcudf(col)
+            for col in plc_table.columns()
+        ]
+        indices = libcudf.column.Column.from_pylibcudf(plc_column)
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
@@ -1888,7 +1895,16 @@ class Frame(BinaryOperand, Scannable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        return libcudf.filling.repeat(columns, repeats)
+        with acquire_spill_lock():
+            plc_table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in columns]
+            )
+            if isinstance(repeats, ColumnBase):
+                repeats = repeats.to_pylibcudf(mode="read")
+            return [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc.filling.repeat(plc_table, repeats).columns()
+            ]
 
     @_performance_tracking
     @_warn_no_dask_cudf

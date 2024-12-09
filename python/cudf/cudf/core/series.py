@@ -17,7 +17,6 @@ import pandas as pd
 from typing_extensions import Self, assert_never
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -517,7 +516,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    a
         dtype: category
         Categories (3, object): ['a', 'b', 'c']
-        """  # noqa: E501
+        """
         col = as_column(categorical)
         if codes is not None:
             codes = as_column(codes)
@@ -526,7 +525,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
             mask = None
             if not valid_codes.all():
-                mask = libcudf.transform.bools_to_mask(valid_codes)
+                mask = valid_codes.as_mask()
             col = CategoricalColumn(
                 data=col.data,
                 size=codes.size,
@@ -942,7 +941,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             labels, axis, index, columns, level, inplace, errors
         )
 
-    def tolist(self):  # noqa: D102
+    def tolist(self):
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicity conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -1087,7 +1099,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             DataFrame, followed by the original Series values. When `drop` is
             True, a `Series` is returned. In either case, if ``inplace=True``,
             no value is returned.
-""",  # noqa: E501
+""",
             example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
@@ -1196,7 +1208,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         12      c
         13   <NA>
         15      d
-        """  # noqa: E501
+        """
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
@@ -1597,6 +1609,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def dtype(self):
         """The dtype of the Series."""
         return self._column.dtype
+
+    @property  # type: ignore
+    @_performance_tracking
+    def dtypes(self):
+        """The dtype of the Series.
+
+        This is an alias for `Series.dtype`.
+        """
+        return self.dtype
 
     @classmethod
     @_performance_tracking
@@ -2113,7 +2134,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> np.array(series.data.memoryview())
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
-        """  # noqa: E501
+        """
         return self._column.data
 
     @property  # type: ignore
@@ -3954,7 +3975,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2002
         dtype: int16
         """
-        return self._get_dt_field("year")
+        return self._return_result_like_self(self.series._column.year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -3979,7 +4000,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    3
         dtype: int16
         """
-        return self._get_dt_field("month")
+        return self._return_result_like_self(self.series._column.month)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4004,7 +4025,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    3
         dtype: int16
         """
-        return self._get_dt_field("day")
+        return self._return_result_like_self(self.series._column.day)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4029,7 +4050,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("hour")
+        return self._return_result_like_self(self.series._column.hour)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4054,7 +4075,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("minute")
+        return self._return_result_like_self(self.series._column.minute)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4079,7 +4100,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("second")
+        return self._return_result_like_self(self.series._column.second)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4104,13 +4125,13 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int32
         """
-        micro = self.series._column.get_dt_field("microsecond")
+        micro = self.series._column.microsecond
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.get_dt_field("millisecond").astype(
-            "int32"
-        ) * cudf.Scalar(1000, dtype="int32")
+        extra = self.series._column.millisecond.astype("int32") * cudf.Scalar(
+            1000, dtype="int32"
+        )
         return self._return_result_like_self(micro + extra)
 
     @property  # type: ignore
@@ -4136,7 +4157,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         2    2
         dtype: int16
         """
-        return self._get_dt_field("nanosecond")
+        return self._return_result_like_self(self.series._column.nanosecond)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4173,7 +4194,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    6
         dtype: int16
         """
-        return self._get_dt_field("weekday")
+        return self._return_result_like_self(self.series._column.weekday)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4210,7 +4231,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8    6
         dtype: int16
         """
-        return self._get_dt_field("weekday")
+        return self._return_result_like_self(self.series._column.weekday)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4248,7 +4269,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8      8
         dtype: int16
         """
-        return self._get_dt_field("day_of_year")
+        return self._return_result_like_self(self.series._column.day_of_year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4286,7 +4307,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         8      8
         dtype: int16
         """
-        return self._get_dt_field("day_of_year")
+        return self._return_result_like_self(self.series._column.day_of_year)
 
     @property  # type: ignore
     @_performance_tracking
@@ -4340,8 +4361,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         12     True
         dtype: bool
         """
-        res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
-        return self._return_result_like_self(res)
+        return self._return_result_like_self(
+            self.series._column.is_leap_year.fillna(False)
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -4368,10 +4390,9 @@ class DatetimeProperties(BaseDatelikeProperties):
         1    4
         dtype: int8
         """
-        res = libcudf.datetime.extract_quarter(self.series._column).astype(
-            np.int8
+        return self._return_result_like_self(
+            self.series._column.quarter.astype(np.int8)
         )
-        return self._return_result_like_self(res)
 
     @_performance_tracking
     def day_name(self, locale: str | None = None) -> Series:
@@ -4581,7 +4602,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         7    False
         8    False
         dtype: bool
-        """  # noqa: E501
+        """
         return self._return_result_like_self(self.series._column.is_month_end)
 
     @property  # type: ignore
@@ -4721,12 +4742,6 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: bool
         """
         return self._return_result_like_self(self.series._column.is_year_end)
-
-    @_performance_tracking
-    def _get_dt_field(self, field: str) -> Series:
-        return self._return_result_like_self(
-            self.series._column.get_dt_field(field)
-        )
 
     @_performance_tracking
     def ceil(self, freq: str) -> Series:
@@ -5034,7 +5049,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4       37
         dtype: int64
         """
-        return self._get_td_field("days")
+        return self._return_result_like_self(self.series._column.days)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5073,7 +5088,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._get_td_field("seconds")
+        return self._return_result_like_self(self.series._column.seconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5105,7 +5120,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._get_td_field("microseconds")
+        return self._return_result_like_self(self.series._column.microseconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5137,7 +5152,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234
         dtype: int64
         """
-        return self._get_td_field("nanoseconds")
+        return self._return_result_like_self(self.series._column.nanoseconds)
 
     @property  # type: ignore
     @_performance_tracking
@@ -5166,16 +5181,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """  # noqa: E501
+        """
         ca = ColumnAccessor(self.series._column.components(), verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index
-        )
-
-    @_performance_tracking
-    def _get_td_field(self, field: str) -> Series:
-        return self._return_result_like_self(
-            getattr(self.series._column, field)
         )
 
 

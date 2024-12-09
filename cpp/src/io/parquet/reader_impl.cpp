@@ -148,7 +148,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     CUDF_EXPECTS(input_col.schema_idx == pass.chunks[c].src_col_schema,
                  "Column/page schema index mismatch");
 
-    size_t max_depth = _metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema);
+    size_t const max_depth = _metadata->get_output_nesting_depth(pass.chunks[c].src_col_schema);
     chunk_offsets.push_back(chunk_off);
 
     // get a slice of size `nesting depth` from `chunk_nested_valids` to store an array of pointers
@@ -203,7 +203,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       auto& out_buf = (*cols)[input_col.nesting[idx]];
       cols          = &out_buf.children;
 
-      int owning_schema = out_buf.user_data & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
+      int const owning_schema = out_buf.user_data & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
       if (owning_schema == 0 || owning_schema == input_col.schema_idx) {
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
@@ -435,7 +435,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     ColumnChunkDesc* col               = &pass.chunks[pi->chunk_idx];
     input_column_info const& input_col = _input_columns[col->src_col_index];
 
-    int index                   = pi->nesting_decode - page_nesting_decode.device_ptr();
+    int const index             = pi->nesting_decode - page_nesting_decode.device_ptr();
     PageNestingDecodeInfo* pndi = &page_nesting_decode[index];
 
     auto* cols = &_output_buffers;
