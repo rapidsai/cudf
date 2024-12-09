@@ -440,7 +440,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Bloom filter header size
       auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
-      size_t const bitset_size            = static_cast<size_t>(header.num_bytes);
+      auto const bitset_size            = static_cast<size_t>(header.num_bytes);
 
       // Check if we already read in the filter bitset in the initial read.
       if (initial_read_size >= bloom_filter_header_size + bitset_size) {
@@ -593,14 +593,12 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;
-  std::for_each(thrust::make_counting_iterator<size_t>(0),
-                thrust::make_counting_iterator(output_column_schemas.size()),
-                [&](auto col_idx) {
-                  // Only for columns that have a non-empty list of literals associated with it
-                  if (equality_literals[col_idx].size()) {
-                    equality_col_schemas.emplace_back(output_column_schemas[col_idx]);
-                  }
-                });
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(), 
+                  output_column_schemas.end(),
+                  equality_literals.begin(),
+                  std::back_inserter(equality_col_schemas),
+                  [](auto& eq_literals) { not return eq_literals.empty(); });
 
   // Read bloom filters and add literal membership columns.
   std::vector<std::unique_ptr<cudf::column>> bloom_filter_membership_columns;
@@ -608,7 +606,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return std::nullopt; }
 
-  // Read a vector of bloom filter bitset device buffers for all column with equality
+  // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups
   auto bloom_filter_data = read_bloom_filters(
     sources, input_row_group_indices, equality_col_schemas, total_row_groups, stream);
