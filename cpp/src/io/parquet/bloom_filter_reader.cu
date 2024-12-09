@@ -598,7 +598,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                   output_column_schemas.end(),
                   equality_literals.begin(),
                   std::back_inserter(equality_col_schemas),
-                  [](auto& eq_literals) { not return eq_literals.empty(); });
+                  [](auto& eq_literals) { return not eq_literals.empty(); });
 
   // Return early if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return std::nullopt; }
