@@ -12,7 +12,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
@@ -1339,7 +1338,11 @@ def _one_hot_encode_column(
             f"np.iinfo({size_type_dtype}).max. Consider reducing "
             "size of category"
         )
-    data = one_hot_encode(column, categories)
+    result_labels = (
+        x if x is not None else "<NA>"
+        for x in categories.to_arrow().to_pylist()
+    )
+    data = dict(zip(result_labels, column.one_hot_encode(categories)))
 
     if drop_first and len(data):
         data.pop(next(iter(data)))

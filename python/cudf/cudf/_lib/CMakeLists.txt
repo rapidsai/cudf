@@ -13,8 +13,39 @@
 # =============================================================================
 
 set(cython_sources
-    column.pyx csv.pyx groupby.pyx interop.pyx parquet.pyx reduce.pyx scalar.pyx sort.pyx
-    stream_compaction.pyx string_casting.pyx strings_udf.pyx transform.pyx types.pyx utils.pyx
+    <<<<<<<
+    HEAD
+    column.pyx
+    csv.pyx
+    groupby.pyx
+    interop.pyx
+    parquet.pyx
+    reduce.pyx
+    scalar.pyx
+    sort.pyx
+    stream_compaction.pyx
+    string_casting.pyx
+    strings_udf.pyx
+    transform.pyx
+    types.pyx
+    utils.pyx
+    =======
+    column.pyx
+    copying.pyx
+    csv.pyx
+    groupby.pyx
+    interop.pyx
+    parquet.pyx
+    reduce.pyx
+    scalar.pyx
+    sort.pyx
+    stream_compaction.pyx
+    string_casting.pyx
+    strings_udf.pyx
+    types.pyx
+    utils.pyx
+    >>>>>>>
+    upstream/branch-25.02
 )
 set(linked_libraries cudf::cudf)
 
@@ -33,4 +64,3 @@ target_link_libraries(interop PUBLIC nanoarrow)
 
 add_subdirectory(io)
 add_subdirectory(nvtext)
-add_subdirectory(strings)
