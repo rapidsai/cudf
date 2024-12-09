@@ -1,9 +1,10 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-from io import BytesIO, StringIO
+from io import BytesIO, StringIO, TextIOBase
+
+import pylibcudf as plc
 
 import cudf
-from cudf._lib import text as libtext
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -33,13 +34,35 @@ def read_text(
         filepath_or_buffer, "read_text"
     )
 
-    return cudf.Series._from_column(
-        libtext.read_text(
-            filepath_or_buffer,
-            delimiter=delimiter,
-            byte_range=byte_range,
-            strip_delimiters=strip_delimiters,
-            compression=compression,
-            compression_offsets=compression_offsets,
-        )
+    if compression is None:
+        if isinstance(filepath_or_buffer, TextIOBase):
+            datasource = plc.io.text.make_source(filepath_or_buffer.read())
+        else:
+            datasource = plc.io.text.make_source_from_file(filepath_or_buffer)
+    elif compression == "bgzip":
+        if isinstance(filepath_or_buffer, TextIOBase):
+            raise ValueError("bgzip compression requires a file path")
+        if compression_offsets is not None:
+            if len(compression_offsets) != 2:
+                raise ValueError(
+                    "Compression offsets need to consist of two elements"
+                )
+            datasource = plc.io.text.make_source_from_bgzip_file(
+                filepath_or_buffer,
+                compression_offsets[0],
+                compression_offsets[1],
+            )
+        else:
+            datasource = plc.io.text.make_source_from_bgzip_file(
+                filepath_or_buffer,
+            )
+    else:
+        raise ValueError("Only bgzip compression is supported at the moment")
+
+    options = plc.io.text.ParseOptions(
+        byte_range=byte_range, strip_delimiters=strip_delimiters
     )
+    plc_column = plc.io.text.multibyte_split(datasource, delimiter, options)
+    result = cudf._lib.column.Column.from_pylibcudf(plc_column)
+
+    return cudf.Series._from_column(result)

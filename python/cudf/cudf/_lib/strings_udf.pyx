@@ -1,7 +1,6 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t, uint16_t, uintptr_t
-
 from pylibcudf.libcudf.strings_udf cimport (
     get_character_cases_table as cpp_get_character_cases_table,
     get_character_flags_table as cpp_get_character_flags_table,
@@ -27,6 +26,7 @@ from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from cudf._lib.column cimport Column
+from pylibcudf cimport Column as plc_Column
 
 
 def get_cuda_build_version():
@@ -52,9 +52,9 @@ def column_from_udf_string_array(DeviceBuffer d_buffer):
         c_result = move(cpp_column_from_udf_string_array(data, size))
         cpp_free_udf_string_array(data, size)
 
-    result = Column.from_unique_ptr(move(c_result))
-
-    return result
+    return Column.from_pylibcudf(
+        plc_Column.from_libcudf(move(c_result))
+    )
 
 
 def get_character_flags_table_ptr():
