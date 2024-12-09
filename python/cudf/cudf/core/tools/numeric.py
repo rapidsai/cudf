@@ -226,6 +226,8 @@ def _convert_str_col(
     if col.is_integer().all():
         return col.astype(dtype=cudf.dtype("i8"))  # type: ignore[return-value]
 
+    # TODO: This can be handled by libcudf in
+    # future see StringColumn.as_numerical_column
     converted_col = (
         col.to_lower()
         .find_and_replace(as_column([""]), as_column(["NaN"]))
