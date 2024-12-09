@@ -13,7 +13,6 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.transform import bools_to_mask
 from cudf.core._internals import unary
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
@@ -775,12 +774,11 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
         if self.categories.dtype.kind == "f":
-            new_mask = bools_to_mask(self.notnull())
             col = type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.size,
                 dtype=self.dtype,
-                mask=new_mask,
+                mask=self.notnull().fillna(False).as_mask(),
                 children=self.children,
             )
         else:
