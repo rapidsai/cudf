@@ -42,7 +42,7 @@ class CudfEngine(ArrowDatasetEngine):
         kwargs = dataset_info.get("kwargs", {})
         set_object_dtypes_from_pa_schema(
             meta_cudf,
-            kwargs.get("schema", None),
+            kwargs.get("dataset", {}).get("schema", None),
         )
 
         return meta_cudf
@@ -439,13 +439,12 @@ def set_object_dtypes_from_pa_schema(df, schema):
                 # However, this should be a simple range index that
                 # we can ignore anyway
                 continue
-            typ = cudf_dtype_from_pa_type(schema.field(col_name).type)
-            if (
-                col_name in schema.names
-                and not isinstance(typ, (cudf.ListDtype, cudf.StructDtype))
-                and isinstance(col, cudf.core.column.StringColumn)
-            ):
-                df._data[col_name] = col.astype(typ)
+            elif col_name in schema.names:
+                typ = cudf_dtype_from_pa_type(schema.field(col_name).type)
+                if not isinstance(
+                    typ, (cudf.ListDtype, cudf.StructDtype)
+                ) and isinstance(col, cudf.core.column.StringColumn):
+                    df._data[col_name] = col.astype(typ)
 
 
 def read_parquet(path, columns=None, **kwargs):
