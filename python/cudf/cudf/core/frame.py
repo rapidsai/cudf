@@ -110,8 +110,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 header["column_label_dtype"] = label_dtype.str
 
         header["columns"], column_frames = serialize_columns(self._columns)
+        column_names, column_names_numpy_type = zip(
+            *[
+                (cname.item(), type(cname).__name__)
+                if isinstance(cname, np.generic)
+                else (cname, "")
+                for cname in self._column_names
+            ]
+        )
         header |= {
-            "column_names": self._column_names,
+            "column_names": column_names,
+            "column_names_numpy_type": column_names_numpy_type,
             "column_rangeindex": self._data.rangeindex,
             "column_multiindex": self._data.multiindex,
             "column_level_names": self._data._level_names,
@@ -136,7 +145,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 np.dtype(dtype_header) if dtype_header is not None else None
             )
 
-        column_names = header["column_names"]
         columns = deserialize_columns(header["columns"], frames)
         for metadata in [
             "rangeindex",
@@ -146,6 +154,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
             key = f"column_{metadata}"
             if key in header:
                 kwargs[metadata] = header[key]
+
+        column_names = [
+            getattr(np, cntype)(cname) if cntype != "" else cname
+            for cname, cntype in zip(
+                header["column_names"], header["column_names_numpy_type"]
+            )
+        ]
         col_accessor = ColumnAccessor(
             data=dict(zip(column_names, columns)), **kwargs
         )
