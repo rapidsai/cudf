@@ -137,17 +137,17 @@ constexpr I div_rounding_up_safe(std::integral_constant<bool, true>, I dividend,
  * @brief Divides the left-hand-side by the right-hand-side, rounding up
  * to an integral multiple of the right-hand-side, e.g. (9,5) -> 2 , (10,5) -> 2, (11,5) -> 3.
  *
- * The result is undefined if `divisor==0` or
- * if `divisor==-1` and `dividend==min<I>()`.
+ * The result is undefined if `divisor == 0` or
+ * if `divisor == -1` and `dividend == min<I>()`.
  *
  * Will not overflow, and may _or may not_ be slower than the intuitive
  * approach of using `(dividend + divisor - 1) / divisor`.
  *
- * @tparam I integer type for dividend, divisor, and return type
- * @param dividend the number to divide
- * @param divisor the number of by which to divide
- * @return The least integer multiple of {@link divisor} which is greater than or equal to
- * the non-integral division dividend/divisor.
+ * @tparam I Integer type for `dividend`, `divisor`, and the return type
+ * @param dividend The number to divide
+ * @param divisor The number by which to divide
+ * @return The least integer multiple of `divisor` which is greater than or equal to
+ * the non-integral division `dividend/divisor`
  */
 template <typename I>
 constexpr I div_rounding_up_safe(I dividend, I divisor) noexcept
