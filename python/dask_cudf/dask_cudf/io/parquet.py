@@ -37,10 +37,9 @@ except ImportError:
 
 import cudf
 
-from dask_cudf import _deprecated_api
-
 # Dask-expr imports CudfEngine from this module
 from dask_cudf._legacy.io.parquet import CudfEngine
+from dask_cudf.core import _deprecated_api
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping

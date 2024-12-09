@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import textwrap
+import warnings
+from importlib import import_module
 
 import dask.dataframe as dd
 
@@ -42,3 +44,22 @@ from_cudf.__doc__ = textwrap.dedent(
         rather than pandas objects.\n
         """
 ) + textwrap.dedent(dd.from_pandas.__doc__)
+
+
+def _deprecated_api(old_api, new_api=None, rec=None):
+    def inner_func(*args, **kwargs):
+        if new_api:
+            # Use alternative
+            msg = f"{old_api} is now deprecated. "
+            msg += rec or f"Please use {new_api} instead."
+            warnings.warn(msg, FutureWarning)
+            new_attr = new_api.split(".")
+            module = import_module(".".join(new_attr[:-1]))
+            return getattr(module, new_attr[-1])(*args, **kwargs)
+
+        # No alternative - raise an error
+        raise NotImplementedError(
+            f"{old_api} is no longer supported. " + (rec or "")
+        )
+
+    return inner_func
