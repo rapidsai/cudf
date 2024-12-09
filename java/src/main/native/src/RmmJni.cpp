@@ -772,14 +772,24 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(JNIEnv
   CATCH_STD(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(JNIEnv* env,
-                                                                           jclass clazz,
-                                                                           jlong init,
-                                                                           jlong release)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(
+  JNIEnv* env, jclass clazz, jlong init, jlong release, jboolean fabric)
 {
   try {
     cudf::jni::auto_set_device(env);
-    auto ret = new rmm::mr::cuda_async_memory_resource(init, release);
+
+    // When we are using fabric, we need to set the memory access to be
+    // read_write, in order for peer GPUs to have access to this memory.
+    // Otherwise, choose default parameters (optional set to nullopt).
+    auto [handle_type, prot_flag] =
+      fabric
+        ? std::pair{std::optional{
+                      rmm::mr::cuda_async_memory_resource::allocation_handle_type::fabric},
+                    std::optional{rmm::mr::cuda_async_memory_resource::access_flags::read_write}}
+        : std::pair{std::nullopt, std::nullopt};
+
+    auto ret = new rmm::mr::cuda_async_memory_resource(init, release, handle_type, prot_flag);
+
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)
