@@ -357,7 +357,7 @@ class aggregate_reader_metadata {
    *
    * @param sources Lists of input datasources
    * @param row_group_indices Lists of row groups to read, one per source
-   * @param output_dtypes Datatypes of of output columns
+   * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -376,7 +376,7 @@ class aggregate_reader_metadata {
    *
    * @param sources Dataset sources
    * @param row_group_indices Lists of input row groups to read, one per source
-   * @param output_dtypes Datatypes of of output columns
+   * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param total_row_groups Total number of row groups across all data sources
