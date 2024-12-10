@@ -31,5 +31,4 @@ include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
 target_link_libraries(interop PUBLIC nanoarrow)
 
-add_subdirectory(io)
 add_subdirectory(nvtext)

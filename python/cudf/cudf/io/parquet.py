@@ -1175,7 +1175,9 @@ def _read_parquet(
     # Simple helper function to dispatch between
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
-        if kwargs:
+        if set(kwargs.keys()).difference(
+            set(("_chunk_read_limit", "_pass_read_limit"))
+        ):
             raise ValueError(
                 "cudf engine doesn't support the "
                 f"following keyword arguments: {list(kwargs.keys())}"
@@ -1214,8 +1216,8 @@ def _read_parquet(
 
             reader = plc.io.parquet.ChunkedParquetReader(
                 options,
-                chunk_read_limit=0,
-                pass_read_limit=1024000000,
+                chunk_read_limit=kwargs.get("_chunk_read_limit", 0),
+                pass_read_limit=kwargs.get("_pass_read_limit", 1024000000),
             )
 
             tbl_w_meta = reader.read_chunk()
