@@ -394,8 +394,8 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
   // Read bloom filters for all column chunks
   std::for_each(
-    thrust::make_counting_iterator<size_t>(0),
-    thrust::make_counting_iterator<size_t>(num_chunks),
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(num_chunks),
     [&](auto const chunk) {
       // If bloom filter offset absent, fill in an empty buffer and skip ahead
       if (not bloom_filter_offsets[chunk].has_value()) {
@@ -504,8 +504,8 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   size_type chunk_count = 0;
 
   // For all data sources
-  std::for_each(thrust::make_counting_iterator<size_t>(0),
-                thrust::make_counting_iterator(row_group_indices.size()),
+  std::for_each(thrust::counting_iterator<size_t>(0),
+                thrust::counting_iterator(row_group_indices.size()),
                 [&](auto const src_index) {
                   // Get all row group indices in the data source
                   auto const& rg_indices = row_group_indices[src_index];
@@ -642,8 +642,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   std::vector<std::unique_ptr<cudf::column>> bloom_filter_membership_columns;
   size_t equality_col_idx = 0;
   std::for_each(
-    thrust::make_counting_iterator<size_t>(0),
-    thrust::make_counting_iterator(output_dtypes.size()),
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(output_dtypes.size()),
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];
 
