@@ -180,6 +180,15 @@ TYPED_TEST(UnaryMathOpsTest, SimpleCBRTWithNullMask)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
+TYPED_TEST(UnaryMathOpsTest, SimpleNEGATE)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3}};
+  auto const v = cudf::test::make_type_param_vector<TypeParam>({-1, -2, -3});
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected(v.begin(), v.end());
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NEGATE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+}
+
 TYPED_TEST(UnaryMathOpsTest, EmptyABS)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
@@ -234,6 +243,15 @@ using floating_point_type_list = ::testing::Types<float, double>;
 
 TYPED_TEST_SUITE(UnaryMathFloatOpsTest, floating_point_type_list);
 
+TYPED_TEST(UnaryMathFloatOpsTest, SimpleNEGATE)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.0, 2.0}};
+  auto const v = cudf::test::make_type_param_vector<TypeParam>({-1.0, -2.0});
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected(v.begin(), v.end());
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NEGATE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+}
+
 TYPED_TEST(UnaryMathFloatOpsTest, SimpleSIN)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
@@ -274,7 +292,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleTANH)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
-TYPED_TEST(UnaryMathFloatOpsTest, SimpleiASINH)
+TYPED_TEST(UnaryMathFloatOpsTest, SimpleASINH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};

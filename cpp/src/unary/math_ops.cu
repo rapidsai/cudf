@@ -234,6 +234,16 @@ struct DeviceNot {
   }
 };
 
+// negation
+
+struct DeviceNegate {
+  template <typename T>
+  __device__ T operator()(T data)
+  {
+    return -data;
+  }
+};
+
 // fixed_point ops
 
 /*
@@ -639,6 +649,9 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
     case cudf::unary_operator::NOT:
       return cudf::type_dispatcher(
         input.type(), detail::LogicalOpDispatcher<detail::DeviceNot>{}, input, stream, mr);
+    case cudf::unary_operator::NEGATE:
+      return cudf::type_dispatcher(
+        input.type(), detail::MathOpDispatcher<detail::DeviceNegate>{}, input, stream, mr);
     default: CUDF_FAIL("Undefined unary operation");
   }
 }

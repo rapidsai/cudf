@@ -117,6 +117,7 @@ class UnaryFunction(Expr):
         "abs": plc.unary.UnaryOperator.ABS,
         "bit_invert": plc.unary.UnaryOperator.BIT_INVERT,
         "not": plc.unary.UnaryOperator.NOT,
+        "negate": plc.unary.UnaryOperator.NEGATE,
     }
     _supported_misc_fns = frozenset(
         {

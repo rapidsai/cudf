@@ -33,6 +33,7 @@ cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
         RINT
         BIT_INVERT
         NOT
+        NEGATE
 
     cdef extern unique_ptr[column] unary_operation(
         column_view input,
