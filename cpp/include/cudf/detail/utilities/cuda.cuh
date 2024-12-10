@@ -74,9 +74,10 @@ class grid_1d {
    * @param num_threads_per_block The number of threads per block
    * @return thread_index_type The global thread index
    */
-  static constexpr thread_index_type global_thread_id(thread_index_type thread_id,
-                                                      thread_index_type block_id,
-                                                      thread_index_type num_threads_per_block)
+  CUDF_HOST_DEVICE static constexpr thread_index_type global_thread_id(
+    thread_index_type thread_id,
+    thread_index_type block_id,
+    thread_index_type num_threads_per_block)
   {
     return thread_id + block_id * num_threads_per_block;
   }
@@ -114,8 +115,8 @@ class grid_1d {
    * @param num_threads_per_block The number of threads per block
    * @return thread_index_type The global thread index
    */
-  static constexpr thread_index_type grid_stride(thread_index_type num_threads_per_block,
-                                                 thread_index_type num_blocks_per_grid)
+  CUDF_HOST_DEVICE static constexpr thread_index_type grid_stride(
+    thread_index_type num_threads_per_block, thread_index_type num_blocks_per_grid)
   {
     return num_threads_per_block * num_blocks_per_grid;
   }

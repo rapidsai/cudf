@@ -1986,7 +1986,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         ck                   = {};
         ck.col_desc          = col_desc.device_ptr() + c;
         ck.col_desc_id       = c;
-        ck.fragments         = &row_group_fragments.device_view()[c][f];
+        ck.fragments         = &row_group_fragments[c][f];
         ck.stats             = nullptr;
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
@@ -1996,7 +1996,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         // In fragment struct, add a pointer to the chunk it belongs to
         // In each fragment in chunk_fragments, update the chunk pointer here.
         for (auto& frag : chunk_fragments) {
-          frag.chunk = &chunks.device_view()[r + first_rg_in_part[p]][c];
+          frag.chunk = &chunks[r + first_rg_in_part[p]][c];
         }
         ck.num_values = std::accumulate(
           chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
@@ -2058,8 +2058,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
           // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {
-            page_fragments[frag_offset + i].chunk =
-              &chunks.device_view()[r + first_rg_in_part[p]][c];
+            page_fragments[frag_offset + i].chunk = &chunks[r + first_rg_in_part[p]][c];
           }
 
           if (not frag_stats.is_empty()) { ck.stats = frag_stats.data() + frag_offset; }

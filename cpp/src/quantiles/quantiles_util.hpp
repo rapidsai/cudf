@@ -20,7 +20,9 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cmath>
+#include <cuda/std/__algorithm/max.h>
+#include <cuda/std/__algorithm/min.h>
+#include <cuda/std/cmath>
 
 namespace cudf {
 namespace detail {
@@ -96,12 +98,12 @@ struct quantile_index {
 
   CUDF_HOST_DEVICE inline quantile_index(size_type count, double quantile)
   {
-    quantile = std::min(std::max(quantile, 0.0), 1.0);
+    quantile = cuda::std::min(cuda::std::max(quantile, 0.0), 1.0);
 
     double val = quantile * (count - 1);
     lower      = std::floor(val);
-    higher     = static_cast<size_type>(std::ceil(val));
-    nearest    = static_cast<size_type>(std::nearbyint(val));
+    higher     = static_cast<size_type>(cuda::std::ceil(val));
+    nearest    = static_cast<size_type>(cuda::std::nearbyint(val));
     fraction   = val - lower;
   }
 };

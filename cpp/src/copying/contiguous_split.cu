@@ -35,6 +35,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/__algorithm/max.h>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -1675,7 +1676,7 @@ std::unique_ptr<chunk_iteration_state> compute_batches(int num_bufs,
         if (bytes == 0) { return {1, 0}; }
 
         // The number of batches we want to subdivide this buffer into
-        std::size_t const num_batches = std::max(
+        std::size_t const num_batches = cuda::std::max(
           std::size_t{1}, util::round_up_unsafe(bytes, desired_batch_size) / desired_batch_size);
 
         // NOTE: leaving batch size as a separate parameter for future tuning

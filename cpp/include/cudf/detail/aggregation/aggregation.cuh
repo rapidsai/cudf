@@ -36,7 +36,7 @@
 namespace cudf {
 namespace detail {
 template <typename T>
-constexpr bool is_product_supported()
+CUDF_HOST_DEVICE constexpr bool is_product_supported()
 {
   return is_numeric<T>();
 }
