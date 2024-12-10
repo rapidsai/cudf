@@ -647,7 +647,7 @@ cdef class Column:
             col.null_mask().obj, exposed=data_ptr_exposed
         ) if col.null_mask() is not None else None
 
-        if hasattr(col.data().obj, "owner"):
+        if not mask and not data and hasattr(col.data().obj, "owner"):
             size = col.size()
             offset = col.offset()
             dtype_itemsize = getattr(dtype, "itemsize", 1)

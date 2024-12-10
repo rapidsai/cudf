@@ -344,8 +344,11 @@ cdef columns_from_table_view(
     """
 
     return [
-        Column.from_column_view(
-            tv.column(i), owners[i] if isinstance(owners, list) else None
+        Column.from_pylibcudf(
+            plc_Column.from_column_view(
+                tv.column(i),
+                owners[i] if isinstance(owners, list) else None
+            )
         ) for i in range(tv.num_columns())
     ]
 
@@ -376,9 +379,11 @@ cdef data_from_table_view(
             if table_owner:
                 column_owner = owner._index._columns[column_idx]
             index_columns.append(
-                Column.from_column_view(
-                    tv.column(column_idx),
-                    column_owner
+                Column.from_pylibcudf(
+                    plc_Column.from_column_view(
+                        tv.column(column_idx),
+                        column_owner
+                    )
                 )
             )
             column_idx += 1
@@ -393,7 +398,12 @@ cdef data_from_table_view(
         if table_owner:
             column_owner = owner._columns[source_column_idx]
         data_columns.append(
-            Column.from_column_view(tv.column(column_idx), column_owner)
+            Column.from_pylibcudf(
+                plc_Column.from_column_view(
+                        tv.column(column_idx),
+                        column_owner
+                    )
+            )
         )
         column_idx += 1
         source_column_idx += 1
