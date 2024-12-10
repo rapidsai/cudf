@@ -139,7 +139,7 @@ enum class unary_operator : int32_t {
   RINT,        ///< Rounds the floating-point argument arg to an integer value
   BIT_INVERT,  ///< Bitwise Not (~)
   NOT,         ///< Logical Not (!)
-  NEGATE,      ///< negate (-)
+  NEGATE,      ///< Unary negation (-), only for signed numeric types.
 };
 
 /**
