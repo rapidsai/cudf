@@ -231,44 +231,55 @@ class expression_parser {
    * @param[in]  v  The `std::vector` containing components (operators, literals, etc).
    * @param[in,out]  sizes  The `std::vector` containing the size of each data buffer.
    * @param[in,out]  data_pointers  The `std::vector` containing pointers to each data buffer.
+   * @param[in,out]  alignment  The maximum alignment needed for all the extracted size and pointers
    */
   template <typename T>
   void extract_size_and_pointer(std::vector<T> const& v,
                                 std::vector<cudf::size_type>& sizes,
-                                std::vector<void const*>& data_pointers)
+                                std::vector<void const*>& data_pointers,
+                                cudf::size_type& alignment)
   {
+    // sub-type alignment will only work provided the alignment is lesser or equal to
+    // alignof(max_align_t) which is the maximum alignment provided by rmm's device buffers
+    static_assert(alignof(T) <= alignof(max_align_t));
     auto const data_size = sizeof(T) * v.size();
     sizes.push_back(data_size);
     data_pointers.push_back(v.data());
+    alignment = std::max(alignment, static_cast<cudf::size_type>(alignof(T)));
   }
 
   void move_to_device(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   {
     std::vector<cudf::size_type> sizes;
     std::vector<void const*> data_pointers;
+    // use a minimum of 4-byte alignment
+    cudf::size_type buffer_alignment = 4;
 
-    extract_size_and_pointer(_data_references, sizes, data_pointers);
-    extract_size_and_pointer(_literals, sizes, data_pointers);
-    extract_size_and_pointer(_operators, sizes, data_pointers);
-    extract_size_and_pointer(_operator_arities, sizes, data_pointers);
-    extract_size_and_pointer(_operator_source_indices, sizes, data_pointers);
+    extract_size_and_pointer(_data_references, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_literals, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_operators, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_operator_arities, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_operator_source_indices, sizes, data_pointers, buffer_alignment);
 
     // Create device buffer
-    auto const buffer_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
-    auto buffer_offsets    = std::vector<int>(sizes.size());
-    thrust::exclusive_scan(
-      sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0, [](auto a, auto b) {
-        // Must align each part of the AST program on 4-byte addresses
-        return a + cudf::util::round_up_safe(b, 4);
-      });
+    auto buffer_offsets = std::vector<cudf::size_type>(sizes.size());
+    thrust::exclusive_scan(sizes.cbegin(),
+                           sizes.cend(),
+                           buffer_offsets.begin(),
+                           cudf::size_type{0},
+                           [buffer_alignment](auto a, auto b) {
+                             // align each component of the AST program
+                             return cudf::util::round_up_safe(a + b, buffer_alignment);
+                           });
 
-    auto h_data_buffer = std::vector<char>(buffer_size);
+    auto const buffer_size = buffer_offsets.empty() ? 0 : (buffer_offsets.back() + sizes.back());
+    auto host_data_buffer  = std::vector<char>(buffer_size);
+
     for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.data() + buffer_offsets[i], data_pointers[i], sizes[i]);
+      std::memcpy(host_data_buffer.data() + buffer_offsets[i], data_pointers[i], sizes[i]);
     }
 
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.data(), buffer_size, stream, mr);
-
+    _device_data_buffer = rmm::device_buffer(host_data_buffer.data(), buffer_size, stream, mr);
     stream.synchronize();
 
     // Create device pointers to components of plan
