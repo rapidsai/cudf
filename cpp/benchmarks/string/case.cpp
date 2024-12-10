@@ -24,18 +24,14 @@
 
 void bench_case(nvbench::state& state)
 {
-  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const max_width = static_cast<int32_t>(state.get_int64("row_width"));
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const encoding  = state.get_string("encoding");
 
-  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(max_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
   data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_width);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
 
   auto col_view = column->view();
 
@@ -74,6 +70,7 @@ void bench_case(nvbench::state& state)
 
 NVBENCH_BENCH(bench_case)
   .set_name("case")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_string_axis("encoding", {"ascii", "utf8"});
