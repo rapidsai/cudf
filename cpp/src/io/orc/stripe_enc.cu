@@ -23,10 +23,10 @@
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 

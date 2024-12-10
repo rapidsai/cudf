@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 

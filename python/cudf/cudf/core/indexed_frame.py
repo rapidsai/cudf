@@ -3990,7 +3990,13 @@ class IndexedFrame(Frame):
 
         cols = (
             col.round(decimals[name], how=how)
-            if name in decimals and col.dtype.kind in "fiu"
+            if name in decimals
+            and (
+                col.dtype.kind in "fiu"
+                or isinstance(
+                    col.dtype, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)
+                )
+            )
             else col.copy(deep=True)
             for name, col in self._column_labels_and_values
         )
