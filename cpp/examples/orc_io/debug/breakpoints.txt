@@ -1,4 +1,4 @@
-break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:167
+break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:210
 
 # break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1398
 # break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:646
