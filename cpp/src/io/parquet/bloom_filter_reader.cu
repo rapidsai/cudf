@@ -246,9 +246,9 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    *
    * @return Vectors of equality literals, one per input table column
    */
-  [[nodiscard]] cudf::host_span<std::vector<ast::literal*> const> get_equality_literals() const
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals()
   {
-    return {_equality_literals};
+    return std::move(_equality_literals);
   }
 
  private:
@@ -305,8 +305,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   /**
    * @brief Delete equality literals getter as no longer needed
    */
-  [[nodiscard]] cudf::host_span<std::vector<ast::literal*> const> get_equality_literals() const =
-    delete;
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() = delete;
 
   // Bring all overloads of `visit` from equality_predicate_collector into scope
   using equality_literals_collector::visit;
@@ -592,8 +591,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto mr = cudf::get_current_device_resource_ref();
 
   // Collect equality literals for each input table column
-  auto const eq_literals_collector = equality_literals_collector{filter.get(), num_input_columns};
-  auto const equality_literals     = eq_literals_collector.get_equality_literals();
+  auto const equality_literals =
+    equality_literals_collector{filter.get(), num_input_columns}.get_equality_literals();
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;
@@ -668,7 +667,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Convert AST to BloomfilterAST expression with reference to bloom filter membership
   // in above `bloom_filter_membership_table`
   bloom_filter_expression_converter bloom_filter_expr{
-    filter.get(), num_input_columns, equality_literals};
+    filter.get(), num_input_columns, {equality_literals}};
 
   // Filter bloom filter membership table with the BloomfilterAST expression and collect
   // filtered row group indices
