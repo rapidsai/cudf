@@ -14,7 +14,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.buffer import acquire_spill_lock
@@ -256,7 +255,7 @@ class ListColumn(ColumnBase):
             data=None,
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
-            mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
+            mask=as_column(mask_col).as_mask(),
             offset=0,
             null_count=0,
             children=(offset_col, data_col),
@@ -272,8 +271,13 @@ class ListColumn(ColumnBase):
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
 
-        # Call libcudf to format the list column
-        return format_list_column(lc, separators)
+        with acquire_spill_lock():
+            plc_column = plc.strings.convert.convert_lists.format_list_column(
+                lc.to_pylibcudf(mode="read"),
+                cudf.Scalar("None").device_value.c_value,
+                separators.to_pylibcudf(mode="read"),
+            )
+            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def _transform_leaves(self, func, *args, **kwargs) -> Self:
         # return a new list column with the same nested structure

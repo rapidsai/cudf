@@ -52,6 +52,7 @@ jobs:
       OTEL_SERVICE_NAME: 'pr-cudf'
     steps:
       - name: Telemetry setup
+        if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   changed-files:
     secrets: inherit
@@ -329,7 +330,7 @@ jobs:
   telemetry-summarize:
     runs-on: ubuntu-latest
     needs: pr-builder
-    if: always()
+    if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
     continue-on-error: true
     steps:
       - name: Load stashed telemetry env vars
