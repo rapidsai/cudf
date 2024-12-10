@@ -63,8 +63,8 @@ void apply_boolean_mask_benchmark(nvbench::state& state, nvbench::type_list<Data
   data_profile profile  = data_profile_builder().cardinality(0).no_validity().distribution(
     input_type, distribution_id::UNIFORM, 0, 20);
 
-  auto source_table =
-    create_random_table(cycle_dtypes({input_type}, n_cols), row_count{n_rows}, profile);
+  auto source_table = create_random_table(
+    cycle_dtypes({input_type, cudf::type_id::STRING}, n_cols), row_count{n_rows}, profile);
 
   profile.set_bool_probability_true(percent_true / 100.0);
   profile.set_null_probability(std::nullopt);  // no null mask
@@ -85,6 +85,6 @@ using data_type = nvbench::type_list<int32_t, int64_t, double, cudf::string_view
 NVBENCH_BENCH_TYPES(apply_boolean_mask_benchmark, NVBENCH_TYPE_AXES(data_type))
   .set_name("apply_boolean_mask")
   .set_type_axes_names({"type"})
-  .add_int64_axis("columns", {1, 4})
+  .add_int64_axis("columns", {1, 4, 9})
   .add_int64_axis("rows", {100'000, 1'000'000, 10'000'000})
-  .add_int64_axis("hits_%", {10, 50, 100});
+  .add_int64_axis("hits_%", {10, 20, 50, 80, 90, 100});

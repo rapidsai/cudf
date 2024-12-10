@@ -413,7 +413,6 @@ dependencies:
           - fmt>=11.0.2,<12
           - flatbuffers==24.3.25
           - librdkafka>=2.5.0,<2.6.0a0
-          - spdlog>=1.14.1,<1.15
   depends_on_nvcomp:
     common:
       - output_types: conda
