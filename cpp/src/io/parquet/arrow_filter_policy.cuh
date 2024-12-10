@@ -82,10 +82,10 @@ namespace cuco {
 template <class Key, template <typename> class XXHash64>
 class arrow_filter_policy {
  public:
-  using hasher             = XXHash64<Key>;  ///< 64-bit XXHash hasher for Arrow bloom filter policy
-  using word_type          = std::uint32_t;  ///< uint32_t for Arrow bloom filter policy
-  using hash_argument_type = Key;            ///< Hash function input type
-  using hash_result_type   = std::uint64_t;  ///< hash function output type
+  using hasher          = XXHash64<Key>;  ///< 64-bit XXHash hasher for Arrow bloom filter policy
+  using word_type       = std::uint32_t;  ///< uint32_t for Arrow bloom filter policy
+  using key_type        = Key;            ///< Hash function input type
+  using hash_value_type = std::uint64_t;  ///< hash function output type
 
   static constexpr uint32_t bits_set_per_block = 8;  ///< hardcoded bits set per Arrow filter block
   static constexpr uint32_t words_per_block    = 8;  ///< hardcoded words per Arrow filter block
@@ -132,10 +132,7 @@ class arrow_filter_policy {
    *
    * @return The hash value of the key
    */
-  __device__ constexpr hash_result_type hash(hash_argument_type const& key) const
-  {
-    return hash_(key);
-  }
+  __device__ constexpr hash_value_type hash(key_type const& key) const { return hash_(key); }
 
   /**
    * @brief Determines the filter block a key is added into.
@@ -152,7 +149,7 @@ class arrow_filter_policy {
    * @return The block index for the given key's hash value
    */
   template <class Extent>
-  __device__ constexpr auto block_index(hash_result_type hash, Extent num_blocks) const
+  __device__ constexpr auto block_index(hash_value_type hash, Extent num_blocks) const
   {
     constexpr auto hash_bits = cuda::std::numeric_limits<word_type>::digits;
     // TODO: assert if num_blocks > max_filter_blocks
@@ -170,7 +167,7 @@ class arrow_filter_policy {
    *
    * @return The bit pattern for the word/segment in the filter block
    */
-  __device__ constexpr word_type word_pattern(hash_result_type hash, std::uint32_t word_index) const
+  __device__ constexpr word_type word_pattern(hash_value_type hash, std::uint32_t word_index) const
   {
     // SALT array to calculate bit indexes for the current word
     auto constexpr salt = SALT();
