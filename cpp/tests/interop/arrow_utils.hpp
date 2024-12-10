@@ -269,3 +269,16 @@ get_decimal_arrow_array(std::vector<T> const& data,
     data_type, data.size(), std::vector<std::shared_ptr<arrow::Buffer>>{mask_buffer, data_buffer});
   return arrow::MakeArray(array_data);
 }
+
+template <typename T>
+std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
+                                    std::is_same<T, int64_t>,
+                                    std::is_same<T, __int128_t>>,
+                 std::size_t>
+get_decimal_precision()
+{
+  if constexpr (std::is_same_v<T, int64_t>)
+    return 18;
+  else
+    return cudf::detail::max_precision<T>();
+}
