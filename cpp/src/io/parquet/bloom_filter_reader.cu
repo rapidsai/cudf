@@ -246,7 +246,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    *
    * @return Vectors of equality literals, one per input table column
    */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals()
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() &&
   {
     return std::move(_equality_literals);
   }
@@ -305,7 +305,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   /**
    * @brief Delete equality literals getter as no longer needed
    */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() = delete;
+  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() && = delete;
 
   // Bring all overloads of `visit` from equality_predicate_collector into scope
   using equality_literals_collector::visit;
