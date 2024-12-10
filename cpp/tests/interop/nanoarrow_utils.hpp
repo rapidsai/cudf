@@ -404,7 +404,6 @@ get_nanoarrow_host_tables(cudf::size_type length);
 
 void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end);
 
-
 template <typename T>
 std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
                                     std::is_same<T, int64_t>,
