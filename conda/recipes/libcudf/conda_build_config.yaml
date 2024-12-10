@@ -31,9 +31,6 @@ fmt_version:
 flatbuffers_version:
   - "=24.3.25"
 
-spdlog_version:
-  - ">=1.14.1,<1.15"
-
 nvcomp_version:
   - "=4.1.0.6"
 

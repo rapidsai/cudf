@@ -29,9 +29,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -506,7 +506,7 @@ size_t max_varint_size()
   return cudf::util::div_rounding_up_unsafe(sizeof(T) * 8, 7);
 }
 
-constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
+size_t RLE_stream_size(TypeKind kind, size_t count)
 {
   using cudf::util::div_rounding_up_unsafe;
   constexpr auto byte_rle_max_len = 128;
