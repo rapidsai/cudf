@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "cudf/detail/utilities/cuda_memcpy.hpp"
 #include "text/subword/detail/codepoint_metadata.ah"
 #include "text/subword/detail/tokenizer_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/default_stream.hpp>

@@ -19,7 +19,6 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
-#include "cudf/detail/utilities/cuda_memcpy.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
@@ -29,6 +28,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
