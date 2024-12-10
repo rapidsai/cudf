@@ -29,10 +29,10 @@ TEST_F(XXHash_32_Test, TestInteger)
   auto constexpr seed = 0u;
   auto const output   = cudf::hashing::xxhash_32(cudf::table_view({col1}), seed);
 
-  // Checking against the reference implementation:
+  // Expected results were generated with the reference implementation:
   // https://github.com/Cyan4973/xxHash/blob/dev/xxhash.h
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>({148298089u, 1161967057u, 1066694813u});
+    cudf::test::fixed_width_column_wrapper<uint32_t>({3740619578u, 1163349692u, 2897135549u});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
 
@@ -43,10 +43,10 @@ TEST_F(XXHash_32_Test, TestDouble)
 
   auto const output = cudf::hashing::xxhash_32(cudf::table_view({col1}), seed);
 
-  // Checking against the reference implementation:
+  // Expected results were generated with the reference implementation:
   // https://github.com/Cyan4973/xxHash/blob/dev/xxhash.h
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>({2276435783u, 3120212431u, 3454197470u});
+    cudf::test::fixed_width_column_wrapper<uint32_t>({732074547u, 4070191577u, 2273654724u});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
@@ -58,10 +58,10 @@ TEST_F(XXHash_32_Test, StringType)
 
   auto output = cudf::hashing::xxhash_32(cudf::table_view({col1}), seed);
 
-  // Checking against the reference implementation:
+  // Expected results were generated with the reference implementation:
   // https://github.com/Cyan4973/xxHash/blob/dev/xxhash.h
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>({320624298u, 1612654309u, 1409499009u});
+    cudf::test::fixed_width_column_wrapper<uint32_t>({2030594998u, 3726104846u, 3758822035});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
