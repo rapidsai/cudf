@@ -119,7 +119,7 @@ def _plc_write_parquet(
     cudf.io.parquet.write_parquet
     """
     if index is True or (
-        index is None and not isinstance(table._index, cudf.RangeIndex)
+        index is None and not isinstance(table.index, cudf.RangeIndex)
     ):
         columns = itertools.chain(table.index._columns, table._columns)
         plc_table = plc.Table(
@@ -130,7 +130,7 @@ def _plc_write_parquet(
             tbl_meta.column_metadata[level].set_name(
                 _index_level_name(idx_name, level, table._column_names)
             )
-        num_index_cols_meta = len(table._index.names)
+        num_index_cols_meta = len(table.index.names)
     else:
         plc_table = plc.Table(
             [col.to_pylibcudf(mode="read") for col in table._columns]
@@ -1724,9 +1724,7 @@ class ParquetWriter:
                         ]
                     )
                     self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
-                    self.tbl_meta.column_metadata[0].set_name(
-                        table._index.name
-                    )
+                    self.tbl_meta.column_metadata[0].set_name(table.index.name)
                     num_index_cols_meta = 1
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
@@ -2353,7 +2351,7 @@ def _process_metadata(
                     name=range_index_meta["name"],
                 )
 
-            df._index = idx
+            df.index = idx
         elif set(index_col).issubset(names):
             index_data = df[index_col]
             actual_index_names = iter(index_col_names.values())
@@ -2366,7 +2364,7 @@ def _process_metadata(
                     index_data, names=list(actual_index_names)
                 )
             df.drop(columns=index_col, inplace=True)
-            df._index = idx
+            df.index = idx
         else:
             if use_pandas_metadata:
                 df.index.names = index_col
