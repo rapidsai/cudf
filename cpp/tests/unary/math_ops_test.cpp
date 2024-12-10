@@ -25,6 +25,23 @@
 
 #include <vector>
 
+using SignedNumericTypesNotBool =
+  cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+
+template <typename T>
+struct UnaryMathOpsSignedTest : public cudf::test::BaseFixture {};
+
+TYPED_TEST_SUITE(UnaryMathOpsSignedTest, SignedNumericTypesNotBool);
+
+TYPED_TEST(UnaryMathOpsSignedTest, SimpleNEGATE)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3}};
+  auto const v = cudf::test::make_type_param_vector<TypeParam>({-1, -2, -3});
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected(v.begin(), v.end());
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NEGATE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+}
+
 template <typename T>
 struct UnaryLogicalOpsTest : public cudf::test::BaseFixture {};
 
@@ -177,15 +194,6 @@ TYPED_TEST(UnaryMathOpsTest, SimpleCBRTWithNullMask)
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 125}, {1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 125}, {1, 1, 0}};
   auto output = cudf::unary_operation(input, cudf::unary_operator::CBRT);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
-}
-
-TYPED_TEST(UnaryMathOpsTest, SimpleNEGATE)
-{
-  cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 2, 3}};
-  auto const v = cudf::test::make_type_param_vector<TypeParam>({-1, -2, -3});
-  cudf::test::fixed_width_column_wrapper<TypeParam> expected(v.begin(), v.end());
-  auto output = cudf::unary_operation(input, cudf::unary_operator::NEGATE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 

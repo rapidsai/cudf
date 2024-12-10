@@ -242,6 +242,11 @@ struct DeviceNegate {
   {
     return -data;
   }
+  template <typename T>
+  std::enable_if_t<!std::is_signed_v<T>, T> __device__ operator()(T data)
+  {
+    return data;
+  }
 };
 
 // fixed_point ops
@@ -569,6 +574,19 @@ struct FixedPointOpDispatcher {
   }
 };
 
+inline bool is_signed_numeric(type_id id)
+{
+  switch (id) {
+    case type_id::INT8:
+    case type_id::INT16:
+    case type_id::INT32:
+    case type_id::INT64:
+    case type_id::FLOAT32:
+    case type_id::FLOAT64: return true;
+    default: return false;
+  }
+}
+
 }  // namespace
 
 std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
@@ -650,6 +668,8 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
       return cudf::type_dispatcher(
         input.type(), detail::LogicalOpDispatcher<detail::DeviceNot>{}, input, stream, mr);
     case cudf::unary_operator::NEGATE:
+      CUDF_EXPECTS(detail::is_signed_numeric(input.type().id()),
+                   "NEGATE operator requires signed numeric types.");
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceNegate>{}, input, stream, mr);
     default: CUDF_FAIL("Undefined unary operation");
