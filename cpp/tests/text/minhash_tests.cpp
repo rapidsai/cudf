@@ -44,10 +44,9 @@ TEST_F(MinHashTest, Permuted)
 
   auto view = cudf::strings_column_view(input);
 
-  auto first  = thrust::counting_iterator<uint32_t>(10);
-  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
-  auto results =
-    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
+  auto first   = thrust::counting_iterator<uint32_t>(10);
+  auto params  = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto results = nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
 
   using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
   // clang-format off
@@ -66,9 +65,9 @@ TEST_F(MinHashTest, Permuted)
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  auto params64  = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
-  auto results64 = nvtext::minhash64_permuted(
-    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
+  auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 =
+    nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
 
   using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
   // clang-format off
@@ -95,10 +94,9 @@ TEST_F(MinHashTest, PermutedWide)
   auto input = cudf::test::strings_column_wrapper({small, wide});
   auto view  = cudf::strings_column_view(input);
 
-  auto first  = thrust::counting_iterator<uint32_t>(20);
-  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
-  auto results =
-    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
+  auto first   = thrust::counting_iterator<uint32_t>(20);
+  auto params  = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
+  auto results = nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
 
   using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
   // clang-format off
@@ -109,9 +107,9 @@ TEST_F(MinHashTest, PermutedWide)
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  auto params64  = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
-  auto results64 = nvtext::minhash64_permuted(
-    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
+  auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 3);
+  auto results64 =
+    nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
 
   using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
   // clang-format off
@@ -132,9 +130,8 @@ TEST_F(MinHashTest, PermutedManyParameters)
 
   auto first = thrust::counting_iterator<uint32_t>(20);
   // more than params_per_thread
-  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 31);
-  auto results =
-    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
+  auto params  = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 31);
+  auto results = nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
 
   using LCW32 = cudf::test::lists_column_wrapper<uint32_t>;
   // clang-format off
@@ -152,9 +149,9 @@ TEST_F(MinHashTest, PermutedManyParameters)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   // more than params_per_thread
-  auto params64  = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 31);
-  auto results64 = nvtext::minhash64_permuted(
-    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
+  auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t, uint32_t>(first, first + 31);
+  auto results64 =
+    nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
 
   using LCW64 = cudf::test::lists_column_wrapper<uint64_t>;
   // clang-format off
@@ -182,15 +179,13 @@ TEST_F(MinHashTest, PermutedManyParameters)
 
 TEST_F(MinHashTest, EmptyTest)
 {
-  auto input  = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
-  auto view   = cudf::strings_column_view(input->view());
-  auto params = cudf::test::fixed_width_column_wrapper<uint32_t>({1, 2, 3});
-  auto results =
-    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
+  auto input   = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  auto view    = cudf::strings_column_view(input->view());
+  auto params  = cudf::test::fixed_width_column_wrapper<uint32_t>({1, 2, 3});
+  auto results = nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
   EXPECT_EQ(results->size(), 0);
   auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t>({1, 2, 3});
-  results       = nvtext::minhash64_permuted(
-    view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
+  results = nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(params64), 4);
   EXPECT_EQ(results->size(), 0);
 }
 
@@ -199,18 +194,16 @@ TEST_F(MinHashTest, ErrorsTest)
   auto input = cudf::test::strings_column_wrapper({"this string intentionally left blank"});
   auto view  = cudf::strings_column_view(input);
   auto empty = cudf::test::fixed_width_column_wrapper<uint32_t>();
-  EXPECT_THROW(
-    nvtext::minhash_permuted(view, 0, cudf::column_view(empty), cudf::column_view(empty), 0),
-    std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(empty), cudf::column_view(empty), 0),
+               std::invalid_argument);
   auto empty64 = cudf::test::fixed_width_column_wrapper<uint64_t>();
   EXPECT_THROW(
-    nvtext::minhash64_permuted(view, 0, cudf::column_view(empty64), cudf::column_view(empty64), 0),
+    nvtext::minhash64(view, 0, cudf::column_view(empty64), cudf::column_view(empty64), 0),
     std::invalid_argument);
+  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(empty), cudf::column_view(empty), 4),
+               std::invalid_argument);
   EXPECT_THROW(
-    nvtext::minhash_permuted(view, 0, cudf::column_view(empty), cudf::column_view(empty), 4),
-    std::invalid_argument);
-  EXPECT_THROW(
-    nvtext::minhash64_permuted(view, 0, cudf::column_view(empty64), cudf::column_view(empty64), 4),
+    nvtext::minhash64(view, 0, cudf::column_view(empty64), cudf::column_view(empty64), 4),
     std::invalid_argument);
 
   std::vector<std::string> h_input(50000, "");
@@ -219,18 +212,16 @@ TEST_F(MinHashTest, ErrorsTest)
 
   auto const zeroes = thrust::constant_iterator<uint32_t>(0);
   auto params       = cudf::test::fixed_width_column_wrapper<uint32_t>(zeroes, zeroes + 50000);
-  EXPECT_THROW(
-    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(params), 4),
-    std::overflow_error);
-  auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t>(zeroes, zeroes + 50000);
-  EXPECT_THROW(nvtext::minhash64_permuted(
-                 view, 0, cudf::column_view(params64), cudf::column_view(params64), 4),
+  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4),
                std::overflow_error);
+  auto params64 = cudf::test::fixed_width_column_wrapper<uint64_t>(zeroes, zeroes + 50000);
+  EXPECT_THROW(
+    nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(params64), 4),
+    std::overflow_error);
 
+  EXPECT_THROW(nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(empty), 4),
+               std::invalid_argument);
   EXPECT_THROW(
-    nvtext::minhash_permuted(view, 0, cudf::column_view(params), cudf::column_view(empty), 4),
-    std::invalid_argument);
-  EXPECT_THROW(
-    nvtext::minhash64_permuted(view, 0, cudf::column_view(params64), cudf::column_view(empty64), 4),
+    nvtext::minhash64(view, 0, cudf::column_view(params64), cudf::column_view(empty64), 4),
     std::invalid_argument);
 }
