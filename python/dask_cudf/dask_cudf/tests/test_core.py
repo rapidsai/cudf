@@ -1019,3 +1019,29 @@ def test_rename_axis_after_join():
     result = ddf1.join(ddf2, how="outer")
     expected = df1.join(df2, how="outer")
     dd.assert_eq(result, expected, check_index=False)
+
+
+def test_clip_dataframe():
+    df = cudf.DataFrame(
+        {
+            "id": ["a", "b", "c", "d"],
+            "score": [-1, 1, 4, 6],
+        }
+    )
+    expect = df.clip(lower=["b", 1], upper=["d", 5], axis=1)
+    got = dd.from_pandas(df, npartitions=2).clip(
+        lower=["b", 1], upper=["d", 5], axis=1
+    )
+    dd.assert_eq(expect, got)
+
+
+def test_clip_series():
+    ser = cudf.Series([-0.5, 0.5, 4.5, 5.5])
+    expect = ser.clip(lower=0, upper=5).round().astype(int)
+    got = (
+        dd.from_pandas(ser, npartitions=2)
+        .clip(lower=0, upper=5)
+        .round()
+        .astype(int)
+    )
+    dd.assert_eq(expect, got)
