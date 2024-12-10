@@ -27,7 +27,7 @@ cdef extern from "cudf/io/json.hpp" \
     cdef cppclass json_reader_options:
         json_reader_options() except +libcudf_exception_handler
         cudf_io_types.source_info get_source() except +libcudf_exception_handler
-        dtype_variant get_dtypes() except +libcudf_exception_handler
+        vector[string] get_dtypes() except +libcudf_exception_handler
         cudf_io_types.compression_type get_compression()\
             except +libcudf_exception_handler
         size_t get_byte_range_offset() except +libcudf_exception_handler
