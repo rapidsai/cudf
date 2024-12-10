@@ -928,6 +928,10 @@ if(TARGET CUDA::cuFile${_cufile_suffix})
   target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
 endif()
 
+# Remove this after upgrading to a CCCL that has a proper CMake option. See
+# https://github.com/NVIDIA/cccl/pull/2844
+target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1)
+
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
