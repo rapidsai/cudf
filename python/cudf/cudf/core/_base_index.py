@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
 import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
@@ -329,13 +328,6 @@ class BaseIndex(Serializable):
             return self
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        # Dispatch deserialization to the appropriate index type in case
-        # deserialization is ever attempted with the base class directly.
-        idx_type = pickle.loads(header["type-serialized"])
-        return idx_type.deserialize(header, frames)
 
     @property
     def names(self):
