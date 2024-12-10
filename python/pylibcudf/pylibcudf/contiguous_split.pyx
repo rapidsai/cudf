@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libc.stdint cimport uint8_t
+from libc.stdint cimport uint8_t, uintptr_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -110,6 +110,23 @@ cdef class PackedColumns:
             )
         )
 
+    @property
+    def __cuda_array_interface__(self):
+        return {
+            "data": (
+                int(
+                    <uintptr_t>dereference(
+                        dereference(self.c_obj).gpu_data.get()
+                    ).data()
+                ),
+                False
+            ),
+            "shape": (int(dereference(dereference(self.c_obj).gpu_data.get()).size()),),
+            "strides": (1,),
+            "typestr": "|u1",
+            "version": 0
+        }
+
 
 cpdef PackedColumns pack(Table input):
     """Deep-copy a table into a serialized contiguous memory format.
@@ -162,11 +179,8 @@ cpdef Table unpack(PackedColumns input):
     Table
         Copy of the packed columns.
     """
-    cdef table_view v = cpp_unpack(dereference(input.c_obj))
-    # Since `Table.from_table_view` doesn't support an arbitrary owning object,
-    # we copy the table, see <https://github.com/rapidsai/cudf/issues/17040>.
-    cdef unique_ptr[table] t = make_unique[table](v)
-    return Table.from_libcudf(move(t))
+    cdef table_view tv = cpp_unpack(dereference(input.c_obj))
+    return Table.from_table_view(tv, input)
 
 
 cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data):

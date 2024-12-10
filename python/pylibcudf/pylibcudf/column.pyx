@@ -251,13 +251,21 @@ cdef class Column:
             )
         else:
             if owner is not None:
-                try:
-                    owner = Column.from_cuda_array_interface_obj(owner)
-                    return Column.from_column_view(cv, owner)
-                except Exception as e:
-                    raise AttributeError(
-                        "Argument 'owner' must have attribute __cuda_array_interface__"
-                    ) from e
+                data = gpumemoryview(owner)
+                iface = data.__cuda_array_interface__
+                data_type = _datatype_from_dtype_desc(iface['typestr'][1:])
+                return Column.from_column_view(
+                    cv,
+                    Column(
+                        data_type,
+                        size,
+                        data,
+                        None,
+                        0,
+                        0,
+                        []
+                    )
+                )
             else:
                 data_ptr = <uintptr_t>(cv.head[void]())
                 mask_ptr = <uintptr_t>(cv.null_mask())

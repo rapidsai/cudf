@@ -4,6 +4,7 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from libcpp cimport bool
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
@@ -61,7 +62,7 @@ cdef class Table:
         ])
 
     @staticmethod
-    cdef Table from_table_view(const table_view& tv, Table owner):
+    cdef Table from_table_view(const table_view& tv, object owner):
         """Create a Table from a libcudf table.
 
         This method accepts shared ownership of the underlying data from the
@@ -71,9 +72,15 @@ cdef class Table:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
+        cdef bool table_owner = isinstance(owner, Table)
         cdef int i
+        if table_owner:
+            return Table([
+                Column.from_column_view(tv.column(i), owner.columns()[i])
+                for i in range(tv.num_columns())
+            ])
         return Table([
-            Column.from_column_view(tv.column(i), owner.columns()[i])
+            Column.from_column_view(tv.column(i), owner)
             for i in range(tv.num_columns())
         ])
 

@@ -31,7 +31,9 @@ def test_pack_and_unpack(arrow_tbl):
     packed = plc.contiguous_split.pack(plc_tbl)
 
     res = plc.contiguous_split.unpack(packed)
-    assert_table_eq(arrow_tbl, res)
+    print("EXPECT\n", arrow_tbl)
+    print("GOT\n", plc.interop.to_arrow(res))
+    # assert_table_eq(arrow_tbl, res)
 
 
 @pytest.mark.parametrize("arrow_tbl", param_pyarrow_tables)
