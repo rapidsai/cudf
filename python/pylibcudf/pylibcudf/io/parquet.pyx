@@ -42,47 +42,204 @@ __all__ = [
     "ParquetWriterOptionsBuilder",
     "read_parquet",
     "write_parquet",
+    "ParquetReaderOptions",
+    "ParquetReaderOptionsBuilder",
     "ChunkedParquetWriterOptions",
     "ChunkedParquetWriterOptionsBuilder"
     "merge_row_group_metadata",
 ]
 
-cdef parquet_reader_options _setup_parquet_reader_options(
-    SourceInfo source_info,
-    list columns = None,
-    list row_groups = None,
-    Expression filters = None,
-    bool convert_strings_to_categories = False,
-    bool use_pandas_metadata = True,
-    int64_t skip_rows = 0,
-    size_type nrows = -1,
-    bool allow_mismatched_pq_schemas=False,
-    # ReaderColumnSchema reader_column_schema = None,
-    # DataType timestamp_type = DataType(type_id.EMPTY)
-):
-    cdef vector[string] col_vec
-    cdef parquet_reader_options opts = (
-        parquet_reader_options.builder(source_info.c_obj)
-        .convert_strings_to_categories(convert_strings_to_categories)
-        .use_pandas_metadata(use_pandas_metadata)
-        .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
-        .use_arrow_schema(True)
-        .build()
-    )
-    if row_groups is not None:
-        opts.set_row_groups(row_groups)
-    if nrows != -1:
-        opts.set_num_rows(nrows)
-    if skip_rows != 0:
-        opts.set_skip_rows(skip_rows)
-    if columns is not None:
-        col_vec.reserve(len(columns))
-        for col in columns:
-            col_vec.push_back(<string>str(col).encode())
-        opts.set_columns(col_vec)
-    if filters is not None:
-        opts.set_filter(<expression &>dereference(filters.c_obj.get()))
-    return opts
+
+cdef class ParquetReaderOptions:
+    """The settings to use for ``read_parquet``
+    For details, see :cpp:class:`cudf::io::parquet_reader_options`
+    """
+    @staticmethod
+    def builder(SourceInfo source):
+        """
+        Create a ParquetReaderOptionsBuilder object
+
+        For details, see :cpp:func:`cudf::io::parquet_reader_options::builder`
+
+        Parameters
+        ----------
+        sink : SourceInfo
+            The source to read the Parquet file from.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+            Builder to build ParquetReaderOptions
+        """
+        cdef ParquetReaderOptionsBuilder parquet_builder = (
+            ParquetReaderOptionsBuilder.__new__(ParquetReaderOptionsBuilder)
+        )
+        parquet_builder.c_obj = parquet_reader_options.builder(source.c_obj)
+        parquet_builder.source = source
+        return parquet_builder
+
+    cpdef void set_row_groups(self, list row_groups):
+        """
+        Sets list of individual row groups to read.
+
+        Parameters
+        ----------
+        row_groups : list
+            List of row groups to read
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[vector[size_type]] outer
+        cdef vector[size_type] inner
+        for row_group in row_groups:
+            for x in row_group:
+                inner.push_back(x)
+            outer.push_back(inner)
+            inner.clear()
+
+        self.c_obj.set_row_groups(outer)
+
+    cpdef void set_num_rows(self, size_type nrows):
+        """
+        Sets number of rows to read.
+
+        Parameters
+        ----------
+        nrows : size_type
+            Number of rows to read after skip
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_num_rows(nrows)
+
+    cpdef void set_skip_rows(self, int64_t skip_rows):
+        """
+        Sets number of rows to skip.
+
+        Parameters
+        ----------
+        skip_rows : int64_t
+            Number of rows to skip from start
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_skip_rows(skip_rows)
+
+    cpdef void set_columns(self, list col_names):
+        """
+        Sets names of the columns to be read.
+
+        Parameters
+        ----------
+        col_names : list
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] vec
+        for name in col_names:
+            vec.push_back(<string>str(name).encode())
+        self.c_obj.set_columns(vec)
+
+    cpdef void set_filter(self, Expression filter):
+        """
+        Sets AST based filter for predicate pushdown.
+
+        Parameters
+        ----------
+        filter : Expression
+            AST expression to use as filter
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_filter(<expression &>dereference(filter.c_obj.get()))
+
+
+cdef class ParquetReaderOptionsBuilder:
+    cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
+        """
+        Sets enable/disable conversion of strings to categories.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable conversion of string columns to categories
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.convert_strings_to_categories(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder use_pandas_metadata(self, bool val):
+        """
+        Sets to enable/disable use of pandas metadata to read.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value whether to use pandas metadata
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.use_pandas_metadata(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder allow_mismatched_pq_schemas(self, bool val):
+        """
+        Sets to enable/disable reading of matching projected and filter
+        columns from mismatched Parquet sources.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value whether to read matching projected and filter
+            columns from mismatched Parquet sources.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.allow_mismatched_pq_schemas(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val):
+        """
+        Sets to enable/disable use of arrow schema to read.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value whether to use arrow schema
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.use_arrow_schema(val)
+        return self
+
+    cpdef build(self):
+        """Create a ParquetReaderOptions object"""
+        cdef ParquetReaderOptions parquet_options = ParquetReaderOptions.__new__(
+            ParquetReaderOptions
+        )
+        parquet_options.c_obj = move(self.c_obj.build())
+        parquet_options.source = self.source
+        return parquet_options
 
 
 cdef class ChunkedParquetReader:
@@ -93,63 +250,27 @@ cdef class ChunkedParquetReader:
 
     Parameters
     ----------
-    source_info : SourceInfo
-        The SourceInfo object to read the Parquet file from.
-    columns : list, default None
-        The names of the columns to be read
-    row_groups : list[list[size_type]], default None
-        List of row groups to be read.
-    use_pandas_metadata : bool, default True
-        If True, return metadata about the index column in
-        the per-file user metadata of the ``TableWithMetadata``
-    convert_strings_to_categories : bool, default False
-        Whether to convert string columns to the category type
-    skip_rows : int64_t, default 0
-        The number of rows to skip from the start of the file.
-    nrows : size_type, default -1
-        The number of rows to read. By default, read the entire file.
+    options : ParquetReaderOptions
+        Settings for controlling reading behavior
     chunk_read_limit : size_t, default 0
         Limit on total number of bytes to be returned per read,
         or 0 if there is no limit.
     pass_read_limit : size_t, default 1024000000
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
-    allow_mismatched_pq_schemas : bool, default False
-        Whether to read (matching) columns specified in `columns` from
-        the input files with otherwise mismatched schemas.
     """
     def __init__(
         self,
-        SourceInfo source_info,
-        list columns=None,
-        list row_groups=None,
-        bool use_pandas_metadata=True,
-        bool convert_strings_to_categories=False,
-        int64_t skip_rows = 0,
-        size_type nrows = -1,
+        ParquetReaderOptions options,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
-        bool allow_mismatched_pq_schemas=False
     ):
-
-        cdef parquet_reader_options opts = _setup_parquet_reader_options(
-            source_info,
-            columns,
-            row_groups,
-            filters=None,
-            convert_strings_to_categories=convert_strings_to_categories,
-            use_pandas_metadata=use_pandas_metadata,
-            skip_rows=skip_rows,
-            nrows=nrows,
-            allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
-        )
-
         with nogil:
             self.reader.reset(
                 new cpp_chunked_parquet_reader(
                     chunk_read_limit,
                     pass_read_limit,
-                    opts
+                    options.c_obj,
                 )
             )
 
@@ -184,69 +305,23 @@ cdef class ChunkedParquetReader:
 
         return TableWithMetadata.from_libcudf(c_result)
 
-cpdef read_parquet(
-    SourceInfo source_info,
-    list columns = None,
-    list row_groups = None,
-    Expression filters = None,
-    bool convert_strings_to_categories = False,
-    bool use_pandas_metadata = True,
-    int64_t skip_rows = 0,
-    size_type nrows = -1,
-    bool allow_mismatched_pq_schemas = False,
-    # Disabled, these aren't used by cudf-python
-    # we should only add them back in if there's user demand
-    # ReaderColumnSchema reader_column_schema = None,
-    # DataType timestamp_type = DataType(type_id.EMPTY)
-):
-    """Reads an Parquet file into a :py:class:`~.types.TableWithMetadata`.
+
+cpdef read_parquet(ParquetReaderOptions options):
+    """
+    Read from Parquet format.
+
+    The source to read from and options are encapsulated
+    by the `options` object.
 
     For details, see :cpp:func:`read_parquet`.
 
     Parameters
     ----------
-    source_info : SourceInfo
-        The SourceInfo object to read the Parquet file from.
-    columns : list, default None
-        The string names of the columns to be read.
-    row_groups : list[list[size_type]], default None
-        List of row groups to be read.
-    filters : Expression, default None
-        An AST :py:class:`pylibcudf.expressions.Expression`
-        to use for predicate pushdown.
-    convert_strings_to_categories : bool, default False
-        Whether to convert string columns to the category type
-    use_pandas_metadata : bool, default True
-        If True, return metadata about the index column in
-        the per-file user metadata of the ``TableWithMetadata``
-    skip_rows : int64_t, default 0
-        The number of rows to skip from the start of the file.
-    nrows : size_type, default -1
-        The number of rows to read. By default, read the entire file.
-    allow_mismatched_pq_schemas : bool, default False
-        If True, enable reading (matching) columns specified in `columns`
-        from the input files with otherwise mismatched schemas.
-
-    Returns
-    -------
-    TableWithMetadata
-        The Table and its corresponding metadata (column names) that were read in.
+    options: ParquetReaderOptions
+        Settings for controlling reading behavior
     """
-    cdef table_with_metadata c_result
-    cdef parquet_reader_options opts = _setup_parquet_reader_options(
-        source_info,
-        columns,
-        row_groups,
-        filters,
-        convert_strings_to_categories,
-        use_pandas_metadata,
-        skip_rows,
-        nrows,
-        allow_mismatched_pq_schemas,
-    )
-
     with nogil:
-        c_result = move(cpp_read_parquet(opts))
+        c_result = move(cpp_read_parquet(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
 
