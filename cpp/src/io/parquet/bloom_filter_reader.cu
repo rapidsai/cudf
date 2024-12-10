@@ -246,10 +246,13 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    *
    * @return Vectors of equality literals, one per input table column
    */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() const
+  [[nodiscard]] cudf::host_span<std::vector<ast::literal*> const> get_equality_literals() const
   {
-    return _equality_literals;
+    return {_equality_literals};
   }
+
+ private:
+  std::vector<std::vector<ast::literal*>> _equality_literals;
 
  protected:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
@@ -263,7 +266,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
     return transformed_operands;
   }
   std::optional<std::reference_wrapper<ast::expression const>> _bloom_filter_expr;
-  std::vector<std::vector<ast::literal*>> _equality_literals;
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
   size_type _num_input_columns;
@@ -278,11 +280,11 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   bloom_filter_expression_converter(
     ast::expression const& expr,
     size_type num_input_columns,
-    std::vector<std::vector<ast::literal*>> const& equality_literals)
+    cudf::host_span<std::vector<ast::literal*> const> equality_literals)
+    : _equality_literals{equality_literals}
   {
-    // Set the num columns and copy equality literals
+    // Set the num columns
     _num_input_columns = num_input_columns;
-    _equality_literals = equality_literals;
 
     // Compute and store columns literals offsets
     _col_literals_offsets.reserve(_num_input_columns + 1);
@@ -303,7 +305,8 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   /**
    * @brief Delete equality literals getter as no longer needed
    */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() = delete;
+  [[nodiscard]] cudf::host_span<std::vector<ast::literal*> const> get_equality_literals() const =
+    delete;
 
   // Bring all overloads of `visit` from equality_predicate_collector into scope
   using equality_literals_collector::visit;
@@ -365,6 +368,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
 
  private:
   std::vector<cudf::size_type> _col_literals_offsets;
+  cudf::host_span<std::vector<ast::literal*> const> _equality_literals;
 };
 
 /**
@@ -588,8 +592,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto mr = cudf::get_current_device_resource_ref();
 
   // Collect equality literals for each input table column
-  auto const equality_literals =
-    equality_literals_collector{filter.get(), num_input_columns}.get_equality_literals();
+  auto const eq_literals_collector = equality_literals_collector{filter.get(), num_input_columns};
+  auto const equality_literals     = eq_literals_collector.get_equality_literals();
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;
