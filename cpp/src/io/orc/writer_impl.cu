@@ -1387,37 +1387,33 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   // we know the size of each array. The number of stripes per column in a chunk array can
   // be calculated by dividing the number of chunks by the number of columns.
   // That many chunks need to be copied at a time to the proper destination.
-  size_t num_entries_seen = 0;
-  auto h_srcs             = cudf::detail::make_empty_host_vector<void*>(
-    per_chunk_stats.stripe_stat_chunks.size() * num_columns * 2, stream);
-  auto h_lens = cudf::detail::make_empty_host_vector<size_t>(
-    per_chunk_stats.stripe_stat_chunks.size() * num_columns * 2, stream);
-  auto h_dsts = cudf::detail::make_empty_host_vector<void*>(
-    per_chunk_stats.stripe_stat_chunks.size() * num_columns * 2, stream);
+  size_t num_entries_seen        = 0;
+  auto const num_buffers_to_copy = per_chunk_stats.stripe_stat_chunks.size() * num_columns * 2;
+  auto h_srcs = cudf::detail::make_empty_host_vector<void*>(num_buffers_to_copy, stream);
+  auto h_dsts = cudf::detail::make_empty_host_vector<void*>(num_buffers_to_copy, stream);
+  auto h_lens = cudf::detail::make_empty_host_vector<size_t>(num_buffers_to_copy, stream);
 
   for (size_t i = 0; i < per_chunk_stats.stripe_stat_chunks.size(); ++i) {
     auto const stripes_per_col = per_chunk_stats.stripe_stat_chunks[i].size() / num_columns;
-    auto const chunk_bytes     = stripes_per_col * sizeof(statistics_chunk);
-    auto const merge_bytes     = stripes_per_col * sizeof(statistics_merge_group);
 
     for (size_t col = 0; col < num_columns; ++col) {
       h_srcs.push_back(per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col);
-      h_lens.push_back(chunk_bytes);
       h_dsts.push_back(stat_chunks.data() + (num_stripes * col) + num_entries_seen);
+      h_lens.push_back(stripes_per_col * sizeof(statistics_chunk));
 
       h_srcs.push_back(per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col);
-      h_lens.push_back(merge_bytes);
       h_dsts.push_back(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen);
+      h_lens.push_back(stripes_per_col * sizeof(statistics_merge_group));
     }
     num_entries_seen += stripes_per_col;
   }
 
   auto const& mr    = cudf::get_current_device_resource_ref();
   auto const d_srcs = cudf::detail::make_device_uvector_async<void*>(h_srcs, stream, mr);
-  auto const d_lens = cudf::detail::make_device_uvector_async<size_t>(h_lens, stream, mr);
   auto const d_dsts = cudf::detail::make_device_uvector_async<void*>(h_dsts, stream, mr);
+  auto const d_lens = cudf::detail::make_device_uvector_async<size_t>(h_lens, stream, mr);
   cudf::detail::batched_memcpy_async(
-    d_srcs.begin(), d_dsts.begin(), d_lens.begin(), h_srcs.size(), stream);
+    d_srcs.begin(), d_dsts.begin(), d_lens.begin(), d_srcs.size(), stream);
 
   auto file_stats_merge =
     cudf::detail::make_host_vector<statistics_merge_group>(num_file_blobs, stream);
