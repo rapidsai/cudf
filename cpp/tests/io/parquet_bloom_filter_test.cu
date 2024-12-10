@@ -36,8 +36,7 @@ class ParquetBloomFilterTest : public cudf::test::BaseFixture {};
 TEST_F(ParquetBloomFilterTest, TestStrings)
 {
   using key_type    = StringType;
-  using hasher_type = cudf::hashing::detail::XXHash_64<key_type>;
-  using policy_type = cuco::arrow_filter_policy<key_type, hasher_type>;
+  using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
   using word_type   = policy_type::word_type;
 
   std::size_t constexpr num_filter_blocks = 4;
@@ -65,7 +64,7 @@ TEST_F(ParquetBloomFilterTest, TestStrings)
                      cudf::detail::cuco_allocator<char>>
     filter{num_filter_blocks,
            cuco::thread_scope_device,
-           {hasher_type{cudf::DEFAULT_HASH_SEED}},
+           {{cudf::DEFAULT_HASH_SEED}},
            cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
            stream};
 

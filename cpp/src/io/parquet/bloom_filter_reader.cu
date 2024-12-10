@@ -64,8 +64,7 @@ struct bloom_filter_caster {
                                                    rmm::device_async_resource_ref mr) const
   {
     using key_type    = T;
-    using hasher_type = cudf::hashing::detail::XXHash_64<key_type>;
-    using policy_type = cuco::arrow_filter_policy<key_type, hasher_type>;
+    using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
     using word_type   = typename policy_type::word_type;
 
     // Check if the literal has the same type as the predicate column
@@ -423,9 +422,9 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Get the hardcoded words_per_block value from `cuco::arrow_filter_policy` using a temporary
       // `std::byte` key type.
-      auto constexpr words_per_block = cuco::arrow_filter_policy<
-        cuda::std::byte,
-        cudf::hashing::detail::XXHash_64<cuda::std::byte>>::words_per_block;
+      auto constexpr words_per_block =
+        cuco::arrow_filter_policy<cuda::std::byte,
+                                  cudf::hashing::detail::XXHash_64>::words_per_block;
 
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
