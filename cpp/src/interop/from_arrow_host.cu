@@ -82,7 +82,7 @@ struct dispatch_copy_from_arrow_host {
                                      data_type type,
                                      bool skip_mask)
   {
-    using DeviceType = typename detail::DeviceType<T>::type;
+    using DeviceType = device_storage_type_t<T>;
 
     size_type const num_rows   = input->length;
     size_type const offset     = input->offset;

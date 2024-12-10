@@ -125,7 +125,7 @@ struct dispatch_to_arrow_host {
     NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), storage_type, column));
 
     NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-    using DataType = typename detail::DeviceType<T>::type;
+    using DataType = device_storage_type_t<T>;
     NANOARROW_RETURN_NOT_OK(
       populate_data_buffer(device_span<DataType const>(column.data<DataType>(), column.size()),
                            ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
