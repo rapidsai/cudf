@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "cub/util_ptx.cuh"
+#include "cuda/std/__type_traits/is_same.h"
 #include "io/utilities/block_utils.cuh"
 #include "orc_gpu.hpp"
 
@@ -130,6 +132,68 @@ struct orcdec_state_s {
     __int128_t i128[block_size];
     __uint128_t u128[block_size];
   } vals;
+};
+
+class run_cache {
+ private:
+  enum class status : uint8_t {
+    DISABLED,
+    CAN_WRITE_TO_CACHE,
+    CAN_READ_FROM_CACHE,
+  };
+
+ public:
+  __forceinline__ __device__ void initialize(orcdec_state_s* s)
+  {
+    _status = (s->top.data.index.run_pos[CI_DATA2] > 0 and s->chunk.type_kind == TIMESTAMP)
+                ? status::CAN_WRITE_TO_CACHE
+                : status::DISABLED;
+    _num_rows_to_reuse = 0;
+    _run_length        = 0;
+  }
+
+  __forceinline__ __device__ void set_num_rows_to_reuse(uint32_t run_length, uint32_t max_length)
+  {
+    if (_status == status::CAN_WRITE_TO_CACHE) {
+      _run_length        = run_length;
+      _num_rows_to_reuse = (_run_length > max_length) ? (_run_length - max_length) : 0;
+    }
+  }
+
+  __forceinline__ __device__ uint32_t adjust_max_length(uint32_t max_length)
+  {
+    auto new_max_length{max_length};
+    if (_status == status::CAN_READ_FROM_CACHE) {
+      if (_num_rows_to_reuse > 0) { new_max_length -= _num_rows_to_reuse; }
+    }
+    return new_max_length;
+  }
+
+  __forceinline__ __device__ void write_to_cache_if_needed(int64_t* src)
+  {
+    const auto warp_idx = cub::WarpId();
+    if (warp_idx != 0) { return; }
+
+    const auto lane_idx = cub::LaneId();
+    if (_status == status::CAN_WRITE_TO_CACHE and _num_rows_to_reuse > 0) {
+      for (uint32_t idx = lane_idx; idx < _run_length; idx += 32) {
+        if (idx < _run_length) { _buf[idx] = src[idx]; }
+      }
+      __syncwarp();
+      if (lane_idx == 0) { _status = status::CAN_READ_FROM_CACHE; }
+    } else {
+      __syncwarp();
+      if (lane_idx == 0) { _status = status::DISABLED; }
+    }
+  }
+
+  __forceinline__ __device__ void read_from_cache_if_needed([[maybe_unused]] uint64_t* dst) {}
+
+ private:
+  status _status;
+  uint32_t _num_rows_to_reuse;
+  uint32_t _run_length;
+  int64_t _buf[bytestream_buffer_size >> 4];
 };
 
 /**
@@ -640,9 +704,11 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
                                          T* vals,
                                          uint32_t maxvals,
                                          int t,
-                                         bool has_buffered_values = false)
+                                         bool has_buffered_values = false,
+                                         run_cache* run_cache_bs  = nullptr)
 {
   if (t == 0) {
+    if (run_cache_bs != nullptr) { maxvals = run_cache_bs->adjust_max_length(maxvals); }
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
     uint32_t lastpos = bs->pos;
     auto numvals     = 0;
@@ -685,6 +751,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
           l += deltapos;
         }
       }
+
+      if (run_cache_bs != nullptr) { run_cache_bs->set_num_rows_to_reuse(n, maxvals); }
+
       if ((numvals != 0) and (numvals + n > maxvals)) break;
       // case where there are buffered values and can't consume a whole chunk
       // from decoded values, so skip adding any more to buffer, work on buffered values and then
@@ -864,6 +933,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
       }
     }
     __syncwarp();
+  }
+  if constexpr (cuda::std::is_same_v<T, int64_t>) {
+    if (run_cache_bs != nullptr) { run_cache_bs->write_to_cache_if_needed(vals); }
   }
   __syncthreads();
   return rle->num_vals;
@@ -1401,6 +1473,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // Struct doesn't have any data in itself, so skip
   bool const is_valid       = s->chunk.type_kind != STRUCT;
   size_t const max_num_rows = s->chunk.column_num_rows;
+  __shared__ run_cache run_cache_bs;
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
@@ -1443,6 +1516,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
+
+    run_cache_bs.initialize(s);
   }
   __syncthreads();
 
@@ -1602,7 +1677,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = Integer_RLEv1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
         } else {
-          numvals = Integer_RLEv2<int64_t>(bs, &s->u.rlev2, s->vals.i64, numvals, t);
+          numvals =
+            Integer_RLEv2<int64_t>(bs, &s->u.rlev2, s->vals.i64, numvals, t, false, &run_cache_bs);
         }
         if (s->chunk.type_kind == DECIMAL) {
           // If we're using an index, we may have to drop values from the initial run
