@@ -517,17 +517,22 @@ class Scan(IR):
         elif typ == "parquet":
             parquet_options = config_options.get("parquet_options", {})
             if parquet_options.get("chunked", True):
+                options = plc.io.parquet.ParquetReaderOptions.builder(
+                    plc.io.SourceInfo(paths)
+                ).build()
+                # We handle skip_rows != 0 by reading from the
+                # up to n_rows + skip_rows and slicing off the
+                # first skip_rows entries.
+                # TODO: Remove this workaround once
+                # https://github.com/rapidsai/cudf/issues/16186
+                # is fixed
+                nrows = n_rows + skip_rows
+                if nrows > -1:
+                    options.set_num_rows(nrows)
+                if with_columns is not None:
+                    options.set_columns(with_columns)
                 reader = plc.io.parquet.ChunkedParquetReader(
-                    plc.io.SourceInfo(paths),
-                    columns=with_columns,
-                    # We handle skip_rows != 0 by reading from the
-                    # up to n_rows + skip_rows and slicing off the
-                    # first skip_rows entries.
-                    # TODO: Remove this workaround once
-                    # https://github.com/rapidsai/cudf/issues/16186
-                    # is fixed
-                    nrows=n_rows + skip_rows,
-                    skip_rows=0,
+                    options,
                     chunk_read_limit=parquet_options.get(
                         "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
                     ),
@@ -573,13 +578,18 @@ class Scan(IR):
                 if predicate is not None and row_index is None:
                     # Can't apply filters during read if we have a row index.
                     filters = to_parquet_filter(predicate.value)
-                tbl_w_meta = plc.io.parquet.read_parquet(
-                    plc.io.SourceInfo(paths),
-                    columns=with_columns,
-                    filters=filters,
-                    nrows=n_rows,
-                    skip_rows=skip_rows,
-                )
+                options = plc.io.parquet.ParquetReaderOptions.builder(
+                    plc.io.SourceInfo(paths)
+                ).build()
+                if n_rows != -1:
+                    options.set_num_rows(n_rows)
+                if skip_rows != 0:
+                    options.set_skip_rows(skip_rows)
+                if with_columns is not None:
+                    options.set_columns(with_columns)
+                if filters is not None:
+                    options.set_filter(filters)
+                tbl_w_meta = plc.io.parquet.read_parquet(options)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     # TODO: consider nested column names?
@@ -688,14 +698,16 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("df", "predicate", "projection")
-    _non_child = ("schema", "df", "projection", "predicate")
+    __slots__ = ("config_options", "df", "predicate", "projection")
+    _non_child = ("schema", "df", "projection", "predicate", "config_options")
     df: Any
     """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     predicate: expr.NamedExpr | None
     """Mask to apply."""
+    config_options: dict[str, Any]
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -703,11 +715,13 @@ class DataFrameScan(IR):
         df: Any,
         projection: Sequence[str] | None,
         predicate: expr.NamedExpr | None,
+        config_options: dict[str, Any],
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
+        self.config_options = config_options
         self._non_child_args = (schema, df, self.projection, predicate)
         self.children = ()
 
@@ -719,7 +733,14 @@ class DataFrameScan(IR):
         not stable across runs, or repeat instances of the same equal dataframes.
         """
         schema_hash = tuple(self.schema.items())
-        return (type(self), schema_hash, id(self.df), self.projection, self.predicate)
+        return (
+            type(self),
+            schema_hash,
+            id(self.df),
+            self.projection,
+            self.predicate,
+            json.dumps(self.config_options),
+        )
 
     @classmethod
     def do_evaluate(

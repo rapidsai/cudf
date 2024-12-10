@@ -1424,8 +1424,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         new_columns = (
                             value
                             if key == arg
-                            else column.column_empty_like(
-                                col, masked=True, newsize=length
+                            else column.column_empty(
+                                row_count=length, dtype=col.dtype
                             )
                             for key, col in self._column_labels_and_values
                         )
@@ -3385,10 +3385,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if num_cols != 0:
                     ca = self._data._from_columns_like_self(
                         (
-                            column.column_empty_like(
-                                col_data, masked=True, newsize=length
-                            )
-                            for col_data in self._columns
+                            column.column_empty(row_count=length, dtype=dtype)
+                            for _, dtype in self._dtypes
                         ),
                         verify=False,
                     )
@@ -6191,8 +6189,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         quant_index=False,
                     )._column
                     if len(res) == 0:
-                        res = column.column_empty_like(
-                            qs, dtype=ser.dtype, masked=True, newsize=len(qs)
+                        res = column.column_empty(
+                            row_count=len(qs), dtype=ser.dtype
                         )
                     result[k] = res
             result = DataFrame._from_data(result)
@@ -6774,9 +6772,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             result = column.as_column(result, dtype=result_dtype)
             if mask is not None:
-                result = result.set_mask(
-                    cudf._lib.transform.bools_to_mask(mask._column)
-                )
+                result = result.set_mask(mask._column.as_mask())
             return Series._from_column(result, index=self.index)
         else:
             result_df = DataFrame(result, index=self.index)
@@ -7885,6 +7881,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         return self._constructor_sliced._from_column(result_col)
 
+    @acquire_spill_lock()
+    def _compute_columns(self, expr: str) -> ColumnBase:
+        plc_column = plc.transform.compute_column(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in self._columns]
+            ),
+            plc.expressions.to_expression(expr, self._column_names),
+        )
+        return libcudf.column.Column.from_pylibcudf(plc_column)
+
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
         """Evaluate a string describing operations on DataFrame columns.
@@ -8012,11 +8018,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError(
                     "Cannot operate inplace if there is no assignment"
                 )
-            return Series._from_column(
-                libcudf.transform.compute_column(
-                    [*self._columns], self._column_names, statements[0]
-                )
-            )
+            return Series._from_column(self._compute_columns(statements[0]))
 
         targets = []
         exprs = []
@@ -8032,15 +8034,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             targets.append(t.strip())
             exprs.append(e.strip())
 
-        cols = (
-            libcudf.transform.compute_column(
-                [*self._columns], self._column_names, e
-            )
-            for e in exprs
-        )
         ret = self if inplace else self.copy(deep=False)
-        for name, col in zip(targets, cols):
-            ret._data[name] = col
+        for name, expr in zip(targets, exprs):
+            ret._data[name] = self._compute_columns(expr)
         if not inplace:
             return ret
 

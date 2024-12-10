@@ -32,7 +32,6 @@ from cudf._lib.stream_compaction import (
     drop_duplicates,
     drop_nulls,
 )
-from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -373,10 +372,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
+    @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
-        return libcudf.transform.mask_to_bools(
-            self.base_mask, self.offset, self.offset + len(self)
+        plc_column = plc.transform.mask_to_bools(
+            self.base_mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+            self.offset,
+            self.offset + len(self),
         )
+        return type(self).from_pylibcudf(plc_column)
 
     @cached_property
     def memory_usage(self) -> int:
@@ -882,7 +885,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         # Handle zero size
         if indices.size == 0:
-            return cast(Self, column_empty_like(self, newsize=0))
+            return cast(Self, column_empty(row_count=0, dtype=self.dtype))
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
@@ -981,11 +984,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         -------
         Buffer
         """
-
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return bools_to_mask(self)
+        with acquire_spill_lock():
+            mask, _ = plc.transform.bools_to_mask(
+                self.to_pylibcudf(mode="read")
+            )
+            return as_buffer(mask)
 
     @property
     def is_unique(self) -> bool:
@@ -1222,7 +1228,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             "data": (self.data_ptr, False),
             "version": 1,
         }
-
         if self.nullable and self.has_nulls():
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -1367,7 +1372,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> ColumnBase | ScalarLike:
+    ) -> ColumnBase | cudf.Scalar:
         raise NotImplementedError
 
     def _reduce(
@@ -1515,36 +1520,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
         return codes.fillna(na_sentinel.value)
 
-
-def column_empty_like(
-    column: ColumnBase,
-    dtype: Dtype | None = None,
-    masked: bool = False,
-    newsize: int | None = None,
-) -> ColumnBase:
-    """Allocate a new column like the given *column*"""
-    if dtype is None:
-        dtype = column.dtype
-    row_count = len(column) if newsize is None else newsize
-
-    if (
-        hasattr(column, "dtype")
-        and isinstance(column.dtype, cudf.CategoricalDtype)
-        and dtype == column.dtype
-    ):
-        catcolumn = cast("cudf.core.column.CategoricalColumn", column)
-        codes = column_empty_like(
-            catcolumn.codes, masked=masked, newsize=newsize
+    def one_hot_encode(
+        self, categories: ColumnBase
+    ) -> abc.Generator[ColumnBase]:
+        plc_table = plc.transform.one_hot_encode(
+            self.to_pylibcudf(mode="read"),
+            categories.to_pylibcudf(mode="read"),
         )
-        return build_column(
-            data=None,
-            dtype=dtype,
-            mask=codes.base_mask,
-            children=(codes,),
-            size=codes.size,
+        return (
+            type(self).from_pylibcudf(col, data_ptr_exposed=True)
+            for col in plc_table.columns()
         )
-
-    return column_empty(row_count, dtype, masked)
 
 
 def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
@@ -1556,9 +1542,31 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 
 
 def column_empty(
-    row_count: int, dtype: Dtype = "object", masked: bool = False
+    row_count: int,
+    dtype: Dtype = "object",
+    masked: bool = False,
+    for_numba: bool = False,
 ) -> ColumnBase:
-    """Allocate a new column like the given row_count and dtype."""
+    """
+    Allocate a new column with the given row_count and dtype.
+
+    * Passing row_count == 0 creates a size 0 column without a mask buffer.
+    * Passing row_count > 0 creates an all null column with a mask buffer.
+
+    Parameters
+    ----------
+    row_count : int
+        Number of elements in the column.
+
+    dtype : Dtype
+        Type of the column.
+
+    masked : bool
+        Unused.
+
+    for_numba : bool, default False
+        If True, don't allocate a mask as it's not supported by numba.
+    """
     dtype = cudf.dtype(dtype)
     children: tuple[ColumnBase, ...] = ()
 
@@ -1600,7 +1608,7 @@ def column_empty(
     else:
         data = as_buffer(rmm.DeviceBuffer(size=row_count * dtype.itemsize))
 
-    if masked:
+    if row_count > 0 and not for_numba:
         mask = as_buffer(
             plc.null_mask.create_null_mask(
                 row_count, plc.null_mask.MaskState.ALL_NULL
@@ -2103,8 +2111,7 @@ def as_column(
                     )
                 # Consider NaT as NA in the mask
                 # but maintain NaT as a value
-                bool_mask = as_column(~is_nat)
-                mask = as_buffer(bools_to_mask(bool_mask))
+                mask = as_column(~is_nat).as_mask()
             buffer = as_buffer(arbitrary.view("|u1"))
             col = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
             if dtype:
@@ -2274,8 +2281,7 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
         )
         return as_buffer(data=desc["data"][0], size=mask_size, owner=obj)
     elif typecode == "b":
-        col = as_column(cai_mask)
-        return bools_to_mask(col)
+        return as_column(cai_mask).as_mask()
     else:
         raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
 
@@ -2353,9 +2359,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
             if obj.null_count == len(obj):
-                objs[i] = column_empty_like(
-                    head, dtype=head.dtype, masked=True, newsize=len(obj)
-                )
+                objs[i] = column_empty(row_count=len(obj), dtype=head.dtype)
             else:
                 raise ValueError("All columns must be the same type")
 

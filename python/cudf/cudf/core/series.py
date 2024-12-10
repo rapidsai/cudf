@@ -17,7 +17,6 @@ import pandas as pd
 from typing_extensions import Self, assert_never
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -526,7 +525,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
             mask = None
             if not valid_codes.all():
-                mask = libcudf.transform.bools_to_mask(valid_codes)
+                mask = valid_codes.as_mask()
             col = CategoricalColumn(
                 data=col.data,
                 size=codes.size,
@@ -943,6 +942,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     def tolist(self):
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicity conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
