@@ -190,6 +190,7 @@ ConfigureTest(
   hashing/sha256_test.cpp
   hashing/sha384_test.cpp
   hashing/sha512_test.cpp
+  hashing/xxhash_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
 
