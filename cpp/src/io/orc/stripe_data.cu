@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "cub/util_ptx.cuh"
-#include "cuda/std/__type_traits/is_same.h"
 #include "io/utilities/block_utils.cuh"
 #include "orc_gpu.hpp"
 
