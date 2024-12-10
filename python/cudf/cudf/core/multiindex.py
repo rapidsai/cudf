@@ -192,12 +192,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         source_data = {}
         for i, (code, level) in enumerate(zip(new_codes, new_levels)):
             if len(code):
-                lo, hi = libcudf.reduce.minmax(code)
-                if lo.value < -1 or hi.value > len(level) - 1:
+                lo, hi = code.minmax()
+                if lo < -1 or hi > len(level) - 1:
                     raise ValueError(
                         f"Codes must be -1 <= codes <= {len(level) - 1}"
                     )
-                if lo.value == -1:
+                if lo == -1:
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(size_type_dtype).min
             result_col = libcudf.copying.gather(

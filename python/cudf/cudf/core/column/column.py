@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -32,7 +33,7 @@ from cudf._lib.stream_compaction import (
     drop_duplicates,
     drop_nulls,
 )
-from cudf._lib.types import size_type_dtype
+from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
@@ -42,7 +43,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
-from cudf.core._internals import unary
+from cudf.core._internals import aggregation, unary
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -260,21 +261,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # The skipna argument is only used for numerical columns.
         # If all entries are null the result is True, including when the column
         # is empty.
-
         if self.null_count == self.size:
             return True
-
-        return libcudf.reduce.reduce("all", self)
+        return self.reduce("all")
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
-
         if not skipna and self.has_nulls():
             return True
         elif skipna and self.null_count == self.size:
             return False
-
-        return libcudf.reduce.reduce("any", self)
+        return self.reduce("any")
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -1396,33 +1393,35 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
         if isinstance(preprocessed, ColumnBase):
             dtype = kwargs.pop("dtype", None)
-            return libcudf.reduce.reduce(
-                op, preprocessed, dtype=dtype, **kwargs
-            )
+            return preprocessed.reduce(op, dtype, **kwargs)
         return preprocessed
+
+    def _can_return_nan(self, skipna: bool | None = None) -> bool:
+        return not skipna and self.has_nulls(include_nan=False)
 
     def _process_for_reduction(
         self, skipna: bool | None = None, min_count: int = 0
     ) -> ColumnBase | ScalarLike:
-        if skipna is None:
-            skipna = True
+        skipna = True if skipna is None else skipna
 
-        if self.has_nulls():
+        if self._can_return_nan(skipna=skipna):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        col = self.nans_to_nulls() if skipna else self
+        if col.has_nulls():
             if skipna:
-                result_col = self.dropna()
+                col = col.dropna()
             else:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        result_col = self
 
         # TODO: If and when pandas decides to validate that `min_count` >= 0 we
         # should insert comparable behavior.
         # https://github.com/pandas-dev/pandas/issues/50022
         if min_count > 0:
-            valid_count = len(result_col) - result_col.null_count
+            valid_count = len(col) - col.null_count
             if valid_count < min_count:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        return result_col
+        return col
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         """
@@ -1530,6 +1529,87 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return (
             type(self).from_pylibcudf(col, data_ptr_exposed=True)
             for col in plc_table.columns()
+        )
+
+    @acquire_spill_lock()
+    def scan(self, scan_op: str, inclusive: bool, **kwargs) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.reduce.scan(
+                self.to_pylibcudf(mode="read"),
+                aggregation.make_aggregation(scan_op, kwargs).c_obj,
+                plc.reduce.ScanType.INCLUSIVE
+                if inclusive
+                else plc.reduce.ScanType.EXCLUSIVE,
+            )
+        )
+
+    def reduce(self, reduction_op: str, dtype=None, **kwargs) -> ScalarLike:
+        if dtype is not None:
+            warnings.warn(
+                "dtype is deprecated and will be remove in a future release. "
+                "Cast the result (e.g. .astype) after the operation instead.",
+                FutureWarning,
+            )
+            col_dtype = dtype
+        else:
+            col_dtype = self._reduction_result_dtype(reduction_op)
+
+        # check empty case
+        if len(self) <= self.null_count:
+            if reduction_op == "sum" or reduction_op == "sum_of_squares":
+                return self.dtype.type(0)
+            if reduction_op == "product":
+                return self.dtype.type(1)
+            if reduction_op == "any":
+                return False
+
+            return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
+
+        with acquire_spill_lock():
+            plc_scalar = plc.reduce.reduce(
+                self.to_pylibcudf(mode="read"),
+                aggregation.make_aggregation(reduction_op, kwargs).c_obj,
+                dtype_to_pylibcudf_type(col_dtype),
+            )
+            result_col = type(self).from_pylibcudf(
+                plc.Column.from_scalar(plc_scalar, 1)
+            )
+            if plc_scalar.type().id() in {
+                plc.TypeId.DECIMAL128,
+                plc.TypeId.DECIMAL64,
+                plc.TypeId.DECIMAL32,
+            }:
+                scale = -plc_scalar.type().scale()
+                # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
+                p = col_dtype.precision
+                nrows = len(self)
+                if reduction_op in {"min", "max"}:
+                    new_p = p
+                elif reduction_op == "sum":
+                    new_p = p + nrows - 1
+                elif reduction_op == "product":
+                    new_p = p * nrows + nrows - 1
+                elif reduction_op == "sum_of_squares":
+                    new_p = 2 * p + nrows
+                else:
+                    raise NotImplementedError(
+                        f"{reduction_op} not implemented for decimal types."
+                    )
+                precision = max(min(new_p, dtype.MAX_PRECISION), 0)
+                new_dtype = type(col_dtype)(precision, scale)
+                result_col = result_col.astype(new_dtype)
+        return result_col.element_indexing(0)
+
+    @acquire_spill_lock()
+    def minmax(self) -> tuple[ScalarLike, ScalarLike]:
+        min_val, max_val = plc.reduce.minmax(self.to_pylibcudf(mode="read"))
+        return (
+            type(self)
+            .from_pylibcudf(plc.Column.from_scalar(min_val, 1))
+            .element_indexing(0),
+            type(self)
+            .from_pylibcudf(plc.Column.from_scalar(max_val, 1))
+            .element_indexing(0),
         )
 
 

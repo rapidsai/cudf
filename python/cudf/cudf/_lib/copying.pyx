@@ -14,8 +14,6 @@ from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.reduce import minmax
-
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
@@ -36,7 +34,7 @@ def _gather_map_is_valid(
     """
     if not check_bounds or nullify or len(gather_map) == 0:
         return True
-    gm_min, gm_max = minmax(gather_map)
+    gm_min, gm_max = gather_map.minmax()
     return gm_min >= -nrows and gm_max < nrows
 
 

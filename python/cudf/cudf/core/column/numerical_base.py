@@ -263,6 +263,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
 
     def _scan(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(
-            op.replace("cum", ""), self, True
-        )._with_type_metadata(self.dtype)
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )

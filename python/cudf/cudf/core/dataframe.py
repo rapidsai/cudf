@@ -2508,16 +2508,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
 
             if map_index.size > 0:
-                plc_lo, plc_hi = plc.reduce.minmax(
-                    map_index.to_pylibcudf(mode="read")
-                )
-                # TODO: Use pylibcudf Scalar once APIs are more developed
-                lo = libcudf.column.Column.from_pylibcudf(
-                    plc.Column.from_scalar(plc_lo, 1)
-                ).element_indexing(0)
-                hi = libcudf.column.Column.from_pylibcudf(
-                    plc.Column.from_scalar(plc_hi, 1)
-                ).element_indexing(0)
+                lo, hi = map_index.minmax()
                 if lo < 0 or hi >= map_size:
                     raise ValueError("Partition map has invalid values")
 
