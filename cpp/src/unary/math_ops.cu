@@ -238,7 +238,7 @@ struct DeviceNot {
 
 struct DeviceNegate {
   template <typename T>
-  __device__ T operator()(T data)
+  std::enable_if_t<std::is_signed<T>::value, T> __device__ T operator()(T data)
   {
     return -data;
   }
