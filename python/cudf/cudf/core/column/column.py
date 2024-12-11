@@ -1595,9 +1595,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     raise NotImplementedError(
                         f"{reduction_op} not implemented for decimal types."
                     )
-                precision = max(min(new_p, dtype.MAX_PRECISION), 0)
+                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
                 new_dtype = type(col_dtype)(precision, scale)
                 result_col = result_col.astype(new_dtype)
+            elif isinstance(col_dtype, cudf.IntervalDtype):
+                result_col = type(self).from_struct_column(  # type: ignore[attr-defined]
+                    result_col, closed=col_dtype.closed
+                )
         return result_col.element_indexing(0)
 
     @acquire_spill_lock()
