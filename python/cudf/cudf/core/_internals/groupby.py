@@ -3,7 +3,6 @@
 
 import pylibcudf as plc
 
-import cudf
 from cudf._lib.utils import columns_from_pylibcudf_table
 from cudf.core.buffer import acquire_spill_lock
 
@@ -20,20 +19,6 @@ class PLCGroupBy:
 
             # We spill lock the columns while this GroupBy instance is alive.
             self._spill_lock = spill_lock
-
-    def shift(self, values: list, periods: int, fill_values: list):
-        keys, shifts = self._groupby.shift(
-            plc.table.Table([c.to_pylibcudf(mode="read") for c in values]),
-            [periods] * len(values),
-            [
-                cudf.Scalar(val, dtype=col.dtype).device_value.c_value
-                for val, col in zip(fill_values, values)
-            ],
-        )
-
-        return columns_from_pylibcudf_table(
-            shifts
-        ), columns_from_pylibcudf_table(keys)
 
     def replace_nulls(self, values: list, method: str):
         _, replaced = self._groupby.replace_nulls(

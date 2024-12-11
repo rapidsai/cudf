@@ -49,7 +49,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Generator, Iterable
 
     from cudf._typing import (
         AggType,
@@ -827,6 +827,19 @@ class GroupBy(Serializable, Reducible, Scannable):
             [ColumnBase.from_pylibcudf(key) for key in keys.columns()],
             included_aggregations,
         )
+
+    def _shift(
+        self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
+    ) -> Generator[ColumnBase]:
+        _, shifts = self._groupby._groupby.shift(
+            plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
+            [periods] * len(values),
+            [
+                cudf.Scalar(val, dtype=col.dtype).device_value.c_value
+                for val, col in zip(fill_values, values)
+            ],
+        )
+        return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
 
     @_performance_tracking
     def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):
@@ -2749,7 +2762,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     @_performance_tracking
     def shift(
         self,
-        periods=1,
+        periods: int = 1,
         freq=None,
         axis=0,
         fill_value=None,
@@ -2796,7 +2809,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if freq is not None:
             raise NotImplementedError("Parameter freq is unsupported.")
 
-        if not axis == 0:
+        if axis != 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
         if suffix is not None:
@@ -2804,20 +2817,18 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         values = self.grouping.values
         if is_list_like(fill_value):
-            if len(fill_value) != len(values._data):
+            if len(fill_value) != values._num_columns:
                 raise ValueError(
                     "Mismatched number of columns and values to fill."
                 )
         else:
-            fill_value = [fill_value] * len(values._data)
+            fill_value = [fill_value] * values._num_columns
 
         result = self.obj.__class__._from_data(
             dict(
                 zip(
                     values._column_names,
-                    self._groupby.shift(
-                        [*values._columns], periods, fill_value
-                    )[0],
+                    self._shift(values._columns, periods, fill_value),
                 )
             )
         )
