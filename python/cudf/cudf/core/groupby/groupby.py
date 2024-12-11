@@ -7,7 +7,7 @@ import pickle
 import textwrap
 import warnings
 from collections import abc
-from functools import cached_property
+from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
 import cupy as cp
@@ -21,14 +21,26 @@ from cudf import _lib as libcudf
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
-from cudf.api.types import is_list_like, is_numeric_dtype
+from cudf.api.types import (
+    _is_categorical_dtype,
+    is_list_like,
+    is_numeric_dtype,
+    is_string_dtype,
+)
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import groupby as libgroupby
+from cudf.core._internals import aggregation, groupby as libgroupby
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column.column import ColumnBase, StructDtype, as_column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    DecimalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
@@ -45,6 +57,112 @@ if TYPE_CHECKING:
         MultiColumnAggType,
         ScalarLike,
     )
+
+# The sets below define the possible aggregations that can be performed on
+# different dtypes. These strings must be elements of the AggregationKind enum.
+# The libcudf infrastructure exists for "COLLECT" support on
+# categoricals, but the dtype support in python does not.
+_CATEGORICAL_AGGS = {"COUNT", "NUNIQUE", "SIZE", "UNIQUE"}
+_STRING_AGGS = {
+    "COLLECT",
+    "COUNT",
+    "MAX",
+    "MIN",
+    "NTH",
+    "NUNIQUE",
+    "SIZE",
+    "UNIQUE",
+}
+_LIST_AGGS = {"COLLECT"}
+_STRUCT_AGGS = {"COLLECT", "CORRELATION", "COVARIANCE"}
+_INTERVAL_AGGS = {"COLLECT"}
+_DECIMAL_AGGS = {
+    "ARGMIN",
+    "ARGMAX",
+    "COLLECT",
+    "COUNT",
+    "MAX",
+    "MIN",
+    "NTH",
+    "NUNIQUE",
+    "SUM",
+}
+
+
+@singledispatch
+def get_valid_aggregation(dtype):
+    if is_string_dtype(dtype):
+        return _STRING_AGGS
+    return "ALL"
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: CategoricalDtype):
+    return _CATEGORICAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: StructDtype):
+    return _STRUCT_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: IntervalDtype):
+    return _INTERVAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: DecimalDtype):
+    return _DECIMAL_AGGS
+
+
+def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
+    """
+    Returns true if all are scan aggregations.
+
+    Raises
+    ------
+    NotImplementedError
+        If both reduction aggregations and scan aggregations are present.
+    """
+    groupby_scans = {
+        "cumcount",
+        "cumsum",
+        "cummin",
+        "cummax",
+        "cumprod",
+        "rank",
+    }
+
+    def get_name(agg):
+        return agg.__name__ if callable(agg) else agg
+
+    all_scan = all(
+        get_name(agg_name) in groupby_scans
+        for aggs in all_aggs
+        for agg_name in aggs
+    )
+    any_scan = any(
+        get_name(agg_name) in groupby_scans
+        for aggs in all_aggs
+        for agg_name in aggs
+    )
+
+    if not all_scan and any_scan:
+        raise NotImplementedError(
+            "Cannot perform both aggregation and scan in one operation"
+        )
+    return all_scan and any_scan
 
 
 def _deprecate_collect():
@@ -611,6 +729,105 @@ class GroupBy(Serializable, Reducible, Scannable):
             ),
         )
 
+    def _aggregate(
+        self, values: tuple[ColumnBase, ...], aggregations
+    ) -> tuple[
+        list[list[ColumnBase]],
+        list[ColumnBase],
+        list[list[tuple[str, str]]],
+    ]:
+        included_aggregations = []
+        column_included = []
+        requests = []
+        result_columns: list[list[ColumnBase]] = []
+        for i, (col, aggs) in enumerate(zip(values, aggregations)):
+            valid_aggregations = get_valid_aggregation(col.dtype)
+            included_aggregations_i = []
+            col_aggregations = []
+            for agg in aggs:
+                str_agg = str(agg)
+                if (
+                    is_string_dtype(col)
+                    and agg not in _STRING_AGGS
+                    and (
+                        str_agg in {"cumsum", "cummin", "cummax"}
+                        or not (
+                            any(
+                                a in str_agg
+                                for a in {
+                                    "count",
+                                    "max",
+                                    "min",
+                                    "first",
+                                    "last",
+                                    "nunique",
+                                    "unique",
+                                    "nth",
+                                }
+                            )
+                            or (agg is list)
+                        )
+                    )
+                ):
+                    raise TypeError(
+                        f"function is not supported for this dtype: {agg}"
+                    )
+                elif (
+                    _is_categorical_dtype(col)
+                    and agg not in _CATEGORICAL_AGGS
+                    and (
+                        str_agg in {"cumsum", "cummin", "cummax"}
+                        or not (
+                            any(
+                                a in str_agg
+                                for a in {"count", "max", "min", "unique"}
+                            )
+                        )
+                    )
+                ):
+                    raise TypeError(
+                        f"{col.dtype} type does not support {agg} operations"
+                    )
+
+                agg_obj = aggregation.make_aggregation(agg)
+                if (
+                    valid_aggregations == "ALL"
+                    or agg_obj.kind in valid_aggregations
+                ):
+                    included_aggregations_i.append((agg, agg_obj.kind))
+                    col_aggregations.append(agg_obj.c_obj)
+            included_aggregations.append(included_aggregations_i)
+            result_columns.append([])
+            if col_aggregations:
+                requests.append(
+                    plc.groupby.GroupByRequest(
+                        col.to_pylibcudf(mode="read"), col_aggregations
+                    )
+                )
+                column_included.append(i)
+
+        if not requests and any(len(v) > 0 for v in aggregations):
+            raise pd.errors.DataError(
+                "All requested aggregations are unsupported."
+            )
+
+        keys, results = (
+            self._groupby._groupby.scan(requests)
+            if _is_all_scan_aggregate(aggregations)
+            else self._groupby._groupby.aggregate(requests)
+        )
+
+        for i, result in zip(column_included, results):
+            result_columns[i] = [
+                ColumnBase.from_pylibcudf(col) for col in result.columns()
+            ]
+
+        return (
+            result_columns,
+            [ColumnBase.from_pylibcudf(key) for key in keys.columns()],
+            included_aggregations,
+        )
+
     @_performance_tracking
     def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):
         """
@@ -726,7 +943,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             result_columns,
             grouped_key_cols,
             included_aggregations,
-        ) = self._groupby.aggregate(columns, normalized_aggs)
+        ) = self._aggregate(columns, normalized_aggs)
 
         result_index = self.grouping.keys._from_columns_like_self(
             grouped_key_cols,
@@ -785,7 +1002,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             if cudf.get_option(
                 "mode.pandas_compatible"
-            ) and not libgroupby._is_all_scan_aggregate(normalized_aggs):
+            ) and not _is_all_scan_aggregate(normalized_aggs):
                 # Even with `sort=False`, pandas guarantees that
                 # groupby preserves the order of rows within each group.
                 left_cols = list(self.grouping.keys.drop_duplicates()._columns)
@@ -834,7 +1051,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not self._as_index:
             result = result.reset_index()
-        if libgroupby._is_all_scan_aggregate(normalized_aggs):
+        if _is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)
 
@@ -1964,7 +2181,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "Currently, `transform()` supports only aggregations."
             ) from e
         # If the aggregation is a scan, don't broadcast
-        if libgroupby._is_all_scan_aggregate([[func]]):
+        if _is_all_scan_aggregate([[func]]):
             if len(result) != len(self.obj):
                 raise AssertionError(
                     "Unexpected result length for scan transform"
