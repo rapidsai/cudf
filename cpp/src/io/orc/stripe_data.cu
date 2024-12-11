@@ -186,6 +186,7 @@ class run_cache {
    * greater than it.
    *
    * @param max_length The maximum length allowed to be consumed.
+   * @return A new maximum length.
    */
   __forceinline__ __device__ uint32_t adjust_max_length(uint32_t max_length)
   {
