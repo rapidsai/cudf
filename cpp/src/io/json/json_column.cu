@@ -60,6 +60,7 @@ auto to_cat = [](auto v) -> std::string {
 };
 auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
 auto print_vec = [](auto const& cpu, auto const name, auto converter) {
+  if (std::getenv("NJP_DEBUG_PRINT") == nullptr) return;
   for (auto const& v : cpu)
     printf("%3s,", converter(v).c_str());
   std::cout << name << std::endl;
@@ -69,6 +70,7 @@ void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
                 rmm::cuda_stream_view stream)
 {
+  if (std::getenv("NJP_DEBUG_PRINT") == nullptr) return;
   print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.node_categories, stream),
             "node_categories",
             to_cat);
@@ -566,7 +568,8 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     auto h_gpu_row_offsets = cudf::detail::make_host_vector_sync(gpu_row_offsets, stream);
     print_vec(h_gpu_row_offsets, "gpu_row_offsets", to_int);
   }
-  std::cout << "is_array_of_arrays: " << is_array_of_arrays << std::endl;
+  if (std::getenv("NJP_DEBUG_PRINT") != nullptr)
+    std::cout << "is_array_of_arrays: " << is_array_of_arrays << std::endl;
 
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
@@ -596,7 +599,9 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
   }
 
-  if (options.is_enabled_experimental()) {
+  // check if row root is list. (mixed types are taken care by prune_columns)
+  if (options.is_enabled_experimental() and
+      data_root.child_columns.begin()->second.type == json_col_t::ListColumn) {
     // insert only root list column as single column in table.
     if (data_root.type == json_col_t::ListColumn) {
       std::cout << "root list column\n";
@@ -606,7 +611,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                           d_input,
                                           parsing_options(options, stream),
                                           options.is_enabled_prune_columns(),
-                                          {},
+                                          unified_schema(options),
                                           stream,
                                           mr);
       std::vector<std::unique_ptr<column>> out_columns;
