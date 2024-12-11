@@ -665,8 +665,9 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
       return cudf::type_dispatcher(
         input.type(), detail::LogicalOpDispatcher<detail::DeviceNot>{}, input, stream, mr);
     case cudf::unary_operator::NEGATE:
-      CUDF_EXPECTS(cudf::is_duration(input.type()) || cudf::is_signed(input.type())),
-                   "NEGATE operator requires signed numeric types or duration types.");
+      CUDF_EXPECTS(
+        (cudf::is_duration(input.type()) || cudf::is_signed(input.type())),
+        "NEGATE operator requires signed numeric types or duration types.");
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceNegate>{}, input, stream, mr);
     default: CUDF_FAIL("Undefined unary operation");
