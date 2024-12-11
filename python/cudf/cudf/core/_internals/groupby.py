@@ -99,42 +99,6 @@ class PLCGroupBy:
             # We spill lock the columns while this GroupBy instance is alive.
             self._spill_lock = spill_lock
 
-    def groups(self, values):
-        """
-        Perform a sort groupby, using the keys used to construct the Groupby as the key
-        columns and ``values`` as the value columns.
-
-        Parameters
-        ----------
-        values: list of Columns
-            The value columns
-
-        Returns
-        -------
-        offsets: list of integers
-            Integer offsets such that offsets[i+1] - offsets[i]
-            represents the size of group `i`.
-        grouped_keys: list of Columns
-            The grouped key columns
-        grouped_values: list of Columns
-            The grouped value columns
-        """
-        offsets, grouped_keys, grouped_values = self._groupby.get_groups(
-            plc.table.Table([c.to_pylibcudf(mode="read") for c in values])
-            if values
-            else None
-        )
-
-        return (
-            offsets,
-            columns_from_pylibcudf_table(grouped_keys),
-            (
-                columns_from_pylibcudf_table(grouped_values)
-                if grouped_values is not None
-                else []
-            ),
-        )
-
     def aggregate(self, values, aggregations):
         """
         Parameters

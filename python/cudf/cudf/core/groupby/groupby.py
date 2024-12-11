@@ -423,7 +423,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df.groupby(by=["a"]).indices
         {10: array([0, 1]), 40: array([2])}
         """
-        offsets, group_keys, (indices,) = self._groupby.groups(
+        offsets, group_keys, (indices,) = self._groups(
             [
                 cudf.core.column.as_column(
                     range(len(self.obj)), dtype=size_type_dtype
@@ -584,6 +584,31 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _groupby(self):
         return libgroupby.PLCGroupBy(
             [*self.grouping.keys._columns], dropna=self._dropna
+        )
+
+    def _groups(
+        self, values: Iterable[ColumnBase]
+    ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
+        plc_columns = [col.to_pylibcudf(mode="read") for col in values]
+        if not plc_columns:
+            plc_table = None
+        else:
+            plc_table = plc.Table(plc_columns)
+        offsets, grouped_keys, grouped_values = (
+            self._groupby._groupby.get_groups(plc_table)
+        )
+
+        return (
+            offsets,
+            [ColumnBase.from_pylibcudf(col) for col in grouped_keys.columns()],
+            (
+                [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in grouped_values.columns()
+                ]
+                if grouped_values is not None
+                else []
+            ),
         )
 
     @_performance_tracking
@@ -919,7 +944,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Can't use _mimic_pandas_order because we need to
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
-            _, _, (ordering,) = self._groupby.groups(
+            _, _, (ordering,) = self._groups(
                 [as_column(range(0, len(self.obj)))]
             )
             # Invert permutation from original order to groups on the
@@ -1306,8 +1331,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self, *, include_groups: bool = True):
-        offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
-            [*self.obj.index._columns, *self.obj._columns]
+        offsets, grouped_key_cols, grouped_value_cols = self._groups(
+            itertools.chain(self.obj.index._columns, self.obj._columns)
         )
         grouped_keys = cudf.core.index._index_from_data(
             dict(enumerate(grouped_key_cols))
@@ -2674,9 +2699,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # result coming back from libcudf has null_count few rows than
         # the input, so we must produce an ordering from the full
         # input range.
-        _, _, (ordering,) = self._groupby.groups(
-            [as_column(range(0, len(self.obj)))]
-        )
+        _, _, (ordering,) = self._groups([as_column(range(0, len(self.obj)))])
         if self._dropna and any(
             c.has_nulls(include_nan=True) > 0
             for c in self.grouping._key_columns
