@@ -23,7 +23,7 @@
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
 
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>

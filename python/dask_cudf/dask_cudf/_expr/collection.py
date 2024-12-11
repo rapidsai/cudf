@@ -163,6 +163,11 @@ class DataFrame(DXDataFrame, CudfFrameBase):
 
         return legacy_read_text(*args, **kwargs)
 
+    def clip(self, lower=None, upper=None, axis=1):
+        if axis not in (None, 1):
+            raise NotImplementedError("axis not yet supported in clip.")
+        return new_collection(self.expr.clip(lower, upper, 1))
+
 
 class Series(DXSeries, CudfFrameBase):
     def groupby(self, by, **kwargs):
@@ -181,6 +186,11 @@ class Series(DXSeries, CudfFrameBase):
         from dask_cudf._expr.accessors import StructMethods
 
         return StructMethods(self)
+
+    def clip(self, lower=None, upper=None, axis=1):
+        if axis not in (None, 1):
+            raise NotImplementedError("axis not yet supported in clip.")
+        return new_collection(self.expr.clip(lower, upper, 1))
 
 
 class Index(DXIndex, CudfFrameBase):

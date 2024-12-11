@@ -38,10 +38,10 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 

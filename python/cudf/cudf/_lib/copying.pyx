@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import pickle
-
 from libcpp cimport bool
 import pylibcudf
 
@@ -358,14 +356,13 @@ class PackedColumns(Serializable):
         header["index-names"] = self.index_names
         header["metadata"] = self._metadata.tobytes()
         for name, dtype in self.column_dtypes.items():
-            dtype_header, dtype_frames = dtype.serialize()
+            dtype_header, dtype_frames = dtype.device_serialize()
             self.column_dtypes[name] = (
                 dtype_header,
                 (len(frames), len(frames) + len(dtype_frames)),
             )
             frames.extend(dtype_frames)
         header["column-dtypes"] = self.column_dtypes
-        header["type-serialized"] = pickle.dumps(type(self))
         return header, frames
 
     @classmethod
@@ -373,9 +370,9 @@ class PackedColumns(Serializable):
         column_dtypes = {}
         for name, dtype in header["column-dtypes"].items():
             dtype_header, (start, stop) = dtype
-            column_dtypes[name] = pickle.loads(
-                dtype_header["type-serialized"]
-            ).deserialize(dtype_header, frames[start:stop])
+            column_dtypes[name] = Serializable.device_deserialize(
+                dtype_header, frames[start:stop]
+            )
         return cls(
             plc.contiguous_split.pack(
                 plc.contiguous_split.unpack_from_memoryviews(
