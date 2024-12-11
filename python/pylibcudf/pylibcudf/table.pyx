@@ -4,10 +4,10 @@ from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from libcpp cimport bool
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.contiguous_split cimport unpack as cpp_unpack
 
 from .column cimport Column
 
@@ -72,13 +72,14 @@ cdef class Table:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
-        cdef bool table_owner = isinstance(owner, Table)
         cdef int i
-        if table_owner:
+        if isinstance(owner, Table):
             return Table([
                 Column.from_column_view(tv.column(i), owner.columns()[i])
                 for i in range(tv.num_columns())
             ])
+        elif "PackedColumns" in type(owner):
+            cpp_unpack(dereference(input.c_obj))
         return Table([
             Column.from_column_view(tv.column(i), owner)
             for i in range(tv.num_columns())

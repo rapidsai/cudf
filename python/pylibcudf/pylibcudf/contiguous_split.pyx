@@ -122,7 +122,7 @@ cdef class PackedColumns:
                 False
             ),
             "shape": (int(dereference(dereference(self.c_obj).gpu_data.get()).size()),),
-            "strides": (1,),
+            "strides": (4, 4, 4),
             "typestr": "|u1",
             "version": 0
         }

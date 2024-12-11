@@ -18,7 +18,8 @@ from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
 from .types cimport DataType, size_of, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
-
+# from pylibcudf.contiguous_split cimport PackedColumns
+# from pylibcudf.libcudf.contiguous_split cimport unpack as cpp_unpack
 import functools
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
@@ -53,7 +54,7 @@ cdef class Column:
     def __init__(
         self, DataType data_type not None, size_type size, gpumemoryview data,
         gpumemoryview mask, size_type null_count, size_type offset,
-        list children
+        list children, object owner=None
     ):
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
@@ -65,6 +66,7 @@ cdef class Column:
         self._offset = offset
         self._children = children
         self._num_children = len(children)
+        self._owner = owner
 
     __hash__ = None
 
@@ -251,21 +253,10 @@ cdef class Column:
             )
         else:
             if owner is not None:
-                data = gpumemoryview(owner)
-                iface = data.__cuda_array_interface__
-                data_type = _datatype_from_dtype_desc(iface['typestr'][1:])
-                return Column.from_column_view(
-                    cv,
-                    Column(
-                        data_type,
-                        size,
-                        data,
-                        None,
-                        0,
-                        0,
-                        []
-                    )
-                )
+                # try:
+                #     if isinstance(<PackedColumns>owner, PackedColumns):
+                #         cpp_unpack(dereference(owner.c_obj.get())).column(0)
+                pass
             else:
                 data_ptr = <uintptr_t>(cv.head[void]())
                 mask_ptr = <uintptr_t>(cv.null_mask())
