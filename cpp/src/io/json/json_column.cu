@@ -535,12 +535,13 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
       stream,
       cudf::get_current_device_resource_ref());
   }();  // IILE used to free memory of token data.
-#ifdef NJP_DEBUG_PRINT
+        // #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
   print_tree(h_input, gpu_tree, stream);
-#endif
+  // #endif
 
   bool const is_array_of_arrays = [&]() {
+    if (options.is_enabled_experimental()) return false;
     auto const size_to_copy = std::min(size_t{2}, gpu_tree.node_categories.size());
     if (size_to_copy == 0) return false;
     auto const h_node_categories = cudf::detail::make_host_vector_sync(
@@ -559,6 +560,13 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   options.is_enabled_experimental(),
                                   stream,
                                   cudf::get_current_device_resource_ref());
+  {
+    auto h_gpu_col_id = cudf::detail::make_host_vector_sync(gpu_col_id, stream);
+    print_vec(h_gpu_col_id, "gpu_col_id", to_int);
+    auto h_gpu_row_offsets = cudf::detail::make_host_vector_sync(gpu_row_offsets, stream);
+    print_vec(h_gpu_row_offsets, "gpu_row_offsets", to_int);
+  }
+  std::cout << "is_array_of_arrays: " << is_array_of_arrays << std::endl;
 
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
@@ -586,6 +594,25 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   // Zero row entries
   if (data_root.type == json_col_t::ListColumn && data_root.child_columns.empty()) {
     return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{})};
+  }
+
+  if (options.is_enabled_experimental()) {
+    // insert only root list column as single column in table.
+    if (data_root.type == json_col_t::ListColumn) {
+      std::cout << "root list column\n";
+      std::cout << "root list column size: " << data_root.child_columns.size() << std::endl;
+      auto [cudf_col, col_name_info] =
+        device_json_column_to_cudf_column(data_root.child_columns.begin()->second,
+                                          d_input,
+                                          parsing_options(options, stream),
+                                          options.is_enabled_prune_columns(),
+                                          {},
+                                          stream,
+                                          mr);
+      std::vector<std::unique_ptr<column>> out_columns;
+      out_columns.emplace_back(std::move(cudf_col));
+      return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {col_name_info}};
+    }
   }
 
   // Verify that we were in fact given a list of structs (or in JSON speech: an array of objects)

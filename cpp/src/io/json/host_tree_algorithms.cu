@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/io/detail/tokenize_json.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
@@ -48,7 +49,15 @@
 #include <deque>
 
 namespace cudf::io::json::detail {
-
+auto to_int2    = [](auto v) { return std::to_string(static_cast<int>(v)); };
+auto print_vec2 = [](auto const& cpu, auto const name, auto converter) {
+  for (auto const& v : cpu)
+    printf("%3s,", converter(v).c_str());
+  std::cout << name << std::endl;
+};
+void print_tree(host_span<SymbolT const> input,
+                tree_meta_t const& d_gpu_tree,
+                rmm::cuda_stream_view stream);
 /**
  * @brief Get the column indices for the values column for array of arrays rows
  *
@@ -247,7 +256,7 @@ void scatter_offsets(tree_meta_t const& tree,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream);
 
-std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_options const& options)
+schema_element unified_schema(cudf::io::json_reader_options const& options)
 {
   return std::visit(
     cudf::detail::visitor_overload{
@@ -259,7 +268,7 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
                        [&user_dtypes](auto i) {
                          return std::pair(std::to_string(i), schema_element{user_dtypes[i]});
                        });
-        return dnew;
+        return schema_element{data_type{type_id::STRUCT}, std::move(dnew)};
       },
       [](std::map<std::string, data_type> const& user_dtypes) {
         std::map<std::string, schema_element> dnew;
@@ -269,10 +278,12 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
                        [](auto key_dtype) {
                          return std::pair(key_dtype.first, schema_element{key_dtype.second});
                        });
-        return dnew;
+        return schema_element{data_type{type_id::STRUCT}, std::move(dnew)};
       },
-      [](std::map<std::string, schema_element> const& user_dtypes) { return user_dtypes; },
-      [](schema_element const& user_dtypes) { return user_dtypes.child_types; }},
+      [](std::map<std::string, schema_element> const& user_dtypes) {
+        return schema_element{data_type{type_id::STRUCT}, user_dtypes};
+      },
+      [](schema_element const& user_dtypes) { return user_dtypes; }},
     options.get_dtypes());
 }
 
@@ -333,6 +344,14 @@ void make_device_json_column(device_span<SymbolT const> input,
                           row_array_parent_col_id,
                           stream);
 
+  {
+    auto h_input = cudf::detail::make_host_vector_async(input, stream);
+    print_tree(h_input, d_column_tree, stream);
+    auto h_unique_col_ids = cudf::detail::make_host_vector_sync(d_unique_col_ids, stream);
+    print_vec2(h_unique_col_ids, "d_unique_col_ids", to_int2);
+    auto h_max_row_offsets = cudf::detail::make_host_vector_sync(d_max_row_offsets, stream);
+    print_vec2(h_max_row_offsets, "d_max_row_offsets", to_int2);
+  }
   auto num_columns                      = d_unique_col_ids.size();
   std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
@@ -518,8 +537,13 @@ std::
     bool pass =
       (schema.type == data_type{type_id::STRUCT} and column_categories[root] == NC_STRUCT) or
       (schema.type == data_type{type_id::LIST} and column_categories[root] == NC_LIST) or
+      // (schema.type == data_type{type_id::STRING}) or
+      // (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
+      // (column_categories[root] == NC_STR)); schema is not nested type and not str, and cat is
+      // nested == don't pass. schema is str, pass always.
       (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
        column_categories[root] != NC_FN);
+    // schema is fixed type, and column_cat is not FN?
     if (!pass) {
       // ignore all children of this column and prune this column.
       is_pruned[root] = true;
@@ -625,8 +649,7 @@ std::
       is_pruned[top_level_list_id] = false;
     }
     is_pruned[root_struct_col_id] = false;
-    schema_element u_schema{data_type{type_id::STRUCT}};
-    u_schema.child_types = unified_schema(options);
+    schema_element u_schema       = unified_schema(options);
     std::visit(
       cudf::detail::visitor_overload{
         [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
@@ -650,6 +673,7 @@ std::
           -> void { mark_is_pruned(root_struct_col_id, u_schema); }},
       options.get_dtypes());
   }
+  print_vec2(is_pruned, "is_pruned", to_int2);
   // Useful for array of arrays
   auto named_level =
     is_enabled_lines
@@ -717,9 +741,9 @@ std::
       CUDF_EXPECTS(struct_col_id == -1 or list_col_id == -1,
                    "A mix of lists and structs within the same column is not supported");
       // either one only: so ignore str column.
-      if ((struct_col_id != -1 or list_col_id != -1) and str_col_id != -1) {
-        is_pruned[str_col_id] = true;
-      }
+      // if ((struct_col_id != -1 or list_col_id != -1) and str_col_id != -1) {
+      //   is_pruned[str_col_id] = true;
+      // }
     }
   };
 
