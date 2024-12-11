@@ -3,7 +3,7 @@ from functools import singledispatch
 
 from pandas.errors import DataError
 
-import pylibcudf
+import pylibcudf as plc
 
 import cudf
 from cudf._lib.utils import columns_from_pylibcudf_table
@@ -89,13 +89,11 @@ def _(dtype: DecimalDtype):
 class PLCGroupBy:
     def __init__(self, keys, dropna=True):
         with acquire_spill_lock() as spill_lock:
-            self._groupby = pylibcudf.groupby.GroupBy(
-                pylibcudf.table.Table(
-                    [c.to_pylibcudf(mode="read") for c in keys]
-                ),
-                pylibcudf.types.NullPolicy.EXCLUDE
+            self._groupby = plc.groupby.GroupBy(
+                plc.table.Table([c.to_pylibcudf(mode="read") for c in keys]),
+                plc.types.NullPolicy.EXCLUDE
                 if dropna
-                else pylibcudf.types.NullPolicy.INCLUDE,
+                else plc.types.NullPolicy.INCLUDE,
             )
 
             # We spill lock the columns while this GroupBy instance is alive.
@@ -122,9 +120,7 @@ class PLCGroupBy:
             The grouped value columns
         """
         offsets, grouped_keys, grouped_values = self._groupby.get_groups(
-            pylibcudf.table.Table(
-                [c.to_pylibcudf(mode="read") for c in values]
-            )
+            plc.table.Table([c.to_pylibcudf(mode="read") for c in values])
             if values
             else None
         )
@@ -218,7 +214,7 @@ class PLCGroupBy:
             included_aggregations.append(included_aggregations_i)
             if col_aggregations:
                 requests.append(
-                    pylibcudf.groupby.GroupByRequest(
+                    plc.groupby.GroupByRequest(
                         col.to_pylibcudf(mode="read"), col_aggregations
                     )
                 )
@@ -245,9 +241,7 @@ class PLCGroupBy:
 
     def shift(self, values: list, periods: int, fill_values: list):
         keys, shifts = self._groupby.shift(
-            pylibcudf.table.Table(
-                [c.to_pylibcudf(mode="read") for c in values]
-            ),
+            plc.table.Table([c.to_pylibcudf(mode="read") for c in values]),
             [periods] * len(values),
             [
                 cudf.Scalar(val, dtype=col.dtype).device_value.c_value
@@ -261,13 +255,11 @@ class PLCGroupBy:
 
     def replace_nulls(self, values: list, method: str):
         _, replaced = self._groupby.replace_nulls(
-            pylibcudf.table.Table(
-                [c.to_pylibcudf(mode="read") for c in values]
-            ),
+            plc.Table([c.to_pylibcudf(mode="read") for c in values]),
             [
-                pylibcudf.replace.ReplacePolicy.PRECEDING
+                plc.replace.ReplacePolicy.PRECEDING
                 if method == "ffill"
-                else pylibcudf.replace.ReplacePolicy.FOLLOWING
+                else plc.replace.ReplacePolicy.FOLLOWING
             ]
             * len(values),
         )
