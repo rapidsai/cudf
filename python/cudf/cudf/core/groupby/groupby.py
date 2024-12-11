@@ -841,6 +841,21 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
 
+    def _replace_nulls(
+        self, values: tuple[ColumnBase, ...], method: str
+    ) -> Generator[ColumnBase]:
+        _, replaced = self._groupby._groupby.replace_nulls(
+            plc.Table([col.to_pylibcudf(mode="read") for col in values]),
+            [
+                plc.replace.ReplacePolicy.PRECEDING
+                if method == "ffill"
+                else plc.replace.ReplacePolicy.FOLLOWING
+            ]
+            * len(values),
+        )
+
+        return (ColumnBase.from_pylibcudf(col) for col in replaced.columns())
+
     @_performance_tracking
     def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):
         """
@@ -2658,7 +2673,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             dict(
                 zip(
                     values._column_names,
-                    self._groupby.replace_nulls([*values._columns], method),
+                    self._replace_nulls(values._columns, method),
                 )
             )
         )
