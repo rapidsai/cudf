@@ -537,13 +537,12 @@ std::
     bool pass =
       (schema.type == data_type{type_id::STRUCT} and column_categories[root] == NC_STRUCT) or
       (schema.type == data_type{type_id::LIST} and column_categories[root] == NC_LIST) or
-      // (schema.type == data_type{type_id::STRING}) or
-      // (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
-      // (column_categories[root] == NC_STR)); schema is not nested type and not str, and cat is
-      // nested == don't pass. schema is str, pass always.
       (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
        column_categories[root] != NC_FN);
-    // schema is fixed type, and column_cat is not FN?
+    if ((schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
+         schema.type != data_type{type_id::STRING}) and
+        (column_categories[root] == NC_STRUCT or column_categories[root] == NC_LIST))
+      pass = false;
     if (!pass) {
       // ignore all children of this column and prune this column.
       is_pruned[root] = true;
