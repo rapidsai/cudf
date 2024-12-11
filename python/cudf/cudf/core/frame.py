@@ -1457,7 +1457,14 @@ class Frame(BinaryOperand, Scannable):
 
     @_performance_tracking
     def _encode(self):
-        columns, indices = libcudf.transform.table_encode(list(self._columns))
+        plc_table, plc_column = plc.transform.encode(
+            plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
+        )
+        columns = [
+            libcudf.column.Column.from_pylibcudf(col)
+            for col in plc_table.columns()
+        ]
+        indices = libcudf.column.Column.from_pylibcudf(plc_column)
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
