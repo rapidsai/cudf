@@ -539,7 +539,6 @@ def test_df_corr(method):
 )
 @pytest.mark.parametrize("skipna", [True, False])
 def test_nans_stats(data, ops, skipna):
-    breakpoint()
     psr = pd.Series(data, dtype="float64" if len(data) == 0 else None)
     gsr = cudf.from_pandas(psr)
 
