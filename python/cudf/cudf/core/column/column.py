@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -1294,28 +1293,27 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         header: dict[Any, Any] = {}
         frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
         try:
-            dtype, dtype_frames = self.dtype.serialize()
+            dtype, dtype_frames = self.dtype.device_serialize()
             header["dtype"] = dtype
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
-            header["dtype"] = pickle.dumps(self.dtype)
+            header["dtype"] = self.dtype.str
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
-            data_header, data_frames = self.data.serialize()
+            data_header, data_frames = self.data.device_serialize()
             header["data"] = data_header
             frames.extend(data_frames)
 
         if self.mask is not None:
-            mask_header, mask_frames = self.mask.serialize()
+            mask_header, mask_frames = self.mask.device_serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
         if self.children:
             child_headers, child_frames = zip(
-                *(c.serialize() for c in self.children)
+                *(c.device_serialize() for c in self.children)
             )
             header["subheaders"] = list(child_headers)
             frames.extend(chain(*child_frames))
@@ -1327,8 +1325,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
         def unpack(header, frames) -> tuple[Any, list]:
             count = header["frame_count"]
-            klass = pickle.loads(header["type-serialized"])
-            obj = klass.deserialize(header, frames[:count])
+            obj = cls.device_deserialize(header, frames[:count])
             return obj, frames[count:]
 
         assert header["frame_count"] == len(frames), (
@@ -1338,7 +1335,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if header["dtype-is-cudf-serialized"]:
             dtype, frames = unpack(header["dtype"], frames)
         else:
-            dtype = pickle.loads(header["dtype"])
+            dtype = np.dtype(header["dtype"])
         if "data" in header:
             data, frames = unpack(header["data"], frames)
         else:
@@ -2307,7 +2304,9 @@ def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:
     frames = []
 
     if len(columns) > 0:
-        header_columns = [c.serialize() for c in columns]
+        header_columns: list[tuple[dict, list]] = [
+            c.device_serialize() for c in columns
+        ]
         headers, column_frames = zip(*header_columns)
         for f in column_frames:
             frames.extend(f)
@@ -2324,7 +2323,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 
     for meta in headers:
         col_frame_count = meta["frame_count"]
-        col_typ = pickle.loads(meta["type-serialized"])
+        col_typ = Serializable._name_type_map[meta["type-serialized-name"]]
         colobj = col_typ.deserialize(meta, frames[:col_frame_count])
         columns.append(colobj)
         # Advance frames
