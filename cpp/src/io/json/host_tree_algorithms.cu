@@ -737,13 +737,16 @@ std::
         }
       }
     } else {
-      // if both are present, error out.
-      CUDF_EXPECTS(struct_col_id == -1 or list_col_id == -1,
+      // if both are present (and not forced as string), error out.
+      CUDF_EXPECTS((struct_col_id == -1 or expected_types[struct_col_id] == NC_STR) or
+                     (list_col_id == -1 or expected_types[list_col_id] == NC_STR),
                    "A mix of lists and structs within the same column is not supported");
       // either one only: so ignore str column.
-      // if ((struct_col_id != -1 or list_col_id != -1) and str_col_id != -1) {
-      //   is_pruned[str_col_id] = true;
-      // }
+      if (((struct_col_id != -1 and expected_types[struct_col_id] != NC_STR) or
+           (list_col_id != -1 and expected_types[list_col_id] != NC_STR)) and
+          str_col_id != -1) {
+        is_pruned[str_col_id] = true;
+      }
     }
   };
 
