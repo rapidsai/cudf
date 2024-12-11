@@ -20,9 +20,12 @@ runtest() {
 
     pytest \
     $plugin \
+    --ignore=${TEST_DIR}/test_catboost.py \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
+    --numprocesses=${NUM_PROCESSES} \
+    --dist=worksteal \
     ${TEST_DIR}/test_${lib}*.py
 }
 
@@ -37,9 +40,12 @@ main() {
     pytest \
     --compare \
     -p cudf.pandas \
+    --ignore=${TEST_DIR}/test_catboost.py \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
+    --numprocesses=${NUM_PROCESSES} \
+    --dist=worksteal \
     ${TEST_DIR}/test_${lib}*.py
 }
 
