@@ -74,7 +74,7 @@ class grid_1d {
    * @param num_threads_per_block The number of threads per block
    * @return thread_index_type The global thread index
    */
-  CUDF_HOST_DEVICE static constexpr thread_index_type global_thread_id(
+  __device__ static constexpr thread_index_type global_thread_id(
     thread_index_type thread_id,
     thread_index_type block_id,
     thread_index_type num_threads_per_block)
