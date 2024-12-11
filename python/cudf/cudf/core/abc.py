@@ -1,6 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 """Common abstract base classes for cudf."""
 
+import pickle
+
 import numpy
 
 import cudf
@@ -105,6 +107,7 @@ class Serializable:
             for f in frames
         )
         header["type-serialized-name"] = type(self).__name__
+        header["type-serialized"] = pickle.dumps(type(self))
         header["is-cuda"] = [
             hasattr(f, "__cuda_array_interface__") for f in frames
         ]
