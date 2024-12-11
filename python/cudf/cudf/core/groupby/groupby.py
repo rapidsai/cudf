@@ -28,7 +28,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import aggregation, groupby as libgroupby
+from cudf.core._internals import aggregation
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
@@ -699,10 +699,19 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result
 
     @cached_property
-    def _groupby(self):
-        return libgroupby.PLCGroupBy(
-            [*self.grouping.keys._columns], dropna=self._dropna
-        )
+    def _groupby(self) -> plc.groupby.GroupBy:
+        with acquire_spill_lock():
+            return plc.groupby.GroupBy(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in self.grouping.keys._columns
+                    ]
+                ),
+                plc.types.NullPolicy.EXCLUDE
+                if self._dropna
+                else plc.types.NullPolicy.INCLUDE,
+            )
 
     def _groups(
         self, values: Iterable[ColumnBase]
@@ -712,8 +721,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             plc_table = None
         else:
             plc_table = plc.Table(plc_columns)
-        offsets, grouped_keys, grouped_values = (
-            self._groupby._groupby.get_groups(plc_table)
+        offsets, grouped_keys, grouped_values = self._groupby.get_groups(
+            plc_table
         )
 
         return (
@@ -812,9 +821,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         keys, results = (
-            self._groupby._groupby.scan(requests)
+            self._groupby.scan(requests)
             if _is_all_scan_aggregate(aggregations)
-            else self._groupby._groupby.aggregate(requests)
+            else self._groupby.aggregate(requests)
         )
 
         for i, result in zip(column_included, results):
@@ -831,7 +840,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _shift(
         self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
     ) -> Generator[ColumnBase]:
-        _, shifts = self._groupby._groupby.shift(
+        _, shifts = self._groupby.shift(
             plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
             [periods] * len(values),
             [
@@ -844,7 +853,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _replace_nulls(
         self, values: tuple[ColumnBase, ...], method: str
     ) -> Generator[ColumnBase]:
-        _, replaced = self._groupby._groupby.replace_nulls(
+        _, replaced = self._groupby.replace_nulls(
             plc.Table([col.to_pylibcudf(mode="read") for col in values]),
             [
                 plc.replace.ReplacePolicy.PRECEDING
