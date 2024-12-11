@@ -3,7 +3,12 @@ from functools import singledispatch
 
 from pandas.errors import DataError
 
+import pylibcudf
+
+import cudf
+from cudf._lib.utils import columns_from_pylibcudf_table
 from cudf.api.types import _is_categorical_dtype, is_string_dtype
+from cudf.core._internals.aggregation import make_aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -12,15 +17,6 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-
-from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport columns_from_pylibcudf_table
-
-from cudf._lib.scalar import as_device_scalar
-
-import pylibcudf
-
-from cudf.core._internals.aggregation import make_aggregation
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
@@ -90,21 +86,22 @@ def _(dtype: DecimalDtype):
     return _DECIMAL_AGGS
 
 
-cdef class GroupBy:
-    cdef dict __dict__
-
+class PLCGroupBy:
     def __init__(self, keys, dropna=True):
         with acquire_spill_lock() as spill_lock:
             self._groupby = pylibcudf.groupby.GroupBy(
-                pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in keys]),
-                pylibcudf.types.NullPolicy.EXCLUDE if dropna
-                else pylibcudf.types.NullPolicy.INCLUDE
+                pylibcudf.table.Table(
+                    [c.to_pylibcudf(mode="read") for c in keys]
+                ),
+                pylibcudf.types.NullPolicy.EXCLUDE
+                if dropna
+                else pylibcudf.types.NullPolicy.INCLUDE,
             )
 
             # We spill lock the columns while this GroupBy instance is alive.
             self._spill_lock = spill_lock
 
-    def groups(self, list values):
+    def groups(self, values):
         """
         Perform a sort groupby, using the keys used to construct the Groupby as the key
         columns and ``values`` as the value columns.
@@ -125,8 +122,11 @@ cdef class GroupBy:
             The grouped value columns
         """
         offsets, grouped_keys, grouped_values = self._groupby.get_groups(
-            pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values])
-            if values else None
+            pylibcudf.table.Table(
+                [c.to_pylibcudf(mode="read") for c in values]
+            )
+            if values
+            else None
         )
 
         return (
@@ -134,7 +134,8 @@ cdef class GroupBy:
             columns_from_pylibcudf_table(grouped_keys),
             (
                 columns_from_pylibcudf_table(grouped_values)
-                if grouped_values is not None else []
+                if grouped_values is not None
+                else []
             ),
         )
 
@@ -167,21 +168,23 @@ cdef class GroupBy:
                 if (
                     is_string_dtype(col)
                     and agg not in _STRING_AGGS
-                    and
-                    (
+                    and (
                         str_agg in {"cumsum", "cummin", "cummax"}
                         or not (
-                        any(a in str_agg for a in {
-                            "count",
-                            "max",
-                            "min",
-                            "first",
-                            "last",
-                            "nunique",
-                            "unique",
-                            "nth"
-                        })
-                        or (agg is list)
+                            any(
+                                a in str_agg
+                                for a in {
+                                    "count",
+                                    "max",
+                                    "min",
+                                    "first",
+                                    "last",
+                                    "nunique",
+                                    "unique",
+                                    "nth",
+                                }
+                            )
+                            or (agg is list)
                         )
                     )
                 ):
@@ -193,9 +196,11 @@ cdef class GroupBy:
                     and agg not in _CATEGORICAL_AGGS
                     and (
                         str_agg in {"cumsum", "cummin", "cummax"}
-                        or
-                        not (
-                            any(a in str_agg for a in {"count", "max", "min", "unique"})
+                        or not (
+                            any(
+                                a in str_agg
+                                for a in {"count", "max", "min", "unique"}
+                            )
                         )
                     )
                 ):
@@ -204,47 +209,67 @@ cdef class GroupBy:
                     )
 
                 agg_obj = make_aggregation(agg)
-                if valid_aggregations == "ALL" or agg_obj.kind in valid_aggregations:
+                if (
+                    valid_aggregations == "ALL"
+                    or agg_obj.kind in valid_aggregations
+                ):
                     included_aggregations_i.append((agg, agg_obj.kind))
                     col_aggregations.append(agg_obj.c_obj)
             included_aggregations.append(included_aggregations_i)
             if col_aggregations:
-                requests.append(pylibcudf.groupby.GroupByRequest(
-                    col.to_pylibcudf(mode="read"), col_aggregations
-                ))
+                requests.append(
+                    pylibcudf.groupby.GroupByRequest(
+                        col.to_pylibcudf(mode="read"), col_aggregations
+                    )
+                )
                 column_included.append(i)
 
         if not requests and any(len(v) > 0 for v in aggregations):
             raise DataError("All requested aggregations are unsupported.")
 
-        keys, results = self._groupby.scan(requests) if \
-            _is_all_scan_aggregate(aggregations) else self._groupby.aggregate(requests)
+        keys, results = (
+            self._groupby.scan(requests)
+            if _is_all_scan_aggregate(aggregations)
+            else self._groupby.aggregate(requests)
+        )
 
         result_columns = [[] for _ in range(len(values))]
         for i, result in zip(column_included, results):
             result_columns[i] = columns_from_pylibcudf_table(result)
 
-        return result_columns, columns_from_pylibcudf_table(keys), included_aggregations
+        return (
+            result_columns,
+            columns_from_pylibcudf_table(keys),
+            included_aggregations,
+        )
 
-    def shift(self, list values, int periods, list fill_values):
+    def shift(self, values: list, periods: int, fill_values: list):
         keys, shifts = self._groupby.shift(
-            pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values]),
+            pylibcudf.table.Table(
+                [c.to_pylibcudf(mode="read") for c in values]
+            ),
             [periods] * len(values),
             [
-                (<DeviceScalar> as_device_scalar(val, dtype=col.dtype)).c_value
+                cudf.Scalar(val, dtype=col.dtype).device_value.c_value
                 for val, col in zip(fill_values, values)
             ],
         )
 
-        return columns_from_pylibcudf_table(shifts), columns_from_pylibcudf_table(keys)
+        return columns_from_pylibcudf_table(
+            shifts
+        ), columns_from_pylibcudf_table(keys)
 
-    def replace_nulls(self, list values, object method):
+    def replace_nulls(self, values: list, method: str):
         _, replaced = self._groupby.replace_nulls(
-            pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values]),
+            pylibcudf.table.Table(
+                [c.to_pylibcudf(mode="read") for c in values]
+            ),
             [
                 pylibcudf.replace.ReplacePolicy.PRECEDING
-                if method == 'ffill' else pylibcudf.replace.ReplacePolicy.FOLLOWING
-            ] * len(values),
+                if method == "ffill"
+                else pylibcudf.replace.ReplacePolicy.FOLLOWING
+            ]
+            * len(values),
         )
 
         return columns_from_pylibcudf_table(replaced)
@@ -256,6 +281,7 @@ _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "cumprod", "rank"}
 def _is_all_scan_aggregate(all_aggs):
     """
     Returns true if all are scan aggregations.
+
     Raises
     ------
     NotImplementedError
@@ -266,11 +292,13 @@ def _is_all_scan_aggregate(all_aggs):
         return agg.__name__ if callable(agg) else agg
 
     all_scan = all(
-        get_name(agg_name) in _GROUPBY_SCANS for aggs in all_aggs
+        get_name(agg_name) in _GROUPBY_SCANS
+        for aggs in all_aggs
         for agg_name in aggs
     )
     any_scan = any(
-        get_name(agg_name) in _GROUPBY_SCANS for aggs in all_aggs
+        get_name(agg_name) in _GROUPBY_SCANS
+        for aggs in all_aggs
         for agg_name in aggs
     )
 
