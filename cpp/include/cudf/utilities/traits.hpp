@@ -358,7 +358,7 @@ bool is_numeric_not_bool(data_type type);
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_floating_point()
 {
-  return std::is_floating_point_v<T>;
+  return cuda::std::is_floating_point_v<T>;
 }
 
 /**
@@ -441,11 +441,12 @@ bool is_timestamp(data_type type);
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_fixed_point()
 {
-  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T> ||
-         std::is_same_v<numeric::decimal128, T> ||
-         std::is_same_v<numeric::fixed_point<int32_t, numeric::Radix::BASE_2>, T> ||
-         std::is_same_v<numeric::fixed_point<int64_t, numeric::Radix::BASE_2>, T> ||
-         std::is_same_v<numeric::fixed_point<__int128_t, numeric::Radix::BASE_2>, T>;
+  return cuda::std::is_same_v<numeric::decimal32, T> ||
+         cuda::std::is_same_v<numeric::decimal64, T> ||
+         cuda::std::is_same_v<numeric::decimal128, T> ||
+         cuda::std::is_same_v<numeric::fixed_point<int32_t, numeric::Radix::BASE_2>, T> ||
+         cuda::std::is_same_v<numeric::fixed_point<int64_t, numeric::Radix::BASE_2>, T> ||
+         cuda::std::is_same_v<numeric::fixed_point<__int128_t, numeric::Radix::BASE_2>, T>;
 }
 
 /**
@@ -592,8 +593,9 @@ class string_view;
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_compound()
 {
-  return std::is_same_v<T, cudf::string_view> or std::is_same_v<T, cudf::dictionary32> or
-         std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>;
+  return cuda::std::is_same_v<T, cudf::string_view> or
+         cuda::std::is_same_v<T, cudf::dictionary32> or cuda::std::is_same_v<T, cudf::list_view> or
+         cuda::std::is_same_v<T, cudf::struct_view>;
 }
 
 /**
@@ -624,7 +626,7 @@ bool is_compound(data_type type);
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_nested()
 {
-  return std::is_same_v<T, cudf::list_view> || std::is_same_v<T, cudf::struct_view>;
+  return cuda::std::is_same_v<T, cudf::list_view> || cuda::std::is_same_v<T, cudf::struct_view>;
 }
 
 /**
