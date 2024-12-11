@@ -19,6 +19,7 @@
  * @brief cuDF-IO JSON writer implementation
  */
 
+#include "io/comp/comp.hpp"
 #include "io/csv/durations.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "lists/utilities.hpp"
@@ -170,6 +171,9 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
   {
+    if (column_v.is_empty()) {  // empty begets empty
+      return make_empty_column(type_id::STRING);
+    }
     auto [offsets_column, chars] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
@@ -825,10 +829,10 @@ void write_chunked(data_sink* out_sink,
   }
 }
 
-void write_json(data_sink* out_sink,
-                table_view const& table,
-                json_writer_options const& options,
-                rmm::cuda_stream_view stream)
+void write_json_uncompressed(data_sink* out_sink,
+                             table_view const& table,
+                             json_writer_options const& options,
+                             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   std::vector<column_name_info> user_column_names = [&]() {
@@ -929,6 +933,26 @@ void write_json(data_sink* out_sink,
       out_sink->host_write(list_braces.data() + 1, 1);
     }
   }
+}
+
+void write_json(data_sink* out_sink,
+                table_view const& table,
+                json_writer_options const& options,
+                rmm::cuda_stream_view stream)
+{
+  if (options.get_compression() != compression_type::NONE) {
+    std::vector<char> hbuf;
+    auto hbuf_sink_ptr = data_sink::create(&hbuf);
+    write_json_uncompressed(hbuf_sink_ptr.get(), table, options, stream);
+    stream.synchronize();
+    auto comp_hbuf = cudf::io::detail::compress(
+      options.get_compression(),
+      host_span<uint8_t>(reinterpret_cast<uint8_t*>(hbuf.data()), hbuf.size()),
+      stream);
+    out_sink->host_write(comp_hbuf.data(), comp_hbuf.size());
+    return;
+  }
+  write_json_uncompressed(out_sink, table, options, stream);
 }
 
 }  // namespace cudf::io::json::detail

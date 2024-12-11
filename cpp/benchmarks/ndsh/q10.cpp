@@ -94,7 +94,7 @@
 }
 
 void run_ndsh_q10(nvbench::state& state,
-                  std::unordered_map<std::string, parquet_device_buffer>& sources)
+                  std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
@@ -122,15 +122,16 @@ void run_ndsh_q10(nvbench::state& state,
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto const customer = read_parquet(
-    sources["customer"].make_source_info(),
+    sources.at("customer").make_source_info(),
     {"c_custkey", "c_name", "c_nationkey", "c_acctbal", "c_address", "c_phone", "c_comment"});
   auto const orders =
-    read_parquet(sources["orders"].make_source_info(), orders_cols, std::move(orders_pred));
+    read_parquet(sources.at("orders").make_source_info(), orders_cols, std::move(orders_pred));
   auto const lineitem =
-    read_parquet(sources["lineitem"].make_source_info(),
+    read_parquet(sources.at("lineitem").make_source_info(),
                  {"l_extendedprice", "l_discount", "l_orderkey", "l_returnflag"},
                  std::move(lineitem_pred));
-  auto const nation = read_parquet(sources["nation"].make_source_info(), {"n_name", "n_nationkey"});
+  auto const nation =
+    read_parquet(sources.at("nation").make_source_info(), {"n_name", "n_nationkey"});
 
   // Perform the joins
   auto const join_a       = apply_inner_join(customer, nation, {"c_nationkey"}, {"n_nationkey"});
@@ -163,7 +164,7 @@ void ndsh_q10(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
-  std::unordered_map<std::string, parquet_device_buffer> sources;
+  std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"customer", "orders", "lineitem", "nation"}, sources);
 

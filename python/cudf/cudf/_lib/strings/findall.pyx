@@ -23,3 +23,19 @@ def findall(Column source_strings, object pattern, uint32_t flags):
         prog,
     )
     return Column.from_pylibcudf(plc_result)
+
+
+@acquire_spill_lock()
+def find_re(Column source_strings, object pattern, uint32_t flags):
+    """
+    Returns character positions where the pattern first matches
+    the elements in source_strings.
+    """
+    prog = plc.strings.regex_program.RegexProgram.create(
+        str(pattern), flags
+    )
+    plc_result = plc.strings.findall.find_re(
+        source_strings.to_pylibcudf(mode="read"),
+        prog,
+    )
+    return Column.from_pylibcudf(plc_result)

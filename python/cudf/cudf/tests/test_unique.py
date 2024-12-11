@@ -12,9 +12,9 @@ from cudf.testing import assert_eq
 @pytest.fixture
 def df():
     df = cudf.DataFrame()
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
-    arr = np.random.randint(2, size=10, dtype=np.int64)
+    arr = rng.integers(2, size=10, dtype=np.int64)
     df["foo"] = arr
     df["bar"] = cudf.Series([pd.Timestamp(x) for x in arr])
 

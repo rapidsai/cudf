@@ -116,6 +116,16 @@ std::unique_ptr<cudf::column> extract_nanosecond_fraction(cudf::column_view cons
                                                           rmm::device_async_resource_ref mr);
 
 /**
+ * @copydoc cudf::extract_datetime_component(cudf::column_view const&, datetime_component,
+ * rmm::cuda_stream_view, rmm::device_async_resource_ref)
+ *
+ */
+std::unique_ptr<cudf::column> extract_datetime_component(cudf::column_view const& column,
+                                                         datetime_component component,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr);
+
+/**
  * @copydoc cudf::last_day_of_month(cudf::column_view const&, rmm::cuda_stream_view,
  * rmm::device_async_resource_ref)
  *

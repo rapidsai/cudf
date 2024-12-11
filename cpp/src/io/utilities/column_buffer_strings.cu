@@ -27,8 +27,7 @@ std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_colu
 {
   // if the size of _string_data is over the threshold for 64bit size_type, _data will contain
   // sizes rather than offsets. need special handling for that case.
-  auto const threshold = static_cast<size_t>(strings::detail::get_offset64_threshold());
-  if (_string_data.size() > threshold) {
+  if (is_large_strings_column()) {
     if (not strings::detail::is_large_strings_enabled()) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }

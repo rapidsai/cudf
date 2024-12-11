@@ -37,6 +37,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -53,7 +54,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
@@ -182,7 +182,7 @@ struct replace_kernel_forwarder {
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
   {
-    rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
+    cudf::detail::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
 
     auto replace = [&] {

@@ -45,7 +45,7 @@ class strings_column_view : private column_view {
   strings_column_view(column_view strings_column);
   strings_column_view(strings_column_view&&)      = default;  ///< Move constructor
   strings_column_view(strings_column_view const&) = default;  ///< Copy constructor
-  ~strings_column_view()                          = default;
+  ~strings_column_view() override                 = default;
   /**
    * @brief Copy assignment operator
    *

@@ -2,80 +2,27 @@
 
 from cudf._lib.column cimport Column
 
-from cudf._lib.scalar import as_device_scalar
-
-from cudf._lib.scalar cimport DeviceScalar
-
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
-
-from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
-from libcpp.utility cimport move
-
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.scalar.scalar cimport string_scalar
-from pylibcudf.libcudf.strings.convert.convert_booleans cimport (
-    from_booleans as cpp_from_booleans,
-    to_booleans as cpp_to_booleans,
-)
-from pylibcudf.libcudf.strings.convert.convert_datetime cimport (
-    is_timestamp as cpp_is_timestamp,
-)
-from pylibcudf.libcudf.strings.convert.convert_floats cimport (
-    from_floats as cpp_from_floats,
-    to_floats as cpp_to_floats,
-)
-from pylibcudf.libcudf.strings.convert.convert_integers cimport (
-    from_integers as cpp_from_integers,
-    hex_to_integers as cpp_hex_to_integers,
-    integers_to_hex as cpp_integers_to_hex,
-    is_hex as cpp_is_hex,
-    to_integers as cpp_to_integers,
-)
-from pylibcudf.libcudf.strings.convert.convert_ipv4 cimport (
-    integers_to_ipv4 as cpp_integers_to_ipv4,
-    ipv4_to_integers as cpp_ipv4_to_integers,
-    is_ipv4 as cpp_is_ipv4,
-)
-from pylibcudf.libcudf.types cimport data_type, type_id
-
-from cudf._lib.types cimport underlying_type_t_type_id
-
 import pylibcudf as plc
+from pylibcudf.types cimport DataType
 
-import cudf
+from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.types cimport dtype_to_pylibcudf_type
 
 
 def floating_to_string(Column input_col):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_floats(
-                input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def string_to_floating(Column input_col, object out_type):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
-        )
+    plc_column = plc.strings.convert.convert_floats.from_floats(
+        input_col.to_pylibcudf(mode="read"),
     )
-    cdef data_type c_out_type = data_type(tid)
-    with nogil:
-        c_result = move(
-            cpp_to_floats(
-                input_column_view,
-                c_out_type))
+    return Column.from_pylibcudf(plc_column)
 
-    return Column.from_unique_ptr(move(c_result))
+
+def string_to_floating(Column input_col, DataType out_type):
+    plc_column = plc.strings.convert.convert_floats.to_floats(
+        input_col.to_pylibcudf(mode="read"),
+        out_type
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def dtos(Column input_col):
@@ -107,7 +54,7 @@ def stod(Column input_col):
     A Column with strings cast to double
     """
 
-    return string_to_floating(input_col, cudf.dtype("float64"))
+    return string_to_floating(input_col, plc.DataType(plc.TypeId.FLOAT64))
 
 
 def ftos(Column input_col):
@@ -139,36 +86,22 @@ def stof(Column input_col):
     A Column with strings cast to float
     """
 
-    return string_to_floating(input_col, cudf.dtype("float32"))
+    return string_to_floating(input_col, plc.DataType(plc.TypeId.FLOAT32))
 
 
 def integer_to_string(Column input_col):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_integers(
-                input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def string_to_integer(Column input_col, object out_type):
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
-        )
+    plc_column = plc.strings.convert.convert_integers.from_integers(
+        input_col.to_pylibcudf(mode="read"),
     )
-    cdef data_type c_out_type = data_type(tid)
-    with nogil:
-        c_result = move(
-            cpp_to_integers(
-                input_column_view,
-                c_out_type))
+    return Column.from_pylibcudf(plc_column)
 
-    return Column.from_unique_ptr(move(c_result))
+
+def string_to_integer(Column input_col, DataType out_type):
+    plc_column = plc.strings.convert.convert_integers.to_integers(
+        input_col.to_pylibcudf(mode="read"),
+        out_type
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def i8tos(Column input_col):
@@ -200,7 +133,7 @@ def stoi8(Column input_col):
     A Column with strings cast to int8
     """
 
-    return string_to_integer(input_col, cudf.dtype("int8"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT8))
 
 
 def i16tos(Column input_col):
@@ -232,7 +165,7 @@ def stoi16(Column input_col):
     A Column with strings cast to int16
     """
 
-    return string_to_integer(input_col, cudf.dtype("int16"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT16))
 
 
 def itos(Column input_col):
@@ -264,7 +197,7 @@ def stoi(Column input_col):
     A Column with strings cast to int32
     """
 
-    return string_to_integer(input_col, cudf.dtype("int32"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT32))
 
 
 def ltos(Column input_col):
@@ -296,7 +229,7 @@ def stol(Column input_col):
     A Column with strings cast to int64
     """
 
-    return string_to_integer(input_col, cudf.dtype("int64"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.INT64))
 
 
 def ui8tos(Column input_col):
@@ -328,7 +261,7 @@ def stoui8(Column input_col):
     A Column with strings cast to uint8
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint8"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT8))
 
 
 def ui16tos(Column input_col):
@@ -360,7 +293,7 @@ def stoui16(Column input_col):
     A Column with strings cast to uint16
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint16"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT16))
 
 
 def uitos(Column input_col):
@@ -392,7 +325,7 @@ def stoui(Column input_col):
     A Column with strings cast to uint32
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint32"))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT32))
 
 
 def ultos(Column input_col):
@@ -424,80 +357,24 @@ def stoul(Column input_col):
     A Column with strings cast to uint64
     """
 
-    return string_to_integer(input_col, cudf.dtype("uint64"))
-
-
-def _to_booleans(Column input_col, object string_true="True"):
-    """
-    Converting/Casting input column of type string to boolean column
-
-    Parameters
-    ----------
-    input_col : input column of type string
-    string_true : string that represents True
-
-    Returns
-    -------
-    A Column with string values cast to boolean
-    """
-
-    cdef DeviceScalar str_true = as_device_scalar(string_true)
-    cdef column_view input_column_view = input_col.view()
-    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
-        str_true.get_raw_ptr())
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_to_booleans(
-                input_column_view,
-                string_scalar_true[0]))
-
-    return Column.from_unique_ptr(move(c_result))
+    return string_to_integer(input_col, plc.DataType(plc.TypeId.UINT64))
 
 
 def to_booleans(Column input_col):
-
-    return _to_booleans(input_col)
-
-
-def _from_booleans(
-        Column input_col,
-        object string_true="True",
-        object string_false="False"):
-    """
-    Converting/Casting input column of type boolean to string column
-
-    Parameters
-    ----------
-    input_col : input column of type boolean
-    string_true : string that represents True
-    string_false : string that represents False
-
-    Returns
-    -------
-    A Column with boolean values cast to string
-    """
-
-    cdef DeviceScalar str_true = as_device_scalar(string_true)
-    cdef DeviceScalar str_false = as_device_scalar(string_false)
-    cdef column_view input_column_view = input_col.view()
-    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
-        str_true.get_raw_ptr())
-    cdef const string_scalar* string_scalar_false = <const string_scalar*>(
-        str_false.get_raw_ptr())
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_booleans(
-                input_column_view,
-                string_scalar_true[0],
-                string_scalar_false[0]))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_booleans.to_booleans(
+        input_col.to_pylibcudf(mode="read"),
+        as_device_scalar("True").c_value,
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def from_booleans(Column input_col):
-    return _from_booleans(input_col)
+    plc_column = plc.strings.convert.convert_booleans.from_booleans(
+        input_col.to_pylibcudf(mode="read"),
+        as_device_scalar("True").c_value,
+        as_device_scalar("False").c_value,
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def int2timestamp(
@@ -520,11 +397,10 @@ def int2timestamp(
     A Column with date-time represented in string format
 
     """
-    cdef string c_timestamp_format = format.encode("UTF-8")
     return Column.from_pylibcudf(
         plc.strings.convert.convert_datetime.from_timestamps(
             input_col.to_pylibcudf(mode="read"),
-            c_timestamp_format,
+            format,
             names.to_pylibcudf(mode="read")
         )
     )
@@ -545,12 +421,11 @@ def timestamp2int(Column input_col, dtype, format):
 
     """
     dtype = dtype_to_pylibcudf_type(dtype)
-    cdef string c_timestamp_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_datetime.to_timestamps(
             input_col.to_pylibcudf(mode="read"),
             dtype,
-            c_timestamp_format
+            format
         )
     )
 
@@ -570,18 +445,11 @@ def istimestamp(Column input_col, str format):
     A Column of boolean values identifying strings that matched the format.
 
     """
-    if input_col.size == 0:
-        return cudf.core.column.column_empty(0, dtype=cudf.dtype("bool"))
-    cdef column_view input_column_view = input_col.view()
-    cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_is_timestamp(
-                input_column_view,
-                c_timestamp_format))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_datetime.is_timestamp(
+        input_col.to_pylibcudf(mode="read"),
+        format
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def timedelta2int(Column input_col, dtype, format):
@@ -599,12 +467,11 @@ def timedelta2int(Column input_col, dtype, format):
 
     """
     dtype = dtype_to_pylibcudf_type(dtype)
-    cdef string c_timestamp_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_durations.to_durations(
             input_col.to_pylibcudf(mode="read"),
             dtype,
-            c_timestamp_format
+            format
         )
     )
 
@@ -623,12 +490,10 @@ def int2timedelta(Column input_col, str format):
     A Column with Timedelta represented in string format
 
     """
-
-    cdef string c_duration_format = format.encode('UTF-8')
     return Column.from_pylibcudf(
         plc.strings.convert.convert_durations.from_durations(
             input_col.to_pylibcudf(mode="read"),
-            c_duration_format
+            format
         )
     )
 
@@ -646,14 +511,10 @@ def int2ip(Column input_col):
     A Column with integer represented in string ipv4 format
 
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_integers_to_ipv4(input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
+        input_col.to_pylibcudf(mode="read")
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def ip2int(Column input_col):
@@ -669,14 +530,10 @@ def ip2int(Column input_col):
     A Column with ipv4 represented as integer
 
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_ipv4_to_integers(input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_ipv4.ipv4_to_integers(
+        input_col.to_pylibcudf(mode="read")
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def is_ipv4(Column source_strings):
@@ -685,18 +542,13 @@ def is_ipv4(Column source_strings):
     that have strings in IPv4 format. This format is nnn.nnn.nnn.nnn
     where nnn is integer digits in [0,255].
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_is_ipv4(
-            source_view
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_ipv4.is_ipv4(
+        source_strings.to_pylibcudf(mode="read")
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
-def htoi(Column input_col, **kwargs):
+def htoi(Column input_col):
     """
     Converting input column of type string having hex values
     to integer of out_type
@@ -709,22 +561,11 @@ def htoi(Column input_col, **kwargs):
     -------
     A Column of integers parsed from hexadecimal string values.
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef type_id tid = <type_id> (
-        <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[cudf.dtype("int64")]
-        )
+    plc_column = plc.strings.convert.convert_integers.hex_to_integers(
+        input_col.to_pylibcudf(mode="read"),
+        plc.DataType(plc.TypeId.INT64)
     )
-    cdef data_type c_out_type = data_type(tid)
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_hex_to_integers(input_column_view,
-                                c_out_type))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(plc_column)
 
 
 def is_hex(Column source_strings):
@@ -732,15 +573,10 @@ def is_hex(Column source_strings):
     Returns a Column of boolean values with True for `source_strings`
     that have hex characters.
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_is_hex(
-            source_view
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_integers.is_hex(
+        source_strings.to_pylibcudf(mode="read"),
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 def itoh(Column input_col):
@@ -756,11 +592,7 @@ def itoh(Column input_col):
     -------
     A Column of strings with hexadecimal characters.
     """
-
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_integers_to_hex(input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_integers.integers_to_hex(
+        input_col.to_pylibcudf(mode="read"),
+    )
+    return Column.from_pylibcudf(plc_column)

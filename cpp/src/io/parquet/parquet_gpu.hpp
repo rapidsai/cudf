@@ -22,14 +22,13 @@
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
 #include "io/utilities/column_buffer.hpp"
-#include "io/utilities/hostdevice_vector.hpp"
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
@@ -221,6 +220,13 @@ enum class decode_kernel_mask {
     (1 << 9),                              // Same as above but for nested, fixed-width data
   FIXED_WIDTH_NO_DICT_NESTED = (1 << 10),  // Run decode kernel for fixed width non-dictionary pages
   FIXED_WIDTH_DICT_NESTED    = (1 << 11),  // Run decode kernel for fixed width dictionary pages
+  FIXED_WIDTH_DICT_LIST      = (1 << 12),  // Run decode kernel for fixed width dictionary pages
+  FIXED_WIDTH_NO_DICT_LIST   = (1 << 13),  // Run decode kernel for fixed width non-dictionary pages
+  BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST =
+    (1 << 14),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data for fixed width lists
+  BOOLEAN        = (1 << 15),  // Run decode kernel for boolean data
+  BOOLEAN_NESTED = (1 << 16),  // Run decode kernel for nested boolean data
+  BOOLEAN_LIST   = (1 << 17),  // Run decode kernel for list boolean data
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -294,7 +300,8 @@ struct PageInfo {
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
   // indicator. instead the lengths for these are stored in the header.
-  int32_t lvl_bytes[level_type::NUM_LEVEL_TYPES];  // length of the rep/def levels (V2 header)
+  int32_t                                    // NOLINT
+    lvl_bytes[level_type::NUM_LEVEL_TYPES];  // length of the rep/def levels (V2 header)
   // Number of values in this data page or dictionary.
   // Important : the # of input values does not necessarily
   // correspond to the number of rows in the output. It just reflects the number
@@ -303,8 +310,10 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;  // starting row of this page relative to the start of the chunk
-  int32_t num_rows;   // number of rows in this page
+  int32_t chunk_row;          // starting row of this page relative to the start of the chunk
+  int32_t num_rows;           // number of rows in this page
+  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
+                              // adjusted to compensate for the list row size estimates.
   // the next four are calculated in gpuComputePageStringSizes
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
@@ -345,7 +354,7 @@ struct PageInfo {
   PageNestingDecodeInfo* nesting_decode;
 
   // level decode buffers
-  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];
+  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
 
   // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
   int64_t temp_string_size;
@@ -394,7 +403,7 @@ struct ColumnChunkDesc {
                            uint8_t def_level_bits_,
                            uint8_t rep_level_bits_,
                            Compression codec_,
-                           cuda::std::optional<LogicalType> logical_type_,
+                           std::optional<LogicalType> logical_type_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
@@ -431,21 +440,21 @@ struct ColumnChunkDesc {
   size_t num_values{};               // total number of values in this column
   size_t start_row{};                // file-wide, absolute starting row of this chunk
   uint32_t num_rows{};               // number of rows in this chunk
-  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
-  int16_t max_nesting_depth{};                       // max nesting depth of the output
-  int32_t type_length{};                             // type length from schema (for FLBA only)
-  Type physical_type{};                              // parquet physical data type
-  uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
-  int32_t num_data_pages{};                     // number of data pages
-  int32_t num_dict_pages{};                     // number of dictionary pages
+  int16_t max_level[level_type::NUM_LEVEL_TYPES]{};   // max definition/repetition level  // NOLINT
+  int16_t max_nesting_depth{};                        // max nesting depth of the output
+  int32_t type_length{};                              // type length from schema (for FLBA only)
+  Type physical_type{};                               // parquet physical data type
+  uint8_t level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max   // NOLINT
+                                                      // definition/repetition levels
+  int32_t num_data_pages{};                           // number of data pages
+  int32_t num_dict_pages{};                           // number of dictionary pages
   PageInfo const* dict_page{};
-  string_index_pair* str_dict_index{};  // index for string dictionary
-  bitmask_type** valid_map_base{};      // base pointers of valid bit map for this column
-  void** column_data_base{};            // base pointers of column data
-  void** column_string_base{};          // base pointers of column string data
-  Compression codec{};                  // compressed codec enum
-  cuda::std::optional<LogicalType> logical_type{};  // logical type
+  string_index_pair* str_dict_index{};        // index for string dictionary
+  bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
+  void** column_data_base{};                  // base pointers of column data
+  void** column_string_base{};                // base pointers of column string data
+  Compression codec{};                        // compressed codec enum
+  std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
@@ -535,7 +544,7 @@ enum class encode_kernel_mask {
   DELTA_BINARY      = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
   DELTA_LENGTH_BA   = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
   DELTA_BYTE_ARRAY  = (1 << 4),  // Run DELTA_BYtE_ARRAY encoding kernel
-  BYTE_STREAM_SPLIT = (1 << 5),  // Run plain encoding kernel, but split streams
+  BYTE_STREAM_SPLIT = (1 << 5)   // Run plain encoding kernel, but split streams
 };
 
 /**
@@ -797,6 +806,18 @@ void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                          rmm::cuda_stream_view stream);
 
 /**
+ * @brief Writes the final offsets to the corresponding list and string buffer end addresses in a
+ * batched manner.
+ *
+ * @param offsets Host span of final offsets
+ * @param buff_addrs Host span of corresponding output col buffer end addresses
+ * @param stream CUDA stream to use
+ */
+void WriteFinalOffsets(host_span<size_type const> offsets,
+                       host_span<size_type* const> buff_addrs,
+                       rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading the string column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
@@ -895,66 +916,18 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
+ * @param[in] kernel_mask Mask indicating the type of decoding kernel to launch.
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
-void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
-                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                         std::size_t num_rows,
-                         size_t min_row,
-                         int level_type_size,
-                         bool has_nesting,
-                         kernel_error::pointer error_code,
-                         rmm::cuda_stream_view stream);
-
-/**
- * @brief Launches kernel for reading dictionary fixed width column data stored in the pages
- *
- * The page data will be written to the output pointed to in the page's
- * associated column chunk.
- *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in] num_rows Total number of rows to read
- * @param[in] min_row Minimum number of rows to read
- * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
- * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use
- */
-void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             std::size_t num_rows,
-                             size_t min_row,
-                             int level_type_size,
-                             bool has_nesting,
-                             kernel_error::pointer error_code,
-                             rmm::cuda_stream_view stream);
-
-/**
- * @brief Launches kernel for reading fixed width column data stored in the pages
- *
- * The page data will be written to the output pointed to in the page's
- * associated column chunk.
- *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in] num_rows Total number of rows to read
- * @param[in] min_row Minimum number of rows to read
- * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[in] has_nesting Whether or not the data contains nested (but not list) data.
- * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use
- */
-void DecodeSplitPageFixedWidthData(cudf::detail::hostdevice_span<PageInfo> pages,
-                                   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                   std::size_t num_rows,
-                                   size_t min_row,
-                                   int level_type_size,
-                                   bool has_nesting,
-                                   kernel_error::pointer error_code,
-                                   rmm::cuda_stream_view stream);
+void DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                    cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                    size_t num_rows,
+                    size_t min_row,
+                    int level_type_size,
+                    decode_kernel_mask kernel_mask,
+                    kernel_error::pointer error_code,
+                    rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments

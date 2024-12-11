@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import collections.abc
-import pickle
 import time
 import weakref
 from threading import RLock
@@ -207,7 +206,7 @@ class SpillableBufferOwner(BufferOwner):
                     domain="cudf_python-spill",
                 ):
                     host_mem = host_memory_allocation(self.size)
-                    rmm._lib.device_buffer.copy_ptr_to_host(
+                    rmm.pylibrmm.device_buffer.copy_ptr_to_host(
                         self._ptr, host_mem
                     )
                 self._ptr_desc["memoryview"] = host_mem
@@ -352,7 +351,7 @@ class SpillableBufferOwner(BufferOwner):
             else:
                 assert self._ptr_desc["type"] == "gpu"
                 ret = host_memory_allocation(size)
-                rmm._lib.device_buffer.copy_ptr_to_host(
+                rmm.pylibrmm.device_buffer.copy_ptr_to_host(
                     self._ptr + offset, ret
                 )
                 return ret
@@ -415,8 +414,7 @@ class SpillableBuffer(ExposureTrackedBuffer):
         header: dict[str, Any] = {}
         frames: list[Buffer | memoryview]
         with self._owner.lock:
-            header["type-serialized"] = pickle.dumps(self.__class__)
-            header["owner-type-serialized"] = pickle.dumps(type(self._owner))
+            header["owner-type-serialized-name"] = type(self._owner).__name__
             header["frame_count"] = 1
             if self.is_spilled:
                 frames = [self.memoryview()]

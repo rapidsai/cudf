@@ -19,9 +19,7 @@
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 

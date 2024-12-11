@@ -13,12 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <algorithm>
 #include <filesystem>
@@ -38,7 +36,7 @@ std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 struct timezone_file_header {
   uint32_t magic;          ///< "TZif"
   uint8_t version;         ///< 0:version1, '2':version2, '3':version3
-  uint8_t reserved15[15];  ///< unused, reserved for future use
+  uint8_t reserved15[15];  ///< unused, reserved for future use // NOLINT
   uint32_t isutccnt;       ///< number of UTC/local indicators contained in the body
   uint32_t isstdcnt;       ///< number of standard/wall indicators contained in the body
   uint32_t leapcnt;        ///< number of leap second records contained in the body
@@ -138,7 +136,7 @@ struct timezone_file {
       std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
-    CUDF_EXPECTS(fin, "Failed to open the timezone file.");
+    CUDF_EXPECTS(fin, "Failed to open the timezone file '" + tz_filename.string() + "'");
     auto const file_size = fin.tellg();
     fin.seekg(0);
 

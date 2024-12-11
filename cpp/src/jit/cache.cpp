@@ -16,11 +16,8 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include <cuda.h>
-
 #include <jitify2.hpp>
 
-#include <cstddef>
 #include <filesystem>
 
 namespace cudf {

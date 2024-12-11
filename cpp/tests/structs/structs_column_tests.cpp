@@ -17,28 +17,18 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/sequence.h>
 
 #include <algorithm>
 #include <functional>
@@ -635,9 +625,8 @@ TEST_F(StructColumnWrapperTest, TestStructsColumnWithEmptyChild)
   auto mask_vec = std::vector<bool>{true, false, false};
   auto [null_mask, null_count] =
     cudf::test::detail::make_null_mask(mask_vec.begin(), mask_vec.end());
-  auto structs_col =
-    cudf::make_structs_column(num_rows, std::move(cols), null_count, std::move(null_mask));
-  EXPECT_NO_THROW(structs_col->view());
+  EXPECT_NO_THROW(auto structs_col = cudf::make_structs_column(
+                    num_rows, std::move(cols), null_count, std::move(null_mask)));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

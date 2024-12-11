@@ -39,8 +39,26 @@ namespace datetime {
  */
 
 /**
+ * @brief Types of datetime components that may be extracted.
+ */
+enum class datetime_component : uint8_t {
+  YEAR,
+  MONTH,
+  DAY,
+  WEEKDAY,
+  HOUR,
+  MINUTE,
+  SECOND,
+  MILLISECOND,
+  MICROSECOND,
+  NANOSECOND
+};
+
+/**
  * @brief  Extracts year from any datetime type and returns an int16_t
  * cudf::column.
+ *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
  *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -49,7 +67,7 @@ namespace datetime {
  * @returns cudf::column of the extracted int16_t years
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_year(
+[[deprecated]] std::unique_ptr<cudf::column> extract_year(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -58,6 +76,8 @@ std::unique_ptr<cudf::column> extract_year(
  * @brief  Extracts month from any datetime type and returns an int16_t
  * cudf::column.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -65,7 +85,7 @@ std::unique_ptr<cudf::column> extract_year(
  * @returns cudf::column of the extracted int16_t months
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_month(
+[[deprecated]] std::unique_ptr<cudf::column> extract_month(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -74,6 +94,8 @@ std::unique_ptr<cudf::column> extract_month(
  * @brief  Extracts day from any datetime type and returns an int16_t
  * cudf::column.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -81,7 +103,7 @@ std::unique_ptr<cudf::column> extract_month(
  * @returns cudf::column of the extracted int16_t days
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_day(
+[[deprecated]] std::unique_ptr<cudf::column> extract_day(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -90,6 +112,8 @@ std::unique_ptr<cudf::column> extract_day(
  * @brief  Extracts a weekday from any datetime type and returns an int16_t
  * cudf::column.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -97,7 +121,7 @@ std::unique_ptr<cudf::column> extract_day(
  * @returns cudf::column of the extracted int16_t days
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_weekday(
+[[deprecated]] std::unique_ptr<cudf::column> extract_weekday(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -106,6 +130,8 @@ std::unique_ptr<cudf::column> extract_weekday(
  * @brief  Extracts hour from any datetime type and returns an int16_t
  * cudf::column.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -113,7 +139,7 @@ std::unique_ptr<cudf::column> extract_weekday(
  * @returns cudf::column of the extracted int16_t hours
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_hour(
+[[deprecated]] std::unique_ptr<cudf::column> extract_hour(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -122,6 +148,8 @@ std::unique_ptr<cudf::column> extract_hour(
  * @brief  Extracts minute from any datetime type and returns an int16_t
  * cudf::column.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -129,7 +157,7 @@ std::unique_ptr<cudf::column> extract_hour(
  * @returns cudf::column of the extracted int16_t minutes
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_minute(
+[[deprecated]] std::unique_ptr<cudf::column> extract_minute(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -138,6 +166,8 @@ std::unique_ptr<cudf::column> extract_minute(
  * @brief  Extracts second from any datetime type and returns an int16_t
  * cudf::column.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -145,7 +175,7 @@ std::unique_ptr<cudf::column> extract_minute(
  * @returns cudf::column of the extracted int16_t seconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_second(
+[[deprecated]] std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -157,6 +187,8 @@ std::unique_ptr<cudf::column> extract_second(
  * A millisecond fraction is only the 3 digits that make up the millisecond portion of a duration.
  * For example, the millisecond fraction of 1.234567890 seconds is 234.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -164,7 +196,7 @@ std::unique_ptr<cudf::column> extract_second(
  * @returns cudf::column of the extracted int16_t milliseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_millisecond_fraction(
+[[deprecated]] std::unique_ptr<cudf::column> extract_millisecond_fraction(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -176,6 +208,8 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  * A microsecond fraction is only the 3 digits that make up the microsecond portion of a duration.
  * For example, the microsecond fraction of 1.234567890 seconds is 567.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -183,7 +217,7 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  * @returns cudf::column of the extracted int16_t microseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_microsecond_fraction(
+[[deprecated]] std::unique_ptr<cudf::column> extract_microsecond_fraction(
   cudf::column_view const& column,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -195,6 +229,8 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  * A nanosecond fraction is only the 3 digits that make up the nanosecond portion of a duration.
  * For example, the nanosecond fraction of 1.234567890 seconds is 890.
  *
+ * @deprecated Deprecated in 24.12, to be removed in 25.02
+ *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the returned column
@@ -202,8 +238,26 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  * @returns cudf::column of the extracted int16_t nanoseconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-std::unique_ptr<cudf::column> extract_nanosecond_fraction(
+[[deprecated]] std::unique_ptr<cudf::column> extract_nanosecond_fraction(
   cudf::column_view const& column,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Extracts the specified datetime component from any datetime type and
+ * returns an int16_t cudf::column.
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param component The datetime component to extract
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the returned column
+ *
+ * @returns cudf::column of the extracted int16_t datetime component
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> extract_datetime_component(
+  cudf::column_view const& column,
+  datetime_component component,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

@@ -22,8 +22,6 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cuda/std/type_traits>
-
 namespace CUDF_EXPORT cudf {
 
 /**
@@ -302,6 +300,30 @@ constexpr inline bool is_integral_not_bool()
  * @return false `type` is integral or is bool
  */
 bool is_integral_not_bool(data_type type);
+
+/**
+ * @brief Indicates whether the type `T` is a numeric type but not bool type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is numeric but not bool
+ * @return false  `T` is not numeric or is bool
+ */
+template <typename T>
+constexpr inline bool is_numeric_not_bool()
+{
+  return cudf::is_numeric<T>() and not std::is_same_v<T, bool>;
+}
+
+/**
+ * @brief Indicates whether `type` is a numeric `data_type` but not BOOL8
+ *
+ * "Numeric" types are integral/floating point types such as `INT*` or `FLOAT*`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is numeric but not bool
+ * @return false `type` is not numeric or is bool
+ */
+bool is_numeric_not_bool(data_type type);
 
 /**
  * @brief Indicates whether the type `T` is a floating point type.

@@ -241,7 +241,7 @@ class table_view : public detail::table_view_base<column_view> {
   {
     std::vector<column_view> columns(std::distance(begin, end));
     std::transform(begin, end, columns.begin(), [this](auto index) { return this->column(index); });
-    return table_view(columns);
+    return table_view{columns};
   }
 
   /**

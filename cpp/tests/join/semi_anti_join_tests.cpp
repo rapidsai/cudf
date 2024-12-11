@@ -22,7 +22,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf/join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>

@@ -19,11 +19,9 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <cstdint>
 #include <memory>

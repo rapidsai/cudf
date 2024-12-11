@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ from typing_extensions import Self
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf.core._internals import unary
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -26,6 +27,7 @@ from cudf.utils.dtypes import (
 
 if TYPE_CHECKING:
     from collections import abc
+    from collections.abc import Mapping, Sequence
 
     import numba.cuda
 
@@ -1017,12 +1019,12 @@ class CategoricalColumn(column.ColumnBase):
         """
         Identify missing values in a CategoricalColumn.
         """
-        result = libcudf.unary.is_null(self)
+        result = unary.is_null(self)
 
         if self.categories.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of an underlying float column
-            categories = libcudf.unary.is_nan(self.categories)
+            categories = unary.is_nan(self.categories)
             if categories.any():
                 code = self._encode(np.nan)
                 result = result | (self.codes == cudf.Scalar(code))
@@ -1033,12 +1035,12 @@ class CategoricalColumn(column.ColumnBase):
         """
         Identify non-missing values in a CategoricalColumn.
         """
-        result = libcudf.unary.is_valid(self)
+        result = unary.is_valid(self)
 
         if self.categories.dtype.kind == "f":
             # Need to consider `np.nan` values in case
             # of an underlying float column
-            categories = libcudf.unary.is_nan(self.categories)
+            categories = unary.is_nan(self.categories)
             if categories.any():
                 code = self._encode(np.nan)
                 result = result & (self.codes != cudf.Scalar(code))
@@ -1202,9 +1204,7 @@ class CategoricalColumn(column.ColumnBase):
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype, masked=True)
         else:
-            # Filter out inputs that have 0 length, then concatenate.
-            codes = [o for o in codes if len(o)]
-            codes_col = libcudf.concat.concat_columns(objs)
+            codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 
         codes_col = as_unsigned_codes(
             len(cats),
@@ -1337,7 +1337,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # Ensure new_categories is unique first
         if not (is_unique or new_cats.is_unique):
-            new_cats = cudf.Series(new_cats)._column.unique()
+            new_cats = new_cats.unique()
 
         if cur_cats.equals(new_cats, check_dtypes=True):
             # TODO: Internal usages don't always need a copy; add a copy keyword

@@ -23,7 +23,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -82,7 +81,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
     return streams;
   }
 
-  std::size_t get_stream_pool_size() const override { return STREAM_POOL_SIZE; }
+  [[nodiscard]] std::size_t get_stream_pool_size() const override { return STREAM_POOL_SIZE; }
 };
 
 /**

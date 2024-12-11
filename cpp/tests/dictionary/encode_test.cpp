@@ -21,8 +21,6 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 
-#include <vector>
-
 struct DictionaryEncodeTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionaryEncodeTest, EncodeStringColumn)

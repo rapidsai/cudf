@@ -292,7 +292,7 @@ std::unique_ptr<tokenize_vocabulary> load_vocabulary(
  * @throw cudf::logic_error if `delimiter` is invalid
  *
  * @param input Strings column to tokenize
- * @param vocabulary Used to lookup tokens within
+ * @param vocabulary Used to lookup tokens within `input`
  * @param delimiter Used to identify tokens within `input`
  * @param default_id The token id to be used for tokens not found in the `vocabulary`;
  *                   Default is -1

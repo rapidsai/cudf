@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/is_element_valid.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -71,7 +72,7 @@ struct get_element_functor {
     auto device_col = column_device_view::create(input, stream);
 
     rmm::device_scalar<string_view> temp_data(stream, mr);
-    rmm::device_scalar<bool> temp_valid(stream, mr);
+    cudf::detail::device_scalar<bool> temp_valid(stream, mr);
 
     device_single_thread(
       [buffer   = temp_data.data(),
@@ -155,8 +156,8 @@ struct get_element_functor {
 
     auto device_col = column_device_view::create(input, stream);
 
-    rmm::device_scalar<Type> temp_data(stream, mr);
-    rmm::device_scalar<bool> temp_valid(stream, mr);
+    cudf::detail::device_scalar<Type> temp_data(stream, mr);
+    cudf::detail::device_scalar<bool> temp_valid(stream, mr);
 
     device_single_thread(
       [buffer   = temp_data.data(),

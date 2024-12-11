@@ -32,13 +32,14 @@ def make_numeric_dataframe(nrows, dtype):
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
+    rng = np.random.default_rng(seed=0)
     types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
         {
-            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            f"col_{typ}": rng.integers(0, nrows, nrows).astype(typ)
             for typ in types
         }
     )

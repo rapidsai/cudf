@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import pylibcudf as plc
+
 import cudf
 from cudf._lib.nvtext.byte_pair_encode import (
-    BPEMergePairs as cpp_merge_pairs,
     byte_pair_encoding as cpp_byte_pair_encoding,
 )
 
@@ -25,7 +26,9 @@ class BytePairEncoder:
     """
 
     def __init__(self, merges_pair: "cudf.Series"):
-        self.merge_pairs = cpp_merge_pairs(merges_pair._column)
+        self.merge_pairs = plc.nvtext.byte_pair_encode.BPEMergePairs(
+            merges_pair._column.to_pylibcudf(mode="read")
+        )
 
     def __call__(self, text, separator: str = " ") -> cudf.Series:
         """

@@ -190,7 +190,7 @@ TEST_F(ListScalarTest, MoveConstructorNonNested)
 
   EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.view().data<int32_t>());
-  EXPECT_EQ(s.view().data<int32_t>(), nullptr);
+  EXPECT_EQ(s.view().data<int32_t>(), nullptr);  // NOLINT
 }
 
 TEST_F(ListScalarTest, MoveConstructorNested)
@@ -205,8 +205,8 @@ TEST_F(ListScalarTest, MoveConstructorNested)
   EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(offset_ptr, s2.view().child(0).data<cudf::size_type>());
   EXPECT_EQ(data_ptr, s2.view().child(1).data<int32_t>());
-  EXPECT_EQ(s.view().data<int32_t>(), nullptr);
-  EXPECT_EQ(s.view().num_children(), 0);
+  EXPECT_EQ(s.view().data<int32_t>(), nullptr);  // NOLINT
+  EXPECT_EQ(s.view().num_children(), 0);         // NOLINT
 }
 
 struct StructScalarTest : public cudf::test::BaseFixture {};

@@ -13,7 +13,6 @@
  * the License.
  */
 
-#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
 
 CUDF_TEST_PROGRAM_MAIN()

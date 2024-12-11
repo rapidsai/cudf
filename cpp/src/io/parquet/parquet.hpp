@@ -20,8 +20,6 @@
 
 #include <cudf/types.hpp>
 
-#include <cuda/std/optional>
-
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -94,10 +92,10 @@ struct LogicalType {
     BSON
   };
   Type type;
-  cuda::std::optional<DecimalType> decimal_type;
-  cuda::std::optional<TimeType> time_type;
-  cuda::std::optional<TimestampType> timestamp_type;
-  cuda::std::optional<IntType> int_type;
+  std::optional<DecimalType> decimal_type;
+  std::optional<TimeType> time_type;
+  std::optional<TimestampType> timestamp_type;
+  std::optional<IntType> int_type;
 
   LogicalType(Type tp = UNDEFINED) : type(tp) {}
   LogicalType(DecimalType&& dt) : type(DECIMAL), decimal_type(dt) {}
@@ -178,21 +176,21 @@ struct SchemaElement {
   // 5: nested fields
   int32_t num_children = 0;
   // 6: DEPRECATED: record the original type before conversion to parquet type
-  cuda::std::optional<ConvertedType> converted_type;
+  std::optional<ConvertedType> converted_type;
   // 7: DEPRECATED: record the scale for DECIMAL converted type
   int32_t decimal_scale = 0;
   // 8: DEPRECATED: record the precision for DECIMAL converted type
   int32_t decimal_precision = 0;
   // 9: save field_id from original schema
-  cuda::std::optional<int32_t> field_id;
+  std::optional<int32_t> field_id;
   // 10: replaces converted type
-  cuda::std::optional<LogicalType> logical_type;
+  std::optional<LogicalType> logical_type;
 
   // extra cudf specific fields
   bool output_as_byte_array = false;
 
   // cudf type determined from arrow:schema
-  cuda::std::optional<type_id> arrow_type;
+  std::optional<type_id> arrow_type;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
@@ -258,21 +256,21 @@ struct SchemaElement {
  */
 struct Statistics {
   // deprecated max value in signed comparison order
-  cuda::std::optional<std::vector<uint8_t>> max;
+  std::optional<std::vector<uint8_t>> max;
   // deprecated min value in signed comparison order
-  cuda::std::optional<std::vector<uint8_t>> min;
+  std::optional<std::vector<uint8_t>> min;
   // count of null values in the column
-  cuda::std::optional<int64_t> null_count;
+  std::optional<int64_t> null_count;
   // count of distinct values occurring
-  cuda::std::optional<int64_t> distinct_count;
+  std::optional<int64_t> distinct_count;
   // max value for column determined by ColumnOrder
-  cuda::std::optional<std::vector<uint8_t>> max_value;
+  std::optional<std::vector<uint8_t>> max_value;
   // min value for column determined by ColumnOrder
-  cuda::std::optional<std::vector<uint8_t>> min_value;
+  std::optional<std::vector<uint8_t>> min_value;
   // If true, max_value is the actual maximum value for a column
-  cuda::std::optional<bool> is_max_value_exact;
+  std::optional<bool> is_max_value_exact;
   // If true, min_value is the actual minimum value for a column
-  cuda::std::optional<bool> is_min_value_exact;
+  std::optional<bool> is_min_value_exact;
 };
 
 /**
@@ -281,7 +279,7 @@ struct Statistics {
 struct SizeStatistics {
   // Number of variable-width bytes stored for the page/chunk. Should not be set for anything
   // but the BYTE_ARRAY physical type.
-  cuda::std::optional<int64_t> unencoded_byte_array_data_bytes;
+  std::optional<int64_t> unencoded_byte_array_data_bytes;
   /**
    * When present, there is expected to be one element corresponding to each
    * repetition (i.e. size=max repetition_level+1) where each element
@@ -290,14 +288,14 @@ struct SizeStatistics {
    *
    * This value should not be written if max_repetition_level is 0.
    */
-  cuda::std::optional<std::vector<int64_t>> repetition_level_histogram;
+  std::optional<std::vector<int64_t>> repetition_level_histogram;
 
   /**
    * Same as repetition_level_histogram except for definition levels.
    *
    * This value should not be written if max_definition_level is 0 or 1.
    */
-  cuda::std::optional<std::vector<int64_t>> definition_level_histogram;
+  std::optional<std::vector<int64_t>> definition_level_histogram;
 };
 
 /**
@@ -318,7 +316,7 @@ struct OffsetIndex {
   std::vector<PageLocation> page_locations;
   // per-page size info. see description of the same field in SizeStatistics. only present for
   // columns with a BYTE_ARRAY physical type.
-  cuda::std::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes;
+  std::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes;
 };
 
 /**
@@ -329,11 +327,11 @@ struct ColumnIndex {
   std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
   std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
   BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;  // Indicates if min and max values are ordered
-  cuda::std::optional<std::vector<int64_t>> null_counts;  // Optional count of null values per page
+    BoundaryOrder::UNORDERED;                       // Indicates if min and max values are ordered
+  std::optional<std::vector<int64_t>> null_counts;  // Optional count of null values per page
   // Repetition/definition level histograms for the column chunk
-  cuda::std::optional<std::vector<int64_t>> repetition_level_histogram;
-  cuda::std::optional<std::vector<int64_t>> definition_level_histogram;
+  std::optional<std::vector<int64_t>> repetition_level_histogram;
+  std::optional<std::vector<int64_t>> definition_level_histogram;
 };
 
 /**
@@ -383,11 +381,11 @@ struct ColumnChunkMetaData {
   Statistics statistics;
   // Set of all encodings used for pages in this column chunk. This information can be used to
   // determine if all data pages are dictionary encoded for example.
-  cuda::std::optional<std::vector<PageEncodingStats>> encoding_stats;
+  std::optional<std::vector<PageEncodingStats>> encoding_stats;
   // Optional statistics to help estimate total memory when converted to in-memory representations.
   // The histograms contained in these statistics can also be useful in some cases for more
   // fine-grained nullability/list length filter pushdown.
-  cuda::std::optional<SizeStatistics> size_statistics;
+  std::optional<SizeStatistics> size_statistics;
 };
 
 /**
@@ -429,13 +427,13 @@ struct RowGroup {
   int64_t num_rows = 0;
   // If set, specifies a sort ordering of the rows in this RowGroup.
   // The sorting columns can be a subset of all the columns.
-  cuda::std::optional<std::vector<SortingColumn>> sorting_columns;
+  std::optional<std::vector<SortingColumn>> sorting_columns;
   // Byte offset from beginning of file to first page (data or dictionary) in this row group
-  cuda::std::optional<int64_t> file_offset;
+  std::optional<int64_t> file_offset;
   // Total byte size of all compressed (and potentially encrypted) column data in this row group
-  cuda::std::optional<int64_t> total_compressed_size;
+  std::optional<int64_t> total_compressed_size;
   // Row group ordinal in the file
-  cuda::std::optional<int16_t> ordinal;
+  std::optional<int16_t> ordinal;
 };
 
 /**
@@ -460,7 +458,7 @@ struct FileMetaData {
   std::vector<RowGroup> row_groups;
   std::vector<KeyValue> key_value_metadata;
   std::string created_by = "";
-  cuda::std::optional<std::vector<ColumnOrder>> column_orders;
+  std::optional<std::vector<ColumnOrder>> column_orders;
 };
 
 /**

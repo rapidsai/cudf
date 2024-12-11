@@ -24,8 +24,8 @@ interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
 @pytest.mark.parametrize("dtype", params_dtypes)
 @pytest.mark.parametrize("skipna", [True, False])
 def test_series_reductions(method, dtype, skipna):
-    np.random.seed(0)
-    arr = np.random.random(100)
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(100)
     if np.issubdtype(dtype, np.integer):
         arr *= 100
         mask = arr > 10
@@ -56,8 +56,8 @@ def test_series_reductions(method, dtype, skipna):
 def test_series_reductions_concurrency(method):
     e = ThreadPoolExecutor(10)
 
-    np.random.seed(0)
-    srs = [cudf.Series(np.random.random(10000)) for _ in range(1)]
+    rng = np.random.default_rng(seed=0)
+    srs = [cudf.Series(rng.random(10000)) for _ in range(1)]
 
     def call_test(sr):
         fn = getattr(sr, method)
@@ -74,8 +74,8 @@ def test_series_reductions_concurrency(method):
 
 @pytest.mark.parametrize("ddof", range(3))
 def test_series_std(ddof):
-    np.random.seed(0)
-    arr = np.random.random(100) - 0.5
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(100) - 0.5
     sr = cudf.Series(arr)
     pd = sr.to_pandas()
     got = sr.std(ddof=ddof)
@@ -84,8 +84,9 @@ def test_series_std(ddof):
 
 
 def test_series_unique():
+    rng = np.random.default_rng(seed=0)
     for size in [10**x for x in range(5)]:
-        arr = np.random.randint(low=-1, high=10, size=size)
+        arr = rng.integers(low=-1, high=10, size=size)
         mask = arr != -1
         sr = cudf.Series(arr)
         sr[~mask] = None
@@ -129,7 +130,8 @@ def test_series_nunique(nan_as_null, dropna):
 
 
 def test_series_scale():
-    arr = pd.Series(np.random.randint(low=-10, high=10, size=100))
+    rng = np.random.default_rng(seed=0)
+    arr = pd.Series(rng.integers(low=-10, high=10, size=100))
     sr = cudf.Series(arr)
 
     vmin = arr.min()
@@ -229,8 +231,8 @@ def test_misc_quantiles(data, q):
 @pytest.mark.parametrize(
     "data",
     [
-        {"data": np.random.normal(-100, 100, 1000)},
-        {"data": np.random.randint(-50, 50, 1000)},
+        {"data": np.random.default_rng(seed=0).normal(-100, 100, 1000)},
+        {"data": np.random.default_rng(seed=0).integers(-50, 50, 1000)},
         {"data": (np.zeros(100))},
         {"data": np.repeat(np.nan, 100)},
         {"data": np.array([1.123, 2.343, np.nan, 0.0])},
@@ -280,8 +282,8 @@ def test_kurt_skew_error(op):
 @pytest.mark.parametrize(
     "data",
     [
-        cudf.Series(np.random.normal(-100, 100, 1000)),
-        cudf.Series(np.random.randint(-50, 50, 1000)),
+        cudf.Series(np.random.default_rng(seed=0).normal(-100, 100, 1000)),
+        cudf.Series(np.random.default_rng(seed=0).integers(-50, 50, 1000)),
         cudf.Series(np.zeros(100)),
         cudf.Series(np.repeat(np.nan, 100)),
         cudf.Series(np.array([1.123, 2.343, np.nan, 0.0])),
@@ -311,8 +313,8 @@ def test_skew_series(data, null_flag, numeric_only):
 @pytest.mark.parametrize("dtype", params_dtypes)
 @pytest.mark.parametrize("num_na", [0, 1, 50, 99, 100])
 def test_series_median(dtype, num_na):
-    np.random.seed(0)
-    arr = np.random.random(100)
+    rng = np.random.default_rng(seed=0)
+    arr = rng.random(100)
     if np.issubdtype(dtype, np.integer):
         arr *= 100
     mask = np.arange(100) >= num_na
@@ -344,8 +346,8 @@ def test_series_median(dtype, num_na):
 @pytest.mark.parametrize(
     "data",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
         np.zeros(100),
         np.array([1.123, 2.343, np.nan, 0.0]),
         np.array([-2, 3.75, 6, None, None, None, -8.5, None, 4.2]),
@@ -379,8 +381,8 @@ def test_series_pct_change(data, periods, fill_method):
 @pytest.mark.parametrize(
     "data1",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
@@ -393,8 +395,8 @@ def test_series_pct_change(data, periods, fill_method):
 @pytest.mark.parametrize(
     "data2",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
@@ -423,8 +425,8 @@ def test_cov1d(data1, data2):
 @pytest.mark.parametrize(
     "data1",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
@@ -437,8 +439,8 @@ def test_cov1d(data1, data2):
 @pytest.mark.parametrize(
     "data2",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        np.random.default_rng(seed=0).normal(-100, 100, 1000),
+        np.random.default_rng(seed=0).integers(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),

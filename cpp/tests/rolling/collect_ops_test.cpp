@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -214,7 +213,7 @@ TYPED_TEST(TypedCollectListTest, RollingWindowHonoursMinPeriods)
                          *cudf::make_collect_list_aggregation<cudf::rolling_aggregation>());
   auto expected_result_2 = cudf::test::lists_column_wrapper<T, int32_t>{
     {{}, {0, 1, 2, 3}, {1, 2, 3, 4}, {2, 3, 4, 5}, {}, {}},
-    cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 0 && i < 4;
     })}.release();
 
@@ -338,7 +337,7 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 4, 8, 12, 12, 12}.release();
     auto expected_num_rows = expected_offsets->size() - 1;
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
-      cudf::size_type{0}, [expected_num_rows](auto i) { return i > 0 && i < 4; });
+      cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
@@ -373,7 +372,7 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 3, 5, 8, 8, 8}.release();
     auto expected_num_rows = expected_offsets->size() - 1;
     auto null_mask_iter    = cudf::detail::make_counting_transform_iterator(
-      cudf::size_type{0}, [expected_num_rows](auto i) { return i > 0 && i < 4; });
+      cudf::size_type{0}, [](auto i) { return i > 0 && i < 4; });
 
     auto [null_mask, null_count] =
       cudf::test::detail::make_null_mask(null_mask_iter, null_mask_iter + expected_num_rows);
@@ -1499,7 +1498,7 @@ TYPED_TEST(TypedCollectSetTest, RollingWindowHonoursMinPeriods)
                         *cudf::make_collect_set_aggregation<cudf::rolling_aggregation>());
   auto expected_result_2 = cudf::test::lists_column_wrapper<T, int32_t>{
     {{}, {0, 1, 2}, {1, 2, 4}, {2, 4, 5}, {}, {}},
-    cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 0 && i < 4;
     })}.release();
 

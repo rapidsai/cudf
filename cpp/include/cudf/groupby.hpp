@@ -36,7 +36,7 @@ namespace CUDF_EXPORT cudf {
 namespace groupby {
 namespace detail {
 namespace sort {
-class sort_groupby_helper;
+struct sort_groupby_helper;
 
 }  // namespace sort
 }  // namespace detail

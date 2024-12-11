@@ -22,7 +22,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/quantiles.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <limits>

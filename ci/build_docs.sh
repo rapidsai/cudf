@@ -5,7 +5,6 @@ set -euo pipefail
 
 export RAPIDS_VERSION="$(rapids-version)"
 export RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
-export RAPIDS_VERSION_NUMBER="$RAPIDS_VERSION_MAJOR_MINOR"
 
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
@@ -29,13 +28,16 @@ PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
-  libcudf pylibcudf cudf dask-cudf
+  "libcudf=${RAPIDS_VERSION}" \
+  "pylibcudf=${RAPIDS_VERSION}" \
+  "cudf=${RAPIDS_VERSION}" \
+  "dask-cudf=${RAPIDS_VERSION}"
 
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
 rapids-logger "Build CPP docs"
 pushd cpp/doxygen
-aws s3 cp s3://rapidsai-docs/librmm/html/${RAPIDS_VERSION_NUMBER}/rmm.tag . || echo "Failed to download rmm Doxygen tag"
+aws s3 cp s3://rapidsai-docs/librmm/html/${RAPIDS_VERSION_MAJOR_MINOR}/rmm.tag . || echo "Failed to download rmm Doxygen tag"
 doxygen Doxyfile
 mkdir -p "${RAPIDS_DOCS_DIR}/libcudf/html"
 mv html/* "${RAPIDS_DOCS_DIR}/libcudf/html"
@@ -55,4 +57,4 @@ mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/html"
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
 popd
 
-rapids-upload-docs
+RAPIDS_VERSION_NUMBER="${RAPIDS_VERSION_MAJOR_MINOR}" rapids-upload-docs

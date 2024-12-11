@@ -6,13 +6,21 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf cimport null_mask as cpp_null_mask
 from pylibcudf.libcudf.types cimport mask_state, size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint
 
 from .column cimport Column
 from .table cimport Table
 
+__all__ = [
+    "bitmask_allocation_size_bytes",
+    "bitmask_and",
+    "bitmask_or",
+    "copy_bitmask",
+    "create_null_mask",
+]
 
 cdef DeviceBuffer buffer_to_python(device_buffer buf):
     return DeviceBuffer.c_from_unique_ptr(make_unique[device_buffer](move(buf)))
@@ -31,13 +39,13 @@ cpdef DeviceBuffer copy_bitmask(Column col):
     Returns
     -------
     rmm.DeviceBuffer
-        A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty ``DeviceBuffer``
-        if ``col`` is not nullable
+        A ``DeviceBuffer`` containing ``col``'s bitmask, or an empty
+        ``DeviceBuffer`` if ``col`` is not nullable
     """
     cdef device_buffer db
 
     with nogil:
-        db = move(cpp_null_mask.copy_bitmask(col.view()))
+        db = cpp_null_mask.copy_bitmask(col.view())
 
     return buffer_to_python(move(db))
 
@@ -89,7 +97,7 @@ cpdef DeviceBuffer create_null_mask(
     cdef device_buffer db
 
     with nogil:
-        db = move(cpp_null_mask.create_null_mask(size, state))
+        db = cpp_null_mask.create_null_mask(size, state)
 
     return buffer_to_python(move(db))
 
@@ -113,7 +121,7 @@ cpdef tuple bitmask_and(list columns):
     cdef pair[device_buffer, size_type] c_result
 
     with nogil:
-        c_result = move(cpp_null_mask.bitmask_and(c_table.view()))
+        c_result = cpp_null_mask.bitmask_and(c_table.view())
 
     return buffer_to_python(move(c_result.first)), c_result.second
 
@@ -137,6 +145,6 @@ cpdef tuple bitmask_or(list columns):
     cdef pair[device_buffer, size_type] c_result
 
     with nogil:
-        c_result = move(cpp_null_mask.bitmask_or(c_table.view()))
+        c_result = cpp_null_mask.bitmask_or(c_table.view())
 
     return buffer_to_python(move(c_result.first)), c_result.second

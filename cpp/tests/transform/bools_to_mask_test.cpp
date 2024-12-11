@@ -20,10 +20,8 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
-#include <cudf/types.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -32,7 +30,7 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
   {
     cudf::test::fixed_width_column_wrapper<bool> input_column(
       input.begin(), input.end(), val.begin());
-    std::transform(val.begin(), val.end(), input.begin(), input.begin(), std::logical_and<bool>());
+    std::transform(val.begin(), val.end(), input.begin(), input.begin(), std::logical_and<>());
 
     auto sample = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 

@@ -70,6 +70,7 @@ enum class hash_id {
  * @param partition_map Non-nullable column of integer values that map each row
  * in `t` to it's partition.
  * @param num_partitions The total number of partitions
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Pair containing the reordered table and vector of `num_partitions +
  * 1` offsets to each partition such that the size of partition `i` is
@@ -79,6 +80,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -242,6 +244,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @param[in] input The input table to be round-robin partitioned
  * @param[in] num_partitions Number of partitions for the table
  * @param[in] start_partition Index of the 1st partition
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return A std::pair consisting of a unique_ptr to the partitioned table
@@ -251,6 +254,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   table_view const& input,
   cudf::size_type num_partitions,
   cudf::size_type start_partition   = 0,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

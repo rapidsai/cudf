@@ -18,7 +18,6 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
@@ -115,12 +114,19 @@ class fixed_pinned_pool_memory_resource {
     return !operator==(other);
   }
 
-  friend void get_property(fixed_pinned_pool_memory_resource const&,
+  // clang-tidy will complain about this function because it is completely
+  // unused at runtime and only exist for tag introspection by CCCL, so we
+  // ignore linting. This masks a real issue if we ever want to compile with
+  // clang, though, which is that the function will actually be compiled out by
+  // clang. If cudf were ever to try to support clang as a compile we would
+  // need to force the compiler to emit this symbol. The same goes for the
+  // other get_property definitions in this file.
+  friend void get_property(fixed_pinned_pool_memory_resource const&,  // NOLINT
                            cuda::mr::device_accessible) noexcept
   {
   }
 
-  friend void get_property(fixed_pinned_pool_memory_resource const&,
+  friend void get_property(fixed_pinned_pool_memory_resource const&,  // NOLINT
                            cuda::mr::host_accessible) noexcept
   {
   }
@@ -235,7 +241,9 @@ class new_delete_memory_resource {
 
   bool operator!=(new_delete_memory_resource const& other) const { return !operator==(other); }
 
+  // NOLINTBEGIN
   friend void get_property(new_delete_memory_resource const&, cuda::mr::host_accessible) noexcept {}
+  // NOLINTEND
 };
 
 static_assert(cuda::mr::resource_with<new_delete_memory_resource, cuda::mr::host_accessible>,

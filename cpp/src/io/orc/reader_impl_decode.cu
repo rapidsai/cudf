@@ -22,6 +22,8 @@
 #include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -32,7 +34,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -451,7 +452,7 @@ void decode_stream_data(int64_t num_dicts,
     update_null_mask(chunks, out_buffers, stream, mr);
   }
 
-  rmm::device_scalar<size_type> error_count(0, stream);
+  cudf::detail::device_scalar<size_type> error_count(0, stream);
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
                            row_groups,
@@ -508,21 +509,20 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
     prefix_sums_to_update, stream, cudf::get_current_device_resource_ref());
 
-  thrust::for_each(
-    rmm::exec_policy_nosync(stream),
-    d_prefix_sums_to_update.begin(),
-    d_prefix_sums_to_update.end(),
-    [num_stripes, chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
-      auto const& idx_psums) {
-      auto const col_idx = idx_psums.first;
-      auto const psums   = idx_psums.second;
-      thrust::transform(thrust::seq,
-                        thrust::make_counting_iterator<std::size_t>(0ul),
-                        thrust::make_counting_iterator<std::size_t>(num_stripes),
-                        psums,
-                        [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
-      thrust::inclusive_scan(thrust::seq, psums, psums + num_stripes, psums);
-    });
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   d_prefix_sums_to_update.begin(),
+                   d_prefix_sums_to_update.end(),
+                   [num_stripes, chunks = chunks.device_view()] __device__(auto const& idx_psums) {
+                     auto const col_idx = idx_psums.first;
+                     auto const psums   = idx_psums.second;
+                     thrust::transform(
+                       thrust::seq,
+                       thrust::make_counting_iterator<std::size_t>(0ul),
+                       thrust::make_counting_iterator<std::size_t>(num_stripes),
+                       psums,
+                       [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
+                     thrust::inclusive_scan(thrust::seq, psums, psums + num_stripes, psums);
+                   });
   // `prefix_sums_to_update` goes out of scope, copy has to be done before we return
   stream.synchronize();
 }
@@ -554,12 +554,12 @@ void aggregate_child_meta(std::size_t level,
   col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
   col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
 
-  auto child_start_row = cudf::detail::host_2dspan<int64_t>(
-    col_meta.child_start_row.data(), num_of_stripes, num_child_cols);
-  auto num_child_rows_per_stripe = cudf::detail::host_2dspan<int64_t>(
-    col_meta.num_child_rows_per_stripe.data(), num_of_stripes, num_child_cols);
+  auto child_start_row =
+    cudf::detail::host_2dspan<int64_t>(col_meta.child_start_row, num_child_cols);
+  auto num_child_rows_per_stripe =
+    cudf::detail::host_2dspan<int64_t>(col_meta.num_child_rows_per_stripe, num_child_cols);
   auto rwgrp_meta = cudf::detail::host_2dspan<reader_column_meta::row_group_meta>(
-    col_meta.rwgrp_meta.data(), num_of_rowgroups, num_child_cols);
+    col_meta.rwgrp_meta, num_child_cols);
 
   int index = 0;  // number of child column processed
 
@@ -951,8 +951,9 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
 
     // Setup row group descriptors if using indexes.
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
-        hd_compinfo.begin(), hd_compinfo.d_begin(), stream_range.size());
+      auto const compinfo =
+        cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>{hd_compinfo}.subspan(
+          0, stream_range.size());
       auto decomp_data = decompress_stripe_data(load_stripe_range,
                                                 stream_range,
                                                 stripe_count,

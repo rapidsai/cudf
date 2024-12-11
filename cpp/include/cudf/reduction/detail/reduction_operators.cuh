@@ -31,17 +31,41 @@ namespace detail {
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
-  ResultType value;          /// the value
-  ResultType value_squared;  /// the value of squared
+  // Uses the pairwise approach of Chan, Golub, and LeVeque,
+  // _Algorithms for computing the sample variance: analysis and
+  // recommendations_ (1983)
+  // https://doi.org/10.1080/00031305.1983.10483115
+  // Also http://www.cs.yale.edu/publications/techreports/tr222.pdf
+  // This is a modification of Youngs and Cramer's online approach.
+  ResultType running_sum;
+  ResultType running_square_deviations;
+  size_type count;
 
-  CUDF_HOST_DEVICE inline var_std(ResultType _value = 0, ResultType _value_squared = 0)
-    : value(_value), value_squared(_value_squared){};
+  CUDF_HOST_DEVICE inline var_std(ResultType t = 0, ResultType s = 0, size_type n = 0)
+    : running_sum(t), running_square_deviations(s), count(n){};
 
   using this_t = var_std<ResultType>;
 
   CUDF_HOST_DEVICE inline this_t operator+(this_t const& rhs) const
   {
-    return this_t((this->value + rhs.value), (this->value_squared + rhs.value_squared));
+    // Updates as per equations 1.5a and 1.5b in the paper
+    // T_{1,m+n} = T_{1,m} + T_{m+1,n+1}
+    // S_{1,m+n} = S_{1,m} + S_{m+1,n+1} + m/(n(m+n)) * (n/m T_{1,m} - T_{m+1,n+1})**2
+    // Here the first m samples are in this, the remaining n samples are in rhs.
+    auto const m = this->count;
+    auto const n = rhs.count;
+    // Avoid division by zero.
+    if (m == 0) { return rhs; }
+    if (n == 0) { return *this; }
+    auto const tm   = this->running_sum;
+    auto const tn   = rhs.running_sum;
+    auto const sm   = this->running_square_deviations;
+    auto const sn   = rhs.running_square_deviations;
+    auto const tmn  = tm + tn;
+    auto const diff = ((static_cast<ResultType>(n) / m) * tm) - tn;
+    // Computing m/n(m+n) as m/n/(m+n) to avoid integer overflow
+    auto const smn = sm + sn + ((static_cast<ResultType>(m) / n) / (m + n)) * diff * diff;
+    return {tmn, smn, m + n};
   };
 };
 
@@ -50,10 +74,7 @@ template <typename ResultType>
 struct transformer_var_std {
   using OutputType = var_std<ResultType>;
 
-  CUDF_HOST_DEVICE inline OutputType operator()(ResultType const& value)
-  {
-    return OutputType(value, value * value);
-  };
+  CUDF_HOST_DEVICE inline OutputType operator()(ResultType const& value) { return {value, 0, 1}; };
 };
 
 // ------------------------------------------------------------------------
@@ -257,12 +278,7 @@ struct variance : public compound_op<variance> {
                                                              cudf::size_type const& count,
                                                              cudf::size_type const& ddof)
     {
-      ResultType mean     = input.value / count;
-      ResultType asum     = input.value_squared;
-      cudf::size_type div = count - ddof;
-      ResultType var      = asum / div - ((mean * mean) * count) / div;
-
-      return var;
+      return input.running_square_deviations / (count - ddof);
     };
   };
 };

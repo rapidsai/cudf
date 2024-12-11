@@ -64,7 +64,8 @@ cmake .. -G"${CMAKE_GENERATOR}" \
          -DBUILD_TESTS=$BUILD_CPP_TESTS \
          -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS \
          -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
-         -DBUILD_SHARED_LIBS=OFF
+         -DBUILD_SHARED_LIBS=OFF \
+         -DCUDF_KVIKIO_REMOTE_IO=OFF
 
 if [[ -z "${PARALLEL_LEVEL}" ]]; then
     cmake --build .

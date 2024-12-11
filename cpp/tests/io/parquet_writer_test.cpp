@@ -31,6 +31,7 @@
 #include <src/io/parquet/parquet.hpp>
 #include <src/io/parquet/parquet_common.hpp>
 
+#include <array>
 #include <fstream>
 
 using cudf::test::iterators::no_nulls;
@@ -289,7 +290,8 @@ class custom_test_data_sink : public cudf::io::data_sink {
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
 
-  ~custom_test_data_sink() override { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~custom_test_data_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {
@@ -879,53 +881,52 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
 TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
 {
-  char const* coldata[] = {
-    // in-range 7 bit.  should truncate to "yyyyyyyz"
-    "yyyyyyyyy",
-    // max 7 bit. should truncate to "x7fx7fx7fx7fx7fx7fx7fx80", since it's
-    // considered binary, not UTF-8.  If UTF-8 it should not truncate.
-    "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
-    // max binary.  this should not truncate
-    "\xff\xff\xff\xff\xff\xff\xff\xff\xff",
-    // in-range 2-byte UTF8 (U+00E9). should truncate to "éééê"
-    "ééééé",
-    // max 2-byte UTF8 (U+07FF). should not truncate
-    "߿߿߿߿߿",
-    // in-range 3-byte UTF8 (U+0800). should truncate to "ࠀࠁ"
-    "ࠀࠀࠀ",
-    // max 3-byte UTF8 (U+FFFF). should not truncate
-    "\xef\xbf\xbf\xef\xbf\xbf\xef\xbf\xbf",
-    // in-range 4-byte UTF8 (U+10000). should truncate to "𐀀𐀁"
-    "𐀀𐀀𐀀",
-    // max unicode (U+10FFFF). should truncate to \xf4\x8f\xbf\xbf\xf4\x90\x80\x80,
-    // which is no longer valid unicode, but is still ok UTF-8???
-    "\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf",
-    // max 4-byte UTF8 (U+1FFFFF). should not truncate
-    "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
+  std::array coldata{// in-range 7 bit.  should truncate to "yyyyyyyz"
+                     "yyyyyyyyy",
+                     // max 7 bit. should truncate to "x7fx7fx7fx7fx7fx7fx7fx80", since it's
+                     // considered binary, not UTF-8.  If UTF-8 it should not truncate.
+                     "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
+                     // max binary.  this should not truncate
+                     "\xff\xff\xff\xff\xff\xff\xff\xff\xff",
+                     // in-range 2-byte UTF8 (U+00E9). should truncate to "éééê"
+                     "ééééé",
+                     // max 2-byte UTF8 (U+07FF). should not truncate
+                     "߿߿߿߿߿",
+                     // in-range 3-byte UTF8 (U+0800). should truncate to "ࠀࠁ"
+                     "ࠀࠀࠀ",
+                     // max 3-byte UTF8 (U+FFFF). should not truncate
+                     "\xef\xbf\xbf\xef\xbf\xbf\xef\xbf\xbf",
+                     // in-range 4-byte UTF8 (U+10000). should truncate to "𐀀𐀁"
+                     "𐀀𐀀𐀀",
+                     // max unicode (U+10FFFF). should truncate to \xf4\x8f\xbf\xbf\xf4\x90\x80\x80,
+                     // which is no longer valid unicode, but is still ok UTF-8???
+                     "\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf",
+                     // max 4-byte UTF8 (U+1FFFFF). should not truncate
+                     "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
 
   // NOTE: UTF8 min is initialized with 0xf7bfbfbf. Binary values larger
   // than that will not become minimum value (when written as UTF-8).
-  char const* truncated_min[] = {"yyyyyyyy",
-                                 "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
-                                 "\xf7\xbf\xbf\xbf",
-                                 "éééé",
-                                 "߿߿߿߿",
-                                 "ࠀࠀ",
-                                 "\xef\xbf\xbf\xef\xbf\xbf",
-                                 "𐀀𐀀",
-                                 "\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf",
-                                 "\xf7\xbf\xbf\xbf"};
+  std::array truncated_min{"yyyyyyyy",
+                           "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f",
+                           "\xf7\xbf\xbf\xbf",
+                           "éééé",
+                           "߿߿߿߿",
+                           "ࠀࠀ",
+                           "\xef\xbf\xbf\xef\xbf\xbf",
+                           "𐀀𐀀",
+                           "\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf",
+                           "\xf7\xbf\xbf\xbf"};
 
-  char const* truncated_max[] = {"yyyyyyyz",
-                                 "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x80",
-                                 "\xff\xff\xff\xff\xff\xff\xff\xff\xff",
-                                 "éééê",
-                                 "߿߿߿߿߿",
-                                 "ࠀࠁ",
-                                 "\xef\xbf\xbf\xef\xbf\xbf\xef\xbf\xbf",
-                                 "𐀀𐀁",
-                                 "\xf4\x8f\xbf\xbf\xf4\x90\x80\x80",
-                                 "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
+  std::array truncated_max{"yyyyyyyz",
+                           "\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x80",
+                           "\xff\xff\xff\xff\xff\xff\xff\xff\xff",
+                           "éééê",
+                           "߿߿߿߿߿",
+                           "ࠀࠁ",
+                           "\xef\xbf\xbf\xef\xbf\xbf\xef\xbf\xbf",
+                           "𐀀𐀁",
+                           "\xf4\x8f\xbf\xbf\xf4\x90\x80\x80",
+                           "\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
 
   auto cols = [&]() {
     using string_wrapper = column_wrapper<cudf::string_view>;
@@ -981,13 +982,15 @@ TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
 
 TEST_F(ParquetWriterTest, BinaryColumnIndexTruncation)
 {
-  std::vector<uint8_t> truncated_min[] = {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe},
-                                          {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-                                          {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+  std::array<std::vector<uint8_t>, 3> truncated_min{
+    {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe},
+     {0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}}};
 
-  std::vector<uint8_t> truncated_max[] = {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xff},
-                                          {0xff},
-                                          {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
+  std::array<std::vector<uint8_t>, 3> truncated_max{
+    {{0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xff},
+     {0xff},
+     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}}};
 
   cudf::test::lists_column_wrapper<uint8_t> col0{
     {0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe}};

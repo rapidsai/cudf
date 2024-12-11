@@ -2,7 +2,7 @@
 
 from pylibcudf.libcudf.types cimport mask_state, size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from .column cimport Column
 

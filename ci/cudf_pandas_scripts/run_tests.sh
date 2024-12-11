@@ -54,15 +54,8 @@ else
     RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
     RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
 
-    echo "" > ./constraints.txt
-    if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
-        # `test_python_cudf_pandas` constraints are for `[test]` not `[cudf-pandas-tests]`
-        rapids-dependency-file-generator \
-            --output requirements \
-            --file-key test_python_cudf_pandas \
-            --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
-        | tee ./constraints.txt
-    fi
+    # generate constraints (possibly pinning to oldest support versions of dependencies)
+    rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
 
     python -m pip install \
         -v \

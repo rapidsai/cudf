@@ -8,7 +8,7 @@ from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
@@ -17,6 +17,7 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 import functools
 
+__all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
 cdef class Column:
     """A container of nullable device data as a column of elements.
@@ -60,6 +61,8 @@ cdef class Column:
         self._offset = offset
         self._children = children
         self._num_children = len(children)
+
+    __hash__ = None
 
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.
@@ -138,7 +141,7 @@ cdef class Column:
 
         cdef size_type null_count = libcudf_col.get().null_count()
 
-        cdef column_contents contents = move(libcudf_col.get().release())
+        cdef column_contents contents = libcudf_col.get().release()
 
         # Note that when converting to cudf Column objects we'll need to pull
         # out the base object.
@@ -247,7 +250,7 @@ cdef class Column:
         cdef const scalar* c_scalar = slr.get()
         cdef unique_ptr[column] c_result
         with nogil:
-            c_result = move(make_column_from_scalar(dereference(c_scalar), size))
+            c_result = make_column_from_scalar(dereference(c_scalar), size)
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
@@ -269,7 +272,7 @@ cdef class Column:
         cdef Scalar slr = Scalar.empty_like(like)
         cdef unique_ptr[column] c_result
         with nogil:
-            c_result = move(make_column_from_scalar(dereference(slr.get()), size))
+            c_result = make_column_from_scalar(dereference(slr.get()), size)
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
@@ -373,7 +376,7 @@ cdef class Column:
         """Create a copy of the column."""
         cdef unique_ptr[column] c_result
         with nogil:
-            c_result = move(make_unique[column](self.view()))
+            c_result = make_unique[column](self.view())
         return Column.from_libcudf(move(c_result))
 
 
@@ -383,6 +386,8 @@ cdef class ListColumnView:
         if col.type().id() != type_id.LIST:
             raise TypeError("Column is not a list type")
         self._column = col
+
+    __hash__ = None
 
     cpdef child(self):
         """The data column of the underlying list column."""

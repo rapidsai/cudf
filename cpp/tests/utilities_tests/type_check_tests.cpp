@@ -18,7 +18,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/wrappers/durations.hpp>

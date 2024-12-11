@@ -22,6 +22,10 @@
 
 namespace CUDF_EXPORT cudf {
 
+namespace detail {
+spdlog::logger& logger();
+}
+
 /**
  * @brief Returns the global logger.
  *
@@ -43,6 +47,8 @@ namespace CUDF_EXPORT cudf {
  *
  * @return spdlog::logger& The logger.
  */
-spdlog::logger& logger();
+[[deprecated(
+  "Support for direct access to spdlog loggers in cudf is planned for removal")]] spdlog::logger&
+logger();
 
 }  // namespace CUDF_EXPORT cudf

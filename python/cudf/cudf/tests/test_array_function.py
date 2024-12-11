@@ -33,7 +33,7 @@ del _Test
 
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
-np.random.seed(0)
+rng = np.random.default_rng(seed=0)
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
@@ -49,7 +49,7 @@ np.random.seed(0)
     ],
 )
 def test_array_func_cudf_series(func):
-    np_ar = np.random.random(100)
+    np_ar = rng.random(100)
     cudf_ser = cudf.Series(np_ar)
     expect = func(np_ar)
     got = func(cudf_ser)
@@ -74,7 +74,7 @@ def test_array_func_cudf_series(func):
     ],
 )
 def test_array_func_cudf_dataframe(func):
-    pd_df = pd.DataFrame(np.random.uniform(size=(100, 10)))
+    pd_df = pd.DataFrame(rng.uniform(size=(100, 10)))
     cudf_df = cudf.from_pandas(pd_df)
     expect = func(pd_df)
     got = func(cudf_df)
@@ -91,7 +91,7 @@ def test_array_func_cudf_dataframe(func):
     ],
 )
 def test_array_func_missing_cudf_dataframe(func):
-    pd_df = pd.DataFrame(np.random.uniform(size=(100, 10)))
+    pd_df = pd.DataFrame(rng.uniform(size=(100, 10)))
     cudf_df = cudf.from_pandas(pd_df)
     with pytest.raises(TypeError):
         func(cudf_df)
@@ -105,7 +105,7 @@ def test_array_func_missing_cudf_dataframe(func):
     ],
 )
 def test_array_func_cudf_index(func):
-    np_ar = np.random.random(100)
+    np_ar = rng.random(100)
     cudf_index = cudf.Index(cudf.Series(np_ar))
     expect = func(np_ar)
     got = func(cudf_index)
@@ -125,7 +125,7 @@ def test_array_func_cudf_index(func):
     ],
 )
 def test_array_func_missing_cudf_index(func):
-    np_ar = np.random.random(100)
+    np_ar = rng.random(100)
     cudf_index = cudf.Index(cudf.Series(np_ar))
     with pytest.raises(TypeError):
         func(cudf_index)

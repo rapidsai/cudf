@@ -28,6 +28,7 @@ enum class data_type : int32_t {
   INTEGRAL        = static_cast<int32_t>(type_group_id::INTEGRAL),
   INTEGRAL_SIGNED = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
   FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
+  BOOL8           = static_cast<int32_t>(cudf::type_id::BOOL8),
   DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
   TIMESTAMP       = static_cast<int32_t>(type_group_id::TIMESTAMP),
   DURATION        = static_cast<int32_t>(type_group_id::DURATION),
@@ -44,6 +45,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case data_type::INTEGRAL: return "INTEGRAL";
       case data_type::INTEGRAL_SIGNED: return "INTEGRAL_SIGNED";
       case data_type::FLOAT: return "FLOAT";
+      case data_type::BOOL8: return "BOOL8";
       case data_type::DECIMAL: return "DECIMAL";
       case data_type::TIMESTAMP: return "TIMESTAMP";
       case data_type::DURATION: return "DURATION";
@@ -74,6 +76,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto value) {
     switch (value) {
       case cudf::io::compression_type::SNAPPY: return "SNAPPY";
+      case cudf::io::compression_type::GZIP: return "GZIP";
       case cudf::io::compression_type::NONE: return "NONE";
       default: return "Unknown";
     }

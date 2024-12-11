@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -25,8 +24,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-
-#include <random>
 
 template <typename T, typename T2 = void>
 struct rep_type_impl {

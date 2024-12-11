@@ -45,10 +45,10 @@ def test_query(data, fn, nulls):
     # prepare
     nelem, seed = data
     expect_fn, query_expr = fn
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame()
     pdf["a"] = np.arange(nelem)
-    pdf["b"] = np.random.random(nelem) * nelem
+    pdf["b"] = rng.random(nelem) * nelem
     if nulls:
         pdf.loc[::2, "a"] = None
     gdf = cudf.from_pandas(pdf)
@@ -71,10 +71,10 @@ def test_query_ref_env(data, fn):
     # prepare
     nelem, seed = data
     expect_fn, query_expr = fn
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
     df["a"] = aa = np.arange(nelem)
-    df["b"] = bb = np.random.random(nelem) * nelem
+    df["b"] = bb = rng.random(nelem) * nelem
     c = 2.3
     d = 1.2
     # udt
@@ -121,9 +121,9 @@ def test_query_local_dict():
 
 
 def test_query_splitted_combine():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10), "y": np.random.normal(size=10)}
+        {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
     gdf = DataFrame.from_pandas(df)
 

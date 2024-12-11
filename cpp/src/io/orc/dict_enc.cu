@@ -77,20 +77,6 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
     counts, orc_columns, rowgroup_bounds, str_col_indexes);
 }
 
-template <int block_size>
-CUDF_KERNEL void __launch_bounds__(block_size)
-  initialize_dictionary_hash_maps_kernel(device_span<stripe_dictionary> dictionaries)
-{
-  auto const dict_map = dictionaries[blockIdx.x].map_slots;
-  auto const t        = threadIdx.x;
-  for (size_type i = 0; i < dict_map.size(); i += block_size) {
-    if (t + i < dict_map.size()) {
-      new (&dict_map[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
-      new (&dict_map[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
-    }
-  }
-}
-
 struct equality_functor {
   column_device_view const& col;
   __device__ bool operator()(size_type lhs_idx, size_type rhs_idx) const
@@ -109,6 +95,9 @@ struct hash_functor {
   }
 };
 
+// Probing scheme to use for the hash map
+using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_functor>;
+
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
@@ -121,26 +110,34 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const& col       = columns[dict.column_idx];
 
   // Make a view of the hash map
-  auto hash_map_mutable  = map_type::device_mutable_view(dict.map_slots.data(),
-                                                        dict.map_slots.size(),
-                                                        cuco::empty_key{KEY_SENTINEL},
-                                                        cuco::empty_value{VALUE_SENTINEL});
   auto const hash_fn     = hash_functor{col};
   auto const equality_fn = equality_functor{col};
+
+  storage_ref_type const storage_ref{dict.map_slots.size(), dict.map_slots.data()};
+  // Make a view of the hash map.
+  auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
+                                           cuco::empty_value{VALUE_SENTINEL},
+                                           equality_fn,
+                                           probing_scheme_type{hash_fn},
+                                           cuco::thread_scope_block,
+                                           storage_ref};
+
+  // Create a map ref with `cuco::insert` operator
+  auto has_map_insert_ref = hash_map_ref.rebind_operators(cuco::insert);
 
   auto const start_row = dict.start_row;
   auto const end_row   = dict.start_row + dict.num_rows;
 
   size_type entry_count{0};
   size_type char_count{0};
+
   // all threads should loop the same number of times
   for (thread_index_type cur_row = start_row + t; cur_row - t < end_row; cur_row += block_size) {
     auto const is_valid = cur_row < end_row and col.is_valid(cur_row);
 
     if (is_valid) {
       // insert element at cur_row to hash map and count successful insertions
-      auto const is_unique =
-        hash_map_mutable.insert(std::pair(cur_row, cur_row), hash_fn, equality_fn);
+      auto const is_unique = has_map_insert_ref.insert(cuco::pair{cur_row, cur_row});
 
       if (is_unique) {
         ++entry_count;
@@ -175,24 +172,23 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   if (not dict.is_enabled) { return; }
 
   auto const t = threadIdx.x;
-  auto map     = map_type::device_view(dict.map_slots.data(),
-                                   dict.map_slots.size(),
-                                   cuco::empty_key{KEY_SENTINEL},
-                                   cuco::empty_value{VALUE_SENTINEL});
-
   __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
 
   using cuda::std::memory_order_relaxed;
   if (t == 0) { new (&counter) cuda::atomic<size_type, cuda::thread_scope_block>{0}; }
   __syncthreads();
+
   for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
     if (t + i < dict.map_slots.size()) {
-      auto* slot = reinterpret_cast<map_type::value_type*>(map.begin_slot() + t + i);
-      auto key   = slot->first;
-      if (key != KEY_SENTINEL) {
-        auto loc       = counter.fetch_add(1, memory_order_relaxed);
-        dict.data[loc] = key;
-        slot->second   = loc;
+      auto window = dict.map_slots.begin() + t + i;
+      // Collect all slots from each window.
+      for (auto& slot : *window) {
+        auto const key = slot.first;
+        if (key != KEY_SENTINEL) {
+          auto loc       = counter.fetch_add(1, memory_order_relaxed);
+          dict.data[loc] = key;
+          slot.second    = loc;
+        }
       }
     }
   }
@@ -205,45 +201,40 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 {
   auto const col_idx    = blockIdx.x;
   auto const stripe_idx = blockIdx.y;
+  auto const t          = threadIdx.x;
   auto const& dict      = dictionaries[col_idx][stripe_idx];
   auto const& col       = columns[dict.column_idx];
 
   if (not dict.is_enabled) { return; }
 
-  auto const t         = threadIdx.x;
+  // Make a view of the hash map
+  auto const hash_fn     = hash_functor{col};
+  auto const equality_fn = equality_functor{col};
+
+  storage_ref_type const storage_ref{dict.map_slots.size(), dict.map_slots.data()};
+  // Make a view of the hash map.
+  auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
+                                           cuco::empty_value{VALUE_SENTINEL},
+                                           equality_fn,
+                                           probing_scheme_type{hash_fn},
+                                           cuco::thread_scope_block,
+                                           storage_ref};
+
+  // Create a map ref with `cuco::insert` operator
+  auto has_map_find_ref = hash_map_ref.rebind_operators(cuco::find);
+
   auto const start_row = dict.start_row;
   auto const end_row   = dict.start_row + dict.num_rows;
 
-  auto const map = map_type::device_view(dict.map_slots.data(),
-                                         dict.map_slots.size(),
-                                         cuco::empty_key{KEY_SENTINEL},
-                                         cuco::empty_value{VALUE_SENTINEL});
-
-  thread_index_type cur_row = start_row + t;
-  while (cur_row < end_row) {
+  for (thread_index_type cur_row = start_row + t; cur_row < end_row; cur_row += block_size) {
     if (col.is_valid(cur_row)) {
-      auto const hash_fn     = hash_functor{col};
-      auto const equality_fn = equality_functor{col};
-      auto const found_slot  = map.find(cur_row, hash_fn, equality_fn);
-      cudf_assert(found_slot != map.end() &&
+      auto const found_slot = has_map_find_ref.find(cur_row);
+      // Fail if we didn't find the previously inserted key.
+      cudf_assert(found_slot != has_map_find_ref.end() &&
                   "Unable to find value in map in dictionary index construction");
-      if (found_slot != map.end()) {
-        // No need for atomic as this is not going to be modified by any other thread
-        auto const val_ptr  = reinterpret_cast<map_type::mapped_type const*>(&found_slot->second);
-        dict.index[cur_row] = *val_ptr;
-      }
+      dict.index[cur_row] = found_slot->second;
     }
-    cur_row += block_size;
   }
-}
-
-void initialize_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,
-                                     rmm::cuda_stream_view stream)
-{
-  if (dictionaries.count() == 0) { return; }
-  constexpr int block_size = 1024;
-  initialize_dictionary_hash_maps_kernel<block_size>
-    <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries.flat_view());
 }
 
 void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries,

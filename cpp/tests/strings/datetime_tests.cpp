@@ -19,7 +19,6 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/wrappers/durations.hpp>

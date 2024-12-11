@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,6 @@ import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
-from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import (
     concatenate_list_elements,
     concatenate_rows,
@@ -22,6 +21,7 @@ from cudf._lib.lists import (
     extract_element_scalar,
     index_of_column,
     index_of_scalar,
+    segmented_gather,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
@@ -34,6 +34,8 @@ from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
 

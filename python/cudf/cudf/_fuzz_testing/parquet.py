@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import logging
 import random
@@ -59,12 +59,11 @@ class ParquetReader(IOFuzz):
                 - {"uint32"}
                 | {"list", "decimal64"}
             )
-
+            seed = random.randint(0, 2**32 - 1)
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
+                self, dtypes_list, seed
             )
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols
@@ -96,14 +95,15 @@ class ParquetReader(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if param == "columns" and values == ALL_POSSIBLE_VALUES:
                 col_size = self._rand(len(self._df.columns))
                 params_dict[param] = list(
-                    np.unique(np.random.choice(self._df.columns, col_size))
+                    np.unique(rng.choice(self._df.columns, col_size))
                 )
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = rng.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
@@ -146,7 +146,7 @@ class ParquetWriter(IOFuzz):
                 | {"list", "decimal64"}
             )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
+                self, dtypes_list, seed
             )
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed

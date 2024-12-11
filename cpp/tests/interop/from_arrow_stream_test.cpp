@@ -17,26 +17,13 @@
 #include "nanoarrow_utils.hpp"
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <cudf_test/testing_main.hpp>
-#include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/concatenate.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/type_checks.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 struct VectorOfArrays {
   std::vector<nanoarrow::UniqueArray> arrays;

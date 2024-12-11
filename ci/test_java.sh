@@ -5,6 +5,8 @@ set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+RAPIDS_VERSION="$(rapids-version)"
+
 rapids-logger "Generate Java testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
@@ -30,7 +32,7 @@ CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
-  libcudf
+  "libcudf=${RAPIDS_VERSION}"
 
 rapids-logger "Check GPU usage"
 nvidia-smi

@@ -15,24 +15,18 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
 class TransformTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Data>
-void test_udf(char const udf[], Data data_init, cudf::size_type size, bool is_ptx)
+void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx)
 {
   auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);

@@ -69,6 +69,7 @@ def s3_base(endpoint_ip, endpoint_port):
         # with an S3 endpoint on localhost
 
         endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
+        os.environ["AWS_ENDPOINT_URL"] = endpoint_uri
 
         server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
         server.start()
@@ -103,6 +104,15 @@ def s3_context(s3_base, bucket, files=None):
                 client.delete_object(Bucket=bucket, Key=f)
             except Exception:
                 pass
+
+
+@pytest.fixture(
+    params=[True, False],
+    ids=["kvikio=ON", "kvikio=OFF"],
+)
+def kvikio_remote_io(request):
+    with cudf.option_context("kvikio_remote_io", request.param):
+        yield request.param
 
 
 @pytest.fixture
@@ -193,6 +203,7 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 def test_read_parquet(
     s3_base,
     s3so,
+    kvikio_remote_io,
     pdf,
     bytes_per_thread,
     columns,

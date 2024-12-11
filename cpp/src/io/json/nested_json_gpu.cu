@@ -21,6 +21,7 @@
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
@@ -34,7 +35,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -83,8 +83,7 @@ struct tree_node {
 void check_input_size(std::size_t input_size)
 {
   // Transduce() writes symbol offsets that may be as large input_size-1
-  CUDF_EXPECTS(input_size == 0 ||
-                 (input_size - 1) <= std::numeric_limits<cudf::io::json::SymbolOffsetT>::max(),
+  CUDF_EXPECTS(input_size == 0 || (input_size - 1) <= std::numeric_limits<int32_t>::max(),
                "Given JSON input is too large");
 }
 }  // namespace
@@ -1447,11 +1446,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr StackSymbolT read_symbol = 'x';
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
-  rmm::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
-
-  // Sequence of stack symbols and their position in the original input (sparse representation)
-  rmm::device_uvector<StackSymbolT> stack_ops{json_in.size(), stream};
-  rmm::device_uvector<SymbolOffsetT> stack_op_indices{json_in.size(), stream};
+  cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   constexpr auto max_translation_table_size =
@@ -1469,11 +1464,26 @@ void get_stack_context(device_span<SymbolT const> json_in,
 
   // "Search" for relevant occurrence of brackets and braces that indicate the beginning/end
   // of structs/lists
+  // Run FST to estimate the sizes of translated buffers
+  json_to_stack_ops_fst.Transduce(json_in.begin(),
+                                  static_cast<SymbolOffsetT>(json_in.size()),
+                                  thrust::make_discard_iterator(),
+                                  thrust::make_discard_iterator(),
+                                  d_num_stack_ops.data(),
+                                  to_stack_op::start_state,
+                                  stream);
+
+  auto stack_ops_bufsize = d_num_stack_ops.value(stream);
+  // Sequence of stack symbols and their position in the original input (sparse representation)
+  rmm::device_uvector<StackSymbolT> stack_ops{stack_ops_bufsize, stream};
+  rmm::device_uvector<SymbolOffsetT> stack_op_indices{stack_ops_bufsize, stream};
+
+  // Run bracket-brace FST to retrieve starting positions of structs and lists
   json_to_stack_ops_fst.Transduce(json_in.begin(),
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
                                   stack_op_indices.data(),
-                                  d_num_stack_ops.data(),
+                                  thrust::make_discard_iterator(),
                                   to_stack_op::start_state,
                                   stream);
 
@@ -1509,6 +1519,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   device_span<SymbolOffsetT const> token_indices,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
@@ -1520,7 +1531,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
     stream);
 
   auto const mr = cudf::get_current_device_resource_ref();
-  rmm::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
+  cudf::detail::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
   rmm::device_uvector<PdaTokenT> filtered_tokens_out{tokens.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> filtered_token_indices_out{tokens.size(), stream, mr};
 
@@ -1639,26 +1650,33 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   std::size_t constexpr max_tokens_per_struct = 6;
   auto const max_token_out_count =
     cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
-  rmm::device_scalar<std::size_t> num_written_tokens{stream};
+  cudf::detail::device_scalar<std::size_t> num_written_tokens{stream};
   // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
   // see a JSON-line delimiter as the very first item
   SymbolOffsetT const delimiter_offset =
     (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
-  rmm::device_uvector<PdaTokenT> tokens{max_token_out_count + delimiter_offset, stream, mr};
-  rmm::device_uvector<SymbolOffsetT> tokens_indices{
-    max_token_out_count + delimiter_offset, stream, mr};
 
+  // Run FST to estimate the size of output buffers
   json_to_tokens_fst.Transduce(zip_in,
                                static_cast<SymbolOffsetT>(json_in.size()),
-                               tokens.data() + delimiter_offset,
-                               tokens_indices.data() + delimiter_offset,
+                               thrust::make_discard_iterator(),
+                               thrust::make_discard_iterator(),
                                num_written_tokens.data(),
                                tokenizer_pda::start_state,
                                stream);
 
   auto const num_total_tokens = num_written_tokens.value(stream) + delimiter_offset;
-  tokens.resize(num_total_tokens, stream);
-  tokens_indices.resize(num_total_tokens, stream);
+  rmm::device_uvector<PdaTokenT> tokens{num_total_tokens, stream, mr};
+  rmm::device_uvector<SymbolOffsetT> tokens_indices{num_total_tokens, stream, mr};
+
+  // Run FST to translate the input JSON string into tokens and indices at which they occur
+  json_to_tokens_fst.Transduce(zip_in,
+                               static_cast<SymbolOffsetT>(json_in.size()),
+                               tokens.data() + delimiter_offset,
+                               tokens_indices.data() + delimiter_offset,
+                               thrust::make_discard_iterator(),
+                               tokenizer_pda::start_state,
+                               stream);
 
   if (delimiter_offset == 1) {
     tokens.set_element(0, token_t::LineEnd, stream);
@@ -2180,9 +2198,9 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // - String columns will be returned as nullable, iff there's at least one null entry
       if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
-      // For string columns return ["offsets", "char"] schema
+      // For string columns return ["offsets"] schema
       if (target_type.id() == type_id::STRING) {
-        return {std::move(col), std::vector<column_name_info>{{"offsets"}, {"chars"}}};
+        return {std::move(col), std::vector<column_name_info>{{"offsets"}}};
       }
       // Non-string leaf-columns (e.g., numeric) do not have child columns in the schema
       else {

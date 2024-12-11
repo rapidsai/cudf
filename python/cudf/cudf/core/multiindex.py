@@ -5,10 +5,9 @@ from __future__ import annotations
 import itertools
 import numbers
 import operator
-import pickle
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, MutableMapping
+from typing import TYPE_CHECKING, Any
 
 import cupy as cp
 import numpy as np
@@ -36,7 +35,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable
+    from collections.abc import Generator, Hashable, MutableMapping
 
     from typing_extensions import Self
 
@@ -700,7 +699,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             lookup_dict[i] = row
         lookup = cudf.DataFrame(lookup_dict)
         frame = cudf.DataFrame._from_data(
-            ColumnAccessor(dict(enumerate(index._columns)), verify=False)
+            ColumnAccessor(
+                dict(enumerate(index._columns)),
+                verify=False,
+            )
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
@@ -780,18 +782,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             index_key = index_key[0]
 
         slice_access = isinstance(index_key, slice)
-        out_index = cudf.DataFrame()
-        # Select the last n-k columns where n is the number of columns and k is
+        # Count the last n-k columns where n is the number of columns and k is
         # the length of the indexing tuple
         size = 0
         if not isinstance(index_key, (numbers.Number, slice)):
             size = len(index_key)
-        for k in range(size, len(index._data)):
-            out_index.insert(
-                out_index._num_columns,
-                k,
-                cudf.Series._from_column(index._columns[k]),
-            )
+        num_selected = max(0, index.nlevels - size)
 
         # determine if we should downcast from a DataFrame to a Series
         need_downcast = (
@@ -814,16 +810,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             result = cudf.Series._from_data(
                 {}, name=tuple(col[0] for col in index._columns)
             )
-        elif out_index._num_columns == 1:
+        elif num_selected == 1:
             # If there's only one column remaining in the output index, convert
             # it into an Index and name the final index values according
             # to that column's name.
-            last_column = index._columns[-1]
-            out_index = cudf.Index._from_column(
-                last_column, name=index.names[-1]
-            )
-            index = out_index
-        elif out_index._num_columns > 1:
+            *_, last_column = index._data.columns
+            index = cudf.Index._from_column(last_column, name=index.names[-1])
+        elif num_selected > 1:
             # Otherwise pop the leftmost levels, names, and codes from the
             # source index until it has the correct number of columns (n-k)
             result.reset_index(drop=True)
@@ -924,15 +917,15 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def serialize(self):
         header, frames = super().serialize()
         # Overwrite the names in _data with the true names.
-        header["column_names"] = pickle.dumps(self.names)
+        header["column_names"] = self.names
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
         # Spoof the column names to construct the frame, then set manually.
-        column_names = pickle.loads(header["column_names"])
-        header["column_names"] = pickle.dumps(range(0, len(column_names)))
+        column_names = header["column_names"]
+        header["column_names"] = range(0, len(column_names))
         obj = super().deserialize(header, frames)
         return obj._set_names(column_names)
 

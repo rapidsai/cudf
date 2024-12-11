@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -340,7 +339,7 @@ TYPED_TEST(TypedColumnTest, MoveConstructorNoMask)
 
   cudf::column moved_to{std::move(original)};
 
-  EXPECT_EQ(0, original.size());
+  EXPECT_EQ(0, original.size());  // NOLINT
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, original.type());
 
   verify_column_views(moved_to);
@@ -359,7 +358,7 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
   cudf::column moved_to{std::move(original)};
   verify_column_views(moved_to);
 
-  EXPECT_EQ(0, original.size());
+  EXPECT_EQ(0, original.size());  // NOLINT
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, original.type());
 
   // Verify move

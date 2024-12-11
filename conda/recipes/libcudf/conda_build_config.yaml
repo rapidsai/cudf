@@ -35,7 +35,7 @@ spdlog_version:
   - ">=1.14.1,<1.15"
 
 nvcomp_version:
-  - "=4.0.1"
+  - "=4.1.0.6"
 
 zlib_version:
   - ">=1.2.13"

@@ -5,6 +5,27 @@ from pylibcudf.libcudf.utilities cimport traits
 
 from .types cimport DataType
 
+__all__ = [
+    "is_bit_castable",
+    "is_boolean",
+    "is_chrono",
+    "is_compound",
+    "is_dictionary",
+    "is_duration",
+    "is_equality_comparable",
+    "is_fixed_point",
+    "is_fixed_width",
+    "is_floating_point",
+    "is_index_type",
+    "is_integral",
+    "is_integral_not_bool",
+    "is_nested",
+    "is_numeric",
+    "is_numeric_not_bool",
+    "is_relationally_comparable",
+    "is_timestamp",
+    "is_unsigned",
+]
 
 cpdef bool is_relationally_comparable(DataType typ):
     """Checks if the given data type supports relational comparisons.
@@ -29,6 +50,12 @@ cpdef bool is_numeric(DataType typ):
     """
     return traits.is_numeric(typ.c_obj)
 
+cpdef bool is_numeric_not_bool(DataType typ):
+    """Checks if the given data type is numeric excluding booleans.
+
+    For details, see :cpp:func:`is_numeric_not_bool`.
+    """
+    return traits.is_numeric_not_bool(typ.c_obj)
 
 cpdef bool is_index_type(DataType typ):
     """Checks if the given data type is an index type.

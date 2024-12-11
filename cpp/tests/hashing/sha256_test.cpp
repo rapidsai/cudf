@@ -17,13 +17,10 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/hashing.hpp>
 #include <cudf/utilities/error.hpp>
-
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
 class SHA256HashTest : public cudf::test::BaseFixture {};
 
@@ -138,7 +135,7 @@ TEST_F(SHA256HashTest, ListsUnsupported)
 
   auto const input = cudf::table_view({strings_list_col});
 
-  EXPECT_THROW(cudf::hashing::sha256(input), cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::sha256(input), cudf::data_type_error);
 }
 
 TEST_F(SHA256HashTest, StructsUnsupported)
@@ -147,7 +144,7 @@ TEST_F(SHA256HashTest, StructsUnsupported)
   auto struct_col  = cudf::test::structs_column_wrapper{{child_col}};
   auto const input = cudf::table_view({struct_col});
 
-  EXPECT_THROW(cudf::hashing::sha256(input), cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::sha256(input), cudf::data_type_error);
 }
 
 template <typename T>

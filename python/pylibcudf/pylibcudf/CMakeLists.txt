@@ -17,6 +17,7 @@ set(cython_sources
     binaryop.pyx
     column.pyx
     column_factories.pyx
+    contiguous_split.pyx
     concatenate.pyx
     copying.pyx
     datetime.pyx
@@ -25,8 +26,10 @@ set(cython_sources
     filling.pyx
     gpumemoryview.pyx
     groupby.pyx
+    hashing.pyx
     interop.pyx
     join.pyx
+    json.pyx
     labeling.pyx
     lists.pyx
     merge.pyx
@@ -66,3 +69,4 @@ target_link_libraries(pylibcudf_interop PUBLIC nanoarrow)
 add_subdirectory(libcudf)
 add_subdirectory(strings)
 add_subdirectory(io)
+add_subdirectory(nvtext)

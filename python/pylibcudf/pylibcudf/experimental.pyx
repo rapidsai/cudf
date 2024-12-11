@@ -5,6 +5,8 @@ from libcpp.string cimport string
 from pylibcudf.libcudf cimport experimental as cpp_experimental
 
 
+__all__ = ["disable_prefetching", "enable_prefetching", "prefetch_debugging"]
+
 cpdef enable_prefetching(str key):
     """Turn on prefetch instructions for the given key.
 

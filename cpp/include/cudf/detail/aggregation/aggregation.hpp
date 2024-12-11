@@ -683,7 +683,7 @@ class ewma_aggregation final : public scan_aggregation {
   {
   }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<ewma_aggregation>(*this);
   }
@@ -694,7 +694,7 @@ class ewma_aggregation final : public scan_aggregation {
     return collector.visit(col_type, *this);
   }
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewma_aggregation const&>(_other);

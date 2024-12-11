@@ -16,6 +16,7 @@ from pylibcudf.libcudf.strings.replace cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
+__all__ = ["replace", "replace_multiple", "replace_slice"]
 
 cpdef Column replace(
     Column input,
@@ -55,12 +56,12 @@ cpdef Column replace(
     repl_str = <string_scalar *>(repl.c_obj.get())
 
     with nogil:
-        c_result = move(cpp_replace(
+        c_result = cpp_replace(
             input.view(),
             target_str[0],
             repl_str[0],
             maxrepl,
-        ))
+        )
 
     return Column.from_libcudf(move(c_result))
 
@@ -98,11 +99,11 @@ cpdef Column replace_multiple(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_replace_multiple(
+        c_result = cpp_replace_multiple(
             input.view(),
             target.view(),
             repl.view(),
-        ))
+        )
 
     return Column.from_libcudf(move(c_result))
 
@@ -136,6 +137,7 @@ cpdef Column replace_slice(
         Start position where repl will be added.
     stop : size_type, default -1
         End position (exclusive) to use for replacement.
+
     Returns
     -------
     pylibcudf.Column
@@ -151,11 +153,11 @@ cpdef Column replace_slice(
     cdef const string_scalar* scalar_str = <string_scalar*>(repl.c_obj.get())
 
     with nogil:
-        c_result = move(cpp_replace_slice(
+        c_result = cpp_replace_slice(
             input.view(),
             scalar_str[0],
             start,
             stop
-        ))
+        )
 
     return Column.from_libcudf(move(c_result))

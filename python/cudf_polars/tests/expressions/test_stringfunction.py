@@ -40,6 +40,79 @@ def ldf(with_nulls):
     )
 
 
+@pytest.fixture(params=[pl.Int8, pl.Int16, pl.Int32, pl.Int64])
+def integer_type(request):
+    return request.param
+
+
+@pytest.fixture(params=[pl.Float32, pl.Float64])
+def floating_type(request):
+    return request.param
+
+
+@pytest.fixture(params=[pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.Float32, pl.Float64])
+def numeric_type(request):
+    return request.param
+
+
+@pytest.fixture
+def str_to_integer_data(with_nulls):
+    a = ["1", "2", "3", "4", "5", "6"]
+    if with_nulls:
+        a[4] = None
+    return pl.LazyFrame({"a": a})
+
+
+@pytest.fixture
+def str_to_float_data(with_nulls):
+    a = [
+        "1.1",
+        "2.2",
+        "3.3",
+        "4.4",
+        "5.5",
+        "6.6",
+        "inf",
+        "+inf",
+        "-inf",
+        "Inf",
+        "-Inf",
+        "nan",
+        "-1.234",
+        "2e2",
+    ]
+    if with_nulls:
+        a[4] = None
+    return pl.LazyFrame({"a": a})
+
+
+@pytest.fixture
+def str_from_integer_data(with_nulls, integer_type):
+    a = [1, 2, 3, 4, 5, 6]
+    if with_nulls:
+        a[4] = None
+    return pl.LazyFrame({"a": pl.Series(a, dtype=integer_type)})
+
+
+@pytest.fixture
+def str_from_float_data(with_nulls, floating_type):
+    a = [
+        1.1,
+        2.2,
+        3.3,
+        4.4,
+        5.5,
+        6.6,
+        float("inf"),
+        float("+inf"),
+        float("-inf"),
+        float("nan"),
+    ]
+    if with_nulls:
+        a[4] = None
+    return pl.LazyFrame({"a": pl.Series(a, dtype=floating_type)})
+
+
 slice_cases = [
     (1, 3),
     (0, 3),
@@ -337,3 +410,47 @@ def test_unsupported_regex_raises(pattern):
 
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_string_to_integer(str_to_integer_data, integer_type):
+    query = str_to_integer_data.select(pl.col("a").cast(integer_type))
+    assert_gpu_result_equal(query)
+
+
+def test_string_from_integer(str_from_integer_data):
+    query = str_from_integer_data.select(pl.col("a").cast(pl.String))
+    assert_gpu_result_equal(query)
+
+
+def test_string_to_float(str_to_float_data, floating_type):
+    query = str_to_float_data.select(pl.col("a").cast(floating_type))
+    assert_gpu_result_equal(query)
+
+
+def test_string_from_float(request, str_from_float_data):
+    if str_from_float_data.collect_schema()["a"] == pl.Float32:
+        # libcudf will return a string representing the precision out to
+        # a certain number of hardcoded decimal places. This results in
+        # the fractional part being thrown away which causes discrepancies
+        # for certain numbers. For instance, the float32 representation of
+        # 1.1 is 1.100000023841858. When cast to a string, this will become
+        # 1.100000024. But the float64 representation of 1.1 is
+        # 1.1000000000000000888 which will result in libcudf truncating the
+        # final value to 1.1.
+        request.applymarker(pytest.mark.xfail(reason="libcudf truncation"))
+    query = str_from_float_data.select(pl.col("a").cast(pl.String))
+
+    # libcudf reads float('inf') -> "inf"
+    # but polars reads float('inf') -> "Inf"
+    query = query.select(pl.col("a").str.to_lowercase())
+    assert_gpu_result_equal(query)
+
+
+def test_string_to_numeric_invalid(numeric_type):
+    df = pl.LazyFrame({"a": ["a", "b", "c"]})
+    q = df.select(pl.col("a").cast(numeric_type))
+    assert_collect_raises(
+        q,
+        polars_except=pl.exceptions.InvalidOperationError,
+        cudf_except=pl.exceptions.ComputeError,
+    )

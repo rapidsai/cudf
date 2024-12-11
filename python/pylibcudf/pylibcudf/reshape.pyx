@@ -13,6 +13,7 @@ from pylibcudf.libcudf.types cimport size_type
 from .column cimport Column
 from .table cimport Table
 
+__all__ = ["interleave_columns", "tile"]
 
 cpdef Column interleave_columns(Table source_table):
     """Interleave columns of a table into a single column.
@@ -38,7 +39,7 @@ cpdef Column interleave_columns(Table source_table):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_interleave_columns(source_table.view()))
+        c_result = cpp_interleave_columns(source_table.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -63,6 +64,6 @@ cpdef Table tile(Table source_table, size_type count):
     cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result = move(cpp_tile(source_table.view(), count))
+        c_result = cpp_tile(source_table.view(), count)
 
     return Table.from_libcudf(move(c_result))

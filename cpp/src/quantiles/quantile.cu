@@ -195,10 +195,11 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  interpolation interp,
                                  column_view const& ordered_indices,
                                  bool exact,
+                                 rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::quantile(input, q, interp, ordered_indices, exact, cudf::get_default_stream(), mr);
+  return detail::quantile(input, q, interp, ordered_indices, exact, stream, mr);
 }
 
 }  // namespace cudf

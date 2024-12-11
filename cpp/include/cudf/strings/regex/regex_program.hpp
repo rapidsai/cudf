@@ -54,6 +54,8 @@ struct regex_program {
                                                regex_flags flags      = regex_flags::DEFAULT,
                                                capture_groups capture = capture_groups::EXTRACT);
 
+  regex_program() = delete;
+
   /**
    * @brief Move constructor
    *
@@ -115,8 +117,6 @@ struct regex_program {
   ~regex_program();
 
  private:
-  regex_program() = delete;
-
   std::string _pattern;
   regex_flags _flags;
   capture_groups _capture;

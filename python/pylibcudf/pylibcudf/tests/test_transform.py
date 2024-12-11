@@ -3,8 +3,9 @@
 import math
 
 import pyarrow as pa
-import pylibcudf as plc
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 def test_nans_to_nulls(has_nans):

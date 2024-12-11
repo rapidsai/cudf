@@ -5,19 +5,41 @@
     "args": {
       "CUDA": "12.5",
       "PYTHON_PACKAGE_MANAGER": "conda",
-      "BASE": "rapidsai/devcontainers:24.10-cpp-mambaforge-ubuntu22.04"
+      "BASE": "rapidsai/devcontainers:24.12-cpp-mambaforge-ubuntu22.04"
     }
   },
   "runArgs": [
     "--rm",
     "--name",
-    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-24.10-cuda12.5-conda"
+    "${localEnv:USER:anon}-rapids-${localWorkspaceFolderBasename}-24.12-cuda12.5-conda"
   ],
   "hostRequirements": {"gpu": "optional"},
   "features": {
-    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.10": {}
+    "ghcr.io/rapidsai/devcontainers/features/cuda:24.12": {
+        "version": "12.5",
+        "installCompilers": false,
+        "installProfilers": true,
+        "installDevPackages": false,
+        "installcuDNN": false,
+        "installcuTensor": false,
+        "installNCCL": false,
+        "installCUDARuntime": false,
+        "installNVRTC": false,
+        "installOpenCL": false,
+        "installcuBLAS": false,
+        "installcuSPARSE": false,
+        "installcuFFT": false,
+        "installcuFile": false,
+        "installcuRAND": false,
+        "installcuSOLVER": false,
+        "installNPP": false,
+        "installnvJPEG": false,
+        "pruneStaticLibs": true
+      },
+    "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils:24.12": {}
   },
   "overrideFeatureInstallOrder": [
+    "ghcr.io/rapidsai/devcontainers/features/cuda",
     "ghcr.io/rapidsai/devcontainers/features/rapids-build-utils"
   ],
   "initializeCommand": ["/bin/bash", "-c", "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda12.5-envs}"],

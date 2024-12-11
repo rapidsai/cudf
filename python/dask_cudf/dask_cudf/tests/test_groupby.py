@@ -13,8 +13,12 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
-from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
-from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
+from dask_cudf._legacy.groupby import OPTIMIZED_AGGS, _aggs_optimized
+from dask_cudf.tests.utils import (
+    QUERY_PLANNING_ON,
+    require_dask_expr,
+    xfail_dask_expr,
+)
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -30,21 +34,21 @@ def assert_cudf_groupby_layers(ddf):
 
 @pytest.fixture(params=["non_null", "null"])
 def pdf(request):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # note that column name "x" is a substring of the groupby key;
     # this gives us coverage for cudf#10829
     pdf = pd.DataFrame(
         {
-            "xx": np.random.randint(0, 5, size=10000),
-            "x": np.random.normal(size=10000),
-            "y": np.random.normal(size=10000),
+            "xx": rng.integers(0, 5, size=10000),
+            "x": rng.normal(size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
     # insert nulls into dataframe at random
     if request.param == "null":
-        pdf = pdf.mask(np.random.choice([True, False], size=pdf.shape))
+        pdf = pdf.mask(rng.choice([True, False], size=pdf.shape))
 
     return pdf
 
@@ -173,11 +177,12 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
     ],
 )
 def test_groupby_multi_column(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "a": np.random.randint(0, 20, size=1000),
-            "b": np.random.randint(0, 5, size=1000),
-            "x": np.random.normal(size=1000),
+            "a": rng.integers(0, 20, size=1000),
+            "b": rng.integers(0, 5, size=1000),
+            "x": rng.normal(size=1000),
         }
     )
 
@@ -371,11 +376,12 @@ def test_groupby_string_index_name(myindex):
     ],
 )
 def test_groupby_split_out_multiindex(agg_func):
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 10, 100),
-            "b": np.random.randint(0, 5, 100),
-            "c": np.random.random(100),
+            "a": rng.integers(0, 10, 100),
+            "b": rng.integers(0, 5, 100),
+            "c": rng.random(100),
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
@@ -419,12 +425,13 @@ def test_groupby_multiindex_reset_index(npartitions):
     ],
 )
 def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 10, 10),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "dd": np.random.randint(0, 5, 10),
+            "a": rng.integers(0, 10, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "dd": rng.integers(0, 5, 10),
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
@@ -437,8 +444,9 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
 
 
 def test_groupby_reset_index_drop_True():
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
-        {"a": np.random.randint(0, 10, 10), "b": np.random.randint(0, 5, 10)}
+        {"a": rng.integers(0, 10, 10), "b": rng.integers(0, 5, 10)}
     )
     ddf = dask_cudf.from_cudf(df, 5)
     pddf = dd.from_pandas(df.to_pandas(), 5)
@@ -552,10 +560,22 @@ def test_groupby_categorical_key():
         ),
     ],
 )
+@pytest.mark.parametrize(
+    "fused",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=require_dask_expr("Not supported by legacy API"),
+        ),
+    ],
+)
 @pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])
-def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
+def test_groupby_agg_params(
+    npartitions, split_every, split_out, fused, as_index
+):
     df = cudf.datasets.randomdata(
         nrows=150,
         dtypes={"name": str, "a": int, "b": int, "c": float},
@@ -570,6 +590,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
         "c": ["mean", "std", "var"],
     }
 
+    fused_kwarg = {"fused": fused} if QUERY_PLANNING_ON else {}
     split_kwargs = {"split_every": split_every, "split_out": split_out}
     if split_out == "use_dask_default":
         split_kwargs.pop("split_out")
@@ -589,6 +610,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
             ddf.groupby(["name", "a"], sort=True, **maybe_as_index)
             .aggregate(
                 agg_dict,
+                **fused_kwarg,
                 **split_kwargs,
             )
             .compute()
@@ -610,6 +632,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     # Full check (`sort=False`)
     gr = ddf.groupby(["name", "a"], sort=False, **maybe_as_index).aggregate(
         agg_dict,
+        **fused_kwarg,
         **split_kwargs,
     )
     pr = pddf.groupby(["name", "a"], sort=False).agg(
@@ -653,10 +676,11 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )
 def test_groupby_agg_redirect(aggregations):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
@@ -758,10 +782,11 @@ def test_groupby_with_list_of_series():
     ],
 )
 def test_groupby_nested_dict(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
@@ -794,10 +819,11 @@ def test_groupby_nested_dict(func):
     ],
 )
 def test_groupby_all_columns(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 

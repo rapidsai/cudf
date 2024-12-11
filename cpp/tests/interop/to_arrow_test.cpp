@@ -19,14 +19,12 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -90,7 +88,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(
     int64_data.begin(), int64_data.end(), validity.begin());
   auto dict_col = cudf::dictionary::encode(col4);
-  columns.emplace_back(std::move(cudf::dictionary::encode(col4)));
+  columns.emplace_back(cudf::dictionary::encode(col4));
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          bool_data.begin(), bool_data.end(), bool_validity.begin())
                          .release());
@@ -112,8 +110,8 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
     cudf::test::strings_column_wrapper(string_data.begin(), string_data.end(), validity.begin())
       .release();
   vector_of_columns cols;
-  cols.push_back(move(int_column));
-  cols.push_back(move(str_column));
+  cols.push_back(std::move(int_column));
+  cols.push_back(std::move(str_column));
   auto [null_mask, null_count] = cudf::bools_to_mask(cudf::test::fixed_width_column_wrapper<bool>(
     bool_data_validity.begin(), bool_data_validity.end()));
   columns.emplace_back(
@@ -294,9 +292,9 @@ TEST_F(ToArrowTest, StructColumn)
   auto int_col2 =
     cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{12, 24, 47}, {1, 0, 1}}.release();
   auto bool_col = cudf::test::fixed_width_column_wrapper<bool>{{true, true, false}}.release();
-  auto list_col =
-    cudf::test::lists_column_wrapper<int64_t>({{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})
-      .release();
+  auto list_col = cudf::test::lists_column_wrapper<int64_t>(
+                    {{{1, 2}, {3, 4}, {5}}, {{{6}}}, {{7}, {8, 9}}})  // NOLINT
+                    .release();
   vector_of_columns cols2;
   cols2.push_back(std::move(str_col2));
   cols2.push_back(std::move(int_col2));
@@ -438,7 +436,7 @@ TEST_F(ToArrowTest, FixedPoint64TableLarge)
     auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
     auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
 
-    std::vector<cudf::column_metadata> const metadata = {{"a"}};
+    std::vector<cudf::column_metadata> const metadata = {{"a"}};  // NOLINT
     ASSERT_TRUE(is_equal(input, metadata, expected_arrow_table));
   }
 }

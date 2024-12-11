@@ -11,12 +11,6 @@ cimport pylibcudf.libcudf.types as libcudf_types
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 
-from cudf._lib.types cimport (
-    underlying_type_t_interpolation,
-    underlying_type_t_order,
-    underlying_type_t_sorted,
-)
-
 import pylibcudf
 
 import cudf
@@ -149,44 +143,6 @@ datetime_unit_map = {
 }
 
 size_type_dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[pylibcudf.types.SIZE_TYPE_ID]
-
-
-class Interpolation(IntEnum):
-    LINEAR = (
-        <underlying_type_t_interpolation> libcudf_types.interpolation.LINEAR
-    )
-    LOWER = (
-        <underlying_type_t_interpolation> libcudf_types.interpolation.LOWER
-    )
-    HIGHER = (
-        <underlying_type_t_interpolation> libcudf_types.interpolation.HIGHER
-    )
-    MIDPOINT = (
-        <underlying_type_t_interpolation> libcudf_types.interpolation.MIDPOINT
-    )
-    NEAREST = (
-        <underlying_type_t_interpolation> libcudf_types.interpolation.NEAREST
-    )
-
-
-class Order(IntEnum):
-    ASCENDING = <underlying_type_t_order> libcudf_types.order.ASCENDING
-    DESCENDING = <underlying_type_t_order> libcudf_types.order.DESCENDING
-
-
-class Sorted(IntEnum):
-    YES = <underlying_type_t_sorted> libcudf_types.sorted.YES
-    NO = <underlying_type_t_sorted> libcudf_types.sorted.NO
-
-
-class NullOrder(IntEnum):
-    BEFORE = <underlying_type_t_order> libcudf_types.null_order.BEFORE
-    AFTER = <underlying_type_t_order> libcudf_types.null_order.AFTER
-
-
-class NullHandling(IntEnum):
-    INCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.INCLUDE
-    EXCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.EXCLUDE
 
 
 cdef dtype_from_lists_column_view(column_view cv):

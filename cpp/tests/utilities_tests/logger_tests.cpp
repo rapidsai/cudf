@@ -28,16 +28,17 @@ class LoggerTest : public cudf::test::BaseFixture {
   std::vector<spdlog::sink_ptr> prev_sinks;
 
  public:
-  LoggerTest() : prev_level{cudf::logger().level()}, prev_sinks{cudf::logger().sinks()}
+  LoggerTest()
+    : prev_level{cudf::detail::logger().level()}, prev_sinks{cudf::detail::logger().sinks()}
   {
-    cudf::logger().sinks() = {std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)};
-    cudf::logger().set_formatter(
+    cudf::detail::logger().sinks() = {std::make_shared<spdlog::sinks::ostream_sink_mt>(oss)};
+    cudf::detail::logger().set_formatter(
       std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter("%v")));
   }
   ~LoggerTest() override
   {
-    cudf::logger().set_level(prev_level);
-    cudf::logger().sinks() = prev_sinks;
+    cudf::detail::logger().set_level(prev_level);
+    cudf::detail::logger().sinks() = prev_sinks;
   }
 
   void clear_sink() { oss.str(""); }
@@ -46,32 +47,32 @@ class LoggerTest : public cudf::test::BaseFixture {
 
 TEST_F(LoggerTest, Basic)
 {
-  cudf::logger().critical("crit msg");
+  cudf::detail::logger().critical("crit msg");
   ASSERT_EQ(this->sink_content(), "crit msg\n");
 }
 
 TEST_F(LoggerTest, DefaultLevel)
 {
-  cudf::logger().trace("trace");
-  cudf::logger().debug("debug");
-  cudf::logger().info("info");
-  cudf::logger().warn("warn");
-  cudf::logger().error("error");
-  cudf::logger().critical("critical");
+  cudf::detail::logger().trace("trace");
+  cudf::detail::logger().debug("debug");
+  cudf::detail::logger().info("info");
+  cudf::detail::logger().warn("warn");
+  cudf::detail::logger().error("error");
+  cudf::detail::logger().critical("critical");
   ASSERT_EQ(this->sink_content(), "warn\nerror\ncritical\n");
 }
 
 TEST_F(LoggerTest, CustomLevel)
 {
-  cudf::logger().set_level(spdlog::level::warn);
-  cudf::logger().info("info");
-  cudf::logger().warn("warn");
+  cudf::detail::logger().set_level(spdlog::level::warn);
+  cudf::detail::logger().info("info");
+  cudf::detail::logger().warn("warn");
   ASSERT_EQ(this->sink_content(), "warn\n");
 
   this->clear_sink();
 
-  cudf::logger().set_level(spdlog::level::debug);
-  cudf::logger().trace("trace");
-  cudf::logger().debug("debug");
+  cudf::detail::logger().set_level(spdlog::level::debug);
+  cudf::detail::logger().trace("trace");
+  cudf::detail::logger().debug("debug");
   ASSERT_EQ(this->sink_content(), "debug\n");
 }

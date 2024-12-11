@@ -51,7 +51,7 @@ enum class letter_type {
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * b1 = is_letter(st, VOWEL, 1)
  * b1 is now [false, true, true]
  * @endcode
@@ -62,7 +62,7 @@ enum class letter_type {
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * b2 = is_letter(st, CONSONANT, -1) // last letter checked in each string
  * b2 is now [false, true, false]
  * @endcode
@@ -99,7 +99,7 @@ std::unique_ptr<cudf::column> is_letter(
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * ix = [3, 1, 4]
  * b1 = is_letter(st, VOWEL, ix)
  * b1 is now [true, true, false]
@@ -111,7 +111,7 @@ std::unique_ptr<cudf::column> is_letter(
  *
  * @code{.pseudo}
  * Example:
- * st = ["trouble", "toy", "sygyzy"]
+ * st = ["trouble", "toy", "syzygy"]
  * ix = [3, -2, 4] // 2nd to last character in st[1] is checked
  * b2 = is_letter(st, CONSONANT, ix)
  * b2 is now [false, false, true]

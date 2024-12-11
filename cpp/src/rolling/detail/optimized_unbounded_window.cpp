@@ -18,13 +18,10 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/reduction/detail/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 namespace cudf::detail {

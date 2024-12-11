@@ -102,7 +102,7 @@ def test_random_forest(binary_classification_data):
 def test_clustering():
     rng = np.random.default_rng(42)
     nsamps = 300
-    X = rng.random((nsamps, 2))
+    X = rng.random(size=(nsamps, 2))
     data = pd.DataFrame(X, columns=["x", "y"])
 
     kmeans = KMeans(n_clusters=3, random_state=42)

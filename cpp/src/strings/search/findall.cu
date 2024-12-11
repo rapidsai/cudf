@@ -23,6 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -97,8 +98,11 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
-  auto const strings_count = input.size();
-  auto const d_strings     = column_device_view::create(input.parent(), stream);
+  if (input.is_empty()) {
+    return cudf::lists::detail::make_empty_lists_column(input.parent().type(), stream, mr);
+  }
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
 
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
@@ -113,7 +117,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings
-  return make_lists_column(strings_count,
+  return make_lists_column(input.size(),
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
@@ -122,6 +126,43 @@ std::unique_ptr<column> findall(strings_column_view const& input,
                            mr);
 }
 
+namespace {
+struct find_re_fn {
+  column_device_view d_strings;
+
+  __device__ size_type operator()(size_type const idx,
+                                  reprog_device const prog,
+                                  int32_t const thread_idx) const
+  {
+    if (d_strings.is_null(idx)) { return 0; }
+    auto const d_str = d_strings.element<string_view>(idx);
+
+    auto const result = prog.find(thread_idx, d_str, d_str.begin());
+    return result.has_value() ? result.value().first : -1;
+  }
+};
+}  // namespace
+
+std::unique_ptr<column> find_re(strings_column_view const& input,
+                                regex_program const& prog,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+{
+  auto results = make_numeric_column(data_type{type_to_id<size_type>()},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+  if (input.is_empty()) { return results; }
+
+  auto d_results       = results->mutable_view().data<size_type>();
+  auto d_prog          = regex_device_builder::create_prog_device(prog, stream);
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+  launch_transform_kernel(find_re_fn{*d_strings}, *d_prog, d_results, input.size(), stream);
+
+  return results;
+}
 }  // namespace detail
 
 // external API
@@ -133,6 +174,15 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::findall(input, prog, stream, mr);
+}
+
+std::unique_ptr<column> find_re(strings_column_view const& input,
+                                regex_program const& prog,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::find_re(input, prog, stream, mr);
 }
 
 }  // namespace strings

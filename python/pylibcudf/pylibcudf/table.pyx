@@ -10,6 +10,7 @@ from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
 
+__all__ = ["Table"]
 
 cdef class Table:
     """A list of columns of the same size.
@@ -23,6 +24,8 @@ cdef class Table:
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
+
+    __hash__ = None
 
     cdef table_view view(self) nogil:
         """Generate a libcudf table_view to pass to libcudf algorithms.
@@ -49,9 +52,7 @@ cdef class Table:
         calling libcudf algorithms, and should generally not be needed by users
         (even direct pylibcudf Cython users).
         """
-        cdef vector[unique_ptr[column]] c_columns = move(
-            dereference(libcudf_tbl).release()
-        )
+        cdef vector[unique_ptr[column]] c_columns = dereference(libcudf_tbl).release()
 
         cdef vector[unique_ptr[column]].size_type i
         return Table([

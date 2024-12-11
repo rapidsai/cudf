@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>

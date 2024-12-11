@@ -19,10 +19,7 @@
 #include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <map>
 #include <vector>
@@ -405,21 +402,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
 
-namespace experimental {
-/**
- * @copydoc cudf::io::json::detail::make_device_json_column
- */
-void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t const& tree,
-                             device_span<NodeIndexT const> col_ids,
-                             device_span<size_type const> row_offsets,
-                             device_json_column& root,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
-}  // namespace experimental
-
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
  *
@@ -446,6 +428,29 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Create all null column of a given nested schema
+ *
+ * @param schema The schema of the column to create
+ * @param num_rows The number of rows in the column
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr resource with which to allocate
+ * @return The all null column
+ */
+std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
+                                              size_type num_rows,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Create metadata for a column of a given schema
+ *
+ * @param schema The schema of the column
+ * @param col_name The name of the column
+ * @return column metadata for a given schema
+ */
+column_name_info make_column_name_info(schema_element const& schema, std::string const& col_name);
 
 /**
  * @brief Get the path data type of a column by path if present in input schema

@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/hashing.hpp>
@@ -155,7 +154,7 @@ TEST_F(SHA384HashTest, ListsUnsupported)
 
   auto const input = cudf::table_view({strings_list_col});
 
-  EXPECT_THROW(cudf::hashing::sha384(input), cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::sha384(input), cudf::data_type_error);
 }
 
 TEST_F(SHA384HashTest, StructsUnsupported)
@@ -164,7 +163,7 @@ TEST_F(SHA384HashTest, StructsUnsupported)
   auto struct_col  = cudf::test::structs_column_wrapper{{child_col}};
   auto const input = cudf::table_view({struct_col});
 
-  EXPECT_THROW(cudf::hashing::sha384(input), cudf::logic_error);
+  EXPECT_THROW(cudf::hashing::sha384(input), cudf::data_type_error);
 }
 
 template <typename T>

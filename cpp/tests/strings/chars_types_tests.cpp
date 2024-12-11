@@ -24,6 +24,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <array>
 #include <vector>
 
 struct StringsCharsTest : public cudf::test::BaseFixture {};
@@ -50,20 +51,20 @@ TEST_P(CharsTypes, AllTypes)
                                      "de",
                                      "\t\r\n\f "};
 
-  bool expecteds[] = {false, false, false, false, false, false, false, false,
-                      false, false, false, false, false, true,  false, false,  // decimal
-                      false, false, false, false, false, false, false, false,
-                      false, true,  false, true,  false, true,  false, false,  // numeric
-                      false, false, false, false, false, false, false, false,
-                      false, false, false, true,  false, true,  false, false,  // digit
-                      true,  true,  false, true,  false, false, false, false,
-                      false, false, false, false, false, false, true,  false,  // alpha
-                      false, false, false, false, false, false, false, false,
-                      false, false, false, false, false, false, false, true,  // space
-                      false, false, false, true,  false, false, false, false,
-                      false, false, false, false, false, false, false, false,  // upper
-                      false, true,  false, false, false, false, false, false,
-                      false, false, false, false, false, false, true,  false};  // lower
+  std::array expecteds{false, false, false, false, false, false, false, false,
+                       false, false, false, false, false, true,  false, false,  // decimal
+                       false, false, false, false, false, false, false, false,
+                       false, true,  false, true,  false, true,  false, false,  // numeric
+                       false, false, false, false, false, false, false, false,
+                       false, false, false, true,  false, true,  false, false,  // digit
+                       true,  true,  false, true,  false, false, false, false,
+                       false, false, false, false, false, false, true,  false,  // alpha
+                       false, false, false, false, false, false, false, false,
+                       false, false, false, false, false, false, false, true,  // space
+                       false, false, false, true,  false, false, false, false,
+                       false, false, false, false, false, false, false, false,  // upper
+                       false, true,  false, false, false, false, false, false,
+                       false, false, false, false, false, false, true,  false};  // lower
 
   auto is_parm = GetParam();
 

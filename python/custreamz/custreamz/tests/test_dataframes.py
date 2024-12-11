@@ -377,24 +377,16 @@ def test_setitem_overwrites(stream):
     [
         ({}, "sum"),
         ({}, "mean"),
-        pytest.param({}, "min"),
+        ({}, "min"),
         pytest.param(
             {},
             "median",
             marks=pytest.mark.xfail(reason="Unavailable for rolling objects"),
         ),
-        pytest.param({}, "max"),
-        pytest.param(
-            {},
-            "var",
-            marks=pytest.mark.xfail(reason="Unavailable for rolling objects"),
-        ),
-        pytest.param({}, "count"),
-        pytest.param(
-            {"ddof": 0},
-            "std",
-            marks=pytest.mark.xfail(reason="Unavailable for rolling objects"),
-        ),
+        ({}, "max"),
+        ({}, "var"),
+        ({}, "count"),
+        ({"ddof": 0}, "std"),
         pytest.param(
             {"quantile": 0.5},
             "quantile",

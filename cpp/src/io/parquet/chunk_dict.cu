@@ -84,7 +84,7 @@ struct map_insert_fn {
                                                storage_ref};
 
       // Create a map ref with `cuco::insert` operator
-      auto map_insert_ref = hash_map_ref.with_operators(cuco::insert);
+      auto map_insert_ref = hash_map_ref.rebind_operators(cuco::insert);
       auto const t        = threadIdx.x;
 
       // Create atomic refs to the current chunk's num_dict_entries and uniq_data_size
@@ -186,7 +186,7 @@ struct map_find_fn {
                                                storage_ref};
 
       // Create a map ref with `cuco::find` operator
-      auto const map_find_ref = hash_map_ref.with_operators(cuco::find);
+      auto const map_find_ref = hash_map_ref.rebind_operators(cuco::find);
       auto const t            = threadIdx.x;
 
       // Note: Adjust the following loop to use `cg::tiles<map_cg_size>` if needed in the future.
@@ -194,17 +194,12 @@ struct map_find_fn {
            val_idx += block_size) {
         // Find the key using a single thread for best performance for now.
         if (data_col.is_valid(val_idx)) {
+          auto const found_slot = map_find_ref.find(val_idx);
+          // Fail if we didn't find the previously inserted key.
+          cudf_assert(found_slot != map_find_ref.end() &&
+                      "Unable to find value in map in dictionary index construction");
           // No need for atomic as this is not going to be modified by any other thread.
-          chunk->dict_index[val_idx - s_ck_start_val_idx] = [&]() {
-            auto const found_slot = map_find_ref.find(val_idx);
-
-            // Fail if we didn't find the previously inserted key.
-            cudf_assert(found_slot != map_find_ref.end() &&
-                        "Unable to find value in map in dictionary index construction");
-
-            // Return the found value.
-            return found_slot->second;
-          }();
+          chunk->dict_index[val_idx - s_ck_start_val_idx] = found_slot->second;
         }
       }
     } else {

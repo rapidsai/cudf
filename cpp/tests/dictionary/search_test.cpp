@@ -15,7 +15,6 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/dictionary/detail/search.hpp>

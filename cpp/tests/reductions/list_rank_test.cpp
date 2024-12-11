@@ -14,14 +14,9 @@
  * limitations under the License.
  */
 
-#include <benchmarks/common/generate_input.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/filling.hpp>
 #include <cudf/reduction.hpp>
 
 struct ListRankScanTest : public cudf::test::BaseFixture {
@@ -136,7 +131,7 @@ TEST_F(ListRankScanTest, ListOfStruct)
      false,
      false}};
   auto col2 = cudf::test::strings_column_wrapper{
-    {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
+    {"x", "x", "a", "a", "b", "", "a", "b", "a", "b", "a", "c", "a", "c", "", "", "b", "b"},
     {true,
      true,
      true,

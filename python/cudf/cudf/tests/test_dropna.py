@@ -22,13 +22,13 @@ from cudf.testing import assert_eq
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
     psr = pd.Series(data)
-
+    rng = np.random.default_rng(seed=0)
     if len(data) > 0:
         if nulls == "one":
-            p = np.random.randint(0, 4)
+            p = rng.integers(0, 4)
             psr[p] = None
         elif nulls == "some":
-            p1, p2 = np.random.randint(0, 4, (2,))
+            p1, p2 = rng.integers(0, 4, (2,))
             psr[p1] = None
             psr[p2] = None
         elif nulls == "all":

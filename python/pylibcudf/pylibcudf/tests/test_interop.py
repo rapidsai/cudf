@@ -1,8 +1,12 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+import cupy as cp
+import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+from utils import assert_table_eq
+
+import pylibcudf as plc
 
 
 def test_list_dtype_roundtrip():
@@ -66,3 +70,31 @@ def test_decimal_other(data_type):
 
     arrow_type = plc.interop.to_arrow(data_type, precision=precision)
     assert arrow_type == pa.decimal128(precision, 0)
+
+
+def test_round_trip_dlpack_plc_table():
+    expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
+    plc_table = plc.interop.from_arrow(expected)
+    result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
+    assert_table_eq(expected, result)
+
+
+@pytest.mark.parametrize("array", [np.array, cp.array])
+def test_round_trip_dlpack_array(array):
+    arr = array([1, 2, 3])
+    result = plc.interop.from_dlpack(arr.__dlpack__())
+    expected = pa.table({"a": [1, 2, 3]})
+    assert_table_eq(expected, result)
+
+
+def test_to_dlpack_error():
+    plc_table = plc.interop.from_arrow(
+        pa.table({"a": [1, None, 3], "b": [5, 6, 7]})
+    )
+    with pytest.raises(ValueError, match="Cannot create a DLPack tensor"):
+        plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
+
+
+def test_from_dlpack_error():
+    with pytest.raises(ValueError, match="Invalid PyCapsule object"):
+        plc.interop.from_dlpack(1)

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal, Mapping
+from typing import TYPE_CHECKING, Literal
 
 from typing_extensions import Self
 
 import cudf
 from cudf.core.buffer.buffer import Buffer, BufferOwner
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 class ExposureTrackedBuffer(Buffer):

@@ -1,5 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+__all__ = ["gpumemoryview"]
 
 cdef class gpumemoryview:
     """Minimal representation of a memory buffer.
@@ -25,3 +26,5 @@ cdef class gpumemoryview:
     @property
     def __cuda_array_interface__(self):
         return self.obj.__cuda_array_interface__
+
+    __hash__ = None

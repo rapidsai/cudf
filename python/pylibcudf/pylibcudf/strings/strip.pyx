@@ -13,6 +13,7 @@ from pylibcudf.libcudf.strings cimport strip as cpp_strip
 from pylibcudf.scalar cimport Scalar
 from pylibcudf.strings.side_type cimport side_type
 
+__all__ = ["strip"]
 
 cpdef Column strip(
     Column input,

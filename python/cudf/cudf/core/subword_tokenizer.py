@@ -6,8 +6,9 @@ import warnings
 
 import cupy as cp
 
+import pylibcudf as plc
+
 from cudf._lib.nvtext.subword_tokenize import (
-    Hashed_Vocabulary as cpp_hashed_vocabulary,
     subword_tokenize_inmem_hash as cpp_subword_tokenize,
 )
 
@@ -50,7 +51,9 @@ class SubwordTokenizer:
 
     def __init__(self, hash_file: str, do_lower_case: bool = True):
         self.do_lower_case = do_lower_case
-        self.vocab_file = cpp_hashed_vocabulary(hash_file)
+        self.vocab_file = plc.nvtext.subword_tokenize.HashedVocabulary(
+            hash_file
+        )
 
     def __call__(
         self,

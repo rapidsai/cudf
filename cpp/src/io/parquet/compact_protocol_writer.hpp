@@ -17,7 +17,6 @@
 #pragma once
 
 #include "parquet.hpp"
-#include "parquet_common.hpp"
 
 #include <algorithm>
 #include <cstddef>

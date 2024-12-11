@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_string_dtype
+from cudf.core._internals import unary
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.index import ensure_index
@@ -171,7 +172,7 @@ def to_numeric(arg, errors="raise", downcast=None, dtype_backend=None):
             downcast_dtype = cudf.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
-                    col = libcudf.unary.cast(col, downcast_dtype)
+                    col = unary.cast(col, downcast_dtype)
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):

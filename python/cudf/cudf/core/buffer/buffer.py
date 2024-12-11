@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import math
-import pickle
 import weakref
 from types import SimpleNamespace
-from typing import Any, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
 from typing_extensions import Self
@@ -17,6 +16,9 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def host_memory_allocation(nbytes: int) -> memoryview:
@@ -284,7 +286,7 @@ class BufferOwner(Serializable):
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
-        rmm._lib.device_buffer.copy_ptr_to_host(
+        rmm.pylibrmm.device_buffer.copy_ptr_to_host(
             self.get_ptr(mode="read") + offset, host_buf
         )
         return memoryview(host_buf).toreadonly()
@@ -429,8 +431,7 @@ class Buffer(Serializable):
             second element is a list containing single frame.
         """
         header: dict[str, Any] = {}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["owner-type-serialized"] = pickle.dumps(type(self._owner))
+        header["owner-type-serialized-name"] = type(self._owner).__name__
         header["frame_count"] = 1
         frames = [self]
         return header, frames
@@ -457,7 +458,9 @@ class Buffer(Serializable):
         if isinstance(frame, cls):
             return frame  # The frame is already deserialized
 
-        owner_type: BufferOwner = pickle.loads(header["owner-type-serialized"])
+        owner_type: BufferOwner = Serializable._name_type_map[
+            header["owner-type-serialized-name"]
+        ]
         if hasattr(frame, "__cuda_array_interface__"):
             owner = owner_type.from_device_memory(frame, exposed=False)
         else:

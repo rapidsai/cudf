@@ -61,10 +61,11 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 }  // namespace detail
 
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
+                                                         rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transpose(input, cudf::get_default_stream(), mr);
+  return detail::transpose(input, stream, mr);
 }
 
 }  // namespace cudf

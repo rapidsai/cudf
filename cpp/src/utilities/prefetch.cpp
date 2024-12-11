@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/prefetch.hpp>
 

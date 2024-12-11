@@ -9,7 +9,7 @@ source ./ci/test_python_common.sh test_python_cudf
 
 rapids-logger "Check GPU usage"
 nvidia-smi
-
+rapids-print-env
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e

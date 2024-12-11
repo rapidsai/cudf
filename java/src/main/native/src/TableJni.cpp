@@ -1037,21 +1037,23 @@ cudf::io::schema_element read_schema_element(int& index,
   if (d_type.id() == cudf::type_id::STRUCT || d_type.id() == cudf::type_id::LIST) {
     std::map<std::string, cudf::io::schema_element> child_elems;
     int num_children = children[index];
+    std::vector<std::string> child_names(num_children);
     // go to the next entry, so recursion can parse it.
     index++;
     for (int i = 0; i < num_children; i++) {
-      auto const name = std::string{names.get(index).get()};
+      auto name = std::string{names.get(index).get()};
       child_elems.insert(
         std::pair{name, cudf::jni::read_schema_element(index, children, names, types, scales)});
+      child_names[i] = std::move(name);
     }
-    return cudf::io::schema_element{d_type, std::move(child_elems)};
+    return cudf::io::schema_element{d_type, std::move(child_elems), {std::move(child_names)}};
   } else {
     if (children[index] != 0) {
       throw std::invalid_argument("found children for a type that should have none");
     }
     // go to the next entry before returning...
     index++;
-    return cudf::io::schema_element{d_type, {}};
+    return cudf::io::schema_element{d_type, {}, std::nullopt};
   }
 }
 
@@ -1824,7 +1826,6 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
                                                  jboolean allow_leading_zeros,
                                                  jboolean allow_nonnumeric_numbers,
                                                  jboolean allow_unquoted_control,
-                                                 jboolean prune_columns,
                                                  jboolean experimental,
                                                  jbyte line_delimiter,
                                                  jlong ds_handle)
@@ -1853,6 +1854,7 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
     cudf::io::json_recovery_mode_t recovery_mode =
       recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                         : cudf::io::json_recovery_mode_t::FAIL;
+
     cudf::io::json_reader_options_builder opts =
       cudf::io::json_reader_options::builder(source)
         .dayfirst(static_cast<bool>(day_first))
@@ -1864,7 +1866,6 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
         .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes)
-        .prune_columns(prune_columns)
         .experimental(experimental);
     if (strict_validation) {
       opts.numeric_leading_zeros(allow_leading_zeros)
@@ -1886,13 +1887,19 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
       }
 
       std::map<std::string, cudf::io::schema_element> data_types;
+      std::vector<std::string> name_order;
       int at = 0;
       while (at < n_types.size()) {
         auto const name = std::string{n_col_names.get(at).get()};
         data_types.insert(std::pair{
           name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+        name_order.push_back(name);
       }
-      opts.dtypes(data_types);
+      auto const prune_columns = data_types.size() != 0;
+      cudf::io::schema_element structs{
+        cudf::data_type{cudf::type_id::STRUCT}, std::move(data_types), {std::move(name_order)}};
+      opts.prune_columns(prune_columns).dtypes(structs);
+
     } else {
       // should infer the types
     }
@@ -1925,7 +1932,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
                                                            jboolean allow_leading_zeros,
                                                            jboolean allow_nonnumeric_numbers,
                                                            jboolean allow_unquoted_control,
-                                                           jboolean prune_columns,
                                                            jboolean experimental,
                                                            jbyte line_delimiter)
 {
@@ -1968,6 +1974,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
     cudf::io::json_recovery_mode_t recovery_mode =
       recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                         : cudf::io::json_recovery_mode_t::FAIL;
+
     cudf::io::json_reader_options_builder opts =
       cudf::io::json_reader_options::builder(source)
         .dayfirst(static_cast<bool>(day_first))
@@ -1979,7 +1986,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
         .delimiter(static_cast<char>(line_delimiter))
         .strict_validation(strict_validation)
         .keep_quotes(keep_quotes)
-        .prune_columns(prune_columns)
         .experimental(experimental);
     if (strict_validation) {
       opts.numeric_leading_zeros(allow_leading_zeros)
@@ -2001,13 +2007,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
       }
 
       std::map<std::string, cudf::io::schema_element> data_types;
+      std::vector<std::string> name_order;
+      name_order.reserve(n_types.size());
       int at = 0;
       while (at < n_types.size()) {
-        auto const name = std::string{n_col_names.get(at).get()};
+        auto name = std::string{n_col_names.get(at).get()};
         data_types.insert(std::pair{
           name, cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+        name_order.emplace_back(std::move(name));
       }
-      opts.dtypes(data_types);
+      auto const prune_columns = data_types.size() != 0;
+      cudf::io::schema_element structs{
+        cudf::data_type{cudf::type_id::STRUCT}, std::move(data_types), {std::move(name_order)}};
+      opts.prune_columns(prune_columns).dtypes(structs);
     } else {
       // should infer the types
     }

@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/span.hpp>
@@ -235,7 +234,7 @@ class column_view_base {
    *
    * @return Typed pointer to underlying data
    */
-  virtual void const* get_data() const noexcept { return _data; }
+  [[nodiscard]] virtual void const* get_data() const noexcept { return _data; }
 
   data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
@@ -695,7 +694,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @return Typed pointer to underlying data
    */
-  void const* get_data() const noexcept override;
+  [[nodiscard]] void const* get_data() const noexcept override;
 
  private:
   friend mutable_column_view bit_cast(mutable_column_view const& input, data_type type);

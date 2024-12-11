@@ -15,12 +15,9 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <src/io/utilities/file_io_utilities.hpp>
-
-#include <type_traits>
 
 // Base test fixture for tests
 struct CuFileIOTest : public cudf::test::BaseFixture {};

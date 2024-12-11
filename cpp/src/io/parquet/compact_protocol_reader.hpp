@@ -22,10 +22,7 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <optional>
-#include <string>
 #include <utility>
-#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace io::parquet::detail {

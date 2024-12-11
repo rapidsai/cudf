@@ -83,7 +83,7 @@ cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=24.10 python=3.12 cuda-version=12.5
+    cudf=24.12 python=3.12 cuda-version=12.5
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

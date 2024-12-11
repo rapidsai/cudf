@@ -1425,13 +1425,13 @@ struct pair_rep_accessor {
 
  private:
   template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
-  __device__ inline auto get_rep(cudf::size_type i) const
+  __device__ [[nodiscard]] inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
   template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
-  __device__ inline auto get_rep(cudf::size_type i) const
+  __device__ [[nodiscard]] inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();
   }

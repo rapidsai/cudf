@@ -69,10 +69,10 @@ def _get_space_util(bins, init_bins):
     return sum(_new_bin_length(len(b)) for b in bins) + 2 * init_bins
 
 
-def _pick_initial_a_b(data, max_constant, init_bins):
+def _pick_initial_a_b(data, max_constant, init_bins, rng):
     while True:
-        a = np.random.randint(2**12, 2**15)
-        b = np.random.randint(2**12, 2**15)
+        a = rng.integers(2**12, 2**15)
+        b = rng.integers(2**12, 2**15)
         bins = _make_bins(data, init_bins, a, b)
         score = _get_space_util(bins, init_bins) / len(data)
 
@@ -86,18 +86,18 @@ def _pick_initial_a_b(data, max_constant, init_bins):
     return bins, a, b
 
 
-def _find_hash_for_internal(hash_bin):
+def _find_hash_for_internal(hash_bin, rng):
     if not hash_bin:
         return [[], 0, 0]
 
     new_length = _new_bin_length(len(hash_bin))
 
     while True:
-        a = np.random.randint(
+        a = rng.integers(
             A_LBOUND_SECOND_LEVEL_HASH,
             A_HBOUND_SECOND_LEVEL_HASH,
         )
-        b = np.random.randint(
+        b = rng.integers(
             B_LBOUND_SECOND_LEVEL_HASH, B_HBOUND_SECOND_LEVEL_HASH
         )
         bins = _make_bins(hash_bin, new_length, a, b)
@@ -108,11 +108,11 @@ def _find_hash_for_internal(hash_bin):
             return bins, a, b
 
 
-def _perfect_hash(integers, max_constant):
+def _perfect_hash(integers, max_constant, rng):
     num_top_level_bins = len(integers) // 4
 
     init_bins, init_a, init_b = _pick_initial_a_b(
-        integers, max_constant, num_top_level_bins
+        integers, max_constant, num_top_level_bins, rng
     )
     flattened_bins = []
 
@@ -127,7 +127,7 @@ def _perfect_hash(integers, max_constant):
     for i, b in enumerate(init_bins):
         if i % 500 == 0:
             print(f"Processing bin {i} / {len(init_bins)} of size = {len(b)}")
-        internal_table, coeff_a, coeff_b = _find_hash_for_internal(b)
+        internal_table, coeff_a, coeff_b = _find_hash_for_internal(b, rng)
         bin_length = len(internal_table)
         max_bin_length = max(bin_length, max_bin_length)
         internal_table_coeffs[i] = (
@@ -245,7 +245,7 @@ def hash_vocab(
     """
     Write the vocab vocabulary hashtable to the output_path
     """
-    np.random.seed(1243342)
+    rng = np.random.default_rng(seed=1243342)
     vocab = _load_vocab_dict(vocab_path)
     keys = list(map(_sdbm_hash, vocab.keys()))
 
@@ -264,7 +264,7 @@ def hash_vocab(
         hash_table,
         inner_table_coeffs,
         offsets_into_ht,
-    ) = _perfect_hash(keys, 10)
+    ) = _perfect_hash(keys, 10, rng)
 
     _pack_keys_and_values(hash_table, hashed_vocab)
     _store_func(

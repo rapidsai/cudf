@@ -5,21 +5,10 @@ from itertools import repeat
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 from pylibcudf.libcudf.aggregation cimport rank_method
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.search cimport lower_bound, upper_bound
-from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport null_order, order as cpp_order
-
 from cudf._lib.column cimport Column
-from cudf._lib.utils cimport (
-    columns_from_pylibcudf_table,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 import pylibcudf
 
@@ -311,43 +300,18 @@ def digitize(list source_columns, list bins, bool right=False):
     right : Indicating whether the intervals include the
             right or the left bin edge.
     """
-
-    cdef table_view bins_view = table_view_from_columns(bins)
-    cdef table_view source_table_view = table_view_from_columns(
-        source_columns
-    )
-    cdef vector[cpp_order] column_order = (
-        vector[cpp_order](
-            bins_view.num_columns(),
-            cpp_order.ASCENDING
+    return Column.from_pylibcudf(
+        getattr(pylibcudf.search, "lower_bound" if right else "upper_bound")(
+            pylibcudf.Table(
+                [c.to_pylibcudf(mode="read") for c in bins]
+            ),
+            pylibcudf.Table(
+                [c.to_pylibcudf(mode="read") for c in source_columns]
+            ),
+            [pylibcudf.types.Order.ASCENDING]*len(bins),
+            [pylibcudf.types.NullOrder.BEFORE]*len(bins)
         )
     )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            bins_view.num_columns(),
-            null_order.BEFORE
-        )
-    )
-
-    cdef unique_ptr[column] c_result
-    if right:
-        with nogil:
-            c_result = move(lower_bound(
-                bins_view,
-                source_table_view,
-                column_order,
-                null_precedence)
-            )
-    else:
-        with nogil:
-            c_result = move(upper_bound(
-                bins_view,
-                source_table_view,
-                column_order,
-                null_precedence)
-            )
-
-    return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()

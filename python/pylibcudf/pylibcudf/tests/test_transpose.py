@@ -1,9 +1,10 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from packaging.version import parse
+
+import pylibcudf as plc
 
 
 @pytest.mark.skipif(

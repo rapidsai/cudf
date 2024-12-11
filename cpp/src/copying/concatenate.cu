@@ -19,6 +19,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/concatenate_masks.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -162,7 +163,7 @@ size_type concatenate_masks(device_span<column_device_view const> d_views,
                             size_type output_size,
                             rmm::cuda_stream_view stream)
 {
-  rmm::device_scalar<size_type> d_valid_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
   constexpr size_type block_size{256};
   cudf::detail::grid_1d config(output_size, block_size);
   concatenate_masks_kernel<block_size>
@@ -265,7 +266,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto out_view     = out_col->mutable_view();
   auto d_out_view   = mutable_column_device_view::create(out_view, stream);
 
-  rmm::device_scalar<size_type> d_valid_count(0, stream);
+  cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
 
   // Launch kernel
   constexpr size_type block_size{256};

@@ -3,9 +3,10 @@
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq, assert_table_eq
+
+import pylibcudf as plc
 
 # Map pylibcudf interpolation options to pyarrow options
 interp_mapping = {

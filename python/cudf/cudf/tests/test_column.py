@@ -31,12 +31,13 @@ dtypes = sorted(
 @pytest.fixture(params=dtypes, ids=dtypes)
 def pandas_input(request):
     dtype = request.param
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed=0)
     size = 100
 
     def random_ints(dtype, size):
         dtype_min = np.iinfo(dtype).min
         dtype_max = np.iinfo(dtype).max
+        rng = np.random.default_rng(seed=0)
         return rng.integers(dtype_min, dtype_max, size=size, dtype=dtype)
 
     try:
@@ -154,7 +155,9 @@ def test_column_slicing(pandas_input, offset, size):
     [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
 )
 def test_decimal_column_slicing(offset, size, precision, scale, decimal_type):
-    col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
+    col = cudf.core.column.as_column(
+        pd.Series(np.random.default_rng(seed=0).random(1000))
+    )
     col = col.astype(decimal_type(precision, scale))
     column_slicing_test(col, offset, size, True)
 

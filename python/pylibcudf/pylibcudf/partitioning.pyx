@@ -11,6 +11,11 @@ from pylibcudf.libcudf.table.table cimport table
 from .column cimport Column
 from .table cimport Table
 
+__all__ = [
+    "hash_partition",
+    "partition",
+    "round_robin_partition",
+]
 
 cpdef tuple[Table, list] hash_partition(
     Table input,
@@ -41,10 +46,10 @@ cpdef tuple[Table, list] hash_partition(
     cdef int c_num_partitions = num_partitions
 
     with nogil:
-        c_result = move(
-            cpp_partitioning.hash_partition(
-                input.view(), c_columns_to_hash, c_num_partitions
-            )
+        c_result = cpp_partitioning.hash_partition(
+            input.view(),
+            c_columns_to_hash,
+            c_num_partitions
         )
 
     return Table.from_libcudf(move(c_result.first)), list(c_result.second)
@@ -74,8 +79,10 @@ cpdef tuple[Table, list] partition(Table t, Column partition_map, int num_partit
     cdef int c_num_partitions = num_partitions
 
     with nogil:
-        c_result = move(
-            cpp_partitioning.partition(t.view(), partition_map.view(), c_num_partitions)
+        c_result = cpp_partitioning.partition(
+            t.view(),
+            partition_map.view(),
+            c_num_partitions
         )
 
     return Table.from_libcudf(move(c_result.first)), list(c_result.second)
@@ -111,10 +118,8 @@ cpdef tuple[Table, list] round_robin_partition(
     cdef int c_start_partition = start_partition
 
     with nogil:
-        c_result = move(
-            cpp_partitioning.round_robin_partition(
-                input.view(), c_num_partitions, c_start_partition
-            )
+        c_result = cpp_partitioning.round_robin_partition(
+            input.view(), c_num_partitions, c_start_partition
         )
 
     return Table.from_libcudf(move(c_result.first)), list(c_result.second)

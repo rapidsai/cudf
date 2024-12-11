@@ -1,5 +1,4 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
@@ -16,7 +15,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type
 
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 ctypedef const scalar constscalar
 

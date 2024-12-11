@@ -36,6 +36,8 @@ if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERS
   )
 endif()
 
+rapids_cmake_write_version_file(include/cudf/version_config.hpp)
+
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
 # `Threads::Threads` is the same value in first run and subsequent runs.
@@ -52,6 +54,7 @@ option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(CUDF_BUILD_TESTUTIL "Whether to build the test utilities contained in libcudf" ON)
 mark_as_advanced(CUDF_BUILD_TESTUTIL)
 option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
+option(CUDF_EXPORT_NVCOMP "Export NVCOMP as a dependency" ON)
 option(CUDF_LARGE_STRINGS_DISABLED "Build with large string support disabled" OFF)
 mark_as_advanced(CUDF_LARGE_STRINGS_DISABLED)
 option(
@@ -76,6 +79,7 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -87,6 +91,13 @@ option(
   ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
+option(CUDF_STATIC_LINTERS "Enable static linters during compilation" OFF)
+
+option(
+  CUDF_KVIKIO_REMOTE_IO
+  "Enable remote IO (e.g. AWS S3) support through KvikIO. If disabled, cudf-python will still be able to do remote IO through fsspec."
+  ON
+)
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -107,6 +118,9 @@ message(
   "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler): ${CUDA_ENABLE_LINEINFO}"
 )
 message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
+message(VERBOSE
+        "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
+)
 
 # Set a default build type if none was specified
 rapids_cmake_build_type("Release")
@@ -144,11 +158,90 @@ if(NOT CUDF_GENERATED_INCLUDE_DIR)
 endif()
 
 # ##################################################################################################
+# * linter configuration ---------------------------------------------------------------------------
+if(CUDF_STATIC_LINTERS)
+  # For simplicity, for now we assume that all linters can be installed into an environment where
+  # any linter is being run. We could relax this requirement if desired.
+  find_program(
+    CLANG_TIDY_EXE
+    NAMES "clang-tidy"
+    DOC "Path to clang-tidy executable" REQUIRED
+  )
+
+  execute_process(
+    COMMAND ${CLANG_TIDY_EXE} --version
+    OUTPUT_VARIABLE CLANG_TIDY_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  string(REGEX MATCH "LLVM version ([0-9]+\\.[0-9]+)\\.[0-9]+" LLVM_VERSION_MATCH
+               "${CLANG_TIDY_OUTPUT}"
+  )
+  # Discard the patch version and allow it to float. Empirically, results between patch versions are
+  # mostly stable, and looking at available packages on some package managers sometimes patch
+  # versions are skipped so we don't want to constrain to a patch version that the user can't
+  # install.
+  set(LLVM_VERSION "${CMAKE_MATCH_1}")
+  set(expected_clang_tidy_version 19.1)
+  if(NOT expected_clang_tidy_version VERSION_EQUAL LLVM_VERSION)
+    message(
+      FATAL_ERROR
+        "clang-tidy version ${expected_clang_tidy_version} is required, but found ${LLVM_VERSION}"
+    )
+  endif()
+
+  find_program(IWYU_EXE NAMES include-what-you-use iwyu REQUIRED)
+endif()
+
+# Turn on the clang-tidy property for a target excluding the files specified in SKIPPED_FILES.
+function(enable_static_checkers target)
+  set(_tidy_options IWYU CLANG_TIDY)
+  set(_tidy_one_value)
+  set(_tidy_multi_value SKIPPED_FILES)
+  cmake_parse_arguments(
+    _LINT "${_tidy_options}" "${_tidy_one_value}" "${_tidy_multi_value}" ${ARGN}
+  )
+
+  if(CUDF_STATIC_LINTERS)
+    if(_LINT_CLANG_TIDY)
+      # clang will complain about unused link libraries on the compile line unless we specify
+      # -Qunused-arguments.
+      set_target_properties(
+        ${target} PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--extra-arg=-Qunused-arguments"
+      )
+    endif()
+    if(_LINT_IWYU)
+      # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
+      # relevant since they don't show up in any other build so it's better to suppress them until
+      # we can figure out the cause. Setting this as part of CXX_INCLUDE_WHAT_YOU_USE does not
+      # appear to be sufficient, we must also ensure that it is set to the underlying target's CXX
+      # compile flags. To do this completely cleanly we should modify the flags on the target rather
+      # than the global CUDF_CXX_FLAGS, but this solution is good enough for now since we never run
+      # the linters on real builds.
+      foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
+        list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
+        if(_flag_index EQUAL -1)
+          list(APPEND CUDF_CXX_FLAGS ${_flag})
+        endif()
+      endforeach()
+      set(CUDF_CXX_FLAGS
+          "${CUDF_CXX_FLAGS}"
+          PARENT_SCOPE
+      )
+      set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
+    endif()
+    foreach(file IN LISTS _LINT_SKIPPED_FILES)
+      set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
+    endforeach()
+  endif()
+endfunction()
+
+# ##################################################################################################
 # * conda environment -----------------------------------------------------------------------------
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules ${CMAKE_MODULE_PATH})
 rapids_find_package(
   CUDAToolkit REQUIRED
   BUILD_EXPORT_SET cudf-exports
@@ -195,8 +288,6 @@ if(CUDF_BUILD_TESTUTIL)
 endif()
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
-# find cuFile
-include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 # find fmt
@@ -213,9 +304,6 @@ if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
   list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
-  if(TARGET cufile::cuFile_interface)
-    list(APPEND dependencies cuFile)
-  endif()
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -314,7 +402,19 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/groupby.cu
+  src/groupby/hash/compute_aggregations.cu
+  src/groupby/hash/compute_aggregations_null.cu
+  src/groupby/hash/compute_global_memory_aggs.cu
+  src/groupby/hash/compute_global_memory_aggs_null.cu
+  src/groupby/hash/compute_groupby.cu
+  src/groupby/hash/compute_mapping_indices.cu
+  src/groupby/hash/compute_mapping_indices_null.cu
+  src/groupby/hash/compute_shared_memory_aggs.cu
+  src/groupby/hash/create_sparse_results_table.cu
+  src/groupby/hash/flatten_single_pass_aggs.cpp
   src/groupby/hash/groupby.cu
+  src/groupby/hash/hash_compound_agg_finalizer.cu
+  src/groupby/hash/sparse_to_dense_results.cu
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
@@ -364,6 +464,7 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
+  src/io/comp/comp.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
@@ -604,6 +705,7 @@ add_library(
   src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
+  src/strings/search/contains_multiple.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_multiple.cu
@@ -708,6 +810,11 @@ set_target_properties(
              INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
+# Note: This must come before the target_compile_options below so that the function can modify the
+# flags if necessary.
+enable_static_checkers(
+  cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp CLANG_TIDY IWYU
+)
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
@@ -793,6 +900,18 @@ target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL
 # Define spdlog level
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
 
+# Enable remote IO through KvikIO
+target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
+
+# Enable cuFile support
+set(_cufile_suffix)
+if(CUDA_STATIC_CUFILE)
+  set(_cufile_suffix _static)
+endif()
+if(TARGET CUDA::cuFile${_cufile_suffix})
+  target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
+endif()
+
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
 
@@ -801,7 +920,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool> spdlog::spdlog_header_only
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
+          kvikio::kvikio $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
@@ -861,15 +980,7 @@ if(CUDF_BUILD_TESTUTIL)
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
-  add_library(
-    cudftestutil SHARED
-    tests/io/metadata_utilities.cpp
-    tests/utilities/column_utilities.cu
-    tests/utilities/debug_utilities.cu
-    tests/utilities/random_seed.cpp
-    tests/utilities/table_utilities.cu
-    tests/utilities/tdigest_utilities.cu
-  )
+  add_library(cudftestutil INTERFACE)
 
   set_target_properties(
     cudftestutil
@@ -878,31 +989,55 @@ if(CUDF_BUILD_TESTUTIL)
                # set target compile options
                CXX_STANDARD 17
                CXX_STANDARD_REQUIRED ON
-               CXX_VISIBILITY_PRESET hidden
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
-               CUDA_VISIBILITY_PRESET hidden
-               POSITION_INDEPENDENT_CODE ON
-               INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
 
   target_compile_options(
-    cudftestutil PUBLIC "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
-                        "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+    cudftestutil INTERFACE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
+                           "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
   )
 
   target_link_libraries(
-    cudftestutil
-    PUBLIC Threads::Threads cudf cudftest_default_stream
-    PRIVATE GTest::gmock GTest::gtest $<TARGET_NAME_IF_EXISTS:conda_env>
+    cudftestutil INTERFACE Threads::Threads cudf cudftest_default_stream
+                           $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
-    cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+    cudftestutil INTERFACE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+                           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
   rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
   add_library(cudf::cudftestutil ALIAS cudftestutil)
+
+  add_library(cudftestutil_impl INTERFACE)
+  add_library(cudf::cudftestutil_impl ALIAS cudftestutil_impl)
+  target_sources(
+    cudftestutil_impl
+    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/io/metadata_utilities.cpp>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/column_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
+              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
+              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
+  )
+  target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
+
+  install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
+  install(
+    FILES tests/utilities/column_utilities.cu
+          tests/utilities/debug_utilities.cu
+          tests/utilities/random_seed.cpp
+          tests/utilities/table_utilities.cu
+          tests/utilities/tdigest_utilities.cu
+    DESTINATION src/cudftestutil/utilities
+  )
 
 endif()
 
@@ -1000,11 +1135,14 @@ install(
   DESTINATION ${lib_dir}
   EXPORT cudf-exports
 )
+install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cudf
+)
 
 set(_components_export_string)
 if(TARGET cudftestutil)
   install(
-    TARGETS cudftest_default_stream cudftestutil
+    TARGETS cudftest_default_stream cudftestutil cudftestutil_impl
     DESTINATION ${lib_dir}
     EXPORT cudf-testing-exports
   )
@@ -1044,14 +1182,15 @@ targets:
 This module offers an optional testing component which defines the
 following IMPORTED GLOBAL  targets:
 
- cudf::cudftestutil     - The main cudf testing library
+ cudf::cudftestutil          - The main cudf testing library
+ cudf::cudftestutil_impl     - C++ and CUDA sources to compile for definitions in cudf::cudftestutil
     ]=]
 )
 
 rapids_export(
   INSTALL cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil
+  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
 )
@@ -1072,7 +1211,7 @@ endif()
 rapids_export(
   BUILD cudf
   EXPORT_SET cudf-exports ${_components_export_string}
-  GLOBAL_TARGETS cudf cudftestutil
+  GLOBAL_TARGETS cudf cudftestutil cudftestutil_impl
   NAMESPACE cudf::
   DOCUMENTATION doc_string
   FINAL_CODE_BLOCK build_code_string

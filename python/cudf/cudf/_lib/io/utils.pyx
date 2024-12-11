@@ -7,75 +7,19 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from pylibcudf.io.datasource cimport Datasource
 from pylibcudf.libcudf.io.data_sink cimport data_sink
-from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.types cimport (
     column_name_info,
-    host_buffer,
     sink_info,
-    source_info,
 )
 
 from cudf._lib.column cimport Column
 
 import codecs
-import errno
 import io
 import os
 
 from cudf.core.dtypes import StructDtype
-
-
-# Converts the Python source input to libcudf IO source_info
-# with the appropriate type and source values
-cdef source_info make_source_info(list src) except*:
-    if not src:
-        raise ValueError("Need to pass at least one source")
-
-    cdef const unsigned char[::1] c_buffer
-    cdef vector[host_buffer] c_host_buffers
-    cdef vector[string] c_files
-    cdef Datasource csrc
-    cdef vector[datasource*] c_datasources
-    empty_buffer = False
-    if isinstance(src[0], bytes):
-        empty_buffer = True
-        for buffer in src:
-            if (len(buffer) > 0):
-                c_buffer = buffer
-                c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
-                                                     c_buffer.shape[0]))
-                empty_buffer = False
-    elif isinstance(src[0], io.BytesIO):
-        for bio in src:
-            c_buffer = bio.getbuffer()  # check if empty?
-            c_host_buffers.push_back(host_buffer(<char*>&c_buffer[0],
-                                                 c_buffer.shape[0]))
-    # Otherwise src is expected to be a numeric fd, string path, or PathLike.
-    # TODO (ptaylor): Might need to update this check if accepted input types
-    #                 change when UCX and/or cuStreamz support is added.
-    elif isinstance(src[0], Datasource):
-        for csrc in src:
-            c_datasources.push_back(csrc.get_datasource())
-        return source_info(c_datasources)
-    elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
-        # If source is a file, return source_info where type=FILEPATH
-        if not all(os.path.isfile(file) for file in src):
-            raise FileNotFoundError(errno.ENOENT,
-                                    os.strerror(errno.ENOENT),
-                                    src)
-
-        files = [<string> str(elem).encode() for elem in src]
-        c_files = files
-        return source_info(c_files)
-    else:
-        raise TypeError("Unrecognized input type: {}".format(type(src[0])))
-
-    if empty_buffer is True:
-        c_host_buffers.push_back(host_buffer(<char*>NULL, 0))
-
-    return source_info(c_host_buffers)
 
 # Converts the Python sink input to libcudf IO sink_info.
 cdef sink_info make_sinks_info(

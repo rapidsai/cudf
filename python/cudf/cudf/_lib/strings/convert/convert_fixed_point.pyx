@@ -1,22 +1,11 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
-import cudf
-
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
 from cudf.core.buffer import acquire_spill_lock
 
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
-from pylibcudf.libcudf.strings.convert.convert_fixed_point cimport (
-    from_fixed_point as cpp_from_fixed_point,
-    is_fixed_point as cpp_is_fixed_point,
-    to_fixed_point as cpp_to_fixed_point,
-)
-from pylibcudf.libcudf.types cimport data_type, type_id
-
 from cudf._lib.column cimport Column
+from cudf._lib.types cimport dtype_to_pylibcudf_type
+
+import pylibcudf as plc
 
 
 @acquire_spill_lock()
@@ -32,14 +21,10 @@ def from_decimal(Column input_col):
     -------
     A column of strings representing the input decimal values.
     """
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_from_fixed_point(
-                input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_fixed_point.from_fixed_point(
+        input_col.to_pylibcudf(mode="read"),
+    )
+    return Column.from_pylibcudf(plc_column)
 
 
 @acquire_spill_lock()
@@ -57,25 +42,11 @@ def to_decimal(Column input_col, object out_type):
     -------
     A column of decimals parsed from the string values.
     """
-    cdef column_view input_column_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    cdef int scale = out_type.scale
-    cdef data_type c_out_type
-    if isinstance(out_type, cudf.Decimal32Dtype):
-        c_out_type = data_type(type_id.DECIMAL32, -scale)
-    elif isinstance(out_type, cudf.Decimal64Dtype):
-        c_out_type = data_type(type_id.DECIMAL64, -scale)
-    elif isinstance(out_type, cudf.Decimal128Dtype):
-        c_out_type = data_type(type_id.DECIMAL128, -scale)
-    else:
-        raise TypeError("should be a decimal dtype")
-    with nogil:
-        c_result = move(
-            cpp_to_fixed_point(
-                input_column_view,
-                c_out_type))
-
-    result = Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_fixed_point.to_fixed_point(
+        input_col.to_pylibcudf(mode="read"),
+        dtype_to_pylibcudf_type(out_type),
+    )
+    result = Column.from_pylibcudf(plc_column)
     result.dtype.precision = out_type.precision
     return result
 
@@ -98,14 +69,8 @@ def is_fixed_point(Column input_col, object dtype):
     -------
     A Column of booleans indicating valid decimal conversion.
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = input_col.view()
-    cdef int scale = dtype.scale
-    cdef data_type c_dtype = data_type(type_id.DECIMAL64, -scale)
-    with nogil:
-        c_result = move(cpp_is_fixed_point(
-            source_view,
-            c_dtype
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    plc_column = plc.strings.convert.convert_fixed_point.is_fixed_point(
+        input_col.to_pylibcudf(mode="read"),
+        dtype_to_pylibcudf_type(dtype),
+    )
+    return Column.from_pylibcudf(plc_column)

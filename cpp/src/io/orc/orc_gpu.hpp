@@ -21,6 +21,7 @@
 #include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/timezone.cuh>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
@@ -40,18 +41,26 @@ namespace gpu {
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 
+using key_type    = size_type;
+using mapped_type = size_type;
+using slot_type   = cuco::pair<key_type, mapped_type>;
+auto constexpr map_cg_size =
+  1;  ///< A CUDA Cooperative Group of 1 thread (set for best performance) to handle each subset.
+      ///< Note: Adjust insert and find loops to use `cg::tile<map_cg_size>` if increasing this.
+auto constexpr window_size =
+  1;  ///< Number of concurrent slots (set for best performance) handled by each thread.
+auto constexpr occupancy_factor = 1.43f;  ///< cuCollections suggests using a hash map of size
+                                          ///< N * (1/0.7) = 1.43 to target a 70% occupancy factor.
+using storage_type     = cuco::aow_storage<slot_type,
+                                       window_size,
+                                       cuco::extent<std::size_t>,
+                                       cudf::detail::cuco_allocator<char>>;
+using storage_ref_type = typename storage_type::ref_type;
+using window_type      = typename storage_type::window_type;
+using slot_type        = cuco::pair<key_type, mapped_type>;
+
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
-
-using map_type = cuco::legacy::static_map<size_type, size_type>;
-
-/**
- * @brief The alias of `map_type::pair_atomic_type` class.
- *
- * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
- * declaration of this struct somewhere else.
- */
-struct slot_type : public map_type::slot_type {};
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -184,11 +193,11 @@ struct StripeStream {
  */
 struct stripe_dictionary {
   // input
-  device_span<slot_type> map_slots;  // hash map storage
-  uint32_t column_idx      = 0;      // column index
-  size_type start_row      = 0;      // first row in the stripe
-  size_type start_rowgroup = 0;      // first rowgroup in the stripe
-  size_type num_rows       = 0;      // number of rows in the stripe
+  device_span<window_type> map_slots;  // hash map (windows) storage
+  uint32_t column_idx      = 0;        // column index
+  size_type start_row      = 0;        // first row in the stripe
+  size_type start_rowgroup = 0;        // first rowgroup in the stripe
+  size_type num_rows       = 0;        // number of rows in the stripe
 
   // output
   device_span<uint32_t> data;        // index of elements in the column to include in the dictionary

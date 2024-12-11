@@ -7,6 +7,23 @@ specifically the [`pytest-cov`](https://github.com/pytest-dev/pytest-cov) plugin
 Code coverage reports are uploaded to [Codecov](https://app.codecov.io/gh/rapidsai/cudf).
 Each PR also indicates whether it increases or decreases test coverage.
 
+### Configuring pytest
+
+Pytest will accept configuration in [multiple different
+files](https://docs.pytest.org/en/stable/reference/customize.html),
+with a specified discovery and precedence order. Note in particular
+that there is no automatic "include" mechanism, as soon as a matching
+configuration file is found, discovery stops.
+
+For preference, so that all tool configuration lives in the same
+place, we use `pyproject.toml`-based configuration. Test configuration
+for a given package should live in that package's `pyproject.toml`
+file.
+
+Where tests do not naturally belong to a project, for example the
+`cudf.pandas` integration tests and the cuDF benchmarks, use a
+`pytest.ini` file as close to the tests as possible.
+
 ## Test organization
 
 How tests are organized depends on which of the following two groups they fall into:

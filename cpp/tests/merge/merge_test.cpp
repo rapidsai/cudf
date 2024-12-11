@@ -21,7 +21,6 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
-#include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -34,7 +33,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/merge.h>
 
 #include <vector>
 
@@ -349,7 +347,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows);
 
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
@@ -452,7 +450,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   cudf::size_type inputRows = 40;
 
   // data: 0  2  4  6 | valid: 1 1 1 0
-  auto sequence1       = cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) {
+  auto sequence1       = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return 0;  // <- no shortcut to this can avoid compiler errors
     } else {
@@ -465,7 +463,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
     leftColWrap1(sequence1, sequence1 + inputRows, valid_sequence1);
 
   // data: 1  3  5  7 | valid: 1 1 1 0
-  auto sequence2 = cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) {
+  auto sequence2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return 1;
     } else

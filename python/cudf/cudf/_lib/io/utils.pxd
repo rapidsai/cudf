@@ -13,7 +13,6 @@ from pylibcudf.libcudf.io.types cimport (
 from cudf._lib.column cimport Column
 
 
-cdef source_info make_source_info(list src) except*
 cdef sink_info make_sinks_info(
     list src, vector[unique_ptr[data_sink]] & data) except*
 cdef sink_info make_sink_info(src, unique_ptr[data_sink] & data) except*

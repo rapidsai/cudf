@@ -289,10 +289,12 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
 }  // namespace detail
 
 std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
-  std::string const& filename_hashed_vocabulary, rmm::device_async_resource_ref mr)
+  std::string const& filename_hashed_vocabulary,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_vocabulary_file(filename_hashed_vocabulary, cudf::get_default_stream(), mr);
+  return detail::load_vocabulary_file(filename_hashed_vocabulary, stream, mr);
 }
 
 }  // namespace nvtext

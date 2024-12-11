@@ -834,10 +834,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(t, partition_map, num_partitions, cudf::get_default_stream(), mr);
+  return detail::partition(t, partition_map, num_partitions, stream, mr);
 }
 
 }  // namespace cudf

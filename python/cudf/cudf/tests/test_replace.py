@@ -13,6 +13,7 @@ import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_GE_220,
+    PANDAS_GT_214,
     PANDAS_VERSION,
 )
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
@@ -116,8 +117,10 @@ def test_series_replace():
     sr6 = sr1.replace([0, 1], [5, 6])
     assert_eq(a6, sr6.to_numpy())
 
-    with pytest.raises(TypeError):
-        sr1.replace([0, 1], [5.5, 6.5])
+    assert_eq(
+        sr1.replace([0, 1], [5.5, 6.5]),
+        sr1.to_pandas().replace([0, 1], [5.5, 6.5]),
+    )
 
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
@@ -160,8 +163,10 @@ def test_series_replace_with_nulls():
     assert_eq(a6, sr6.to_numpy())
 
     sr1 = cudf.Series([0, 1, 2, 3, 4, None])
-    with pytest.raises(TypeError):
-        sr1.replace([0, 1], [5.5, 6.5]).fillna(-10)
+    assert_eq(
+        sr1.replace([0, 1], [5.5, 6.5]).fillna(-10),
+        sr1.to_pandas().replace([0, 1], [5.5, 6.5]).fillna(-10),
+    )
 
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
@@ -967,30 +972,37 @@ def test_series_multiple_times_with_nulls():
 @pytest.mark.parametrize(
     "replacement", [128, 128.0, 128.5, 32769, 32769.0, 32769.5]
 )
-def test_numeric_series_replace_dtype(series_dtype, replacement):
+def test_numeric_series_replace_dtype(request, series_dtype, replacement):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GT_214
+            and (
+                (
+                    series_dtype == "int8"
+                    and replacement in {128, 128.0, 32769, 32769.0}
+                )
+                or (
+                    series_dtype == "int16" and replacement in {32769, 32769.0}
+                )
+            ),
+            reason="Pandas throws an AssertionError for these "
+            "cases and asks us to log a bug, they are trying to "
+            "avoid a RecursionError which cudf will not run into",
+        )
+    )
     psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=series_dtype)
     sr = cudf.from_pandas(psr)
 
-    numpy_replacement = np.array(replacement).astype(sr.dtype)[()]
-    can_replace = numpy_replacement == replacement
+    expect = psr.replace(1, replacement)
+    got = sr.replace(1, replacement)
 
-    # Both Scalar
-    if not can_replace:
-        with pytest.raises(TypeError):
-            sr.replace(1, replacement)
-    else:
-        expect = psr.replace(1, replacement).astype(psr.dtype)
-        got = sr.replace(1, replacement)
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
     # to_replace is a list, replacement is a scalar
-    if not can_replace:
-        with pytest.raises(TypeError):
-            sr.replace([2, 3], replacement)
-    else:
-        expect = psr.replace([2, 3], replacement).astype(psr.dtype)
-        got = sr.replace([2, 3], replacement)
-        assert_eq(expect, got)
+    expect = psr.replace([2, 3], replacement)
+    got = sr.replace([2, 3], replacement)
+
+    assert_eq(expect, got)
 
     # If to_replace is a scalar and replacement is a list
     with pytest.raises(TypeError):
@@ -1001,17 +1013,9 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         sr.replace([0, 1], [replacement])
 
     # Both lists of equal length
-    if (
-        np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}
-    ) or (not can_replace):
-        with pytest.raises(TypeError):
-            sr.replace([2, 3], [replacement, replacement])
-    else:
-        expect = psr.replace([2, 3], [replacement, replacement]).astype(
-            psr.dtype
-        )
-        got = sr.replace([2, 3], [replacement, replacement])
-        assert_eq(expect, got)
+    expect = psr.replace([2, 3], [replacement, replacement])
+    got = sr.replace([2, 3], [replacement, replacement])
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -1392,3 +1396,52 @@ def test_replace_with_index_objects():
     result = cudf.Series([1, 2]).replace(cudf.Index([1]), cudf.Index([2]))
     expected = pd.Series([1, 2]).replace(pd.Index([1]), pd.Index([2]))
     assert_eq(result, expected)
+
+
+# Example test function for datetime series replace
+def test_replace_datetime_series():
+    # Create a pandas datetime series
+    pd_series = pd.Series(pd.date_range("20210101", periods=5))
+    # Replace a specific datetime value
+    pd_result = pd_series.replace(
+        pd.Timestamp("2021-01-02"), pd.Timestamp("2021-01-10")
+    )
+
+    # Create a cudf datetime series
+    cudf_series = cudf.Series(pd.date_range("20210101", periods=5))
+    # Replace a specific datetime value
+    cudf_result = cudf_series.replace(
+        pd.Timestamp("2021-01-02"), pd.Timestamp("2021-01-10")
+    )
+
+    assert_eq(pd_result, cudf_result)
+
+
+# Example test function for timedelta series replace
+def test_replace_timedelta_series():
+    # Create a pandas timedelta series
+    pd_series = pd.Series(pd.timedelta_range("1 days", periods=5))
+    # Replace a specific timedelta value
+    pd_result = pd_series.replace(
+        pd.Timedelta("2 days"), pd.Timedelta("10 days")
+    )
+
+    # Create a cudf timedelta series
+    cudf_series = cudf.Series(pd.timedelta_range("1 days", periods=5))
+    # Replace a specific timedelta value
+    cudf_result = cudf_series.replace(
+        pd.Timedelta("2 days"), pd.Timedelta("10 days")
+    )
+
+    assert_eq(pd_result, cudf_result)
+
+
+def test_replace_multiple_rows(datadir):
+    path = datadir / "parquet" / "replace_multiple_rows.parquet"
+    pdf = pd.read_parquet(path)
+    gdf = cudf.read_parquet(path)
+
+    pdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+    gdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    assert_eq(pdf, gdf, check_dtype=False)

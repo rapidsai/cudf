@@ -22,13 +22,15 @@ from dask_cudf.tests.utils import (
     xfail_dask_expr,
 )
 
+rng = np.random.default_rng(seed=0)
+
 
 def test_from_dict_backend_dispatch():
     # Test ddf.from_dict cudf-backend dispatch
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     data = {
-        "x": np.random.randint(0, 5, size=10000),
-        "y": np.random.normal(size=10000),
+        "x": rng.integers(0, 5, size=10000),
+        "y": rng.normal(size=10000),
     }
     expect = cudf.DataFrame(data)
     with dask.config.set({"dataframe.backend": "cudf"}):
@@ -37,35 +39,11 @@ def test_from_dict_backend_dispatch():
     dd.assert_eq(expect, ddf)
 
 
-def test_to_dask_dataframe_deprecated():
-    gdf = cudf.DataFrame({"a": range(100)})
-    ddf = dd.from_pandas(gdf, npartitions=2)
-    assert isinstance(ddf._meta, cudf.DataFrame)
-
-    with pytest.warns(FutureWarning, match="API is now deprecated"):
-        assert isinstance(
-            ddf.to_dask_dataframe()._meta,
-            pd.DataFrame,
-        )
-
-
-def test_from_dask_dataframe_deprecated():
-    gdf = pd.DataFrame({"a": range(100)})
-    ddf = dd.from_pandas(gdf, npartitions=2)
-    assert isinstance(ddf._meta, pd.DataFrame)
-
-    with pytest.warns(FutureWarning, match="API is now deprecated"):
-        assert isinstance(
-            dask_cudf.from_dask_dataframe(ddf)._meta,
-            cudf.DataFrame,
-        )
-
-
 def test_to_backend():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     data = {
-        "x": np.random.randint(0, 5, size=10000),
-        "y": np.random.normal(size=10000),
+        "x": rng.integers(0, 5, size=10000),
+        "y": rng.normal(size=10000),
     }
     with dask.config.set({"dataframe.backend": "pandas"}):
         ddf = dd.from_dict(data, npartitions=2)
@@ -114,12 +92,12 @@ def test_to_backend_kwargs():
 
 
 def test_from_pandas():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
@@ -169,10 +147,10 @@ def _fragmented_gdf(df, nsplit):
 
 
 def test_query():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10), "y": np.random.normal(size=10)}
+        {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
     gdf = cudf.DataFrame.from_pandas(df)
     expr = "x > 2"
@@ -188,9 +166,9 @@ def test_query():
 
 
 def test_query_local_dict():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10), "y": np.random.normal(size=10)}
+        {"x": rng.integers(0, 5, size=10), "y": rng.normal(size=10)}
     )
     gdf = cudf.DataFrame.from_pandas(df)
     ddf = dask_cudf.from_cudf(gdf, npartitions=2)
@@ -204,11 +182,11 @@ def test_query_local_dict():
 
 
 def test_head():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=100),
-            "y": np.random.normal(size=100),
+            "x": rng.integers(0, 5, size=100),
+            "y": rng.normal(size=100),
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)
@@ -220,13 +198,11 @@ def test_head():
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
 def test_set_index(nelem):
     with dask.config.set(scheduler="single-threaded"):
-        np.random.seed(0)
+        rng = np.random.default_rng(seed=0)
         # Use unique index range as the sort may not be stable-ordering
         x = np.arange(nelem)
-        np.random.shuffle(x)
-        df = pd.DataFrame(
-            {"x": x, "y": np.random.randint(0, nelem, size=nelem)}
-        )
+        rng.shuffle(x)
+        df = pd.DataFrame({"x": x, "y": rng.integers(0, nelem, size=nelem)})
         ddf = dd.from_pandas(df, npartitions=2)
         ddf2 = ddf.to_backend("cudf")
 
@@ -242,7 +218,7 @@ def test_set_index(nelem):
 def test_set_index_quantile(nelem, nparts, by):
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
-    df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
+    df["b"] = rng.choice(cudf.datasets.names, size=nelem)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
     with pytest.warns(FutureWarning, match="deprecated"):
@@ -270,11 +246,11 @@ def assert_frame_equal_by_index_group(expect, got):
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
 def test_set_index_2(nelem):
     with dask.config.set(scheduler="single-threaded"):
-        np.random.seed(0)
+        rng = np.random.default_rng(seed=0)
         df = pd.DataFrame(
             {
-                "x": 100 + np.random.randint(0, nelem // 2, size=nelem),
-                "y": np.random.normal(size=nelem),
+                "x": 100 + rng.integers(0, nelem // 2, size=nelem),
+                "y": rng.normal(size=nelem),
             }
         )
         expect = df.set_index("x").sort_index()
@@ -289,11 +265,11 @@ def test_set_index_2(nelem):
 def test_set_index_w_series():
     with dask.config.set(scheduler="single-threaded"):
         nelem = 20
-        np.random.seed(0)
+        rng = np.random.default_rng(seed=0)
         df = pd.DataFrame(
             {
-                "x": 100 + np.random.randint(0, nelem // 2, size=nelem),
-                "y": np.random.normal(size=nelem),
+                "x": 100 + rng.integers(0, nelem // 2, size=nelem),
+                "y": rng.normal(size=nelem),
             }
         )
         expect = df.set_index(df.x).sort_index()
@@ -327,12 +303,12 @@ def test_set_index_sorted():
 @pytest.mark.parametrize("index", [None, "myindex"])
 def test_rearrange_by_divisions(nelem, index):
     with dask.config.set(scheduler="single-threaded"):
-        np.random.seed(0)
+        rng = np.random.default_rng(seed=0)
         df = pd.DataFrame(
             {
-                "x": np.random.randint(0, 20, size=nelem),
-                "y": np.random.normal(size=nelem),
-                "z": np.random.choice(["dog", "cat", "bird"], nelem),
+                "x": rng.integers(0, 20, size=nelem),
+                "y": rng.normal(size=nelem),
+                "z": rng.choice(["dog", "cat", "bird"], nelem),
             }
         )
         df["z"] = df["z"].astype("category")
@@ -355,9 +331,9 @@ def test_rearrange_by_divisions(nelem, index):
 
 
 def test_assign():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
+        {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
 
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
@@ -372,10 +348,10 @@ def test_assign():
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
 def test_setitem_scalar_integer(data_type):
-    np.random.seed(0)
-    scalar = np.random.randint(0, 100, dtype=data_type)
+    rng = np.random.default_rng(seed=0)
+    scalar = rng.integers(0, 100, dtype=data_type)
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
+        {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
 
@@ -388,10 +364,10 @@ def test_setitem_scalar_integer(data_type):
 
 @pytest.mark.parametrize("data_type", ["float32", "float64"])
 def test_setitem_scalar_float(data_type):
-    np.random.seed(0)
-    scalar = np.random.randn(1).astype(data_type)[0]
+    rng = np.random.default_rng(seed=0)
+    scalar = rng.standard_normal(size=1).astype(data_type)[0]
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
+        {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
 
@@ -403,10 +379,10 @@ def test_setitem_scalar_float(data_type):
 
 
 def test_setitem_scalar_datetime():
-    np.random.seed(0)
-    scalar = np.int64(np.random.randint(0, 100)).astype("datetime64[ms]")
+    rng = np.random.default_rng(seed=0)
+    scalar = np.int64(rng.integers(0, 100)).astype("datetime64[ms]")
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
+        {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
 
@@ -422,12 +398,12 @@ def test_setitem_scalar_datetime():
     "func",
     [
         lambda: pd.DataFrame(
-            {"A": np.random.rand(10), "B": np.random.rand(10)},
+            {"A": rng.random(10), "B": rng.random(10)},
             index=list("abcdefghij"),
         ),
         lambda: pd.DataFrame(
             {
-                "A": np.random.rand(10),
+                "A": rng.random(10),
                 "B": list("a" * 10),
                 "C": pd.Series(
                     [str(20090101 + i) for i in range(10)],
@@ -438,7 +414,7 @@ def test_setitem_scalar_datetime():
         ),
         lambda: pd.Series(list("abcdefghijklmnop")),
         lambda: pd.Series(
-            np.random.rand(10),
+            rng.random(10),
             index=pd.Index(
                 [str(20090101 + i) for i in range(10)], dtype="datetime64[ns]"
             ),
@@ -497,10 +473,11 @@ def test_repartition_hash_staged(npartitions):
     by = ["b"]
     datarange = 35
     size = 100
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
             "a": np.arange(size, dtype="int64"),
-            "b": np.random.randint(datarange, size=size),
+            "b": rng.integers(datarange, size=size),
         }
     )
     # WARNING: Specific npartitions-max_branch combination
@@ -537,12 +514,13 @@ def test_repartition_hash(by, npartitions, max_branch):
     npartitions_i = 4
     datarange = 26
     size = 100
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="int64"),
-            "b": np.random.randint(datarange, size=size),
-            "c": np.random.choice(list("abcdefgh"), size=size),
-            "d": np.random.choice(np.arange(26), size=size),
+            "b": rng.integers(datarange, size=size),
+            "c": rng.choice(list("abcdefgh"), size=size),
+            "d": rng.choice(np.arange(26), size=size),
         }
     )
     gdf.d = gdf.d.astype("datetime64[ms]")
@@ -768,6 +746,7 @@ def test_dataframe_series_replace(data):
 
 
 def test_dataframe_assign_col():
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(list(range(100)))
     pdf = pd.DataFrame(list(range(100)))
 
@@ -780,7 +759,7 @@ def test_dataframe_assign_col():
     pddf = dd.from_pandas(pdf, npartitions=4)
     pddf["fold"] = 0
     pddf["fold"] = pddf["fold"].map_partitions(
-        lambda p_df: pd.Series(np.random.randint(0, 4, len(p_df)))
+        lambda p_df: pd.Series(rng.integers(0, 4, len(p_df)))
     )
 
     dd.assert_eq(ddf[0], pddf[0])
@@ -1015,10 +994,11 @@ def test_to_backend_simplify():
 @pytest.mark.parametrize("numeric_only", [True, False])
 @pytest.mark.parametrize("op", ["corr", "cov"])
 def test_cov_corr(op, numeric_only):
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame.from_dict(
         {
-            "x": np.random.randint(0, 5, size=10),
-            "y": np.random.normal(size=10),
+            "x": rng.integers(0, 5, size=10),
+            "y": rng.normal(size=10),
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)

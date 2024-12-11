@@ -23,7 +23,8 @@ from pylibcudf.libcudf.strings_udf cimport (
     to_string_view_array as cpp_to_string_view_array,
     udf_string,
 )
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from cudf._lib.column cimport Column
 

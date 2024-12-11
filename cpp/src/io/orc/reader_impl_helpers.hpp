@@ -20,9 +20,6 @@
 #include "io/orc/orc.hpp"
 #include "io/utilities/column_buffer.hpp"
 
-#include <cudf/io/orc.hpp>
-#include <cudf/utilities/memory_resource.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>

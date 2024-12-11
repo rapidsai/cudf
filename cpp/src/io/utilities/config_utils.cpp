@@ -16,11 +16,10 @@
 
 #include "getenv_or.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cstdlib>
-#include <sstream>
+#include <kvikio/defaults.hpp>
+
 #include <string>
 
 namespace cudf::io {
@@ -53,6 +52,18 @@ bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_
 
 bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
 
+void set_up_kvikio()
+{
+  static std::once_flag flag{};
+  std::call_once(flag, [] {
+    auto const compat_mode =
+      kvikio::detail::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
+    kvikio::defaults::compat_mode_reset(compat_mode);
+
+    auto const nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 4u);
+    kvikio::defaults::thread_pool_nthreads_reset(nthreads);
+  });
+}
 }  // namespace cufile_integration
 
 namespace nvcomp_integration {
@@ -81,5 +92,4 @@ bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
 
 }  // namespace nvcomp_integration
-
 }  // namespace cudf::io

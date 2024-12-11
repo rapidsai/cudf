@@ -13,13 +13,16 @@ from cudf.testing import assert_eq
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
 def test_factorize_series_obj(ncats, nelem):
     df = DataFrame()
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # initialize data frame
-    df["cats"] = arr = np.random.randint(2, size=10, dtype=np.int32)
+    df["cats"] = arr = rng.integers(2, size=10, dtype=np.int32)
 
     uvals, labels = df["cats"].factorize()
-    np.testing.assert_array_equal(labels.to_numpy(), sorted(set(arr)))
+    unique_values, indices = np.unique(arr, return_index=True)
+    expected_values = unique_values[np.argsort(indices)]
+
+    np.testing.assert_array_equal(labels.to_numpy(), expected_values)
     assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 
@@ -31,14 +34,17 @@ def test_factorize_series_obj(ncats, nelem):
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
 def test_factorize_index_obj(ncats, nelem):
     df = DataFrame()
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # initialize data frame
-    df["cats"] = arr = np.random.randint(2, size=10, dtype=np.int32)
+    df["cats"] = arr = rng.integers(2, size=10, dtype=np.int32)
     df = df.set_index("cats")
 
     uvals, labels = df.index.factorize()
-    np.testing.assert_array_equal(labels.values.get(), sorted(set(arr)))
+    unique_values, indices = np.unique(arr, return_index=True)
+    expected_values = unique_values[np.argsort(indices)]
+
+    np.testing.assert_array_equal(labels.values.get(), expected_values)
     assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 

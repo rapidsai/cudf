@@ -216,17 +216,21 @@ def test_setitem_datetime():
 
 
 def test_sort_datetime():
-    df = pd.DataFrame()
-    df["date"] = np.array(
-        [
-            np.datetime64("2016-11-20"),
-            np.datetime64("2020-11-20"),
-            np.datetime64("2019-11-20"),
-            np.datetime64("1918-11-20"),
-            np.datetime64("2118-11-20"),
-        ]
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(
+        {
+            "date": np.array(
+                [
+                    np.datetime64("2016-11-20"),
+                    np.datetime64("2020-11-20"),
+                    np.datetime64("2019-11-20"),
+                    np.datetime64("1918-11-20"),
+                    np.datetime64("2118-11-20"),
+                ]
+            ),
+            "vals": rng.random(5),
+        }
     )
-    df["vals"] = np.random.sample(len(df["date"]))
 
     gdf = cudf.from_pandas(df)
 
@@ -432,11 +436,12 @@ def test_datetime_to_arrow(dtype):
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_unique(data, nulls):
+    rng = np.random.default_rng(seed=0)
     psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = rng.integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
@@ -461,10 +466,11 @@ def test_datetime_unique(data, nulls):
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_nunique(data, nulls):
     psr = data.copy()
+    rng = np.random.default_rng(seed=0)
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = rng.integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
@@ -2525,23 +2531,7 @@ def test_dti_asi8():
 
 @pytest.mark.parametrize(
     "method, kwargs",
-    [
-        ["mean", {}],
-        pytest.param(
-            "std",
-            {},
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/16444"
-            ),
-        ),
-        pytest.param(
-            "std",
-            {"ddof": 0},
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/16444"
-            ),
-        ),
-    ],
+    [["mean", {}], ["std", {}], ["std", {"ddof": 0}]],
 )
 def test_dti_reduction(method, kwargs):
     pd_dti = pd.DatetimeIndex(["2020-01-01", "2020-12-31"], name="foo")

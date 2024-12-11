@@ -22,7 +22,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/transform_iterator.h>

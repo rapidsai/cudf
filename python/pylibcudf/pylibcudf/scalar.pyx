@@ -6,10 +6,12 @@ from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.scalar.scalar_factories cimport make_empty_scalar_like
 
-from rmm._lib.memory_resource cimport get_current_device_resource
+from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
 from .column cimport Column
 from .types cimport DataType
+
+__all__ = ["Scalar"]
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -36,6 +38,8 @@ cdef class Scalar:
         # support, but it here for now to ease the transition of
         # DeviceScalar.
         raise ValueError("Scalar should be constructed with a factory")
+
+    __hash__ = None
 
     cdef const scalar* get(self) noexcept nogil:
         return self.c_obj.get()

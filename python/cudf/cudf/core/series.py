@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import functools
 import inspect
-import pickle
 import textwrap
 import warnings
 from collections import abc
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numpy as np
@@ -28,7 +27,6 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -71,6 +69,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     import pyarrow as pa
 
     from cudf._typing import (
@@ -413,7 +413,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indices
 
 
-class Series(SingleColumnFrame, IndexedFrame, Serializable):
+class Series(SingleColumnFrame, IndexedFrame):
     """
     One-dimensional GPU array (including time series).
 
@@ -637,10 +637,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
-        elif isinstance(data, (ColumnAccessor, ColumnBase)):
+        elif isinstance(data, ColumnAccessor):
             raise TypeError(
                 "Use cudf.Series._from_data for constructing a Series from "
-                "ColumnAccessor or a ColumnBase"
+                "ColumnAccessor"
+            )
+        elif isinstance(data, ColumnBase):
+            raise TypeError(
+                "Use cudf.Series._from_column for constructing a Series from "
+                "a ColumnBase"
             )
         elif isinstance(data, dict):
             if not data:
@@ -893,7 +898,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self.index.serialize()
+        header["index"], index_frames = self.index.device_serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -909,8 +914,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             header, frames[header["index_frame_count"] :]
         )
 
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
         obj.index = index
 
         return obj
@@ -2943,7 +2947,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
         >>> ser1.corr(ser2, method="pearson")
-        -0.20454263717316112
+        -0.20454263717316126
         >>> ser1.corr(ser2, method="spearman")
         -0.5
         """

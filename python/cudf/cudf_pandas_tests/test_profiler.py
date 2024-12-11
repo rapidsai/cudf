@@ -23,12 +23,12 @@ from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
     reason="function names change across versions of pandas, so making sure it only runs on latest version of pandas",
 )
 def test_profiler():
-    np.random.seed(42)
+    rng = np.random.default_rng(seed=42)
     with Profiler() as profiler:
         df = pd.DataFrame(
             {
-                "idx": np.random.randint(0, 10, 1000),
-                "data": np.random.rand(1000),
+                "idx": rng.integers(0, 10, 1000),
+                "data": rng.random(1000),
             }
         )
         sums = df.groupby("idx").sum()
@@ -58,7 +58,7 @@ def test_profiler():
     calls = [
         "pd.DataFrame",
         "",
-        "np.random.randint",
+        "rng.integers",
         "np.random.rand",
         'df.groupby("idx").sum',
         'df.sum()["data"]',

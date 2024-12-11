@@ -11,7 +11,7 @@ from pylibcudf.libcudf.column.column_view cimport (
     mutable_column_view,
 )
 from pylibcudf.libcudf.types cimport size_type
-from rmm._lib.device_buffer cimport device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
 
 
 cdef class Column:

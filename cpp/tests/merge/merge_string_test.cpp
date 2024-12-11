@@ -17,10 +17,8 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/merge.hpp>
 #include <cudf/table/table.hpp>
@@ -30,10 +28,6 @@
 
 #include <gtest/gtest.h>
 
-#include <algorithm>
-#include <cassert>
-#include <initializer_list>
-#include <limits>
 #include <memory>
 #include <vector>
 
@@ -97,7 +91,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
                                             "hi",
                                             "hj"});
 
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
@@ -296,7 +290,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
                                             true,
                                             false,
                                             false});
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else

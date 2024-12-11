@@ -38,6 +38,7 @@ conduct. More information can be found at:
 8. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
    Fix if needed.
 9. Wait for other developers to review your code and update code as needed.
+   Changes to any C++ files require at least 2 approvals from the cudf-cpp-codeowners before merging.
 10. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
 If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
@@ -293,8 +294,8 @@ In order to run doxygen as a linter on C++/CUDA code, run
 ./ci/checks/doxygen.sh
 ```
 
-Python code runs several linters including [Black](https://black.readthedocs.io/en/stable/),
-[isort](https://pycqa.github.io/isort/), and [flake8](https://flake8.pycqa.org/en/latest/).
+Python code runs several linters including [Ruff](https://docs.astral.sh/ruff/)
+with its various rules  for Black-like formatting or Isort.
 
 cuDF also uses [codespell](https://github.com/codespell-project/codespell) to find spelling
 mistakes, and this check is run as a pre-commit hook. To apply the suggested spelling fixes,

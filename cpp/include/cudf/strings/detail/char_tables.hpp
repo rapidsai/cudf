@@ -74,9 +74,9 @@ character_cases_table_type const* get_character_cases_table();
  */
 struct special_case_mapping {
   uint16_t num_upper_chars;
-  uint16_t upper[3];
+  uint16_t upper[3];  // NOLINT
   uint16_t num_lower_chars;
-  uint16_t lower[3];
+  uint16_t lower[3];  // NOLINT
 };
 
 /**

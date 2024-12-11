@@ -17,10 +17,8 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/table.hpp>
@@ -30,12 +28,7 @@
 
 #include <gtest/gtest.h>
 
-#include <algorithm>
-#include <cassert>
-#include <initializer_list>
-#include <limits>
 #include <memory>
-#include <numeric>
 #include <vector>
 
 using cudf::test::fixed_width_column_wrapper;

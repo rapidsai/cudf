@@ -7,10 +7,11 @@ import os
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from pyarrow.orc import write_table as orc_write_table
 from pyarrow.parquet import write_table as pq_write_table
+
+import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 
@@ -384,12 +385,10 @@ DEFAULT_PA_STRUCT_TESTING_TYPES = [
     NESTED_STRUCT_TESTING_TYPE,
 ]
 
+NON_NESTED_PA_TYPES = NUMERIC_PA_TYPES + STRING_PA_TYPES + BOOL_PA_TYPES
+
 DEFAULT_PA_TYPES = (
-    NUMERIC_PA_TYPES
-    + STRING_PA_TYPES
-    + BOOL_PA_TYPES
-    + LIST_PA_TYPES
-    + DEFAULT_PA_STRUCT_TESTING_TYPES
+    NON_NESTED_PA_TYPES + LIST_PA_TYPES + DEFAULT_PA_STRUCT_TESTING_TYPES
 )
 
 # Map pylibcudf compression types to pandas ones

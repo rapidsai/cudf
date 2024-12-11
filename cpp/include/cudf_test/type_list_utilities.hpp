@@ -414,9 +414,8 @@ struct RemoveIfImpl<PRED, Types<>> {
 
 template <class PRED, class HEAD, class... TAIL>
 struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>> {
-  using type =
-    Concat<typename std::conditional<PRED::template Call<HEAD>::value, Types<>, Types<HEAD>>::type,
-           typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
+  using type = Concat<std::conditional_t<PRED::template Call<HEAD>::value, Types<>, Types<HEAD>>,
+                      typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
 };
 // @endcond
 

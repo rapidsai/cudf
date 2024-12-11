@@ -19,8 +19,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
-#include <cctype>
-#include <map>
 #include <set>
 #include <string>
 #include <utility>
@@ -28,7 +26,7 @@
 
 namespace cudf {
 namespace jit {
-constexpr char percent_escape[] = "_";
+constexpr char percent_escape[] = "_";  // NOLINT
 
 inline bool is_white(char const c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
 

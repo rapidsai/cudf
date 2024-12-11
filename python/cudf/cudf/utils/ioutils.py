@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
+import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
@@ -208,6 +209,11 @@ DataFrame
 Notes
 -----
 {remote_data_sources}
+
+- Setting the cudf option `io.parquet.low_memory=True` will result in the chunked
+  low memory parquet reader being used. This can make it easier to read large
+  parquet datasets on systems with limited GPU memory. See all `available options
+  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
 
 Examples
 --------
@@ -757,9 +763,14 @@ result : Series or DataFrame, depending on the value of `typ`.
 
 Notes
 -----
-When `engine='auto'`, and `line=False`, the `pandas` json
-reader will be used. To override the selection, please
-use `engine='cudf'`.
+- When `engine='auto'`, and `line=False`, the `pandas` json
+  reader will be used. To override the selection, please
+  use `engine='cudf'`.
+
+- Setting the cudf option `io.json.low_memory=True` will result in the chunked
+  low memory json reader being used. This can make it easier to read large
+  json datasets on systems with limited GPU memory. See all `available options
+  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
 
 See Also
 --------
@@ -1624,6 +1635,16 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
     return expanded_paths
 
 
+def _use_kvikio_remote_io(fs) -> bool:
+    """Whether `kvikio_remote_io` is enabled and `fs` refers to a S3 file"""
+
+    try:
+        from s3fs.core import S3FileSystem
+    except ImportError:
+        return False
+    return cudf.get_option("kvikio_remote_io") and isinstance(fs, S3FileSystem)
+
+
 @doc_get_reader_filepath_or_buffer()
 def get_reader_filepath_or_buffer(
     path_or_data,
@@ -1649,17 +1670,17 @@ def get_reader_filepath_or_buffer(
         )
     ]
     if not input_sources:
-        raise ValueError("Empty input source list: {input_sources}.")
+        raise ValueError(f"Empty input source list: {input_sources}.")
 
     filepaths_or_buffers = []
     string_paths = [isinstance(source, str) for source in input_sources]
     if any(string_paths):
-        # Sources are all strings. Thes strings are typically
+        # Sources are all strings. The strings are typically
         # file paths, but they may also be raw text strings.
 
         # Don't allow a mix of source types
         if not all(string_paths):
-            raise ValueError("Invalid input source list: {input_sources}.")
+            raise ValueError(f"Invalid input source list: {input_sources}.")
 
         # Make sure we define a filesystem (if possible)
         paths = input_sources
@@ -1712,11 +1733,17 @@ def get_reader_filepath_or_buffer(
                 raise FileNotFoundError(
                     f"{input_sources} could not be resolved to any files"
                 )
-            filepaths_or_buffers = _prefetch_remote_buffers(
-                paths,
-                fs,
-                **(prefetch_options or {}),
-            )
+
+            # If `kvikio_remote_io` is enabled and `fs` refers to a S3 file,
+            # we create S3 URLs and let them pass-through to libcudf.
+            if _use_kvikio_remote_io(fs):
+                filepaths_or_buffers = [f"s3://{fpath}" for fpath in paths]
+            else:
+                filepaths_or_buffers = _prefetch_remote_buffers(
+                    paths,
+                    fs,
+                    **(prefetch_options or {}),
+                )
         else:
             raw_text_input = True
 

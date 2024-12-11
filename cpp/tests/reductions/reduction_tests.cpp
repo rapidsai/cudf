@@ -22,9 +22,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -35,7 +33,8 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <iostream>
+#include <algorithm>
+#include <iterator>
 #include <vector>
 
 using aggregation        = cudf::aggregation;
@@ -766,6 +765,25 @@ TYPED_TEST(MultiStepReductionTest, Mean)
             expected_value_nulls);
 }
 
+template <typename T>
+double calc_var(std::vector<T> const& v, int ddof, std::vector<bool> const& mask = {})
+{
+  auto const values = [&]() {
+    if (mask.empty()) { return v; }
+    std::vector<T> masked{};
+    thrust::copy_if(
+      v.begin(), v.end(), mask.begin(), std::back_inserter(masked), [](auto m) { return m; });
+    return masked;
+  }();
+  auto const valid_count = values.size();
+  double const mean      = std::accumulate(values.cbegin(), values.cend(), double{0}) / valid_count;
+  double const sq_sum_of_differences =
+    std::accumulate(values.cbegin(), values.cend(), double{0}, [mean](double acc, auto const v) {
+      return acc + std::pow(v - mean, 2);
+    });
+  return sq_sum_of_differences / (valid_count - ddof);
+}
+
 // This test is disabled for only a Debug build because a compiler error
 // documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
 #ifdef NDEBUG
@@ -778,25 +796,12 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({true, true, false, true, true, true, false, true});
 
-  auto calc_var = [](std::vector<T>& v, cudf::size_type valid_count, int ddof) {
-    double mean = std::accumulate(v.begin(), v.end(), double{0});
-    mean /= valid_count;
-
-    double sum_of_sq = std::accumulate(
-      v.begin(), v.end(), double{0}, [](double acc, TypeParam i) { return acc + i * i; });
-
-    cudf::size_type div = valid_count - ddof;
-
-    double var = sum_of_sq / div - ((mean * mean) * valid_count) / div;
-    return var;
-  };
-
   // test without nulls
   std::vector<T> v = convert_values<T>(int_values);
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
   auto const ddof = 1;
-  double var      = calc_var(v, v.size(), ddof);
+  double var      = calc_var(v, ddof);
   double std      = std::sqrt(var);
   auto var_agg    = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
   auto std_agg    = cudf::make_std_aggregation<reduce_aggregation>(ddof);
@@ -812,23 +817,19 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto replaced_array = replace_nulls(v, host_bools, T{0});
+  double var_nulls                                    = calc_var(v, ddof, host_bools);
+  double std_nulls                                    = std::sqrt(var_nulls);
 
-  double var_nulls = calc_var(replaced_array, valid_count, ddof);
-  double std_nulls = std::sqrt(var_nulls);
-
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            var_nulls);
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            std_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   var_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   std_nulls);
 }
 
 // ----------------------------------------------------------------------------
@@ -1140,23 +1141,10 @@ TEST_P(ReductionParamTest, DISABLED_std_var)
   std::vector<double> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({true, true, false, true, true, true, false, true});
 
-  auto calc_var = [ddof](std::vector<double>& v, cudf::size_type valid_count) {
-    double mean = std::accumulate(v.begin(), v.end(), double{0});
-    mean /= valid_count;
-
-    double sum_of_sq = std::accumulate(
-      v.begin(), v.end(), double{0}, [](double acc, double i) { return acc + i * i; });
-
-    cudf::size_type div = valid_count - ddof;
-
-    double var = sum_of_sq / div - ((mean * mean) * valid_count) / div;
-    return var;
-  };
-
   // test without nulls
   cudf::test::fixed_width_column_wrapper<double> col(int_values.begin(), int_values.end());
 
-  double var   = calc_var(int_values, int_values.size());
+  double var   = calc_var(int_values, ddof);
   double std   = std::sqrt(var);
   auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
   auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(ddof);
@@ -1173,23 +1161,19 @@ TEST_P(ReductionParamTest, DISABLED_std_var)
   // test with nulls
   cudf::test::fixed_width_column_wrapper<double> col_nulls =
     construct_null_column(int_values, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto replaced_array = replace_nulls<double>(int_values, host_bools, int{0});
-
-  double var_nulls = calc_var(replaced_array, valid_count);
+  double var_nulls = calc_var(int_values, ddof, host_bools);
   double std_nulls = std::sqrt(var_nulls);
 
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            var_nulls);
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            std_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   var_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   std_nulls);
 }
 
 //-------------------------------------------------------------------
@@ -1254,7 +1238,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
 };
 
 // ------------------------------------------------------------------------
-std::vector<std::string> string_list[] = {
+std::vector<std::vector<std::string>> string_list{{
   {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
   {"", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
   {"one", "", "three", "four", "five", "six", "seven", "eight", "nine"},
@@ -1264,13 +1248,19 @@ std::vector<std::string> string_list[] = {
   {"\xF7\xBF\xBF\xBF", "", "", "", "", "", "", "", ""},
   {"one", "two", "three", "four", "\xF7\xBF\xBF\xBF", "six", "seven", "eight", "nine"},
   {"one", "two", "\xF7\xBF\xBF\xBF", "four", "five", "six", "seven", "eight", "nine"},
-};
+}};
 INSTANTIATE_TEST_CASE_P(string_cases, StringReductionTest, testing::ValuesIn(string_list));
 TEST_P(StringReductionTest, MinMax)
 {
   // data and valid arrays
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
+  std::transform(thrust::counting_iterator<std::size_t>(0),
+                 thrust::counting_iterator<std::size_t>(host_strings.size()),
+                 host_strings.begin(),
+                 [host_strings, host_bools](auto idx) {
+                   return host_bools[idx] ? host_strings[idx] : std::string{};
+                 });
   bool succeed(true);
   std::string initial_value = "init";
 
@@ -1397,7 +1387,7 @@ TEST_F(StringReductionTest, AllNull)
   std::vector<std::string> host_strings(
     {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
   std::vector<bool> host_bools(host_strings.size(), false);
-  auto initial_value = cudf::make_string_scalar("init");
+  auto initial_value = cudf::make_string_scalar("");
   initial_value->set_valid_async(false);
 
   // string column with nulls
@@ -2235,7 +2225,7 @@ TYPED_TEST(ReductionTest, NthElement)
 
 struct DictionaryStringReductionTest : public StringReductionTest {};
 
-std::vector<std::string> data_list[] = {
+std::vector<std::vector<std::string>> data_list = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
 };
 INSTANTIATE_TEST_CASE_P(dictionary_cases,
@@ -2472,21 +2462,11 @@ TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
   std::vector<T> v = convert_values<T>(int_values);
   cudf::data_type output_type{cudf::type_to_id<double>()};
 
-  auto calc_var = [](std::vector<T> const& v, cudf::size_type valid_count, cudf::size_type ddof) {
-    double mean = std::accumulate(v.cbegin(), v.cend(), double{0});
-    mean /= valid_count;
-    double sum_of_sq = std::accumulate(
-      v.cbegin(), v.cend(), double{0}, [](double acc, TypeParam i) { return acc + i * i; });
-    auto const div = valid_count - ddof;
-    double var     = sum_of_sq / div - ((mean * mean) * valid_count) / div;
-    return var;
-  };
-
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
   cudf::size_type const ddof = 1;
-  double var                 = calc_var(v, v.size(), ddof);
+  double var                 = calc_var(v, ddof);
   double std                 = std::sqrt(var);
   auto var_agg               = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
   auto std_agg               = cudf::make_std_aggregation<reduce_aggregation>(ddof);
@@ -2498,15 +2478,13 @@ TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
   std::vector<bool> validity({true, true, false, true, true, true, false, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
-  cudf::size_type const valid_count = std::count(validity.begin(), validity.end(), true);
-
-  double var_nulls = calc_var(replace_nulls(v, validity, T{0}), valid_count, ddof);
+  double var_nulls = calc_var(v, ddof, validity);
   double std_nulls = std::sqrt(var_nulls);
 
-  EXPECT_EQ(this->template reduction_test<double>(col_nulls, *var_agg, output_type).first,
-            var_nulls);
-  EXPECT_EQ(this->template reduction_test<double>(col_nulls, *std_agg, output_type).first,
-            std_nulls);
+  EXPECT_DOUBLE_EQ(this->template reduction_test<double>(col_nulls, *var_agg, output_type).first,
+                   var_nulls);
+  EXPECT_DOUBLE_EQ(this->template reduction_test<double>(col_nulls, *std_agg, output_type).first,
+                   std_nulls);
 }
 
 TYPED_TEST(DictionaryReductionTest, NthElement)
@@ -3110,21 +3088,28 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
   using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
-  // `null` means null at child column.
-  // `NULL` means null at parent column.
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "₹1" /*null*/,
-                              "aaa" /*NULL*/,
+                              "",     // child null
+                              "aaa",  // parent null
                               "zit",
                               "bat",
                               "aab",
-                              "$1" /*null*/,
-                              "€1" /*NULL*/,
+                              "",    // child null
+                              "€1",  // parent null
                               "wut"},
                              nulls_at({2, 7})};
-    auto child2 = INTS_CW{{1, 2, 3 /*null*/, 4 /*NULL*/, 5, 6, 7, 8 /*null*/, 9 /*NULL*/, 10},
+    auto child2 = INTS_CW{{1,
+                           2,
+                           0,  // child null
+                           4,  // parent null
+                           5,
+                           6,
+                           7,
+                           0,  // child null
+                           9,  // parent NULL
+                           10},
                           nulls_at({2, 7})};
     return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
   }();

@@ -89,7 +89,7 @@
 }
 
 void run_ndsh_q5(nvbench::state& state,
-                 std::unordered_map<std::string, parquet_device_buffer>& sources)
+                 std::unordered_map<std::string, cuio_source_sink_pair>& sources)
 {
   // Define the column projection and filter predicate for the `orders` table
   std::vector<std::string> const orders_cols = {"o_custkey", "o_orderkey", "o_orderdate"};
@@ -120,17 +120,17 @@ void run_ndsh_q5(nvbench::state& state,
   // Read out the tables from parquet files
   // while pushing down the column projections and filter predicates
   auto const customer =
-    read_parquet(sources["customer"].make_source_info(), {"c_custkey", "c_nationkey"});
+    read_parquet(sources.at("customer").make_source_info(), {"c_custkey", "c_nationkey"});
   auto const orders =
-    read_parquet(sources["orders"].make_source_info(), orders_cols, std::move(orders_pred));
-  auto const lineitem = read_parquet(sources["lineitem"].make_source_info(),
+    read_parquet(sources.at("orders").make_source_info(), orders_cols, std::move(orders_pred));
+  auto const lineitem = read_parquet(sources.at("lineitem").make_source_info(),
                                      {"l_orderkey", "l_suppkey", "l_extendedprice", "l_discount"});
   auto const supplier =
-    read_parquet(sources["supplier"].make_source_info(), {"s_suppkey", "s_nationkey"});
+    read_parquet(sources.at("supplier").make_source_info(), {"s_suppkey", "s_nationkey"});
   auto const nation =
-    read_parquet(sources["nation"].make_source_info(), {"n_nationkey", "n_regionkey", "n_name"});
+    read_parquet(sources.at("nation").make_source_info(), {"n_nationkey", "n_regionkey", "n_name"});
   auto const region =
-    read_parquet(sources["region"].make_source_info(), region_cols, std::move(region_pred));
+    read_parquet(sources.at("region").make_source_info(), region_cols, std::move(region_pred));
 
   // Perform the joins
   auto const join_a = apply_inner_join(region, nation, {"r_regionkey"}, {"n_regionkey"});
@@ -165,7 +165,7 @@ void ndsh_q5(nvbench::state& state)
 {
   // Generate the required parquet files in device buffers
   double const scale_factor = state.get_float64("scale_factor");
-  std::unordered_map<std::string, parquet_device_buffer> sources;
+  std::unordered_map<std::string, cuio_source_sink_pair> sources;
   generate_parquet_data_sources(
     scale_factor, {"customer", "orders", "lineitem", "supplier", "nation", "region"}, sources);
 

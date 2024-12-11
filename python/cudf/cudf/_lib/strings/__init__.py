@@ -9,6 +9,8 @@ from cudf._lib.nvtext.jaccard import jaccard_index
 from cudf._lib.nvtext.minhash import (
     minhash,
     minhash64,
+    minhash64_permuted,
+    minhash_permuted,
     word_minhash,
     word_minhash64,
 )
@@ -71,16 +73,9 @@ from cudf._lib.strings.find import (
     startswith_multiple,
 )
 from cudf._lib.strings.find_multiple import find_multiple
-from cudf._lib.strings.findall import findall
-from cudf._lib.strings.json import GetJsonObjectOptions, get_json_object
-from cudf._lib.strings.padding import (
-    SideType,
-    center,
-    ljust,
-    pad,
-    rjust,
-    zfill,
-)
+from cudf._lib.strings.findall import find_re, findall
+from cudf._lib.strings.json import get_json_object
+from cudf._lib.strings.padding import center, ljust, pad, rjust, zfill
 from cudf._lib.strings.repeat import repeat_scalar, repeat_sequence
 from cudf._lib.strings.replace import (
     insert,
