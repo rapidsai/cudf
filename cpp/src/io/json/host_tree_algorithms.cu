@@ -51,6 +51,7 @@
 namespace cudf::io::json::detail {
 auto to_int2    = [](auto v) { return std::to_string(static_cast<int>(v)); };
 auto print_vec2 = [](auto const& cpu, auto const name, auto converter) {
+  if (std::getenv("NJP_DEBUG_PRINT") == nullptr) return;
   for (auto const& v : cpu)
     printf("%3s,", converter(v).c_str());
   std::cout << name << std::endl;
@@ -514,6 +515,31 @@ std::
     return {cudf::detail::make_host_vector<bool>(0, stream),
             cudf::detail::make_host_vector<bool>(0, stream),
             {}};  // for empty file
+  // if root has struct, list or string, then keep only requested root type.
+  if (options.is_enabled_prune_columns()) {
+    auto root_type_id = std::visit(
+      cudf::detail::visitor_overload{
+        [](std::vector<data_type> const& user_dtypes) { return NC_STRUCT; },
+        [](std::map<std::string, data_type> const& user_dtypes) { return NC_STRUCT; },
+        [](std::map<std::string, schema_element> const& user_dtypes) { return NC_STRUCT; },
+        [](schema_element const& user_dtypes) {
+          if (user_dtypes.type.id() == type_id::STRUCT) return NC_STRUCT;
+          if (user_dtypes.type.id() == type_id::LIST) return NC_LIST;
+          return NC_ERR;
+        }},
+      options.get_dtypes());
+    CUDF_EXPECTS(root_type_id == NC_STRUCT or root_type_id == NC_LIST,
+                 "Root type in input schema should be struct or list");
+    auto& remove_vec =
+      is_enabled_lines ? adj[parent_node_sentinel] : adj[adj[parent_node_sentinel][0]];
+    if (remove_vec.size() != 1)
+      remove_vec.erase(std::remove_if(remove_vec.begin(),
+                                      remove_vec.end(),
+                                      [&column_categories, root_type_id](auto x) {
+                                        return column_categories[x] != root_type_id;
+                                      }),
+                       remove_vec.end());
+  }
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
