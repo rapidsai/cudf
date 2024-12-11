@@ -6135,7 +6135,7 @@ class StringColumn(column.ColumnBase):
         width: int,
     ) -> ListColumn:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.minhash.minhash_permuted(
+            plc.nvtext.minhash.minhash(
                 self.to_pylibcudf(mode="read"),
                 seed,
                 a.to_pylibcudf(mode="read"),
@@ -6153,7 +6153,7 @@ class StringColumn(column.ColumnBase):
         width: int,
     ) -> ListColumn:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.minhash.minhash64_permuted(
+            plc.nvtext.minhash.minhash64(
                 self.to_pylibcudf(mode="read"),
                 seed,
                 a.to_pylibcudf(mode="read"),
