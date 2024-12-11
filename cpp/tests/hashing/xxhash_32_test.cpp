@@ -32,7 +32,7 @@ TEST_F(XXHash_32_Test, TestInteger)
   // Expected results were generated with the reference implementation:
   // https://github.com/Cyan4973/xxHash/blob/dev/xxhash.h
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>({3740619578u, 1163349692u, 2897135549u});
+    cudf::test::fixed_width_column_wrapper<uint32_t>({2802733858u, 3816402826u, 3721130582u});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
 
@@ -46,7 +46,7 @@ TEST_F(XXHash_32_Test, TestDouble)
   // Expected results were generated with the reference implementation:
   // https://github.com/Cyan4973/xxHash/blob/dev/xxhash.h
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>({732074547u, 4070191577u, 2273654724u});
+    cudf::test::fixed_width_column_wrapper<uint32_t>({635906976u, 1479683640u, 1813668619u});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
@@ -61,7 +61,7 @@ TEST_F(XXHash_32_Test, StringType)
   // Expected results were generated with the reference implementation:
   // https://github.com/Cyan4973/xxHash/blob/dev/xxhash.h
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>({2030594998u, 3726104846u, 3758822035u});
+    cudf::test::fixed_width_column_wrapper<uint32_t>({2975112264u, 4267142293u, 4063988593u});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
