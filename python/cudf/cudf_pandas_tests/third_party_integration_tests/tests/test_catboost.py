@@ -8,7 +8,7 @@ try:
     from catboost import CatBoostClassifier, CatBoostRegressor, Pool
 except Exception:
     pytest.skip(
-        "ValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject"
+        reason="ValueError: numpy.dtype size changed, may indicate binary incompatibility. Expected 96 from C header, got 88 from PyObject", allow_module_level=True
     )
 from sklearn.datasets import make_classification, make_regression
 
