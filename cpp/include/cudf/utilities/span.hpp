@@ -358,9 +358,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
                                std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
                                  std::declval<C&>().data()))> (*)[],
                                T (*)[]>>* = nullptr>  // NOLINT
-  CUDF_HOST_DEVICE constexpr device_span(C& in) : base()
-  // CUDF_HOST_DEVICE constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()),
-  // in.size())
+  constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
@@ -373,9 +371,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
                                std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
                                  std::declval<C&>().data()))> (*)[],
                                T (*)[]>>* = nullptr>  // NOLINT
-  CUDF_HOST_DEVICE constexpr device_span(C const& in) : base()
-  // CUDF_HOST_DEVICE constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()),
-  // in.size())
+  constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
