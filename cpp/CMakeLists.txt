@@ -276,7 +276,7 @@ rapids_cpm_init()
 
 # Not using rapids-cmake since we never want to find, always download.
 CPMAddPackage(
-  NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW TRUE GIT_TAG
+  NAME rapids_logger GITHUB_REPOSITORY vyasr/rapids-logger GIT_SHALLOW TRUE GIT_TAG
   fix/include_dir VERSION f9b007ae30f924de2dca8c585334f0d55331d0b8
 )
 rapids_make_logger(cudf EXPORT_SET cudf-exports)
