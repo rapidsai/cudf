@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -48,11 +49,9 @@ T get_value(column_view const& col_view, size_type element_index, rmm::cuda_stre
   CUDF_EXPECTS(data_type(type_to_id<T>()) == col_view.type(), "get_value data type mismatch");
   CUDF_EXPECTS(element_index >= 0 && element_index < col_view.size(),
                "invalid element_index value");
-  T result;
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    &result, col_view.data<T>() + element_index, sizeof(T), cudaMemcpyDefault, stream.value()));
-  stream.synchronize();
-  return result;
+  return cudf::detail::make_host_vector_sync(
+           device_span<T const>{col_view.data<T>() + element_index, 1}, stream)
+    .front();
 }
 
 }  // namespace detail
