@@ -68,9 +68,16 @@ struct bloom_filter_caster {
     using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
     using word_type   = typename policy_type::word_type;
 
-    // Check if the literal has the same type as the predicate column
-    CUDF_EXPECTS(dtype == literal->get_data_type(),
-                 "Mismatched predicate column and literal types");
+    // List, Struct, Dictionary types are not supported
+    if constexpr (cudf::is_compound<T>() and not std::is_same_v<T, string_view>) {
+      CUDF_FAIL("Compound types don't support equality predicate");
+    } else {
+      // Check if the literal has the same type as the predicate column
+      auto const scalar = cudf::scalar_type_t<T>(T{}, false, stream, mr);
+      CUDF_EXPECTS(dtype == literal->get_data_type() and
+                     cudf::have_same_types(cudf::column_view{dtype, 0, {}, {}, 0, 0, {}}, scalar),
+                   "Mismatched predicate column and literal types");
+    }
 
     // Filter properties
     auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
@@ -137,11 +144,6 @@ struct bloom_filter_caster {
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
-    // List, Struct, Dictionary types are not supported
-    if constexpr (cudf::is_compound<T>() and not std::is_same_v<T, string_view>) {
-      CUDF_FAIL("Compound types don't support equality predicate");
-    }
-
     // For INT96 timestamps, use cudf::string_view type and set is_int96_timestamp to YES
     if constexpr (cudf::is_timestamp<T>()) {
       if (parquet_types[equality_col_idx] == Type::INT96) {
