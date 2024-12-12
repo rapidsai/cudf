@@ -7,7 +7,6 @@ import inspect
 import itertools
 import numbers
 import os
-import pickle
 import re
 import sys
 import textwrap
@@ -50,7 +49,6 @@ from cudf.api.types import (
 )
 from cudf.core import column, df_protocol, indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column import (
     CategoricalColumn,
@@ -588,7 +586,7 @@ class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
     pass
 
 
-class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
+class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     """
     A GPU Dataframe object.
 
@@ -1183,7 +1181,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self.index.serialize()
+        header["index"], index_frames = self.index.device_serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -1198,8 +1196,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             header, frames[header["index_frame_count"] :]
         )
 
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
         obj.index = index
 
         return obj
@@ -6761,9 +6758,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             result = column.as_column(result, dtype=result_dtype)
             if mask is not None:
-                result = result.set_mask(
-                    cudf._lib.transform.bools_to_mask(mask._column)
-                )
+                result = result.set_mask(mask._column.as_mask())
             return Series._from_column(result, index=self.index)
         else:
             result_df = DataFrame(result, index=self.index)
@@ -7870,6 +7865,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         return self._constructor_sliced._from_column(result_col)
 
+    @acquire_spill_lock()
+    def _compute_columns(self, expr: str) -> ColumnBase:
+        plc_column = plc.transform.compute_column(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in self._columns]
+            ),
+            plc.expressions.to_expression(expr, self._column_names),
+        )
+        return libcudf.column.Column.from_pylibcudf(plc_column)
+
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
         """Evaluate a string describing operations on DataFrame columns.
@@ -7997,11 +8002,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError(
                     "Cannot operate inplace if there is no assignment"
                 )
-            return Series._from_column(
-                libcudf.transform.compute_column(
-                    [*self._columns], self._column_names, statements[0]
-                )
-            )
+            return Series._from_column(self._compute_columns(statements[0]))
 
         targets = []
         exprs = []
@@ -8017,15 +8018,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             targets.append(t.strip())
             exprs.append(e.strip())
 
-        cols = (
-            libcudf.transform.compute_column(
-                [*self._columns], self._column_names, e
-            )
-            for e in exprs
-        )
         ret = self if inplace else self.copy(deep=False)
-        for name, col in zip(targets, cols):
-            ret._data[name] = col
+        for name, expr in zip(targets, exprs):
+            ret._data[name] = self._compute_columns(expr)
         if not inplace:
             return ret
 

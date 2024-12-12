@@ -47,12 +47,12 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
   }
 }
 
-template <typename RowHasher>
-using hash_set_type =
+template <typename RowEqual>
+using distinct_set_t =
   cuco::static_set<size_type,
                    cuco::extent<int64_t>,
                    cuda::thread_scope_device,
-                   RowHasher,
+                   RowEqual,
                    cuco::linear_probing<1,
                                         cudf::experimental::row::hash::device_row_hasher<
                                           cudf::hashing::detail::default_hash,
@@ -79,6 +79,8 @@ using hash_set_type =
  * the `reduction_init_value()` function. Then, the reduction result for each row group is written
  * into the output array at the index of an unspecified row in the group.
  *
+ * @tparam RowEqual The type of row equality comparator
+ *
  * @param set The auxiliary set to perform reduction
  * @param set_size The number of elements in set
  * @param num_rows The number of all input rows
@@ -87,8 +89,8 @@ using hash_set_type =
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the output indices
  */
-template <typename RowHasher>
-rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+template <typename RowEqual>
+rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
