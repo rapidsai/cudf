@@ -266,6 +266,20 @@ struct FixedPointUnaryTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointUnaryTests, cudf::test::FixedPointTypes);
 
+TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryNegate)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 6789}, scale_type{-3}};
+  auto const expected = fp_wrapper{{1234, 3456, 6789, -1234, -3456, -6789}, scale_type{-3}};
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::NEGATE);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbs)
 {
   using namespace numeric;

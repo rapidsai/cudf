@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
 
+_SUPPORTED_UNARY_OPERATIONS: set = {"ABS", "CEIL", "FLOOR", "NEGATE"}
+
 
 class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
@@ -225,6 +227,17 @@ class DecimalBaseColumn(NumericalBaseColumn):
         self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         return unary.cast(self, dtype)  # type: ignore[return-value]
+
+    def unary_operator(self, unaryop: str) -> ColumnBase:
+        # TODO: Support Callable unary operations via numba
+        unaryop = unaryop.upper()
+        if unaryop in _SUPPORTED_UNARY_OPERATIONS:
+            unaryop = plc.unary.UnaryOperator[unaryop]
+            return unary.unary_operation(self, unaryop)
+        else:
+            raise TypeError(
+                f"Operation {unaryop} not supported for dtype {self.dtype}."
+            )
 
 
 class Decimal32Column(DecimalBaseColumn):

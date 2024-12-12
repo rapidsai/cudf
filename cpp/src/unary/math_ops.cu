@@ -293,6 +293,12 @@ struct fixed_point_abs {
   __device__ T operator()(T data) { return numeric::detail::abs(data); }
 };
 
+template <typename T>
+struct fixed_point_negate {
+  T n;
+  __device__ T operator()(T data) { return -data; }
+};
+
 template <typename T, template <typename> typename FixedPointFunctor>
 std::unique_ptr<column> unary_op_with(column_view const& input,
                                       rmm::cuda_stream_view stream,
@@ -578,6 +584,7 @@ struct FixedPointOpDispatcher {
       case cudf::unary_operator::CEIL:  return unary_op_with<T, fixed_point_ceil>(input, stream, mr);
       case cudf::unary_operator::FLOOR: return unary_op_with<T, fixed_point_floor>(input, stream, mr);
       case cudf::unary_operator::ABS:   return unary_op_with<T, fixed_point_abs>(input, stream, mr);
+      case cudf::unary_operator::NEGATE: return unary_op_with<T, fixed_point_negate>(input, stream, mr);
       default: CUDF_FAIL("Unsupported fixed_point unary operation");
     }
     // clang-format on
