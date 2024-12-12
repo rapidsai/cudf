@@ -65,7 +65,6 @@ cdef class ColumnInMetadata:
 
 cdef class TableInputMetadata:
     cdef table_input_metadata c_obj
-    cdef list column_metadata
 
 cdef class TableWithMetadata:
     cdef public Table tbl

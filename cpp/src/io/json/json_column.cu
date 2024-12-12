@@ -464,46 +464,49 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       column_names.emplace_back(
         json_col.child_columns.empty() ? list_child_name : json_col.child_columns.begin()->first);
 
-      // Note: json_col modified here, reuse the memory
+      // If child is not present, set the null mask correctly, but offsets are zero, and children
+      // are empty. Note: json_col modified here, reuse the memory
       auto offsets_column = std::make_unique<column>(data_type{type_id::INT32},
                                                      num_rows + 1,
                                                      json_col.child_offsets.release(),
                                                      rmm::device_buffer{},
                                                      0);
       // Create children column
-      auto child_schema_element =
-        json_col.child_columns.empty() ? std::optional<schema_element>{} : get_list_child_schema();
-      auto [child_column, names] =
-        json_col.child_columns.empty() or (prune_columns and !child_schema_element.has_value())
-          ? std::pair<std::unique_ptr<column>,
-                      // EMPTY type could not used because gather throws exception on EMPTY type.
-                      std::vector<column_name_info>>{std::make_unique<column>(
-                                                       data_type{type_id::INT8},
-                                                       0,
-                                                       rmm::device_buffer{},
-                                                       rmm::device_buffer{},
-                                                       0),
-                                                     std::vector<column_name_info>{}}
-          : device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
-                                              d_input,
-                                              options,
-                                              prune_columns,
-                                              child_schema_element,
-                                              stream,
-                                              mr);
+      auto child_schema_element  = get_list_child_schema();
+      auto [child_column, names] = [&]() {
+        if (json_col.child_columns.empty()) {
+          // EMPTY type could not used because gather throws exception on EMPTY type.
+          auto empty_col = make_empty_column(
+            child_schema_element.value_or(schema_element{data_type{type_id::INT8}}), stream, mr);
+          auto children_metadata = std::vector<column_name_info>{
+            make_column_name_info(
+              child_schema_element.value_or(schema_element{data_type{type_id::INT8}}),
+              list_child_name)
+              .children};
+
+          return std::pair<std::unique_ptr<column>, std::vector<column_name_info>>{
+            std::move(empty_col), children_metadata};
+        }
+        return device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
+                                                 d_input,
+                                                 options,
+                                                 prune_columns,
+                                                 child_schema_element,
+                                                 stream,
+                                                 mr);
+      }();
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
-      auto ret_col                      = make_lists_column(num_rows,
-                                       std::move(offsets_column),
-                                       std::move(child_column),
-                                       0,
-                                       rmm::device_buffer{0, stream, mr},
-                                       stream,
-                                       mr);
-      // The null_mask is set after creation of list column is to skip the purge_nonempty_nulls and
-      // null validation applied in make_lists_column factory, which is not needed for json
-      // parent column cannot be null when its children is non-empty in JSON
-      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
+      auto ret_col                      = make_lists_column(
+        num_rows,
+        std::move(offsets_column),
+        std::move(child_column),
+        null_count,
+        null_count == 0 ? rmm::device_buffer{0, stream, mr} : std::move(result_bitmask),
+        stream,
+        mr);
+      // Since some rows in child column may need to be nullified due to mixed types, we can not
+      // skip the purge_nonempty_nulls call in make_lists_column factory
       return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;
