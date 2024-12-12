@@ -138,7 +138,7 @@ CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
   auto const stride = cudf::detail::grid_1d::grid_stride();
 
   // Initialize local histogram
-  size_type partition_number = threadIdx.x;
+  thread_index_type partition_number = threadIdx.x;
   while (partition_number < num_partitions) {
     shared_partition_sizes[partition_number] = 0;
     partition_number += blockDim.x;
@@ -207,7 +207,7 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
   extern __shared__ size_type shared_partition_offsets[];
 
   // Initialize array of this blocks offsets from global array
-  size_type partition_number = threadIdx.x;
+  thread_index_type partition_number = threadIdx.x;
   while (partition_number < num_partitions) {
     shared_partition_offsets[partition_number] =
       block_partition_offsets[partition_number * gridDim.x + blockIdx.x];
@@ -303,7 +303,8 @@ CUDF_KERNEL void copy_block_partitions(InputIter input_iter,
 
   // Fetch the offset in the output buffer of each partition in this thread
   // block
-  for (size_type ipartition = threadIdx.x; ipartition < num_partitions; ipartition += blockDim.x) {
+  for (thread_index_type ipartition = threadIdx.x; ipartition < num_partitions;
+       ipartition += blockDim.x) {
     partition_offset_global[ipartition] =
       scanned_block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
   }
