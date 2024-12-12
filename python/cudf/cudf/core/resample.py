@@ -15,7 +15,6 @@
 # limitations under the License.
 from __future__ import annotations
 
-import pickle
 import warnings
 from typing import TYPE_CHECKING
 
@@ -26,6 +25,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
+from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
@@ -97,21 +97,21 @@ class _Resampler(GroupBy):
         header, frames = super().serialize()
         grouping_head, grouping_frames = self.grouping.serialize()
         header["grouping"] = grouping_head
-        header["resampler_type"] = pickle.dumps(type(self))
+        header["resampler_type"] = type(self).__name__
         header["grouping_frames_count"] = len(grouping_frames)
         frames.extend(grouping_frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        obj_type = pickle.loads(header["obj_type"])
+        obj_type = Serializable._name_type_map[header["obj_type_name"]]
         obj = obj_type.deserialize(
             header["obj"], frames[: header["num_obj_frames"]]
         )
         grouping = _ResampleGrouping.deserialize(
             header["grouping"], frames[header["num_obj_frames"] :]
         )
-        resampler_cls = pickle.loads(header["resampler_type"])
+        resampler_cls = Serializable._name_type_map[header["resampler_type"]]
         out = resampler_cls.__new__(resampler_cls)
         out.grouping = grouping
         super().__init__(out, obj, by=grouping)
@@ -163,8 +163,8 @@ class _ResampleGrouping(_Grouping):
 
     @classmethod
     def deserialize(cls, header, frames):
-        names = pickle.loads(header["names"])
-        _named_columns = pickle.loads(header["_named_columns"])
+        names = header["names"]
+        _named_columns = header["_named_columns"]
         key_columns = cudf.core.column.deserialize_columns(
             header["columns"], frames[: -header["__bin_labels_count"]]
         )

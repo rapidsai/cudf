@@ -273,6 +273,14 @@ endif()
 
 # add third party dependencies using CPM
 rapids_cpm_init()
+
+# Not using rapids-cmake since we never want to find, always download.
+CPMAddPackage(
+  NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW TRUE GIT_TAG
+  c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55 VERSION c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55
+)
+rapids_make_logger(cudf EXPORT_SET cudf-exports)
+
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
 # find NVTX
@@ -299,8 +307,6 @@ include(cmake/Modules/JitifyPreprocessKernels.cmake)
 include(cmake/thirdparty/get_kvikio.cmake)
 # find fmt
 include(cmake/thirdparty/get_fmt.cmake)
-# find spdlog
-include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
@@ -772,7 +778,6 @@ add_library(
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
   src/utilities/linked_column.cpp
-  src/utilities/logger.cpp
   src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
@@ -910,11 +915,8 @@ if(CUDF_LARGE_STRINGS_DISABLED)
   target_compile_definitions(cudf PRIVATE CUDF_LARGE_STRINGS_DISABLED)
 endif()
 
-# Define RMM logging level
-target_compile_definitions(cudf PRIVATE "RMM_LOGGING_LEVEL=LIBCUDF_LOGGING_LEVEL")
-
-# Define spdlog level
-target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}")
+# Define logging level
+target_compile_definitions(cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=${LIBCUDF_LOGGING_LEVEL}")
 
 # Enable remote IO through KvikIO
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
@@ -938,8 +940,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-         spdlog::spdlog_header_only
+  PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool> cudf_logger
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
           cuco::cuco
           ZLIB::ZLIB
@@ -948,6 +949,7 @@ target_link_libraries(
           $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
           nanoarrow
           rmm::rmm_logger_impl
+          cudf_logger_impl
 )
 
 # Add Conda library, and include paths if specified
