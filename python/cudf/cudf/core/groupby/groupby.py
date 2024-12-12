@@ -699,7 +699,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result
 
     @cached_property
-    def _groupby(self) -> plc.groupby.GroupBy:
+    def _groupby(self) -> types.SimpleNamespace:
         with acquire_spill_lock() as spill_lock:
             plc_groupby = plc.groupby.GroupBy(
                 plc.Table(
