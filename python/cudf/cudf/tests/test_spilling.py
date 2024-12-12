@@ -211,7 +211,6 @@ def test_creations(manager: SpillManager):
 
 
 def test_spillable_df_groupby(manager: SpillManager):
-    breakpoint()
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
     assert len(single_column_df_base_data(df).owner._spill_locks) == 0
