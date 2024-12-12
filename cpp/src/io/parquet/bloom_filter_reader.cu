@@ -73,9 +73,9 @@ struct bloom_filter_caster {
       CUDF_FAIL("Compound types don't support equality predicate");
     } else {
       // Check if the literal has the same type as the predicate column
-      auto const scalar = cudf::scalar_type_t<T>(T{}, false, stream, mr);
       CUDF_EXPECTS(dtype == literal->get_data_type() and
-                     cudf::have_same_types(cudf::column_view{dtype, 0, {}, {}, 0, 0, {}}, scalar),
+                     cudf::have_same_types(cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
+                                           cudf::scalar_type_t<T>(T{}, false, stream, mr)),
                    "Mismatched predicate column and literal types");
     }
 
