@@ -581,9 +581,9 @@ struct FixedPointOpDispatcher {
   {
     // clang-format off
     switch (op) {
-      case cudf::unary_operator::CEIL:  return unary_op_with<T, fixed_point_ceil>(input, stream, mr);
-      case cudf::unary_operator::FLOOR: return unary_op_with<T, fixed_point_floor>(input, stream, mr);
-      case cudf::unary_operator::ABS:   return unary_op_with<T, fixed_point_abs>(input, stream, mr);
+      case cudf::unary_operator::CEIL:   return unary_op_with<T, fixed_point_ceil>(input, stream, mr);
+      case cudf::unary_operator::FLOOR:  return unary_op_with<T, fixed_point_floor>(input, stream, mr);
+      case cudf::unary_operator::ABS:    return unary_op_with<T, fixed_point_abs>(input, stream, mr);
       case cudf::unary_operator::NEGATE: return unary_op_with<T, fixed_point_negate>(input, stream, mr);
       default: CUDF_FAIL("Unsupported fixed_point unary operation");
     }
@@ -672,7 +672,7 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
       return cudf::type_dispatcher(
         input.type(), detail::LogicalOpDispatcher<detail::DeviceNot>{}, input, stream, mr);
     case cudf::unary_operator::NEGATE:
-      CUDF_EXPECTS((cudf::is_duration(input.type()) || cudf::is_signed(input.type())),
+      CUDF_EXPECTS(cudf::is_signed(input.type()) || cudf::is_duration(input.type()),
                    "NEGATE operator requires signed numeric types or duration types.");
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceNegate>{}, input, stream, mr);

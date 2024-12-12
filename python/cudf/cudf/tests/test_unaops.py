@@ -139,6 +139,6 @@ def test_series_bool_neg():
 
 
 def test_series_decimal_neg():
-    sr = Series([Decimal("1.23"), Decimal("4.567")])
+    sr = Series([Decimal("0.0"), Decimal("1.23"), Decimal("4.567")])
     psr = sr.to_pandas()
     assert_eq((-sr).to_pandas(), -psr, check_dtype=True)
