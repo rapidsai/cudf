@@ -7,13 +7,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import Select
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.dispatch import lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
@@ -21,21 +22,15 @@ if TYPE_CHECKING:
 def _(
     ir: Select, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    (child,) = ir.children
-    child, partition_info = rec(child)
+    child, partition_info = rec(ir.children[0])
+    pi = partition_info[child]
+    if pi.count > 1 and not all(
+        expr.is_pointwise for expr in traversal([e.value for e in ir.exprs])
+    ):
+        # TODO: Handle non-pointwise expressions.
+        raise NotImplementedError(
+            f"Selection {ir} does not support multiple partitions."
+        )
     new_node = ir.reconstruct([child])
-
-    # Search the expression graph for "complex" operations
-    if not all(e.is_pointwise for e in ir.exprs):
-        if partition_info[child].count > 1:
-            # TODO: Handle non-pointwise expressions.
-            raise NotImplementedError(
-                f"Selection {ir} does not support multiple partitions."
-            )
-        else:  # pragma: no cover
-            partition_info[new_node] = PartitionInfo(count=1)
-            return new_node, partition_info
-
-    # Remaining Select ops are partition-wise
-    partition_info[new_node] = PartitionInfo(count=partition_info[child].count)
+    partition_info[new_node] = pi
     return new_node, partition_info

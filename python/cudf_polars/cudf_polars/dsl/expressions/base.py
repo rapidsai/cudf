@@ -40,7 +40,7 @@ class Expr(Node["Expr"]):
     dtype: plc.DataType
     """Data type of the expression."""
     is_pointwise: bool
-    """Whether row output is independent."""
+    """Whether this expression acts pointwise on its inputs."""
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     """Names of non-child data (not Exprs) for reconstruction."""
@@ -183,7 +183,7 @@ class NamedExpr:
 
     @property
     def is_pointwise(self) -> bool:
-        """Whether row output is independent."""
+        """Whether this expression acts pointwise on its inputs."""
         return self.value.is_pointwise
 
     def __hash__(self) -> int:

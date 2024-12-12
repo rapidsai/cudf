@@ -83,14 +83,12 @@ class BooleanFunction(Expr):
         self.children = children
         self.is_pointwise = self.name not in (
             BooleanFunction.Name.All,
-            BooleanFunction.Name.AllHorizontal,
             BooleanFunction.Name.Any,
-            BooleanFunction.Name.AnyHorizontal,
             BooleanFunction.Name.IsDuplicated,
             BooleanFunction.Name.IsFirstDistinct,
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
-        ) and all(c.is_pointwise for c in self.children)
+        )
         if self.name is BooleanFunction.Name.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):

@@ -113,7 +113,7 @@ def task_graph(
     """
     graph = reduce(
         operator.or_,
-        (generate_ir_tasks(node, partition_info) for node in traversal(ir)),
+        (generate_ir_tasks(node, partition_info) for node in traversal([ir])),
     )
 
     key_name = get_key_name(ir)
