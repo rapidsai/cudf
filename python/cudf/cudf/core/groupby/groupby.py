@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import copy
 import itertools
-import pickle
 import textwrap
 import warnings
 from collections import abc
@@ -1281,7 +1280,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         obj_header, obj_frames = self.obj.serialize()
         header["obj"] = obj_header
-        header["obj_type"] = pickle.dumps(type(self.obj))
+        header["obj_type_name"] = type(self.obj).__name__
         header["num_obj_frames"] = len(obj_frames)
         frames.extend(obj_frames)
 
@@ -1296,7 +1295,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def deserialize(cls, header, frames):
         kwargs = header["kwargs"]
 
-        obj_type = pickle.loads(header["obj_type"])
+        obj_type = Serializable._name_type_map[header["obj_type_name"]]
         obj = obj_type.deserialize(
             header["obj"], frames[: header["num_obj_frames"]]
         )
@@ -3329,8 +3328,8 @@ class _Grouping(Serializable):
     def serialize(self):
         header = {}
         frames = []
-        header["names"] = pickle.dumps(self.names)
-        header["_named_columns"] = pickle.dumps(self._named_columns)
+        header["names"] = self.names
+        header["_named_columns"] = self._named_columns
         column_header, column_frames = cudf.core.column.serialize_columns(
             self._key_columns
         )
@@ -3340,8 +3339,8 @@ class _Grouping(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        names = pickle.loads(header["names"])
-        _named_columns = pickle.loads(header["_named_columns"])
+        names = header["names"]
+        _named_columns = header["_named_columns"]
         key_columns = cudf.core.column.deserialize_columns(
             header["columns"], frames
         )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import pickle
 import weakref
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal
@@ -432,8 +431,7 @@ class Buffer(Serializable):
             second element is a list containing single frame.
         """
         header: dict[str, Any] = {}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["owner-type-serialized"] = pickle.dumps(type(self._owner))
+        header["owner-type-serialized-name"] = type(self._owner).__name__
         header["frame_count"] = 1
         frames = [self]
         return header, frames
@@ -460,7 +458,9 @@ class Buffer(Serializable):
         if isinstance(frame, cls):
             return frame  # The frame is already deserialized
 
-        owner_type: BufferOwner = pickle.loads(header["owner-type-serialized"])
+        owner_type: BufferOwner = Serializable._name_type_map[
+            header["owner-type-serialized-name"]
+        ]
         if hasattr(frame, "__cuda_array_interface__"):
             owner = owner_type.from_device_memory(frame, exposed=False)
         else:
