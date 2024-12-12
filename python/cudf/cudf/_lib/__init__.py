@@ -7,7 +7,6 @@ from . import (
     groupby,
     interop,
     nvtext,
-    parquet,
     reduce,
     sort,
     stream_compaction,
