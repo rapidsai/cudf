@@ -6,7 +6,6 @@ from . import (
     csv,
     groupby,
     interop,
-    parquet,
     reduce,
     sort,
     stream_compaction,

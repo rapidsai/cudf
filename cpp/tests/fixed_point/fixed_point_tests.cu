@@ -72,10 +72,12 @@ TYPED_TEST(FixedPointTestAllReps, DecimalXXThrust)
   EXPECT_EQ(vec2, vec3);
 }
 
+namespace {
 struct cast_to_int32_fn {
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
   int32_t __host__ __device__ operator()(decimal32 fp) { return static_cast<int32_t>(fp); }
 };
+}  // namespace
 
 TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 {
