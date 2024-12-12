@@ -4,7 +4,10 @@
 
 from __future__ import annotations
 
+import enum
 import math
+import random
+from enum import IntEnum
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
@@ -52,8 +55,66 @@ def _(
     return ir, {ir: PartitionInfo(count=1)}
 
 
+class ScanPartitionFlavor(IntEnum):
+    """Flavor of Scan partitioning."""
+
+    SINGLE_FILE = enum.auto()  # 1:1 mapping between files and partitions
+    SPLIT_FILES = enum.auto()  # Split each file into >1 partition
+    FUSED_FILES = enum.auto()  # Fuse multiple files into each partition
+
+
+class ScanPartitionPlan:
+    """Scan partitioning plan."""
+
+    __slots__ = ("factor", "flavor")
+    factor: int
+    flavor: ScanPartitionFlavor
+
+    def __init__(self, factor: int, flavor: ScanPartitionFlavor) -> None:
+        if (
+            flavor == ScanPartitionFlavor.SINGLE_FILE and factor != 1
+        ):  # pragma: no cover
+            raise ValueError(f"Expected factor == 1 for {flavor}, got: {factor}")
+        self.factor = factor
+        self.flavor = flavor
+
+    @staticmethod
+    def from_scan(ir: Scan) -> ScanPartitionPlan:
+        """Extract the partitioning plan of a Scan operation."""
+        plan = ScanPartitionPlan(1, ScanPartitionFlavor.SINGLE_FILE)
+        if ir.typ == "parquet":
+            # TODO: Use system info to set default blocksize
+            parallel_options = ir.config_options.get("executor_options", {})
+            blocksize: int = parallel_options.get("parquet_blocksize", 1024**3)
+            stats = _sample_pq_statistics(ir)
+            file_size = sum(float(stats[column]) for column in ir.schema)
+            if file_size > 0:
+                if file_size > blocksize:
+                    # Split large files
+                    plan = ScanPartitionPlan(
+                        math.ceil(file_size / blocksize),
+                        ScanPartitionFlavor.SPLIT_FILES,
+                    )
+                else:
+                    # Fuse small files
+                    plan = ScanPartitionPlan(
+                        max(int(blocksize / file_size), 1),
+                        ScanPartitionFlavor.FUSED_FILES,
+                    )
+
+        # TODO: Use file sizes for csv and json
+        return plan
+
+
 class SplitScan(IR):
-    """Input from a split file."""
+    """
+    Input from a split file.
+
+    This class wraps a single-file `Scan` object. At
+    IO/evaluation time, this class will only perform
+    a partial read of the underlying file. The range
+    (skip_rows and n_rows) is calculated at IO time.
+    """
 
     __slots__ = (
         "base_scan",
@@ -92,7 +153,7 @@ class SplitScan(IR):
     def get_hashable(self) -> Hashable:
         """Hashable representation of node."""
         return (
-            hash(self.base_scan),
+            self.base_scan,
             self.split_index,
             self.total_splits,
         )
@@ -117,33 +178,49 @@ class SplitScan(IR):
         if typ not in ("parquet",):  # pragma: no cover
             raise NotImplementedError(f"Unhandled Scan type for file splitting: {typ}")
 
+        if len(paths) > 1:  # pragma: no cover
+            raise ValueError(f"Expected a single path, got: {paths}")
+
+        # Parquet logic:
+        # - We are one of "total_splits" SplitScan nodes
+        #   assigned to the same file.
+        # - We know our index within this file ("split_index")
+        # - We can also use parquet metadata to query the
+        #   total number of rows in each row-group of the file.
+        # - We can use all this information to calculate the
+        #   "skip_rows" and "n_rows" options to use locally.
+
         rowgroup_metadata = plc.io.parquet_metadata.read_parquet_metadata(
             plc.io.SourceInfo(paths)
         ).rowgroup_metadata()
         total_row_groups = len(rowgroup_metadata)
-        if total_splits > total_row_groups:
-            # Don't bother aligning on row-groups
-            total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
-            n_rows = int(total_rows / total_splits)
-            skip_rows = n_rows * split_index
-        else:
-            # Align split with row-groups
-            rg_stride = int(total_row_groups / total_splits)
+        if total_splits <= total_row_groups:
+            # We have enough row-groups in the file to align
+            # all "total_splits" of our reads with row-group
+            # boundaries. Calculate which row-groups to include
+            # in the current read, and use metadata to translate
+            # the row-group indices to "skip_rows" and "n_rows".
+            rg_stride = total_row_groups // total_splits
             skip_rgs = rg_stride * split_index
-            skip_rows = (
-                sum(rg["num_rows"] for rg in rowgroup_metadata[:skip_rgs])
-                if skip_rgs
-                else 0
-            )
+            skip_rows = sum(rg["num_rows"] for rg in rowgroup_metadata[:skip_rgs])
             n_rows = sum(
                 rg["num_rows"]
                 for rg in rowgroup_metadata[skip_rgs : skip_rgs + rg_stride]
             )
+        else:
+            # There are not enough row-groups to align
+            # all "total_splits" of our reads with row-group
+            # boundaries. Use metadata to directly calculate
+            # "skip_rows" and "n_rows" for the current read.
+            total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
+            n_rows = total_rows // total_splits
+            skip_rows = n_rows * split_index
 
         # Last split should always read to end of file
         if split_index == (total_splits - 1):
             n_rows = -1
 
+        # Perform the partial read
         return Scan.do_evaluate(
             schema,
             typ,
@@ -166,7 +243,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, float]:
     # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
     n_sample = 3
     column_sizes = {}
-    ds = pa_ds.dataset(ir.paths[:n_sample], format="parquet")
+    ds = pa_ds.dataset(random.sample(ir.paths, n_sample), format="parquet")
     for i, frag in enumerate(ds.get_fragments()):
         md = frag.metadata
         for rg in range(md.num_row_groups):
@@ -181,38 +258,15 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, float]:
     return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
 
 
-def _scan_partitioning(ir: Scan) -> tuple[int, int]:
-    split, stride = 1, 1
-    if ir.typ == "parquet":
-        file_size: float = 0
-        # TODO: Use system info to set default blocksize
-        parallel_options = ir.config_options.get("executor_options", {})
-        blocksize: int = parallel_options.get("parquet_blocksize", 1024**3)
-        stats = _sample_pq_statistics(ir)
-        columns: list = ir.with_columns or list(stats.keys())
-        for name in columns:
-            file_size += float(stats[name])
-        if file_size > 0:
-            if file_size > blocksize:
-                # Split large files
-                split = math.ceil(file_size / blocksize)
-            else:
-                # Aggregate small files
-                stride = max(int(blocksize / file_size), 1)
-
-    # TODO: Use file sizes for csv and json
-    return (split, stride)
-
-
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
     if ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0:
-        split, stride = _scan_partitioning(ir)
+        plan = ScanPartitionPlan.from_scan(ir)
         paths = list(ir.paths)
-        if split > 1:
+        if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
             config_options = ir.config_options.copy()
             config_options["parquet_options"] = config_options.get(
@@ -236,7 +290,8 @@ def _(
                     ir.predicate,
                 )
                 slices.extend(
-                    SplitScan(base_scan, sindex, split) for sindex in range(split)
+                    SplitScan(base_scan, sindex, plan.factor)
+                    for sindex in range(plan.factor)
                 )
             new_node = Union(ir.schema, None, *slices)
             partition_info = {slice: PartitionInfo(count=1) for slice in slices} | {
@@ -250,14 +305,14 @@ def _(
                     ir.reader_options,
                     ir.cloud_options,
                     ir.config_options,
-                    paths[i : i + stride],
+                    paths[i : i + plan.factor],
                     ir.with_columns,
                     ir.skip_rows,
                     ir.n_rows,
                     ir.row_index,
                     ir.predicate,
                 )
-                for i in range(0, len(paths), stride)
+                for i in range(0, len(paths), plan.factor)
             ]
             new_node = Union(ir.schema, None, *groups)
             partition_info = {group: PartitionInfo(count=1) for group in groups} | {
