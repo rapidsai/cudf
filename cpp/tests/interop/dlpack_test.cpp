@@ -26,6 +26,7 @@
 
 #include <dlpack/dlpack.h>
 
+namespace {
 struct dlpack_deleter {
   void operator()(DLManagedTensor* tensor) { tensor->deleter(tensor); }
 };
@@ -60,6 +61,7 @@ void validate_dtype(DLDataType const& dtype)
   EXPECT_EQ(1, dtype.lanes);
   EXPECT_EQ(sizeof(T) * 8, dtype.bits);
 }
+}  // namespace
 
 class DLPackUntypedTests : public cudf::test::BaseFixture {};
 

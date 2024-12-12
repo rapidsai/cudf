@@ -43,7 +43,6 @@ PARQUET_META_TYPE_MAP = {
 }
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
-_ROW_GROUP_SIZE_BYTES_DEFAULT = np.iinfo(np.uint64).max
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for

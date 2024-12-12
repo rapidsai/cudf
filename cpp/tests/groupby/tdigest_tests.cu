@@ -30,6 +30,7 @@
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 
+namespace {
 /**
  * @brief Functor to generate a tdigest by key.
  *
@@ -116,6 +117,7 @@ struct tdigest_groupby_simple_merge_op {
     return std::move(result.second[0].results[0]);
   }
 };
+}  // namespace
 
 template <typename T>
 struct TDigestAllTypes : public cudf::test::BaseFixture {};
@@ -508,6 +510,7 @@ TEST_F(TDigestMergeTest, EmptyGroups)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result.second[0].results[0]);
 }
 
+namespace {
 std::unique_ptr<cudf::table> do_agg(
   cudf::column_view key,
   cudf::column_view val,
@@ -537,6 +540,7 @@ std::unique_ptr<cudf::table> do_agg(
 
   return std::make_unique<cudf::table>(std::move(result_columns));
 }
+}  // namespace
 
 TEST_F(TDigestMergeTest, AllValuesAreNull)
 {
