@@ -513,7 +513,8 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to be used in cudf::compute_column
  *
- * @return Collected filtered row group indices, if any.
+ * @return Collected filtered row group indices, one vector per source, if any. A std::nullopt if
+ * all row groups are required or if the computed predicate is all nulls
  */
 [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
   cudf::table_view ast_table,

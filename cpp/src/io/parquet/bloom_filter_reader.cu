@@ -36,6 +36,7 @@
 
 #include <cuco/bloom_filter_ref.cuh>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/tabulate.h>
 
 #include <future>
 #include <numeric>
@@ -68,35 +69,30 @@ struct bloom_filter_caster {
     using word_type   = typename policy_type::word_type;
 
     // Check if the literal has the same type as the predicate column
-    CUDF_EXPECTS(
-      cudf::have_same_types(cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
-                            cudf::column_view{literal->get_data_type(), 0, {}, {}, 0, 0, {}}),
-      "Mismatched predicate column and literal types");
+    CUDF_EXPECTS(dtype == literal->get_data_type(),
+                 "Mismatched predicate column and literal types");
 
     // Filter properties
     auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
     rmm::device_buffer results{total_row_groups, stream, mr};
+    cudf::device_span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
 
     // Query literal in bloom filters from each column chunk (row group).
-    thrust::for_each(
+    thrust::tabulate(
       rmm::exec_policy_nosync(stream),
-      thrust::counting_iterator<size_t>{0},
-      thrust::counting_iterator{total_row_groups},
+      results_span.begin(),
+      results_span.end(),
       [filter_span          = bloom_filter_spans.data(),
        d_scalar             = literal->get_value(),
        col_idx              = equality_col_idx,
-       num_equality_columns = num_equality_columns,
-       results = reinterpret_cast<bool*>(results.data())] __device__(auto row_group_idx) {
+       num_equality_columns = num_equality_columns] __device__(auto row_group_idx) {
         // Filter bitset buffer index
         auto const filter_idx  = col_idx + (num_equality_columns * row_group_idx);
         auto const filter_size = filter_span[filter_idx].size();
 
         // If no bloom filter, then fill in `true` as membership cannot be determined
-        if (filter_size == 0) {
-          results[row_group_idx] = true;
-          return;
-        }
+        if (filter_size == 0) { return true; }
 
         // Number of filter blocks
         auto const num_filter_blocks = filter_size / bytes_per_block;
@@ -119,10 +115,10 @@ struct bloom_filter_caster {
                       IS_INT96_TIMESTAMP == is_int96_timestamp::YES) {
           auto const int128_key = static_cast<__int128_t>(d_scalar.value<int64_t>());
           cudf::string_view probe_key{reinterpret_cast<char const*>(&int128_key), 12};
-          results[row_group_idx] = filter.contains(probe_key);
+          return filter.contains(probe_key);
         } else {
           // Query the bloom filter and store results
-          results[row_group_idx] = filter.contains(d_scalar.value<T>());
+          return filter.contains(d_scalar.value<T>());
         }
       });
 
@@ -144,17 +140,19 @@ struct bloom_filter_caster {
     // List, Struct, Dictionary types are not supported
     if constexpr (cudf::is_compound<T>() and not std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types don't support equality predicate");
-    } else if constexpr (cudf::is_timestamp<T>()) {
+    }
+
+    // For INT96 timestamps, use cudf::string_view type and set is_int96_timestamp to YES
+    if constexpr (cudf::is_timestamp<T>()) {
       if (parquet_types[equality_col_idx] == Type::INT96) {
         // For INT96 timestamps, use cudf::string_view type and set is_int96_timestamp to YES
         return query_bloom_filter<cudf::string_view, bloom_filter_caster::is_int96_timestamp::YES>(
           equality_col_idx, dtype, literal, stream, mr);
-      } else {
-        return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream, mr);
       }
-    } else {
-      return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream, mr);
     }
+
+    // For all other cases
+    return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream, mr);
   }
 };
 
