@@ -42,6 +42,7 @@ class BinOp(Expr):
             op = BinOp._BOOL_KLEENE_MAPPING.get(op, op)
         self.op = op
         self.children = (left, right)
+        self.is_pointwise = all(c.is_pointwise for c in self.children)
         if not plc.binaryop.is_supported_operation(
             self.dtype, left.dtype, right.dtype, op
         ):

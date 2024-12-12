@@ -81,6 +81,7 @@ class BooleanFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self.is_pointwise = all(c.is_pointwise for c in self.children)
         if self.name is BooleanFunction.Name.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):

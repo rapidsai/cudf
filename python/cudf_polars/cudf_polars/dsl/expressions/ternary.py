@@ -34,6 +34,7 @@ class Ternary(Expr):
     ) -> None:
         self.dtype = dtype
         self.children = (when, then, otherwise)
+        self.is_pointwise = all(c.is_pointwise for c in self.children)
 
     def do_evaluate(
         self,

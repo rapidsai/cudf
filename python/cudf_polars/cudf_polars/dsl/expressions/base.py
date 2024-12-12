@@ -36,9 +36,11 @@ class ExecutionContext(IntEnum):
 class Expr(Node["Expr"]):
     """An abstract expression object."""
 
-    __slots__ = ("dtype",)
+    __slots__ = ("dtype", "is_pointwise")
     dtype: plc.DataType
     """Data type of the expression."""
+    is_pointwise: bool
+    """Whether row output is independent."""
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("dtype",)
     """Names of non-child data (not Exprs) for reconstruction."""
@@ -164,6 +166,7 @@ class ErrorExpr(Expr):
         self.dtype = dtype
         self.error = error
         self.children = ()
+        self.is_pointwise = True
 
 
 class NamedExpr:
@@ -177,6 +180,11 @@ class NamedExpr:
     def __init__(self, name: str, value: Expr) -> None:
         self.name = name
         self.value = value
+
+    @property
+    def is_pointwise(self) -> bool:
+        """Whether row output is independent."""
+        return self.value.is_pointwise
 
     def __hash__(self) -> int:
         """Hash of the expression."""
@@ -243,6 +251,7 @@ class Col(Expr):
     def __init__(self, dtype: plc.DataType, name: str) -> None:
         self.dtype = dtype
         self.name = name
+        self.is_pointwise = True
         self.children = ()
 
     def do_evaluate(
@@ -280,6 +289,7 @@ class ColRef(Expr):
         self.dtype = dtype
         self.index = index
         self.table_ref = table_ref
+        self.is_pointwise = True
         self.children = (column,)
 
     def do_evaluate(

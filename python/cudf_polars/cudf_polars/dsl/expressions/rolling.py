@@ -24,6 +24,7 @@ class RollingWindow(Expr):
         self.dtype = dtype
         self.options = options
         self.children = (agg,)
+        self.is_pointwise = False
         raise NotImplementedError("Rolling window not implemented")
 
 
@@ -35,4 +36,5 @@ class GroupedRollingWindow(Expr):
         self.dtype = dtype
         self.options = options
         self.children = (agg, *by)
+        self.is_pointwise = False
         raise NotImplementedError("Grouped rolling window not implemented")
