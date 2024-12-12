@@ -434,12 +434,7 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # pyarrow schema.
     if schema:
         for col_name, col in df._data.items():
-            if col_name is None:
-                # Pyarrow cannot handle `None` as a field name.
-                # However, this should be a simple range index that
-                # we can ignore anyway
-                continue
-            elif col_name in schema.names:
+            if col_name in schema.names:
                 typ = cudf_dtype_from_pa_type(schema.field(col_name).type)
                 if not isinstance(
                     typ, (cudf.ListDtype, cudf.StructDtype)
