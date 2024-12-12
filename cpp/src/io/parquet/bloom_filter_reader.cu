@@ -24,8 +24,8 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -74,8 +74,7 @@ struct bloom_filter_caster {
       "Mismatched predicate column and literal types");
 
     // Filter properties
-    auto constexpr word_size       = sizeof(word_type);
-    auto constexpr words_per_block = policy_type::words_per_block;
+    auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
     rmm::device_buffer results{total_row_groups, stream, mr};
 
@@ -100,7 +99,7 @@ struct bloom_filter_caster {
         }
 
         // Number of filter blocks
-        auto const num_filter_blocks = filter_size / (word_size * words_per_block);
+        auto const num_filter_blocks = filter_size / bytes_per_block;
 
         // Create a bloom filter view.
         cuco::bloom_filter_ref<key_type,
