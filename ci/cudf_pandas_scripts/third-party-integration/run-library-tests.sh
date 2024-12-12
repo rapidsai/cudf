@@ -20,7 +20,6 @@ runtest() {
 
     pytest \
     $plugin \
-    --ignore=${TEST_DIR}/test_catboost.py \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
@@ -40,7 +39,6 @@ main() {
     pytest \
     --compare \
     -p cudf.pandas \
-    --ignore=${TEST_DIR}/test_catboost.py \
     -v \
     --continue-on-collection-errors \
     --cache-clear \
