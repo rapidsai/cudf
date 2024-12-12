@@ -15,9 +15,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.strings.convert.convert_integers import (
-    is_integer as cpp_is_integer,
-)
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
@@ -232,7 +229,7 @@ def to_datetime(
                         )
                         break
                     elif arg_col.dtype.kind == "O":
-                        if not cpp_is_integer(arg_col).all():
+                        if not arg_col.is_integer().all():
                             col = new_series._column.strptime(
                                 cudf.dtype("datetime64[ns]"), format=format
                             )

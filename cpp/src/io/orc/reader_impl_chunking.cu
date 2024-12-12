@@ -22,7 +22,7 @@
 
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>

@@ -56,6 +56,8 @@ using int16_wrapper        = wrapper<int16_t>;
 using int64_wrapper        = wrapper<int64_t>;
 using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>;
 using bool_wrapper         = wrapper<bool>;
+using size_type_wrapper    = wrapper<cudf::size_type>;
+using strings_wrapper      = cudf::test::strings_column_wrapper;
 
 using cudf::data_type;
 using cudf::type_id;
@@ -3253,6 +3255,144 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2), *wrapped);
     }
   }
+
+  // test list (all-null) of struct (empty) of string (empty)
+  {
+    std::string json_stringl = R"(
+    {"a" : [1], "c2": [1, 2]}
+    {}
+    )";
+    auto lines               = true;
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_stringl.data(), json_stringl.size()})
+        .prune_columns(true)
+        .experimental(true)
+        .lines(lines);
+
+    cudf::io::schema_element dtype_schema{
+      data_type{cudf::type_id::STRUCT},
+      {
+        {"a", {data_type{cudf::type_id::LIST}, {{"element", {dtype<int64_t>()}}}}},
+        {"c2",
+         {data_type{cudf::type_id::LIST},
+          {{"element",
+            {data_type{cudf::type_id::STRUCT},
+             {
+               {"d", {data_type{cudf::type_id::STRING}}},
+             },
+             {{"d"}}}}}}},
+      },
+      {{"a", "c2"}}};
+    in_options.set_dtypes(dtype_schema);
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    // Make sure we have column "a":[int64_t]
+    ASSERT_EQ(result.tbl->num_columns(), 2);
+    ASSERT_EQ(result.metadata.schema_info.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+    ASSERT_EQ(result.metadata.schema_info[0].children.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[0].children[0].name, "offsets");
+    EXPECT_EQ(result.metadata.schema_info[0].children[1].name, "element");
+    // Make sure we have all null list "c2": [{"d": ""}]
+    EXPECT_EQ(result.metadata.schema_info[1].name, "c2");
+    ASSERT_EQ(result.metadata.schema_info[1].children.size(), 2);
+    EXPECT_EQ(result.metadata.schema_info[1].children[0].name, "offsets");
+    EXPECT_EQ(result.metadata.schema_info[1].children[1].name, "element");
+    ASSERT_EQ(result.metadata.schema_info[1].children[1].children.size(), 1);
+    EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "d");
+
+    auto const expected0 = [&] {
+      auto const valids = std::vector<bool>{1, 0};
+      auto [null_mask, null_count] =
+        cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+      return cudf::make_lists_column(2,
+                                     size_type_wrapper{0, 1, 1}.release(),
+                                     int64_wrapper{1}.release(),
+                                     null_count,
+                                     std::move(null_mask));
+    }();
+
+    auto const expected1 = [&] {
+      auto const get_structs = [] {
+        auto child = cudf::test::strings_column_wrapper{};
+        return cudf::test::structs_column_wrapper{{child}};
+      };
+      auto const valids = std::vector<bool>{0, 0};
+      auto [null_mask, null_count] =
+        cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+      return cudf::make_lists_column(2,
+                                     size_type_wrapper{0, 0, 0}.release(),
+                                     get_structs().release(),
+                                     null_count,
+                                     std::move(null_mask));
+    }();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected0, result.tbl->get_column(0).view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected1, result.tbl->get_column(1).view());
+  }
+}
+
+TEST_F(JsonReaderTest, NullifyMixedList)
+{
+  using namespace cudf::test::iterators;
+  // test list
+  std::string json_stringl = R"(
+      {"c2": []}
+      {"c2": [{}]}
+      {"c2": [[]]}
+      {"c2": [{}, [], {}]}
+      {"c2": [[123], {"b": "1"}]}
+      {"c2": [{"x": "y"}, {"b": "1"}]}
+      {}
+    )";
+  // [], [{null, null}], null, null, null, [{null, null}, {1, null}], null
+  // valid     1  1  0  0  0  1  0
+  // ofset  0, 0, 1, 1, 1, 1, 3, 3
+  // child  {null, null}, {null, null}, {1, null}
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{json_stringl.data(), json_stringl.size()})
+      .prune_columns(true)
+      .experimental(true)
+      .lines(true);
+
+  // struct<c2: array<struct<b: string, c: string>>> eg. {"c2": [{"b": "1", "c": "2"}]}
+  cudf::io::schema_element dtype_schema{data_type{cudf::type_id::STRUCT},
+                                        {
+                                          {"c2",
+                                           {data_type{cudf::type_id::LIST},
+                                            {{"element",
+                                              {data_type{cudf::type_id::STRUCT},
+                                               {
+                                                 {"b", {data_type{cudf::type_id::STRING}}},
+                                                 {"c", {data_type{cudf::type_id::STRING}}},
+                                               },
+                                               {{"b", "c"}}}}}}},
+                                        },
+                                        {{"c2"}}};
+  in_options.set_dtypes(dtype_schema);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  ASSERT_EQ(result.tbl->num_columns(), 1);
+  ASSERT_EQ(result.metadata.schema_info.size(), 1);
+
+  // Expected: A list of struct of 2-string columns
+  // [], [{null, null}], null, null, null, [{null, null}, {1, null}], null
+  auto get_structs = [] {
+    strings_wrapper child0{{"", "", "1"}, nulls_at({0, 0, 1})};
+    strings_wrapper child1{{"", "", ""}, all_nulls()};
+    // purge non-empty nulls in list seems to retain nullmask in struct child column
+    return cudf::test::structs_column_wrapper{{child0, child1}, no_nulls()}.release();
+  };
+  std::vector<bool> const list_nulls{1, 1, 0, 0, 0, 1, 0};
+  auto [null_mask, null_count] =
+    cudf::test::detail::make_null_mask(list_nulls.cbegin(), list_nulls.cend());
+  auto const expected = cudf::make_lists_column(
+    7,
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 1, 1, 1, 1, 3, 3}.release(),
+    get_structs(),
+    null_count,
+    std::move(null_mask));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, result.tbl->get_column(0).view());
 }
 
 struct JsonCompressedIOTest : public cudf::test::BaseFixture,

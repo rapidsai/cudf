@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -32,7 +31,6 @@ from cudf._lib.stream_compaction import (
     drop_duplicates,
     drop_nulls,
 )
-from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -373,10 +371,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
+    @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
-        return libcudf.transform.mask_to_bools(
-            self.base_mask, self.offset, self.offset + len(self)
+        plc_column = plc.transform.mask_to_bools(
+            self.base_mask.get_ptr(mode="read"),  # type: ignore[union-attr]
+            self.offset,
+            self.offset + len(self),
         )
+        return type(self).from_pylibcudf(plc_column)
 
     @cached_property
     def memory_usage(self) -> int:
@@ -981,11 +983,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         -------
         Buffer
         """
-
         if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
-        return bools_to_mask(self)
+        with acquire_spill_lock():
+            mask, _ = plc.transform.bools_to_mask(
+                self.to_pylibcudf(mode="read")
+            )
+            return as_buffer(mask)
 
     @property
     def is_unique(self) -> bool:
@@ -1288,28 +1293,27 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         header: dict[Any, Any] = {}
         frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
         try:
-            dtype, dtype_frames = self.dtype.serialize()
+            dtype, dtype_frames = self.dtype.device_serialize()
             header["dtype"] = dtype
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
-            header["dtype"] = pickle.dumps(self.dtype)
+            header["dtype"] = self.dtype.str
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
-            data_header, data_frames = self.data.serialize()
+            data_header, data_frames = self.data.device_serialize()
             header["data"] = data_header
             frames.extend(data_frames)
 
         if self.mask is not None:
-            mask_header, mask_frames = self.mask.serialize()
+            mask_header, mask_frames = self.mask.device_serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
         if self.children:
             child_headers, child_frames = zip(
-                *(c.serialize() for c in self.children)
+                *(c.device_serialize() for c in self.children)
             )
             header["subheaders"] = list(child_headers)
             frames.extend(chain(*child_frames))
@@ -1321,8 +1325,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
         def unpack(header, frames) -> tuple[Any, list]:
             count = header["frame_count"]
-            klass = pickle.loads(header["type-serialized"])
-            obj = klass.deserialize(header, frames[:count])
+            obj = cls.device_deserialize(header, frames[:count])
             return obj, frames[count:]
 
         assert header["frame_count"] == len(frames), (
@@ -1332,7 +1335,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if header["dtype-is-cudf-serialized"]:
             dtype, frames = unpack(header["dtype"], frames)
         else:
-            dtype = pickle.loads(header["dtype"])
+            dtype = np.dtype(header["dtype"])
         if "data" in header:
             data, frames = unpack(header["data"], frames)
         else:
@@ -1366,7 +1369,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def normalize_binop_value(
         self, other: ScalarLike
-    ) -> ColumnBase | ScalarLike:
+    ) -> ColumnBase | cudf.Scalar:
         raise NotImplementedError
 
     def _reduce(
@@ -1513,6 +1516,18 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             codes, [left_gather_map], [True], ["last"], stable=True
         )
         return codes.fillna(na_sentinel.value)
+
+    def one_hot_encode(
+        self, categories: ColumnBase
+    ) -> abc.Generator[ColumnBase]:
+        plc_table = plc.transform.one_hot_encode(
+            self.to_pylibcudf(mode="read"),
+            categories.to_pylibcudf(mode="read"),
+        )
+        return (
+            type(self).from_pylibcudf(col, data_ptr_exposed=True)
+            for col in plc_table.columns()
+        )
 
 
 def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
@@ -2093,8 +2108,7 @@ def as_column(
                     )
                 # Consider NaT as NA in the mask
                 # but maintain NaT as a value
-                bool_mask = as_column(~is_nat)
-                mask = as_buffer(bools_to_mask(bool_mask))
+                mask = as_column(~is_nat).as_mask()
             buffer = as_buffer(arbitrary.view("|u1"))
             col = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
             if dtype:
@@ -2264,8 +2278,7 @@ def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
         )
         return as_buffer(data=desc["data"][0], size=mask_size, owner=obj)
     elif typecode == "b":
-        col = as_column(cai_mask)
-        return bools_to_mask(col)
+        return as_column(cai_mask).as_mask()
     else:
         raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
 
@@ -2291,7 +2304,9 @@ def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:
     frames = []
 
     if len(columns) > 0:
-        header_columns = [c.serialize() for c in columns]
+        header_columns: list[tuple[dict, list]] = [
+            c.device_serialize() for c in columns
+        ]
         headers, column_frames = zip(*header_columns)
         for f in column_frames:
             frames.extend(f)
@@ -2308,7 +2323,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 
     for meta in headers:
         col_frame_count = meta["frame_count"]
-        col_typ = pickle.loads(meta["type-serialized"])
+        col_typ = Serializable._name_type_map[meta["type-serialized-name"]]
         colobj = col_typ.deserialize(meta, frames[:col_frame_count])
         columns.append(colobj)
         # Advance frames
