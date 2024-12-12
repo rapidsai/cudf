@@ -1,7 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libc.stdint cimport uint8_t, uintptr_t
+from libc.stdint cimport uint8_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -109,23 +109,6 @@ cdef class PackedColumns:
                 DeviceBuffer.c_from_unique_ptr(move(dereference(self.c_obj).gpu_data))
             )
         )
-
-    @property
-    def __cuda_array_interface__(self):
-        return {
-            "data": (
-                int(
-                    <uintptr_t>dereference(
-                        dereference(self.c_obj).gpu_data.get()
-                    ).data()
-                ),
-                False
-            ),
-            "shape": (int(dereference(dereference(self.c_obj).gpu_data.get()).size()),),
-            "strides": (4, 4, 4),
-            "typestr": "|u1",
-            "version": 0
-        }
 
 
 cpdef PackedColumns pack(Table input):

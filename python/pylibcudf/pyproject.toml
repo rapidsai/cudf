@@ -128,6 +128,7 @@ ninja.make-fallback = true
 sdist.exclude = ["*tests*"]
 sdist.reproducible = true
 wheel.packages = ["pylibcudf"]
+install.strip = false
 
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"
