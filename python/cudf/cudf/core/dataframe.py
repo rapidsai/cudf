@@ -1809,13 +1809,37 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 for table in tables
             ]
-
-            concatted = libcudf.utils.data_from_pylibcudf_table(
-                plc.concatenate.concatenate(plc_tables),
-                column_names=column_names,
-                index_names=index_names,
-            )
-        out = cls._from_data(*concatted)
+            plc_result = plc.concatenate.concatenate(plc_tables)
+            if ignore:
+                index = None
+                data = {
+                    col_name: ColumnBase.from_pylibcudf(col)
+                    for col_name, col in zip(
+                        column_names, plc_result.columns(), strict=True
+                    )
+                }
+            else:
+                result_columns = [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_result.columns()
+                ]
+                index = _index_from_data(
+                    dict(
+                        zip(
+                            index_names,
+                            result_columns[: len(index_names)],
+                            strict=True,
+                        )
+                    )
+                )
+                data = dict(
+                    zip(
+                        column_names,
+                        result_columns[len(index_names) :],
+                        strict=True,
+                    )
+                )
+        out = cls._from_data(data=data, index=index)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
