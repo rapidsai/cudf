@@ -20,9 +20,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cuda/std/__algorithm/max.h>
-#include <cuda/std/__algorithm/min.h>
 #include <cuda/std/cmath>
+#include <cuda/std/functional>
 
 namespace cudf {
 namespace detail {
