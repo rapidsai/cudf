@@ -238,28 +238,34 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   cudf::size_type length = 10000);
 
 template <typename T>
-[[nodiscard]] auto make_decimal128_arrow_array(std::vector<T> const& data,
-                                               std::optional<std::vector<int>> const& validity,
-                                               int32_t scale) -> std::shared_ptr<arrow::Array>
+std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
+                                    std::is_same<T, int64_t>,
+                                    std::is_same<T, __int128_t>>,
+                 std::shared_ptr<arrow::Array>>
+get_decimal_arrow_array(std::vector<T> const& data,
+                        std::optional<std::vector<uint8_t>> const& validity,
+                        int32_t precision,
+                        int32_t scale)
 {
-  auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
+  std::shared_ptr<arrow::Buffer> data_buffer;
+  arrow::BufferBuilder buff_builder;
+  CUDF_EXPECTS(buff_builder.Append(data.data(), sizeof(T) * data.size()).ok(),
+               "Failed to append values to buffer builder");
+  CUDF_EXPECTS(buff_builder.Finish(&data_buffer).ok(), "Failed to allocate buffer");
 
-  std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(cudf::detail::max_precision<T>(), -scale),
-                                           arrow::default_memory_pool());
+  std::shared_ptr<arrow::Buffer> mask_buffer =
+    !validity.has_value() ? nullptr : arrow::internal::BytesToBits(validity.value()).ValueOrDie();
 
-  for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
-    if (validity.has_value() and not validity.value()[i]) {
-      CUDF_EXPECTS(decimal_builder.AppendNull().ok(), "Failed to append");
-    } else {
-      CUDF_EXPECTS(
-        decimal_builder.Append(reinterpret_cast<uint8_t const*>(data.data() + BIT_WIDTH_RATIO * i))
-          .ok(),
-        "Failed to append");
-    }
+  std::shared_ptr<arrow::DataType> data_type;
+  if constexpr (std::is_same_v<T, int32_t>) {
+    data_type = arrow::decimal32(precision, -scale);
+  } else if constexpr (std::is_same_v<T, int64_t>) {
+    data_type = arrow::decimal64(precision, -scale);
+  } else {
+    data_type = arrow::decimal128(precision, -scale);
   }
 
-  CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
-
-  return arr;
+  auto array_data = std::make_shared<arrow::ArrayData>(
+    data_type, data.size(), std::vector<std::shared_ptr<arrow::Buffer>>{mask_buffer, data_buffer});
+  return arrow::MakeArray(array_data);
 }

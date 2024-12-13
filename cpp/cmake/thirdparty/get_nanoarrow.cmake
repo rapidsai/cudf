@@ -28,7 +28,7 @@ function(find_and_configure_nanoarrow)
   # Currently we need to always build nanoarrow so we don't pickup a previous installed version
   set(CPM_DOWNLOAD_nanoarrow ON)
   rapids_cpm_find(
-    nanoarrow 0.6.0.dev
+    nanoarrow 0.7.0.dev
     GLOBAL_TARGETS nanoarrow
     CPM_ARGS
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf" ${_exclude_from_all}

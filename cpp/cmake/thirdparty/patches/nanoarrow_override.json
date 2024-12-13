@@ -2,9 +2,9 @@
 {
   "packages" : {
     "nanoarrow" : {
-      "version" : "0.6.0.dev",
+      "version" : "0.7.0.dev",
       "git_url" : "https://github.com/apache/arrow-nanoarrow.git",
-      "git_tag" : "1e2664a70ec14907409cadcceb14d79b9670bcdb",
+      "git_tag" : "e54b7df525fa1d310a96687bd99902823402b26c",
       "git_shallow" : false,
       "patches" : [
         {
