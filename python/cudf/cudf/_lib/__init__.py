@@ -6,7 +6,6 @@ from . import (
     csv,
     groupby,
     interop,
-    nvtext,
     reduce,
     sort,
     stream_compaction,
