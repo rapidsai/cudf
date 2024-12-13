@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pickle
+import warnings
 from collections import abc
 from collections.abc import MutableSequence, Sequence
 from functools import cached_property
@@ -32,7 +32,7 @@ from cudf._lib.stream_compaction import (
     drop_duplicates,
     drop_nulls,
 )
-from cudf._lib.types import size_type_dtype
+from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
@@ -42,7 +42,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
-from cudf.core._internals import unary
+from cudf.core._internals import aggregation, sorting, unary
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -260,21 +260,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # The skipna argument is only used for numerical columns.
         # If all entries are null the result is True, including when the column
         # is empty.
-
         if self.null_count == self.size:
             return True
-
-        return libcudf.reduce.reduce("all", self)
+        return self.reduce("all")
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
-
         if not skipna and self.has_nulls():
             return True
         elif skipna and self.null_count == self.size:
             return False
-
-        return libcudf.reduce.reduce("any", self)
+        return self.reduce("any")
 
     def dropna(self) -> Self:
         if self.has_nulls():
@@ -555,7 +551,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + len(self)
         if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
-            return cast(Self, column_empty(0, self.dtype, masked=True))
+            return cast(Self, column_empty(0, self.dtype))
         # compute mask slice
         if stride == 1:
             return libcudf.copying.column_slice(self, [start, stop])[
@@ -1000,13 +996,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @cached_property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and sorting.is_sorted(
             [self], [True], None
         )
 
     @cached_property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and sorting.is_sorted(
             [self], [False], None
         )
 
@@ -1030,15 +1026,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def sort_values(
         self: Self,
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ) -> Self:
         if (not ascending and self.is_monotonic_decreasing) or (
             ascending and self.is_monotonic_increasing
         ):
             return self.copy()
-        return libcudf.sort.sort(
-            [self], column_order=[ascending], null_precedence=[na_position]
-        )[0]
+        order = sorting.ordering([ascending], [na_position])
+        with acquire_spill_lock():
+            plc_table = plc.sorting.sort(
+                plc.Table([self.to_pylibcudf(mode="read")]),
+                order[0],
+                order[1],
+            )
+            return type(self).from_pylibcudf(plc_table.columns()[0])  # type: ignore[return-value]
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
@@ -1058,7 +1059,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             if self.dtype == dtype:
                 result = self
             else:
-                result = column_empty(0, dtype=dtype, masked=self.nullable)
+                result = column_empty(0, dtype=dtype)
         elif dtype == "category":
             # TODO: Figure out why `cudf.dtype("category")`
             # astype's different than just the string
@@ -1208,7 +1209,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 as_column(range(len(self) - 1, -1, -1)),
             )
         else:
-            return libcudf.sort.order_by(
+            return sorting.order_by(
                 [self], [ascending], na_position, stable=True
             )
 
@@ -1294,28 +1295,27 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         header: dict[Any, Any] = {}
         frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
         try:
-            dtype, dtype_frames = self.dtype.serialize()
+            dtype, dtype_frames = self.dtype.device_serialize()
             header["dtype"] = dtype
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
-            header["dtype"] = pickle.dumps(self.dtype)
+            header["dtype"] = self.dtype.str
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
-            data_header, data_frames = self.data.serialize()
+            data_header, data_frames = self.data.device_serialize()
             header["data"] = data_header
             frames.extend(data_frames)
 
         if self.mask is not None:
-            mask_header, mask_frames = self.mask.serialize()
+            mask_header, mask_frames = self.mask.device_serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
         if self.children:
             child_headers, child_frames = zip(
-                *(c.serialize() for c in self.children)
+                *(c.device_serialize() for c in self.children)
             )
             header["subheaders"] = list(child_headers)
             frames.extend(chain(*child_frames))
@@ -1327,8 +1327,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
         def unpack(header, frames) -> tuple[Any, list]:
             count = header["frame_count"]
-            klass = pickle.loads(header["type-serialized"])
-            obj = klass.deserialize(header, frames[:count])
+            obj = cls.device_deserialize(header, frames[:count])
             return obj, frames[count:]
 
         assert header["frame_count"] == len(frames), (
@@ -1338,7 +1337,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if header["dtype-is-cudf-serialized"]:
             dtype, frames = unpack(header["dtype"], frames)
         else:
-            dtype = pickle.loads(header["dtype"])
+            dtype = np.dtype(header["dtype"])
         if "data" in header:
             data, frames = unpack(header["data"], frames)
         else:
@@ -1396,33 +1395,35 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         )
         if isinstance(preprocessed, ColumnBase):
             dtype = kwargs.pop("dtype", None)
-            return libcudf.reduce.reduce(
-                op, preprocessed, dtype=dtype, **kwargs
-            )
+            return preprocessed.reduce(op, dtype, **kwargs)
         return preprocessed
+
+    def _can_return_nan(self, skipna: bool | None = None) -> bool:
+        return not skipna and self.has_nulls(include_nan=False)
 
     def _process_for_reduction(
         self, skipna: bool | None = None, min_count: int = 0
     ) -> ColumnBase | ScalarLike:
-        if skipna is None:
-            skipna = True
+        skipna = True if skipna is None else skipna
 
-        if self.has_nulls():
+        if self._can_return_nan(skipna=skipna):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        col = self.nans_to_nulls() if skipna else self
+        if col.has_nulls():
             if skipna:
-                result_col = self.dropna()
+                col = col.dropna()
             else:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        result_col = self
 
         # TODO: If and when pandas decides to validate that `min_count` >= 0 we
         # should insert comparable behavior.
         # https://github.com/pandas-dev/pandas/issues/50022
         if min_count > 0:
-            valid_count = len(result_col) - result_col.null_count
+            valid_count = len(col) - col.null_count
             if valid_count < min_count:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-        return result_col
+        return col
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         """
@@ -1515,7 +1516,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         del right_rows
         # reorder `codes` so that its values correspond to the
         # values of `self`:
-        (codes,) = libcudf.sort.sort_by_key(
+        (codes,) = sorting.sort_by_key(
             codes, [left_gather_map], [True], ["last"], stable=True
         )
         return codes.fillna(na_sentinel.value)
@@ -1532,6 +1533,91 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             for col in plc_table.columns()
         )
 
+    @acquire_spill_lock()
+    def scan(self, scan_op: str, inclusive: bool, **kwargs) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.reduce.scan(
+                self.to_pylibcudf(mode="read"),
+                aggregation.make_aggregation(scan_op, kwargs).c_obj,
+                plc.reduce.ScanType.INCLUSIVE
+                if inclusive
+                else plc.reduce.ScanType.EXCLUSIVE,
+            )
+        )
+
+    def reduce(self, reduction_op: str, dtype=None, **kwargs) -> ScalarLike:
+        if dtype is not None:
+            warnings.warn(
+                "dtype is deprecated and will be remove in a future release. "
+                "Cast the result (e.g. .astype) after the operation instead.",
+                FutureWarning,
+            )
+            col_dtype = dtype
+        else:
+            col_dtype = self._reduction_result_dtype(reduction_op)
+
+        # check empty case
+        if len(self) <= self.null_count:
+            if reduction_op == "sum" or reduction_op == "sum_of_squares":
+                return self.dtype.type(0)
+            if reduction_op == "product":
+                return self.dtype.type(1)
+            if reduction_op == "any":
+                return False
+
+            return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
+
+        with acquire_spill_lock():
+            plc_scalar = plc.reduce.reduce(
+                self.to_pylibcudf(mode="read"),
+                aggregation.make_aggregation(reduction_op, kwargs).c_obj,
+                dtype_to_pylibcudf_type(col_dtype),
+            )
+            result_col = type(self).from_pylibcudf(
+                plc.Column.from_scalar(plc_scalar, 1)
+            )
+            if plc_scalar.type().id() in {
+                plc.TypeId.DECIMAL128,
+                plc.TypeId.DECIMAL64,
+                plc.TypeId.DECIMAL32,
+            }:
+                scale = -plc_scalar.type().scale()
+                # https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
+                p = col_dtype.precision
+                nrows = len(self)
+                if reduction_op in {"min", "max"}:
+                    new_p = p
+                elif reduction_op == "sum":
+                    new_p = p + nrows - 1
+                elif reduction_op == "product":
+                    new_p = p * nrows + nrows - 1
+                elif reduction_op == "sum_of_squares":
+                    new_p = 2 * p + nrows
+                else:
+                    raise NotImplementedError(
+                        f"{reduction_op} not implemented for decimal types."
+                    )
+                precision = max(min(new_p, col_dtype.MAX_PRECISION), 0)
+                new_dtype = type(col_dtype)(precision, scale)
+                result_col = result_col.astype(new_dtype)
+            elif isinstance(col_dtype, cudf.IntervalDtype):
+                result_col = type(self).from_struct_column(  # type: ignore[attr-defined]
+                    result_col, closed=col_dtype.closed
+                )
+        return result_col.element_indexing(0)
+
+    @acquire_spill_lock()
+    def minmax(self) -> tuple[ScalarLike, ScalarLike]:
+        min_val, max_val = plc.reduce.minmax(self.to_pylibcudf(mode="read"))
+        return (
+            type(self)
+            .from_pylibcudf(plc.Column.from_scalar(min_val, 1))
+            .element_indexing(0),
+            type(self)
+            .from_pylibcudf(plc.Column.from_scalar(max_val, 1))
+            .element_indexing(0),
+        )
+
 
 def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
     """Check if an object dtype Series or array contains NaN."""
@@ -1544,7 +1630,6 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 def column_empty(
     row_count: int,
     dtype: Dtype = "object",
-    masked: bool = False,
     for_numba: bool = False,
 ) -> ColumnBase:
     """
@@ -1560,9 +1645,6 @@ def column_empty(
 
     dtype : Dtype
         Type of the column.
-
-    masked : bool
-        Unused.
 
     for_numba : bool, default False
         If True, don't allocate a mask as it's not supported by numba.
@@ -2307,7 +2389,9 @@ def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:
     frames = []
 
     if len(columns) > 0:
-        header_columns = [c.serialize() for c in columns]
+        header_columns: list[tuple[dict, list]] = [
+            c.device_serialize() for c in columns
+        ]
         headers, column_frames = zip(*header_columns)
         for f in column_frames:
             frames.extend(f)
@@ -2324,7 +2408,7 @@ def deserialize_columns(headers: list[dict], frames: list) -> list[ColumnBase]:
 
     for meta in headers:
         col_frame_count = meta["frame_count"]
-        col_typ = pickle.loads(meta["type-serialized"])
+        col_typ = Serializable._name_type_map[meta["type-serialized-name"]]
         colobj = col_typ.deserialize(meta, frames[:col_frame_count])
         columns.append(colobj)
         # Advance frames
@@ -2337,7 +2421,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         dtype = cudf.dtype(None)
-        return column_empty(0, dtype=dtype, masked=True)
+        return column_empty(0, dtype=dtype)
 
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.
@@ -2384,7 +2468,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
         )
     elif newsize == 0:
-        return column_empty(0, head.dtype, masked=True)
+        return column_empty(0, head.dtype)
 
     # Filter out inputs that have 0 length, then concatenate.
     objs_with_len = [o for o in objs if len(o)]
