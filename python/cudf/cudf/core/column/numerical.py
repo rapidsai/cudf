@@ -439,22 +439,12 @@ class NumericalColumn(NumericalBaseColumn):
         # If all entries are null the result is True, including when the column
         # is empty.
         result_col = self.nans_to_nulls() if skipna else self
-
-        if result_col.null_count == result_col.size:
-            return True
-
-        return libcudf.reduce.reduce("all", result_col)
+        return super(type(self), result_col).all(skipna=skipna)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
         result_col = self.nans_to_nulls() if skipna else self
-
-        if not skipna and result_col.has_nulls():
-            return True
-        elif skipna and result_col.null_count == result_col.size:
-            return False
-
-        return libcudf.reduce.reduce("any", result_col)
+        return super(type(self), result_col).any(skipna=skipna)
 
     @functools.cached_property
     def nan_count(self) -> int:
@@ -501,19 +491,6 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=True)
-
-    def _process_for_reduction(
-        self, skipna: bool | None = None, min_count: int = 0
-    ) -> NumericalColumn | ScalarLike:
-        skipna = True if skipna is None else skipna
-
-        if self._can_return_nan(skipna=skipna):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        col = self.nans_to_nulls() if skipna else self
-        return super(NumericalColumn, col)._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
 
     def find_and_replace(
         self,

@@ -139,7 +139,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             result = cast(
                 NumericalBaseColumn,
                 cudf.core.column.column_empty(
-                    row_count=len(q), dtype=self.dtype, masked=True
+                    row_count=len(q), dtype=self.dtype
                 ),
             )
         else:
@@ -263,6 +263,6 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
 
     def _scan(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(
-            op.replace("cum", ""), self, True
-        )._with_type_metadata(self.dtype)
+        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
+            self.dtype
+        )
