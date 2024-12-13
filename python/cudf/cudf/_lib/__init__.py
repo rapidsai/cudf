@@ -2,11 +2,8 @@
 import numpy as np
 
 from . import (
-    csv,
     groupby,
     interop,
-    nvtext,
-    parquet,
     reduce,
     sort,
     stream_compaction,
