@@ -336,7 +336,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if len(self) > 0:
             return column.as_column(self._range, dtype=self.dtype)
         else:
-            return column.column_empty(0, masked=False, dtype=self.dtype)
+            return column.column_empty(0, dtype=self.dtype)
 
     def _clean_nulls_from_index(self) -> Self:
         return self

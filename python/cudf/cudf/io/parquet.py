@@ -1139,7 +1139,6 @@ def _parquet_to_frame(
                     dfs[-1][name] = column_empty(
                         row_count=_len,
                         dtype=_dtype,
-                        masked=True,
                     )
                 else:
                     dfs[-1][name] = as_column(

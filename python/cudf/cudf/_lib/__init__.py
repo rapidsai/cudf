@@ -4,7 +4,6 @@ import numpy as np
 from . import (
     copying,
     interop,
-    reduce,
     sort,
     stream_compaction,
     string_casting,
