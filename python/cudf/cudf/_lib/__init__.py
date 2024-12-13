@@ -5,7 +5,6 @@ from . import (
     copying,
     groupby,
     interop,
-    sort,
     stream_compaction,
     strings_udf,
 )
