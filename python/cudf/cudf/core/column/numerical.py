@@ -718,6 +718,40 @@ class NumericalColumn(NumericalBaseColumn):
 
         return super()._reduction_result_dtype(reduction_op)
 
+    @acquire_spill_lock()
+    def digitize(self, bins: np.ndarray, right: bool = False) -> Self:
+        """Return the indices of the bins to which each value in column belongs.
+
+        Parameters
+        ----------
+        bins : np.ndarray
+            1-D column-like object of bins with same type as `column`, should be
+            monotonically increasing.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A column containing the indices
+        """
+        if self.dtype != bins.dtype:
+            raise ValueError(
+                "digitize() expects bins and input column have the same dtype."
+            )
+
+        bin_col = as_column(bins, dtype=bins.dtype)
+        if bin_col.nullable:
+            raise ValueError("`bins` cannot contain null entries.")
+
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            getattr(plc.search, "lower_bound" if right else "upper_bound")(
+                plc.Table([bin_col.to_pylibcudf(mode="read")]),
+                plc.Table([self.to_pylibcudf(mode="read")]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+            )
+        )
+
 
 def _normalize_find_and_replace_input(
     input_column_dtype: DtypeObj, col_to_normalize: ColumnBase | list
@@ -772,34 +806,3 @@ def _normalize_find_and_replace_input(
     if not normalized_column.can_cast_safely(input_column_dtype):
         return normalized_column
     return normalized_column.astype(input_column_dtype)
-
-
-def digitize(
-    column: ColumnBase, bins: np.ndarray, right: bool = False
-) -> ColumnBase:
-    """Return the indices of the bins to which each value in column belongs.
-
-    Parameters
-    ----------
-    column : Column
-        Input column.
-    bins : Column-like
-        1-D column-like object of bins with same type as `column`, should be
-        monotonically increasing.
-    right : bool
-        Indicates whether interval contains the right or left bin edge.
-
-    Returns
-    -------
-    A column containing the indices
-    """
-    if not column.dtype == bins.dtype:
-        raise ValueError(
-            "Digitize() expects bins and input column have the same dtype."
-        )
-
-    bin_col = as_column(bins, dtype=bins.dtype)
-    if bin_col.nullable:
-        raise ValueError("`bins` cannot contain null entries.")
-
-    return as_column(libcudf.sort.digitize([column], [bin_col], right))
