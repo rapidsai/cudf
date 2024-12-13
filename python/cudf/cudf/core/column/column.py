@@ -331,16 +331,33 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif isinstance(array.type, ArrowIntervalType):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
-        if isinstance(array, pa.ChunkedArray):
-            array = array.combine_chunks()
+        data = pa.table([array], [None])
 
         if isinstance(array.type, pa.DictionaryType):
+            indices_table = pa.table(
+                [
+                    pa.chunked_array(
+                        [chunk.indices for chunk in data.column(0).chunks],
+                        type=array.type.index_type,
+                    )
+                ],
+                [None],
+            )
+            dictionaries_table = pa.table(
+                [
+                    pa.chunked_array(
+                        [chunk.dictionary for chunk in data.column(0).chunks],
+                        type=array.type.value_type,
+                    )
+                ],
+                [None],
+            )
             with acquire_spill_lock():
                 codes = cls.from_pylibcudf(
-                    plc.interop.from_arrow(array.indices)
+                    plc.interop.from_arrow(indices_table).columns()[0]
                 )
                 categories = cls.from_pylibcudf(
-                    plc.interop.from_arrow(array.dictionary)
+                    plc.interop.from_arrow(dictionaries_table).columns()[0]
                 )
             codes = cudf.core.column.categorical.as_unsigned_codes(
                 len(categories),
@@ -356,7 +373,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 children=(codes,),
             )
         else:
-            result = cls.from_pylibcudf(plc.interop.from_arrow(array))
+            result = cls.from_pylibcudf(
+                plc.interop.from_arrow(data).columns()[0]
+            )
             # TODO: cudf_dtype_from_pa_type may be less necessary for some types
             return result._with_type_metadata(
                 cudf_dtype_from_pa_type(array.type)
