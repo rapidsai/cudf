@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import operator
-import pickle
 import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, Literal
@@ -24,6 +23,7 @@ from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals.search import search_sorted
+from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
-class Frame(BinaryOperand, Scannable):
+class Frame(BinaryOperand, Scannable, Serializable):
     """A collection of Column objects with an optional index.
 
     Parameters
@@ -97,37 +97,80 @@ class Frame(BinaryOperand, Scannable):
     @_performance_tracking
     def serialize(self):
         # TODO: See if self._data can be serialized outright
+        frames = []
         header = {
-            "type-serialized": pickle.dumps(type(self)),
-            "column_names": pickle.dumps(self._column_names),
-            "column_rangeindex": pickle.dumps(self._data.rangeindex),
-            "column_multiindex": pickle.dumps(self._data.multiindex),
-            "column_label_dtype": pickle.dumps(self._data.label_dtype),
-            "column_level_names": pickle.dumps(self._data._level_names),
+            "column_label_dtype": None,
+            "dtype-is-cudf-serialized": False,
         }
-        header["columns"], frames = serialize_columns(self._columns)
+        if (label_dtype := self._data.label_dtype) is not None:
+            try:
+                header["column_label_dtype"], frames = (
+                    label_dtype.device_serialize()
+                )
+                header["dtype-is-cudf-serialized"] = True
+            except AttributeError:
+                header["column_label_dtype"] = label_dtype.str
+
+        header["columns"], column_frames = serialize_columns(self._columns)
+        column_names, column_names_numpy_type = (
+            zip(
+                *[
+                    (cname.item(), type(cname).__name__)
+                    if isinstance(cname, np.generic)
+                    else (cname, "")
+                    for cname in self._column_names
+                ]
+            )
+            if self._column_names
+            else ((), ())
+        )
+        header |= {
+            "column_names": column_names,
+            "column_names_numpy_type": column_names_numpy_type,
+            "column_rangeindex": self._data.rangeindex,
+            "column_multiindex": self._data.multiindex,
+            "column_level_names": self._data._level_names,
+        }
+        frames.extend(column_frames)
+
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
-        cls_deserialize = pickle.loads(header["type-serialized"])
-        column_names = pickle.loads(header["column_names"])
-        columns = deserialize_columns(header["columns"], frames)
         kwargs = {}
+        dtype_header = header["column_label_dtype"]
+        if header["dtype-is-cudf-serialized"]:
+            count = dtype_header["frame_count"]
+            kwargs["label_dtype"] = cls.device_deserialize(
+                header, frames[:count]
+            )
+            frames = frames[count:]
+        else:
+            kwargs["label_dtype"] = (
+                np.dtype(dtype_header) if dtype_header is not None else None
+            )
+
+        columns = deserialize_columns(header["columns"], frames)
         for metadata in [
             "rangeindex",
             "multiindex",
-            "label_dtype",
             "level_names",
         ]:
             key = f"column_{metadata}"
             if key in header:
-                kwargs[metadata] = pickle.loads(header[key])
+                kwargs[metadata] = header[key]
+
+        column_names = [
+            getattr(np, cntype)(cname) if cntype != "" else cname
+            for cname, cntype in zip(
+                header["column_names"], header["column_names_numpy_type"]
+            )
+        ]
         col_accessor = ColumnAccessor(
             data=dict(zip(column_names, columns)), **kwargs
         )
-        return cls_deserialize._from_data(col_accessor)
+        return cls._from_data(col_accessor)
 
     @classmethod
     @_performance_tracking
