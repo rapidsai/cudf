@@ -292,7 +292,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   }
 
   /**
-   * @brief Delete equality literals getter as no longer needed
+   * @brief Delete equality literals getter as it's not needed in the derived class
    */
   [[nodiscard]] std::vector<std::vector<ast::literal*>> get_equality_literals() && = delete;
 
@@ -468,13 +468,9 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
     });
 
   // Read task sync function
-  auto sync_fn = [](decltype(read_tasks) read_tasks) {
-    for (auto& task : read_tasks) {
-      task.wait();
-    }
-  };
-
-  std::async(std::launch::async, sync_fn, std::move(read_tasks)).wait();
+  for (auto& task : read_tasks) {
+    task.wait();
+  }
 }
 
 }  // namespace
