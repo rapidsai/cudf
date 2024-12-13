@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources column.pyx copying.pyx groupby.pyx interop.pyx scalar.pyx sort.pyx
-                   strings_udf.pyx types.pyx utils.pyx
+                   stream_compaction.pyx strings_udf.pyx types.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
 
