@@ -5855,7 +5855,7 @@ class StringColumn(column.ColumnBase):
                 f"dtype must be datetime or timedelta type, not {dtype}"
             )
         elif self.null_count == len(self):
-            return column.column_empty(len(self), dtype=dtype, masked=True)  # type: ignore[return-value]
+            return column.column_empty(len(self), dtype=dtype)  # type: ignore[return-value]
         elif (self == "None").any():
             raise ValueError(
                 "Cannot convert `None` value to datetime or timedelta."

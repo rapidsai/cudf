@@ -3851,7 +3851,6 @@ class IndexedFrame(Frame):
                 if name in df._data
                 else cudf.core.column.column.column_empty(
                     dtype=dtypes.get(name, np.float64),
-                    masked=True,
                     row_count=len(index),
                 )
             )
