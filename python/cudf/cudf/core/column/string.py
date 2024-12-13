@@ -20,7 +20,7 @@ import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
 from cudf import _lib as libcudf
-from cudf._lib import string_casting as str_cast, strings as libstrings
+from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         SeriesOrIndex,
     )
     from cudf.core.buffer import Buffer
+    from cudf.core.column.lists import ListColumn
     from cudf.core.column.numerical import NumericalColumn
 
 
@@ -624,7 +625,7 @@ class StringMethods(ColumnMethods):
 
     def _split_by_character(self):
         col = self._column.fillna("")  # sanitize nulls
-        result_col = libstrings.character_tokenize(col)
+        result_col = col.character_tokenize()
 
         offset_col = col.children[0]
 
@@ -4693,9 +4694,7 @@ class StringMethods(ColumnMethods):
         1    test string
         dtype: object
         """
-        return self._return_or_inplace(
-            libstrings.normalize_spaces(self._column)
-        )
+        return self._return_or_inplace(self._column.normalize_spaces())
 
     def normalize_characters(self, do_lower: bool = True) -> SeriesOrIndex:
         r"""
@@ -4743,7 +4742,7 @@ class StringMethods(ColumnMethods):
         dtype: object
         """
         return self._return_or_inplace(
-            libstrings.normalize_characters(self._column, do_lower)
+            self._column.normalize_characters(do_lower)
         )
 
     def tokenize(self, delimiter: str = " ") -> SeriesOrIndex:
@@ -4775,16 +4774,16 @@ class StringMethods(ColumnMethods):
         2    goodbye
         dtype: object
         """
-        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        delim = _massage_string_arg(delimiter, "delimiter", allow_col=True)
 
-        if isinstance(delimiter, Column):
+        if isinstance(delim, Column):
             result = self._return_or_inplace(
-                libstrings._tokenize_column(self._column, delimiter),
+                self._column.tokenize_column(delim),
                 retain_index=False,
             )
-        elif isinstance(delimiter, cudf.Scalar):
+        elif isinstance(delim, cudf.Scalar):
             result = self._return_or_inplace(
-                libstrings._tokenize_scalar(self._column, delimiter),
+                self._column.tokenize_scalar(delim),
                 retain_index=False,
             )
         else:
@@ -4799,7 +4798,7 @@ class StringMethods(ColumnMethods):
         return result
 
     def detokenize(
-        self, indices: "cudf.Series", separator: str = " "
+        self, indices: cudf.Series, separator: str = " "
     ) -> SeriesOrIndex:
         """
         Combines tokens into strings by concatenating them in the order
@@ -4829,9 +4828,9 @@ class StringMethods(ColumnMethods):
         2          three
         dtype: object
         """
-        separator = _massage_string_arg(separator, "separator")
+        sep = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
-            libstrings.detokenize(self._column, indices._column, separator),
+            self._column.detokenize(indices._column, sep),  # type: ignore[arg-type]
             retain_index=False,
         )
 
@@ -4882,17 +4881,15 @@ class StringMethods(ColumnMethods):
         2    .
         dtype: object
         """
-        result_col = libstrings.character_tokenize(self._column)
+        result_col = self._column.character_tokenize()
         if isinstance(self._parent, cudf.Series):
             lengths = self.len().fillna(0)
             index = self._parent.index.repeat(lengths)
-            return cudf.Series._from_column(
+            return type(self._parent)._from_column(
                 result_col, name=self._parent.name, index=index
             )
-        elif isinstance(self._parent, cudf.BaseIndex):
-            return cudf.Index._from_column(result_col, name=self._parent.name)
         else:
-            return result_col
+            return self._return_or_inplace(result_col)
 
     def token_count(self, delimiter: str = " ") -> SeriesOrIndex:
         """
@@ -4919,15 +4916,15 @@ class StringMethods(ColumnMethods):
         2    0
         dtype: int32
         """
-        delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        if isinstance(delimiter, Column):
+        delim = _massage_string_arg(delimiter, "delimiter", allow_col=True)
+        if isinstance(delim, Column):
             return self._return_or_inplace(
-                libstrings._count_tokens_column(self._column, delimiter)
+                self._column.count_tokens_column(delim)
             )
 
-        elif isinstance(delimiter, cudf.Scalar):
+        elif isinstance(delim, cudf.Scalar):
             return self._return_or_inplace(
-                libstrings._count_tokens_scalar(self._column, delimiter)
+                self._column.count_tokens_scalar(delim)  # type: ignore[arg-type]
             )
         else:
             raise TypeError(
@@ -4966,9 +4963,9 @@ class StringMethods(ColumnMethods):
         2    xyz_hhh
         dtype: object
         """
-        separator = _massage_string_arg(separator, "separator")
+        sep = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
-            libstrings.generate_ngrams(self._column, n, separator),
+            self._column.generate_ngrams(n, sep),  # type: ignore[arg-type]
             retain_index=False,
         )
 
@@ -5015,7 +5012,7 @@ class StringMethods(ColumnMethods):
         dtype: list
         """
         result = self._return_or_inplace(
-            libstrings.generate_character_ngrams(self._column, n),
+            self._column.generate_character_ngrams(n),
             retain_index=True,
         )
         if isinstance(result, cudf.Series) and not as_list:
@@ -5060,7 +5057,7 @@ class StringMethods(ColumnMethods):
         """
 
         result = self._return_or_inplace(
-            libstrings.hash_character_ngrams(self._column, n),
+            self._column.hash_character_ngrams(n),
             retain_index=True,
         )
         if isinstance(result, cudf.Series) and not as_list:
@@ -5098,10 +5095,10 @@ class StringMethods(ColumnMethods):
         2    best_book
         dtype: object
         """
-        delimiter = _massage_string_arg(delimiter, "delimiter")
-        separator = _massage_string_arg(separator, "separator")
+        delim = _massage_string_arg(delimiter, "delimiter")
+        sep = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
-            libstrings.ngrams_tokenize(self._column, n, delimiter, separator),
+            self._column.ngrams_tokenize(n, delim, sep),  # type: ignore[arg-type]
             retain_index=False,
         )
 
@@ -5180,10 +5177,9 @@ class StringMethods(ColumnMethods):
             )
 
         return self._return_or_inplace(
-            libstrings.replace_tokens(
-                self._column,
-                targets_column,
-                replacements_column,
+            self._column.replace_tokens(
+                targets_column,  # type: ignore[arg-type]
+                replacements_column,  # type: ignore[arg-type]
                 cudf.Scalar(delimiter, dtype="str"),
             ),
         )
@@ -5251,8 +5247,7 @@ class StringMethods(ColumnMethods):
             )
 
         return self._return_or_inplace(
-            libstrings.filter_tokens(
-                self._column,
+            self._column.filter_tokens(
                 min_token_length,
                 cudf.Scalar(replacement, dtype="str"),
                 cudf.Scalar(delimiter, dtype="str"),
@@ -5278,9 +5273,7 @@ class StringMethods(ColumnMethods):
         1    2
         dtype: int32
         """
-        return self._return_or_inplace(
-            libstrings.porter_stemmer_measure(self._column)
-        )
+        return self._return_or_inplace(self._column.porter_stemmer_measure())
 
     def is_consonant(self, position) -> SeriesOrIndex:
         """
@@ -5313,17 +5306,10 @@ class StringMethods(ColumnMethods):
         1    False
         dtype: bool
         """
-        ltype = libstrings.LetterType.CONSONANT
-
         if can_convert_to_column(position):
-            return self._return_or_inplace(
-                libstrings.is_letter_multi(
-                    self._column, ltype, column.as_column(position)
-                ),
-            )
-
+            position = column.as_column(position)
         return self._return_or_inplace(
-            libstrings.is_letter(self._column, ltype, position)
+            self._column.is_letter(False, position)  # type: ignore[arg-type]
         )
 
     def is_vowel(self, position) -> SeriesOrIndex:
@@ -5357,17 +5343,10 @@ class StringMethods(ColumnMethods):
         1     True
         dtype: bool
         """
-        ltype = libstrings.LetterType.VOWEL
-
         if can_convert_to_column(position):
-            return self._return_or_inplace(
-                libstrings.is_letter_multi(
-                    self._column, ltype, column.as_column(position)
-                ),
-            )
-
+            position = column.as_column(position)
         return self._return_or_inplace(
-            libstrings.is_letter(self._column, ltype, position)
+            self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
     def edit_distance(self, targets) -> SeriesOrIndex:
@@ -5416,7 +5395,7 @@ class StringMethods(ColumnMethods):
             )
 
         return self._return_or_inplace(
-            libstrings.edit_distance(self._column, targets_column)
+            self._column.edit_distance(targets_column)  # type: ignore[arg-type]
         )
 
     def edit_distance_matrix(self) -> SeriesOrIndex:
@@ -5456,9 +5435,7 @@ class StringMethods(ColumnMethods):
                 "Cannot compute edit distance between null strings. "
                 "Consider removing them using `dropna` or fill with `fillna`."
             )
-        return self._return_or_inplace(
-            libstrings.edit_distance_matrix(self._column)
-        )
+        return self._return_or_inplace(self._column.edit_distance_matrix())
 
     def minhash(
         self, seed: np.uint32, a: ColumnLike, b: ColumnLike, width: int
@@ -5508,7 +5485,7 @@ class StringMethods(ColumnMethods):
                 f"Expecting a Series with dtype uint32, got {type(b)}"
             )
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seed, a_column, b_column, width)
+            self._column.minhash(seed, a_column, b_column, width)  # type: ignore[arg-type]
         )
 
     def minhash64(
@@ -5559,7 +5536,7 @@ class StringMethods(ColumnMethods):
                 f"Expecting a Series with dtype uint64, got {type(b)}"
             )
         return self._return_or_inplace(
-            libstrings.minhash64(self._column, seed, a_column, b_column, width)
+            self._column.minhash64(seed, a_column, b_column, width)  # type: ignore[arg-type]
         )
 
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
@@ -5585,13 +5562,14 @@ class StringMethods(ColumnMethods):
         1    0.307692
         dtype: float32
         """
-
         return self._return_or_inplace(
-            libstrings.jaccard_index(self._column, input._column, width),
+            self._column.jaccard_index(input._column, width)
         )
 
 
-def _massage_string_arg(value, name, allow_col=False):
+def _massage_string_arg(
+    value, name, allow_col: bool = False
+) -> StringColumn | cudf.Scalar:
     if isinstance(value, cudf.Scalar):
         return value
 
@@ -5602,9 +5580,9 @@ def _massage_string_arg(value, name, allow_col=False):
 
     if allow_col:
         if isinstance(value, list):
-            return column.as_column(value, dtype="str")
+            return column.as_column(value, dtype="str")  # type: ignore[return-value]
 
-        if isinstance(value, Column) and is_string_dtype(value.dtype):
+        if isinstance(value, StringColumn):
             return value
 
         allowed_types.append("Column")
@@ -6147,6 +6125,278 @@ class StringColumn(column.ColumnBase):
         )
 
         return to_view.view(dtype)
+
+    @acquire_spill_lock()
+    def minhash(
+        self,
+        seed: np.uint32,
+        a: NumericalColumn,
+        b: NumericalColumn,
+        width: int,
+    ) -> ListColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.minhash.minhash(
+                self.to_pylibcudf(mode="read"),
+                seed,
+                a.to_pylibcudf(mode="read"),
+                b.to_pylibcudf(mode="read"),
+                width,
+            )
+        )
+
+    @acquire_spill_lock()
+    def minhash64(
+        self,
+        seed: np.uint64,
+        a: NumericalColumn,
+        b: NumericalColumn,
+        width: int,
+    ) -> ListColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.minhash.minhash64(
+                self.to_pylibcudf(mode="read"),
+                seed,
+                a.to_pylibcudf(mode="read"),
+                b.to_pylibcudf(mode="read"),
+                width,
+            )
+        )
+
+    @acquire_spill_lock()
+    def jaccard_index(self, other: Self, width: int) -> NumericalColumn:
+        result = plc.nvtext.jaccard.jaccard_index(
+            self.to_pylibcudf(mode="read"),
+            other.to_pylibcudf(mode="read"),
+            width,
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def generate_ngrams(self, ngrams: int, separator: cudf.Scalar) -> Self:
+        result = plc.nvtext.generate_ngrams.generate_ngrams(
+            self.to_pylibcudf(mode="read"),
+            ngrams,
+            separator.device_value.c_value,
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def generate_character_ngrams(self, ngrams: int) -> ListColumn:
+        result = plc.nvtext.generate_ngrams.generate_character_ngrams(
+            self.to_pylibcudf(mode="read"), ngrams
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def hash_character_ngrams(self, ngrams: int) -> ListColumn:
+        result = plc.nvtext.generate_ngrams.hash_character_ngrams(
+            self.to_pylibcudf(mode="read"), ngrams
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def edit_distance(self, targets: Self) -> NumericalColumn:
+        result = plc.nvtext.edit_distance.edit_distance(
+            self.to_pylibcudf(mode="read"), targets.to_pylibcudf(mode="read")
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def edit_distance_matrix(self) -> ListColumn:
+        result = plc.nvtext.edit_distance.edit_distance_matrix(
+            self.to_pylibcudf(mode="read")
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def byte_pair_encoding(
+        self,
+        merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
+        separator: cudf.Scalar,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.byte_pair_encode.byte_pair_encoding(
+                self.to_pylibcudf(mode="read"),
+                merge_pairs,
+                separator.device_value.c_value,
+            )
+        )
+
+    @acquire_spill_lock()
+    def ngrams_tokenize(
+        self,
+        ngrams: int,
+        delimiter: cudf.Scalar,
+        separator: cudf.Scalar,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.ngrams_tokenize.ngrams_tokenize(
+                self.to_pylibcudf(mode="read"),
+                ngrams,
+                delimiter.device_value.c_value,
+                separator.device_value.c_value,
+            )
+        )
+
+    @acquire_spill_lock()
+    def normalize_spaces(self) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.normalize.normalize_spaces(
+                self.to_pylibcudf(mode="read")
+            )
+        )
+
+    @acquire_spill_lock()
+    def normalize_characters(self, do_lower: bool = True) -> Self:
+        return Column.from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.normalize.normalize_characters(
+                self.to_pylibcudf(mode="read"),
+                do_lower,
+            )
+        )
+
+    @acquire_spill_lock()
+    def replace_tokens(
+        self, targets: Self, replacements: Self, delimiter: cudf.Scalar
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.replace.replace_tokens(
+                self.to_pylibcudf(mode="read"),
+                targets.to_pylibcudf(mode="read"),
+                replacements.to_pylibcudf(mode="read"),
+                delimiter.device_value.c_value,
+            )
+        )
+
+    @acquire_spill_lock()
+    def filter_tokens(
+        self,
+        min_token_length: int,
+        replacement: cudf.Scalar,
+        delimiter: cudf.Scalar,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.replace.filter_tokens(
+                self.to_pylibcudf(mode="read"),
+                min_token_length,
+                replacement.device_value.c_value,
+                delimiter.device_value.c_value,
+            )
+        )
+
+    @acquire_spill_lock()
+    def porter_stemmer_measure(self) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.stemmer.porter_stemmer_measure(
+                self.to_pylibcudf(mode="read")
+            )
+        )
+
+    @acquire_spill_lock()
+    def is_letter(self, is_vowel: bool, index: int | NumericalColumn) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.stemmer.is_letter(
+                self.to_pylibcudf(mode="read"),
+                is_vowel,
+                index
+                if isinstance(index, int)
+                else index.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def subword_tokenize(
+        self,
+        hashed_vocabulary: plc.nvtext.subword_tokenize.HashedVocabulary,
+        max_sequence_length: int = 64,
+        stride: int = 48,
+        do_lower: bool = True,
+        do_truncate: bool = False,
+    ) -> tuple[ColumnBase, ColumnBase, ColumnBase]:
+        """
+        Subword tokenizes text series by using the pre-loaded hashed vocabulary
+        """
+        result = plc.nvtext.subword_tokenize.subword_tokenize(
+            self.to_pylibcudf(mode="read"),
+            hashed_vocabulary,
+            max_sequence_length,
+            stride,
+            do_lower,
+            do_truncate,
+        )
+        # return the 3 tensor components
+        tokens = type(self).from_pylibcudf(result[0])
+        masks = type(self).from_pylibcudf(result[1])
+        metadata = type(self).from_pylibcudf(result[2])
+        return tokens, masks, metadata
+
+    @acquire_spill_lock()
+    def tokenize_scalar(self, delimiter: cudf.Scalar) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.tokenize.tokenize_scalar(
+                self.to_pylibcudf(mode="read"), delimiter.device_value.c_value
+            )
+        )
+
+    @acquire_spill_lock()
+    def tokenize_column(self, delimiters: Self) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.tokenize.tokenize_column(
+                self.to_pylibcudf(mode="read"),
+                delimiters.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def count_tokens_scalar(self, delimiter: cudf.Scalar) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.tokenize.count_tokens_scalar(
+                self.to_pylibcudf(mode="read"), delimiter.device_value.c_value
+            )
+        )
+
+    @acquire_spill_lock()
+    def count_tokens_column(self, delimiters: Self) -> NumericalColumn:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.tokenize.count_tokens_column(
+                self.to_pylibcudf(mode="read"),
+                delimiters.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def character_tokenize(self) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.tokenize.character_tokenize(
+                self.to_pylibcudf(mode="read")
+            )
+        )
+
+    @acquire_spill_lock()
+    def tokenize_with_vocabulary(
+        self,
+        vocabulary: plc.nvtext.tokenize.TokenizeVocabulary,
+        delimiter: cudf.Scalar,
+        default_id: int,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.tokenize.tokenize_with_vocabulary(
+                self.to_pylibcudf(mode="read"),
+                vocabulary,
+                delimiter.device_value.c_value,
+                default_id,
+            )
+        )
+
+    @acquire_spill_lock()
+    def detokenize(self, indices: ColumnBase, separator: cudf.Scalar) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.tokenize.detokenize(
+                self.to_pylibcudf(mode="read"),
+                indices.to_pylibcudf(mode="read"),
+                separator.device_value.c_value,
+            )
+        )
 
     def _modify_characters(
         self, method: Callable[[plc.Column], plc.Column]

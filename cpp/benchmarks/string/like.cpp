@@ -30,11 +30,6 @@ static void bench_like(nvbench::state& state)
   auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
   auto const hit_rate  = static_cast<int32_t>(state.get_int64("hit_rate"));
 
-  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
   auto col   = create_string_column(n_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
 
@@ -54,6 +49,6 @@ static void bench_like(nvbench::state& state)
 
 NVBENCH_BENCH(bench_like)
   .set_name("strings_like")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
+  .add_int64_axis("row_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("hit_rate", {10, 25, 70, 100});
