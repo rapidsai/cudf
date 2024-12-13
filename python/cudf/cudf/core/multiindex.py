@@ -22,7 +22,7 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype, is_scalar
 from cudf.core import column
 from cudf.core._base_index import _return_get_indexer_result
-from cudf.core._internals import copying
+from cudf.core._internals import copying, sorting
 from cudf.core.algorithms import factorize
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column_accessor import ColumnAccessor
@@ -1676,7 +1676,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 f"Expected a list-like or None for `null_position`, got "
                 f"{type(null_position)}"
             )
-        return libcudf.sort.is_sorted(
+        return sorting.is_sorted(
             [*self._columns], ascending=ascending, null_position=null_position
         )
 

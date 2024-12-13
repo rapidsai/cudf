@@ -42,7 +42,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
-from cudf.core._internals import aggregation, copying, unary
+from cudf.core._internals import aggregation, copying, sorting, unary
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -1035,13 +1035,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @cached_property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and sorting.is_sorted(
             [self], [True], None
         )
 
     @cached_property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls(include_nan=True) and libcudf.sort.is_sorted(
+        return not self.has_nulls(include_nan=True) and sorting.is_sorted(
             [self], [False], None
         )
 
@@ -1065,15 +1065,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def sort_values(
         self: Self,
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ) -> Self:
         if (not ascending and self.is_monotonic_decreasing) or (
             ascending and self.is_monotonic_increasing
         ):
             return self.copy()
-        return libcudf.sort.sort(
-            [self], column_order=[ascending], null_precedence=[na_position]
-        )[0]
+        order = sorting.ordering([ascending], [na_position])
+        with acquire_spill_lock():
+            plc_table = plc.sorting.sort(
+                plc.Table([self.to_pylibcudf(mode="read")]),
+                order[0],
+                order[1],
+            )
+            return type(self).from_pylibcudf(plc_table.columns()[0])  # type: ignore[return-value]
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
@@ -1243,7 +1248,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 as_column(range(len(self) - 1, -1, -1)),
             )
         else:
-            return libcudf.sort.order_by(
+            return sorting.order_by(
                 [self], [ascending], na_position, stable=True
             )
 
@@ -1548,7 +1553,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         del right_rows
         # reorder `codes` so that its values correspond to the
         # values of `self`:
-        (codes,) = libcudf.sort.sort_by_key(
+        (codes,) = sorting.sort_by_key(
             [codes], [left_gather_map], [True], ["last"], stable=True
         )
         return codes.fillna(na_sentinel.value)
