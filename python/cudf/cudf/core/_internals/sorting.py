@@ -53,10 +53,10 @@ def is_sorted(
                 f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(ascending)} for `ascending`"
             )
-        column_order = [plc.types.Order.DESCENDING] * len(source_columns)
-        for idx, val in enumerate(ascending):
-            if val:
-                column_order[idx] = plc.types.Order.ASCENDING
+        column_order = [
+            plc.types.Order.ASCENDING if asc else plc.types.Order.DESCENDING
+            for asc in ascending
+        ]
 
     if null_position is None:
         null_precedence = [plc.types.NullOrder.AFTER] * len(source_columns)
@@ -66,10 +66,10 @@ def is_sorted(
                 f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(null_position)} for `null_position`"
             )
-        null_precedence = [plc.types.NullOrder.AFTER] * len(source_columns)
-        for idx, val in enumerate(null_position):
-            if val:
-                null_precedence[idx] = plc.types.NullOrder.BEFORE
+        null_precedence = [
+            plc.types.NullOrder.BEFORE if null else plc.types.NullOrder.AFTER
+            for null in null_position
+        ]
 
     return plc.sorting.is_sorted(
         plc.Table([col.to_pylibcudf(mode="read") for col in source_columns]),
