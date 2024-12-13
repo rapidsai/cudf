@@ -35,7 +35,6 @@ rapids-mamba-retry install \
 
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
-ANY_FAILURES=0
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
