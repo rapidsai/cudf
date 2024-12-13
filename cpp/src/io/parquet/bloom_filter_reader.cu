@@ -178,7 +178,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override
   {
-    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(expr);
     return expr;
   }
 
@@ -191,7 +190,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
                  "BloomfilterAST supports only left table");
     CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
                  "Column index cannot be more than number of columns in the table");
-    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(expr);
     return expr;
   }
 
@@ -228,15 +226,11 @@ class equality_literals_collector : public ast::detail::expression_transformer {
         _equality_literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
       }
     } else {
-      auto new_operands = visit_operands(operands);
-      if (cudf::ast::detail::ast_operator_arity(op) == 2) {
-        _operators.emplace_back(op, new_operands.front(), new_operands.back());
-      } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _operators.emplace_back(op, new_operands.front());
-      }
+      // Just visit the operands and ignore any output
+      std::ignore = visit_operands(operands);
     }
-    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(_operators.back());
-    return std::reference_wrapper<ast::expression const>(_operators.back());
+
+    return expr;
   }
 
   /**
@@ -263,9 +257,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
     }
     return transformed_operands;
   }
-  std::optional<std::reference_wrapper<ast::expression const>> _bloom_filter_expr;
-  std::list<ast::column_reference> _col_ref;
-  std::list<ast::operation> _operators;
   size_type _num_input_columns;
 };
 
@@ -337,20 +328,25 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
 
         // Evaluate boolean is_true(value) expression as NOT(NOT(value))
-        auto const& value = _col_ref.emplace_back(col_literal_offset);
-        auto const& op    = _operators.emplace_back(ast_operator::NOT, value);
-        _operators.emplace_back(ast_operator::NOT, op);
+        auto const& value = _bloom_filter_expr.push(ast::column_reference{col_literal_offset});
+        _bloom_filter_expr.push(ast::operation{
+          ast_operator::NOT, _bloom_filter_expr.push(ast::operation{ast_operator::NOT, value})});
+      }
+      // For all other expressions, push an always true expression
+      else {
+        _bloom_filter_expr.push(
+          ast::operation{ast_operator::NOT,
+                         _bloom_filter_expr.push(ast::operation{ast_operator::NOT, _always_true})});
       }
     } else {
       auto new_operands = visit_operands(operands);
       if (cudf::ast::detail::ast_operator_arity(op) == 2) {
-        _operators.emplace_back(op, new_operands.front(), new_operands.back());
+        _bloom_filter_expr.push(ast::operation{op, new_operands.front(), new_operands.back()});
       } else if (cudf::ast::detail::ast_operator_arity(op) == 1) {
-        _operators.emplace_back(op, new_operands.front());
+        _bloom_filter_expr.push(ast::operation{op, new_operands.front()});
       }
     }
-    _bloom_filter_expr = std::reference_wrapper<ast::expression const>(_operators.back());
-    return std::reference_wrapper<ast::expression const>(_operators.back());
+    return _bloom_filter_expr.back();
   }
 
   /**
@@ -360,12 +356,15 @@ class bloom_filter_expression_converter : public equality_literals_collector {
    */
   [[nodiscard]] std::reference_wrapper<ast::expression const> get_bloom_filter_expr() const
   {
-    return _bloom_filter_expr.value().get();
+    return _bloom_filter_expr.back();
   }
 
  private:
   std::vector<cudf::size_type> _col_literals_offsets;
   cudf::host_span<std::vector<ast::literal*> const> _equality_literals;
+  ast::tree _bloom_filter_expr;
+  cudf::numeric_scalar<bool> _always_true_scalar{true};
+  ast::literal const _always_true{_always_true_scalar};
 };
 
 /**
