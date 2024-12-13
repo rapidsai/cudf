@@ -551,7 +551,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if stop < 0 and not (stride < 0 and stop == -1):
             stop = stop + len(self)
         if (stride > 0 and start >= stop) or (stride < 0 and start <= stop):
-            return cast(Self, column_empty(0, self.dtype, masked=True))
+            return cast(Self, column_empty(0, self.dtype))
         # compute mask slice
         if stride == 1:
             return libcudf.copying.column_slice(self, [start, stop])[
@@ -1054,7 +1054,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             if self.dtype == dtype:
                 result = self
             else:
-                result = column_empty(0, dtype=dtype, masked=self.nullable)
+                result = column_empty(0, dtype=dtype)
         elif dtype == "category":
             # TODO: Figure out why `cudf.dtype("category")`
             # astype's different than just the string
@@ -1625,7 +1625,6 @@ def _has_any_nan(arbitrary: pd.Series | np.ndarray) -> bool:
 def column_empty(
     row_count: int,
     dtype: Dtype = "object",
-    masked: bool = False,
     for_numba: bool = False,
 ) -> ColumnBase:
     """
@@ -1641,9 +1640,6 @@ def column_empty(
 
     dtype : Dtype
         Type of the column.
-
-    masked : bool
-        Unused.
 
     for_numba : bool, default False
         If True, don't allocate a mask as it's not supported by numba.
@@ -2420,7 +2416,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
         dtype = cudf.dtype(None)
-        return column_empty(0, dtype=dtype, masked=True)
+        return column_empty(0, dtype=dtype)
 
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.
@@ -2467,7 +2463,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
         )
     elif newsize == 0:
-        return column_empty(0, head.dtype, masked=True)
+        return column_empty(0, head.dtype)
 
     # Filter out inputs that have 0 length, then concatenate.
     objs_with_len = [o for o in objs if len(o)]
