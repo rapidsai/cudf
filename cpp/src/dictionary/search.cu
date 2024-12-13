@@ -158,8 +158,9 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
-  if (dictionary.is_empty())
-    return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
+  if (dictionary.is_empty()) {
+    return std::make_unique<numeric_scalar<int32_t>>(0, false, stream, mr);
+  }
   return type_dispatcher<dispatch_storage_type>(
     dictionary.keys().type(), find_index_fn(), dictionary, key, stream, mr);
 }
@@ -169,8 +170,9 @@ std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionar
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {
-  if (dictionary.is_empty())
-    return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
+  if (dictionary.is_empty()) {
+    return std::make_unique<numeric_scalar<int32_t>>(0, false, stream, mr);
+  }
   return type_dispatcher<dispatch_storage_type>(
     dictionary.keys().type(), find_insert_index_fn(), dictionary, key, stream, mr);
 }

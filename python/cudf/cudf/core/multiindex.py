@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import operator
-import pickle
 import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
@@ -192,12 +191,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         source_data = {}
         for i, (code, level) in enumerate(zip(new_codes, new_levels)):
             if len(code):
-                lo, hi = libcudf.reduce.minmax(code)
-                if lo.value < -1 or hi.value > len(level) - 1:
+                lo, hi = code.minmax()
+                if lo < -1 or hi > len(level) - 1:
                     raise ValueError(
                         f"Codes must be -1 <= codes <= {len(level) - 1}"
                     )
-                if lo.value == -1:
+                if lo == -1:
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(size_type_dtype).min
             result_col = libcudf.copying.gather(
@@ -567,7 +566,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 names=['a', 'b'])
         >>> midx.levels
         [Index([1, 2, 3], dtype='int64', name='a'), Index([10, 11, 12], dtype='int64', name='b')]
-        """  # noqa: E501
+        """
         return [
             idx.rename(name) for idx, name in zip(self._levels, self.names)
         ]
@@ -921,15 +920,15 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def serialize(self):
         header, frames = super().serialize()
         # Overwrite the names in _data with the true names.
-        header["column_names"] = pickle.dumps(self.names)
+        header["column_names"] = self.names
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
         # Spoof the column names to construct the frame, then set manually.
-        column_names = pickle.loads(header["column_names"])
-        header["column_names"] = pickle.dumps(range(0, len(column_names)))
+        column_names = header["column_names"]
+        header["column_names"] = range(0, len(column_names))
         obj = super().deserialize(header, frames)
         return obj._set_names(column_names)
 

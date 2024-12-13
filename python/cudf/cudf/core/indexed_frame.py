@@ -607,7 +607,7 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def equals(self, other) -> bool:  # noqa: D102
+    def equals(self, other) -> bool:
         return super().equals(other) and self.index.equals(other.index)
 
     @property
@@ -3507,7 +3507,7 @@ class IndexedFrame(Frame):
 
         col = _post_process_output_col(ans_col, retty)
 
-        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        col.set_base_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(col, index=self.index)
 
         return result
@@ -3970,7 +3970,13 @@ class IndexedFrame(Frame):
 
         cols = (
             col.round(decimals[name], how=how)
-            if name in decimals and col.dtype.kind in "fiu"
+            if name in decimals
+            and (
+                col.dtype.kind in "fiu"
+                or isinstance(
+                    col.dtype, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)
+                )
+            )
             else col.copy(deep=True)
             for name, col in self._column_labels_and_values
         )
@@ -5474,7 +5480,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def add(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def add(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5515,7 +5521,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def radd(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def radd(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5556,7 +5562,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def subtract(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def subtract(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5599,7 +5605,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rsub(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def rsub(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5640,7 +5646,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def multiply(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def multiply(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5683,7 +5689,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rmul(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def rmul(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5724,7 +5730,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def mod(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def mod(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5765,7 +5771,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rmod(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def rmod(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5806,7 +5812,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def pow(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def pow(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5847,7 +5853,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rpow(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def rpow(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5888,7 +5894,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def floordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def floordiv(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5929,7 +5935,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rfloordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def rfloordiv(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5970,7 +5976,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def truediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def truediv(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -6015,7 +6021,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rtruediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+    def rtruediv(self, other, axis, level=None, fill_value=None):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -6059,7 +6065,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def eq(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
+    def eq(self, other, axis="columns", level=None, fill_value=None):
         return self._binaryop(
             other=other, op="__eq__", fill_value=fill_value, can_reindex=True
         )
@@ -6099,7 +6105,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ne(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
+    def ne(self, other, axis="columns", level=None, fill_value=None):
         return self._binaryop(
             other=other, op="__ne__", fill_value=fill_value, can_reindex=True
         )
@@ -6139,7 +6145,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def lt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
+    def lt(self, other, axis="columns", level=None, fill_value=None):
         return self._binaryop(
             other=other, op="__lt__", fill_value=fill_value, can_reindex=True
         )
@@ -6179,7 +6185,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def le(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
+    def le(self, other, axis="columns", level=None, fill_value=None):
         return self._binaryop(
             other=other, op="__le__", fill_value=fill_value, can_reindex=True
         )
@@ -6219,7 +6225,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def gt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
+    def gt(self, other, axis="columns", level=None, fill_value=None):
         return self._binaryop(
             other=other, op="__gt__", fill_value=fill_value, can_reindex=True
         )
@@ -6259,7 +6265,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ge(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
+    def ge(self, other, axis="columns", level=None, fill_value=None):
         return self._binaryop(
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )

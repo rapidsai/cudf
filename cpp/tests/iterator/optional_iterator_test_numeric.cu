@@ -26,16 +26,6 @@
 
 using TestingTypes = cudf::test::NumericTypes;
 
-namespace cudf {
-// To print meanvar for debug.
-// Needs to be in the cudf namespace for ADL
-template <typename T>
-std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
-{
-  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
-};
-}  // namespace cudf
-
 template <typename T>
 struct NumericOptionalIteratorTest : public IteratorTest<T> {};
 
@@ -46,6 +36,7 @@ TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)
 }
 TYPED_TEST(NumericOptionalIteratorTest, null_optional_iterator) { null_optional_iterator(*this); }
 
+namespace {
 // Transformers and Operators for optional_iterator test
 template <typename ElementType>
 struct transformer_optional_meanvar {
@@ -65,6 +56,7 @@ template <typename T>
 struct optional_to_meanvar {
   CUDF_HOST_DEVICE inline T operator()(cuda::std::optional<T> const& v) { return v.value_or(T{0}); }
 };
+}  // namespace
 
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.

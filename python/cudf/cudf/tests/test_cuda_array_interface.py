@@ -170,7 +170,7 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     # CuPy array
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
     a = cudf.core.column.as_column(a)
-    b = cupy.asarray([1, 1, 1])  # noqa: F841
+    b = cupy.asarray([1, 1, 1])
     assert_eq(pd.Index([1, 2, 3]), a.to_pandas())
 
     a = cudf.Series(cupy.asarray([1, 2, 3]))._column
@@ -187,7 +187,7 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     ),
 )
 def test_cuda_array_interface_pytorch():
-    torch = pytest.importorskip("torch", minversion="1.6.0")
+    torch = pytest.importorskip("torch", minversion="2.4.0")
     if not torch.cuda.is_available():
         pytest.skip("need gpu version of pytorch to be installed")
 
@@ -202,15 +202,10 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    # TODO: This test fails with PyTorch 2. It appears that PyTorch
-    # checks that the pointer is device-accessible even when the
-    # size is zero. See
-    # https://github.com/pytorch/pytorch/issues/98133
-    #
-    # index = cudf.Index([], dtype="float64")
-    # tensor = torch.tensor(index)
-    # got = cudf.Index(tensor)
-    # assert_eq(got, index)
+    index = cudf.Index([], dtype="float64")
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+    assert_eq(got, index)
 
     index = cudf.core.index.RangeIndex(start=0, stop=100)
     tensor = torch.tensor(index)

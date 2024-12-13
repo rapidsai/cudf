@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
 import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
@@ -133,7 +132,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def tolist(self):  # noqa: D102
+    def tolist(self):
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -148,7 +147,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property  # type: ignore
-    def ndim(self) -> int:  # noqa: D401
+    def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -265,7 +264,7 @@ class BaseIndex(Serializable):
         slice(1, 3, None)
         >>> multi_index.get_loc(('b', 'e'))
         1
-        """  # noqa: E501
+        """
 
     def max(self):
         """The maximum value of the index."""
@@ -329,13 +328,6 @@ class BaseIndex(Serializable):
             return self
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        # Dispatch deserialization to the appropriate index type in case
-        # deserialization is ever attempted with the base class directly.
-        idx_type = pickle.loads(header["type-serialized"])
-        return idx_type.deserialize(header, frames)
 
     @property
     def names(self):
@@ -1473,7 +1465,7 @@ class BaseIndex(Serializable):
             ._data
         )
 
-        if sort is {None, True} and len(other):
+        if sort in {None, True} and len(other):
             return intersection_result.sort_values()
         return intersection_result
 

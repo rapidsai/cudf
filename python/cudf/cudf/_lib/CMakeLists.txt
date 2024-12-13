@@ -12,30 +12,8 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-    aggregation.pyx
-    binaryop.pyx
-    column.pyx
-    copying.pyx
-    csv.pyx
-    filling.pyx
-    groupby.pyx
-    interop.pyx
-    merge.pyx
-    orc.pyx
-    parquet.pyx
-    reduce.pyx
-    replace.pyx
-    round.pyx
-    scalar.pyx
-    sort.pyx
-    stream_compaction.pyx
-    string_casting.pyx
-    strings_udf.pyx
-    text.pyx
-    transform.pyx
-    types.pyx
-    utils.pyx
+set(cython_sources column.pyx copying.pyx groupby.pyx interop.pyx scalar.pyx sort.pyx
+                   stream_compaction.pyx string_casting.pyx strings_udf.pyx types.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
 
@@ -51,7 +29,3 @@ target_include_directories(interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DI
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
 target_link_libraries(interop PUBLIC nanoarrow)
-
-add_subdirectory(io)
-add_subdirectory(nvtext)
-add_subdirectory(strings)
