@@ -594,6 +594,8 @@ nitpick_ignore = [
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
+    ("py:class", "np.uint32"),
+    ("py:class", "np.uint64"),
 ]
 
 

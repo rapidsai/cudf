@@ -12,9 +12,8 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-    column.pyx copying.pyx csv.pyx groupby.pyx parquet.pyx reduce.pyx scalar.pyx sort.pyx
-    stream_compaction.pyx string_casting.pyx strings_udf.pyx types.pyx utils.pyx
+set(cython_sources column.pyx copying.pyx groupby.pyx reduce.pyx scalar.pyx sort.pyx
+                   stream_compaction.pyx string_casting.pyx strings_udf.pyx types.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
 
@@ -25,6 +24,3 @@ rapids_cython_create_modules(
 )
 
 target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
-
-add_subdirectory(io)
-add_subdirectory(nvtext)

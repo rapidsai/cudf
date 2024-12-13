@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import operator
-import pickle
 import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
@@ -921,15 +920,15 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def serialize(self):
         header, frames = super().serialize()
         # Overwrite the names in _data with the true names.
-        header["column_names"] = pickle.dumps(self.names)
+        header["column_names"] = self.names
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
         # Spoof the column names to construct the frame, then set manually.
-        column_names = pickle.loads(header["column_names"])
-        header["column_names"] = pickle.dumps(range(0, len(column_names)))
+        column_names = header["column_names"]
+        header["column_names"] = range(0, len(column_names))
         obj = super().deserialize(header, frames)
         return obj._set_names(column_names)
 

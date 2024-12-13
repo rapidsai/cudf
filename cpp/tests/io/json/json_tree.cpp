@@ -34,6 +34,8 @@
 
 namespace cuio_json = cudf::io::json;
 
+namespace {
+
 // Host copy of tree_meta_t
 struct tree_meta_t2 {
   std::vector<cuio_json::NodeT> node_categories;
@@ -42,8 +44,6 @@ struct tree_meta_t2 {
   std::vector<cuio_json::SymbolOffsetT> node_range_begin;
   std::vector<cuio_json::SymbolOffsetT> node_range_end;
 };
-
-namespace {
 
 tree_meta_t2 to_cpu_tree(cuio_json::tree_meta_t const& d_value, rmm::cuda_stream_view stream)
 {
