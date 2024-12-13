@@ -1028,7 +1028,13 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
+std::tuple<int64_t,
+           size_type,
+           std::vector<row_group_info>,
+           std::vector<size_t>,
+           size_t,
+           size_t,
+           size_t>
 aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
@@ -1039,15 +1045,24 @@ aggregate_reader_metadata::select_row_groups(
   rmm::cuda_stream_view stream) const
 {
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
+  size_t num_input_row_groups;
+  size_t num_stats_filtered_row_groups;
+  size_t num_bloom_filtered_row_groups;
+
   // if filter is not empty, then gather row groups to read after predicate pushdown
   if (filter.has_value()) {
-    filtered_row_group_indices = filter_row_groups(
-      row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
+    std::tie(filtered_row_group_indices,
+             num_input_row_groups,
+             num_stats_filtered_row_groups,
+             num_bloom_filtered_row_groups) =
+      filter_row_groups(
+        row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
     }
   }
+
   std::vector<row_group_info> selection;
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
@@ -1081,6 +1096,9 @@ aggregate_reader_metadata::select_row_groups(
       }
     }
   } else {
+    // Reset input row group count as filtered row group indices are empty
+    num_input_row_groups = 0;
+
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
       auto const& fmd = per_file_metadata[src_idx];
@@ -1091,6 +1109,9 @@ aggregate_reader_metadata::select_row_groups(
         auto const chunk_start_row = count;
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
+          // Keep this row group, increase count
+          num_input_row_groups++;
+
           // start row of this row group adjusted with rows_to_skip
           num_rows_per_source[src_idx] += count;
           num_rows_per_source[src_idx] -=
@@ -1111,9 +1132,18 @@ aggregate_reader_metadata::select_row_groups(
         }
       }
     }
+    // Since no filtering was applied, set these to the number of input row groups
+    num_stats_filtered_row_groups = num_input_row_groups;
+    num_bloom_filtered_row_groups = num_input_row_groups;
   }
 
-  return {rows_to_skip, rows_to_read, std::move(selection), std::move(num_rows_per_source)};
+  return {rows_to_skip,
+          rows_to_read,
+          std::move(selection),
+          std::move(num_rows_per_source),
+          num_input_row_groups,
+          num_stats_filtered_row_groups,
+          num_bloom_filtered_row_groups};
 }
 
 std::tuple<std::vector<input_column_info>,

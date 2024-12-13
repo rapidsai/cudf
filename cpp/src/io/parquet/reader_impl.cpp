@@ -561,6 +561,11 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
 
+  // Copy predicate pushdown results to the `_output_metadata`
+  out_metadata.num_input_row_groups          = _file_itm_data.num_input_row_groups;
+  out_metadata.num_stats_filtered_row_groups = _file_itm_data.num_stats_filtered_row_groups;
+  out_metadata.num_bloom_filtered_row_groups = _file_itm_data.num_bloom_filtered_row_groups;
+
   // output cudf columns as determined by the top level schema
   auto out_columns = std::vector<std::unique_ptr<column>>{};
   out_columns.reserve(_output_buffers.size());

@@ -328,14 +328,17 @@ class aggregate_reader_metadata {
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Filtered row group indices, if any is filtered.
+   * @return A tuple of filtered row group indices, if any is filtered,  number of input row groups,
+   *         number of row groups after stats filtering, and number of row groups after bloom
+   *         filtering
    */
-  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter,
-    rmm::cuda_stream_view stream) const;
+  [[nodiscard]] std::
+    tuple<std::optional<std::vector<std::vector<size_type>>>, size_t, size_t, size_t>
+    filter_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+                      host_span<data_type const> output_dtypes,
+                      host_span<int const> output_column_schemas,
+                      std::reference_wrapper<ast::expression const> filter,
+                      rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of row groups
@@ -351,9 +354,16 @@ class aggregate_reader_metadata {
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of corrected row_start, row_count, list of row group indexes and its
-   *         starting row, and list of number of rows per source.
+   *         starting row, list of number of rows per source, number of input row groups, number of
+   *         row groups after stats filtering, and number of row groups after bloom filtering
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>, std::vector<size_t>>
+  [[nodiscard]] std::tuple<int64_t,
+                           size_type,
+                           std::vector<row_group_info>,
+                           std::vector<size_t>,
+                           size_t,
+                           size_t,
+                           size_t>
   select_row_groups(host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
                     std::optional<size_type> const& row_count,
