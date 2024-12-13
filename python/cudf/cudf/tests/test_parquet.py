@@ -22,7 +22,6 @@ from packaging import version
 from pyarrow import parquet as pq
 
 import cudf
-from cudf._lib.parquet import read_parquet_chunked
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.parquet import (
     ParquetDatasetWriter,
@@ -3775,13 +3774,14 @@ def test_parquet_chunked_reader(
     )
     buffer = BytesIO()
     df.to_parquet(buffer, row_group_size=10000)
-    actual = read_parquet_chunked(
-        [buffer],
-        chunk_read_limit=chunk_read_limit,
-        pass_read_limit=pass_read_limit,
-        use_pandas_metadata=use_pandas_metadata,
-        row_groups=row_groups,
-    )
+    with cudf.option_context("io.parquet.low_memory", True):
+        actual = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=chunk_read_limit,
+            _pass_read_limit=pass_read_limit,
+            use_pandas_metadata=use_pandas_metadata,
+            row_groups=row_groups,
+        )
     expected = cudf.read_parquet(
         buffer, use_pandas_metadata=use_pandas_metadata, row_groups=row_groups
     )
@@ -3825,12 +3825,13 @@ def test_parquet_chunked_reader_structs(
     # Number of rows to read
     nrows = num_rows if num_rows is not None else len(df)
 
-    actual = read_parquet_chunked(
-        [buffer],
-        chunk_read_limit=chunk_read_limit,
-        pass_read_limit=pass_read_limit,
-        nrows=nrows,
-    )
+    with cudf.option_context("io.parquet.low_memory", True):
+        actual = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=chunk_read_limit,
+            _pass_read_limit=pass_read_limit,
+            nrows=nrows,
+        )
     expected = cudf.read_parquet(
         buffer,
         nrows=nrows,
@@ -3877,12 +3878,13 @@ def test_parquet_chunked_reader_string_decoders(
     nrows = num_rows if num_rows is not None else len(df)
 
     # Check with num_rows specified
-    actual = read_parquet_chunked(
-        [buffer],
-        chunk_read_limit=chunk_read_limit,
-        pass_read_limit=pass_read_limit,
-        nrows=nrows,
-    )
+    with cudf.option_context("io.parquet.low_memory", True):
+        actual = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=chunk_read_limit,
+            _pass_read_limit=pass_read_limit,
+            nrows=nrows,
+        )
     expected = cudf.read_parquet(
         buffer,
         nrows=nrows,
@@ -3982,13 +3984,14 @@ def test_parquet_reader_with_mismatched_tables(store_schema):
     ).reset_index(drop=True)
 
     # Read with chunked reader (filter columns not supported)
-    got_chunked = read_parquet_chunked(
-        [buf1, buf2],
-        columns=["list", "d_list", "str"],
-        chunk_read_limit=240,
-        pass_read_limit=240,
-        allow_mismatched_pq_schemas=True,
-    )
+    with cudf.option_context("io.parquet.low_memory", True):
+        got_chunked = cudf.read_parquet(
+            [buf1, buf2],
+            columns=["list", "d_list", "str"],
+            _chunk_read_limit=240,
+            _pass_read_limit=240,
+            allow_mismatched_pq_schemas=True,
+        )
 
     # Construct the expected table without filter columns
     expected_chunked = cudf.concat(
@@ -4054,13 +4057,14 @@ def test_parquet_reader_with_mismatched_structs():
     )
 
     # Read with chunked reader
-    got_chunked = read_parquet_chunked(
-        [buf1, buf2],
-        columns=["struct.b.b_b.b_b_a"],
-        chunk_read_limit=240,
-        pass_read_limit=240,
-        allow_mismatched_pq_schemas=True,
-    )
+    with cudf.option_context("io.parquet.low_memory", True):
+        got_chunked = cudf.read_parquet(
+            [buf1, buf2],
+            columns=["struct.b.b_b.b_b_a"],
+            _chunk_read_limit=240,
+            _pass_read_limit=240,
+            allow_mismatched_pq_schemas=True,
+        )
     got_chunked = (
         cudf.Series(got_chunked["struct"])
         .struct.field("b")
