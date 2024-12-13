@@ -596,14 +596,12 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object", masked=False),
+                column.column_empty(0, dtype="object"),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = cudf.core.column.column_empty(
-                0, dtype="object", masked=False
-            )
+            names = column.column_empty(0, dtype="object")
         return string._datetime_to_str_typecast_functions[self.dtype](
             self, format, names
         )
