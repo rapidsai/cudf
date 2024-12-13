@@ -1,0 +1,259 @@
+/*
+ * Copyright (c) 2024, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/valid_if.cuh>
+#include <cudf/groupby.hpp>
+#include <cudf/reduction.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/transform_reduce.h>
+
+namespace {
+/**
+ * @brief A host-based UDF implementation.
+ *
+ * The aggregations perform the following computation:
+ *  - For reduction: compute `sum(value^2, for value in group)` (this is sum of squared).
+ *  - For segmented reduction: compute `segment_size * sum(value^2, for value in group)`.
+ *  - For groupby: compute `(group_idx + 1) * group_sum_of_squares - group_max * group_sum`.
+ *
+ * In addition, for segmented reduction, if null_policy is set to `INCLUDE`, the null values are
+ * replaced with an initial value if it is provided.
+ */
+template <typename cudf_aggregation>
+struct test_udf_simple_type : cudf::host_udf_base {
+  static_assert(std::is_same_v<cudf_aggregation, cudf::groupby_aggregation>);
+
+  test_udf_simple_type() = default;
+
+  [[nodiscard]] data_attributes_set_t get_required_data() const override
+  {
+    // We need grouped values, group offsets, group labels, and also results from groups'
+    // MAX and SUM aggregations.
+    return {groupby_data_attribute::GROUPED_VALUES,
+            groupby_data_attribute::GROUP_OFFSETS,
+            groupby_data_attribute::GROUP_LABELS,
+            cudf::make_max_aggregation<cudf::groupby_aggregation>(),
+            cudf::make_sum_aggregation<cudf::groupby_aggregation>()};
+  }
+
+  [[nodiscard]] output_t get_empty_output(
+    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
+    [[maybe_unused]] rmm::cuda_stream_view stream,
+    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  {
+    return cudf::make_empty_column(
+      cudf::data_type{cudf::type_to_id<typename groupby_fn::OutputType>()});
+  }
+
+  [[nodiscard]] output_t operator()(host_udf_input const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr) const override
+  {
+    auto const& values =
+      std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
+    return cudf::type_dispatcher(values.type(), groupby_fn{this}, input, stream, mr);
+  }
+
+  [[nodiscard]] std::size_t do_hash() const override
+  {
+    // Just return the same hash for all instances of this class.
+    return std::size_t{12345};
+  }
+
+  [[nodiscard]] bool is_equal(host_udf_base const& other) const override
+  {
+    // Just check if the other object is also instance of this class.
+    return dynamic_cast<test_udf_simple_type const*>(&other) != nullptr;
+  }
+
+  [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
+  {
+    return std::make_unique<test_udf_simple_type>();
+  }
+
+  // For quick compilation, we only instantiate a few input/output types.
+  template <typename T>
+  static constexpr bool is_valid_input_t()
+  {
+    return std::is_same_v<T, double>;
+  }
+
+  // For quick compilation, we only instantiate a few input/output types.
+  template <typename T>
+  static constexpr bool is_valid_output_t()
+  {
+    return std::is_same_v<T, int64_t>;
+  }
+
+  struct groupby_fn {
+    // Store pointer to the parent class so we can call its functions.
+    test_udf_simple_type const* parent;
+    using OutputType = double;
+    template <typename InputType>
+    using MaxType = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::MAX>;
+    template <typename InputType>
+    using SumType = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::SUM>;
+
+    template <typename InputType, typename... Args, CUDF_ENABLE_IF(!cudf::is_numeric<InputType>())>
+    output_t operator()(Args...) const
+    {
+      CUDF_FAIL("Unsupported input/output type.");
+    }
+
+    template <typename InputType, CUDF_ENABLE_IF(cudf::is_numeric<InputType>())>
+    output_t operator()(host_udf_input const& input,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr) const
+    {
+      auto const& values =
+        std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
+      if (values.size() == 0) { return parent->get_empty_output(std::nullopt, stream, mr); }
+
+      auto const offsets = std::get<cudf::device_span<cudf::size_type const>>(
+        input.at(groupby_data_attribute::GROUP_OFFSETS));
+      CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
+      auto const num_groups    = static_cast<int>(offsets.size()) - 1;
+      auto const group_indices = std::get<cudf::device_span<cudf::size_type const>>(
+        input.at(groupby_data_attribute::GROUP_LABELS));
+      auto const group_max = std::get<cudf::column_view>(
+        input.at(cudf::make_max_aggregation<cudf::groupby_aggregation>()));
+      auto const group_sum = std::get<cudf::column_view>(
+        input.at(cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+
+      auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
+      auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
+                                              num_groups,
+                                              cudf::mask_state::UNALLOCATED,
+                                              stream);
+      rmm::device_uvector<bool> validity(num_groups, stream);
+
+      thrust::transform(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(num_groups),
+        thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), validity.begin()),
+        transform_fn<InputType, OutputType>{*values_dv_ptr,
+                                            offsets,
+                                            group_indices,
+                                            group_max.begin<MaxType<InputType>>(),
+                                            group_sum.begin<SumType<InputType>>()});
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity<>{}, stream, mr);
+      if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
+      return output;
+    }
+
+    template <typename InputType, typename OutputType>
+    struct transform_fn {
+      cudf::column_device_view values;
+      cudf::device_span<cudf::size_type const> offsets;
+      cudf::device_span<cudf::size_type const> group_indices;
+      MaxType<InputType> const* group_max;
+      SumType<InputType> const* group_sum;
+
+      thrust::tuple<OutputType, bool> __device__ operator()(cudf::size_type idx) const
+      {
+        auto const start = offsets[idx];
+        auto const end   = offsets[idx + 1];
+        if (start == end) { return {OutputType{0}, false}; }
+
+        auto sum_sqr = OutputType{0};
+        bool has_valid{false};
+        for (auto i = start; i < end; ++i) {
+          if (values.is_null(i)) { continue; }
+          has_valid      = true;
+          auto const val = static_cast<OutputType>(values.element<InputType>(i));
+          sum_sqr += val * val;
+        }
+
+        if (!has_valid) { return {OutputType{0}, false}; }
+        return {static_cast<OutputType>(group_indices[start] + 1) * sum_sqr -
+                  static_cast<OutputType>(group_max[idx]) * static_cast<OutputType>(group_sum[idx]),
+                true};
+      }
+    };
+  };
+};
+
+}  // namespace
+
+using doubles_col = cudf::test::fixed_width_column_wrapper<double>;
+using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+struct HostUDFExampleTest : cudf::test::BaseFixture {};
+
+TEST_F(HostUDFExampleTest, GroupbySimpleInput)
+{
+  double constexpr null = 0.0;
+  auto const keys       = int32s_col{0, 1, 2, 0, 1, 2, 0, 1, 2, 0};
+  auto const vals       = doubles_col{{0.0, null, 2.0, 3.0, null, 5.0, null, null, 8.0, 9.0},
+                                      {true, false, true, true, false, true, false, false, true, true}};
+  auto agg              = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
+    std::make_unique<test_udf_simple_type<cudf::groupby_aggregation>>());
+
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back();
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(std::move(agg));
+  cudf::groupby::groupby gb_obj(
+    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
+
+  auto const grp_result = gb_obj.aggregate(requests, cudf::test::get_default_stream());
+  auto const& result    = grp_result.second[0].results[0];
+
+  // Output type of groupby is double.
+  // Values grouped by keys: [ {0, 3, null, 9}, {null, null, null}, {2, 5, 8} ]
+  // Group sum_sqr: [ 90, null, 93 ]
+  // Group max: [ 9, null, 8 ]
+  // Group sum: [ 12, null, 15 ]
+  // Output: [ 1 * 90 - 9 * 12, null, 3 * 93 - 8 * 15 ]
+  auto const expected = doubles_col{{-18.0, null, 159.0}, {true, false, true}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+}
+
+TEST_F(HostUDFExampleTest, GroupbyEmptyInput)
+{
+  auto const keys = int32s_col{};
+  auto const vals = doubles_col{};
+  auto agg        = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
+    std::make_unique<test_udf_simple_type<cudf::groupby_aggregation>>());
+
+  std::vector<cudf::groupby::aggregation_request> requests;
+  requests.emplace_back();
+  requests[0].values = vals;
+  requests[0].aggregations.push_back(std::move(agg));
+  cudf::groupby::groupby gb_obj(
+    cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
+
+  auto const grp_result = gb_obj.aggregate(requests, cudf::test::get_default_stream());
+  auto const& result    = grp_result.second[0].results[0];
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(vals, *result);
+}
