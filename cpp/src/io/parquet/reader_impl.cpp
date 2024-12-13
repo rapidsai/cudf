@@ -18,6 +18,7 @@
 
 #include "error.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -525,6 +526,8 @@ reader::impl::impl(std::size_t chunk_read_limit,
 
 void reader::impl::prepare_data(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   // if we have not preprocessed at the whole-file level, do that now
   if (!_file_preprocessed) {
     // setup file level information
@@ -557,6 +560,8 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
 
 table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
 {
+  CUDF_FUNC_RANGE();
+
   // If `_output_metadata` has been constructed, just copy it over.
   auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
