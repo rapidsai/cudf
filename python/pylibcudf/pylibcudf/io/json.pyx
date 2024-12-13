@@ -83,6 +83,9 @@ cdef json_reader_options _setup_json_reader_options(
     opts.enable_keep_quotes(keep_quotes)
     opts.enable_mixed_types_as_string(mixed_types_as_string)
     opts.enable_prune_columns(prune_columns)
+
+    # These hidden options are subjected to change without deprecation cycle.
+    # These are used to test libcudf JSON reader features, not used in cuDF.
     if extra_parameters is not None:
         for key, value in extra_parameters.items():
             if key == 'delimiter':
