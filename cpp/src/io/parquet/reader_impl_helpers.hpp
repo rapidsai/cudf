@@ -379,7 +379,6 @@ class aggregate_reader_metadata {
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on bloom filter membership
-   * @param total_row_groups Total number of row groups across all data sources
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Filtered row group indices, if any is filtered
@@ -390,7 +389,6 @@ class aggregate_reader_metadata {
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
-    size_t total_row_groups,
     rmm::cuda_stream_view stream) const;
 
   /**

@@ -471,13 +471,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
       : input_row_group_indices;
 
   // Apply bloom filtering on the bloom filter input row groups
-  auto const bloom_filtered_row_groups = apply_bloom_filters(sources,
-                                                             bloom_filter_input_row_groups,
-                                                             output_dtypes,
-                                                             output_column_schemas,
-                                                             filter,
-                                                             total_row_groups,
-                                                             stream);
+  auto const bloom_filtered_row_groups = apply_bloom_filters(
+    sources, bloom_filter_input_row_groups, output_dtypes, output_column_schemas, filter, stream);
 
   // Return bloom filtered row group indices iff collected
   return bloom_filtered_row_groups.has_value() ? bloom_filtered_row_groups

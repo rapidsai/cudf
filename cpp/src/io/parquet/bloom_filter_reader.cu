@@ -580,11 +580,21 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
-  size_t total_row_groups,
   rmm::cuda_stream_view stream) const
 {
   // Number of input table columns
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
+
+  // Total number of row groups after StatsAST filtration
+  auto const total_row_groups = std::accumulate(
+    input_row_group_indices.begin(),
+    input_row_group_indices.end(),
+    size_t{0},
+    [](size_t sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of row groups exceed the size_type's limit");
 
   auto mr = cudf::get_current_device_resource_ref();
 
