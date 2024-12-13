@@ -6,8 +6,6 @@ from . import (
     csv,
     groupby,
     interop,
-    nvtext,
-    parquet,
     sort,
     stream_compaction,
     string_casting,
