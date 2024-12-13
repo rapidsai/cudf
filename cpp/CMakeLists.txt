@@ -277,7 +277,7 @@ rapids_cpm_init()
 # Not using rapids-cmake since we never want to find, always download.
 CPMAddPackage(
   NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW TRUE GIT_TAG
-  14bb233d2420f7187a690f0bb528ec0420c70d48
+  c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55 VERSION c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55
 )
 rapids_make_logger(cudf EXPORT_SET cudf-exports)
 
@@ -1105,7 +1105,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm rmm::rmm_logger rmm::rmm_logger_impl)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()
