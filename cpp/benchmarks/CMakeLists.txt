@@ -352,11 +352,18 @@ ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binary
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(TEXT_BENCH text/subword.cpp)
-
 ConfigureNVBench(
-  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/ngrams.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
+  TEXT_NVBENCH
+  text/edit_distance.cpp
+  text/hash_ngrams.cpp
+  text/jaccard.cpp
+  text/minhash.cpp
+  text/ngrams.cpp
+  text/normalize.cpp
+  text/replace.cpp
+  text/subword.cpp
+  text/tokenize.cpp
+  text/vocab.cpp
 )
 
 # ##################################################################################################
