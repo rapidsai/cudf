@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources column.pyx copying.pyx groupby.pyx scalar.pyx sort.pyx stream_compaction.pyx
+set(cython_sources column.pyx copying.pyx groupby.pyx scalar.pyx stream_compaction.pyx
                    string_casting.pyx strings_udf.pyx types.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
