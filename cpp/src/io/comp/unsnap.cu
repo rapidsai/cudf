@@ -65,7 +65,8 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  constexpr unsnap_state_s() noexcept {}  // required to compile on ctk-12.2 + aarch64
+  CUDF_HOST_DEVICE constexpr unsnap_state_s() noexcept {
+  }  // required to compile on ctk-12.2 + aarch64
 
   uint8_t const* base{};           ///< base ptr of compressed stream
   uint8_t const* end{};            ///< end of compressed stream

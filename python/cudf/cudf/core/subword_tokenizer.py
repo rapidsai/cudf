@@ -8,10 +8,6 @@ import cupy as cp
 
 import pylibcudf as plc
 
-from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize_inmem_hash as cpp_subword_tokenize,
-)
-
 
 def _cast_to_appropriate_type(ar, cast_type):
     if cast_type == "cp":
@@ -210,8 +206,7 @@ class SubwordTokenizer:
         stride = max_length - stride
         # behavior varies from subword_tokenize but maps with huggingface
 
-        input_ids, attention_mask, metadata = cpp_subword_tokenize(
-            text._column,
+        input_ids, attention_mask, metadata = text._column.subword_tokenize(
             self.vocab_file,
             max_sequence_length=max_length,
             stride=stride,

@@ -32,10 +32,10 @@ namespace binops {
 namespace compiled {
 
 template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
-constexpr bool is_bool_result()
+CUDF_HOST_DEVICE constexpr bool is_bool_result()
 {
-  using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
-  return std::is_same_v<bool, ReturnType>;
+  using ReturnType = cuda::std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
+  return cuda::std::is_same_v<bool, ReturnType>;
 }
 
 /**

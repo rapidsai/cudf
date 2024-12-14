@@ -1193,7 +1193,7 @@ class CategoricalColumn(column.ColumnBase):
                 f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
             )
         elif newsize == 0:
-            codes_col = column.column_empty(0, head.codes.dtype, masked=True)
+            codes_col = column.column_empty(0, head.codes.dtype)
         else:
             codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 
