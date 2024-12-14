@@ -42,8 +42,7 @@ cimport pylibcudf.libcudf.types as libcudf_types
 cimport pylibcudf.libcudf.unary as libcudf_unary
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport (
-    make_column_from_scalar as cpp_make_column_from_scalar,
-    make_numeric_column,
+    make_numeric_column
 )
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
@@ -840,9 +839,8 @@ cdef class Column:
 
     @staticmethod
     def from_scalar(py_val, size_type size):
-        cdef DeviceScalar val = py_val.device_value
-        cdef const scalar* c_val = val.get_raw_ptr()
-        cdef unique_ptr[column] c_result
-        with nogil:
-            c_result = move(cpp_make_column_from_scalar(c_val[0], size))
-        return Column.from_unique_ptr(move(c_result))
+        return Column.from_pylibcudf(
+            pylibcudf.Column.from_scalar(
+                py_val.device_value.c_value, size
+            )
+        )

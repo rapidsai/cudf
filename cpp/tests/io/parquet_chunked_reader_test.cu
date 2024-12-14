@@ -1074,6 +1074,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
   } while (reader.has_next());
 }
 
+namespace {
 constexpr size_t input_limit_expected_file_count = 4;
 
 std::vector<std::string> input_limit_get_test_names(std::string const& base_filename)
@@ -1133,6 +1134,7 @@ void input_limit_test_read(std::vector<std::string> const& test_filenames,
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, t);
   }
 }
+}  // namespace
 
 struct ParquetChunkedReaderInputLimitConstrainedTest : public cudf::test::BaseFixture {};
 
@@ -1189,6 +1191,7 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
 
 struct ParquetChunkedReaderInputLimitTest : public cudf::test::BaseFixture {};
 
+namespace {
 struct offset_gen {
   int const group_size;
   __device__ int operator()(int i) { return i * group_size; }
@@ -1198,6 +1201,8 @@ template <typename T>
 struct value_gen {
   __device__ T operator()(int i) { return i % 1024; }
 };
+}  // namespace
+
 TEST_F(ParquetChunkedReaderInputLimitTest, List)
 {
   auto base_path      = temp_env->get_temp_filepath("list");
@@ -1263,6 +1268,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
   input_limit_test_read(test_filenames, tbl, 32 * 1024 * 1024, 64 * 1024 * 1024, expected_c);
 }
 
+namespace {
 void tiny_list_rowgroup_test(bool just_list_col)
 {
   auto iter = thrust::make_counting_iterator(0);
@@ -1320,6 +1326,7 @@ void tiny_list_rowgroup_test(bool just_list_col)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *(result.first));
 }
+}  // namespace
 
 TEST_F(ParquetChunkedReaderInputLimitTest, TinyListRowGroupsSingle)
 {
@@ -1333,6 +1340,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, TinyListRowGroupsMixed)
   tiny_list_rowgroup_test(false);
 }
 
+namespace {
 struct char_values {
   __device__ int8_t operator()(int i)
   {
@@ -1341,6 +1349,8 @@ struct char_values {
     return index == 0 ? 'a' : (index == 1 ? 'b' : 'c');
   }
 };
+}  // namespace
+
 TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
 {
   auto base_path      = temp_env->get_temp_filepath("mixed_types");

@@ -3507,7 +3507,7 @@ class IndexedFrame(Frame):
 
         col = _post_process_output_col(ans_col, retty)
 
-        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        col.set_base_mask(ans_mask.as_mask())
         result = cudf.Series._from_column(col, index=self.index)
 
         return result
@@ -3851,7 +3851,6 @@ class IndexedFrame(Frame):
                 if name in df._data
                 else cudf.core.column.column.column_empty(
                     dtype=dtypes.get(name, np.float64),
-                    masked=True,
                     row_count=len(index),
                 )
             )
@@ -3970,7 +3969,13 @@ class IndexedFrame(Frame):
 
         cols = (
             col.round(decimals[name], how=how)
-            if name in decimals and col.dtype.kind in "fiu"
+            if name in decimals
+            and (
+                col.dtype.kind in "fiu"
+                or isinstance(
+                    col.dtype, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)
+                )
+            )
             else col.copy(deep=True)
             for name, col in self._column_labels_and_values
         )
@@ -6362,9 +6367,49 @@ class IndexedFrame(Frame):
             elif source._num_columns != num_cols:
                 dropped_cols = True
 
-        result_columns = libcudf.sort.rank_columns(
-            [*source._columns], method_enum, na_option, ascending, pct
+        column_order = (
+            plc.types.Order.ASCENDING
+            if ascending
+            else plc.types.Order.DESCENDING
         )
+        # ascending
+        #    #top    = na_is_smallest
+        #    #bottom = na_is_largest
+        #    #keep   = na_is_largest
+        # descending
+        #    #top    = na_is_largest
+        #    #bottom = na_is_smallest
+        #    #keep   = na_is_smallest
+        if ascending:
+            if na_option == "top":
+                null_precedence = plc.types.NullOrder.BEFORE
+            else:
+                null_precedence = plc.types.NullOrder.AFTER
+        else:
+            if na_option == "top":
+                null_precedence = plc.types.NullOrder.AFTER
+            else:
+                null_precedence = plc.types.NullOrder.BEFORE
+        c_null_handling = (
+            plc.types.NullPolicy.EXCLUDE
+            if na_option == "keep"
+            else plc.types.NullPolicy.INCLUDE
+        )
+
+        with acquire_spill_lock():
+            result_columns = [
+                libcudf.column.Column.from_pylibcudf(
+                    plc.sorting.rank(
+                        col.to_pylibcudf(mode="read"),
+                        method_enum,
+                        column_order,
+                        c_null_handling,
+                        null_precedence,
+                        pct,
+                    )
+                )
+                for col in source._columns
+            ]
 
         if dropped_cols:
             result = type(source)._from_data(
