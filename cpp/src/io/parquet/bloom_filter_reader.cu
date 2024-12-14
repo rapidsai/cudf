@@ -496,6 +496,9 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   // Gather all bloom filter offsets and sizes.
   size_type chunk_count = 0;
 
+  // Flag to check if we have at least one valid bloom filter offset
+  auto have_bloom_filters = false;
+
   // For all data sources
   std::for_each(thrust::counting_iterator<size_t>(0),
                 thrust::counting_iterator(row_group_indices.size()),
@@ -513,6 +516,9 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
                         bloom_filter_offsets[chunk_count] = col_meta.bloom_filter_offset;
                         bloom_filter_sizes[chunk_count]   = col_meta.bloom_filter_length;
 
+                        // Set `have_bloom_filters` if `bloom_filter_offset` is valid
+                        if (col_meta.bloom_filter_offset.has_value()) { have_bloom_filters = true; }
+
                         // Map each column chunk to its source index
                         chunk_source_map[chunk_count] = src_index;
                         chunk_count++;
@@ -521,9 +527,7 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
                 });
 
   // Do we have any bloom filters
-  if (std::any_of(bloom_filter_offsets.cbegin(),
-                  bloom_filter_offsets.cend(),
-                  [](auto const offset) { return offset.has_value(); })) {
+  if (have_bloom_filters) {
     // Vector to hold bloom filter data
     std::vector<rmm::device_buffer> bloom_filter_data(num_chunks);
 
