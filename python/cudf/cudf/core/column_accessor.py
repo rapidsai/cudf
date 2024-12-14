@@ -267,7 +267,12 @@ class ColumnAccessor(abc.MutableMapping):
         new_ncols: int
             len(self) after self._data was modified
         """
-        cached_properties = ("columns", "names", "_grouped_data", "to_pandas_index")
+        cached_properties = (
+            "columns",
+            "names",
+            "_grouped_data",
+            "to_pandas_index",
+        )
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
