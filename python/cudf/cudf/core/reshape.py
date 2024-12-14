@@ -431,8 +431,9 @@ def concat(
 
             result_columns = (
                 objs[0]
-                ._data.to_pandas_index
-                .append([obj._data.to_pandas_index for obj in objs[1:]])
+                ._data.to_pandas_index.append(
+                    [obj._data.to_pandas_index for obj in objs[1:]]
+                )
                 .unique()
             )
 

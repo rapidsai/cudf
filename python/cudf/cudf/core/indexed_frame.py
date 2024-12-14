@@ -1108,9 +1108,7 @@ class IndexedFrame(Frame):
         elif isinstance(self, cudf.DataFrame) and isinstance(
             other, (cudf.Series, cudf.DataFrame)
         ):
-            common = self._data.to_pandas_index.union(
-                other.index.to_pandas()
-            )
+            common = self._data.to_pandas_index.union(other.index.to_pandas())
             if len(common) > self._num_columns or len(common) > len(
                 other.index
             ):
