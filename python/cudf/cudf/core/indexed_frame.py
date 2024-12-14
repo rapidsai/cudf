@@ -1104,11 +1104,11 @@ class IndexedFrame(Frame):
             lhs = self.reindex(index=common, copy=False).values
             rhs = other.reindex(index=common, copy=False).values
             if isinstance(other, cudf.DataFrame):
-                result_index = other._data.to_pandas_index()
+                result_index = other._data.to_pandas_index
         elif isinstance(self, cudf.DataFrame) and isinstance(
             other, (cudf.Series, cudf.DataFrame)
         ):
-            common = self._data.to_pandas_index().union(
+            common = self._data.to_pandas_index.union(
                 other.index.to_pandas()
             )
             if len(common) > self._num_columns or len(common) > len(
@@ -1122,7 +1122,7 @@ class IndexedFrame(Frame):
             rhs = other.reindex(index=common, copy=False).values
             lhs = lhs.values
             if isinstance(other, cudf.DataFrame):
-                result_cols = other._data.to_pandas_index()
+                result_cols = other._data.to_pandas_index
 
         elif isinstance(
             other, (cp.ndarray, np.ndarray)
@@ -2242,7 +2242,7 @@ class IndexedFrame(Frame):
         if not copy:
             raise ValueError("Truncating with copy=False is not supported.")
         axis = self._get_axis_from_axis_arg(axis)
-        ax = self.index if axis == 0 else self._data.to_pandas_index()
+        ax = self.index if axis == 0 else self._data.to_pandas_index
 
         if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
             raise ValueError("truncate requires a sorted index")
@@ -6735,7 +6735,7 @@ def _drop_rows_by_labels(
             return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
-                columns=obj._data.to_pandas_index(),
+                columns=obj._data.to_pandas_index,
             )
 
     else:

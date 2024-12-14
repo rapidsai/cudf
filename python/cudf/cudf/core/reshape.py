@@ -431,8 +431,8 @@ def concat(
 
             result_columns = (
                 objs[0]
-                ._data.to_pandas_index()
-                .append([obj._data.to_pandas_index() for obj in objs[1:]])
+                ._data.to_pandas_index
+                .append([obj._data.to_pandas_index for obj in objs[1:]])
                 .unique()
             )
 
@@ -689,7 +689,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index().dtype
+            value_vars, dtype=frame._data.to_pandas_index.dtype
         )
     else:
         var_data = (
@@ -1020,6 +1020,7 @@ def _pivot(
             names = [
                 as_tuple(col_label) + as_tuple(name) for name in column_labels
             ]
+            # import pdb;pdb.set_trace()
             new_size = nrows * len(names)
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
             target_col = column_empty(row_count=new_size, dtype=col.dtype)
@@ -1096,6 +1097,7 @@ def pivot(
         2  <NA>  <NA>  three
 
     """
+    # import pdb;pdb.set_trace()
     values_is_list = True
     if values is no_default:
         already_selected = set(
@@ -1272,7 +1274,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
-            tuple(df._data.to_pandas_index().names) + df.index.names
+            tuple(df._data.to_pandas_index.names) + df.index.names
         )
         return res
     else:

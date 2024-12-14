@@ -3084,7 +3084,7 @@ class SeriesGroupBy(GroupBy):
 
         # drop the first level if we have a multiindex
         if result._data.nlevels > 1:
-            result.columns = result._data.to_pandas_index().droplevel(0)
+            result.columns = result._data.to_pandas_index.droplevel(0)
 
         return result
 
