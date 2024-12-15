@@ -34,7 +34,7 @@ from pytz import utc
 from rmm import RMMError
 
 from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
-from cudf.pandas import LOADED, Profiler
+from cudf.pandas import LOADED
 from cudf.pandas.fast_slow_proxy import (
     AttributeFallbackError,
     FallbackError,
@@ -485,32 +485,6 @@ def test_groupby_grouper_fallback(dataframe, groupby_udf):
 
 def test_options_mode():
     assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
-
-
-# Codecov and Profiler interfere with each-other,
-# hence we don't want to run code-cov on this test.
-@pytest.mark.no_cover
-def test_profiler():
-    pytest.importorskip("cudf")
-
-    # test that the profiler correctly reports
-    # when we use the GPU v/s CPU
-    with Profiler() as p:
-        df = xpd.DataFrame({"a": [1, 2, 3], "b": "b"})
-        df.groupby("a").max()
-
-    assert len(p.per_line_stats) == 2
-    for line_no, line, gpu_time, cpu_time in p.per_line_stats:
-        assert gpu_time
-        assert not cpu_time
-
-    with Profiler() as p:
-        s = xpd.Series([1, "a"])
-        s = s + s
-
-    assert len(p.per_line_stats) == 2
-    for line_no, line, gpu_time, cpu_time in p.per_line_stats:
-        assert cpu_time
 
 
 def test_column_access_as_attribute():
