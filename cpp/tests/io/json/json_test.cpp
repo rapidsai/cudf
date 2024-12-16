@@ -3312,7 +3312,7 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
 
 TEST_F(JsonReaderTest, MismatchedBeginEndTokens)
 {
-  std::string data = R"({"not_valid":"json)";
+  std::string data = R"({"not_valid": "json)";
   auto opts =
     cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
       .lines(true)

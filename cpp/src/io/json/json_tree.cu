@@ -272,63 +272,6 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     CUDF_FAIL("JSON Parser encountered an invalid format at location " +
               std::to_string(error_index[0]));
   }
-  // Ensure that begin tokens have matching end tokens
-  {
-    // Struct, List, StructMember, FieldName, String, Value
-    // Corner case: If the input is a literal such as "true" or "false" that does not end in a
-    // newline character, then we will have only the ValueBegin token without the corresponding
-    // ValueEnd
-    if (tokens.size() == 1) {
-      auto h_tokens = cudf::detail::make_std_vector_sync(tokens, stream);
-      CUDF_EXPECTS(h_tokens[0] == token_t::ValueBegin,
-                   "Some begin token does not have a matching end token");
-    } else {
-      auto not_ok = thrust::transform_reduce(
-        rmm::exec_policy(stream),
-        tokens.begin(),
-        tokens.end(),
-        cuda::proclaim_return_type<std::uint8_t>([] __device__(auto token) -> std::uint8_t {
-          std::uint8_t token_bits{0};
-          switch (token) {
-            case token_t::StructBegin: [[fallthrough]];
-            case token_t::StructEnd: {
-              token_bits |= (std::uint8_t{1} << 5);
-              break;
-            }
-            case token_t::ListBegin: [[fallthrough]];
-            case token_t::ListEnd: {
-              token_bits |= (std::uint8_t{1} << 4);
-              break;
-            }
-            case token_t::StructMemberBegin: [[fallthrough]];
-            case token_t::StructMemberEnd: {
-              token_bits |= (std::uint8_t{1} << 3);
-              break;
-            }
-            case token_t::FieldNameBegin: [[fallthrough]];
-            case token_t::FieldNameEnd: {
-              token_bits |= (std::uint8_t{1} << 2);
-              break;
-            }
-            case token_t::StringBegin: [[fallthrough]];
-            case token_t::StringEnd: {
-              token_bits |= (std::uint8_t{1} << 1);
-              break;
-            }
-            case token_t::ValueBegin: [[fallthrough]];
-            case token_t::ValueEnd: {
-              token_bits |= std::uint8_t{1};
-              break;
-            }
-            default: break;
-          }
-          return token_bits;
-        }),
-        std::uint8_t{0},
-        thrust::bit_xor<std::uint8_t>());
-      CUDF_EXPECTS(!not_ok, "Some begin token does not have a matching end token");
-    }
-  }
 
   auto const num_tokens = tokens.size();
   auto const num_nodes =
