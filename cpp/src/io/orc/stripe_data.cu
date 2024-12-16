@@ -247,23 +247,21 @@ class run_cache_manager {
 
     // All threads in the block take a uniform code path.
     // _reusable_length ranges between [0, 512]
-    if (_reusable_length > 0) {
-      // First, shift the data up
-      const auto dst_idx = tid + _reusable_length;
-      const auto v       = (dst_idx < rle->num_vals + _reusable_length) ? dst[tid] : 0;
-      __syncthreads();
+    // First, shift the data up
+    const auto dst_idx = tid + _reusable_length;
+    const auto v       = (dst_idx < rle->num_vals + _reusable_length) ? dst[tid] : 0;
+    __syncthreads();
 
-      if (dst_idx < rle->num_vals + _reusable_length) { dst[dst_idx] = v; }
-      __syncthreads();
+    if (dst_idx < rle->num_vals + _reusable_length) { dst[dst_idx] = v; }
+    __syncthreads();
 
-      // Second, insert the cached data
-      if (tid < _reusable_length) { dst[tid] = cache; }
-      __syncthreads();
+    // Second, insert the cached data
+    if (tid < _reusable_length) { dst[tid] = cache; }
+    __syncthreads();
 
-      if (tid == 0) {
-        _status = status::DISABLED;
-        rle->num_vals += _reusable_length;
-      }
+    if (tid == 0) {
+      _status = status::DISABLED;
+      rle->num_vals += _reusable_length;
     }
 
     __syncthreads();
