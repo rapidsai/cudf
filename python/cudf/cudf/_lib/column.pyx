@@ -11,7 +11,6 @@ import pylibcudf
 import rmm
 
 import cudf
-import cudf._lib as libcudf
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,
@@ -36,7 +35,6 @@ from cudf._lib.types cimport (
     dtype_to_pylibcudf_type,
 )
 
-from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
 cimport pylibcudf.libcudf.copying as cpp_copying
@@ -44,8 +42,7 @@ cimport pylibcudf.libcudf.types as libcudf_types
 cimport pylibcudf.libcudf.unary as libcudf_unary
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport (
-    make_column_from_scalar as cpp_make_column_from_scalar,
-    make_numeric_column,
+    make_numeric_column
 )
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
@@ -159,7 +156,10 @@ cdef class Column:
             if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
-                self._mask = libcudf.null_mask.copy_bitmask(self)
+                with acquire_spill_lock():
+                    self._mask = as_buffer(
+                        pylibcudf.null_mask.copy_bitmask(self.to_pylibcudf(mode="read"))
+                    )
         return self._mask
 
     @property
@@ -183,7 +183,9 @@ cdef class Column:
 
         if value is not None:
             # bitmask size must be relative to offset = 0 data.
-            required_size = bitmask_allocation_size_bytes(self.base_size)
+            required_size = pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                self.base_size
+            )
             if value.size < required_size:
                 error_msg = (
                     "The Buffer for mask is smaller than expected, "
@@ -220,7 +222,7 @@ cdef class Column:
         and compute new data Buffers zero-copy that use pointer arithmetic to
         properly adjust the pointer.
         """
-        mask_size = bitmask_allocation_size_bytes(self.size)
+        mask_size = pylibcudf.null_mask.bitmask_allocation_size_bytes(self.size)
         required_num_bytes = -(-self.size // 8)  # ceiling divide
         error_msg = (
             "The value for mask is smaller than expected, got {}  bytes, "
@@ -790,13 +792,17 @@ cdef class Column:
                     mask = as_buffer(
                         rmm.DeviceBuffer(
                             ptr=mask_ptr,
-                            size=bitmask_allocation_size_bytes(base_size)
+                            size=pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                                base_size
+                            )
                         )
                     )
             else:
                 mask = as_buffer(
                     data=mask_ptr,
-                    size=bitmask_allocation_size_bytes(base_size),
+                    size=pylibcudf.null_mask.bitmask_allocation_size_bytes(
+                        base_size
+                    ),
                     owner=mask_owner,
                     exposed=True
                 )
@@ -833,9 +839,8 @@ cdef class Column:
 
     @staticmethod
     def from_scalar(py_val, size_type size):
-        cdef DeviceScalar val = py_val.device_value
-        cdef const scalar* c_val = val.get_raw_ptr()
-        cdef unique_ptr[column] c_result
-        with nogil:
-            c_result = move(cpp_make_column_from_scalar(c_val[0], size))
-        return Column.from_unique_ptr(move(c_result))
+        return Column.from_pylibcudf(
+            pylibcudf.Column.from_scalar(
+                py_val.device_value.c_value, size
+            )
+        )

@@ -852,7 +852,7 @@ def test_listcol_setitem_retain_dtype():
         {"a": cudf.Series([["a", "b"], []]), "b": [1, 2], "c": [123, 321]}
     )
     df1 = df.head(0)
-    # Performing a setitem on `b` triggers a `column.column_empty_like` call
+    # Performing a setitem on `b` triggers a `column.column_empty` call
     # which tries to create an empty ListColumn.
     df1["b"] = df1["c"]
     # Performing a copy to trigger a copy dtype which is obtained by accessing

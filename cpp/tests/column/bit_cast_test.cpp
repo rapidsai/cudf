@@ -25,6 +25,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+namespace {
 template <typename T, typename T2 = void>
 struct rep_type_impl {
   using type = void;
@@ -47,12 +48,14 @@ struct rep_type_impl<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 
 template <typename T>
 using rep_type_t = typename rep_type_impl<T>::type;
+}  // namespace
 
 template <typename T>
 struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
+namespace {
 template <typename FromType, typename ToType, typename Iterator>
 void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
 {
@@ -102,6 +105,7 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
     }
   }
 }
+}  // namespace
 
 TYPED_TEST(ColumnViewAllTypesTests, BitCast)
 {

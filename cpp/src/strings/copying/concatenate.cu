@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -123,8 +124,8 @@ CUDF_KERNEL void fused_concatenate_string_offset_kernel(
   bitmask_type* output_mask,
   size_type* out_valid_count)
 {
-  cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
-  size_type warp_valid_count           = 0;
+  auto output_index          = cudf::detail::grid_1d::global_thread_id();
+  size_type warp_valid_count = 0;
 
   unsigned active_mask;
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
@@ -156,7 +157,7 @@ CUDF_KERNEL void fused_concatenate_string_offset_kernel(
       warp_valid_count += __popc(new_word);
     }
 
-    output_index += blockDim.x * gridDim.x;
+    output_index += cudf::detail::grid_1d::grid_stride();
     if (Nullable) { active_mask = __ballot_sync(active_mask, output_index < output_size); }
   }
 
@@ -178,7 +179,7 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
                                                        size_type const output_size,
                                                        char* output_data)
 {
-  cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+  auto output_index = cudf::detail::grid_1d::global_thread_id();
 
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
@@ -198,7 +199,7 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
     auto const first_char     = input_offsets_data[input_view.offset()];
     output_data[output_index] = input_chars_data[offset_index + first_char];
 
-    output_index += blockDim.x * gridDim.x;
+    output_index += cudf::detail::grid_1d::grid_stride();
   }
 }
 

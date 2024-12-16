@@ -68,7 +68,6 @@ requirements:
     - librdkafka {{ librdkafka_version }}
     - fmt {{ fmt_version }}
     - flatbuffers {{ flatbuffers_version }}
-    - spdlog {{ spdlog_version }}
     - zlib {{ zlib_version }}
 
 outputs:

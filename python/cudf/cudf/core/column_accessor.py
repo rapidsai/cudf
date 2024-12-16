@@ -49,7 +49,7 @@ class _NestedGetItemDict(dict):
     def __getitem__(self, key):
         """Recursively apply dict.__getitem__ for nested elements."""
         # As described in the pandas docs
-        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index  # noqa: E501
+        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index
         # accessing nested elements of a multiindex must be done using a tuple.
         # Lists and other sequences are treated as accessing multiple elements
         # at the top level of the index.
@@ -62,10 +62,10 @@ def _to_flat_dict_inner(d: dict, parents: tuple = ()):
     for k, v in d.items():
         if not isinstance(v, d.__class__):
             if parents:
-                k = parents + (k,)
+                k = (*parents, k)
             yield (k, v)
         else:
-            yield from _to_flat_dict_inner(d=v, parents=parents + (k,))
+            yield from _to_flat_dict_inner(d=v, parents=(*parents, k))
 
 
 class ColumnAccessor(abc.MutableMapping):

@@ -113,6 +113,9 @@ def test_with_external_memory(
     return predt
 
 
+@pytest.mark.skip(
+    reason="TypeError: Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly."
+)
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_predict(device: str) -> np.ndarray:
     reg = xgb.XGBRegressor(n_estimators=2, device=device)

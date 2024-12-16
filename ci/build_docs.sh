@@ -35,6 +35,10 @@ rapids-mamba-retry install \
 
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
+
 rapids-logger "Build CPP docs"
 pushd cpp/doxygen
 aws s3 cp s3://rapidsai-docs/librmm/html/${RAPIDS_VERSION_MAJOR_MINOR}/rmm.tag . || echo "Failed to download rmm Doxygen tag"
@@ -58,3 +62,5 @@ mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
 popd
 
 RAPIDS_VERSION_NUMBER="${RAPIDS_VERSION_MAJOR_MINOR}" rapids-upload-docs
+
+exit ${EXITCODE}
