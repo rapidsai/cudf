@@ -240,15 +240,27 @@ def read_orc(
         elif not isinstance(num_rows, int) or num_rows < -1:
             raise TypeError("num_rows must be an int >= -1")
 
-        tbl_w_meta = plc.io.orc.read_orc(
-            plc.io.SourceInfo(filepaths_or_buffers),
-            columns,
-            stripes,
-            skiprows,
-            num_rows,
-            use_index,
-            dtype_to_pylibcudf_type(cudf.dtype(timestamp_type)),
+        options = (
+            plc.io.orc.OrcReaderOptions.builder(
+                plc.io.types.SourceInfo(filepaths_or_buffers)
+            )
+            .use_index(use_index)
+            .build()
         )
+        if num_rows >= 0:
+            options.set_num_rows(num_rows)
+        if skiprows >= 0:
+            options.set_skip_rows(skiprows)
+        if stripes is not None:
+            options.set_stripes(stripes)
+        if timestamp_type is not None:
+            options.set_timestamp_type(
+                dtype_to_pylibcudf_type(cudf.dtype(timestamp_type))
+            )
+        if columns is not None and len(columns) > 0:
+            options.set_columns(columns)
+
+        tbl_w_meta = plc.io.orc.read_orc(options)
 
         if isinstance(columns, list) and len(columns) == 0:
             # When `columns=[]`, index needs to be
