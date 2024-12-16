@@ -42,13 +42,13 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                  stream,
                                  mr);
 
-  // The functor returns the indices of maximums in the sorted values.
-  // We need the indices of maximums from the original unsorted values
-  // so we use these indices to gather the sorted order values.
-  // We cannot use cudf::gather since indices should not have nulls.
+  // The functor returns the indices of minimums based on the sorted keys.
+  // We need the indices of minimums from the original unsorted keys
+  // so we use these indices and the key_sort_order to map to the correct indices.
+  // We do not use cudf::gather since we can move the null-mask separately.
   auto indices_view = indices->view();
   auto output       = rmm::device_uvector<size_type>(indices_view.size(), stream, mr);
-  thrust::gather(rmm::exec_policy(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream),
                  indices_view.begin<size_type>(),    // map first
                  indices_view.end<size_type>(),      // map last
                  key_sort_order.begin<size_type>(),  // input

@@ -16,6 +16,7 @@
 
 #include "groupby/sort/group_single_pass_reduction_util.cuh"
 
+#include <cudf/detail/gather.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -40,15 +41,15 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                  num_groups,
                                  group_labels,
                                  stream,
-                                 cudf::get_current_device_resource_ref());
+                                 mr);
 
-  // The functor returns the indices of minimums in the sorted values.
-  // We need the indices of minimums from the original unsorted values
-  // so we use these indices to gather the sorted order values.
-  // We cannot use cudf::gather since indices should not have nulls.
+  // The functor returns the indices of minimums based on the sorted keys.
+  // We need the indices of minimums from the original unsorted keys
+  // so we use these and the key_sort_order to map to the correct indices.
+  // We do not use cudf::gather since we can move the null-mask separately.
   auto indices_view = indices->view();
   auto output       = rmm::device_uvector<size_type>(indices_view.size(), stream, mr);
-  thrust::gather(rmm::exec_policy(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream),
                  indices_view.begin<size_type>(),    // map first
                  indices_view.end<size_type>(),      // map last
                  key_sort_order.begin<size_type>(),  // input
