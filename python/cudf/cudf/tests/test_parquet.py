@@ -4392,6 +4392,7 @@ def test_parquet_reader_mismatched_nullability_structs(tmpdir):
         ([[("str", "==", "FINDME")], [("fp64", "==", float(500))]], 2),
         ([("fixed_pt", "==", decimal.Decimal(float(500)))], 2),
         ([[("ui32", "==", np.uint32(500)), ("str", "==", "FINDME")]], 2),
+        ([[("str", "==", "FINDME")], [("ui32", ">=", np.uint32(0))]], 1000),
         (
             [
                 ("str", "!=", "FINDME"),
