@@ -58,8 +58,7 @@ jobs:
   check-nightly-ci:
     runs-on: ubuntu-latest
     container:
-      # Just need an image where Python is available
-      image: rapidsai/ci-wheel:latest
+      image: ubuntu-latest
       env:
         RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
