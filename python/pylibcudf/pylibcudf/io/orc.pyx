@@ -46,6 +46,8 @@ __all__ = [
     "read_orc",
     "read_parsed_orc_statistics",
     "write_orc",
+    "OrcReaderOptions",
+    "OrcReaderOptionsBuilder",
     "OrcWriterOptions",
     "OrcWriterOptionsBuilder",
     "OrcChunkedWriter",
