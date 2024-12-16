@@ -47,7 +47,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
     std::vector<column_view> children;
     children.reserve(num_cols);
     for (size_type col_index = 0; col_index < num_cols; col_index++) {
-      structs_column_view scv(struct_cols[col_index]);
+      structs_column_view const scv(struct_cols[col_index]);
 
       // all inputs must have the same # of children and they must all be of the
       // same type.

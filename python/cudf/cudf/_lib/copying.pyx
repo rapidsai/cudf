@@ -1,10 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-import pickle
-
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 import pylibcudf
 
 import cudf
@@ -16,12 +12,6 @@ from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.reduce import minmax
-
-from libcpp.memory cimport make_unique
-
-from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.utils cimport columns_from_pylibcudf_table, data_from_pylibcudf_table
@@ -42,7 +32,7 @@ def _gather_map_is_valid(
     """
     if not check_bounds or nullify or len(gather_map) == 0:
         return True
-    gm_min, gm_max = minmax(gather_map)
+    gm_min, gm_max = gather_map.minmax()
     return gm_min >= -nrows and gm_max < nrows
 
 
@@ -59,12 +49,9 @@ def copy_column(Column input_column):
     -------
     Deep copied column
     """
-    cdef unique_ptr[column] c_result
-    cdef column_view input_column_view = input_column.view()
-    with nogil:
-        c_result = move(make_unique[column](input_column_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        input_column.to_pylibcudf(mode="read").copy()
+    )
 
 
 @acquire_spill_lock()
@@ -367,14 +354,13 @@ class PackedColumns(Serializable):
         header["index-names"] = self.index_names
         header["metadata"] = self._metadata.tobytes()
         for name, dtype in self.column_dtypes.items():
-            dtype_header, dtype_frames = dtype.serialize()
+            dtype_header, dtype_frames = dtype.device_serialize()
             self.column_dtypes[name] = (
                 dtype_header,
                 (len(frames), len(frames) + len(dtype_frames)),
             )
             frames.extend(dtype_frames)
         header["column-dtypes"] = self.column_dtypes
-        header["type-serialized"] = pickle.dumps(type(self))
         return header, frames
 
     @classmethod
@@ -382,9 +368,9 @@ class PackedColumns(Serializable):
         column_dtypes = {}
         for name, dtype in header["column-dtypes"].items():
             dtype_header, (start, stop) = dtype
-            column_dtypes[name] = pickle.loads(
-                dtype_header["type-serialized"]
-            ).deserialize(dtype_header, frames[start:stop])
+            column_dtypes[name] = Serializable.device_deserialize(
+                dtype_header, frames[start:stop]
+            )
         return cls(
             plc.contiguous_split.pack(
                 plc.contiguous_split.unpack_from_memoryviews(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +30,20 @@ public class RmmCudaAsyncMemoryResource implements RmmDeviceMemoryResource {
    * @param releaseThreshold size in bytes for when memory is released back to cuda
    */
   public RmmCudaAsyncMemoryResource(long size, long releaseThreshold) {
+    this(size, releaseThreshold, false);
+  }
+
+  /**
+   * Create a new async memory resource
+   * @param size the initial size of the pool
+   * @param releaseThreshold size in bytes for when memory is released back to cuda
+   * @param fabric if true request peer read+write accessible fabric handles when
+   *        creating the pool
+   */
+  public RmmCudaAsyncMemoryResource(long size, long releaseThreshold, boolean fabric) {
     this.size = size;
     this.releaseThreshold = releaseThreshold;
-    handle = Rmm.newCudaAsyncMemoryResource(size, releaseThreshold);
+    handle = Rmm.newCudaAsyncMemoryResource(size, releaseThreshold, fabric);
   }
 
   @Override

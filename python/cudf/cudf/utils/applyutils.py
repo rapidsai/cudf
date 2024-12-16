@@ -9,7 +9,7 @@ from numba import cuda
 from numba.core.utils import pysignature
 
 import cudf
-from cudf import _lib as libcudf
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
 from cudf.utils import utils
@@ -121,7 +121,7 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
                 nullmask.copy(), dtype=utils.mask_dtype
             )
         else:
-            out_mask = libcudf.binaryop.binaryop(
+            out_mask = binaryop.binaryop(
                 nullmask, out_mask, op, out_mask.dtype
             )
 

@@ -16,7 +16,7 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type
 
 from cudf._lib.column cimport Column
-
+from pylibcudf cimport Column as plc_Column
 try:
     import ujson as json
 except ImportError:
@@ -223,10 +223,11 @@ cdef columns_from_unique_ptr(
 
     cdef size_t i
 
-    columns = [Column.from_unique_ptr(move(dereference(it+i)))
-               for i in range(c_columns.size())]
-
-    return columns
+    return [
+        Column.from_pylibcudf(
+            plc_Column.from_libcudf(move(dereference(it+i)))
+        ) for i in range(c_columns.size())
+    ]
 
 
 cpdef columns_from_pylibcudf_table(tbl):
