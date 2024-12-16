@@ -20,6 +20,33 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import ExprTransformer
 
+# Can't merge these op-mapping dictionaries because scoped enum values
+# are exposed by cython with equality/hash based one their underlying
+# representation type. So in a dict they are just treated as integers.
+BINOP_TO_ASTOP = {
+    plc.binaryop.BinaryOperator.EQUAL: plc_expr.ASTOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NULL_EQUALS: plc_expr.ASTOperator.NULL_EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL: plc_expr.ASTOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS: plc_expr.ASTOperator.LESS,
+    plc.binaryop.BinaryOperator.LESS_EQUAL: plc_expr.ASTOperator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER: plc_expr.ASTOperator.GREATER,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL: plc_expr.ASTOperator.GREATER_EQUAL,
+    plc.binaryop.BinaryOperator.ADD: plc_expr.ASTOperator.ADD,
+    plc.binaryop.BinaryOperator.SUB: plc_expr.ASTOperator.SUB,
+    plc.binaryop.BinaryOperator.MUL: plc_expr.ASTOperator.MUL,
+    plc.binaryop.BinaryOperator.DIV: plc_expr.ASTOperator.DIV,
+    plc.binaryop.BinaryOperator.TRUE_DIV: plc_expr.ASTOperator.TRUE_DIV,
+    plc.binaryop.BinaryOperator.FLOOR_DIV: plc_expr.ASTOperator.FLOOR_DIV,
+    plc.binaryop.BinaryOperator.PYMOD: plc_expr.ASTOperator.PYMOD,
+    plc.binaryop.BinaryOperator.BITWISE_AND: plc_expr.ASTOperator.BITWISE_AND,
+    plc.binaryop.BinaryOperator.BITWISE_OR: plc_expr.ASTOperator.BITWISE_OR,
+    plc.binaryop.BinaryOperator.BITWISE_XOR: plc_expr.ASTOperator.BITWISE_XOR,
+    plc.binaryop.BinaryOperator.LOGICAL_AND: plc_expr.ASTOperator.LOGICAL_AND,
+    plc.binaryop.BinaryOperator.LOGICAL_OR: plc_expr.ASTOperator.LOGICAL_OR,
+    plc.binaryop.BinaryOperator.NULL_LOGICAL_AND: plc_expr.ASTOperator.NULL_LOGICAL_AND,
+    plc.binaryop.BinaryOperator.NULL_LOGICAL_OR: plc_expr.ASTOperator.NULL_LOGICAL_OR,
+}
+
 UOP_TO_ASTOP = {
     plc.unary.UnaryOperator.SIN: plc_expr.ASTOperator.SIN,
     plc.unary.UnaryOperator.COS: plc_expr.ASTOperator.COS,
@@ -46,21 +73,21 @@ UOP_TO_ASTOP = {
 }
 
 SUPPORTED_STATISTICS_BINOPS = {
-    expr.BinOp.Operator.EQUAL,
-    expr.BinOp.Operator.NOT_EQUAL,
-    expr.BinOp.Operator.LESS,
-    expr.BinOp.Operator.LESS_EQUAL,
-    expr.BinOp.Operator.GREATER,
-    expr.BinOp.Operator.GREATER_EQUAL,
+    plc.binaryop.BinaryOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS,
+    plc.binaryop.BinaryOperator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL,
 }
 
 REVERSED_COMPARISON = {
-    expr.BinOp.Operator.EQUAL: expr.BinOp.Operator.EQUAL,
-    expr.BinOp.Operator.NOT_EQUAL: expr.BinOp.Operator.NOT_EQUAL,
-    expr.BinOp.Operator.LESS: expr.BinOp.Operator.GREATER,
-    expr.BinOp.Operator.LESS_EQUAL: expr.BinOp.Operator.GREATER_EQUAL,
-    expr.BinOp.Operator.GREATER: expr.BinOp.Operator.LESS,
-    expr.BinOp.Operator.GREATER_EQUAL: expr.BinOp.Operator.LESS_EQUAL,
+    plc.binaryop.BinaryOperator.EQUAL: plc.binaryop.BinaryOperator.EQUAL,
+    plc.binaryop.BinaryOperator.NOT_EQUAL: plc.binaryop.BinaryOperator.NOT_EQUAL,
+    plc.binaryop.BinaryOperator.LESS: plc.binaryop.BinaryOperator.GREATER,
+    plc.binaryop.BinaryOperator.LESS_EQUAL: plc.binaryop.BinaryOperator.GREATER_EQUAL,
+    plc.binaryop.BinaryOperator.GREATER: plc.binaryop.BinaryOperator.LESS,
+    plc.binaryop.BinaryOperator.GREATER_EQUAL: plc.binaryop.BinaryOperator.LESS_EQUAL,
 }
 
 
@@ -118,20 +145,22 @@ def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
-    if node.op == expr.BinOp.Operator.NULL_NOT_EQUALS:
+    if node.op == plc.binaryop.BinaryOperator.NULL_NOT_EQUALS:
         return plc_expr.Operation(
             plc_expr.ASTOperator.NOT,
             self(
                 # Reconstruct and apply, rather than directly
                 # constructing the right expression so we get the
                 # handling of parquet special cases for free.
-                expr.BinOp(node.dtype, expr.BinOp.Operator.NULL_EQUALS, *node.children)
+                expr.BinOp(
+                    node.dtype, plc.binaryop.BinaryOperator.NULL_EQUALS, *node.children
+                )
             ),
         )
     if self.state["for_parquet"]:
         op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
         if op1_col ^ op2_col:
-            op: expr.BinOp.Operator = node.op
+            op = node.op
             if op not in SUPPORTED_STATISTICS_BINOPS:
                 raise NotImplementedError(
                     f"Parquet filter binop with column doesn't support {node.op!r}"
@@ -144,16 +173,12 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
                 raise NotImplementedError(
                     "Parquet filter binops must have form 'col binop literal'"
                 )
-            return plc_expr.Operation(
-                expr.BinOp.Operator.to_pylibcudf_expr(op), self(op1), self(op2)
-            )
+            return plc_expr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
         elif op1_col and op2_col:
             raise NotImplementedError(
                 "Parquet filter binops must have one column reference not two"
             )
-    return plc_expr.Operation(
-        expr.BinOp.Operator.to_pylibcudf_expr(node.op), *map(self, node.children)
-    )
+    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
 
 
 @_to_ast.register

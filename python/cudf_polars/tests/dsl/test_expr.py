@@ -83,7 +83,7 @@ def test_equality_cse():
         a = expr.Col(plc.DataType(plc.TypeId.INT8), n1)
         b = expr.Col(plc.DataType(plc.TypeId.INT8), n2)
 
-        return expr.BinOp(dt, expr.BinOp.Operator.ADD, a, b)
+        return expr.BinOp(dt, plc.binaryop.BinaryOperator.ADD, a, b)
 
     e1 = make_expr("a", "b")
     e2 = make_expr("a", "b")

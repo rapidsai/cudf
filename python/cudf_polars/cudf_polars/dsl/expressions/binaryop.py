@@ -6,21 +6,17 @@
 
 from __future__ import annotations
 
-from enum import IntEnum, auto
 from typing import TYPE_CHECKING, ClassVar
 
 from polars.polars import _expr_nodes as pl_expr
 
 import pylibcudf as plc
-from pylibcudf import expressions as plc_expr
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from typing_extensions import Self
 
     from cudf_polars.containers import DataFrame
 
@@ -31,90 +27,10 @@ class BinOp(Expr):
     __slots__ = ("op",)
     _non_child = ("dtype", "op")
 
-    class Operator(IntEnum):
-        """Internal and picklable representation of pylibcudf's `BinaryOperator`."""
-
-        ADD = auto()
-        ATAN2 = auto()
-        BITWISE_AND = auto()
-        BITWISE_OR = auto()
-        BITWISE_XOR = auto()
-        DIV = auto()
-        EQUAL = auto()
-        FLOOR_DIV = auto()
-        GENERIC_BINARY = auto()
-        GREATER = auto()
-        GREATER_EQUAL = auto()
-        INT_POW = auto()
-        INVALID_BINARY = auto()
-        LESS = auto()
-        LESS_EQUAL = auto()
-        LOGICAL_AND = auto()
-        LOGICAL_OR = auto()
-        LOG_BASE = auto()
-        MOD = auto()
-        MUL = auto()
-        NOT_EQUAL = auto()
-        NULL_EQUALS = auto()
-        NULL_LOGICAL_AND = auto()
-        NULL_LOGICAL_OR = auto()
-        NULL_MAX = auto()
-        NULL_MIN = auto()
-        NULL_NOT_EQUALS = auto()
-        PMOD = auto()
-        POW = auto()
-        PYMOD = auto()
-        SHIFT_LEFT = auto()
-        SHIFT_RIGHT = auto()
-        SHIFT_RIGHT_UNSIGNED = auto()
-        SUB = auto()
-        TRUE_DIV = auto()
-
-        @classmethod
-        def from_polars(cls, obj: pl_expr.Operator) -> BinOp.Operator:
-            """Convert from polars' `Operator`."""
-            mapping: dict[pl_expr.Operator, BinOp.Operator] = {
-                pl_expr.Operator.Eq: BinOp.Operator.EQUAL,
-                pl_expr.Operator.EqValidity: BinOp.Operator.NULL_EQUALS,
-                pl_expr.Operator.NotEq: BinOp.Operator.NOT_EQUAL,
-                pl_expr.Operator.NotEqValidity: BinOp.Operator.NULL_NOT_EQUALS,
-                pl_expr.Operator.Lt: BinOp.Operator.LESS,
-                pl_expr.Operator.LtEq: BinOp.Operator.LESS_EQUAL,
-                pl_expr.Operator.Gt: BinOp.Operator.GREATER,
-                pl_expr.Operator.GtEq: BinOp.Operator.GREATER_EQUAL,
-                pl_expr.Operator.Plus: BinOp.Operator.ADD,
-                pl_expr.Operator.Minus: BinOp.Operator.SUB,
-                pl_expr.Operator.Multiply: BinOp.Operator.MUL,
-                pl_expr.Operator.Divide: BinOp.Operator.DIV,
-                pl_expr.Operator.TrueDivide: BinOp.Operator.TRUE_DIV,
-                pl_expr.Operator.FloorDivide: BinOp.Operator.FLOOR_DIV,
-                pl_expr.Operator.Modulus: BinOp.Operator.PYMOD,
-                pl_expr.Operator.And: BinOp.Operator.BITWISE_AND,
-                pl_expr.Operator.Or: BinOp.Operator.BITWISE_OR,
-                pl_expr.Operator.Xor: BinOp.Operator.BITWISE_XOR,
-                pl_expr.Operator.LogicalAnd: BinOp.Operator.LOGICAL_AND,
-                pl_expr.Operator.LogicalOr: BinOp.Operator.LOGICAL_OR,
-            }
-
-            return mapping[obj]
-
-        @classmethod
-        def to_pylibcudf(cls, obj: Self) -> plc.binaryop.BinaryOperator:
-            """Convert to pylibcudf's `BinaryOperator`."""
-            return getattr(plc.binaryop.BinaryOperator, obj.name)
-
-        @classmethod
-        def to_pylibcudf_expr(cls, obj: Self) -> plc.binaryop.BinaryOperator:
-            """Convert to pylibcudf's `ASTOperator`."""
-            if obj is BinOp.Operator.NULL_EQUALS:
-                # Name mismatch in pylibcudf's `BinaryOperator` and `ASTOperator`.
-                return plc_expr.ASTOperator.NULL_EQUAL
-            return getattr(plc_expr.ASTOperator, obj.name)
-
     def __init__(
         self,
         dtype: plc.DataType,
-        op: BinOp.Operator,
+        op: plc.binaryop.BinaryOperator,
         left: Expr,
         right: Expr,
     ) -> None:
@@ -127,7 +43,7 @@ class BinOp(Expr):
         self.op = op
         self.children = (left, right)
         if not plc.binaryop.is_supported_operation(
-            self.dtype, left.dtype, right.dtype, BinOp.Operator.to_pylibcudf(op)
+            self.dtype, left.dtype, right.dtype, op
         ):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
@@ -135,11 +51,36 @@ class BinOp(Expr):
                 f"with output type {self.dtype.id().name}"
             )
 
-    _BOOL_KLEENE_MAPPING: ClassVar[dict[Operator, Operator]] = {
-        Operator.BITWISE_AND: Operator.NULL_LOGICAL_AND,
-        Operator.BITWISE_OR: Operator.NULL_LOGICAL_OR,
-        Operator.LOGICAL_AND: Operator.NULL_LOGICAL_AND,
-        Operator.LOGICAL_OR: Operator.NULL_LOGICAL_OR,
+    _BOOL_KLEENE_MAPPING: ClassVar[
+        dict[plc.binaryop.BinaryOperator, plc.binaryop.BinaryOperator]
+    ] = {
+        plc.binaryop.BinaryOperator.BITWISE_AND: plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
+        plc.binaryop.BinaryOperator.BITWISE_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
+        plc.binaryop.BinaryOperator.LOGICAL_AND: plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
+        plc.binaryop.BinaryOperator.LOGICAL_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
+    }
+
+    _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
+        pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
+        pl_expr.Operator.EqValidity: plc.binaryop.BinaryOperator.NULL_EQUALS,
+        pl_expr.Operator.NotEq: plc.binaryop.BinaryOperator.NOT_EQUAL,
+        pl_expr.Operator.NotEqValidity: plc.binaryop.BinaryOperator.NULL_NOT_EQUALS,
+        pl_expr.Operator.Lt: plc.binaryop.BinaryOperator.LESS,
+        pl_expr.Operator.LtEq: plc.binaryop.BinaryOperator.LESS_EQUAL,
+        pl_expr.Operator.Gt: plc.binaryop.BinaryOperator.GREATER,
+        pl_expr.Operator.GtEq: plc.binaryop.BinaryOperator.GREATER_EQUAL,
+        pl_expr.Operator.Plus: plc.binaryop.BinaryOperator.ADD,
+        pl_expr.Operator.Minus: plc.binaryop.BinaryOperator.SUB,
+        pl_expr.Operator.Multiply: plc.binaryop.BinaryOperator.MUL,
+        pl_expr.Operator.Divide: plc.binaryop.BinaryOperator.DIV,
+        pl_expr.Operator.TrueDivide: plc.binaryop.BinaryOperator.TRUE_DIV,
+        pl_expr.Operator.FloorDivide: plc.binaryop.BinaryOperator.FLOOR_DIV,
+        pl_expr.Operator.Modulus: plc.binaryop.BinaryOperator.PYMOD,
+        pl_expr.Operator.And: plc.binaryop.BinaryOperator.BITWISE_AND,
+        pl_expr.Operator.Or: plc.binaryop.BinaryOperator.BITWISE_OR,
+        pl_expr.Operator.Xor: plc.binaryop.BinaryOperator.BITWISE_XOR,
+        pl_expr.Operator.LogicalAnd: plc.binaryop.BinaryOperator.LOGICAL_AND,
+        pl_expr.Operator.LogicalOr: plc.binaryop.BinaryOperator.LOGICAL_OR,
     }
 
     def do_evaluate(
@@ -162,9 +103,7 @@ class BinOp(Expr):
             elif right.is_scalar:
                 rop = right.obj_scalar
         return Column(
-            plc.binaryop.binary_operation(
-                lop, rop, BinOp.Operator.to_pylibcudf(self.op), self.dtype
-            ),
+            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
         )
 
     def collect_agg(self, *, depth: int) -> AggInfo:

@@ -8,7 +8,6 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.dsl import expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -72,12 +71,12 @@ def test_timelike_literal(timestamp, timedelta):
         schema["adjusted"],
         schema["time"],
         schema["delta"],
-        expr.BinOp.Operator.ADD,
+        plc.binaryop.BinaryOperator.ADD,
     ) and plc.binaryop.is_supported_operation(
         schema["two_delta"],
         schema["delta"],
         schema["delta"],
-        expr.BinOp.Operator.ADD,
+        plc.binaryop.BinaryOperator.ADD,
     ):
         assert_gpu_result_equal(q)
     else:

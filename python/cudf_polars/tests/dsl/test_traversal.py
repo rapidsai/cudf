@@ -25,7 +25,7 @@ def make_expr(dt, n1, n2):
     a1 = expr.Col(dt, n1)
     a2 = expr.Col(dt, n2)
 
-    return expr.BinOp(dt, expr.BinOp.Operator.MUL, a1, a2)
+    return expr.BinOp(dt, plc.binaryop.BinaryOperator.MUL, a1, a2)
 
 
 def test_traversal_unique():
@@ -197,8 +197,10 @@ def test_rewrite_names_and_ops():
 
     @_transform.register
     def _(e: expr.BinOp, fn: ExprTransformer):
-        if e.op == expr.BinOp.Operator.ADD:
-            return type(e)(e.dtype, expr.BinOp.Operator.MUL, *map(fn, e.children))
+        if e.op == plc.binaryop.BinaryOperator.ADD:
+            return type(e)(
+                e.dtype, plc.binaryop.BinaryOperator.MUL, *map(fn, e.children)
+            )
         return reuse_if_unchanged(e, fn)
 
     _transform.register(expr.Expr)(reuse_if_unchanged)
