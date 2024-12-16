@@ -425,6 +425,11 @@ ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
 
+# ##################################################################################################
+# * reshape benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(ROLLING_NVBENCH rolling/rolling_sum.cpp)
+
 add_custom_target(
   run_benchmarks
   DEPENDS CUDF_BENCHMARKS
