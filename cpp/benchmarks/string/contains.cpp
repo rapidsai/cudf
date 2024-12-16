@@ -29,17 +29,12 @@ std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$", "5W43"
 
 static void bench_contains(nvbench::state& state)
 {
-  auto const n_rows        = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const row_width     = static_cast<cudf::size_type>(state.get_int64("row_width"));
   auto const pattern_index = static_cast<cudf::size_type>(state.get_int64("pattern"));
   auto const hit_rate      = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
 
-  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
-  auto col   = create_string_column(n_rows, row_width, hit_rate);
+  auto col   = create_string_column(num_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
 
   auto pattern = patterns[pattern_index];
@@ -56,7 +51,7 @@ static void bench_contains(nvbench::state& state)
 
 NVBENCH_BENCH(bench_contains)
   .set_name("contains")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
+  .add_int64_axis("row_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("hit_rate", {50, 100})  // percentage
   .add_int64_axis("pattern", {0, 1, 2});

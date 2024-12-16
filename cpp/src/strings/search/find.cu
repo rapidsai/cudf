@@ -34,6 +34,7 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -142,7 +143,7 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
     if (stop < 0) { return d_str.size_bytes(); }
     if (stop <= start) { return begin; }
     // we count from `begin` instead of recounting from the beginning of the string
-    return begin + std::get<0>(bytes_to_character_position(
+    return begin + cuda::std::get<0>(bytes_to_character_position(
                      string_view(d_str.data() + begin, d_str.size_bytes() - begin), stop - start));
   }();
 
