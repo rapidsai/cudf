@@ -207,11 +207,13 @@ class run_cache_manager {
    */
   __forceinline__ __device__ void write_to_cache(int64_t* src, int64_t& cache)
   {
+    if (_status != status::CAN_WRITE_TO_CACHE) { return; }
+
     const auto tid = threadIdx.x;
 
     // All threads in the block take a uniform code path.
     // _reusable_length ranges between [0, 512]
-    if (_status == status::CAN_WRITE_TO_CACHE and _reusable_length > 0) {
+    if (_reusable_length > 0) {
       const auto length_to_skip = _run_length - _reusable_length;
       if (tid < _reusable_length) {
         const auto src_idx = tid + length_to_skip;
@@ -224,6 +226,8 @@ class run_cache_manager {
       __syncthreads();
       if (tid == 0) { _status = status::DISABLED; }
     }
+
+    __syncthreads();
   }
 
   /**
@@ -237,11 +241,13 @@ class run_cache_manager {
                                                   orc_rlev2_state_s* rle,
                                                   int64_t cache)
   {
+    if (_status != status::CAN_READ_FROM_CACHE) { return; }
+
     const auto tid = threadIdx.x;
 
     // All threads in the block take a uniform code path.
     // _reusable_length ranges between [0, 512]
-    if (_status == status::CAN_READ_FROM_CACHE and _reusable_length > 0) {
+    if (_reusable_length > 0) {
       // First, shift the data up
       const auto dst_idx = tid + _reusable_length;
       const auto v       = (dst_idx < rle->num_vals + _reusable_length) ? dst[tid] : 0;
@@ -259,6 +265,8 @@ class run_cache_manager {
         rle->num_vals += _reusable_length;
       }
     }
+
+    __syncthreads();
   }
 
  private:
@@ -1026,7 +1034,6 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
       run_cache_manager_inst->write_to_cache(vals, *cache);
     }
   }
-  __syncthreads();
   return rle->num_vals;
 }
 
