@@ -140,8 +140,9 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
 endfunction()
 
 # ##################################################################################################
-# * column benchmarks -----------------------------------------------------------------------------
-ConfigureBench(COLUMN_CONCAT_BENCH column/concatenate.cpp)
+# * copying benchmarks
+# -----------------------------------------------------------------------------
+ConfigureNVBench(COPYING_NVBENCH copying/concatenate.cpp)
 
 # ##################################################################################################
 # * gather benchmark ------------------------------------------------------------------------------
@@ -351,17 +352,22 @@ ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binary
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(TEXT_BENCH text/subword.cpp)
-
 ConfigureNVBench(
-  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/ngrams.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
+  TEXT_NVBENCH
+  text/edit_distance.cpp
+  text/hash_ngrams.cpp
+  text/jaccard.cpp
+  text/minhash.cpp
+  text/ngrams.cpp
+  text/normalize.cpp
+  text/replace.cpp
+  text/subword.cpp
+  text/tokenize.cpp
+  text/vocab.cpp
 )
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
-ConfigureBench(STRINGS_BENCH string/factory.cu)
-
 ConfigureNVBench(
   STRINGS_NVBENCH
   string/case.cpp
@@ -377,6 +383,7 @@ ConfigureNVBench(
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/factory.cpp
   string/filter.cpp
   string/find.cpp
   string/find_multiple.cpp

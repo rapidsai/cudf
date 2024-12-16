@@ -16,9 +16,9 @@
 
 #include "file_io_utilities.hpp"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <kvikio/file_handle.hpp>
@@ -86,7 +86,7 @@ class file_sink : public data_sink {
   {
     if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
 
-    size_t offset = _bytes_written;
+    size_t const offset = _bytes_written;
     _bytes_written += size;
 
     if (!_kvikio_file.closed()) {
@@ -170,7 +170,7 @@ class void_sink : public data_sink {
   size_t bytes_written() override { return _bytes_written; }
 
  private:
-  size_t _bytes_written;
+  size_t _bytes_written{};
 };
 
 class user_sink_wrapper : public data_sink {

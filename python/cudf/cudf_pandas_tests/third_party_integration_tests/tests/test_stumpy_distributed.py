@@ -41,7 +41,7 @@ def test_multidimensional_distributed_timeseries(dask_client):
     rng = np.random.default_rng(seed=42)
     # Each row represents data from a different dimension while each column represents
     # data from the same dimension
-    your_time_series = rng.random(3, 1000)
+    your_time_series = rng.random((3, 1000))
     # Approximately, how many data points might be found in a pattern
     window_size = 50
 

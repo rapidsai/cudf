@@ -1,12 +1,15 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import itertools
-from typing import Any, ClassVar
+from typing import Any
+
+import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.types import size_type_dtype
+from cudf.core._internals import sorting
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.copy_types import GatherMap
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
@@ -17,19 +20,26 @@ from cudf.core.join._join_helpers import (
 
 
 class Merge:
-    # The joiner function must have the following signature:
-    #
-    #     def joiner(
-    #         lhs: Frame,
-    #         rhs: Frame
-    #     ) -> Tuple[Optional[Column], Optional[Column]]:
-    #          ...
-    #
-    # where `lhs` and `rhs` are Frames composed of the left and right
-    # join key. The `joiner` returns a tuple of two Columns
-    # representing the rows to gather from the left- and right- side
-    # tables respectively.
-    _joiner: ClassVar[staticmethod] = staticmethod(libcudf.join.join)
+    @staticmethod
+    @acquire_spill_lock()
+    def _joiner(
+        lhs: list[libcudf.column.Column],
+        rhs: list[libcudf.column.Column],
+        how: str,
+    ) -> tuple[libcudf.column.Column, libcudf.column.Column]:
+        if how == "outer":
+            how = "full"
+        if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
+            raise ValueError(f"Invalid join type {how}")
+
+        left_rows, right_rows = join_func(
+            plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
+            plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
+            plc.types.NullEquality.EQUAL,
+        )
+        return libcudf.column.Column.from_pylibcudf(
+            left_rows
+        ), libcudf.column.Column.from_pylibcudf(right_rows)
 
     def __init__(
         self,
@@ -232,21 +242,13 @@ class Merge:
         # To reorder maps so that they are in order of the input
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
-        key_order = list(
-            itertools.chain.from_iterable(
-                libcudf.copying.gather(
-                    [
-                        cudf.core.column.as_column(
-                            range(n), dtype=size_type_dtype
-                        )
-                    ],
-                    map_,
-                    nullify=null,
-                )
-                for map_, n, null in zip(maps, lengths, nullify)
+        key_order = [
+            cudf.core.column.as_column(range(n), dtype=size_type_dtype).take(
+                map_, nullify=null, check_bounds=False
             )
-        )
-        return libcudf.sort.sort_by_key(
+            for map_, n, null in zip(maps, lengths, nullify)
+        ]
+        return sorting.sort_by_key(
             list(maps),
             # If how is right, right map is primary sort key.
             key_order[:: -1 if self.how == "right" else 1],
@@ -416,7 +418,7 @@ class Merge:
             else:
                 to_sort = [*result._columns]
                 index_names = None
-            result_columns = libcudf.sort.sort_by_key(
+            result_columns = sorting.sort_by_key(
                 to_sort,
                 by,
                 [True] * len(by),
@@ -546,7 +548,27 @@ class Merge:
 
 
 class MergeSemi(Merge):
-    _joiner: ClassVar[staticmethod] = staticmethod(libcudf.join.semi_join)
+    @staticmethod
+    @acquire_spill_lock()
+    def _joiner(
+        lhs: list[libcudf.column.Column],
+        rhs: list[libcudf.column.Column],
+        how: str,
+    ) -> tuple[libcudf.column.Column, None]:
+        if (
+            join_func := getattr(
+                plc.join, f"{how.replace('left', 'left_')}_join", None
+            )
+        ) is None:
+            raise ValueError(f"Invalid join type {how}")
+
+        return libcudf.column.Column.from_pylibcudf(
+            join_func(
+                plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
+                plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
+                plc.types.NullEquality.EQUAL,
+            )
+        ), None
 
     def _merge_results(self, lhs: cudf.DataFrame, rhs: cudf.DataFrame):
         # semi-join result includes only lhs columns

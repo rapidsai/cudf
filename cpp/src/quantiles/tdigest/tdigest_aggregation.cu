@@ -385,7 +385,7 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
                                                 size_type const* group_cluster_offsets,
                                                 bool has_nulls)
 {
-  int const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
 
   auto const group_index = tid;
   if (group_index >= num_groups) { return; }
