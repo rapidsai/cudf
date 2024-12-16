@@ -294,7 +294,7 @@ class TimeDeltaColumn(ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object", masked=False),
+                column.column_empty(0, dtype="object"),
             )
         else:
             return string._timedelta_to_str_typecast_functions[self.dtype](

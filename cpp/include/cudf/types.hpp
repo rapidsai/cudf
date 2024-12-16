@@ -266,7 +266,7 @@ class data_type {
    *
    * @param id The type's identifier
    */
-  explicit constexpr data_type(type_id id) : _id{id} {}
+  CUDF_HOST_DEVICE explicit constexpr data_type(type_id id) : _id{id} {}
 
   /**
    * @brief Construct a new `data_type` object for `numeric::fixed_point`
@@ -284,14 +284,17 @@ class data_type {
    *
    * @return The type identifier
    */
-  [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    *
    * @return The scale
    */
-  [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr int32_t scale() const noexcept
+  {
+    return _fixed_point_scale;
+  }
 
  private:
   type_id _id{type_id::EMPTY};
