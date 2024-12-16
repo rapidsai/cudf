@@ -13,6 +13,9 @@ from pylibcudf.libcudf.types cimport bitmask_type, size_type
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
 
+ctypedef fused ColumnOrObject:
+    Column
+    object
 
 cdef class Column:
     # TODO: Should we document these attributes? Should we mark them readonly?
@@ -35,7 +38,7 @@ cdef class Column:
     cdef Column from_libcudf(unique_ptr[column] libcudf_col)
 
     @staticmethod
-    cdef Column from_column_view(const column_view& libcudf_col, Column owner)
+    cdef Column from_column_view(const column_view& libcudf_col, object owner)
 
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)

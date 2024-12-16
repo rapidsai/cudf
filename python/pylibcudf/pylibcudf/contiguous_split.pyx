@@ -162,11 +162,8 @@ cpdef Table unpack(PackedColumns input):
     Table
         Copy of the packed columns.
     """
-    cdef table_view v = cpp_unpack(dereference(input.c_obj))
-    # Since `Table.from_table_view` doesn't support an arbitrary owning object,
-    # we copy the table, see <https://github.com/rapidsai/cudf/issues/17040>.
-    cdef unique_ptr[table] t = make_unique[table](v)
-    return Table.from_libcudf(move(t))
+    cdef table_view tv = cpp_unpack(dereference(input.c_obj))
+    return Table.from_table_view(tv, input)
 
 
 cpdef Table unpack_from_memoryviews(memoryview metadata, gpumemoryview gpu_data):

@@ -61,7 +61,7 @@ cdef class Table:
         ])
 
     @staticmethod
-    cdef Table from_table_view(const table_view& tv, Table owner):
+    cdef Table from_table_view(const table_view& tv, object owner):
         """Create a Table from a libcudf table.
 
         This method accepts shared ownership of the underlying data from the
@@ -72,8 +72,13 @@ cdef class Table:
         (even direct pylibcudf Cython users).
         """
         cdef int i
+        if isinstance(owner, Table):
+            return Table([
+                Column.from_column_view(tv.column(i), owner.columns()[i])
+                for i in range(tv.num_columns())
+            ])
         return Table([
-            Column.from_column_view(tv.column(i), owner.columns()[i])
+            Column.from_column_view(tv.column(i), owner)
             for i in range(tv.num_columns())
         ])
 

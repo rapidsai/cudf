@@ -6,7 +6,7 @@ from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.fixed_point.fixed_point cimport scale_type
 from pylibcudf.libcudf.table.table_view cimport table_view
-from pylibcudf.libcudf.types cimport data_type
+from pylibcudf.libcudf.types cimport data_type, size_type
 
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
@@ -54,6 +54,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         string_scalar(string st, bool is_valid) except +libcudf_exception_handler
         string_scalar(string_scalar other) except +libcudf_exception_handler
         string to_string() except +libcudf_exception_handler
+        size_type size() except +libcudf_exception_handler
 
     cdef cppclass fixed_point_scalar[T](scalar):
         fixed_point_scalar() except +libcudf_exception_handler
