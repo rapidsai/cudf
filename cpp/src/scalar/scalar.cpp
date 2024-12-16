@@ -114,11 +114,10 @@ string_scalar::operator std::string() const { return this->to_string(cudf::get_d
 
 std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
-  std::string result;
-  result.resize(_data.size());
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(&result[0], _data.data(), _data.size(), cudaMemcpyDefault, stream.value()));
-  stream.synchronize();
+  std::string result(size(), '\0');
+  detail::cuda_memcpy(host_span<char>{result.data(), result.size()},
+                      device_span<char const>{data(), _data.size()},
+                      stream);
   return result;
 }
 

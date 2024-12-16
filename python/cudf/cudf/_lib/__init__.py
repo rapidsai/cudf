@@ -2,7 +2,6 @@
 import numpy as np
 
 from . import (
-    copying,
     groupby,
     interop,
     stream_compaction,

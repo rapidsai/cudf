@@ -1802,13 +1802,37 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 for table in tables
             ]
-
-            concatted = libcudf.utils.data_from_pylibcudf_table(
-                plc.concatenate.concatenate(plc_tables),
-                column_names=column_names,
-                index_names=index_names,
-            )
-        out = cls._from_data(*concatted)
+            plc_result = plc.concatenate.concatenate(plc_tables)
+            if ignore:
+                index = None
+                data = {
+                    col_name: ColumnBase.from_pylibcudf(col)
+                    for col_name, col in zip(
+                        column_names, plc_result.columns(), strict=True
+                    )
+                }
+            else:
+                result_columns = [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_result.columns()
+                ]
+                index = _index_from_data(
+                    dict(
+                        zip(
+                            index_names,
+                            result_columns[: len(index_names)],
+                            strict=True,
+                        )
+                    )
+                )
+                data = dict(
+                    zip(
+                        column_names,
+                        result_columns[len(index_names) :],
+                        strict=True,
+                    )
+                )
+        out = cls._from_data(data=data, index=index)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
@@ -3172,10 +3196,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             if cond_col := cond._data.get(name):
-                result = cudf._lib.copying.copy_if_else(
-                    source_col, other_col, cond_col
-                )
-
+                result = source_col.copy_if_else(other_col, cond_col)
                 out.append(result._with_type_metadata(col.dtype))
             else:
                 out_mask = as_buffer(
