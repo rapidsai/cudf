@@ -57,10 +57,8 @@ jobs:
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   check-nightly-ci:
     runs-on: ubuntu-latest
-    container:
-      image: ubuntu-latest
-      env:
-        RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Check if nightly CI is passing
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@feat/check_nightly_ci
