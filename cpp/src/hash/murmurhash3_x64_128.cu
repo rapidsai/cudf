@@ -25,6 +25,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/array>
+#include <cuda/std/limits>
 #include <thrust/for_each.h>
 
 namespace cudf {
@@ -83,7 +84,8 @@ class murmur_device_row_hasher {
                                           hash_value_type const seed) const noexcept
     {
       if (check_nulls && col.is_null(row_index)) {
-        return {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
+        return {cuda::std::numeric_limits<uint64_t>::max(),
+                cuda::std::numeric_limits<uint64_t>::max()};
       }
       auto const hasher = MurmurHash3_x64_128<T>{seed[0]};
       return hasher(col.element<T>(row_index));

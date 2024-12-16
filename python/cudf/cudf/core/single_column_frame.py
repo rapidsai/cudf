@@ -380,7 +380,7 @@ class SingleColumnFrame(Frame, NotIterable):
             source_col=self._column, other=other, inplace=inplace
         )
 
-        result = cudf._lib.copying.copy_if_else(input_col, other, cond)
+        result = input_col.copy_if_else(other, cond)
         return result._with_type_metadata(self.dtype)
 
     @_performance_tracking
