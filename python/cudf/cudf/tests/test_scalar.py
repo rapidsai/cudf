@@ -10,10 +10,11 @@ import pyarrow as pa
 import pytest
 from packaging import version
 
+import pylibcudf as plc
 import rmm
 
 import cudf
-from cudf._lib.copying import get_element
+from cudf.core.buffer import acquire_spill_lock
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
@@ -143,8 +144,14 @@ def test_scalar_host_initialization(value):
 @pytest.mark.parametrize("value", SCALAR_VALUES)
 def test_scalar_device_initialization(value):
     column = cudf.Series([value], nan_as_null=False)._column
-    dev_slr = get_element(column, 0)
-
+    with acquire_spill_lock():
+        dev_slr = cudf._lib.scalar.DeviceScalar.from_pylibcudf(
+            plc.copying.get_element(
+                column.to_pylibcudf(mode="read"),
+                0,
+            ),
+            dtype=column.dtype,
+        )
     s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current
@@ -164,8 +171,14 @@ def test_scalar_device_initialization(value):
 def test_scalar_device_initialization_decimal(value, decimal_type):
     dtype = decimal_type._from_decimal(value)
     column = cudf.Series([str(value)]).astype(dtype)._column
-    dev_slr = get_element(column, 0)
-
+    with acquire_spill_lock():
+        dev_slr = cudf._lib.scalar.DeviceScalar.from_pylibcudf(
+            plc.copying.get_element(
+                column.to_pylibcudf(mode="read"),
+                0,
+            ),
+            dtype=column.dtype,
+        )
     s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current

@@ -42,7 +42,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._compat import PANDAS_GE_210
-from cudf.core._internals import aggregation, sorting, unary
+from cudf.core._internals import aggregation, copying, sorting, unary
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -51,6 +51,7 @@ from cudf.core.buffer import (
     as_buffer,
     cuda_array_interface_wrapper,
 )
+from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import (
     CategoricalDtype,
     DecimalDtype,
@@ -77,6 +78,7 @@ if TYPE_CHECKING:
     import builtins
 
     from cudf._typing import ColumnLike, Dtype, ScalarLike
+    from cudf.core.column.numerical import NumericalColumn
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -431,8 +433,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
         return self
 
-    def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
-        return libcudf.copying.shift(self, offset, fill_value)
+    @acquire_spill_lock()
+    def shift(self, offset: int, fill_value: ScalarLike) -> Self:
+        if not isinstance(fill_value, cudf.Scalar):
+            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        plc_col = plc.copying.shift(
+            self.to_pylibcudf(mode="read"),
+            offset,
+            fill_value.device_value.c_value,
+        )
+        return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
     @property
     def nullmask(self) -> Buffer:
@@ -460,8 +470,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             them.
         """
         if deep:
-            result = libcudf.copying.copy_column(self)
-            return result._with_type_metadata(self.dtype)
+            with acquire_spill_lock():
+                result = type(self).from_pylibcudf(
+                    self.to_pylibcudf(mode="read").copy()
+                )
+            return result._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
             return cast(
                 Self,
@@ -542,7 +555,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             idx = len(self) + idx
         if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
-        return libcudf.copying.get_element(self, idx).value
+        with acquire_spill_lock():
+            dscalar = libcudf.scalar.DeviceScalar.from_pylibcudf(
+                plc.copying.get_element(
+                    self.to_pylibcudf(mode="read"),
+                    idx,
+                ),
+                dtype=self.dtype,
+            )
+        return dscalar.value
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride
@@ -554,9 +575,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return cast(Self, column_empty(0, self.dtype))
         # compute mask slice
         if stride == 1:
-            return libcudf.copying.column_slice(self, [start, stop])[
-                0
-            ]._with_type_metadata(self.dtype)
+            with acquire_spill_lock():
+                result = [
+                    type(self).from_pylibcudf(col)
+                    for col in plc.copying.slice(
+                        self.to_pylibcudf(mode="read"),
+                        [start, stop],
+                    )
+                ]
+            return result[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
             # Need to create a gather map for given slice with stride
             gather_map = as_column(
@@ -625,9 +652,16 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             if isinstance(value, cudf.core.scalar.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
-                return libcudf.copying.copy_range(
-                    value, self, 0, num_keys, start, stop, False
-                )
+                with acquire_spill_lock():
+                    return type(self).from_pylibcudf(  # type: ignore[return-value]
+                        plc.copying.copy_range(
+                            value.to_pylibcudf(mode="read"),
+                            self.to_pylibcudf(mode="read"),
+                            0,
+                            num_keys,
+                            start,
+                        )
+                    )
 
         # step != 1, create a scatter map with arange
         scatter_map = cast(
@@ -671,11 +705,21 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         self._check_scatter_key_length(num_keys, value)
 
         if key.dtype.kind == "b":
-            return libcudf.copying.boolean_mask_scatter([value], [self], key)[
-                0
-            ]._with_type_metadata(self.dtype)
+            with acquire_spill_lock():
+                plc_table = plc.copying.boolean_mask_scatter(
+                    plc.Table([value.to_pylibcudf(mode="read")])
+                    if isinstance(value, Column)
+                    else [value.device_value.c_value],
+                    plc.Table([self.to_pylibcudf(mode="read")]),
+                    key.to_pylibcudf(mode="read"),
+                )
+                return (
+                    type(self)  # type: ignore[return-value]
+                    .from_pylibcudf(plc_table.columns()[0])
+                    ._with_type_metadata(self.dtype)
+                )
         else:
-            return libcudf.copying.scatter([value], key, [self])[
+            return copying.scatter([value], key, [self])[
                 0
             ]._with_type_metadata(self.dtype)
 
@@ -887,14 +931,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # be done by the caller. This check will be removed in future release.
         if indices.dtype.kind not in {"u", "i"}:
             indices = indices.astype(libcudf.types.size_type_dtype)
-        if not libcudf.copying._gather_map_is_valid(
-            indices, len(self), check_bounds, nullify
-        ):
-            raise IndexError("Gather map index is out of bounds.")
-
-        return libcudf.copying.gather([self], indices, nullify=nullify)[
-            0
-        ]._with_type_metadata(self.dtype)
+        GatherMap(indices, len(self), nullify=not check_bounds or nullify)
+        gathered = copying.gather([self], indices, nullify=nullify)  # type: ignore[arg-type]
+        return gathered[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
@@ -1507,20 +1546,33 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         left_gather_map = type(self).from_pylibcudf(left_rows)
         right_gather_map = type(self).from_pylibcudf(right_rows)
 
-        codes = libcudf.copying.gather(
-            [as_column(range(len(cats)), dtype=dtype)],
-            right_gather_map,
-            nullify=True,
+        codes = as_column(range(len(cats)), dtype=dtype).take(
+            right_gather_map, nullify=True
         )
         del right_gather_map
         del right_rows
         # reorder `codes` so that its values correspond to the
         # values of `self`:
         (codes,) = sorting.sort_by_key(
-            codes, [left_gather_map], [True], ["last"], stable=True
+            [codes], [left_gather_map], [True], ["last"], stable=True
         )
         return codes.fillna(na_sentinel.value)
 
+    @acquire_spill_lock()
+    def copy_if_else(
+        self, other: Self | cudf.Scalar, boolean_mask: NumericalColumn
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.copying.copy_if_else(
+                self.to_pylibcudf(mode="read"),
+                other.device_value.c_value
+                if isinstance(other, cudf.Scalar)
+                else other.to_pylibcudf(mode="read"),
+                boolean_mask.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
     def one_hot_encode(
         self, categories: ColumnBase
     ) -> abc.Generator[ColumnBase]:
