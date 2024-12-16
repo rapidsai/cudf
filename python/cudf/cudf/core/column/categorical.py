@@ -1095,17 +1095,22 @@ class CategoricalColumn(column.ColumnBase):
             raise ValueError("dtype must be CategoricalDtype")
 
         if not isinstance(self.categories, type(dtype.categories._column)):
-            # If both categories are of different Column types,
-            # return a column full of Nulls.
-            codes = cast(
-                cudf.core.column.numerical.NumericalColumn,
-                column.as_column(
-                    _DEFAULT_CATEGORICAL_VALUE,
-                    length=self.size,
-                    dtype=self.codes.dtype,
-                ),
-            )
-            codes = as_unsigned_codes(len(dtype.categories), codes)
+            if isinstance(
+                self.categories.dtype, cudf.StructDtype
+            ) and isinstance(dtype.categories.dtype, cudf.IntervalDtype):
+                codes = self.codes
+            else:
+                # Otherwise If both categories are of different Column types,
+                # return a column full of Nulls.
+                codes = cast(
+                    cudf.core.column.numerical.NumericalColumn,
+                    column.as_column(
+                        _DEFAULT_CATEGORICAL_VALUE,
+                        length=self.size,
+                        dtype=self.codes.dtype,
+                    ),
+                )
+                codes = as_unsigned_codes(len(dtype.categories), codes)
             return type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.size,
