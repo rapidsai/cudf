@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.cuh>
 #include <cudf/hashing.hpp>
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/lists/list_view.hpp>

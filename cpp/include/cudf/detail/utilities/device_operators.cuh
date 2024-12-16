@@ -21,7 +21,7 @@
  * @file
  */
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.cuh>
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.cuh>

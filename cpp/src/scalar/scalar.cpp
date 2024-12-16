@@ -17,7 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/utilities/default_stream.hpp>

@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/wrappers/dictionary.hpp>

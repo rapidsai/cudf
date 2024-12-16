@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/durations.hpp>

@@ -24,7 +24,7 @@
 #include "byte_array_view.cuh"
 #include "conversion_type_select.cuh"
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
