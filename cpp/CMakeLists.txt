@@ -760,6 +760,7 @@ add_library(
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
+  src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
