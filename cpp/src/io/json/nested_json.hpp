@@ -465,17 +465,6 @@ std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
 column_name_info make_column_name_info(schema_element const& schema, std::string const& col_name);
 
 /**
- * @brief Get the path data type of a column by path if present in input schema
- *
- * @param path path of the column
- * @param options json reader options which holds schema
- * @return data type of the column if present
- */
-std::optional<data_type> get_path_data_type(
-  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path,
-  cudf::io::json_reader_options const& options);
-
-/**
  * @brief Helper class to get path of a column by column id from reduced column tree
  *
  */

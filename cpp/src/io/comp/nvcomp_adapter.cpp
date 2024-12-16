@@ -18,8 +18,8 @@
 
 #include "nvcomp_adapter.cuh"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <nvcomp/deflate.h>
