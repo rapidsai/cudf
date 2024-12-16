@@ -38,6 +38,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals import copying
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -2953,10 +2954,10 @@ class IndexedFrame(Frame):
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
         return self._from_columns_like_self(
-            libcudf.copying.gather(
-                list(self.index._columns + self._columns)
+            copying.gather(
+                itertools.chain(self.index._columns, self._columns)
                 if keep_index
-                else list(self._columns),
+                else self._columns,
                 gather_map.column,
                 nullify=gather_map.nullify,
             ),
@@ -3036,16 +3037,24 @@ class IndexedFrame(Frame):
                 keep_index=keep_index,
             )
 
-        columns_to_slice = [
-            *(
-                self.index._columns
-                if keep_index and not has_range_index
-                else []
-            ),
-            *self._columns,
-        ]
+        columns_to_slice = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index and not has_range_index
+            else self._columns
+        )
+        with acquire_spill_lock():
+            plc_tables = plc.copying.slice(
+                plc.Table(
+                    [col.to_pylibcudf(mode="read") for col in columns_to_slice]
+                ),
+                [start, stop],
+            )
+            sliced = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_tables[0].columns()
+            ]
         result = self._from_columns_like_self(
-            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
+            sliced,
             self._column_names,
             None if has_range_index or not keep_index else self.index.names,
         )
@@ -3239,7 +3248,7 @@ class IndexedFrame(Frame):
                 plc.types.NanEquality.ALL_EQUAL,
             )
             distinct = libcudf.column.Column.from_pylibcudf(plc_column)
-        result = libcudf.copying.scatter(
+        result = copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
             [as_column(True, length=len(self), dtype=bool)],
@@ -3248,14 +3257,26 @@ class IndexedFrame(Frame):
         return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
-    def _empty_like(self, keep_index=True) -> Self:
+    def _empty_like(self, keep_index: bool = True) -> Self:
+        with acquire_spill_lock():
+            plc_table = plc.copying.empty_like(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in (
+                            itertools.chain(self.index._columns, self._columns)
+                            if keep_index
+                            else self._columns
+                        )
+                    ]
+                )
+            )
+            columns = [
+                libcudf.column.Column.from_pylibcudf(col)
+                for col in plc_table.columns()
+            ]
         result = self._from_columns_like_self(
-            libcudf.copying.columns_empty_like(
-                [
-                    *(self.index._columns if keep_index else ()),
-                    *self._columns,
-                ]
-            ),
+            columns,
             self._column_names,
             self.index.names if keep_index else None,
         )
@@ -3263,25 +3284,24 @@ class IndexedFrame(Frame):
         result._data.rangeindex = self._data.rangeindex
         return result
 
-    def _split(self, splits, keep_index=True):
+    def _split(self, splits, keep_index: bool = True) -> list[Self]:
         if self._num_rows == 0:
             return []
 
-        columns_split = libcudf.copying.columns_split(
-            [
-                *(self.index._columns if keep_index else []),
-                *self._columns,
-            ],
+        columns_split = copying.columns_split(
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns,
             splits,
         )
 
         return [
             self._from_columns_like_self(
-                columns_split[i],
+                split,
                 self._column_names,
                 self.index.names if keep_index else None,
             )
-            for i in range(len(splits) + 1)
+            for split in columns_split
         ]
 
     @_performance_tracking

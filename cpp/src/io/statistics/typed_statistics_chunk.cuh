@@ -30,6 +30,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/std/limits>
 #include <math_constants.h>
 #include <thrust/extrema.h>
 
@@ -246,9 +247,9 @@ get_untyped_chunk(typed_statistics_chunk<T, include_aggregate> const& chunk)
     // invalidate the sum if overflow or underflow is possible
     if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
       if (!chunk.has_minmax) { return true; }
-      return std::numeric_limits<E>::max() / chunk.non_nulls >=
+      return cuda::std::numeric_limits<E>::max() / chunk.non_nulls >=
                static_cast<E>(chunk.maximum_value) and
-             std::numeric_limits<E>::lowest() / chunk.non_nulls <=
+             cuda::std::numeric_limits<E>::lowest() / chunk.non_nulls <=
                static_cast<E>(chunk.minimum_value);
     }
     return true;

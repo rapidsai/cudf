@@ -22,7 +22,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import sorting
+from cudf.core._internals import copying, sorting
 from cudf.core._internals.search import search_sorted
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
@@ -1472,18 +1472,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def _split(self, splits):
+    def _split(self, splits: list[int]) -> list[Self]:
         """Split a frame with split points in ``splits``. Returns a list of
         Frames of length `len(splits) + 1`.
         """
         return [
-            self._from_columns_like_self(
-                libcudf.copying.columns_split(list(self._columns), splits)[
-                    split_idx
-                ],
-                self._column_names,
-            )
-            for split_idx in range(len(splits) + 1)
+            self._from_columns_like_self(split, self._column_names)
+            for split in copying.columns_split(self._columns, splits)
         ]
 
     @_performance_tracking
