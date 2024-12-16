@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
@@ -107,12 +107,9 @@ class StructColumn(ColumnBase):
 
         return n
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return {
-            field: value
-            for field, value in zip(self.dtype.fields, result.values())
-        }
+        return dict(zip(self.dtype.fields, result.values()))
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):
