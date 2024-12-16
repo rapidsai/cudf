@@ -1100,8 +1100,8 @@ class CategoricalColumn(column.ColumnBase):
             ) and isinstance(dtype.categories.dtype, cudf.IntervalDtype):
                 codes = self.codes
             else:
-                # Otherwise If both categories are of different Column types,
-                # return a column full of Nulls.
+                # Otherwise if both categories are of different Column types,
+                # return a column full of nulls.
                 codes = cast(
                     cudf.core.column.numerical.NumericalColumn,
                     column.as_column(
