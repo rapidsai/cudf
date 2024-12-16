@@ -16,6 +16,10 @@ cpdef Table murmurhash3_x64_128(
     uint64_t seed=*
 )
 
+cpdef Column xxhash_32(
+    Table input,
+    uint32_t seed=*
+)
 
 cpdef Column xxhash_64(
     Table input,

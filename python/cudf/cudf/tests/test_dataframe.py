@@ -1440,6 +1440,7 @@ def test_assign_callable(mapping):
         "sha256",
         "sha384",
         "sha512",
+        "xxhash32",
         "xxhash64",
     ],
 )
@@ -1447,6 +1448,7 @@ def test_assign_callable(mapping):
 def test_dataframe_hash_values(nrows, method, seed):
     warning_expected = seed is not None and method not in {
         "murmur3",
+        "xxhash32",
         "xxhash64",
     }
     potential_warning = (
@@ -1472,6 +1474,7 @@ def test_dataframe_hash_values(nrows, method, seed):
         "sha256": object,
         "sha384": object,
         "sha512": object,
+        "xxhash32": np.uint32,
         "xxhash64": np.uint64,
     }
     assert out.dtype == expected_dtypes[method]
@@ -1486,7 +1489,7 @@ def test_dataframe_hash_values(nrows, method, seed):
         assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
 
 
-@pytest.mark.parametrize("method", ["murmur3", "xxhash64"])
+@pytest.mark.parametrize("method", ["murmur3", "xxhash32", "xxhash64"])
 def test_dataframe_hash_values_seed(method):
     gdf = cudf.DataFrame()
     data = np.arange(10)
@@ -1498,6 +1501,52 @@ def test_dataframe_hash_values_seed(method):
     assert out_one.iloc[0] == out_one.iloc[-1]
     assert out_two.iloc[0] == out_two.iloc[-1]
     assert_neq(out_one, out_two)
+
+
+def test_dataframe_hash_values_xxhash32():
+    # xxhash32 has no built-in implementation in Python and we don't want to
+    # add a testing dependency, so we use regression tests against known good
+    # values.
+    gdf = cudf.DataFrame({"a": [0.0, 1.0, 2.0, np.inf, np.nan]})
+    gdf["b"] = -gdf["a"]
+    out_a = gdf["a"].hash_values(method="xxhash32", seed=0)
+    expected_a = cudf.Series(
+        [
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        dtype=np.uint32,
+    )
+    assert_eq(out_a, expected_a)
+
+    out_b = gdf["b"].hash_values(method="xxhash32", seed=42)
+    expected_b = cudf.Series(
+        [
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        dtype=np.uint32,
+    )
+    assert_eq(out_b, expected_b)
+
+    out_df = gdf.hash_values(method="xxhash32", seed=0)
+    expected_df = cudf.Series(
+        [
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        dtype=np.uint32,
+    )
+    assert_eq(out_df, expected_df)
 
 
 def test_dataframe_hash_values_xxhash64():

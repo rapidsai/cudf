@@ -115,6 +115,21 @@ def test_hash_column_sha_md5(
     assert_column_eq(got, expect)
 
 
+def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
+    def py_hasher(val):
+        return xxhash.xxh32(
+            scalar_to_binary(val), seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+        ).intdigest()
+
+    expect = pa.array(
+        [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
+        type=pa.uint32(),
+    )
+    got = plc.hashing.xxhash_32(plc_scalar_input_tbl, 0)
+
+    assert_column_eq(got, expect)
+
+
 def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
     def py_hasher(val):
         return xxhash.xxh64(
