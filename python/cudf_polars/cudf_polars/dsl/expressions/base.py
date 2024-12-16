@@ -181,11 +181,6 @@ class NamedExpr:
         self.name = name
         self.value = value
 
-    @property
-    def is_pointwise(self) -> bool:
-        """Whether this expression acts pointwise on its inputs."""
-        return self.value.is_pointwise
-
     def __hash__(self) -> int:
         """Hash of the expression."""
         return hash((type(self), self.name, self.value))
