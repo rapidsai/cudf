@@ -34,10 +34,15 @@ def read_avro(
         raise TypeError("skip_rows must be an int >= 0")
 
     plc_result = plc.io.avro.read_avro(
-        plc.io.types.SourceInfo([filepath_or_buffer]),
-        columns,
-        skip_rows,
-        num_rows,
+        (
+            plc.io.avro.AvroReaderOptions.builder(
+                plc.io.types.SourceInfo([filepath_or_buffer])
+            )
+            .columns(columns)
+            .skip_rows(skip_rows)
+            .num_rows(num_rows)
+            .build()
+        )
     )
 
     return cudf.DataFrame._from_data(*data_from_pylibcudf_io(plc_result))
