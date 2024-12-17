@@ -14,8 +14,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-import cudf.core.column.string as string
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop, unary
 from cudf.core.buffer import acquire_spill_lock, as_buffer
@@ -366,21 +364,41 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             return NotImplemented
 
-    def int2ip(self) -> "cudf.core.column.StringColumn":
-        if self.dtype != cudf.dtype("uint32"):
+    @acquire_spill_lock()
+    def int2ip(self) -> cudf.core.column.StringColumn:
+        if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
-
-        return libcudf.string_casting.int2ip(self)
+        plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
+            self.to_pylibcudf(mode="read")
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
-        if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
-                cudf.dtype(self.dtype)
-            ](self)
-        else:
+        if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
                 column.column_empty(0, dtype="object"),
+            )
+        elif self.dtype.kind == "b":
+            conv_func = functools.partial(
+                plc.strings.convert.convert_booleans.from_booleans,
+                true_string=cudf.Scalar(
+                    "True", dtype="str"
+                ).device_value.c_value,
+                false_string=cudf.Scalar(
+                    "False", dtype="str"
+                ).device_value.c_value,
+            )
+        elif self.dtype.kind in {"i", "u"}:
+            conv_func = plc.strings.convert.convert_integers.from_integers
+        elif self.dtype.kind == "f":
+            conv_func = plc.strings.convert.convert_floats.from_floats
+        else:
+            raise ValueError(f"No string conversion from type {self.dtype}")
+
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                conv_func(self.to_pylibcudf(mode="read"))
             )
 
     def as_datetime_column(
@@ -420,22 +438,12 @@ class NumericalColumn(NumericalBaseColumn):
         # If all entries are null the result is True, including when the column
         # is empty.
         result_col = self.nans_to_nulls() if skipna else self
-
-        if result_col.null_count == result_col.size:
-            return True
-
-        return libcudf.reduce.reduce("all", result_col)
+        return super(type(self), result_col).all(skipna=skipna)
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
         result_col = self.nans_to_nulls() if skipna else self
-
-        if not skipna and result_col.has_nulls():
-            return True
-        elif skipna and result_col.null_count == result_col.size:
-            return False
-
-        return libcudf.reduce.reduce("any", result_col)
+        return super(type(self), result_col).any(skipna=skipna)
 
     @functools.cached_property
     def nan_count(self) -> int:
@@ -482,19 +490,6 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls(include_nan=True)
-
-    def _process_for_reduction(
-        self, skipna: bool | None = None, min_count: int = 0
-    ) -> NumericalColumn | ScalarLike:
-        skipna = True if skipna is None else skipna
-
-        if self._can_return_nan(skipna=skipna):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-
-        col = self.nans_to_nulls() if skipna else self
-        return super(NumericalColumn, col)._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
 
     def find_and_replace(
         self,
@@ -741,6 +736,40 @@ class NumericalColumn(NumericalBaseColumn):
 
         return super()._reduction_result_dtype(reduction_op)
 
+    @acquire_spill_lock()
+    def digitize(self, bins: np.ndarray, right: bool = False) -> Self:
+        """Return the indices of the bins to which each value in column belongs.
+
+        Parameters
+        ----------
+        bins : np.ndarray
+            1-D column-like object of bins with same type as `column`, should be
+            monotonically increasing.
+        right : bool
+            Indicates whether interval contains the right or left bin edge.
+
+        Returns
+        -------
+        A column containing the indices
+        """
+        if self.dtype != bins.dtype:
+            raise ValueError(
+                "digitize() expects bins and input column have the same dtype."
+            )
+
+        bin_col = as_column(bins, dtype=bins.dtype)
+        if bin_col.nullable:
+            raise ValueError("`bins` cannot contain null entries.")
+
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            getattr(plc.search, "lower_bound" if right else "upper_bound")(
+                plc.Table([bin_col.to_pylibcudf(mode="read")]),
+                plc.Table([self.to_pylibcudf(mode="read")]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+            )
+        )
+
 
 def _normalize_find_and_replace_input(
     input_column_dtype: DtypeObj, col_to_normalize: ColumnBase | list
@@ -795,34 +824,3 @@ def _normalize_find_and_replace_input(
     if not normalized_column.can_cast_safely(input_column_dtype):
         return normalized_column
     return normalized_column.astype(input_column_dtype)
-
-
-def digitize(
-    column: ColumnBase, bins: np.ndarray, right: bool = False
-) -> ColumnBase:
-    """Return the indices of the bins to which each value in column belongs.
-
-    Parameters
-    ----------
-    column : Column
-        Input column.
-    bins : Column-like
-        1-D column-like object of bins with same type as `column`, should be
-        monotonically increasing.
-    right : bool
-        Indicates whether interval contains the right or left bin edge.
-
-    Returns
-    -------
-    A column containing the indices
-    """
-    if not column.dtype == bins.dtype:
-        raise ValueError(
-            "Digitize() expects bins and input column have the same dtype."
-        )
-
-    bin_col = as_column(bins, dtype=bins.dtype)
-    if bin_col.nullable:
-        raise ValueError("`bins` cannot contain null entries.")
-
-    return as_column(libcudf.sort.digitize([column], [bin_col], right))

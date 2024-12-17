@@ -439,6 +439,8 @@ _names_to_skip_in_cpp = {
     # Sphinx doesn't know how to distinguish between the ORC and Parquet
     # definitions because Breathe doesn't to preserve namespaces for enums.
     "TypeKind",
+    # Span subclasses access base class members
+    "base::",
 }
 
 _domain_objects = None

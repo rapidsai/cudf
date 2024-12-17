@@ -86,7 +86,7 @@ constexpr S round_down_safe(S number_to_round, S modulus) noexcept
  * `modulus` is positive and does not check for overflow.
  */
 template <typename S>
-constexpr S round_up_unsafe(S number_to_round, S modulus) noexcept
+CUDF_HOST_DEVICE constexpr S round_up_unsafe(S number_to_round, S modulus) noexcept
 {
   auto remainder = number_to_round % modulus;
   if (remainder == 0) { return number_to_round; }
@@ -187,7 +187,7 @@ constexpr bool is_a_power_of_two(I val) noexcept
  * @return Absolute value if value type is signed.
  */
 template <typename T>
-constexpr auto absolute_value(T value) -> T
+CUDF_HOST_DEVICE constexpr auto absolute_value(T value) -> T
 {
   if constexpr (cuda::std::is_signed<T>()) return numeric::detail::abs(value);
   return value;
