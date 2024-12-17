@@ -1059,19 +1059,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def _positions_from_column_names(self, column_names) -> list[int]:
-        """Map each column name into their positions in the frame.
-
-        The order of indices returned corresponds to the column order in this
-        Frame.
-        """
-        return [
-            i
-            for i, name in enumerate(self._column_names)
-            if name in set(column_names)
-        ]
-
-    @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
         """
         Copy type metadata from each column of `other` to the corresponding
