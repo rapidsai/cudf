@@ -806,6 +806,7 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
     data_attrs = {host_udf_base::groupby_data_attribute::INPUT_VALUES,
                   host_udf_base::groupby_data_attribute::GROUPED_VALUES,
                   host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
+                  host_udf_base::groupby_data_attribute::NUM_GROUPS,
                   host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
                   host_udf_base::groupby_data_attribute::GROUP_LABELS};
   }
@@ -826,6 +827,9 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
           break;
         case host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES:
           udf_input.emplace(attr, get_sorted_values());
+          break;
+        case host_udf_base::groupby_data_attribute::NUM_GROUPS:
+          udf_input.emplace(attr, helper.num_groups(stream));
           break;
         case host_udf_base::groupby_data_attribute::GROUP_OFFSETS:
           udf_input.emplace(attr, helper.group_offsets(stream));

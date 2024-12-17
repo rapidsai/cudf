@@ -630,6 +630,7 @@ struct host_udf_base {
                      ///< values within each group maintain their original order.
     SORTED_GROUPED_VALUES,  ///< The input values grouped according to the input `keys` and
                             ///< sorted within each group.
+    NUM_GROUPS,             ///< The number of groups (i.e., number of distinct keys).
     GROUP_OFFSETS,          ///< The offsets separating groups.
     GROUP_LABELS            ///< Group labels (which is also the same as group indices).
   };
@@ -771,7 +772,7 @@ struct host_udf_base {
    * @brief Hold all possible types of the data that is passed to the derived class for executing
    * the aggregation.
    */
-  using input_data_t = std::variant<column_view, device_span<size_type const>>;
+  using input_data_t = std::variant<column_view, size_type, device_span<size_type const>>;
 
   /**
    * @brief Input to the aggregation, mapping from each data attribute to its actual data.

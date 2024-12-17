@@ -54,6 +54,7 @@ struct host_udf_test : cudf::host_udf_base {
       check_attrs = data_attributes_set_t{groupby_data_attribute::INPUT_VALUES,
                                           groupby_data_attribute::GROUPED_VALUES,
                                           groupby_data_attribute::SORTED_GROUPED_VALUES,
+                                          groupby_data_attribute::NUM_GROUPS,
                                           groupby_data_attribute::GROUP_OFFSETS,
                                           groupby_data_attribute::GROUP_LABELS};
     }
@@ -72,6 +73,9 @@ struct host_udf_test : cudf::host_udf_base {
             break;
           case groupby_data_attribute::SORTED_GROUPED_VALUES:
             EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
+            break;
+          case groupby_data_attribute::NUM_GROUPS:
+            EXPECT_TRUE(std::holds_alternative<cudf::size_type>(input.at(attr)));
             break;
           case groupby_data_attribute::GROUP_OFFSETS:
             EXPECT_TRUE(
@@ -154,7 +158,7 @@ using int32s_col = cudf::test::fixed_width_column_wrapper<int32_t>;
 // For each test, a subset of data attributes will be randomly generated from all the possible input
 // data attributes. The input data corresponding to that subset passed from libcudf will be tested
 // for correctness.
-constexpr int NUM_RANDOM_TESTS = 10;
+constexpr int NUM_RANDOM_TESTS = 20;
 
 struct HostUDFTest : cudf::test::BaseFixture {};
 
@@ -185,6 +189,7 @@ TEST_F(HostUDFTest, GroupbySomeInput)
     cudf::host_udf_base::groupby_data_attribute::INPUT_VALUES,
     cudf::host_udf_base::groupby_data_attribute::GROUPED_VALUES,
     cudf::host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
+    cudf::host_udf_base::groupby_data_attribute::NUM_GROUPS,
     cudf::host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
     cudf::host_udf_base::groupby_data_attribute::GROUP_LABELS};
   for (int i = 0; i < NUM_RANDOM_TESTS; ++i) {
