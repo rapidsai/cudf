@@ -18,8 +18,8 @@
 
 #include "nvcomp_adapter.cuh"
 
-#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <nvcomp/deflate.h>
@@ -70,7 +70,7 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
   }
 }
 
-std::string compression_type_name(compression_type compression)
+[[maybe_unused]] std::string compression_type_name(compression_type compression)
 {
   switch (compression) {
     case compression_type::SNAPPY: return "Snappy";

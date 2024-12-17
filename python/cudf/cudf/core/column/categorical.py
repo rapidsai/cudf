@@ -13,7 +13,6 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.transform import bools_to_mask
 from cudf.core._internals import unary
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
@@ -775,12 +774,11 @@ class CategoricalColumn(column.ColumnBase):
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
         if self.categories.dtype.kind == "f":
-            new_mask = bools_to_mask(self.notnull())
             col = type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.size,
                 dtype=self.dtype,
-                mask=new_mask,
+                mask=self.notnull().fillna(False).as_mask(),
                 children=self.children,
             )
         else:
@@ -1097,17 +1095,22 @@ class CategoricalColumn(column.ColumnBase):
             raise ValueError("dtype must be CategoricalDtype")
 
         if not isinstance(self.categories, type(dtype.categories._column)):
-            # If both categories are of different Column types,
-            # return a column full of Nulls.
-            codes = cast(
-                cudf.core.column.numerical.NumericalColumn,
-                column.as_column(
-                    _DEFAULT_CATEGORICAL_VALUE,
-                    length=self.size,
-                    dtype=self.codes.dtype,
-                ),
-            )
-            codes = as_unsigned_codes(len(dtype.categories), codes)
+            if isinstance(
+                self.categories.dtype, cudf.StructDtype
+            ) and isinstance(dtype.categories.dtype, cudf.IntervalDtype):
+                codes = self.codes
+            else:
+                # Otherwise if both categories are of different Column types,
+                # return a column full of nulls.
+                codes = cast(
+                    cudf.core.column.numerical.NumericalColumn,
+                    column.as_column(
+                        _DEFAULT_CATEGORICAL_VALUE,
+                        length=self.size,
+                        dtype=self.codes.dtype,
+                    ),
+                )
+                codes = as_unsigned_codes(len(dtype.categories), codes)
             return type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.size,
@@ -1195,7 +1198,7 @@ class CategoricalColumn(column.ColumnBase):
                 f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
             )
         elif newsize == 0:
-            codes_col = column.column_empty(0, head.codes.dtype, masked=True)
+            codes_col = column.column_empty(0, head.codes.dtype)
         else:
             codes_col = column.concat_columns(codes)  # type: ignore[arg-type]
 

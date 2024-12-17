@@ -714,21 +714,35 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         storage_options=None,
         **kwargs,
     ):
-        import dask_expr as dx
-        from fsspec.utils import stringify_path
+        try:
+            # TODO: Remove when cudf is pinned to dask>2024.12.0
+            import dask_expr as dx
+            from dask_expr.io.csv import ReadCSV
+            from fsspec.utils import stringify_path
 
-        if not isinstance(path, str):
-            path = stringify_path(path)
-        return dx.new_collection(
-            dx.io.csv.ReadCSV(
-                path,
-                dtype_backend=dtype_backend,
-                storage_options=storage_options,
-                kwargs=kwargs,
-                header=header,
-                dataframe_backend="cudf",
+            if not isinstance(path, str):
+                path = stringify_path(path)
+            return dx.new_collection(
+                ReadCSV(
+                    path,
+                    dtype_backend=dtype_backend,
+                    storage_options=storage_options,
+                    kwargs=kwargs,
+                    header=header,
+                    dataframe_backend="cudf",
+                )
             )
-        )
+        except ImportError:
+            # Requires dask>2024.12.0
+            from dask_cudf.io.csv import read_csv
+
+            return read_csv(
+                path,
+                *args,
+                header=header,
+                storage_options=storage_options,
+                **kwargs,
+            )
 
     @staticmethod
     def read_json(*args, **kwargs):

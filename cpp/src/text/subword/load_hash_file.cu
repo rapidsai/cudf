@@ -19,6 +19,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -198,8 +200,8 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::getline(hash_file, line);
   result.num_bins = str_to_uint32(line, line_no++);
 
-  std::vector<uint64_t> bin_coefficients(result.num_bins);
-  std::vector<uint16_t> bin_offsets(result.num_bins);
+  auto bin_coefficients = cudf::detail::make_host_vector<uint64_t>(result.num_bins, stream);
+  auto bin_offsets      = cudf::detail::make_host_vector<uint16_t>(result.num_bins, stream);
 
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
@@ -216,7 +218,7 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
 
   std::getline(hash_file, line);
   uint64_t hash_table_length = str_to_uint64(line, line_no++);
-  std::vector<uint64_t> table(hash_table_length);
+  auto table                 = cudf::detail::make_host_vector<uint64_t>(hash_table_length, stream);
 
   std::generate(table.begin(), table.end(), [&hash_file, &line_no]() {
     std::string line;
@@ -239,33 +241,32 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
                                            cudf::mask_state::UNALLOCATED,
                                            stream,
                                            mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(result.table->mutable_view().data<uint64_t>(),
-                                table.data(),
-                                table.size() * sizeof(uint64_t),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<uint64_t>(
+    cudf::device_span<uint64_t>(result.table->mutable_view().data<uint64_t>(), table.size()),
+    table,
+    stream);
 
   result.bin_coefficients = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT64},
                                                       bin_coefficients.size(),
                                                       cudf::mask_state::UNALLOCATED,
                                                       stream,
                                                       mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(result.bin_coefficients->mutable_view().data<uint64_t>(),
-                                bin_coefficients.data(),
-                                bin_coefficients.size() * sizeof(uint64_t),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<uint64_t>(
+    cudf::device_span<uint64_t>(result.bin_coefficients->mutable_view().data<uint64_t>(),
+                                bin_coefficients.size()),
+    bin_coefficients,
+    stream);
 
   result.bin_offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT16},
                                                  bin_offsets.size(),
                                                  cudf::mask_state::UNALLOCATED,
                                                  stream,
                                                  mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(result.bin_offsets->mutable_view().data<uint16_t>(),
-                                bin_offsets.data(),
-                                bin_offsets.size() * sizeof(uint16_t),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<uint16_t>(
+    cudf::device_span<uint16_t>(result.bin_offsets->mutable_view().data<uint16_t>(),
+                                bin_offsets.size()),
+    bin_offsets,
+    stream);
 
   auto cp_metadata            = detail::get_codepoint_metadata(stream);
   auto const cp_metadata_size = static_cast<cudf::size_type>(cp_metadata.size());
