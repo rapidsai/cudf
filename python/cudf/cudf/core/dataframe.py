@@ -7878,7 +7878,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return self._constructor_sliced._from_column(result_col)
 
     @acquire_spill_lock()
-    def _compute_columns(self, expr: str) -> ColumnBase:
+    def _compute_column(self, expr: str) -> ColumnBase:
+        """Helper function for eval"""
         plc_column = plc.transform.compute_column(
             plc.Table(
                 [col.to_pylibcudf(mode="read") for col in self._columns]
@@ -8014,7 +8015,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError(
                     "Cannot operate inplace if there is no assignment"
                 )
-            return Series._from_column(self._compute_columns(statements[0]))
+            return Series._from_column(self._compute_column(statements[0]))
 
         targets = []
         exprs = []
@@ -8032,7 +8033,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         ret = self if inplace else self.copy(deep=False)
         for name, expr in zip(targets, exprs):
-            ret._data[name] = self._compute_columns(expr)
+            ret._data[name] = self._compute_column(expr)
         if not inplace:
             return ret
 

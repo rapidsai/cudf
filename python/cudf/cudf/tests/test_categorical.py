@@ -950,3 +950,13 @@ def test_index_set_categories(ordered):
     expected = pd_ci.set_categories([1, 2, 3, 4], ordered=ordered)
     result = cudf_ci.set_categories([1, 2, 3, 4], ordered=ordered)
     assert_eq(result, expected)
+
+
+def test_categorical_interval_pandas_roundtrip():
+    expected = cudf.Series(cudf.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected.to_pandas())
+    assert_eq(result, expected)
+
+    expected = pd.Series(pd.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected).to_pandas()
+    assert_eq(result, expected)
