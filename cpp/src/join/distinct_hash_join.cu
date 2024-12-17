@@ -47,19 +47,6 @@ namespace cudf {
 namespace detail {
 namespace {
 
-template <cudf::has_nested HasNested>
-auto prepare_device_equal(
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> build,
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> probe,
-  bool has_nulls,
-  cudf::null_equality compare_nulls)
-{
-  auto const two_table_equal =
-    cudf::experimental::row::equality::two_table_comparator(probe, build);
-  return comparator_adapter{two_table_equal.equal_to<HasNested == cudf::has_nested::YES>(
-    nullate::DYNAMIC{has_nulls}, compare_nulls)};
-}
-
 /**
  * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
  *
@@ -92,26 +79,21 @@ struct output_fn {
 };
 }  // namespace
 
-template <cudf::has_nested HasNested>
-distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
-                                                  cudf::table_view const& probe,
-                                                  bool has_nulls,
-                                                  cudf::null_equality compare_nulls,
-                                                  rmm::cuda_stream_view stream)
+distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
+                                       bool has_nulls,
+                                       cudf::null_equality compare_nulls,
+                                       rmm::cuda_stream_view stream)
   : _has_nulls{has_nulls},
+    _has_nested_columns{cudf::has_nested_columns(build)},
     _nulls_equal{compare_nulls},
     _build{build},
-    _probe{probe},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)},
-    _preprocessed_probe{
-      cudf::experimental::row::equality::preprocessed_table::create(_probe, stream)},
     _hash_table{build.num_rows(),
                 CUCO_DESIRED_LOAD_FACTOR,
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
                                            rhs_index_type{JoinNoneValue}}},
-                prepare_device_equal<HasNested>(
-                  _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls),
+                always_not_equal{},
                 {},
                 cuco::thread_scope_device,
                 cuco_storage_type{},
@@ -146,15 +128,15 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
   }
 }
 
-template <cudf::has_nested HasNested>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr) const
+distinct_hash_join::inner_join(cudf::table_view const& probe,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"distinct_hash_join::inner_join"};
 
-  size_type const probe_table_num_rows{this->_probe.num_rows()};
+  size_type const probe_table_num_rows{probe.num_rows()};
 
   // If output size is zero, return immediately
   if (probe_table_num_rows == 0) {
@@ -162,25 +144,46 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
+  auto preprocessed_probe =
+    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
+    preprocessed_probe, _preprocessed_build);
+
   auto build_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
   auto probe_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
 
-  auto const probe_row_hasher =
-    cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
-  auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
-  auto const iter           = cudf::detail::make_counting_transform_iterator(
+  auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
+  auto const iter             = cudf::detail::make_counting_transform_iterator(
     0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
   auto found_indices = rmm::device_uvector<size_type>(probe_table_num_rows, stream);
   auto const found_begin =
     thrust::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
-  // TODO conditional find for nulls once `cuco::static_set::find_if` is added
-  // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not equal
-  // to `JoinNoneValue`, then `idx` has a match in the hash set.
-  this->_hash_table.find_async(iter, iter + probe_table_num_rows, found_begin, stream.value());
+  auto const comparator_helper = [&](auto device_comparator) {
+    // TODO conditional find for nulls once `cuco::static_set::find_if` is added
+    // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
+    // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
+    this->_hash_table.find_async(iter,
+                                 iter + probe_table_num_rows,
+                                 comparator_adapter{device_comparator},
+                                 hasher{},
+                                 found_begin,
+                                 stream.value());
+  };
+
+  if (_has_nested_columns) {
+    auto const device_comparator =
+      two_table_equal.equal_to<true>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+    comparator_helper(device_comparator);
+  } else {
+    auto const device_comparator =
+      two_table_equal.equal_to<false>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+    comparator_helper(device_comparator);
+  }
 
   auto const tuple_iter = cudf::detail::make_counting_transform_iterator(
     0,
@@ -206,13 +209,14 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
   return {std::move(build_indices), std::move(probe_indices)};
 }
 
-template <cudf::has_nested HasNested>
-std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::left_join(
-  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
+std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
+  cudf::table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
 {
   cudf::scoped_range range{"distinct_hash_join::left_join"};
 
-  size_type const probe_table_num_rows{this->_probe.num_rows()};
+  size_type const probe_table_num_rows{probe.num_rows()};
 
   // If output size is zero, return empty
   if (probe_table_num_rows == 0) {
@@ -227,80 +231,68 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::l
     thrust::fill(
       rmm::exec_policy_nosync(stream), build_indices->begin(), build_indices->end(), JoinNoneValue);
   } else {
-    auto const probe_row_hasher =
-      cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
+    auto preprocessed_probe =
+      cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+    auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
+      preprocessed_probe, _preprocessed_build);
+
+    auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
     auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
     auto const iter           = cudf::detail::make_counting_transform_iterator(
       0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
 
     auto const output_begin =
       thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
-    // TODO conditional find for nulls once `cuco::static_set::find_if` is added
-    this->_hash_table.find_async(iter, iter + probe_table_num_rows, output_begin, stream.value());
+    auto const comparator_helper = [&](auto device_comparator) {
+      // TODO conditional find for nulls once `cuco::static_set::find_if` is added
+      this->_hash_table.find_async(iter,
+                                   iter + probe_table_num_rows,
+                                   comparator_adapter{device_comparator},
+                                   hasher{},
+                                   output_begin,
+                                   stream.value());
+    };
+
+    if (_has_nested_columns) {
+      auto const device_comparator =
+        two_table_equal.equal_to<true>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+      comparator_helper(device_comparator);
+    } else {
+      auto const device_comparator =
+        two_table_equal.equal_to<false>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+      comparator_helper(device_comparator);
+    }
   }
 
   return build_indices;
 }
 }  // namespace detail
 
-template <>
-distinct_hash_join<cudf::has_nested::YES>::~distinct_hash_join() = default;
+distinct_hash_join::~distinct_hash_join() = default;
 
-template <>
-distinct_hash_join<cudf::has_nested::NO>::~distinct_hash_join() = default;
-
-template <>
-distinct_hash_join<cudf::has_nested::YES>::distinct_hash_join(cudf::table_view const& build,
-                                                              cudf::table_view const& probe,
-                                                              nullable_join has_nulls,
-                                                              null_equality compare_nulls,
-                                                              rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<impl_type>(
-      build, probe, has_nulls == nullable_join::YES, compare_nulls, stream)}
+distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
+                                       nullable_join has_nulls,
+                                       null_equality compare_nulls,
+                                       rmm::cuda_stream_view stream)
+  : _impl{
+      std::make_unique<impl_type>(build, has_nulls == nullable_join::YES, compare_nulls, stream)}
 {
 }
 
-template <>
-distinct_hash_join<cudf::has_nested::NO>::distinct_hash_join(cudf::table_view const& build,
-                                                             cudf::table_view const& probe,
-                                                             nullable_join has_nulls,
-                                                             null_equality compare_nulls,
-                                                             rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<impl_type>(
-      build, probe, has_nulls == nullable_join::YES, compare_nulls, stream)}
-{
-}
-
-template <>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-distinct_hash_join<cudf::has_nested::YES>::inner_join(rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr) const
+distinct_hash_join::inner_join(cudf::table_view const& probe,
+                               rmm::cuda_stream_view stream,
+                               rmm::device_async_resource_ref mr) const
 {
-  return _impl->inner_join(stream, mr);
+  return _impl->inner_join(probe, stream, mr);
 }
 
-template <>
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-distinct_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr) const
+std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
+  cudf::table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
 {
-  return _impl->inner_join(stream, mr);
-}
-
-template <>
-std::unique_ptr<rmm::device_uvector<size_type>>
-distinct_hash_join<cudf::has_nested::YES>::left_join(rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr) const
-{
-  return _impl->left_join(stream, mr);
-}
-
-template <>
-std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<cudf::has_nested::NO>::left_join(
-  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
-{
-  return _impl->left_join(stream, mr);
+  return _impl->left_join(probe, stream, mr);
 }
 }  // namespace cudf

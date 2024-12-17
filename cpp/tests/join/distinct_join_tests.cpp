@@ -89,10 +89,9 @@ TEST_F(DistinctJoinTest, IntegerInnerJoin)
   auto build_table = cudf::table_view{{build->view()}};
   auto probe_table = cudf::table_view{{probe->view()}};
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{
-    build_table, probe_table, cudf::nullable_join::NO};
+  auto distinct_join = cudf::distinct_hash_join{build_table, cudf::nullable_join::NO};
 
-  auto result = distinct_join.inner_join();
+  auto result = distinct_join.inner_join(probe_table);
 
   auto constexpr gold_size = size / 2;
   auto gold                = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
@@ -120,8 +119,8 @@ TEST_F(DistinctJoinTest, InnerJoinNoNulls)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   column_wrapper<int32_t> col_gold_0{{1, 2}};
   strcol_wrapper col_gold_1({"s0", "s0"});
@@ -162,8 +161,8 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
   strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
@@ -229,8 +228,8 @@ TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
   Table probe(std::move(cols0));
   Table build(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
   strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
@@ -284,8 +283,8 @@ TEST_F(DistinctJoinTest, EmptyBuildTableInnerJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   this->compare_to_reference(build.view(), probe.view(), result, build.view());
 }
@@ -307,8 +306,8 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
   auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   this->compare_to_reference(
@@ -332,8 +331,8 @@ TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   this->compare_to_reference(build.view(), probe.view(), result, probe.view());
 }
@@ -355,8 +354,8 @@ TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
   auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   this->compare_to_reference(
@@ -391,8 +390,8 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
   auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   this->compare_to_reference(
@@ -416,8 +415,8 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
   Table probe(std::move(cols0));
   Table build(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
   auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {true, true, true, true, true}};
@@ -461,8 +460,8 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
   Table probe(std::move(cols0));
   Table build(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
   auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
 
   auto col0_gold_names_col = strcol_wrapper{
