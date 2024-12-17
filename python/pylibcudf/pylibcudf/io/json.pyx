@@ -1,6 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from libcpp cimport bool
-from libcpp.limits cimport numeric_limits
 from libcpp.map cimport map
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -17,7 +16,6 @@ from pylibcudf.libcudf.io.json cimport (
 )
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
-    table_metadata,
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
@@ -255,56 +253,171 @@ cpdef TableWithMetadata read_json(
     return TableWithMetadata.from_libcudf(c_result)
 
 
-cpdef void write_json(
-    SinkInfo sink_info,
-    TableWithMetadata table_w_meta,
-    str na_rep = "",
-    bool include_nulls = False,
-    bool lines = False,
-    size_type rows_per_chunk = numeric_limits[size_type].max(),
-    str true_value = "true",
-    str false_value = "false"
-):
+cdef class JsonWriterOptions:
     """
-    Writes a :py:class:`~pylibcudf.table.Table` to JSON format.
+    The settings to use for ``write_json``
+
+    For details, see :cpp:class:`cudf::io::write_json_reader_options`
+    """
+    @staticmethod
+    def builder(SinkInfo sink, Table table):
+        """
+        Create a JsonWriterOptionsBuilder object
+
+        Parameters
+        ----------
+        sink : SinkInfo
+            The sink used for writer output
+        table : Table
+            Table to be written to output
+
+        Returns
+        -------
+        JsonWriterOptionsBuilder
+            Builder to build JsonWriterOptions
+        """
+        cdef JsonWriterOptionsBuilder json_builder = (
+            JsonWriterOptionsBuilder.__new__(JsonWriterOptionsBuilder)
+        )
+        json_builder.c_obj = json_writer_options.builder(sink.c_obj, table.view())
+        json_builder.sink = sink
+        json_builder.table = table
+        return json_builder
+
+    cpdef void set_rows_per_chunk(self, size_type val):
+        """
+        Sets string to used for null entries.
+
+        Parameters
+        ----------
+        val : size_type
+            String to represent null value
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_rows_per_chunk(val)
+
+    cpdef void set_true_value(self, str val):
+        """
+        Sets string used for values != 0
+
+        Parameters
+        ----------
+        val : str
+            String to represent values != 0
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_true_value(val.encode())
+
+    cpdef void set_false_value(self, str val):
+        """
+        Sets string used for values == 0
+
+        Parameters
+        ----------
+        val : str
+            String to represent values == 0
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_false_value(val.encode())
+
+
+cdef class JsonWriterOptionsBuilder:
+    cpdef JsonWriterOptionsBuilder metadata(self, TableWithMetadata tbl_w_meta):
+        """
+        Sets optional metadata (with column names).
+
+        Parameters
+        ----------
+        tbl_w_meta : TableWithMetadata
+            Associated metadata
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.metadata(tbl_w_meta.metadata)
+        return self
+
+    cpdef JsonWriterOptionsBuilder na_rep(self, str val):
+        """
+        Sets string to used for null entries.
+
+        Parameters
+        ----------
+        val : str
+            String to represent null value
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.na_rep(val.encode())
+        return self
+
+    cpdef JsonWriterOptionsBuilder include_nulls(self, bool val):
+        """
+        Enables/Disables output of nulls as 'null'.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.include_nulls(val)
+        return self
+
+    cpdef JsonWriterOptionsBuilder lines(self, bool val):
+        """
+        Enables/Disables JSON lines for records format.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean value to enable/disable
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.lines(val)
+        return self
+
+    cpdef JsonWriterOptions build(self):
+        """Create a JsonWriterOptions object"""
+        cdef JsonWriterOptions json_options = JsonWriterOptions.__new__(
+            JsonWriterOptions
+        )
+        json_options.c_obj = move(self.c_obj.build())
+        json_options.sink = self.sink
+        json_options.table = self.table
+        return json_options
+
+
+cpdef void write_json(JsonWriterOptions options):
+    """
+    Writes a set of columns to JSON format.
 
     Parameters
     ----------
-    sink_info: SinkInfo
-        The SinkInfo object to write the JSON to.
-    table_w_meta: TableWithMetadata
-        The TableWithMetadata object containing the Table to write
-    na_rep: str, default ""
-        The string representation for null values.
-    include_nulls: bool, default False
-        Enables/Disables output of nulls as 'null'.
-    lines: bool, default False
-        If `True`, write output in the JSON lines format.
-    rows_per_chunk: size_type, defaults to length of the input table
-        The maximum number of rows to write at a time.
-    true_value: str, default "true"
-        The string representation for values != 0 in INT8 types.
-    false_value: str, default "false"
-        The string representation for values == 0 in INT8 types.
+    options : JsonWriterOptions
+        Settings for controlling writing behavior
+
+    Returns
+    -------
+    None
     """
-    cdef table_metadata tbl_meta = table_w_meta.metadata
-    cdef string na_rep_c = na_rep.encode()
-
-    cdef json_writer_options options = (
-        json_writer_options.builder(sink_info.c_obj, table_w_meta.tbl.view())
-        .metadata(tbl_meta)
-        .na_rep(na_rep_c)
-        .include_nulls(include_nulls)
-        .lines(lines)
-        .build()
-    )
-
-    if rows_per_chunk != numeric_limits[size_type].max():
-        options.set_rows_per_chunk(rows_per_chunk)
-    if true_value != "true":
-        options.set_true_value(<string>true_value.encode())
-    if false_value != "false":
-        options.set_false_value(<string>false_value.encode())
-
     with nogil:
-        cpp_write_json(options)
+        cpp_write_json(options.c_obj)
