@@ -166,15 +166,31 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
     thrust::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
   auto const comparator_helper = [&](auto device_comparator) {
-    // TODO conditional find for nulls once `cuco::static_set::find_if` is added
     // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
     // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
-    this->_hash_table.find_async(iter,
-                                 iter + probe_table_num_rows,
-                                 comparator_adapter{device_comparator},
-                                 hasher{},
-                                 found_begin,
-                                 stream.value());
+    if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
+      this->_hash_table.find_async(iter,
+                                   iter + probe_table_num_rows,
+                                   comparator_adapter{device_comparator},
+                                   hasher{},
+                                   found_begin,
+                                   stream.value());
+    } else {
+      auto stencil = thrust::counting_iterator<size_type>{0};
+      auto const row_bitmask =
+        cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
+      auto const pred =
+        cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
+
+      this->_hash_table.find_if_async(iter,
+                                      iter + probe_table_num_rows,
+                                      stencil,
+                                      pred,
+                                      comparator_adapter{device_comparator},
+                                      hasher{},
+                                      found_begin,
+                                      stream.value());
+    }
   };
 
   if (_has_nested_columns) {
@@ -246,13 +262,29 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
     auto const output_begin =
       thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
     auto const comparator_helper = [&](auto device_comparator) {
-      // TODO conditional find for nulls once `cuco::static_set::find_if` is added
-      this->_hash_table.find_async(iter,
-                                   iter + probe_table_num_rows,
-                                   comparator_adapter{device_comparator},
-                                   hasher{},
-                                   output_begin,
-                                   stream.value());
+      if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
+        this->_hash_table.find_async(iter,
+                                     iter + probe_table_num_rows,
+                                     comparator_adapter{device_comparator},
+                                     hasher{},
+                                     output_begin,
+                                     stream.value());
+      } else {
+        auto stencil = thrust::counting_iterator<size_type>{0};
+        auto const row_bitmask =
+          cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
+        auto const pred =
+          cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
+
+        this->_hash_table.find_if_async(iter,
+                                        iter + probe_table_num_rows,
+                                        stencil,
+                                        pred,
+                                        comparator_adapter{device_comparator},
+                                        hasher{},
+                                        output_begin,
+                                        stream.value());
+      }
     };
 
     if (_has_nested_columns) {
