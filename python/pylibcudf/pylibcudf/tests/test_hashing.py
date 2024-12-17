@@ -34,7 +34,9 @@ def hash_single_uint32(val, seed=0):
 
 
 def hash_combine_32(lhs, rhs):
-    return np.uint32(lhs ^ (rhs + 0x9E3779B9 + (lhs << 6) + (lhs >> 2)))
+    return np.uint32(
+        int((lhs ^ (rhs + 0x9E3779B9 + (lhs << 6) + (lhs >> 2)))) % 2**32
+    )
 
 
 def uint_hash_combine_32(lhs, rhs):
@@ -44,6 +46,12 @@ def uint_hash_combine_32(lhs, rhs):
 def libcudf_mmh3_x86_32(binary):
     seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     hashval = mmh3.hash(binary, seed)
+    return hash_combine_32(seed, hashval)
+
+
+def libcudf_xxhash_32(binary):
+    seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+    hashval = xxhash.xxh32(binary, seed).intdigest()
     return hash_combine_32(seed, hashval)
 
 
@@ -101,15 +109,15 @@ def test_hash_column_sha_md5(
 
 def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
     def py_hasher(val):
-        return xxhash.xxh32(
-            scalar_to_binary(val), seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
-        ).intdigest()
+        return libcudf_xxhash_32(scalar_to_binary(val))
 
     expect = pa.array(
         [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
         type=pa.uint32(),
     )
-    got = plc.hashing.xxhash_32(plc_scalar_input_tbl, 0)
+    got = plc.hashing.xxhash_32(
+        plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+    )
 
     assert_column_eq(got, expect)
 
@@ -124,7 +132,9 @@ def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
         [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
         type=pa.uint64(),
     )
-    got = plc.hashing.xxhash_64(plc_scalar_input_tbl, 0)
+    got = plc.hashing.xxhash_64(
+        plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+    )
 
     assert_column_eq(got, expect)
 
