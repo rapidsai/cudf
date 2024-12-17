@@ -154,7 +154,7 @@ class UnaryFunction(Expr):
             "cum_max",
             "cum_prod",
             "cum_sum",
-            "set_sorted",
+            "drop_nulls",
             "unique",
         )
 
