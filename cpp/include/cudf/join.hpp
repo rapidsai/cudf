@@ -468,6 +468,9 @@ class hash_join {
  * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
+ * This class enables the distinct hash join scheme that builds hash table once, and probes as many
+ * times as needed (possibly in parallel).
+ *
  * @note Behavior is undefined if the build table contains duplicates.
  * @note All NaNs are considered as equal
  */
