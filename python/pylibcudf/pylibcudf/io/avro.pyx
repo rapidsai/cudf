@@ -42,6 +42,25 @@ cdef class AvroReaderOptions:
         avro_builder.source = source
         return avro_builder
 
+    cpdef void set_columns(self, list col_names):
+        """
+        Set names of the column to be read.
+
+        Parameters
+        ----------
+        col_names : list[str]
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] vec
+        vec.reserve(len(col_names))
+        for name in col_names:
+            vec.push_back(str(name).encode())
+        self.c_obj.set_columns(vec)
+
 
 cdef class AvroReaderOptionsBuilder:
     cpdef AvroReaderOptionsBuilder columns(self, list col_names):
@@ -58,10 +77,9 @@ cdef class AvroReaderOptionsBuilder:
         AvroReaderOptionsBuilder
         """
         cdef vector[string] vec
-        if col_names is not None and len(col_names) > 0:
-            vec.reserve(len(col_names))
-            for name in col_names:
-                vec.push_back(str(name).encode())
+        vec.reserve(len(col_names))
+        for name in col_names:
+            vec.push_back(str(name).encode())
         self.c_obj.columns(vec)
         return self
 

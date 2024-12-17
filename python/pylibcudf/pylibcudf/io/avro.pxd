@@ -9,6 +9,7 @@ from pylibcudf.libcudf.types cimport size_type
 cdef class AvroReaderOptions:
     cdef avro_reader_options c_obj
     cdef SourceInfo source
+    cpdef void set_columns(self, list col_names)
 
 
 cdef class AvroReaderOptionsBuilder:
