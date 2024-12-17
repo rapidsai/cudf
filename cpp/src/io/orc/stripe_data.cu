@@ -136,8 +136,8 @@ struct orcdec_state_s {
  * @brief Manage caching of the first run of TIMESTAMP's DATA stream for a row group.
  *
  * This class is used to address a special case, where the first run spans two adjacent row groups
- * and its length is greater than the maximum length allowed to be consumed (which limit is imposed
- * by the decoder when processing the SECONDARY stream). This class shall be instantiated in the
+ * and its length is greater than the maximum length allowed to be consumed. This limit is imposed
+ * by the decoder when processing the SECONDARY stream. This class shall be instantiated in the
  * shared memory. As an optimization, the actual cache is a local variable and does not reside in
  * the shared memory.
  */

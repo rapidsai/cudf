@@ -1984,7 +1984,7 @@ def test_orc_reader_desynced_timestamp(datadir, inputfile):
     # is progressed faster than the SECONDARY stream (nanosecond) at the start of a row
     # group. In this case, the "run cache manager" in the decoder kernel is used to
     # orchestrate the dual-stream processing.
-    # See https://github.com/rapidsai/cudf/issues/17155 .
+    # For more information, see https://github.com/rapidsai/cudf/issues/17155.
 
     path = datadir / inputfile
 
