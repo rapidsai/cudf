@@ -113,9 +113,6 @@ def test_with_external_memory(
     return predt
 
 
-@pytest.mark.skip(
-    reason="TypeError: Implicit conversion to a NumPy array is not allowed. Please use `.get()` to construct a NumPy array explicitly."
-)
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_predict(device: str) -> np.ndarray:
     reg = xgb.XGBRegressor(n_estimators=2, device=device)
@@ -127,6 +124,13 @@ def test_predict(device: str) -> np.ndarray:
     predt0 = reg.predict(X_df)
 
     predt1 = booster.inplace_predict(X_df)
+    # After https://github.com/dmlc/xgboost/pull/11014, .inplace_predict()
+    # returns a real cupy array when called on a cudf.pandas proxy dataframe.
+    # So we need to ensure we have a valid numpy array.
+    # TODO: We should remove the call to .get() when .inplace_predict()
+    # returns a cudf.pandas proxy numpy array
+    if not isinstance(predt1, np.ndarray):
+        predt1 = predt1.get()
     np.testing.assert_allclose(predt0, predt1)
 
     predt2 = booster.predict(xgb.DMatrix(X_df))
