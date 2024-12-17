@@ -98,10 +98,15 @@ def test_read_avro(avro_dtypes, avro_dtype_data, row_opts, columns, nullable):
     buffer.seek(0)
 
     res = plc.io.avro.read_avro(
-        plc.io.types.SourceInfo([buffer]),
-        columns=columns,
-        skip_rows=skip_rows,
-        num_rows=num_rows,
+        (
+            plc.io.avro.AvroReaderOptions.builder(
+                plc.io.types.SourceInfo([buffer])
+            )
+            .columns(columns)
+            .skip_rows(skip_rows)
+            .num_rows(num_rows)
+            .build()
+        )
     )
 
     expected = pa.Table.from_arrays(

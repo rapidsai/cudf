@@ -4,8 +4,6 @@ import numpy as np
 from . import (
     groupby,
     interop,
-    stream_compaction,
-    string_casting,
     strings_udf,
 )
 
