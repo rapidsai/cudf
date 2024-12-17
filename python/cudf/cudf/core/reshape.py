@@ -1021,7 +1021,6 @@ def _pivot(
             names = [
                 as_tuple(col_label) + as_tuple(name) for name in column_labels
             ]
-            # import pdb;pdb.set_trace()
             new_size = nrows * len(names)
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
             target_col = column_empty(row_count=new_size, dtype=col.dtype)

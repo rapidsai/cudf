@@ -214,7 +214,7 @@ class ColumnAccessor(abc.MutableMapping):
         else:
             return self._level_names
 
-    def is_cached(self, attr_name):
+    def is_cached(self, attr_name: str) -> bool:
         return attr_name in self.__dict__
 
     @property
