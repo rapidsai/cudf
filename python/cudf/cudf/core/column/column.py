@@ -2076,18 +2076,26 @@ def as_column(
             if isinstance(arbitrary.dtype, pd.DatetimeTZDtype):
                 new_tz = get_compatible_timezone(arbitrary.dtype)
                 arbitrary = arbitrary.astype(new_tz)
-            if isinstance(arbitrary.dtype, pd.CategoricalDtype) and isinstance(
-                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
-            ):
-                new_tz = get_compatible_timezone(
-                    arbitrary.dtype.categories.dtype
-                )
-                new_cats = arbitrary.dtype.categories.astype(new_tz)
-                new_dtype = pd.CategoricalDtype(
-                    categories=new_cats, ordered=arbitrary.dtype.ordered
-                )
-                arbitrary = arbitrary.astype(new_dtype)
-
+            if isinstance(arbitrary.dtype, pd.CategoricalDtype):
+                if isinstance(
+                    arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+                ):
+                    new_tz = get_compatible_timezone(
+                        arbitrary.dtype.categories.dtype
+                    )
+                    new_cats = arbitrary.dtype.categories.astype(new_tz)
+                    new_dtype = pd.CategoricalDtype(
+                        categories=new_cats, ordered=arbitrary.dtype.ordered
+                    )
+                    arbitrary = arbitrary.astype(new_dtype)
+                elif (
+                    isinstance(
+                        arbitrary.dtype.categories.dtype, pd.IntervalDtype
+                    )
+                    and dtype is None
+                ):
+                    # Conversion to arrow converts IntervalDtype to StructDtype
+                    dtype = cudf.CategoricalDtype.from_pandas(arbitrary.dtype)
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,
