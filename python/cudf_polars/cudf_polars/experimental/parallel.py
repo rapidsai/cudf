@@ -124,9 +124,28 @@ def task_graph(
         return graph, (key_name, 0)
 
 
+def _register_serialize():
+    """Register Dask/cudf-polars serializers in calling process."""
+    from cudf_polars.experimental.dask_serialize import register
+
+    register()
+
+
 def evaluate_dask(ir: IR) -> DataFrame:
     """Evaluate an IR graph with Dask."""
-    from dask import get
+    from dask import get as _get
+    from distributed import get_client
+
+    _register_serialize()
+
+    try:
+        client = get_client()
+        client.run(_register_serialize)
+        client.run_on_scheduler(_register_serialize)
+
+        get = client.get
+    except ValueError:
+        get = _get
 
     ir, partition_info = lower_ir_graph(ir)
 
