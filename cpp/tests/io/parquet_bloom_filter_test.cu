@@ -24,8 +24,8 @@
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter.cuh>
+#include <cuco/bloom_filter_policies.cuh>
 
 using StringType = cudf::string_view;
 
