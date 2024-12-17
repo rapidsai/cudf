@@ -234,183 +234,87 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
 namespace detail {
 namespace {
 
-/**
- * @brief Threshold to decide on using string or warp parallel functions.
- *
- * If the average byte length of a string in a column exceeds this value then
- * the warp-parallel function is used to compute the output sizes.
- * Otherwise, a regular string-parallel function is used.
- *
- * This value was found using the vocab_tokenize benchmark results.
- */
-constexpr cudf::size_type AVG_CHAR_BYTES_THRESHOLD = 128;
+template <typename MapRefType, typename MapRefType2>
+__device__ void wordpiece_fn(cudf::column_device_view const d_strings,
+                             cduf::string_view token,
+                             MapRefType d_map,
+                             MapRefType2 d_map2,
+                             cudf::size_type* d_tokens)
+{
+  // lookup token in map
+  auto token_idx = 0;
+  auto const itr = d_map.find(token);
+  if (itr != d_map.end()) {
+    d_tokens[token_idx++] = itr->second;
+    continue;
+  }
+  // reduce string by one character and try again
+  auto piece = token.substr(0, token.length() - 1);
+  while (piece.length() > 0) {
+    auto const itr = d_map.find(piece);
+    if (itr == d_map.end()) {
+      piece = piece.substr(0, piece.length() - 1);
+      continue;
+    }
+    d_tokens[token_idx++] = itr->second;
+  }
+  piece = token.substr(piece.length(), token.length() - piece.length());
+  while (piece.length() > 0) {
+    auto const itr = d_map2.find(piece);
+    if (itr == d_map2.end()) {
+      piece = piece.substr(0, piece.length() - 1);
+      continue;
+    }
+    d_tokens[token_idx++] = itr->second;
+  }
+}
 
 constexpr int block_size = 256;
 
-__device__ bool is_delimiter(cudf::char_utf8 chr) { return (chr <= ' '); }
-
-struct mark_delimiters_fn {
-  char const* d_chars;
-  int8_t* d_results;
-
-  __device__ void operator()(cudf::size_type idx) const
-  {
-    auto const ptr = d_chars + idx;
-    if (cudf::strings::detail::is_utf8_continuation_char(*ptr)) { return; }
-    cudf::char_utf8 chr = 0;
-    auto ch_size        = cudf::strings::detail::to_char_utf8(ptr, chr);
-    auto const output   = is_delimiter(chr);
-    while (ch_size > 0) {
-      d_results[idx++] = output;
-      --ch_size;
-    }
-  }
-};
-
-CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
-                                 cudf::size_type* d_counts,
-                                 int8_t* d_results)
+CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
+                                 cudf::size_type max_tokens,
+                                 cudf::size_type* d_tokens)
 {
-  // string per warp
+  // string per block
   auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  auto const str_idx = idx / block_size;
   if (str_idx >= d_strings.size()) { return; }
-  auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
-
-  if (d_strings.is_null(str_idx)) {
-    d_counts[str_idx] = 0;
-    return;
-  }
+  if (d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
-  if (d_str.empty()) {
-    d_counts[str_idx] = 0;
-    return;
-  }
-
-  auto const offsets     = d_strings.child(cudf::strings_column_view::offsets_column_index);
-  auto const offsets_itr = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
-  auto const offset = offsets_itr[str_idx + d_strings.offset()] - offsets_itr[d_strings.offset()];
-  auto const chars_begin = d_strings.data<char>() + offsets_itr[d_strings.offset()];
+  if (d_str.empty()) { return; }
 
   auto const begin        = d_str.data();
   auto const end          = begin + d_str.size_bytes();
-  auto const d_output     = d_results + offset;
-  auto const d_output_end = d_output + d_str.size_bytes();
+  auto const d_output     = d_tokens + (idx * max_tokens);
+  auto const d_output_end = d_output + max_tokens;
 
-  using warp_reduce = cub::WarpReduce<cudf::size_type>;
-  __shared__ typename warp_reduce::TempStorage warp_storage;
+  __shared__ cudf::size_type s_tokens[block_size];
 
-  cudf::size_type count = 0;
-  if (lane_idx == 0) {
-    cudf::char_utf8 chr = 0;
-    auto ch_size        = cudf::strings::detail::to_char_utf8(begin, chr);
-    auto output         = 1;
-    if (begin > chars_begin) {
-      auto ptr = begin - 1;
-      while (ptr > chars_begin && cudf::strings::detail::is_utf8_continuation_char(*ptr)) {
-        --ptr;
-      }
-      cudf::strings::detail::to_char_utf8(ptr, chr);
-      output = !is_delimiter(chr);
+  auto const lane_idx = idx % block_size;
+  // init s_tokens
+  s_tokens[lane_idx] = cuda::std::numeric_limits<cudf::size_type>::max();
+  __syncthreads();
+
+  for (auto itr = begin + lane_idx; itr < end; itr += block_size) {
+    auto const ch = *itr;
+    if (ch == ' ') { continue; }
+    if ((lane_idx != 0) && (*(itr - 1) != ' ')) { continue; }
+    // at the front edge of a word; find the end
+    auto wend = itr + 1;
+    while (wend < end && *wend != ' ') {
+      ++wend;
     }
-    auto ptr = d_output;
-    while (ch_size > 0) {
-      *ptr++ = output;
-      --ch_size;
-    }
-    count = ((begin + ch_size) == end);
+    auto count = thrust::distance(itr, wend);
+    // lookup token and place them in (s_tokens+lane_idx)
+
+    // a syncthreads requires reworking the loop here;
+    // need to read the non-max tokens out into global memory
+    // up to the max_tokens and re-init if we are continuing
   }
-  __syncwarp();
 
-  for (auto itr = d_output + lane_idx + 1; itr < d_output_end; itr += cudf::detail::warp_size) {
-    // add one if at the edge of a token or if at the string's end
-    if (*itr) {
-      count += !(*(itr - 1));
-    } else {
-      count += (itr + 1 == d_output_end);
-    }
-  }
-  __syncwarp();
-
-  // add up the counts from the other threads to compute the total token count for this string
-  auto const total_count = warp_reduce(warp_storage).Reduce(count, cub::Sum());
-  if (lane_idx == 0) { d_counts[str_idx] = total_count; }
+  // maybe also keep track of the actual tokens in this string
+  // and return that number in order to build the final offsets
 }
-
-template <typename MapRefType, typename MapRefType2>
-struct vocabulary_tokenizer_fn {
-  cudf::column_device_view const d_strings;
-  MapRefType d_map;
-  MapRefType2 d_map2;
-  cudf::detail::input_offsetalator d_offsets;
-  cudf::size_type* d_results;
-
-  __device__ void operator()(cudf::size_type idx) const
-  {
-    if (d_strings.is_null(idx)) { return; }
-
-    auto const d_str = d_strings.element<cudf::string_view>(idx);
-    characters_tokenizer tokenizer(d_str, cudf::string_view{});
-    auto d_tokens = d_results + d_offsets[idx];
-
-    cudf::size_type token_idx = 0;
-    while (tokenizer.next_token()) {
-      auto const pos   = tokenizer.token_byte_positions();
-      auto const token = cudf::string_view{d_str.data() + pos.first, (pos.second - pos.first)};
-      // lookup token in map
-      auto const itr = d_map.find(token);
-      if (itr != d_map.end()) {
-        d_tokens[token_idx++] = itr->second;
-        continue;
-      }
-      // reduce string by one character and try again
-      auto piece = token.substr(0, token.length() - 1);
-      while (piece.length() > 0) {
-        auto const itr = d_map.find(piece);
-        if (itr == d_map.end()) {
-          piece = piece.substr(0, piece.length() - 1);
-          continue;
-        }
-        d_tokens[token_idx++] = itr->second;
-      }
-      piece = token.substr(piece.length(), token.length() - piece.length());
-      while (piece.length() > 0) {
-        auto const itr = d_map2.find(piece);
-        if (itr == d_map2.end()) {
-          piece = piece.substr(0, piece.length() - 1);
-          continue;
-        }
-        d_tokens[token_idx++] = itr->second;
-      }
-    }
-  }
-};
-
-template <typename MapRefType>
-struct transform_tokenizer_fn {
-  MapRefType d_map;
-  cudf::size_type const default_id;
-
-  __device__ cudf::size_type operator()(cudf::string_view d_str) const
-  {
-    auto const begin = d_str.data();
-    auto const end   = begin + d_str.size_bytes();
-
-    auto itr = begin;
-    while (itr < end) {
-      cudf::char_utf8 chr = 0;
-      auto const ch_size  = cudf::strings::detail::to_char_utf8(itr, chr);
-      if (!is_delimiter(chr)) break;
-      itr += ch_size;
-    }
-
-    auto const size  = static_cast<cudf::size_type>(thrust::distance(itr, end));
-    auto const token = cudf::string_view{itr, size};
-    // lookup token in map
-    auto const fitr = d_map.find(token);
-    return (fitr != d_map.end()) ? fitr->second : default_id;
-  }
-};
 
 }  // namespace
 
