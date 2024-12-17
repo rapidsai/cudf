@@ -133,7 +133,7 @@ struct orcdec_state_s {
 };
 
 /**
- * @brief Manage caching of the first run of the DATA stream for a row group.
+ * @brief Manage caching of the first run of TIMESTAMP's DATA stream for a row group.
  *
  * This class is used to address a special case, where the first run spans two adjacent row groups
  * and its length is greater than the maximum length allowed to be consumed (which limit is imposed
@@ -211,8 +211,8 @@ class run_cache_manager {
 
     const auto tid = threadIdx.x;
 
-    // All threads in the block take a uniform code path.
-    // _reusable_length ranges between [0, 512]
+    // All threads in the block always take a uniform code path for the following branches.
+    // _reusable_length ranges between [0, 512].
     if (_reusable_length > 0) {
       const auto length_to_skip = _run_length - _reusable_length;
       if (tid < _reusable_length) {
@@ -245,8 +245,6 @@ class run_cache_manager {
 
     const auto tid = threadIdx.x;
 
-    // All threads in the block take a uniform code path.
-    // _reusable_length ranges between [0, 512]
     // First, shift the data up
     const auto dst_idx = tid + _reusable_length;
     const auto v       = (dst_idx < rle->num_vals + _reusable_length) ? dst[tid] : 0;
