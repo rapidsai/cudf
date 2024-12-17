@@ -1970,3 +1970,25 @@ def test_row_group_alignment(datadir):
     got = cudf.read_orc(buffer)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "inputfile",
+    [
+        "TestOrcFile.timestampDesynced.orc",
+        "TestOrcFile.timestampDesyncedSnappy.orc",
+    ],
+)
+def test_orc_reader_desynced_timestamp(datadir, inputfile):
+    # Test a special case where the DATA stream (second) in a TIMESTAMP column
+    # is progressed faster than the SECONDARY stream (nanosecond) at the start of a row
+    # group. In this case, the "run cache manager" in the decoder kernel is used to
+    # orchestrate the dual-stream processing.
+    # See https://github.com/rapidsai/cudf/issues/17155 .
+
+    path = datadir / inputfile
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_frame_equal(cudf.from_pandas(expect), got)
