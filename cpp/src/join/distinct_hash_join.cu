@@ -110,8 +110,8 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
   auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
   auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
 
-  auto const iter = cudf::detail::make_counting_transform_iterator(
-    0, build_keys_fn<decltype(d_hasher), rhs_index_type>{d_hasher});
+  auto const iter =
+    cudf::detail::make_counting_transform_iterator(0, build_keys_fn<rhs_index_type>{d_hasher});
 
   size_type const build_table_num_rows{build.num_rows()};
   if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(this->_build))) {
@@ -159,7 +159,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
   auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
   auto const iter             = cudf::detail::make_counting_transform_iterator(
-    0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
+    0, build_keys_fn<lhs_index_type>{d_probe_hasher});
 
   auto found_indices = rmm::device_uvector<size_type>(probe_table_num_rows, stream);
   auto const found_begin =
@@ -241,7 +241,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
     auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
     auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
     auto const iter           = cudf::detail::make_counting_transform_iterator(
-      0, build_keys_fn<decltype(d_probe_hasher), lhs_index_type>{d_probe_hasher});
+      0, build_keys_fn<lhs_index_type>{d_probe_hasher});
 
     auto const output_begin =
       thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
