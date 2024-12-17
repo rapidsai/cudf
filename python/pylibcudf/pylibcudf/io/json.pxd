@@ -17,8 +17,6 @@ from pylibcudf.libcudf.types cimport size_type
 cdef class JsonReaderOptions:
     cdef json_reader_options c_obj
     cdef SourceInfo source
-    # cpdef void set_dtypes_list(self, list types)
-    # cpdef void set_dtypes_map(self, dict types)
     cpdef void set_dtypes(self, list types)
     cpdef void enable_keep_quotes(self, bool keep_quotes)
     cpdef void enable_mixed_types_as_string(self, bool mixed_types_as_string)
