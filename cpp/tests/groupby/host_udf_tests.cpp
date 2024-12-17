@@ -29,9 +29,9 @@ namespace {
  * @brief A host-based UDF implementation used for unit tests.
  */
 struct host_udf_test_base : cudf::host_udf_base {
-  int const test_location_line;  // the location where testing is called
-  bool* const test_run;          // to check if the test is accidentally skipped
-  data_attributes_set_t const input_attrs;
+  int test_location_line;  // the location where testing is called
+  bool* test_run;          // to check if the test is accidentally skipped
+  data_attributes_set_t input_attrs;
 
   host_udf_test_base(int test_location_line_, bool* test_run_, data_attributes_set_t input_attrs_)
     : test_location_line{test_location_line_},
@@ -44,7 +44,7 @@ struct host_udf_test_base : cudf::host_udf_base {
 
   // This is the main testing function, which checks for the correctness of input data.
   // The rests are just to satisfy the interface.
-  [[nodiscard]] output_t operator()(host_udf_input const& input,
+  [[nodiscard]] output_t operator()(input_map_t const& input,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr) const override
   {
@@ -70,7 +70,7 @@ struct host_udf_test_base : cudf::host_udf_base {
 
   // The main test function, which must be implemented for each kind of aggregations
   // (groupby/reduction/segmented_reduction).
-  virtual void test_data_attributes(host_udf_input const& input,
+  virtual void test_data_attributes(input_map_t const& input,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr) const = 0;
 };
@@ -91,7 +91,7 @@ struct host_udf_groupby_test : host_udf_test_base {
     return std::make_unique<host_udf_groupby_test>(test_location_line, test_run, input_attrs);
   }
 
-  void test_data_attributes(host_udf_input const& input,
+  void test_data_attributes(input_map_t const& input,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr) const override
   {

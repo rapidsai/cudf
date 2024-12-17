@@ -613,7 +613,10 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
  * @brief The interface for host-based UDF implementation.
  *
  * An implementation of host-based UDF needs to be derived from this base class, defining
- * its own version of the required functions.
+ * its own version of the required functions. In particular, the derived class must define the
+ * following function: `get_empty_output`, `operator()`, `do_hash`, `is_equal` and `clone`.
+ * The function `get_required_data` can also be optionally overriden to facilitate selective
+ * access to the input data as well as intermediate data provided by libcudf.
  */
 struct host_udf_base {
   host_udf_base()          = default;
@@ -761,8 +764,10 @@ struct host_udf_base {
   /**
    * @brief Return a set of attributes for the data that is needed for computing the aggregation.
    *
-   * If this function is not overridden, an empty set is returned. That means all the data
-   * attributes (except results from other aggregations in groupby) will be needed.
+   * The derived class should return the attributes corresponding to only the data that it needs to
+   * avoid unnecessary computation performed in libcudf. If this function is not overridden, an
+   * empty set is returned. That means all the data attributes (except results from other
+   * aggregations in groupby) will be needed.
    *
    * @return A set of `data_attribute`
    */
@@ -777,7 +782,7 @@ struct host_udf_base {
   /**
    * @brief Input to the aggregation, mapping from each data attribute to its actual data.
    */
-  using host_udf_input = std::
+  using input_map_t = std::
     unordered_map<data_attribute, input_data_t, data_attribute::hash, data_attribute::equal_to>;
 
   /**
@@ -811,7 +816,7 @@ struct host_udf_base {
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation
    */
-  [[nodiscard]] virtual output_t operator()(host_udf_input const& input,
+  [[nodiscard]] virtual output_t operator()(input_map_t const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr) const = 0;
 

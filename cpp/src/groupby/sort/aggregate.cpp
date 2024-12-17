@@ -812,7 +812,7 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
   }
 
   // Do not cache udf_input, as the actual input data may change from run to run.
-  host_udf_base::host_udf_input udf_input;
+  host_udf_base::input_map_t udf_input;
   for (auto const& attr : data_attrs) {
     CUDF_EXPECTS(std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value) ||
                    std::holds_alternative<std::unique_ptr<aggregation>>(attr.value),

@@ -62,7 +62,7 @@ struct host_udf_groupby_example : cudf::host_udf_base {
       cudf::data_type{cudf::type_to_id<typename groupby_fn::OutputType>()});
   }
 
-  [[nodiscard]] output_t operator()(host_udf_input const& input,
+  [[nodiscard]] output_t operator()(input_map_t const& input,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr) const override
   {
@@ -95,11 +95,8 @@ struct host_udf_groupby_example : cudf::host_udf_base {
     // For simplicity, this example only accepts double input and always produces double output.
     using InputType  = double;
     using OutputType = double;
-
-    template <typename InputType>
-    using MaxType = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::MAX>;
-    template <typename InputType>
-    using SumType = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::SUM>;
+    using MaxType    = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::MAX>;
+    using SumType    = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::SUM>;
 
     template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_same_v<InputType, T>)>
     output_t operator()(Args...) const
@@ -108,7 +105,7 @@ struct host_udf_groupby_example : cudf::host_udf_base {
     }
 
     template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
-    output_t operator()(host_udf_input const& input,
+    output_t operator()(input_map_t const& input,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr) const
     {
@@ -131,7 +128,8 @@ struct host_udf_groupby_example : cudf::host_udf_base {
       auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
                                               num_groups,
                                               cudf::mask_state::UNALLOCATED,
-                                              stream);
+                                              stream,
+                                              mr);
       rmm::device_uvector<bool> validity(num_groups, stream);
 
       thrust::transform(
@@ -139,24 +137,23 @@ struct host_udf_groupby_example : cudf::host_udf_base {
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_groups),
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), validity.begin()),
-        transform_fn<InputType, OutputType>{*values_dv_ptr,
-                                            offsets,
-                                            group_indices,
-                                            group_max.begin<MaxType<InputType>>(),
-                                            group_sum.begin<SumType<InputType>>()});
+        transform_fn{*values_dv_ptr,
+                     offsets,
+                     group_indices,
+                     group_max.begin<MaxType>(),
+                     group_sum.begin<SumType>()});
       auto [null_mask, null_count] =
         cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity<>{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(std::move(null_mask), null_count); }
       return output;
     }
 
-    template <typename InputType, typename OutputType>
     struct transform_fn {
       cudf::column_device_view values;
       cudf::device_span<cudf::size_type const> offsets;
       cudf::device_span<cudf::size_type const> group_indices;
-      MaxType<InputType> const* group_max;
-      SumType<InputType> const* group_sum;
+      MaxType const* group_max;
+      SumType const* group_sum;
 
       thrust::tuple<OutputType, bool> __device__ operator()(cudf::size_type idx) const
       {
