@@ -2,10 +2,8 @@
 import numpy as np
 
 from . import (
-    copying,
     groupby,
     interop,
-    stream_compaction,
     string_casting,
     strings_udf,
 )
