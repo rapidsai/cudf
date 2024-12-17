@@ -16,13 +16,14 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
+import cudf.core._internals
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals import sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -430,7 +431,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             ]
         )
 
-        group_keys = libcudf.stream_compaction.drop_duplicates(group_keys)
+        group_keys = cudf.core._internals.stream_compaction.drop_duplicates(
+            group_keys
+        )
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
@@ -792,7 +795,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                (right_order,) = libcudf.sort.sort_by_key(
+                (right_order,) = sorting.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],
@@ -1248,15 +1251,20 @@ class GroupBy(Serializable, Reducible, Scannable):
                 for off, size in zip(group_offsets, size_per_group):
                     rs.shuffle(indices[off : off + size])
             else:
-                rng = cp.random.default_rng(seed=random_state)
-                (indices,) = segmented_sort_by_key(
-                    [as_column(indices)],
-                    [as_column(rng.random(size=nrows))],
-                    as_column(group_offsets),
-                    [],
-                    [],
-                    stable=True,
+                keys = cp.random.default_rng(seed=random_state).random(
+                    size=nrows
                 )
+                with acquire_spill_lock():
+                    plc_table = plc.sorting.stable_segmented_sort_by_key(
+                        plc.Table(
+                            [as_column(indices).to_pylibcudf(mode="read")]
+                        ),
+                        plc.Table([as_column(keys).to_pylibcudf(mode="read")]),
+                        as_column(group_offsets).to_pylibcudf(mode="read"),
+                        [plc.types.Order.ASCENDING],
+                        [plc.types.NullOrder.AFTER],
+                    )
+                    indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
             want = np.arange(samples_per_group.sum(), dtype=size_type_dtype)
