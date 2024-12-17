@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "arrow_filter_policy.cuh"
 #include "compact_protocol_reader.hpp"
 #include "io/parquet/parquet.hpp"
 #include "reader_impl_helpers.hpp"
@@ -34,6 +33,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter_ref.cuh>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
