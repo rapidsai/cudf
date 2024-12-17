@@ -878,7 +878,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              - pyarrow==14.0.0
+              - pyarrow==14.0.1
           - matrix:
             packages:
       - output_types: conda
