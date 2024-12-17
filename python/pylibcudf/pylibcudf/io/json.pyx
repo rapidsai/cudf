@@ -21,7 +21,13 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 
-__all__ = ["chunked_read_json", "read_json", "write_json"]
+__all__ = [
+    "chunked_read_json",
+    "read_json",
+    "write_json",
+    "JsonWriterOptions",
+    "JsonWriterOptionsBuilder"
+]
 
 cdef map[string, schema_element] _generate_schema_map(list dtypes):
     cdef map[string, schema_element] schema_map
@@ -257,7 +263,7 @@ cdef class JsonWriterOptions:
     """
     The settings to use for ``write_json``
 
-    For details, see :cpp:class:`cudf::io::write_json_reader_options`
+    For details, see :cpp:class:`cudf::io::json_writer_options`
     """
     @staticmethod
     def builder(SinkInfo sink, Table table):
