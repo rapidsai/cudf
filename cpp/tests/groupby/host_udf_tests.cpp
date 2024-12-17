@@ -28,14 +28,15 @@ namespace {
 /**
  * @brief A host-based UDF implementation used for unit tests.
  */
-template <typename cudf_aggregation, int test_location_line>
-struct host_udf_test : cudf::host_udf_base {
-  static_assert(std::is_same_v<cudf_aggregation, cudf::groupby_aggregation>);
-
-  bool* const test_run;  // to check if the test is accidentally skipped
+struct host_udf_test_base : cudf::host_udf_base {
+  int const test_location_line;  // the location where testing is called
+  bool* const test_run;          // to check if the test is accidentally skipped
   data_attributes_set_t const input_attrs;
-  host_udf_test(bool* test_run_, data_attributes_set_t input_attrs_ = {})
-    : test_run{test_run_}, input_attrs(std::move(input_attrs_))
+
+  host_udf_test_base(int test_location_line_, bool* test_run_, data_attributes_set_t input_attrs_)
+    : test_location_line{test_location_line_},
+      test_run{test_run_},
+      input_attrs(std::move(input_attrs_))
   {
   }
 
@@ -47,8 +48,53 @@ struct host_udf_test : cudf::host_udf_base {
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr) const override
   {
-    SCOPED_TRACE("Original line of failure: " + std::to_string(test_location_line));
+    SCOPED_TRACE("Test instance created at line: " + std::to_string(test_location_line));
 
+    test_data_attributes(input, stream, mr);
+
+    *test_run = true;  // test is run successfully
+    return get_empty_output(std::nullopt, stream, mr);
+  }
+
+  [[nodiscard]] output_t get_empty_output(
+    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
+    [[maybe_unused]] rmm::cuda_stream_view stream,
+    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  {
+    // Unused function - dummy output.
+    return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
+  }
+
+  [[nodiscard]] std::size_t do_hash() const override { return 0; }
+  [[nodiscard]] bool is_equal(host_udf_base const& other) const override { return true; }
+
+  // The main test function, which must be implemented for each kind of aggregations
+  // (groupby/reduction/segmented_reduction).
+  virtual void test_data_attributes(host_udf_input const& input,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr) const = 0;
+};
+
+/**
+ * @brief A host-based UDF implementation used for unit tests for groupby aggregation.
+ */
+struct host_udf_groupby_test : host_udf_test_base {
+  host_udf_groupby_test(int test_location_line_,
+                        bool* test_run_,
+                        data_attributes_set_t input_attrs_ = {})
+    : host_udf_test_base(test_location_line_, test_run_, std::move(input_attrs_))
+  {
+  }
+
+  [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
+  {
+    return std::make_unique<host_udf_groupby_test>(test_location_line, test_run, input_attrs);
+  }
+
+  void test_data_attributes(host_udf_input const& input,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr) const override
+  {
     data_attributes_set_t check_attrs = input_attrs;
     if (check_attrs.empty()) {
       check_attrs = data_attributes_set_t{groupby_data_attribute::INPUT_VALUES,
@@ -91,24 +137,6 @@ struct host_udf_test : cudf::host_udf_base {
         EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
       }
     }
-
-    *test_run = true;  // test is run successfully
-    return get_empty_output(std::nullopt, stream, mr);
-  }
-
-  [[nodiscard]] output_t get_empty_output(
-    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
-    [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
-  {
-    return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
-  }
-
-  [[nodiscard]] std::size_t do_hash() const override { return 0; }
-  [[nodiscard]] bool is_equal(host_udf_base const& other) const override { return true; }
-  [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
-  {
-    return std::make_unique<host_udf_test>(test_run, input_attrs);
   }
 };
 
@@ -168,7 +196,7 @@ TEST_F(HostUDFTest, GroupbyAllInput)
   auto const keys = int32s_col{0, 1, 2};
   auto const vals = int32s_col{0, 1, 2};
   auto agg        = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-    std::make_unique<host_udf_test<cudf::groupby_aggregation, __LINE__>>(&test_run));
+    std::make_unique<host_udf_groupby_test>(__LINE__, &test_run));
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
@@ -197,8 +225,7 @@ TEST_F(HostUDFTest, GroupbySomeInput)
     auto input_attrs = get_subset(all_attrs);
     input_attrs.insert(get_random_agg());
     auto agg = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-      std::make_unique<host_udf_test<cudf::groupby_aggregation, __LINE__>>(&test_run,
-                                                                           std::move(input_attrs)));
+      std::make_unique<host_udf_groupby_test>(__LINE__, &test_run, std::move(input_attrs)));
 
     std::vector<cudf::groupby::aggregation_request> requests;
     requests.emplace_back();
