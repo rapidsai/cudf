@@ -15,6 +15,7 @@
  */
 
 #include <cudf/detail/is_element_valid.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -30,15 +31,14 @@ bool is_element_valid_sync(column_view const& col_view,
   CUDF_EXPECTS(element_index >= 0 and element_index < col_view.size(), "invalid index.");
   if (!col_view.nullable()) { return true; }
 
-  bitmask_type word = 0;
   // null_mask() returns device ptr to bitmask without offset
   size_type const index = element_index + col_view.offset();
-  CUDF_CUDA_TRY(cudaMemcpyAsync(&word,
-                                col_view.null_mask() + word_index(index),
-                                sizeof(bitmask_type),
-                                cudaMemcpyDefault,
-                                stream.value()));
-  stream.synchronize();
+
+  auto const word =
+    cudf::detail::make_host_vector_sync(
+      device_span<bitmask_type const>{col_view.null_mask() + word_index(index), 1}, stream)
+      .front();
+
   return static_cast<bool>(word & (bitmask_type{1} << intra_word_index(index)));
 }
 
