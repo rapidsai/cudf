@@ -53,7 +53,7 @@ struct DistinctJoinTest : public cudf::test::BaseFixture {
     cudf::table_view const& expected_table,
     cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK)
   {
-    auto const& [build_join_indices, probe_join_indices] = result;
+    auto const& [probe_join_indices, build_join_indices] = result;
 
     auto build_indices_span = cudf::device_span<cudf::size_type const>{*build_join_indices};
     auto probe_indices_span = cudf::device_span<cudf::size_type const>{*probe_join_indices};
@@ -308,7 +308,7 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
 
   auto distinct_join = cudf::distinct_hash_join{build.view()};
   auto result        = distinct_join.left_join(probe.view());
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -356,7 +356,7 @@ TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
 
   auto distinct_join = cudf::distinct_hash_join{build.view()};
   auto result        = distinct_join.left_join(probe.view());
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -392,7 +392,7 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
 
   auto distinct_join = cudf::distinct_hash_join{build.view()};
   auto result        = distinct_join.left_join(probe.view());
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -417,7 +417,7 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
 
   auto distinct_join = cudf::distinct_hash_join{build.view()};
   auto result        = distinct_join.left_join(probe.view());
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {true, true, true, true, true}};
   strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
@@ -462,7 +462,7 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
 
   auto distinct_join = cudf::distinct_hash_join{build.view()};
   auto result        = distinct_join.left_join(probe.view());
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   auto col0_gold_names_col = strcol_wrapper{
     "Samuel Vimes", "Detritus", "Carrot Ironfoundersson", "Samuel Vimes", "Angua von Überwald"};

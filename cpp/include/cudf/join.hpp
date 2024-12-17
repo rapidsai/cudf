@@ -505,7 +505,7 @@ class distinct_hash_join {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned indices' device memory.
    *
-   * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to
+   * @return A pair of columns [`probe_indices`, `build_indices`] that can be used to
    * construct the result of performing an inner join between two tables
    * with `build` and `probe` as the join keys.
    */

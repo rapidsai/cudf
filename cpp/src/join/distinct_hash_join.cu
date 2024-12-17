@@ -224,7 +224,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
   build_indices->resize(actual_size, stream);
   probe_indices->resize(actual_size, stream);
 
-  return {std::move(build_indices), std::move(probe_indices)};
+  return {std::move(probe_indices), std::move(build_indices)};
 }
 
 std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
