@@ -20,7 +20,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/reduction.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 
 #include <random>
 #include <vector>

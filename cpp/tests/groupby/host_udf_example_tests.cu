@@ -23,7 +23,6 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/reduction.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -32,25 +31,16 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/transform_reduce.h>
 
 namespace {
 /**
- * @brief A host-based UDF implementation.
+ * @brief A host-based UDF implementation for groupby.
  *
- * The aggregations perform the following computation:
- *  - For reduction: compute `sum(value^2, for value in group)` (this is sum of squared).
- *  - For segmented reduction: compute `segment_size * sum(value^2, for value in group)`.
- *  - For groupby: compute `(group_idx + 1) * group_sum_of_squares - group_max * group_sum`.
- *
- * In addition, for segmented reduction, if null_policy is set to `INCLUDE`, the null values are
- * replaced with an initial value if it is provided.
+ * For each group of values, the aggregation computes
+ * `(group_idx + 1) * group_sum_of_squares - group_max * group_sum`.
  */
-template <typename cudf_aggregation>
-struct test_udf_simple_type : cudf::host_udf_base {
-  static_assert(std::is_same_v<cudf_aggregation, cudf::groupby_aggregation>);
-
-  test_udf_simple_type() = default;
+struct host_udf_groupby_example : cudf::host_udf_base {
+  host_udf_groupby_example() = default;
 
   [[nodiscard]] data_attributes_set_t get_required_data() const override
   {
@@ -90,44 +80,34 @@ struct test_udf_simple_type : cudf::host_udf_base {
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
   {
     // Just check if the other object is also instance of this class.
-    return dynamic_cast<test_udf_simple_type const*>(&other) != nullptr;
+    return dynamic_cast<host_udf_groupby_example const*>(&other) != nullptr;
   }
 
   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
   {
-    return std::make_unique<test_udf_simple_type>();
-  }
-
-  // For quick compilation, we only instantiate a few input/output types.
-  template <typename T>
-  static constexpr bool is_valid_input_t()
-  {
-    return std::is_same_v<T, double>;
-  }
-
-  // For quick compilation, we only instantiate a few input/output types.
-  template <typename T>
-  static constexpr bool is_valid_output_t()
-  {
-    return std::is_same_v<T, int64_t>;
+    return std::make_unique<host_udf_groupby_example>();
   }
 
   struct groupby_fn {
     // Store pointer to the parent class so we can call its functions.
-    test_udf_simple_type const* parent;
+    host_udf_groupby_example const* parent;
+
+    // For simplicity, this example only accepts double input and always produces double output.
+    using InputType  = double;
     using OutputType = double;
+
     template <typename InputType>
     using MaxType = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::MAX>;
     template <typename InputType>
     using SumType = cudf::detail::target_type_t<InputType, cudf::aggregation::Kind::SUM>;
 
-    template <typename InputType, typename... Args, CUDF_ENABLE_IF(!cudf::is_numeric<InputType>())>
+    template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_same_v<InputType, T>)>
     output_t operator()(Args...) const
     {
-      CUDF_FAIL("Unsupported input/output type.");
+      CUDF_FAIL("Unsupported input type.");
     }
 
-    template <typename InputType, CUDF_ENABLE_IF(cudf::is_numeric<InputType>())>
+    template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
     output_t operator()(host_udf_input const& input,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr) const
@@ -206,18 +186,17 @@ struct test_udf_simple_type : cudf::host_udf_base {
 
 using doubles_col = cudf::test::fixed_width_column_wrapper<double>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
-using int64s_col  = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-struct HostUDFExampleTest : cudf::test::BaseFixture {};
+struct HostUDFGroupbyExampleTest : cudf::test::BaseFixture {};
 
-TEST_F(HostUDFExampleTest, GroupbySimpleInput)
+TEST_F(HostUDFGroupbyExampleTest, SimpleInput)
 {
   double constexpr null = 0.0;
   auto const keys       = int32s_col{0, 1, 2, 0, 1, 2, 0, 1, 2, 0};
   auto const vals       = doubles_col{{0.0, null, 2.0, 3.0, null, 5.0, null, null, 8.0, 9.0},
                                       {true, false, true, true, false, true, false, false, true, true}};
   auto agg              = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-    std::make_unique<test_udf_simple_type<cudf::groupby_aggregation>>());
+    std::make_unique<host_udf_groupby_example>());
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
@@ -239,12 +218,12 @@ TEST_F(HostUDFExampleTest, GroupbySimpleInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-TEST_F(HostUDFExampleTest, GroupbyEmptyInput)
+TEST_F(HostUDFGroupbyExampleTest, EmptyInput)
 {
   auto const keys = int32s_col{};
   auto const vals = doubles_col{};
   auto agg        = cudf::make_host_udf_aggregation<cudf::groupby_aggregation>(
-    std::make_unique<test_udf_simple_type<cudf::groupby_aggregation>>());
+    std::make_unique<host_udf_groupby_example>());
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back();
