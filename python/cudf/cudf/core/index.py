@@ -31,6 +31,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals import copying
 from cudf.core._internals.search import search_sorted
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -336,7 +337,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if len(self) > 0:
             return column.as_column(self._range, dtype=self.dtype)
         else:
-            return column.column_empty(0, masked=False, dtype=self.dtype)
+            return column.column_empty(0, dtype=self.dtype)
 
     def _clean_nulls_from_index(self) -> Self:
         return self
@@ -1371,7 +1372,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
             scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
             indices = libcudf.column.Column.from_pylibcudf(right_plc)
-        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result = copying.scatter([indices], scatter_map, [result])[0]
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
