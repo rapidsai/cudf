@@ -66,13 +66,7 @@ jobs:
       - name: Check if nightly CI is passing
         uses: rapidsai/shared-actions/check_nightly_success/dispatch@feat/check_nightly_ci
         with:
-          # TODO: Change back before merging, just using cugraph to demonstrate a failure
-          repo: cugraph
-          #repo: cudf
-        # TODO: Remove envs once the shared-actions PR is merged.
-        env:
-          SHARED_ACTIONS_REPO: rapidsai/shared-actions
-          SHARED_ACTIONS_REF: feat/check_nightly_ci
+          repo: cudf
   changed-files:
     secrets: inherit
     needs: telemetry-setup
