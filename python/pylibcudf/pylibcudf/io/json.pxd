@@ -26,6 +26,7 @@ cpdef TableWithMetadata read_json(
     bool mixed_types_as_string = *,
     bool prune_columns = *,
     json_recovery_mode_t recovery_mode = *,
+    dict extra_parameters = *,
 )
 
 cdef class JsonWriterOptions:

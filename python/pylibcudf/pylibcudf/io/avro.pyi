@@ -1,11 +1,16 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 from pylibcudf.io.types import SourceInfo, TableWithMetadata
 
-__all__ = ["read_avro"]
+__all__ = ["AvroReaderOptions", "AvroReaderOptionsBuilder", "read_avro"]
 
-def read_avro(
-    source_info: SourceInfo,
-    columns: list[str] | None = None,
-    skip_rows: int = 0,
-    num_rows: int = -1,
-) -> TableWithMetadata: ...
+class AvroReaderOptions:
+    @staticmethod
+    def builder(source: SourceInfo) -> AvroReaderOptionsBuilder: ...
+
+class AvroReaderOptionsBuilder:
+    def columns(col_names: list[str]) -> AvroReaderOptionsBuilder: ...
+    def skip_rows(skip_rows: int) -> AvroReaderOptionsBuilder: ...
+    def num_rows(num_rows: int) -> AvroReaderOptionsBuilder: ...
+    def build(self) -> AvroReaderOptions: ...
+
+def read_avro(options: AvroReaderOptions) -> TableWithMetadata: ...

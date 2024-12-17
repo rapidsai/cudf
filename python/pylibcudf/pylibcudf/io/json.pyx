@@ -61,8 +61,10 @@ cdef json_reader_options _setup_json_reader_options(
         bool keep_quotes,
         bool mixed_types_as_string,
         bool prune_columns,
-        json_recovery_mode_t recovery_mode):
+        json_recovery_mode_t recovery_mode,
+        dict extra_parameters=None):
 
+    cdef vector[string] na_vec
     cdef vector[data_type] types_vec
     cdef json_reader_options opts = (
         json_reader_options.builder(source_info.c_obj)
@@ -85,6 +87,39 @@ cdef json_reader_options _setup_json_reader_options(
     opts.enable_keep_quotes(keep_quotes)
     opts.enable_mixed_types_as_string(mixed_types_as_string)
     opts.enable_prune_columns(prune_columns)
+
+    # These hidden options are subjected to change without deprecation cycle.
+    # These are used to test libcudf JSON reader features, not used in cuDF.
+    if extra_parameters is not None:
+        for key, value in extra_parameters.items():
+            if key == 'delimiter':
+                opts.set_delimiter(ord(value))
+            elif key == 'dayfirst':
+                opts.enable_dayfirst(value)
+            elif key == 'experimental':
+                opts.enable_experimental(value)
+            elif key == 'normalize_single_quotes':
+                opts.enable_normalize_single_quotes(value)
+            elif key == 'normalize_whitespace':
+                opts.enable_normalize_whitespace(value)
+            elif key == 'strict_validation':
+                opts.set_strict_validation(value)
+            elif key == 'allow_unquoted_control_chars':
+                opts.allow_unquoted_control_chars(value)
+            elif key == 'allow_numeric_leading_zeros':
+                opts.allow_numeric_leading_zeros(value)
+            elif key == 'allow_nonnumeric_numbers':
+                opts.allow_nonnumeric_numbers(value)
+            elif key == 'na_values':
+                for na_val in value:
+                    if isinstance(na_val, str):
+                        na_vec.push_back(na_val.encode())
+                opts.set_na_values(na_vec)
+            else:
+                raise ValueError(
+                    "cudf engine doesn't support the "
+                    f"'{key}' keyword argument for read_json"
+                )
     return opts
 
 
@@ -200,6 +235,7 @@ cpdef TableWithMetadata read_json(
     bool mixed_types_as_string = False,
     bool prune_columns = False,
     json_recovery_mode_t recovery_mode = json_recovery_mode_t.FAIL,
+    dict extra_parameters = None,
 ):
     """Reads an JSON file into a :py:class:`~.types.TableWithMetadata`.
 
@@ -231,6 +267,8 @@ cpdef TableWithMetadata read_json(
     recover_mode : JSONRecoveryMode, default JSONRecoveryMode.FAIL
         Whether to raise an error or set corresponding values to null
         when encountering an invalid JSON line.
+    extra_parameters : dict, default None
+        Additional hidden parameters to pass to the JSON reader.
 
     Returns
     -------
@@ -248,6 +286,7 @@ cpdef TableWithMetadata read_json(
         mixed_types_as_string=mixed_types_as_string,
         prune_columns=prune_columns,
         recovery_mode=recovery_mode,
+        extra_parameters=extra_parameters,
     )
 
     # Read JSON
