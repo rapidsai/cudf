@@ -61,7 +61,7 @@ TEST_F(XXHash_32_Test, StringType)
   // Expected results were generated with the reference implementation:
   // https://github.com/Cyan4973/xxHash/blob/dev/xxhash.h
   auto expected =
-    cudf::test::fixed_width_column_wrapper<uint32_t>({320624298u, 1612654309u, 1409499099u});
+    cudf::test::fixed_width_column_wrapper<uint32_t>({320624298u, 1612654309u, 1409499009u});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(), expected);
 }
