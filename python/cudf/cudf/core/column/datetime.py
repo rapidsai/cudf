@@ -19,7 +19,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.core._compat import PANDAS_GE_220
 from cudf.core._internals import binaryop, unary
@@ -602,9 +601,14 @@ class DatetimeColumn(column.ColumnBase):
             names = as_column(_DATETIME_NAMES)
         else:
             names = column.column_empty(0, dtype="object")
-        return string._datetime_to_str_typecast_functions[self.dtype](
-            self, format, names
-        )
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    self.to_pylibcudf(mode="read"),
+                    format,
+                    names.to_pylibcudf(mode="read"),
+                )
+            )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         format = _dtype_to_format_conversion.get(
@@ -1012,7 +1016,7 @@ class DatetimeTZColumn(DatetimeColumn):
                 self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
             )
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return pa.compute.assume_timezone(
             self._local_time.to_arrow(), str(self.dtype.tz)
         )
