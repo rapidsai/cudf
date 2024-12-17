@@ -91,11 +91,6 @@ def read_json(
         if dtype is None:
             dtype = True
 
-        if kwargs:
-            raise ValueError(
-                "cudf engine doesn't support the "
-                f"following keyword arguments: {list(kwargs.keys())}"
-            )
         if args:
             raise ValueError(
                 "cudf engine doesn't support the "
@@ -198,6 +193,7 @@ def read_json(
                 mixed_types_as_string=mixed_types_as_string,
                 prune_columns=prune_columns,
                 recovery_mode=c_on_bad_lines,
+                extra_parameters=kwargs,
             )
 
             df = cudf.DataFrame._from_data(
