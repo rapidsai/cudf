@@ -461,7 +461,7 @@ class hash_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  std::unique_ptr<impl_type const> const _impl;
+  std::unique_ptr<impl_type const> _impl;
 };
 
 /**
