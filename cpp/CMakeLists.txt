@@ -1105,7 +1105,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm rmm::rmm_logger rmm::rmm_logger_impl)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()

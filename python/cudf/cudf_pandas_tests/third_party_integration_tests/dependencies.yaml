@@ -76,13 +76,6 @@ files:
       - py_version
       - test_base
       - test_xgboost
-  test_catboost:
-    output: none
-    includes:
-      - cuda_version
-      - py_version
-      - test_base
-      - test_catboost
   test_cuml:
     output: none
     includes:
@@ -251,14 +244,6 @@ dependencies:
           - pip
           - pip:
             - xgboost>=2.0.1
-  test_catboost:
-    common:
-      - output_types: conda
-        packages:
-          - numpy
-          - scipy
-          - scikit-learn
-          - catboost
   test_cuml:
     common:
       - output_types: conda

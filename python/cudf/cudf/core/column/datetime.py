@@ -354,9 +354,7 @@ class DatetimeColumn(column.ColumnBase):
 
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
-        return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
-            False
-        )
+        return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
     @property
     def is_leap_year(self) -> ColumnBase:
@@ -598,14 +596,12 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object", masked=False),
+                column.column_empty(0, dtype="object"),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = cudf.core.column.column_empty(
-                0, dtype="object", masked=False
-            )
+            names = column.column_empty(0, dtype="object")
         return string._datetime_to_str_typecast_functions[self.dtype](
             self, format, names
         )

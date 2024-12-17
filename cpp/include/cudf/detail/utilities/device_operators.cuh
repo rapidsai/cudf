@@ -29,6 +29,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cuda/std/functional>
+
 #include <type_traits>
 
 namespace cudf {
@@ -42,7 +44,7 @@ template <typename LHS,
           std::enable_if_t<cudf::is_relationally_comparable<LHS, RHS>()>* = nullptr>
 CUDF_HOST_DEVICE inline auto min(LHS const& lhs, RHS const& rhs)
 {
-  return std::min(lhs, rhs);
+  return cuda::std::min(lhs, rhs);
 }
 
 /**
@@ -53,7 +55,7 @@ template <typename LHS,
           std::enable_if_t<cudf::is_relationally_comparable<LHS, RHS>()>* = nullptr>
 CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
 {
-  return std::max(lhs, rhs);
+  return cuda::std::max(lhs, rhs);
 }
 }  // namespace detail
 
@@ -68,20 +70,20 @@ struct DeviceSum {
   }
 
   template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     return T{typename T::duration{0}};
   }
 
   template <typename T,
             std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     return T{0};
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support device operator identity");
@@ -109,7 +111,7 @@ struct DeviceCount {
   }
 
   template <typename T>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     return T{};
   }
@@ -129,7 +131,7 @@ struct DeviceMin {
   template <typename T,
             std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
                              !cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     // chrono types do not have std::numeric_limits specializations and should use T::max()
     // https://eel.is/c++draft/numeric.limits.general#6
@@ -143,7 +145,7 @@ struct DeviceMin {
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support DeviceMin identity");
@@ -161,7 +163,7 @@ struct DeviceMin {
   }
 
   template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     return static_cast<T>(T::max_value());
   }
@@ -181,7 +183,7 @@ struct DeviceMax {
   template <typename T,
             std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
                              !cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     // chrono types do not have std::numeric_limits specializations and should use T::min()
     // https://eel.is/c++draft/numeric.limits.general#6
@@ -195,7 +197,7 @@ struct DeviceMax {
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support DeviceMax identity");
@@ -212,7 +214,7 @@ struct DeviceMax {
   }
 
   template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     return static_cast<T>(T::lowest_value());
   }
@@ -229,13 +231,13 @@ struct DeviceProduct {
   }
 
   template <typename T, std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
     return T{1};
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  static constexpr T identity()
+  CUDF_HOST_DEVICE static constexpr T identity()
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support DeviceProduct identity");

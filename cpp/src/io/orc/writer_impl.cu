@@ -19,7 +19,6 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
-#include "cudf/detail/utilities/cuda_memcpy.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
@@ -28,7 +27,9 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
@@ -1386,28 +1387,33 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
   // we know the size of each array. The number of stripes per column in a chunk array can
   // be calculated by dividing the number of chunks by the number of columns.
   // That many chunks need to be copied at a time to the proper destination.
-  size_t num_entries_seen = 0;
+  size_t num_entries_seen        = 0;
+  auto const num_buffers_to_copy = per_chunk_stats.stripe_stat_chunks.size() * num_columns * 2;
+  auto h_srcs = cudf::detail::make_empty_host_vector<void*>(num_buffers_to_copy, stream);
+  auto h_dsts = cudf::detail::make_empty_host_vector<void*>(num_buffers_to_copy, stream);
+  auto h_lens = cudf::detail::make_empty_host_vector<size_t>(num_buffers_to_copy, stream);
+
   for (size_t i = 0; i < per_chunk_stats.stripe_stat_chunks.size(); ++i) {
     auto const stripes_per_col = per_chunk_stats.stripe_stat_chunks[i].size() / num_columns;
 
-    auto const chunk_bytes = stripes_per_col * sizeof(statistics_chunk);
-    auto const merge_bytes = stripes_per_col * sizeof(statistics_merge_group);
     for (size_t col = 0; col < num_columns; ++col) {
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
-                        per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
-                        chunk_bytes,
-                        cudaMemcpyDefault,
-                        stream.value()));
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
-                        per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
-                        merge_bytes,
-                        cudaMemcpyDefault,
-                        stream.value()));
+      h_srcs.push_back(per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col);
+      h_dsts.push_back(stat_chunks.data() + (num_stripes * col) + num_entries_seen);
+      h_lens.push_back(stripes_per_col * sizeof(statistics_chunk));
+
+      h_srcs.push_back(per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col);
+      h_dsts.push_back(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen);
+      h_lens.push_back(stripes_per_col * sizeof(statistics_merge_group));
     }
     num_entries_seen += stripes_per_col;
   }
+
+  auto const& mr    = cudf::get_current_device_resource_ref();
+  auto const d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, mr);
+  auto const d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, mr);
+  auto const d_lens = cudf::detail::make_device_uvector_async(h_lens, stream, mr);
+  cudf::detail::batched_memcpy_async(
+    d_srcs.begin(), d_dsts.begin(), d_lens.begin(), d_srcs.size(), stream);
 
   auto file_stats_merge =
     cudf::detail::make_host_vector<statistics_merge_group>(num_file_blobs, stream);

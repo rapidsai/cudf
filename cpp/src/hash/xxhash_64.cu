@@ -25,6 +25,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/tabulate.h>
 
 namespace cudf {
@@ -72,7 +73,7 @@ class device_row_hasher {
                                           hash_value_type const _seed) const noexcept
     {
       if (_check_nulls && col.is_null(row_index)) {
-        return std::numeric_limits<hash_value_type>::max();
+        return cuda::std::numeric_limits<hash_value_type>::max();
       }
       auto const hasher = XXHash_64<T>{_seed};
       return hasher(col.element<T>(row_index));
