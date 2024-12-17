@@ -158,7 +158,7 @@ class run_cache_manager {
    *
    * @param[in] s ORC decoder state.
    */
-  __forceinline__ __device__ void initialize(orcdec_state_s* s)
+  __device__ void initialize(orcdec_state_s* s)
   {
     _status          = (s->top.data.index.run_pos[CI_DATA2] > 0 and s->chunk.type_kind == TIMESTAMP)
                          ? status::CAN_WRITE_TO_CACHE
@@ -175,7 +175,7 @@ class run_cache_manager {
    * @param[in] max_length The maximum length allowed to be consumed. This limit is imposed
    * by the decoder when processing the SECONDARY stream.
    */
-  __forceinline__ __device__ void set_reusable_length(uint32_t run_length, uint32_t max_length)
+  __device__ void set_reusable_length(uint32_t run_length, uint32_t max_length)
   {
     if (_status == status::CAN_WRITE_TO_CACHE) {
       _run_length      = run_length;
@@ -190,7 +190,7 @@ class run_cache_manager {
    * @param[in] max_length The maximum length allowed to be consumed.
    * @return A new maximum length.
    */
-  __forceinline__ __device__ uint32_t adjust_max_length(uint32_t max_length)
+  __device__ uint32_t adjust_max_length(uint32_t max_length)
   {
     auto new_max_length{max_length};
     if (_status == status::CAN_READ_FROM_CACHE and _reusable_length > 0) {
@@ -205,7 +205,7 @@ class run_cache_manager {
    * @param[in] src Intermediate buffer for the DATA stream.
    * @param[out] cache Local variable serving as the cache.
    */
-  __forceinline__ __device__ void write_to_cache(int64_t* src, int64_t& cache)
+  __device__ void write_to_cache(int64_t* src, int64_t& cache)
   {
     if (_status != status::CAN_WRITE_TO_CACHE) { return; }
 
@@ -237,9 +237,7 @@ class run_cache_manager {
    * @param[in,out] rle Run length decoder state object.
    * @param[in] cache Local variable serving as the cache.
    */
-  __forceinline__ __device__ void read_from_cache(int64_t* dst,
-                                                  orc_rlev2_state_s* rle,
-                                                  int64_t cache)
+  __device__ void read_from_cache(int64_t* dst, orc_rlev2_state_s* rle, int64_t cache)
   {
     if (_status != status::CAN_READ_FROM_CACHE) { return; }
 
