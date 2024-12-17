@@ -49,12 +49,6 @@ def libcudf_mmh3_x86_32(binary):
     return hash_combine_32(seed, hashval)
 
 
-def libcudf_xxhash_32(binary):
-    seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
-    hashval = xxhash.xxh32(binary, seed).intdigest()
-    return hash_combine_32(seed, hashval)
-
-
 @pytest.fixture(params=[pa.int64(), pa.float64(), pa.string(), pa.bool_()])
 def scalar_type(request):
     return request.param
@@ -109,7 +103,9 @@ def test_hash_column_sha_md5(
 
 def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
     def py_hasher(val):
-        return libcudf_xxhash_32(scalar_to_binary(val))
+        return xxhash.xxh32(
+            scalar_to_binary(val), seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+        ).intdigest()
 
     expect = pa.array(
         [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],

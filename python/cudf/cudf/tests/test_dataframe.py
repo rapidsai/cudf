@@ -1511,21 +1511,21 @@ def test_dataframe_hash_values_xxhash32():
     gdf["b"] = -gdf["a"]
     out_a = gdf["a"].hash_values(method="xxhash32", seed=0)
     expected_a = cudf.Series(
-        [2095779532, 667448960, 1266115603, 3401014672, 2654435768],
+        [3736311059, 2307980487, 2906647130, 746578903, 4294967295],
         dtype=np.uint32,
     )
     assert_eq(out_a, expected_a)
 
     out_b = gdf["b"].hash_values(method="xxhash32", seed=42)
     expected_b = cudf.Series(
-        [3730825784, 620821108, 3185936566, 3305307769, 2654438504],
+        [1076387279, 2261349915, 531498073, 650869264, 4294967295],
         dtype=np.uint32,
     )
     assert_eq(out_b, expected_b)
 
     out_df = gdf.hash_values(method="xxhash32", seed=0)
     expected_df = cudf.Series(
-        [2852293555, 2790935110, 2304542211, 57154089, 3449077662],
+        [1223721700, 2885793241, 1920811472, 1146715602, 4294967295],
         dtype=np.uint32,
     )
     assert_eq(out_df, expected_df)
