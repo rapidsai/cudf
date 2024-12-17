@@ -17,7 +17,9 @@
 #include "strings/regex/regcomp.h"
 #include "strings/regex/regex.cuh"
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -66,10 +68,11 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
                        cudf::util::round_up_safe(classes_size, sizeof(char32_t));
 
   // allocate memory to store all the prog data in a flat contiguous buffer
-  std::vector<u_char> h_buffer(memsize);                        // copy everything into here;
-  auto h_ptr    = h_buffer.data();                              // this is our running host ptr;
-  auto d_buffer = new rmm::device_buffer(memsize, stream);      // output device memory;
-  auto d_ptr    = reinterpret_cast<u_char*>(d_buffer->data());  // running device pointer
+  auto h_buffer =
+    cudf::detail::make_host_vector<u_char>(memsize, stream);  // copy everything into here;
+  auto h_ptr    = h_buffer.data();                            // this is our running host ptr;
+  auto d_buffer = new rmm::device_uvector<u_char>(memsize, stream);  // output device memory;
+  auto d_ptr    = d_buffer->data();                                  // running device pointer
 
   // create our device object; this is managed separately and returned to the caller
   auto* d_prog = new reprog_device(h_prog);
@@ -113,8 +116,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   d_prog->_prog_size = memsize + sizeof(reprog_device);
 
   // copy flat prog to device memory
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyDefault, stream.value()));
+  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
 
   // build deleter to cleanup device memory
   auto deleter = [d_buffer](reprog_device* t) {

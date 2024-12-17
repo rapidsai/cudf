@@ -4061,9 +4061,7 @@ class StringMethods(ColumnMethods):
         ends_column = self.endswith(suffix)._column  # type: ignore[union-attr]
         removed_column = self.slice(0, -len(suffix), None)._column  # type: ignore[union-attr]
 
-        result = cudf._lib.copying.copy_if_else(
-            removed_column, self._column, ends_column
-        )
+        result = removed_column.copy_if_else(self._column, ends_column)
         return self._return_or_inplace(result)
 
     def removeprefix(self, prefix: str) -> SeriesOrIndex:
@@ -4101,9 +4099,7 @@ class StringMethods(ColumnMethods):
             return self._return_or_inplace(self._column)
         starts_column = self.startswith(prefix)._column  # type: ignore[union-attr]
         removed_column = self.slice(len(prefix), None, None)._column  # type: ignore[union-attr]
-        result = cudf._lib.copying.copy_if_else(
-            removed_column, self._column, starts_column
-        )
+        result = removed_column.copy_if_else(self._column, starts_column)
         return self._return_or_inplace(result)
 
     def _find(
