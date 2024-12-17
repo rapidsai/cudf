@@ -47,6 +47,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <numeric>
 
 namespace cudf::io::json::detail {
 auto to_int2    = [](auto v) { return std::to_string(static_cast<int>(v)); };
@@ -432,8 +433,8 @@ std::
     cudf::detail::make_host_vector_async(d_column_tree.parent_node_ids, stream);
   auto column_range_beg =
     cudf::detail::make_host_vector_async(d_column_tree.node_range_begin, stream);
-  auto const max_row_offsets = cudf::detail::make_host_vector_async(d_max_row_offsets, stream);
-  auto num_columns           = d_unique_col_ids.size();
+  auto max_row_offsets = cudf::detail::make_host_vector_async(d_max_row_offsets, stream);
+  auto num_columns     = d_unique_col_ids.size();
   stream.synchronize();
 
   auto to_json_col_type = [](auto category) {
@@ -532,6 +533,13 @@ std::
                  "Root type in input schema should be struct or list");
     auto& remove_vec =
       is_enabled_lines ? adj[parent_node_sentinel] : adj[adj[parent_node_sentinel][0]];
+    // make sure all root columns have same number of rows.
+    auto max_root_rows =
+      std::reduce(remove_vec.begin(), remove_vec.end(), 0, [&max_row_offsets](auto acc, auto x) {
+        return std::max(acc, max_row_offsets[x]);
+      });
+    for (auto x : remove_vec)
+      max_row_offsets[x] = max_root_rows;
     if (remove_vec.size() != 1)
       remove_vec.erase(std::remove_if(remove_vec.begin(),
                                       remove_vec.end(),
