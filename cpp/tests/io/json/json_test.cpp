@@ -3441,6 +3441,49 @@ TEST_F(JsonReaderTest, ListRoot)
   cudf::test::print(result.tbl->get_column(0).view());
 }
 
+TEST_F(JsonReaderTest, ListRootMixed)
+{
+  // Test for non-json-lines too.
+  using namespace cudf::test::iterators;
+  // test list
+  std::string json_stringl = R"(
+     []
+     []
+     []
+     {}
+    )";
+  // 'ARRAY<STRING>'
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{json_stringl.data(), json_stringl.size()})
+      .prune_columns(true)
+      .experimental(true)
+      .lines(true);
+
+  // arrac<string> eg. [""]
+  cudf::io::schema_element dtype_schema{data_type{cudf::type_id::LIST},
+                                        {{"element",
+                                          {
+                                            data_type{cudf::type_id::STRING},
+                                          }}}};
+  in_options.set_dtypes(dtype_schema);
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  // ASSERT_EQ(result.tbl->num_columns(), 1);
+  // ASSERT_EQ(result.metadata.schema_info.size(), 1);
+  cudf::test::print(result.tbl->get_column(0).view());
+  dtype_schema = cudf::io::schema_element{data_type{cudf::type_id::LIST},
+                                          {{"element",
+                                            {data_type{cudf::type_id::STRUCT},
+                                             {{"A",
+                                               {
+                                                 data_type{cudf::type_id::INT32},
+                                               }}},
+                                             {{"A"}}}}}};
+  in_options.set_dtypes(dtype_schema);
+  result = cudf::io::read_json(in_options);
+  cudf::test::print(result.tbl->get_column(0).view());
+}
+
 struct JsonCompressedIOTest : public cudf::test::BaseFixture,
                               public testing::WithParamInterface<cudf::io::compression_type> {};
 
