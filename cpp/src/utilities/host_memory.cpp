@@ -290,8 +290,8 @@ size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(
 
 CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 {
-  // use pageable memory for all host allocations
-  static std::atomic<size_t> threshold = 0;
+  // Use pinned memory for all allocations smaller than this threshold
+  static std::atomic<size_t> threshold = 4096;
   return threshold;
 }
 
