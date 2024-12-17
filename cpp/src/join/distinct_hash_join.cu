@@ -49,13 +49,15 @@ namespace {
 
 /**
  * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
- *
- * @tparam Hasher The type of internal hasher to compute row hash.
  */
-template <typename Hasher, typename T>
+template <typename T>
 class build_keys_fn {
+  using hasher =
+    cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                     cudf::nullate::DYNAMIC>;
+
  public:
-  CUDF_HOST_DEVICE build_keys_fn(Hasher const& hash) : _hash{hash} {}
+  CUDF_HOST_DEVICE constexpr build_keys_fn(hasher const& hash) : _hash{hash} {}
 
   __device__ __forceinline__ auto operator()(size_type i) const noexcept
   {
@@ -63,7 +65,7 @@ class build_keys_fn {
   }
 
  private:
-  Hasher _hash;
+  hasher _hash;
 };
 
 /**
