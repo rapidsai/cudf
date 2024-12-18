@@ -24,8 +24,8 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
-rapids-logger "pytest dask_cudf (dask-expr)"
-DASK_DATAFRAME__QUERY_PLANNING=True ./ci/run_dask_cudf_pytests.sh \
+rapids-logger "pytest dask_cudf"
+./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
@@ -33,13 +33,6 @@ DASK_DATAFRAME__QUERY_PLANNING=True ./ci/run_dask_cudf_pytests.sh \
   --cov=dask_cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term
-
-rapids-logger "pytest dask_cudf (legacy)"
-DASK_DATAFRAME__QUERY_PLANNING=False ./ci/run_dask_cudf_pytests.sh \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-legacy.xml" \
-  --numprocesses=8 \
-  --dist=worksteal \
-  .
 
 rapids-logger "pytest cudf_kafka"
 ./ci/run_cudf_kafka_pytests.sh \
