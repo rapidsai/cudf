@@ -1052,8 +1052,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
 
-    volatile bool output_is_valid = false;
-    output_is_valid               = device_operator.template operator()<OutputType, has_nulls>(
+    bool const output_is_valid = device_operator.template operator()<OutputType, has_nulls>(
       input, default_outputs, output, start, end, i);
 
     // set the mask
