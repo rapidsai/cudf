@@ -251,7 +251,7 @@ def read_orc(
             options.set_num_rows(num_rows)
         if skiprows >= 0:
             options.set_skip_rows(skiprows)
-        if stripes is not None:
+        if stripes is not None and len(stripes) > 0:
             options.set_stripes(stripes)
         if timestamp_type is not None:
             options.set_timestamp_type(
