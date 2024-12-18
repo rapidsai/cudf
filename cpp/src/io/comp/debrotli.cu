@@ -2020,7 +2020,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
     results[block_id].status =
       (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
     // Return ext heap used by last block (statistics)
-    results[block_id].reserved = s->fb_size;
   }
 }
 

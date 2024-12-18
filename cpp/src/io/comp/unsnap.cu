@@ -26,7 +26,6 @@ namespace io {
 constexpr int32_t batch_size    = (1 << 5);
 constexpr int32_t batch_count   = (1 << 2);
 constexpr int32_t prefetch_size = (1 << 9);  // 512B, in 32B chunks
-constexpr bool log_cyclecount   = false;
 
 void __device__ busy_wait(size_t cycles)
 {
@@ -647,7 +646,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     auto cur       = s->src.begin();
     auto const end = s->src.end();
     s->error       = 0;
-    if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
       uint32_t uncompressed_size = *cur++;
@@ -705,11 +703,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     results[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
     results[strm_id].status =
       (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
-    if (log_cyclecount) {
-      results[strm_id].reserved = clock() - s->tstart;
-    } else {
-      results[strm_id].reserved = 0;
-    }
   }
 }
 

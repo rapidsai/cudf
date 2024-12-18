@@ -1139,7 +1139,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         default: return compression_status::FAILURE;
       }
     }();
-    results[z].reserved = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
 

@@ -329,7 +329,6 @@ CUDF_KERNEL void __launch_bounds__(128)
     results[blockIdx.x].bytes_written = s->dst - s->dst_base;
     results[blockIdx.x].status =
       (s->dst > s->end) ? compression_status::FAILURE : compression_status::SUCCESS;
-    results[blockIdx.x].reserved = 0;
   }
 }
 

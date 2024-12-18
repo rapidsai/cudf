@@ -192,18 +192,14 @@ rmm::device_buffer decompress_stripe_data(
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
-    device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(),
-                                                            num_compressed_blocks};
-    device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
     switch (decompressor.compression()) {
       case compression_type::ZLIB:
         if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
-          gpuinflate(
-            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
+          gpuinflate(inflate_in, inflate_out, inflate_res, gzip_header_included::NO, stream);
         } else {
           nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
-                                     inflate_in_view,
-                                     inflate_out_view,
+                                     inflate_in,
+                                     inflate_out,
                                      inflate_res,
                                      max_uncomp_block_size,
                                      total_decomp_size,
@@ -212,11 +208,11 @@ rmm::device_buffer decompress_stripe_data(
         break;
       case compression_type::SNAPPY:
         if (nvcomp::is_decompression_disabled(nvcomp::compression_type::SNAPPY)) {
-          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_res, stream);
+          gpu_unsnap(inflate_in, inflate_out, inflate_res, stream);
         } else {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                                     inflate_in_view,
-                                     inflate_out_view,
+                                     inflate_in,
+                                     inflate_out,
                                      inflate_res,
                                      max_uncomp_block_size,
                                      total_decomp_size,
@@ -229,8 +225,8 @@ rmm::device_buffer decompress_stripe_data(
           CUDF_FAIL("Decompression error: " + reason.value());
         }
         nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                   inflate_in_view,
-                                   inflate_out_view,
+                                   inflate_in,
+                                   inflate_out,
                                    inflate_res,
                                    max_uncomp_block_size,
                                    total_decomp_size,
@@ -242,8 +238,8 @@ rmm::device_buffer decompress_stripe_data(
           CUDF_FAIL("Decompression error: " + reason.value());
         }
         nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
-                                   inflate_in_view,
-                                   inflate_out_view,
+                                   inflate_in,
+                                   inflate_out,
                                    inflate_res,
                                    max_uncomp_block_size,
                                    total_decomp_size,

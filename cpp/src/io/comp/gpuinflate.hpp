@@ -43,7 +43,6 @@ enum class compression_status : uint8_t {
 struct compression_result {
   uint64_t bytes_written;
   compression_status status;
-  uint32_t reserved;
 };
 
 enum class gzip_header_included { NO, YES };
