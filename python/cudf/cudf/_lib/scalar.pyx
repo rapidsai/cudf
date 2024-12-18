@@ -214,7 +214,7 @@ cdef class DeviceScalar:
         return s
 
     @staticmethod
-    cdef DeviceScalar from_pylibcudf(pscalar, dtype=None):
+    def from_pylibcudf(pscalar, dtype=None):
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         s.c_value = pscalar
         s._set_dtype(dtype)
