@@ -42,7 +42,7 @@ groupby_agg = _deprecated_api("dask_cudf.groupby_agg")
 read_text = DataFrame.read_text
 to_orc = _deprecated_api(
     "dask_cudf.to_orc",
-    new_api="dask_cudf._legacy.io.to_orc",
+    new_api="dask_cudf.io.to_orc",
     rec="Please use DataFrame.to_orc instead.",
 )
 

@@ -155,7 +155,3 @@ def test_deprecated_api_paths(tmpdir):
     with pytest.warns(match="dask_cudf.io.read_orc is now deprecated"):
         df2 = dask_cudf.io.read_orc(paths)
     dd.assert_eq(df, df2, check_divisions=False)
-
-    with pytest.warns(match="dask_cudf.io.orc.read_orc is now deprecated"):
-        df2 = dask_cudf.io.orc.read_orc(paths)
-    dd.assert_eq(df, df2, check_divisions=False)

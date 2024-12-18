@@ -38,7 +38,3 @@ def test_deprecated_api_paths():
     with pytest.warns(match="dask_cudf.io.read_text is now deprecated"):
         df2 = dask_cudf.io.read_text(text_file, delimiter=".")
     dd.assert_eq(df, df2, check_divisions=False)
-
-    with pytest.warns(match="dask_cudf.io.text.read_text is now deprecated"):
-        df2 = dask_cudf.io.text.read_text(text_file, delimiter=".")
-    dd.assert_eq(df, df2, check_divisions=False)

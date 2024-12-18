@@ -17,7 +17,13 @@ from dask.dataframe.backends import (
     DataFrameBackendEntrypoint,
     PandasBackendEntrypoint,
 )
-from dask.dataframe.core import get_parallel_type, meta_nonempty
+from dask.dataframe.core import (
+    DataFrame,
+    Index,
+    Series,
+    get_parallel_type,
+    meta_nonempty,
+)
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat_dispatch,
@@ -45,8 +51,6 @@ from dask.utils import Dispatch, is_arraylike
 import cudf
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
-
-from ._legacy.core import DataFrame, Index, Series
 
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
@@ -559,12 +563,6 @@ class LegacyCudfBackendEntrypoint(DataFrameBackendEntrypoint):
     This "legacy" backend is only used for CSV support.
     """
 
-    @staticmethod
-    def read_csv(*args, **kwargs):
-        from dask_cudf._legacy.io import read_csv
-
-        return read_csv(*args, **kwargs)
-
 
 # Define the "cudf" backend for expr-based Dask DataFrame
 class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
@@ -662,12 +660,12 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_json(*args, **kwargs):
-        from dask_cudf._legacy.io.json import read_json as read_json_impl
+        from dask_cudf.io.json import read_json as read_json_impl
 
         return read_json_impl(*args, **kwargs)
 
     @staticmethod
     def read_orc(*args, **kwargs):
-        from dask_cudf._legacy.io.orc import read_orc as legacy_read_orc
+        from dask_cudf.io.orc import read_orc as legacy_read_orc
 
         return legacy_read_orc(*args, **kwargs)

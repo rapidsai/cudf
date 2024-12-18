@@ -15,7 +15,7 @@ read_orc = _deprecated_api(
 )
 to_orc = _deprecated_api(
     "dask_cudf.io.to_orc",
-    new_api="dask_cudf._legacy.io.to_orc",
+    new_api="dask_cudf.io.orc.to_orc",
     rec="Please use the DataFrame.to_orc method instead.",
 )
 read_text = _deprecated_api(

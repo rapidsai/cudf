@@ -133,7 +133,3 @@ def test_deprecated_api_paths(tmp_path):
     with pytest.warns(match="dask_cudf.io.read_json is now deprecated"):
         df2 = dask_cudf.io.read_json(path)
     dd.assert_eq(df, df2, check_divisions=False)
-
-    with pytest.warns(match="dask_cudf.io.json.read_json is now deprecated"):
-        df2 = dask_cudf.io.json.read_json(path)
-    dd.assert_eq(df, df2, check_divisions=False)

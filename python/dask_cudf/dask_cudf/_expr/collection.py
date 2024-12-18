@@ -141,15 +141,15 @@ class DataFrame(DXDataFrame, CudfFrameBase):
         )
 
     def to_orc(self, *args, **kwargs):
-        from dask_cudf._legacy.io import to_orc
+        from dask_cudf.io.orc import to_orc as to_orc_impl
 
-        return to_orc(self, *args, **kwargs)
+        return to_orc_impl(self, *args, **kwargs)
 
     @staticmethod
     def read_text(*args, **kwargs):
-        from dask_cudf._legacy.io.text import read_text as legacy_read_text
+        from dask_cudf.io.text import read_text as read_text_impl
 
-        return legacy_read_text(*args, **kwargs)
+        return read_text_impl(*args, **kwargs)
 
     def clip(self, lower=None, upper=None, axis=1):
         if axis not in (None, 1):
