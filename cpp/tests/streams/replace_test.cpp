@@ -104,9 +104,9 @@ TEST_F(ReplaceTest, NormalizeNansAndZeros)
 
 TEST_F(ReplaceTest, NormalizeNansAndZerosMutable)
 {
-  auto nan          = std::numeric_limits<double>::quiet_NaN();
-  auto input_column = cudf::test::make_type_param_vector<double>({-0.0, 0.0, -nan, nan, nan});
-  cudf::test::fixed_width_column_wrapper<double> input(input_column.begin(), input_column.end());
-  cudf::mutable_column_view mutable_view = cudf::column(input, cudf::test::get_default_stream());
-  cudf::normalize_nans_and_zeros(mutable_view, cudf::test::get_default_stream());
+  auto nan   = std::numeric_limits<double>::quiet_NaN();
+  auto data  = cudf::test::make_type_param_vector<double>({-0.0, 0.0, -nan, nan, nan});
+  auto input = cudf::test::fixed_width_column_wrapper<double>(data.begin(), data.end()).release();
+  auto view  = input->mutable_view();
+  cudf::normalize_nans_and_zeros(view, cudf::test::get_default_stream());
 }

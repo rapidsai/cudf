@@ -3,7 +3,6 @@ import numpy as np
 
 from . import (
     groupby,
-    interop,
     strings_udf,
 )
 
