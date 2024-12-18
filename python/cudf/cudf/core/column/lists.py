@@ -150,7 +150,7 @@ class ListColumn(ColumnBase):
         """
         return cast(NumericalColumn, self.children[0])
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         offsets = self.offsets.to_arrow()
         elements = (
             pa.nulls(len(self.elements))
@@ -160,7 +160,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = pa.py_buffer(self.mask.memoryview())
+            nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
