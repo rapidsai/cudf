@@ -4,6 +4,8 @@ from typing import TypeAlias
 
 from typing_extensions import Self
 
+from rmm._cuda.stream import Stream
+
 from pylibcudf.column import Column
 from pylibcudf.io.types import (
     CompressionType,
@@ -14,8 +16,6 @@ from pylibcudf.io.types import (
 )
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
-from rmm._cuda.stream import Stream
-
 
 ChildNameToTypeMap: TypeAlias = Mapping[str, ChildNameToTypeMap]
 
@@ -32,7 +32,7 @@ def read_json(
     mixed_types_as_string: bool = False,
     prune_columns: bool = False,
     recovery_mode: JSONRecoveryMode = JSONRecoveryMode.FAIL,
-    stream: stream = None,
+    stream: Stream = None,
 ) -> TableWithMetadata: ...
 
 class JsonWriterOptions:
@@ -49,8 +49,7 @@ class JsonWriterOptionsBuilder:
     def lines(self, val: bool) -> Self: ...
     def build(self) -> JsonWriterOptions: ...
 
-def write_json(options: JsonWriterOptions, stream: stream = None) -> None: ...
-
+def write_json(options: JsonWriterOptions, stream: Stream = None) -> None: ...
 def chunked_read_json(
     source_info: SourceInfo,
     dtypes: list[NameAndType] | None = None,
@@ -60,5 +59,5 @@ def chunked_read_json(
     prune_columns: bool = False,
     recovery_mode: JSONRecoveryMode = JSONRecoveryMode.FAIL,
     chunk_size: int = 100_000_000,
-    stream: stream = None,
+    stream: Stream = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...

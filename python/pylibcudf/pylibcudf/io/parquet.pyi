@@ -4,6 +4,8 @@ from collections.abc import Mapping
 
 from typing_extensions import Self
 
+from rmm._cuda.stream import Stream
+
 from pylibcudf.expressions import Expression
 from pylibcudf.io.types import (
     CompressionType,
@@ -16,7 +18,6 @@ from pylibcudf.io.types import (
     TableWithMetadata,
 )
 from pylibcudf.table import Table
-from rmm._cuda.stream import Stream
 
 class ParquetReaderOptions:
     def __init__(self): ...
@@ -55,7 +56,7 @@ class ChunkedParquetReader:
 
 def read_parquet(
     options: ParquetReaderOptions,
-    stream: stream = None,
+    stream: Stream = None,
 ) -> TableWithMetadata: ...
 
 class ParquetWriterOptions:
@@ -87,14 +88,18 @@ class ParquetWriterOptionsBuilder:
     def write_arrow_schema(self, enabled: bool) -> Self: ...
     def build(self) -> ParquetWriterOptions: ...
 
-def write_parquet(options: ParquetWriterOptions, stream: stream = None) -> memoryview: ...
+def write_parquet(
+    options: ParquetWriterOptions, stream: Stream = None
+) -> memoryview: ...
 
 class ParquetChunkedWriter:
     def __init__(self): ...
     def close(self, metadata_file_path: list) -> memoryview: ...
     def write(self, table: Table) -> None: ...
     @staticmethod
-    def from_options(options: ChunkedParquetWriterOptions, stream: stream = None) -> Self: ...
+    def from_options(
+        options: ChunkedParquetWriterOptions, stream: Stream = None
+    ) -> Self: ...
 
 class ChunkedParquetWriterOptions:
     def __init__(self): ...

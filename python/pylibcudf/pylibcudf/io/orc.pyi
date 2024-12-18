@@ -2,6 +2,8 @@
 
 from typing import Any, Self
 
+from rmm._cuda.stream import Stream
+
 from pylibcudf.io.types import (
     CompressionType,
     SinkInfo,
@@ -12,7 +14,6 @@ from pylibcudf.io.types import (
 )
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
-from rmm._cuda.stream import Stream
 
 def read_orc(
     source_info: SourceInfo,
@@ -24,7 +25,7 @@ def read_orc(
     use_np_dtypes: bool = True,
     timestamp_type: DataType | None = None,
     decimal128_columns: list[str] | None = None,
-    stream: Strem = Stream(),
+    stream: Stream = Stream(),
 ) -> TableWithMetadata: ...
 
 class OrcColumnStatistics:

@@ -1,8 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from collections.abc import Mapping
-
 from typing_extensions import Self
+
+from rmm._cuda.stream import Stream
 
 from pylibcudf.io.types import (
     CompressionType,
@@ -13,7 +13,6 @@ from pylibcudf.io.types import (
 )
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
-from rmm._cuda.stream import Stream
 
 class CsvReaderOptions:
     def __init__(self): ...
@@ -58,9 +57,9 @@ class CsvReaderOptionsBuilder:
 
 def read_csv(
     options: CsvReaderOptions,
-    stream: stream = None,
+    stream: Stream = None,
 ) -> TableWithMetadata: ...
-def write_csv(options: CsvWriterOptionsBuilder, stream: stream = None): ...
+def write_csv(options: CsvWriterOptionsBuilder, stream: Stream = None): ...
 
 class CsvWriterOptions:
     def __init__(self): ...
