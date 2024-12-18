@@ -758,7 +758,7 @@ struct host_udf_base {
   /**
    * @brief Set of attributes for the input data that is needed for computing the aggregation.
    */
-  using data_attributes_set_t =
+  using data_attribute_set_t =
     std::unordered_set<data_attribute, data_attribute::hash, data_attribute::equal_to>;
 
   /**
@@ -771,7 +771,7 @@ struct host_udf_base {
    *
    * @return A set of `data_attribute`
    */
-  [[nodiscard]] virtual data_attributes_set_t get_required_data() const { return {}; }
+  [[nodiscard]] virtual data_attribute_set_t get_required_data() const { return {}; }
 
   /**
    * @brief Hold all possible types of the data that is passed to the derived class for executing

@@ -42,7 +42,7 @@ namespace {
 struct host_udf_groupby_example : cudf::host_udf_base {
   host_udf_groupby_example() = default;
 
-  [[nodiscard]] data_attributes_set_t get_required_data() const override
+  [[nodiscard]] data_attribute_set_t get_required_data() const override
   {
     // We need grouped values, group offsets, group labels, and also results from groups'
     // MAX and SUM aggregations.

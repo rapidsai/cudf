@@ -31,16 +31,16 @@ namespace {
 struct host_udf_test_base : cudf::host_udf_base {
   int test_location_line;  // the location where testing is called
   bool* test_run;          // to check if the test is accidentally skipped
-  data_attributes_set_t input_attrs;
+  data_attribute_set_t input_attrs;
 
-  host_udf_test_base(int test_location_line_, bool* test_run_, data_attributes_set_t input_attrs_)
+  host_udf_test_base(int test_location_line_, bool* test_run_, data_attribute_set_t input_attrs_)
     : test_location_line{test_location_line_},
       test_run{test_run_},
       input_attrs(std::move(input_attrs_))
   {
   }
 
-  [[nodiscard]] data_attributes_set_t get_required_data() const override { return input_attrs; }
+  [[nodiscard]] data_attribute_set_t get_required_data() const override { return input_attrs; }
 
   // This is the main testing function, which checks for the correctness of input data.
   // The rests are just to satisfy the interface.
@@ -81,7 +81,7 @@ struct host_udf_test_base : cudf::host_udf_base {
 struct host_udf_groupby_test : host_udf_test_base {
   host_udf_groupby_test(int test_location_line_,
                         bool* test_run_,
-                        data_attributes_set_t input_attrs_ = {})
+                        data_attribute_set_t input_attrs_ = {})
     : host_udf_test_base(test_location_line_, test_run_, std::move(input_attrs_))
   {
   }
@@ -95,14 +95,14 @@ struct host_udf_groupby_test : host_udf_test_base {
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr) const override
   {
-    data_attributes_set_t check_attrs = input_attrs;
+    data_attribute_set_t check_attrs = input_attrs;
     if (check_attrs.empty()) {
-      check_attrs = data_attributes_set_t{groupby_data_attribute::INPUT_VALUES,
-                                          groupby_data_attribute::GROUPED_VALUES,
-                                          groupby_data_attribute::SORTED_GROUPED_VALUES,
-                                          groupby_data_attribute::NUM_GROUPS,
-                                          groupby_data_attribute::GROUP_OFFSETS,
-                                          groupby_data_attribute::GROUP_LABELS};
+      check_attrs = data_attribute_set_t{groupby_data_attribute::INPUT_VALUES,
+                                         groupby_data_attribute::GROUPED_VALUES,
+                                         groupby_data_attribute::SORTED_GROUPED_VALUES,
+                                         groupby_data_attribute::NUM_GROUPS,
+                                         groupby_data_attribute::GROUP_OFFSETS,
+                                         groupby_data_attribute::GROUP_LABELS};
     }
     EXPECT_EQ(input.size(), check_attrs.size());
     for (auto const& attr : check_attrs) {
@@ -143,8 +143,8 @@ struct host_udf_groupby_test : host_udf_test_base {
 /**
  * @brief Get a random subset of input data attributes.
  */
-cudf::host_udf_base::data_attributes_set_t get_subset(
-  cudf::host_udf_base::data_attributes_set_t const& attrs)
+cudf::host_udf_base::data_attribute_set_t get_subset(
+  cudf::host_udf_base::data_attribute_set_t const& attrs)
 {
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -153,7 +153,7 @@ cudf::host_udf_base::data_attributes_set_t get_subset(
   auto const elements =
     std::vector<cudf::host_udf_base::data_attribute>(attrs.begin(), attrs.end());
   std::uniform_int_distribution<std::size_t> idx_distr(0, attrs.size() - 1);
-  cudf::host_udf_base::data_attributes_set_t output;
+  cudf::host_udf_base::data_attribute_set_t output;
   while (output.size() < subset_size) {
     output.insert(elements[idx_distr(gen)]);
   }
@@ -213,7 +213,7 @@ TEST_F(HostUDFTest, GroupbySomeInput)
 {
   auto const keys      = int32s_col{0, 1, 2};
   auto const vals      = int32s_col{0, 1, 2};
-  auto const all_attrs = cudf::host_udf_base::data_attributes_set_t{
+  auto const all_attrs = cudf::host_udf_base::data_attribute_set_t{
     cudf::host_udf_base::groupby_data_attribute::INPUT_VALUES,
     cudf::host_udf_base::groupby_data_attribute::GROUPED_VALUES,
     cudf::host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
