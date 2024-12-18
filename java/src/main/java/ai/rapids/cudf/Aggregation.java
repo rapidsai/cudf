@@ -24,7 +24,7 @@ import java.util.Arrays;
  * Represents an aggregation operation.  Please note that not all aggregations work, or even make
  * sense in all types of aggregation operations.
  */
-abstract class Aggregation {
+public abstract class Aggregation {
     static {
         NativeDepsLoader.loadNativeDeps();
     }
@@ -397,7 +397,7 @@ abstract class Aggregation {
     public static abstract class HostUDFWrapper {
         public final long udfNativeHandle;
 
-        HostUDFWrapper(long udfNativeHandle) {
+        public HostUDFWrapper(long udfNativeHandle) {
             this.udfNativeHandle = udfNativeHandle;
         }
     }
@@ -417,7 +417,7 @@ abstract class Aggregation {
 
         @Override
         public int hashCode() {
-            return 31 * kind.hashCode();
+            return 31 * kind.hashCode() ^ wrapper.hashCode();
         }
 
         @Override
@@ -885,11 +885,11 @@ abstract class Aggregation {
 
     /**
      * Host UDF aggregation, to execute a host-side user-defined function (UDF).
-     * @param udfNativeHandle Pointer to the native host UDF instance
+     * @param TODO
      * @return A new HostUDFAggregation instance
      */
-    static HostUDFAggregation hostUDF(long udfNativeHandle) {
-        return new HostUDFAggregation(udfNativeHandle);
+    static HostUDFAggregation hostUDF(HostUDFWrapper wrapper) {
+        return new HostUDFAggregation(wrapper);
     }
 
     static final class LeadAggregation extends LeadLagAggregation {
