@@ -269,8 +269,8 @@ class Decimal32Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")
+    def to_arrow(self) -> pa.Array:
+        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
 
         # use striding to set the first 32 bits of each 128-bit chunk:
@@ -337,7 +337,7 @@ class Decimal128Column(DecimalBaseColumn):
         result.dtype.precision = data.type.precision
         return result
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return super().to_arrow().cast(self.dtype.to_arrow())
 
     def _with_type_metadata(
@@ -396,8 +396,8 @@ class Decimal64Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")
+    def to_arrow(self) -> pa.Array:
+        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
 
         # use striding to set the first 64 bits of each 128-bit chunk:
