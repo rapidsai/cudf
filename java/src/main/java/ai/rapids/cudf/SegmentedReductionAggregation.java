@@ -104,10 +104,10 @@ public final class SegmentedReductionAggregation {
 
   /**
    * Execute a reduction using a host-side user-defined function (UDF).
-   * @param udfNativeHandle Pointer to the native host UDF instance
+   * @param TODO
    * @return A new SegmentedReductionAggregation instance
    */
-  public static SegmentedReductionAggregation hostUDF(long udfNativeHandle) {
-    return new SegmentedReductionAggregation(Aggregation.hostUDF(udfNativeHandle));
+  public static SegmentedReductionAggregation hostUDF(Aggregation.HostUDFWrapper wrapper) {
+    return new SegmentedReductionAggregation(Aggregation.hostUDF(wrapper));
   }
 }

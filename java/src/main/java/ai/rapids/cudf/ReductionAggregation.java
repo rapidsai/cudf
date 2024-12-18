@@ -288,11 +288,11 @@ public final class ReductionAggregation {
 
   /**
    * Execute a reduction using a host-side user-defined function (UDF).
-   * @param udfNativeHandle Pointer to the native host UDF instance
+   * @param TODO
    * @return A new ReductionAggregation instance
    */
-  public static ReductionAggregation hostUDF(long udfNativeHandle) {
-    return new ReductionAggregation(Aggregation.hostUDF(udfNativeHandle));
+  public static ReductionAggregation hostUDF(Aggregation.HostUDFWrapper wrapper) {
+    return new ReductionAggregation(Aggregation.hostUDF(wrapper));
   }
 
   /**
