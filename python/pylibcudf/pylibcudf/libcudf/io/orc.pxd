@@ -216,7 +216,8 @@ cdef extern from "cudf/io/orc.hpp" \
     cdef cppclass orc_chunked_writer:
         orc_chunked_writer() except +libcudf_exception_handler
         orc_chunked_writer(
-            chunked_orc_writer_options args
+            chunked_orc_writer_options args,
+            cuda_stream_view stream,
         ) except +libcudf_exception_handler
         orc_chunked_writer& write(
             cudf_table_view.table_view table_,
