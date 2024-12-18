@@ -138,8 +138,8 @@ struct orcdec_state_s {
  * This class is used to address a special case, where the first run spans two adjacent row groups
  * and its length is greater than the maximum length allowed to be consumed. This limit is imposed
  * by the decoder when processing the SECONDARY stream. This class shall be instantiated in the
- * shared memory. As an optimization, the actual cache is a local variable and does not reside in
- * the shared memory.
+ * shared memory, and be used to cache the DATA stream with a decoded data type of `int64_t`. As an
+ * optimization, the actual cache is a local variable and does not reside in the shared memory.
  */
 class run_cache_manager {
  private:
@@ -187,7 +187,7 @@ class run_cache_manager {
    * @brief Adjust the maximum length allowed to be consumed when the length of the first run is
    * greater than it.
    *
-   * @param[in] max_length The maximum length allowed to be consumed.
+   * @param[in] max_length The maximum length allowed to be consumed for the DATA stream.
    * @return A new maximum length.
    */
   __device__ uint32_t adjust_max_length(uint32_t max_length)
@@ -203,7 +203,7 @@ class run_cache_manager {
    * @brief Copy the excess data from the intermediate buffer for the DATA stream to the cache.
    *
    * @param[in] src Intermediate buffer for the DATA stream.
-   * @param[out] cache Local variable serving as the cache.
+   * @param[out] cache Local variable serving as the cache for the DATA stream.
    */
   __device__ void write_to_cache(int64_t* src, int64_t& cache)
   {
@@ -235,7 +235,7 @@ class run_cache_manager {
    *
    * @param[in,out] dst Intermediate buffer for the DATA stream.
    * @param[in,out] rle Run length decoder state object.
-   * @param[in] cache Local variable serving as the cache.
+   * @param[in] cache Local variable serving as the cache for the DATA stream.
    */
   __device__ void read_from_cache(int64_t* dst, orc_rlev2_state_s* rle, int64_t cache)
   {

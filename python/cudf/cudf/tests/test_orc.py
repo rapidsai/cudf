@@ -1975,8 +1975,8 @@ def test_row_group_alignment(datadir):
 @pytest.mark.parametrize(
     "inputfile",
     [
-        "TestOrcFile.timestampDesynced.orc",
-        "TestOrcFile.timestampDesyncedSnappy.orc",
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.orc",
     ],
 )
 def test_orc_reader_desynced_timestamp(datadir, inputfile):
