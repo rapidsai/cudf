@@ -164,6 +164,7 @@ cdef class JsonReaderOptions:
         if isinstance(types[0], tuple):
             self.c_obj.set_dtypes(_generate_schema_map(types))
         else:
+            types_vec.reserve(len(types))
             for dtype in types:
                 types_vec.push_back((<DataType>dtype).c_obj)
             self.c_obj.set_dtypes(types_vec)
