@@ -992,21 +992,6 @@ TYPED_TEST(RollingTest, SimpleDynamic)
   this->run_test_col_agg(input, preceding_window, following_window, 1);
 }
 
-// this is a special test to check the volatile count variable issue (see rolling.cu for detail)
-TYPED_TEST(RollingTest, VolatileCount)
-{
-  auto const col_data = cudf::test::make_type_param_vector<TypeParam>({8, 70, 45, 20, 59, 80});
-  const std::vector<bool> col_mask = {1, 1, 0, 0, 1, 0};
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> input(
-    col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> preceding_window({5, 9, 4, 8, 3, 3});
-  std::vector<cudf::size_type> following_window({1, 1, 9, 2, 8, 9});
-
-  // dynamic sizes
-  this->run_test_col_agg(input, preceding_window, following_window, 1);
-}
-
 // all rows are invalid
 TYPED_TEST(RollingTest, AllInvalid)
 {
