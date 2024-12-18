@@ -328,7 +328,8 @@ jobs:
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
 
   telemetry-summarize:
-    runs-on: ubuntu-latest
+    # This job must use a self-hosted runner to record telemetry traces.
+    runs-on: linux-amd64-cpu4
     needs: pr-builder
     if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
     continue-on-error: true
