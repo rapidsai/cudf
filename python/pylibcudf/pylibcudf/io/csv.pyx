@@ -854,4 +854,4 @@ cpdef void write_csv(
     if stream is None:
         stream = Stream()
     with nogil:
-        cpp_write_csv(move(options.c_obj), stream.view())
+        cpp_write_csv(move(options.c_obj, stream.view()))
