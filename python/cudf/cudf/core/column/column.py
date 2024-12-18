@@ -279,6 +279,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             return self.copy()
 
+    @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
 
@@ -295,9 +296,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], [("None", self.dtype)])[
-            "None"
-        ].chunk(0)
+        return plc.interop.to_arrow(self.to_pylibcudf(mode="read")).chunk(0)
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -334,26 +333,33 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.indices for chunk in data["None"].chunks],
+                [
+                    pa.chunked_array(
+                        [chunk.indices for chunk in data.column(0).chunks],
                         type=array.type.index_type,
                     )
-                }
+                ],
+                [None],
             )
             dictionaries_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.dictionary for chunk in data["None"].chunks],
+                [
+                    pa.chunked_array(
+                        [chunk.dictionary for chunk in data.column(0).chunks],
                         type=array.type.value_type,
                     )
-                }
+                ],
+                [None],
             )
-
-            codes = libcudf.interop.from_arrow(indices_table)[0]
-            categories = libcudf.interop.from_arrow(dictionaries_table)[0]
+            with acquire_spill_lock():
+                codes = cls.from_pylibcudf(
+                    plc.interop.from_arrow(indices_table).columns()[0]
+                )
+                categories = cls.from_pylibcudf(
+                    plc.interop.from_arrow(dictionaries_table).columns()[0]
+                )
             codes = cudf.core.column.categorical.as_unsigned_codes(
-                len(categories), codes
+                len(categories),
+                codes,  # type: ignore[arg-type]
             )
             return cudf.core.column.CategoricalColumn(
                 data=None,
@@ -364,10 +370,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 mask=codes.base_mask,
                 children=(codes,),
             )
-
-        result = libcudf.interop.from_arrow(data)[0]
-
-        return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
+        else:
+            result = cls.from_pylibcudf(
+                plc.interop.from_arrow(data).columns()[0]
+            )
+            # TODO: cudf_dtype_from_pa_type may be less necessary for some types
+            return result._with_type_metadata(
+                cudf_dtype_from_pa_type(array.type)
+            )
 
     @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:

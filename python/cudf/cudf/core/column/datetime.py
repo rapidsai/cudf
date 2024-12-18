@@ -1016,7 +1016,7 @@ class DatetimeTZColumn(DatetimeColumn):
                 self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
             )
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return pa.compute.assume_timezone(
             self._local_time.to_arrow(), str(self.dtype.tz)
         )

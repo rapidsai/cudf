@@ -60,7 +60,7 @@ rmm::device_uvector<cudf::size_type> compute_aggregations(
   rmm::cuda_stream_view stream)
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
-  auto [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests);
+  auto [flattened_values, agg_kinds, aggs] = flatten_single_pass_aggs(requests, stream);
   auto const d_agg_kinds                   = cudf::detail::make_device_uvector_async(
     agg_kinds, stream, rmm::mr::get_current_device_resource());
 

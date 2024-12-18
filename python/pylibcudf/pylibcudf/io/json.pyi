@@ -2,6 +2,8 @@
 from collections.abc import Mapping
 from typing import TypeAlias
 
+from typing_extensions import Self
+
 from pylibcudf.column import Column
 from pylibcudf.io.types import (
     CompressionType,
@@ -10,6 +12,7 @@ from pylibcudf.io.types import (
     SourceInfo,
     TableWithMetadata,
 )
+from pylibcudf.table import Table
 from pylibcudf.types import DataType
 
 ChildNameToTypeMap: TypeAlias = Mapping[str, ChildNameToTypeMap]
@@ -28,16 +31,22 @@ def read_json(
     prune_columns: bool = False,
     recovery_mode: JSONRecoveryMode = JSONRecoveryMode.FAIL,
 ) -> TableWithMetadata: ...
-def write_json(
-    sink_info: SinkInfo,
-    table_w_meta: TableWithMetadata,
-    na_rep: str = "",
-    include_nulls: bool = False,
-    lines: bool = False,
-    rows_per_chunk: int = 2**32 - 1,
-    true_value: str = "true",
-    false_value: str = "false",
-) -> None: ...
+
+class JsonWriterOptions:
+    @staticmethod
+    def builder(sink: SinkInfo, table: Table) -> JsonWriterOptionsBuilder: ...
+    def set_rows_per_chunk(self, val: int) -> None: ...
+    def set_true_value(self, val: str) -> None: ...
+    def set_false_value(self, val: str) -> None: ...
+
+class JsonWriterOptionsBuilder:
+    def metadata(self, tbl_w_meta: TableWithMetadata) -> Self: ...
+    def na_rep(self, val: str) -> Self: ...
+    def include_nulls(self, val: bool) -> Self: ...
+    def lines(self, val: bool) -> Self: ...
+    def build(self) -> JsonWriterOptions: ...
+
+def write_json(options: JsonWriterOptions) -> None: ...
 def chunked_read_json(
     source_info: SourceInfo,
     dtypes: list[NameAndType] | None = None,
