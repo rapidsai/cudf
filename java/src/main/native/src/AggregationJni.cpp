@@ -313,20 +313,4 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHostUDFAgg(JNIEnv*
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_areHostUDFsEqual(JNIEnv* env,
-                                                                         jclass class_object,
-                                                                         jlong lhs_native_handle,
-                                                                         jlong rhs_native_handle)
-{
-  JNI_NULL_CHECK(env, lhs_native_handle, "lhs_native_handle is null", 0);
-  JNI_NULL_CHECK(env, rhs_native_handle, "rhs_native_handle is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    auto const lhs_udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(lhs_native_handle);
-    auto const rhs_udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(rhs_native_handle);
-    return lhs_udf_ptr->is_equal(*rhs_udf_ptr);
-  }
-  CATCH_STD(env, 0);
-}
-
 }  // extern "C"

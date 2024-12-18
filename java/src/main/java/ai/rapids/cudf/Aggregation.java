@@ -386,17 +386,33 @@ abstract class Aggregation {
         }
     }
 
-    static final class HostUDFAggregation extends Aggregation {
-        private final long udfNativeHandle;
+    /**
+     * A wrapper class for native host UDF aggregations.
+     * <p>
+     * This class is used to store the native handle of a host UDF aggregation and is used as
+     * a proxy object to compute hash code and compare two host UDF aggregations.
+     * A new host UDF aggregation implementation must extend this class and override the
+     * {@code hashCode} and {@code equals} methods for such purposes.
+     */
+    public static abstract class HostUDFWrapper {
+        public final long udfNativeHandle;
 
-        private HostUDFAggregation(long udfNativeHandle) {
-            super(Kind.HOST_UDF);
+        HostUDFWrapper(long udfNativeHandle) {
             this.udfNativeHandle = udfNativeHandle;
+        }
+    }
+
+    static final class HostUDFAggregation extends Aggregation {
+        HostUDFWrapper wrapper;
+
+        private HostUDFAggregation(HostUDFWrapper wrapper) {
+            super(Kind.HOST_UDF);
+            this.wrapper = wrapper;
         }
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createHostUDFAgg(udfNativeHandle);
+            return Aggregation.createHostUDFAgg(wrapper.udfNativeHandle);
         }
 
         @Override
@@ -409,8 +425,7 @@ abstract class Aggregation {
             if (this == other) {
                 return true;
             } else if (other instanceof HostUDFAggregation) {
-                HostUDFAggregation o = (HostUDFAggregation) other;
-                return Aggregation.areHostUDFsEqual(udfNativeHandle, o.udfNativeHandle);
+                return wrapper.equals(((HostUDFAggregation) other).wrapper);
             }
             return false;
         }
@@ -1035,9 +1050,4 @@ abstract class Aggregation {
      * Create a HOST_UDF aggregation.
      */
     private static native long createHostUDFAgg(long udfNativeHandle);
-
-    /**
-     * Compare two host UDFs to see if they are equal.
-     */
-    private static native boolean areHostUDFsEqual(long lhsNativeHandle, long rhsNativeHandle);
 }
