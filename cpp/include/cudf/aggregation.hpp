@@ -615,7 +615,7 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
  * An implementation of host-based UDF needs to be derived from this base class, defining
  * its own version of the required functions. In particular, the derived class must define the
  * following function: `get_empty_output`, `operator()`, `do_hash`, `is_equal` and `clone`.
- * The function `get_required_data` can also be optionally overriden to facilitate selective
+ * The function `get_required_data` can also be optionally overridden to facilitate selective
  * access to the input data as well as intermediate data provided by libcudf.
  */
 struct host_udf_base {
