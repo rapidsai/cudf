@@ -17,11 +17,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/subword_tokenize.hpp>
+#include <nvtext/wordpiece_tokenize.hpp>
 
 #include <fstream>
 #include <vector>
@@ -437,4 +439,28 @@ TEST(TextSubwordTest, ZeroHashBinCoefficient)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
+}
+
+TEST(TextSubwordTest, WP1)
+{
+  cudf::test::strings_column_wrapper vocabulary(
+    {"ate", "chased", "cheese", "dog", "fox", "jumped", "mouse", "mousé", "over", "the", "[UNK]"});
+  auto vocab = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
+
+  auto input =
+    cudf::test::strings_column_wrapper({"the quick brown fox jumped over", "the lazy brown dog"});
+  auto sv      = cudf::strings_column_view(input);
+  auto results = nvtext::wordpiece_tokenize(sv, *vocab, 100);
+  cudf::test::print(results->view());
+}
+
+TEST(TextSubwordTest, WP2)
+{
+  cudf::test::strings_column_wrapper vocabulary({"[UNK]", "I", "have", "a", "GP", "##U", "!"});
+  auto vocab = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
+
+  auto input   = cudf::test::strings_column_wrapper({"I have a GPU !"});
+  auto sv      = cudf::strings_column_view(input);
+  auto results = nvtext::wordpiece_tokenize(sv, *vocab, 10);
+  cudf::test::print(results->view());
 }
