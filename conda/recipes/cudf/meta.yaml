@@ -91,7 +91,7 @@ requirements:
     - cudatoolkit
     - ptxcompiler >=0.7.0
     - cubinlinker  # CUDA enhanced compatibility.
-    - cuda-python >=11.7.1,<12.0a0
+    - cuda-python >=11.8.5,<12.0a0
     {% else %}
     - cuda-cudart
     - libcufile  # [linux64]
@@ -100,7 +100,7 @@ requirements:
     # TODO: Add nvjitlink here
     # xref: https://github.com/rapidsai/cudf/issues/12822
     - cuda-nvrtc
-    - cuda-python >=12.0,<13.0a0
+    - cuda-python >=12.6.2,<13.0a0
     - pynvjitlink
     {% endif %}
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}

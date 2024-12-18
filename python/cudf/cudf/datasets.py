@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._lib.transform import bools_to_mask
 
 __all__ = ["randomdata", "timeseries"]
 
@@ -70,7 +69,7 @@ def timeseries(
             size=len(index),
             p=[1 - nulls_frequency, nulls_frequency],
         )
-        mask_buf = bools_to_mask(cudf.core.column.as_column(mask))
+        mask_buf = cudf.core.column.as_column(mask).as_mask()
         masked_col = gdf[col]._column.set_mask(mask_buf)
         gdf[col] = cudf.Series._from_column(masked_col, index=gdf.index)
 
