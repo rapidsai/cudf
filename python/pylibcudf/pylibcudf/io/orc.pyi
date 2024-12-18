@@ -4,8 +4,6 @@ from typing import Any
 
 from typing_extensions import Self
 
-from rmm._cuda.stream import Stream
-
 from pylibcudf.io.types import (
     CompressionType,
     SinkInfo,

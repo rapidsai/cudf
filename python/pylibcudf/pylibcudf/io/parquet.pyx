@@ -399,7 +399,11 @@ cdef class ParquetChunkedWriter:
         cdef ParquetChunkedWriter parquet_writer = ParquetChunkedWriter.__new__(
             ParquetChunkedWriter
         )
-        parquet_writer.c_obj.reset(new cpp_parquet_chunked_writer(options.c_obj, stream.view()))
+        parquet_writer.c_obj.reset(
+            new cpp_parquet_chunked_writer(
+                    options.c_obj, stream.view()
+                )
+            )
         return parquet_writer
 
 
