@@ -426,7 +426,7 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj))
+        c_result = move(cpp_read_orc(options.c_obj, stream.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
