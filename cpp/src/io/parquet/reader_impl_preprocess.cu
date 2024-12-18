@@ -552,7 +552,7 @@ void decode_page_headers(pass_intermediate_data& pass,
 {
   CUDF_FUNC_RANGE();
 
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = thrust::counting_iterator<size_t>(0);
   rmm::device_uvector<size_t> chunk_page_counts(pass.chunks.size() + 1, stream);
   thrust::transform_exclusive_scan(
     rmm::exec_policy_nosync(stream),
@@ -564,7 +564,7 @@ void decode_page_headers(pass_intermediate_data& pass,
         return static_cast<size_t>(
           i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
       }),
-    0,
+    size_t{0},
     thrust::plus<size_t>{});
   rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),

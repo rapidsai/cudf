@@ -106,6 +106,7 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self.is_pointwise = True
         self._validate_input()
 
     def _validate_input(self):
