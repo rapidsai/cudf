@@ -282,7 +282,7 @@ public final class GroupByAggregation {
    * @param TODO
    * @return A new GroupByAggregation instance
    */
-  public static GroupByAggregation hostUDF(Aggregation.HostUDFWrapper wrapper) {
+  public static GroupByAggregation hostUDF(HostUDFWrapper wrapper) {
     return new GroupByAggregation(Aggregation.hostUDF(wrapper));
   }
 

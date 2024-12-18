@@ -291,7 +291,7 @@ public final class ReductionAggregation {
    * @param TODO
    * @return A new ReductionAggregation instance
    */
-  public static ReductionAggregation hostUDF(Aggregation.HostUDFWrapper wrapper) {
+  public static ReductionAggregation hostUDF(HostUDFWrapper wrapper) {
     return new ReductionAggregation(Aggregation.hostUDF(wrapper));
   }
 

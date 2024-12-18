@@ -107,7 +107,7 @@ public final class SegmentedReductionAggregation {
    * @param TODO
    * @return A new SegmentedReductionAggregation instance
    */
-  public static SegmentedReductionAggregation hostUDF(Aggregation.HostUDFWrapper wrapper) {
+  public static SegmentedReductionAggregation hostUDF(HostUDFWrapper wrapper) {
     return new SegmentedReductionAggregation(Aggregation.hostUDF(wrapper));
   }
 }
