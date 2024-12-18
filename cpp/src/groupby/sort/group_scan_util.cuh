@@ -107,7 +107,10 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
     if (values.is_empty()) { return result; }
 
     auto result_table = mutable_table_view({*result});
-    cudf::detail::initialize_with_identity(result_table, {K}, stream);
+    // Need an address of the aggregation kind to pass to the span
+    auto const kind = K;
+    cudf::detail::initialize_with_identity(
+      result_table, host_span<aggregation::Kind const>(&kind, 1), stream);
 
     auto result_view = mutable_column_device_view::create(result->mutable_view(), stream);
     auto values_view = column_device_view::create(values, stream);

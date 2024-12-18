@@ -293,21 +293,25 @@ def _plc_write_json(
     rows_per_chunk: int = 1024 * 64,  # 64K rows
 ) -> None:
     try:
-        plc.io.json.write_json(
-            plc.io.SinkInfo([path_or_buf]),
-            plc.io.TableWithMetadata(
-                plc.Table(
-                    [col.to_pylibcudf(mode="read") for col in table._columns]
-                ),
-                colnames,
+        tbl_w_meta = plc.io.TableWithMetadata(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in table._columns]
             ),
-            na_rep,
-            include_nulls,
-            lines,
-            rows_per_chunk,
-            true_value="true",
-            false_value="false",
+            colnames,
         )
+        options = (
+            plc.io.json.JsonWriterOptions.builder(
+                plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+            )
+            .metadata(tbl_w_meta)
+            .na_rep(na_rep)
+            .include_nulls(include_nulls)
+            .lines(lines)
+            .build()
+        )
+        if rows_per_chunk != np.iinfo(np.int32).max:
+            options.set_rows_per_chunk(rows_per_chunk)
+        plc.io.json.write_json(options)
     except OverflowError as err:
         raise OverflowError(
             f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "

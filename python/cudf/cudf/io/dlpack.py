@@ -1,13 +1,14 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import pylibcudf as plc
 
 import cudf
-from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
 from cudf.utils import ioutils
 
 
-def from_dlpack(pycapsule_obj):
+def from_dlpack(pycapsule_obj) -> cudf.Series | cudf.DataFrame:
     """Converts from a DLPack tensor to a cuDF object.
 
     DLPack is an open-source memory tensor structure:
@@ -33,18 +34,21 @@ def from_dlpack(pycapsule_obj):
     cuDF from_dlpack() assumes column-major (Fortran order) input. If the input
     tensor is row-major, transpose it before passing it to this function.
     """
+    plc_table = plc.interop.from_dlpack(pycapsule_obj)
+    data = dict(
+        enumerate(
+            (ColumnBase.from_pylibcudf(col) for col in plc_table.columns())
+        )
+    )
 
-    columns = libdlpack.from_dlpack(pycapsule_obj)
-    data = dict(enumerate(columns))
-
-    if len(columns) == 1:
+    if len(data) == 1:
         return cudf.Series._from_data(data)
     else:
         return cudf.DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()
-def to_dlpack(cudf_obj):
+def to_dlpack(cudf_obj: cudf.Series | cudf.DataFrame | cudf.BaseIndex):
     """Converts a cuDF object to a DLPack tensor.
 
     DLPack is an open-source memory tensor structure:
@@ -80,13 +84,14 @@ def to_dlpack(cudf_obj):
 
     if any(
         not cudf.api.types._is_non_decimal_numeric_dtype(dtype)
-        for _, dtype in gdf._dtypes
+        for _, dtype in gdf._dtypes  # type: ignore[union-attr]
     ):
         raise TypeError("non-numeric data not yet supported")
 
     dtype = cudf.utils.dtypes.find_common_type(
-        [dtype for _, dtype in gdf._dtypes]
+        [dtype for _, dtype in gdf._dtypes]  # type: ignore[union-attr]
     )
     gdf = gdf.astype(dtype)
-
-    return libdlpack.to_dlpack([*gdf._columns])
+    return plc.interop.to_dlpack(
+        plc.Table([col.to_pylibcudf(mode="read") for col in gdf._columns])
+    )
