@@ -22,7 +22,6 @@ from cudf import _lib as libcudf
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_categorical_dtype,
     is_list_like,
     is_numeric_dtype,
     is_string_dtype,
@@ -124,6 +123,46 @@ def _(dtype: IntervalDtype):
 @get_valid_aggregation.register
 def _(dtype: DecimalDtype):
     return _DECIMAL_AGGS
+
+
+@singledispatch
+def _is_unsupported_agg_for_type(dtype, str_agg: str) -> bool:
+    return False
+
+
+@_is_unsupported_agg_for_type.register
+def _(dtype: np.dtype, str_agg: str) -> bool:
+    # string specifically
+    cumulative_agg = str_agg in {"cumsum", "cummin", "cummax"}
+    basic_agg = any(
+        a in str_agg
+        for a in (
+            "count",
+            "max",
+            "min",
+            "first",
+            "last",
+            "nunique",
+            "unique",
+            "nth",
+        )
+    )
+    return (
+        dtype.kind == "O"
+        and str_agg not in _STRING_AGGS
+        and (cumulative_agg or not (basic_agg or str_agg == "<class 'list'>"))
+    )
+
+
+@_is_unsupported_agg_for_type.register
+def _(dtype: CategoricalDtype, str_agg: str) -> bool:
+    cumulative_agg = str_agg in {"cumsum", "cummin", "cummax"}
+    not_basic_agg = not any(
+        a in str_agg for a in ("count", "max", "min", "unique")
+    )
+    return str_agg not in _CATEGORICAL_AGGS and (
+        cumulative_agg or not_basic_agg
+    )
 
 
 def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
@@ -760,49 +799,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             col_aggregations = []
             for agg in aggs:
                 str_agg = str(agg)
-                if (
-                    is_string_dtype(col)
-                    and agg not in _STRING_AGGS
-                    and (
-                        str_agg in {"cumsum", "cummin", "cummax"}
-                        or not (
-                            any(
-                                a in str_agg
-                                for a in {
-                                    "count",
-                                    "max",
-                                    "min",
-                                    "first",
-                                    "last",
-                                    "nunique",
-                                    "unique",
-                                    "nth",
-                                }
-                            )
-                            or (agg is list)
-                        )
-                    )
-                ):
-                    raise TypeError(
-                        f"function is not supported for this dtype: {agg}"
-                    )
-                elif (
-                    _is_categorical_dtype(col)
-                    and agg not in _CATEGORICAL_AGGS
-                    and (
-                        str_agg in {"cumsum", "cummin", "cummax"}
-                        or not (
-                            any(
-                                a in str_agg
-                                for a in {"count", "max", "min", "unique"}
-                            )
-                        )
-                    )
-                ):
+                if _is_unsupported_agg_for_type(col.dtype, str_agg):
                     raise TypeError(
                         f"{col.dtype} type does not support {agg} operations"
                     )
-
                 agg_obj = aggregation.make_aggregation(agg)
                 if (
                     valid_aggregations == "ALL"
