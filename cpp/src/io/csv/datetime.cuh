@@ -19,7 +19,7 @@
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.cuh>
 
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
