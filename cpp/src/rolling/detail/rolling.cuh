@@ -1034,16 +1034,17 @@ __launch_bounds__(block_size) CUDF_KERNEL
 
   size_type warp_valid_count{0};
 
-  int64_t const num_rows = input.size();
-  auto active_threads    = __ballot_sync(0xffff'ffffu, i < num_rows);
+  auto const num_rows = input.size();
+  auto active_threads = __ballot_sync(0xffff'ffffu, i < num_rows);
   while (i < num_rows) {
-    // to prevent overflow issues when computing bounds use int64_t
-    int64_t const preceding_window = preceding_window_begin[i];
-    int64_t const following_window = following_window_begin[i];
+    // The caller is required to provide window bounds that will
+    // result in indexing that is in-bounds for the column. Therefore all
+    // of these calculations cannot overflow and we can do everything
+    // in size_type arithmetic. Moreover, we require that start <=
+    // end, i.e., the window is never "reversed" though it may be empty.
+    auto const preceding_window = preceding_window_begin[i];
+    auto const following_window = following_window_begin[i];
 
-    // compute bounds. It is required that these calculations produce
-    // a value that fits in size_type and is in-bounds for the input
-    // column. Moreover, we require start <= end.
     size_type const start = i - preceding_window + 1;
     size_type const end   = i + following_window + 1;
 
