@@ -239,7 +239,8 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_chunked_writer:
         parquet_chunked_writer() except +libcudf_exception_handler
         parquet_chunked_writer(
-            chunked_parquet_writer_options args
+            chunked_parquet_writer_options args,
+            cuda_stream_view stream,
         ) except +libcudf_exception_handler
         parquet_chunked_writer& write(
             table_view table_,
