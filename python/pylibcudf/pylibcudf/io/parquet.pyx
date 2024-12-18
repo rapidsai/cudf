@@ -35,6 +35,7 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
+from rmm._cuda.stream cimport Stream
 
 __all__ = [
     "ChunkedParquetReader",
@@ -306,7 +307,7 @@ cdef class ChunkedParquetReader:
         return TableWithMetadata.from_libcudf(c_result)
 
 
-cpdef read_parquet(ParquetReaderOptions options):
+cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     """
     Read from Parquet format.
 
@@ -320,8 +321,10 @@ cpdef read_parquet(ParquetReaderOptions options):
     options: ParquetReaderOptions
         Settings for controlling reading behavior
     """
+    if stream is None:
+        stream = Stream()
     with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj))
+        c_result = move(cpp_read_parquet(options.c_obj, stream.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -378,7 +381,7 @@ cdef class ParquetChunkedWriter:
             self.c_obj.get()[0].write(table.view(), partitions)
 
     @staticmethod
-    def from_options(ChunkedParquetWriterOptions options):
+    def from_options(ChunkedParquetWriterOptions options, Stream stream = None):
         """
         Creates a chunked Parquet writer from options
 
@@ -391,6 +394,8 @@ cdef class ParquetChunkedWriter:
         -------
         ParquetChunkedWriter
         """
+        if stream is None:
+            stream = Stream()
         cdef ParquetChunkedWriter parquet_writer = ParquetChunkedWriter.__new__(
             ParquetChunkedWriter
         )
@@ -916,7 +921,7 @@ cdef class ParquetWriterOptionsBuilder:
         return parquet_options
 
 
-cpdef memoryview write_parquet(ParquetWriterOptions options):
+cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = None):
     """
     Writes a set of columns to parquet format.
 
@@ -932,10 +937,12 @@ cpdef memoryview write_parquet(ParquetWriterOptions options):
         (parquet FileMetadata thrift message) if requested in
         parquet_writer_options (empty blob otherwise).
     """
+    if stream is None:
+        stream = Stream()
     cdef unique_ptr[vector[uint8_t]] c_result
 
     with nogil:
-        c_result = cpp_write_parquet(move(options.c_obj))
+        c_result = cpp_write_parquet(move(options.c_obj), stream.view())
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 

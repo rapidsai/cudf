@@ -22,6 +22,8 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
+from rmm._cuda.stream cimport Stream
+
 
 __all__ = ["chunked_read_json", "read_json", "write_json"]
 
@@ -128,6 +130,7 @@ cpdef tuple chunked_read_json(
     bool prune_columns = False,
     json_recovery_mode_t recovery_mode = json_recovery_mode_t.FAIL,
     int chunk_size=100_000_000,
+    Stream stream = None,
 ):
     """Reads an JSON file into a :py:class:`~.types.TableWithMetadata`.
 
@@ -179,7 +182,8 @@ cpdef tuple chunked_read_json(
         prune_columns=prune_columns,
         recovery_mode=recovery_mode,
     )
-
+    if stream is None:
+        stream = Stream()
     # Read JSON
     cdef table_with_metadata c_result
 
@@ -193,7 +197,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(opts))
+                c_result = move(cpp_read_json(opts, stream.view()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -232,6 +236,7 @@ cpdef TableWithMetadata read_json(
     bool prune_columns = False,
     json_recovery_mode_t recovery_mode = json_recovery_mode_t.FAIL,
     dict extra_parameters = None,
+    Stream stream = None,
 ):
     """Reads an JSON file into a :py:class:`~.types.TableWithMetadata`.
 
@@ -284,12 +289,13 @@ cpdef TableWithMetadata read_json(
         recovery_mode=recovery_mode,
         extra_parameters=extra_parameters,
     )
-
+    if stream is None:
+        stream = Stream()
     # Read JSON
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(cpp_read_json(opts))
+        c_result = move(cpp_read_json(opts, stream.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -302,7 +308,8 @@ cpdef void write_json(
     bool lines = False,
     size_type rows_per_chunk = numeric_limits[size_type].max(),
     str true_value = "true",
-    str false_value = "false"
+    str false_value = "false",
+    Stream stream = None,
 ):
     """
     Writes a :py:class:`~pylibcudf.table.Table` to JSON format.
@@ -344,6 +351,7 @@ cpdef void write_json(
         options.set_true_value(<string>true_value.encode())
     if false_value != "false":
         options.set_false_value(<string>false_value.encode())
-
+    if stream is None:
+        stream = Stream()
     with nogil:
-        cpp_write_json(options)
+        cpp_write_json(options, stream.view())

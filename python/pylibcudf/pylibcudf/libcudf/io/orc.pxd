@@ -10,6 +10,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type, size_type
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 
 cdef extern from "cudf/io/orc.hpp" \
@@ -76,7 +77,8 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_orc(
-        orc_reader_options opts
+        orc_reader_options opts,
+        cuda_stream_view stream,
     ) except +libcudf_exception_handler
 
     cdef cppclass orc_writer_options:
@@ -144,7 +146,8 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_writer_options build() except +libcudf_exception_handler
 
     cdef void write_orc(
-        orc_writer_options options
+        orc_writer_options options,
+        cuda_stream_view stream,
     ) except +libcudf_exception_handler
 
     cdef cppclass chunked_orc_writer_options:

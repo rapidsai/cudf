@@ -9,6 +9,7 @@ from pylibcudf.libcudf.io.avro cimport (
     read_avro as cpp_read_avro,
 )
 from pylibcudf.libcudf.types cimport size_type
+from rmm._cuda.stream cimport Stream
 
 __all__ = ["read_avro", "AvroReaderOptions", "AvroReaderOptionsBuilder"]
 
@@ -126,7 +127,8 @@ cdef class AvroReaderOptionsBuilder:
 
 
 cpdef TableWithMetadata read_avro(
-    AvroReaderOptions options
+    AvroReaderOptions options,
+    Stream stream = None,
 ):
     """
     Read from Avro format.
@@ -141,7 +143,9 @@ cpdef TableWithMetadata read_avro(
     options: AvroReaderOptions
         Settings for controlling reading behavior
     """
+    if stream is None:
+        stream = Stream()
     with nogil:
-        c_result = move(cpp_read_avro(options.c_obj))
+        c_result = move(cpp_read_avro(options.c_obj, stream.view()))
 
     return TableWithMetadata.from_libcudf(c_result)

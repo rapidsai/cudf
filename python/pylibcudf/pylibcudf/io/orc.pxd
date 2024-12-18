@@ -31,6 +31,8 @@ from pylibcudf.libcudf.io.types cimport (
     compression_type,
     statistics_freq,
 )
+from rmm._cuda.stream cimport Stream
+
 
 cpdef TableWithMetadata read_orc(
     SourceInfo source_info,
@@ -41,7 +43,8 @@ cpdef TableWithMetadata read_orc(
     bool use_index = *,
     bool use_np_dtypes = *,
     DataType timestamp_type = *,
-    list decimal128_columns = *
+    list decimal128_columns = *,
+    Stream stream = *,
 )
 
 cdef class OrcColumnStatistics:
@@ -85,7 +88,7 @@ cdef class OrcWriterOptionsBuilder:
     cpdef OrcWriterOptionsBuilder metadata(self, TableInputMetadata meta)
     cpdef OrcWriterOptions build(self)
 
-cpdef void write_orc(OrcWriterOptions options)
+cpdef void write_orc(OrcWriterOptions options, Stream stream = *)
 
 cdef class OrcChunkedWriter:
     cdef unique_ptr[orc_chunked_writer] c_obj

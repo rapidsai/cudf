@@ -22,7 +22,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
 from pylibcudf.table cimport Table
-from rmm._cuda.stream import Stream
+from rmm._cuda.stream cimport Stream
 
 __all__ = [
     "read_csv",
@@ -631,7 +631,7 @@ cdef class CsvReaderOptionsBuilder:
 
 cpdef TableWithMetadata read_csv(
     CsvReaderOptions options,
-    Stream stream,
+    Stream stream = None,
 ):
     """
     Read from CSV format.
@@ -646,6 +646,8 @@ cpdef TableWithMetadata read_csv(
     options: CsvReaderOptions
         Settings for controlling reading behavior
     """
+    if stream is None:
+        stream = Stream()
     cdef table_with_metadata c_result
     with nogil:
         c_result = move(cpp_read_csv(options.c_obj), stream.view())
@@ -833,7 +835,8 @@ cdef class CsvWriterOptionsBuilder:
 
 
 cpdef void write_csv(
-    CsvWriterOptions options
+    CsvWriterOptions options,
+    Stream stream = None,
 ):
     """
     Write to CSV format.
@@ -848,6 +851,7 @@ cpdef void write_csv(
     options: CsvWriterOptions
         Settings for controlling writing behavior
     """
-
+    if stream is None:
+        stream = Stream()
     with nogil:
-        cpp_write_csv(move(options.c_obj))
+        cpp_write_csv(move(options.c_obj), stream.view())

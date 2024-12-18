@@ -8,6 +8,7 @@ from pylibcudf.io.types cimport (
 )
 from pylibcudf.libcudf.io.json cimport json_recovery_mode_t
 from pylibcudf.libcudf.types cimport size_type
+from rmm._cuda.stream cimport Stream
 
 
 cpdef TableWithMetadata read_json(
@@ -22,6 +23,7 @@ cpdef TableWithMetadata read_json(
     bool prune_columns = *,
     json_recovery_mode_t recovery_mode = *,
     dict extra_parameters = *,
+    Stream stream = *,
 )
 
 
@@ -33,7 +35,8 @@ cpdef void write_json(
     bool lines = *,
     size_type rows_per_chunk = *,
     str true_value = *,
-    str false_value = *
+    str false_value = *,
+    Stream stream = *,
 )
 
 cpdef tuple chunked_read_json(
@@ -45,4 +48,5 @@ cpdef tuple chunked_read_json(
     bool prune_columns = *,
     json_recovery_mode_t recovery_mode = *,
     int chunk_size= *,
+    Stream stream = *,
 )
