@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/text/device_data_chunks.hpp"
 
@@ -40,6 +41,8 @@
 
 namespace cudf::io::text {
 namespace {
+
+namespace nvcomp = cudf::io::detail::nvcomp;
 
 /**
  * @brief Transforms offset tuples of the form [compressed_begin, compressed_end,
@@ -73,7 +76,8 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   {
     // Buffer needs to be padded.
     // Required by `inflate_kernel`.
-    device.resize(cudf::util::round_up_safe(host.size(), BUFFER_PADDING_MULTIPLE), stream);
+    device.resize(cudf::util::round_up_safe(host.size(), cudf::io::detail::BUFFER_PADDING_MULTIPLE),
+                  stream);
     cudf::detail::cuda_memcpy_async<T>(
       device_span<T>{device}.subspan(0, host.size()), host, stream);
   }
@@ -94,7 +98,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     rmm::device_uvector<std::size_t> d_decompressed_offsets;
     rmm::device_uvector<device_span<uint8_t const>> d_compressed_spans;
     rmm::device_uvector<device_span<uint8_t>> d_decompressed_spans;
-    rmm::device_uvector<compression_result> d_decompression_results;
+    rmm::device_uvector<cudf::io::detail::compression_result> d_decompression_results;
     std::size_t compressed_size_with_headers{};
     std::size_t max_decompressed_size{};
     // this is usually equal to decompressed_size()
@@ -152,16 +156,16 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
           gpuinflate(d_compressed_spans,
                      d_decompressed_spans,
                      d_decompression_results,
-                     gzip_header_included::NO,
+                     cudf::io::detail::gzip_header_included::NO,
                      stream);
         } else {
-          cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
-                                               d_compressed_spans,
-                                               d_decompressed_spans,
-                                               d_decompression_results,
-                                               max_decompressed_size,
-                                               decompressed_size(),
-                                               stream);
+          nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
+                                     d_compressed_spans,
+                                     d_decompressed_spans,
+                                     d_decompression_results,
+                                     max_decompressed_size,
+                                     decompressed_size(),
+                                     stream);
         }
       }
       is_decompressed = true;

@@ -21,8 +21,7 @@
 
 #include <cub/cub.cuh>
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
 constexpr int32_t batch_size    = (1 << 5);
 constexpr int32_t batch_count   = (1 << 2);
 constexpr int32_t prefetch_size = (1 << 9);  // 512B, in 32B chunks
@@ -717,5 +716,4 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
   unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

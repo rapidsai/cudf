@@ -15,6 +15,7 @@
  */
 
 #include "error.hpp"
+#include "io/comp/common.hpp"
 #include "reader_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -251,8 +252,8 @@ void generate_depth_remappings(
       if (source->is_device_read_preferred(io_size)) {
         // Buffer needs to be padded.
         // Required by `gpuDecodePageData`.
-        page_data[chunk] =
-          rmm::device_buffer(cudf::util::round_up_safe(io_size, BUFFER_PADDING_MULTIPLE), stream);
+        page_data[chunk] = rmm::device_buffer(
+          cudf::util::round_up_safe(io_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
         auto fut_read_size = source->device_read_async(
           io_offset, io_size, static_cast<uint8_t*>(page_data[chunk].data()), stream);
         read_tasks.emplace_back(std::move(fut_read_size));
@@ -261,7 +262,8 @@ void generate_depth_remappings(
         // Buffer needs to be padded.
         // Required by `gpuDecodePageData`.
         page_data[chunk] = rmm::device_buffer(
-          cudf::util::round_up_safe(read_buffer->size(), BUFFER_PADDING_MULTIPLE), stream);
+          cudf::util::round_up_safe(read_buffer->size(), cudf::io::detail::BUFFER_PADDING_MULTIPLE),
+          stream);
         CUDF_CUDA_TRY(cudaMemcpyAsync(page_data[chunk].data(),
                                       read_buffer->data(),
                                       read_buffer->size(),

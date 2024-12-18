@@ -23,7 +23,7 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-namespace cudf::io::nvcomp {
+namespace cudf::io::detail::nvcomp {
 
 batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> const> inputs,
                                         device_span<device_span<uint8_t> const> outputs,
@@ -127,4 +127,4 @@ std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t cons
   return {max, sum};
 }
 
-}  // namespace cudf::io::nvcomp
+}  // namespace cudf::io::detail::nvcomp

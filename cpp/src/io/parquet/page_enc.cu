@@ -51,6 +51,9 @@ namespace {
 
 using ::cudf::detail::device_2dspan;
 
+using cudf::io::detail::compression_result;
+using cudf::io::detail::compression_status;
+
 constexpr int encode_block_size = 128;
 constexpr int rle_buffer_size   = 2 * encode_block_size;
 constexpr int num_encode_warps  = encode_block_size / cudf::detail::warp_size;
