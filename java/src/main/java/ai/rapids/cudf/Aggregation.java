@@ -24,7 +24,7 @@ import java.util.Arrays;
  * Represents an aggregation operation.  Please note that not all aggregations work, or even make
  * sense in all types of aggregation operations.
  */
-public abstract class Aggregation {
+abstract class Aggregation {
     static {
         NativeDepsLoader.loadNativeDeps();
     }
@@ -383,22 +383,6 @@ public abstract class Aggregation {
                 return o.nullEquality == this.nullEquality && o.nanEquality == this.nanEquality;
             }
             return false;
-        }
-    }
-
-    /**
-     * A wrapper class for native host UDF aggregations.
-     * <p>
-     * This class is used to store the native handle of a host UDF aggregation and is used as
-     * a proxy object to compute hash code and compare two host UDF aggregations.
-     * A new host UDF aggregation implementation must extend this class and override the
-     * {@code hashCode} and {@code equals} methods for such purposes.
-     */
-    public static abstract class HostUDFWrapper {
-        public final long udfNativeHandle;
-
-        public HostUDFWrapper(long udfNativeHandle) {
-            this.udfNativeHandle = udfNativeHandle;
         }
     }
 
