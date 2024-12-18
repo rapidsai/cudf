@@ -15,6 +15,7 @@
  */
 
 #include "rolling.cuh"
+#include "rolling_utils.cuh"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -60,21 +61,12 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                             stream,
                                             mr);
   } else {
-    auto preceding = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      cuda::proclaim_return_type<size_type>(
-        [preceding_window, num_rows = input.size()] __device__(size_type i) -> size_type {
-          // No overflow, since 0 <= i < num_rows <= size_type::max, so i + 1 is always defined.
-          return cuda::std::min(i + 1, cuda::std::max(preceding_window, i + 1 - num_rows));
-        }));
-
-    auto following = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      cuda::proclaim_return_type<size_type>(
-        [following_window, num_rows = input.size()] __device__(size_type i) -> size_type {
-          // No overflow, since 0 <= i < num_rows <= size_type::max, so -(i+1) is always defined.
-          return cuda::std::max(-i - 1, cuda::std::min(following_window, num_rows - i - 1));
-        }));
+    namespace utils = cudf::detail::rolling;
+    auto groups     = utils::ungrouped{input.size()};
+    auto preceding =
+      utils::make_clamped_window_iterator<utils::direction::PRECEDING>(preceding_window, groups);
+    auto following =
+      utils::make_clamped_window_iterator<utils::direction::FOLLOWING>(following_window, groups);
     return cudf::detail::rolling_window(
       input, default_outputs, preceding, following, min_periods, agg, stream, mr);
   }
