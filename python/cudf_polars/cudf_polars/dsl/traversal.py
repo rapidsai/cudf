@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Generic
 from cudf_polars.typing import U_contra, V_co
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping, MutableMapping
+    from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
 
     from cudf_polars.typing import GenericTransformer, NodeT
 
@@ -23,22 +23,22 @@ __all__: list[str] = [
 ]
 
 
-def traversal(node: NodeT) -> Generator[NodeT, None, None]:
+def traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
     """
     Pre-order traversal of nodes in an expression.
 
     Parameters
     ----------
-    node
-        Root of expression to traverse.
+    nodes
+        Roots of expressions to traverse.
 
     Yields
     ------
-    Unique nodes in the expression, parent before child, children
+    Unique nodes in the expressions, parent before child, children
     in-order from left to right.
     """
-    seen = {node}
-    lifo = [node]
+    seen = set(nodes)
+    lifo = list(nodes)
 
     while lifo:
         node = lifo.pop()
