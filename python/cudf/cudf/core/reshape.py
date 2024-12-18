@@ -1030,7 +1030,8 @@ def _pivot(
                 {
                     name: idx._column
                     for name, idx in zip(
-                        names, target._split(range(nrows, new_size, nrows))
+                        names,
+                        target._split(list(range(nrows, new_size, nrows))),
                     )
                 }
             )

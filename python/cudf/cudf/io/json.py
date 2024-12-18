@@ -91,11 +91,6 @@ def read_json(
         if dtype is None:
             dtype = True
 
-        if kwargs:
-            raise ValueError(
-                "cudf engine doesn't support the "
-                f"following keyword arguments: {list(kwargs.keys())}"
-            )
         if args:
             raise ValueError(
                 "cudf engine doesn't support the "
@@ -198,6 +193,7 @@ def read_json(
                 mixed_types_as_string=mixed_types_as_string,
                 prune_columns=prune_columns,
                 recovery_mode=c_on_bad_lines,
+                extra_parameters=kwargs,
             )
 
             df = cudf.DataFrame._from_data(
@@ -291,21 +287,25 @@ def _plc_write_json(
     rows_per_chunk: int = 1024 * 64,  # 64K rows
 ) -> None:
     try:
-        plc.io.json.write_json(
-            plc.io.SinkInfo([path_or_buf]),
-            plc.io.TableWithMetadata(
-                plc.Table(
-                    [col.to_pylibcudf(mode="read") for col in table._columns]
-                ),
-                colnames,
+        tbl_w_meta = plc.io.TableWithMetadata(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in table._columns]
             ),
-            na_rep,
-            include_nulls,
-            lines,
-            rows_per_chunk,
-            true_value="true",
-            false_value="false",
+            colnames,
         )
+        options = (
+            plc.io.json.JsonWriterOptions.builder(
+                plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+            )
+            .metadata(tbl_w_meta)
+            .na_rep(na_rep)
+            .include_nulls(include_nulls)
+            .lines(lines)
+            .build()
+        )
+        if rows_per_chunk != np.iinfo(np.int32).max:
+            options.set_rows_per_chunk(rows_per_chunk)
+        plc.io.json.write_json(options)
     except OverflowError as err:
         raise OverflowError(
             f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "

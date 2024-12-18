@@ -878,7 +878,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              - pyarrow==14.0.0
+              - pyarrow==14.*
           - matrix:
             packages:
       - output_types: conda
@@ -903,7 +903,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.24.*
-              - pyarrow==14.0.1
+              - pyarrow==14.*
           - matrix:
             packages:
   test_python_cudf_polars:
