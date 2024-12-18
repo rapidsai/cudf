@@ -1097,7 +1097,6 @@ def pivot(
         2  <NA>  <NA>  three
 
     """
-    # import pdb;pdb.set_trace()
     values_is_list = True
     if values is no_default:
         already_selected = set(
