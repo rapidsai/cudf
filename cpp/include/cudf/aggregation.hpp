@@ -613,10 +613,12 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
  * @brief The interface for host-based UDF implementation.
  *
  * An implementation of host-based UDF needs to be derived from this base class, defining
- * its own version of the required functions. In particular, the derived class must define the
- * following function: `get_empty_output`, `operator()`, `do_hash`, `is_equal` and `clone`.
- * The function `get_required_data` can also be optionally overridden to facilitate selective
- * access to the input data as well as intermediate data provided by libcudf.
+ * its own version of the required functions. In particular:
+ *  - The derived class is required to implement `get_empty_output`, `operator()`, `is_equal`,
+ *    and `clone` functions.
+ *  - If necessary, the derived class can also override `do_hash` to compute hashing for its
+ *    instance, and `get_required_data` to selectively access to the input data as well as
+ *    intermediate data provided by libcudf.
  */
 struct host_udf_base {
   host_udf_base()          = default;
@@ -821,10 +823,13 @@ struct host_udf_base {
                                             rmm::device_async_resource_ref mr) const = 0;
 
   /**
-   * @brief Computes hash value of the derived class's instance.
+   * @brief Computes hash value of the class's instance.
    * @return The hash value of the instance
    */
-  [[nodiscard]] virtual std::size_t do_hash() const = 0;
+  [[nodiscard]] virtual std::size_t do_hash() const
+  {
+    return std::hash<int>{}(static_cast<int>(aggregation::Kind::HOST_UDF));
+  }
 
   /**
    * @brief Compares two instances of the derived class for equality.

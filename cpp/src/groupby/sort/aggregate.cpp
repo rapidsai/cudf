@@ -800,16 +800,17 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
 {
   if (cache.has_result(values, agg)) { return; }
 
-  auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-  auto data_attrs     = udf_ptr->get_required_data();
-  if (data_attrs.empty()) {  // empty means everything
-    data_attrs = {host_udf_base::groupby_data_attribute::INPUT_VALUES,
-                  host_udf_base::groupby_data_attribute::GROUPED_VALUES,
-                  host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
-                  host_udf_base::groupby_data_attribute::NUM_GROUPS,
-                  host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
-                  host_udf_base::groupby_data_attribute::GROUP_LABELS};
-  }
+  auto const& udf_ptr   = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+  auto const data_attrs = [&]() -> host_udf_base::data_attribute_set_t {
+    if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
+    // Empty attribute set means everything.
+    return {host_udf_base::groupby_data_attribute::INPUT_VALUES,
+            host_udf_base::groupby_data_attribute::GROUPED_VALUES,
+            host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
+            host_udf_base::groupby_data_attribute::NUM_GROUPS,
+            host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
+            host_udf_base::groupby_data_attribute::GROUP_LABELS};
+  }();
 
   // Do not cache udf_input, as the actual input data may change from run to run.
   host_udf_base::input_map_t udf_input;
