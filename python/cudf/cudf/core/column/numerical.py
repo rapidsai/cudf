@@ -14,8 +14,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-import cudf.core.column.string as string
-from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop, unary
 from cudf.core.buffer import acquire_spill_lock, as_buffer
@@ -366,21 +364,41 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             return NotImplemented
 
-    def int2ip(self) -> "cudf.core.column.StringColumn":
-        if self.dtype != cudf.dtype("uint32"):
+    @acquire_spill_lock()
+    def int2ip(self) -> cudf.core.column.StringColumn:
+        if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
-
-        return libcudf.string_casting.int2ip(self)
+        plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
+            self.to_pylibcudf(mode="read")
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
-        if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
-                cudf.dtype(self.dtype)
-            ](self)
-        else:
+        if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
                 column.column_empty(0, dtype="object"),
+            )
+        elif self.dtype.kind == "b":
+            conv_func = functools.partial(
+                plc.strings.convert.convert_booleans.from_booleans,
+                true_string=cudf.Scalar(
+                    "True", dtype="str"
+                ).device_value.c_value,
+                false_string=cudf.Scalar(
+                    "False", dtype="str"
+                ).device_value.c_value,
+            )
+        elif self.dtype.kind in {"i", "u"}:
+            conv_func = plc.strings.convert.convert_integers.from_integers
+        elif self.dtype.kind == "f":
+            conv_func = plc.strings.convert.convert_floats.from_floats
+        else:
+            raise ValueError(f"No string conversion from type {self.dtype}")
+
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                conv_func(self.to_pylibcudf(mode="read"))
             )
 
     def as_datetime_column(
