@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/file_utilities.hpp>
 
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/subword_tokenize.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <filesystem>
 #include <fstream>
@@ -54,40 +53,33 @@ static std::string create_hash_vocab_file()
   return hash_file;
 }
 
-static void BM_subword_tokenizer(benchmark::State& state)
+static void bench_subword_tokenizer(nvbench::state& state)
 {
-  auto const nrows = static_cast<cudf::size_type>(state.range(0));
-  std::vector<char const*> h_strings(nrows, "This is a test ");
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+
+  std::vector<char const*> h_strings(num_rows, "This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   static std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};
-  uint32_t max_sequence_length = 64;
-  uint32_t stride              = 48;
-  uint32_t do_truncate         = 0;
-  uint32_t do_lower            = 1;
-  //
+  uint32_t max_sequence = 64;
+  uint32_t stride       = 48;
+  uint32_t do_truncate  = 0;
+  uint32_t do_lower     = 1;
+
+  auto input = cudf::strings_column_view{strings};
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  auto chars_size = input.chars_size(cudf::get_default_stream());
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  state.add_global_memory_writes<nvbench::int32_t>(num_rows * max_sequence);
+
   auto vocab = nvtext::load_vocabulary_file(hash_file);
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                           *vocab,
-                                           max_sequence_length,
-                                           stride,
-                                           do_lower,
-                                           do_truncate);
-  }
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    auto result =
+      nvtext::subword_tokenize(input, *vocab, max_sequence, stride, do_lower, do_truncate);
+  });
 }
 
-class Subword : public cudf::benchmark {};
-
-#define SUBWORD_BM_BENCHMARK_DEFINE(name)                                                        \
-  BENCHMARK_DEFINE_F(Subword, name)(::benchmark::State & state) { BM_subword_tokenizer(state); } \
-  BENCHMARK_REGISTER_F(Subword, name)                                                            \
-    ->RangeMultiplier(2)                                                                         \
-    ->Range(1 << 10, 1 << 17)                                                                    \
-    ->UseManualTime()                                                                            \
-    ->Unit(benchmark::kMillisecond);
-
-SUBWORD_BM_BENCHMARK_DEFINE(BM_subword_tokenizer);
-
-// BENCHMARK_MAIN();
+NVBENCH_BENCH(bench_subword_tokenizer)
+  .set_name("subword_tokenize")
+  .add_int64_axis("num_rows", {32768, 262144, 2097152});

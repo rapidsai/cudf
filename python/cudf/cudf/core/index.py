@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import operator
-import pickle
 import warnings
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
@@ -32,6 +31,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals import copying
 from cudf.core._internals.search import search_sorted
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -337,7 +337,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if len(self) > 0:
             return column.as_column(self._range, dtype=self.dtype)
         else:
-            return column.column_empty(0, masked=False, dtype=self.dtype)
+            return column.column_empty(0, dtype=self.dtype)
 
     def _clean_nulls_from_index(self) -> Self:
         return self
@@ -497,9 +497,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
         header["index_column"]["step"] = self.step
         frames = []
 
-        header["name"] = pickle.dumps(self.name)
-        header["dtype"] = pickle.dumps(self.dtype)
-        header["type-serialized"] = pickle.dumps(type(self))
+        header["name"] = self.name
+        header["dtype"] = self.dtype.str
         header["frame_count"] = 0
         return header, frames
 
@@ -507,11 +506,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def deserialize(cls, header, frames):
         h = header["index_column"]
-        name = pickle.loads(header["name"])
+        name = header["name"]
         start = h["start"]
         stop = h["stop"]
         step = h.get("step", 1)
-        return RangeIndex(start=start, stop=stop, step=step, name=name)
+        dtype = np.dtype(header["dtype"])
+        return RangeIndex(
+            start=start, stop=stop, step=step, dtype=dtype, name=name
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -1370,7 +1372,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
             scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
             indices = libcudf.column.Column.from_pylibcudf(right_plc)
-        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result = copying.scatter([indices], scatter_map, [result])[0]
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:

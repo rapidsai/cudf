@@ -46,6 +46,8 @@ __all__ = [
     "read_orc",
     "read_parsed_orc_statistics",
     "write_orc",
+    "OrcReaderOptions",
+    "OrcReaderOptionsBuilder",
     "OrcWriterOptions",
     "OrcWriterOptionsBuilder",
     "OrcChunkedWriter",
@@ -237,84 +239,190 @@ cdef class ParsedOrcStatistics:
         return out
 
 
-cpdef TableWithMetadata read_orc(
-    SourceInfo source_info,
-    list columns = None,
-    list stripes = None,
-    size_type skip_rows = 0,
-    size_type nrows = -1,
-    bool use_index = True,
-    bool use_np_dtypes = True,
-    DataType timestamp_type = None,
-    list decimal128_columns = None,
-):
-    """Reads an ORC file into a :py:class:`~.types.TableWithMetadata`.
-
-    Parameters
-    ----------
-    source_info : SourceInfo
-        The SourceInfo object to read the Parquet file from.
-    columns : list, default None
-        The string names of the columns to be read.
-    stripes : list[list[size_type]], default None
-        List of stripes to be read.
-    skip_rows : int64_t, default 0
-        The number of rows to skip from the start of the file.
-    nrows : size_type, default -1
-        The number of rows to read. By default, read the entire file.
-    use_index : bool, default True
-        Whether to use the row index to speed up reading.
-    use_np_dtypes : bool, default True
-        Whether to use numpy compatible dtypes.
-    timestamp_type : DataType, default None
-        The timestamp type to use for the timestamp columns.
-    decimal128_columns : list, default None
-        List of column names to be read as 128-bit decimals.
-
-    Returns
-    -------
-    TableWithMetadata
-        The Table and its corresponding metadata (column names) that were read in.
+cdef class OrcReaderOptions:
     """
-    cdef orc_reader_options opts
-    cdef vector[vector[size_type]] c_stripes
-    opts = (
-        orc_reader_options.builder(source_info.c_obj)
-        .use_index(use_index)
-        .build()
-    )
-    if nrows >= 0:
-        opts.set_num_rows(nrows)
-    if skip_rows >= 0:
-        opts.set_skip_rows(skip_rows)
-    if stripes is not None:
-        c_stripes = stripes
-        opts.set_stripes(c_stripes)
-    if timestamp_type is not None:
-        opts.set_timestamp_type(timestamp_type.c_obj)
+    The settings to use for ``read_orc``
 
-    cdef vector[string] c_decimal128_columns
-    if decimal128_columns is not None and len(decimal128_columns) > 0:
-        c_decimal128_columns.reserve(len(decimal128_columns))
-        for col in decimal128_columns:
+    For details, see :cpp:class:`cudf::io::orc_reader_options`
+    """
+    @staticmethod
+    def builder(SourceInfo source):
+        """
+        Create a OrcReaderOptionsBuilder object
+
+        For details, see :cpp:func:`cudf::io::orc_reader_options::builder`
+
+        Parameters
+        ----------
+        sink : SourceInfo
+            The source to read the ORC file from.
+
+        Returns
+        -------
+        OrcReaderOptionsBuilder
+            Builder to build OrcReaderOptions
+        """
+        cdef OrcReaderOptionsBuilder orc_builder = (
+            OrcReaderOptionsBuilder.__new__(OrcReaderOptionsBuilder)
+        )
+        orc_builder.c_obj = orc_reader_options.builder(source.c_obj)
+        orc_builder.source = source
+        return orc_builder
+
+    cpdef void set_num_rows(self, int64_t nrows):
+        """
+        Sets number of row to read.
+
+        Parameters
+        ----------
+        nrows: int64_t
+            Number of rows
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_num_rows(nrows)
+
+    cpdef void set_skip_rows(self, int64_t skip_rows):
+        """
+        Sets number of rows to skip from the start.
+
+        Parameters
+        ----------
+        skip_rows: int64_t
+            Number of rows
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_skip_rows(skip_rows)
+
+    cpdef void set_stripes(self, list stripes):
+        """
+        Sets list of stripes to read for each input source.
+
+        Parameters
+        ----------
+        stripes: list[list[size_type]]
+            List of lists, mapping stripes to read to input sources
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[vector[size_type]] c_stripes
+        cdef vector[size_type] vec
+        for sub_list in stripes:
+            for x in sub_list:
+                vec.push_back(x)
+            c_stripes.push_back(vec)
+            vec.clear()
+        self.c_obj.set_stripes(c_stripes)
+
+    cpdef void set_decimal128_columns(self, list val):
+        """
+        Set columns that should be read as 128-bit Decimal.
+
+        Parameters
+        ----------
+        val: list[str]
+            List of fully qualified column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] c_decimal128_columns
+        c_decimal128_columns.reserve(len(val))
+        for col in val:
             if not isinstance(col, str):
                 raise TypeError("Decimal 128 column names must be strings!")
             c_decimal128_columns.push_back(col.encode())
-        opts.set_decimal128_columns(c_decimal128_columns)
+        self.c_obj.set_decimal128_columns(c_decimal128_columns)
 
-    cdef vector[string] c_column_names
-    if columns is not None and len(columns) > 0:
-        c_column_names.reserve(len(columns))
-        for col in columns:
+    cpdef void set_timestamp_type(self, DataType type_):
+        """
+        Sets timestamp type to which timestamp column will be cast.
+
+        Parameters
+        ----------
+        type_: DataType
+            Type of timestamp
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_timestamp_type(type_.c_obj)
+
+    cpdef void set_columns(self, list col_names):
+        """
+        Sets names of the column to read.
+
+        Parameters
+        ----------
+        col_names: list[str]
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] c_column_names
+        c_column_names.reserve(len(col_names))
+        for col in col_names:
             if not isinstance(col, str):
                 raise TypeError("Column names must be strings!")
             c_column_names.push_back(col.encode())
-        opts.set_columns(c_column_names)
+        self.c_obj.set_columns(c_column_names)
 
+cdef class OrcReaderOptionsBuilder:
+    cpdef OrcReaderOptionsBuilder use_index(self, bool use):
+        """
+        Enable/Disable use of row index to speed-up reading.
+
+        Parameters
+        ----------
+        use : bool
+            Boolean value to enable/disable row index use
+
+        Returns
+        -------
+        OrcReaderOptionsBuilder
+        """
+        self.c_obj.use_index(use)
+        return self
+
+    cpdef OrcReaderOptions build(self):
+        """Create a OrcReaderOptions object"""
+        cdef OrcReaderOptions orc_options = OrcReaderOptions.__new__(
+            OrcReaderOptions
+        )
+        orc_options.c_obj = move(self.c_obj.build())
+        orc_options.source = self.source
+        return orc_options
+
+
+cpdef TableWithMetadata read_orc(OrcReaderOptions options):
+    """
+    Read from ORC format.
+
+    The source to read from and options are encapsulated
+    by the `options` object.
+
+    For details, see :cpp:func:`read_orc`.
+
+    Parameters
+    ----------
+    options: OrcReaderOptions
+        Settings for controlling reading behavior
+    """
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(cpp_read_orc(opts))
+        c_result = move(cpp_read_orc(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -503,7 +611,7 @@ cpdef void write_orc(OrcWriterOptions options):
     The table to write, output paths, and options are encapsulated
     by the `options` object.
 
-    For details, see :cpp:func:`write_csv`.
+    For details, see :cpp:func:`write_orc`.
 
     Parameters
     ----------
