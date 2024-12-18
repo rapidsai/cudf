@@ -331,7 +331,7 @@ jobs:
   third-party-integration-tests-cudf-pandas:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.10
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.02
     with:
       build_type: pull-request
       node_type: "gpu-v100-latest-1"
