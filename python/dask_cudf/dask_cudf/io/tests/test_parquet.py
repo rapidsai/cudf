@@ -492,6 +492,33 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     dd.assert_eq(ddf1.compute(), ddf2.compute())
 
 
+def test_read_inconsistent_schema(tmpdir):
+    records = [
+        {"id": 123, "text": "foo"},
+        {
+            "text": "bar",
+            "meta1": [{"field1": "cat"}],
+            "id": 456,
+        },
+    ]
+    columns = ["text", "id"]
+    pd.DataFrame(records[:1]).to_parquet(tmpdir / "part.0.parquet")
+    pd.DataFrame(records[1:]).to_parquet(tmpdir / "part.1.parquet")
+    # Check that cuDF and Dask cuDF match
+    dd.assert_eq(
+        cudf.read_parquet(
+            tmpdir, columns=columns, allow_mismatched_pq_schemas=True
+        ),
+        dask_cudf.read_parquet(tmpdir, columns=columns),
+        check_index=False,
+    )
+    # Check that "pandas" and "cudf" backends match
+    dd.assert_eq(
+        dd.read_parquet(tmpdir, columns=columns),
+        dask_cudf.read_parquet(tmpdir, columns=columns),
+    )
+
+
 @pytest.mark.parametrize(
     "data",
     [
