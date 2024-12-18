@@ -473,4 +473,4 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     if stream is None:
         stream = Stream()
     with nogil:
-        cpp_write_json(options.c_obj)
+        cpp_write_json(options.c_obj, stream.view())
