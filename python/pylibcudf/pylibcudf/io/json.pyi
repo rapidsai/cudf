@@ -69,7 +69,6 @@ class JsonWriterOptionsBuilder:
     def build(self) -> JsonWriterOptions: ...
 
 def write_json(options: JsonWriterOptions) -> None: ...
-
 def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
