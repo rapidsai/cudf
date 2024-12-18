@@ -386,24 +386,8 @@ abstract class Aggregation {
         }
     }
 
-    /**
-     * A wrapper class for native host UDF aggregations.
-     * <p>
-     * This class is used to store the native handle of a host UDF aggregation and is used as
-     * a proxy object to compute hash code and compare two host UDF aggregations.
-     * A new host UDF aggregation implementation must extend this class and override the
-     * {@code hashCode} and {@code equals} methods for such purposes.
-     */
-    public static abstract class HostUDFWrapper {
-        public final long udfNativeHandle;
-
-        HostUDFWrapper(long udfNativeHandle) {
-            this.udfNativeHandle = udfNativeHandle;
-        }
-    }
-
     static final class HostUDFAggregation extends Aggregation {
-        HostUDFWrapper wrapper;
+        private final HostUDFWrapper wrapper;
 
         private HostUDFAggregation(HostUDFWrapper wrapper) {
             super(Kind.HOST_UDF);
@@ -417,7 +401,7 @@ abstract class Aggregation {
 
         @Override
         public int hashCode() {
-            return 31 * kind.hashCode();
+            return 31 * kind.hashCode() + wrapper.hashCode();
         }
 
         @Override
@@ -885,11 +869,11 @@ abstract class Aggregation {
 
     /**
      * Host UDF aggregation, to execute a host-side user-defined function (UDF).
-     * @param udfNativeHandle Pointer to the native host UDF instance
+     * @param wrapper The wrapper for the native host UDF instance.
      * @return A new HostUDFAggregation instance
      */
-    static HostUDFAggregation hostUDF(long udfNativeHandle) {
-        return new HostUDFAggregation(udfNativeHandle);
+    static HostUDFAggregation hostUDF(HostUDFWrapper wrapper) {
+        return new HostUDFAggregation(wrapper);
     }
 
     static final class LeadAggregation extends LeadLagAggregation {

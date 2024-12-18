@@ -279,11 +279,11 @@ public final class GroupByAggregation {
 
   /**
    * Execute an aggregation using a host-side user-defined function (UDF).
-   * @param udfNativeHandle Pointer to the native host UDF instance
+   * @param wrapper The wrapper for the native host UDF instance.
    * @return A new GroupByAggregation instance
    */
-  public static GroupByAggregation hostUDF(long udfNativeHandle) {
-    return new GroupByAggregation(Aggregation.hostUDF(udfNativeHandle));
+  public static GroupByAggregation hostUDF(HostUDFWrapper wrapper) {
+    return new GroupByAggregation(Aggregation.hostUDF(wrapper));
   }
 
   /**
