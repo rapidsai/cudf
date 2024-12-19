@@ -10,13 +10,12 @@ import cupy as cp
 import numpy as np
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.strings.convert.convert_fixed_point import (
-    from_decimal as cpp_from_decimal,
-)
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop, unary
-from cudf.core.buffer import as_buffer
+from cudf.core.buffer import acquire_spill_lock, as_buffer
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
@@ -89,7 +88,13 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
-            return cpp_from_decimal(self)
+            with acquire_spill_lock():
+                plc_column = (
+                    plc.strings.convert.convert_fixed_point.from_fixed_point(
+                        self.to_pylibcudf(mode="read"),
+                    )
+                )
+                return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
         else:
             return cast(
                 cudf.core.column.StringColumn,
@@ -264,8 +269,8 @@ class Decimal32Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")
+    def to_arrow(self) -> pa.Array:
+        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
 
         # use striding to set the first 32 bits of each 128-bit chunk:
@@ -332,7 +337,7 @@ class Decimal128Column(DecimalBaseColumn):
         result.dtype.precision = data.type.precision
         return result
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return super().to_arrow().cast(self.dtype.to_arrow())
 
     def _with_type_metadata(
@@ -391,8 +396,8 @@ class Decimal64Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")
+    def to_arrow(self) -> pa.Array:
+        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
 
         # use striding to set the first 64 bits of each 128-bit chunk:

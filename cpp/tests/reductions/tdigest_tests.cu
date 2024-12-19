@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ template <typename T>
 struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(ReductionTDigestAllTypes, cudf::test::NumericTypes);
 
+namespace {
 struct reduce_op {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& values, int delta) const
   {
@@ -60,6 +61,7 @@ struct reduce_merge_op {
     return cudf::make_structs_column(tbl.num_rows(), std::move(cols), 0, rmm::device_buffer());
   }
 };
+}  // namespace
 
 TYPED_TEST(ReductionTDigestAllTypes, Simple)
 {
