@@ -62,15 +62,16 @@ abstract class Aggregation {
         LAG(23),
         PTX(24),
         CUDA(25),
-        M2(26),
-        MERGE_M2(27),
-        RANK(28),
-        DENSE_RANK(29),
-        PERCENT_RANK(30),
-        TDIGEST(31), // This can take a delta argument for accuracy level
-        MERGE_TDIGEST(32), // This can take a delta argument for accuracy level
-        HISTOGRAM(33),
-        MERGE_HISTOGRAM(34);
+        HOST_UDF(26),
+        M2(27),
+        MERGE_M2(28),
+        RANK(29),
+        DENSE_RANK(30),
+        PERCENT_RANK(31),
+        TDIGEST(32), // This can take a delta argument for accuracy level
+        MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
+        HISTOGRAM(34),
+        MERGE_HISTOGRAM(35);
 
         final int nativeId;
 
@@ -380,6 +381,35 @@ abstract class Aggregation {
             } else if (other instanceof MergeSetsAggregation) {
                 MergeSetsAggregation o = (MergeSetsAggregation) other;
                 return o.nullEquality == this.nullEquality && o.nanEquality == this.nanEquality;
+            }
+            return false;
+        }
+    }
+
+    static final class HostUDFAggregation extends Aggregation {
+        private final HostUDFWrapper wrapper;
+
+        private HostUDFAggregation(HostUDFWrapper wrapper) {
+            super(Kind.HOST_UDF);
+            this.wrapper = wrapper;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createHostUDFAgg(wrapper.udfNativeHandle);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + wrapper.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof HostUDFAggregation) {
+                return wrapper.equals(((HostUDFAggregation) other).wrapper);
             }
             return false;
         }
@@ -837,6 +867,15 @@ abstract class Aggregation {
         return new MergeSetsAggregation(nullEquality, nanEquality);
     }
 
+    /**
+     * Host UDF aggregation, to execute a host-side user-defined function (UDF).
+     * @param wrapper The wrapper for the native host UDF instance.
+     * @return A new HostUDFAggregation instance
+     */
+    static HostUDFAggregation hostUDF(HostUDFWrapper wrapper) {
+        return new HostUDFAggregation(wrapper);
+    }
+
     static final class LeadAggregation extends LeadLagAggregation {
         private LeadAggregation(int offset, ColumnVector defaultOutput) {
             super(Kind.LEAD, offset, defaultOutput);
@@ -990,4 +1029,9 @@ abstract class Aggregation {
      * Create a TDigest aggregation.
      */
     private static native long createTDigestAgg(int kind, int delta);
+
+    /**
+     * Create a HOST_UDF aggregation.
+     */
+    private static native long createHostUDFAgg(long udfNativeHandle);
 }
