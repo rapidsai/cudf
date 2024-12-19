@@ -60,7 +60,8 @@ namespace CUDF_EXPORT cudf {
  *
  *   // This UDF aggregation needs `GROUPED_VALUES` and `GROUP_OFFSETS`,
  *   // and the result from groupby `MAX` aggregation.
- *   [[nodiscard]] data_attribute_set_t get_required_data() const override {
+ *   [[nodiscard]] data_attribute_set_t get_required_data() const override
+ *   {
  *       return {groupby_data_attribute::GROUPED_VALUES,
  *               groupby_data_attribute::GROUP_OFFSETS,
  *               cudf::make_max_aggregation<cudf::groupby_aggregation>()};
