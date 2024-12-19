@@ -431,8 +431,9 @@ def concat(
 
             result_columns = (
                 objs[0]
-                ._data.to_pandas_index()
-                .append([obj._data.to_pandas_index() for obj in objs[1:]])
+                ._data.to_pandas_index.append(
+                    [obj._data.to_pandas_index for obj in objs[1:]]
+                )
                 .unique()
             )
 
@@ -689,7 +690,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index().dtype
+            value_vars, dtype=frame._data.to_pandas_index.dtype
         )
     else:
         var_data = (
@@ -1273,7 +1274,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
-            tuple(df._data.to_pandas_index().names) + df.index.names
+            tuple(df._data.to_pandas_index.names) + df.index.names
         )
         return res
     else:
