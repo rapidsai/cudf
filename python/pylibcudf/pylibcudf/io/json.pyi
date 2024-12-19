@@ -4,6 +4,8 @@ from typing import TypeAlias
 
 from typing_extensions import Self
 
+from rmm._cuda.stream import Stream
+
 from pylibcudf.column import Column
 from pylibcudf.io.types import (
     CompressionType,
@@ -68,8 +70,9 @@ class JsonWriterOptionsBuilder:
     def lines(self, val: bool) -> Self: ...
     def build(self) -> JsonWriterOptions: ...
 
-def write_json(options: JsonWriterOptions) -> None: ...
+def write_json(options: JsonWriterOptions, stream: Stream = None) -> None: ...
 def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
+    stream: Stream = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...

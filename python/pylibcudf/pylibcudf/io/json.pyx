@@ -20,6 +20,8 @@ from pylibcudf.libcudf.io.types cimport (
 )
 from pylibcudf.libcudf.types cimport data_type, size_type
 from pylibcudf.types cimport DataType
+from rmm._cuda.stream cimport Stream
+
 
 __all__ = [
     "chunked_read_json",
@@ -422,6 +424,7 @@ cdef class JsonReaderOptionsBuilder:
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size=100_000_000,
+    Stream stream = None,
 ):
     """
     Reads chunks of a JSON file into a :py:class:`~.types.TableWithMetadata`.
@@ -442,6 +445,9 @@ cpdef tuple chunked_read_json(
     cdef size_type c_range_size = (
         chunk_size if chunk_size is not None else 0
     )
+    if stream is None:
+        stream = Stream()
+
     cdef table_with_metadata c_result
 
     final_columns = []
@@ -455,7 +461,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj))
+                c_result = move(cpp_read_json(options.c_obj, stream.view()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -483,7 +489,8 @@ cpdef tuple chunked_read_json(
 
 
 cpdef TableWithMetadata read_json(
-    JsonReaderOptions options
+    JsonReaderOptions options,
+    Stream stream = None,
 ):
     """
     Read from JSON format.
@@ -503,10 +510,13 @@ cpdef TableWithMetadata read_json(
     TableWithMetadata
         The Table and its corresponding metadata (column names) that were read in.
     """
+    if stream is None:
+        stream = Stream()
+
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj))
+        c_result = move(cpp_read_json(options.c_obj, stream.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -664,7 +674,7 @@ cdef class JsonWriterOptionsBuilder:
         return json_options
 
 
-cpdef void write_json(JsonWriterOptions options):
+cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     """
     Writes a set of columns to JSON format.
 
@@ -677,5 +687,7 @@ cpdef void write_json(JsonWriterOptions options):
     -------
     None
     """
+    if stream is None:
+        stream = Stream()
     with nogil:
-        cpp_write_json(options.c_obj)
+        cpp_write_json(options.c_obj, stream.view())
