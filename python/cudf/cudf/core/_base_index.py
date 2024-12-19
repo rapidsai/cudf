@@ -10,17 +10,18 @@ import pandas as pd
 from typing_extensions import Self
 
 import cudf
-from cudf._lib.copying import _gather_map_is_valid, gather
-from cudf._lib.stream_compaction import (
+from cudf._lib.types import size_type_dtype
+from cudf.api.extensions import no_default
+from cudf.api.types import is_integer, is_list_like, is_scalar
+from cudf.core._internals import copying
+from cudf.core._internals.stream_compaction import (
     apply_boolean_mask,
     drop_duplicates,
     drop_nulls,
 )
-from cudf._lib.types import size_type_dtype
-from cudf.api.extensions import no_default
-from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
+from cudf.core.copy_types import GatherMap
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
@@ -413,7 +414,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property
-    def nlevels(self):
+    def nlevels(self) -> int:
         """
         Number of levels.
         """
@@ -1446,7 +1447,7 @@ class BaseIndex(Serializable):
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
         res = res.sort_values(
-            by=res._data.to_pandas_index()[1:], ignore_index=True
+            by=res._data.to_pandas_index[1:], ignore_index=True
         )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
@@ -1943,7 +1944,6 @@ class BaseIndex(Serializable):
         return self._from_columns_like_self(
             drop_duplicates(
                 list(self._columns),
-                keys=range(len(self._columns)),
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),
@@ -2032,7 +2032,6 @@ class BaseIndex(Serializable):
             drop_nulls(
                 data_columns,
                 how=how,
-                keys=range(len(data_columns)),
             ),
             self._column_names,
         )
@@ -2050,13 +2049,9 @@ class BaseIndex(Serializable):
         if gather_map.dtype.kind not in "iu":
             gather_map = gather_map.astype(size_type_dtype)
 
-        if not _gather_map_is_valid(
-            gather_map, len(self), check_bounds, nullify
-        ):
-            raise IndexError("Gather map index is out of bounds.")
-
+        GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
-            gather(list(self._columns), gather_map, nullify=nullify),
+            copying.gather(self._columns, gather_map, nullify=nullify),
             self._column_names,
         )
 

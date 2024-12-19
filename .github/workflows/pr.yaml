@@ -13,6 +13,7 @@ jobs:
   # Please keep pr-builder as the top job here
   pr-builder:
     needs:
+      - check-nightly-ci
       - changed-files
       - checks
       - conda-cpp-build
@@ -54,6 +55,18 @@ jobs:
       - name: Telemetry setup
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
+  check-nightly-ci:
+    # Switch to ubuntu-latest once it defaults to a version of Ubuntu that
+    # provides at least Python 3.11 (see
+    # https://docs.python.org/3/library/datetime.html#datetime.date.fromisoformat)
+    runs-on: ubuntu-24.04
+    env:
+      RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check if nightly CI is passing
+        uses: rapidsai/shared-actions/check_nightly_success/dispatch@main
+        with:
+          repo: cudf
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -328,16 +341,11 @@ jobs:
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
 
   telemetry-summarize:
-    runs-on: ubuntu-latest
+    # This job must use a self-hosted runner to record telemetry traces.
+    runs-on: linux-amd64-cpu4
     needs: pr-builder
     if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
     continue-on-error: true
     steps:
-      - name: Load stashed telemetry env vars
-        uses: rapidsai/shared-actions/telemetry-dispatch-load-base-env-vars@main
-        with:
-            load_service_name: true
       - name: Telemetry summarize
-        uses: rapidsai/shared-actions/telemetry-dispatch-write-summary@main
-        with:
-          cert_concat: "${{ secrets.OTEL_EXPORTER_OTLP_CA_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE }};${{ secrets.OTEL_EXPORTER_OTLP_CLIENT_KEY }}"
+        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main

@@ -33,6 +33,7 @@ class Cast(Expr):
     def __init__(self, dtype: plc.DataType, value: Expr) -> None:
         self.dtype = dtype
         self.children = (value,)
+        self.is_pointwise = True
         if not dtypes.can_cast(value.dtype, self.dtype):
             raise NotImplementedError(
                 f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
@@ -63,6 +64,7 @@ class Len(Expr):
     def __init__(self, dtype: plc.DataType) -> None:
         self.dtype = dtype
         self.children = ()
+        self.is_pointwise = False
 
     def do_evaluate(
         self,
@@ -147,6 +149,14 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
+        self.is_pointwise = self.name not in (
+            "cum_min",
+            "cum_max",
+            "cum_prod",
+            "cum_sum",
+            "drop_nulls",
+            "unique",
+        )
 
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")

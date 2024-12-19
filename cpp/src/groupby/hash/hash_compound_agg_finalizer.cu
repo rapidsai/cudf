@@ -170,7 +170,8 @@ void hash_compound_agg_finalizer<SetType>::visit(cudf::detail::var_aggregation c
     cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
   auto var_result_view = mutable_column_device_view::create(var_result->mutable_view(), stream);
   mutable_table_view var_table_view{{var_result->mutable_view()}};
-  cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
+  cudf::detail::initialize_with_identity(
+    var_table_view, host_span<cudf::aggregation::Kind const>(&agg.kind, 1), stream);
 
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),

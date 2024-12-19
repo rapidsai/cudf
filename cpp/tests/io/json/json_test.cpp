@@ -3450,4 +3450,15 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3}});
 }
 
+TEST_F(JsonReaderTest, MismatchedBeginEndTokens)
+{
+  std::string data = R"({"not_valid": "json)";
+  auto opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
+      .build();
+  EXPECT_THROW(cudf::io::read_json(opts), cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
