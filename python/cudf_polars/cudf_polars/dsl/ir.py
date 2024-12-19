@@ -604,10 +604,12 @@ class Scan(IR):
                 (name, typ, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
-                plc.io.SourceInfo(paths),
-                lines=True,
-                dtypes=json_schema,
-                prune_columns=True,
+                plc.io.json._setup_json_reader_options(
+                    plc.io.SourceInfo(paths),
+                    lines=True,
+                    dtypes=json_schema,
+                    prune_columns=True,
+                )
             )
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)

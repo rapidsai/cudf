@@ -161,13 +161,15 @@ def read_json(
         if cudf.get_option("io.json.low_memory") and lines:
             res_cols, res_col_names, res_child_names = (
                 plc.io.json.chunked_read_json(
-                    plc.io.SourceInfo(filepaths_or_buffers),
-                    processed_dtypes,
-                    c_compression,
-                    keep_quotes=keep_quotes,
-                    mixed_types_as_string=mixed_types_as_string,
-                    prune_columns=prune_columns,
-                    recovery_mode=c_on_bad_lines,
+                    plc.io.json._setup_json_reader_options(
+                        plc.io.SourceInfo(filepaths_or_buffers),
+                        processed_dtypes,
+                        c_compression,
+                        keep_quotes=keep_quotes,
+                        mixed_types_as_string=mixed_types_as_string,
+                        prune_columns=prune_columns,
+                        recovery_mode=c_on_bad_lines,
+                    )
                 )
             )
             df = cudf.DataFrame._from_data(
@@ -181,19 +183,23 @@ def read_json(
             return df
         else:
             table_w_meta = plc.io.json.read_json(
-                plc.io.SourceInfo(filepaths_or_buffers),
-                processed_dtypes,
-                c_compression,
-                lines,
-                byte_range_offset=byte_range[0]
-                if byte_range is not None
-                else 0,
-                byte_range_size=byte_range[1] if byte_range is not None else 0,
-                keep_quotes=keep_quotes,
-                mixed_types_as_string=mixed_types_as_string,
-                prune_columns=prune_columns,
-                recovery_mode=c_on_bad_lines,
-                extra_parameters=kwargs,
+                plc.io.json._setup_json_reader_options(
+                    plc.io.SourceInfo(filepaths_or_buffers),
+                    processed_dtypes,
+                    c_compression,
+                    lines,
+                    byte_range_offset=byte_range[0]
+                    if byte_range is not None
+                    else 0,
+                    byte_range_size=byte_range[1]
+                    if byte_range is not None
+                    else 0,
+                    keep_quotes=keep_quotes,
+                    mixed_types_as_string=mixed_types_as_string,
+                    prune_columns=prune_columns,
+                    recovery_mode=c_on_bad_lines,
+                    extra_parameters=kwargs,
+                )
             )
 
             df = cudf.DataFrame._from_data(
