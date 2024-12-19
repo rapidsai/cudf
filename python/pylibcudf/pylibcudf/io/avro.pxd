@@ -4,8 +4,6 @@ from pylibcudf.libcudf.io.avro cimport avro_reader_options, avro_reader_options_
 from pylibcudf.libcudf.types cimport size_type
 
 
-from pylibcudf.libcudf.types cimport size_type
-
 cdef class AvroReaderOptions:
     cdef avro_reader_options c_obj
     cdef SourceInfo source

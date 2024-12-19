@@ -27,6 +27,7 @@ from pylibcudf.libcudf.io.parquet cimport (
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.table cimport Table
 from pylibcudf.types cimport DataType
+from rmm._cuda.stream cimport Stream
 
 
 cdef class ParquetReaderOptions:
@@ -55,7 +56,7 @@ cdef class ChunkedParquetReader:
     cpdef TableWithMetadata read_chunk(self)
 
 
-cpdef read_parquet(ParquetReaderOptions options)
+cpdef read_parquet(ParquetReaderOptions options, Stream stream = *)
 
 
 cdef class ParquetChunkedWriter:
@@ -145,6 +146,6 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptions build(self)
 
-cpdef memoryview write_parquet(ParquetWriterOptions options)
+cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
 
 cpdef memoryview merge_row_group_metadata(list metdata_list)
