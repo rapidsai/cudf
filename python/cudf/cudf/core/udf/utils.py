@@ -9,7 +9,7 @@ import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
-from cuda import cudart
+from cuda.bindings import runtime
 from numba import cuda, typeof
 from numba.core.datamodel import default_manager, models
 from numba.core.errors import TypingError
@@ -356,8 +356,8 @@ def set_malloc_heap_size(size=None):
     if size is None:
         size = _STRINGS_UDF_DEFAULT_HEAP_SIZE
     if size != _heap_size:
-        (ret,) = cudart.cudaDeviceSetLimit(
-            cudart.cudaLimit.cudaLimitMallocHeapSize, size
+        (ret,) = runtime.cudaDeviceSetLimit(
+            runtime.cudaLimit.cudaLimitMallocHeapSize, size
         )
         if ret.value != 0:
             raise RuntimeError("Unable to set cudaMalloc heap size")

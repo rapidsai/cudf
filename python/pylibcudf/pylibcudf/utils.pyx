@@ -5,7 +5,7 @@ from cython.operator import dereference
 from libc.stdint cimport uintptr_t
 from libcpp.functional cimport reference_wrapper
 from libcpp.vector cimport vector
-from cuda import cudart
+from cuda.bindings import runtime
 
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.types cimport bitmask_type
@@ -44,13 +44,13 @@ def _is_concurrent_managed_access_supported():
     """
 
     # Ensure CUDA is initialized before checking cudaDevAttrConcurrentManagedAccess
-    cudart.cudaFree(0)
+    runtime.cudaFree(0)
 
     device_id = 0
-    err, supports_managed_access = cudart.cudaDeviceGetAttribute(
-        cudart.cudaDeviceAttr.cudaDevAttrConcurrentManagedAccess, device_id
+    err, supports_managed_access = runtime.cudaDeviceGetAttribute(
+        runtime.cudaDeviceAttr.cudaDevAttrConcurrentManagedAccess, device_id
     )
-    if err != cudart.cudaError_t.cudaSuccess:
+    if err != runtime.cudaError_t.cudaSuccess:
         raise RuntimeError(
             f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
         )

@@ -99,8 +99,6 @@ addopts = "--tb=native --strict-config --strict-markers --import-mode=importlib"
 empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
   "error",
-  # https://github.com/rapidsai/build-planning/issues/116
-  "ignore:.*cuda..* module is deprecated.*:DeprecationWarning",
   "ignore:::.*xdist.*",
   "ignore:::.*pytest.*"
 ]
