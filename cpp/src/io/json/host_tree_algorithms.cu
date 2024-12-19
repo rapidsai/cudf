@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/io/detail/tokenize_json.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
@@ -46,9 +47,19 @@
 
 #include <algorithm>
 #include <deque>
+#include <numeric>
 
 namespace cudf::io::json::detail {
-
+auto to_int2    = [](auto v) { return std::to_string(static_cast<int>(v)); };
+auto print_vec2 = [](auto const& cpu, auto const name, auto converter) {
+  if (std::getenv("NJP_DEBUG_PRINT") == nullptr) return;
+  for (auto const& v : cpu)
+    printf("%3s,", converter(v).c_str());
+  std::cout << name << std::endl;
+};
+void print_tree(host_span<SymbolT const> input,
+                tree_meta_t const& d_gpu_tree,
+                rmm::cuda_stream_view stream);
 /**
  * @brief Get the column indices for the values column for array of arrays rows
  *
@@ -247,7 +258,7 @@ void scatter_offsets(tree_meta_t const& tree,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream);
 
-std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_options const& options)
+schema_element unified_schema(cudf::io::json_reader_options const& options)
 {
   return std::visit(
     cudf::detail::visitor_overload{
@@ -259,7 +270,7 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
                        [&user_dtypes](auto i) {
                          return std::pair(std::to_string(i), schema_element{user_dtypes[i]});
                        });
-        return dnew;
+        return schema_element{data_type{type_id::STRUCT}, std::move(dnew)};
       },
       [](std::map<std::string, data_type> const& user_dtypes) {
         std::map<std::string, schema_element> dnew;
@@ -269,10 +280,12 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
                        [](auto key_dtype) {
                          return std::pair(key_dtype.first, schema_element{key_dtype.second});
                        });
-        return dnew;
+        return schema_element{data_type{type_id::STRUCT}, std::move(dnew)};
       },
-      [](std::map<std::string, schema_element> const& user_dtypes) { return user_dtypes; },
-      [](schema_element const& user_dtypes) { return user_dtypes.child_types; }},
+      [](std::map<std::string, schema_element> const& user_dtypes) {
+        return schema_element{data_type{type_id::STRUCT}, user_dtypes};
+      },
+      [](schema_element const& user_dtypes) { return user_dtypes; }},
     options.get_dtypes());
 }
 
@@ -333,6 +346,14 @@ void make_device_json_column(device_span<SymbolT const> input,
                           row_array_parent_col_id,
                           stream);
 
+  {
+    auto h_input = cudf::detail::make_host_vector_async(input, stream);
+    print_tree(h_input, d_column_tree, stream);
+    auto h_unique_col_ids = cudf::detail::make_host_vector_sync(d_unique_col_ids, stream);
+    print_vec2(h_unique_col_ids, "d_unique_col_ids", to_int2);
+    auto h_max_row_offsets = cudf::detail::make_host_vector_sync(d_max_row_offsets, stream);
+    print_vec2(h_max_row_offsets, "d_max_row_offsets", to_int2);
+  }
   auto num_columns                      = d_unique_col_ids.size();
   std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
@@ -412,8 +433,8 @@ std::
     cudf::detail::make_host_vector_async(d_column_tree.parent_node_ids, stream);
   auto column_range_beg =
     cudf::detail::make_host_vector_async(d_column_tree.node_range_begin, stream);
-  auto const max_row_offsets = cudf::detail::make_host_vector_async(d_max_row_offsets, stream);
-  auto num_columns           = d_unique_col_ids.size();
+  auto max_row_offsets = cudf::detail::make_host_vector_async(d_max_row_offsets, stream);
+  auto num_columns     = d_unique_col_ids.size();
   stream.synchronize();
 
   auto to_json_col_type = [](auto category) {
@@ -495,6 +516,38 @@ std::
     return {cudf::detail::make_host_vector<bool>(0, stream),
             cudf::detail::make_host_vector<bool>(0, stream),
             {}};  // for empty file
+  // if root has struct, list or string, then keep only requested root type.
+  if (options.is_enabled_prune_columns()) {
+    auto root_type_id = std::visit(
+      cudf::detail::visitor_overload{
+        [](std::vector<data_type> const& user_dtypes) { return NC_STRUCT; },
+        [](std::map<std::string, data_type> const& user_dtypes) { return NC_STRUCT; },
+        [](std::map<std::string, schema_element> const& user_dtypes) { return NC_STRUCT; },
+        [](schema_element const& user_dtypes) {
+          if (user_dtypes.type.id() == type_id::STRUCT) return NC_STRUCT;
+          if (user_dtypes.type.id() == type_id::LIST) return NC_LIST;
+          return NC_ERR;
+        }},
+      options.get_dtypes());
+    CUDF_EXPECTS(root_type_id == NC_STRUCT or root_type_id == NC_LIST,
+                 "Root type in input schema should be struct or list");
+    auto& remove_vec =
+      is_enabled_lines ? adj[parent_node_sentinel] : adj[adj[parent_node_sentinel][0]];
+    // make sure all root columns have same number of rows.
+    auto max_root_rows =
+      std::reduce(remove_vec.begin(), remove_vec.end(), 0, [&max_row_offsets](auto acc, auto x) {
+        return std::max(acc, max_row_offsets[x]);
+      });
+    for (auto x : remove_vec)
+      max_row_offsets[x] = max_root_rows;
+    if (remove_vec.size() != 1)
+      remove_vec.erase(std::remove_if(remove_vec.begin(),
+                                      remove_vec.end(),
+                                      [&column_categories, root_type_id](auto x) {
+                                        return column_categories[x] != root_type_id;
+                                      }),
+                       remove_vec.end());
+  }
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
@@ -520,6 +573,10 @@ std::
       (schema.type == data_type{type_id::LIST} and column_categories[root] == NC_LIST) or
       (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
        column_categories[root] != NC_FN);
+    if ((schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
+         schema.type != data_type{type_id::STRING}) and
+        (column_categories[root] == NC_STRUCT or column_categories[root] == NC_LIST))
+      pass = false;
     if (!pass) {
       // ignore all children of this column and prune this column.
       is_pruned[root] = true;
@@ -625,8 +682,7 @@ std::
       is_pruned[top_level_list_id] = false;
     }
     is_pruned[root_struct_col_id] = false;
-    schema_element u_schema{data_type{type_id::STRUCT}};
-    u_schema.child_types = unified_schema(options);
+    schema_element u_schema       = unified_schema(options);
     std::visit(
       cudf::detail::visitor_overload{
         [&is_pruned, &root_struct_col_id, &adj, &mark_is_pruned](
@@ -650,6 +706,7 @@ std::
           -> void { mark_is_pruned(root_struct_col_id, u_schema); }},
       options.get_dtypes());
   }
+  print_vec2(is_pruned, "is_pruned", to_int2);
   // Useful for array of arrays
   auto named_level =
     is_enabled_lines
@@ -713,11 +770,14 @@ std::
         }
       }
     } else {
-      // if both are present, error out.
-      CUDF_EXPECTS(struct_col_id == -1 or list_col_id == -1,
+      // if both are present (and not forced as string), error out.
+      CUDF_EXPECTS((struct_col_id == -1 or expected_types[struct_col_id] == NC_STR) or
+                     (list_col_id == -1 or expected_types[list_col_id] == NC_STR),
                    "A mix of lists and structs within the same column is not supported");
       // either one only: so ignore str column.
-      if ((struct_col_id != -1 or list_col_id != -1) and str_col_id != -1) {
+      if (((struct_col_id != -1 and expected_types[struct_col_id] != NC_STR) or
+           (list_col_id != -1 and expected_types[list_col_id] != NC_STR)) and
+          str_col_id != -1) {
         is_pruned[str_col_id] = true;
       }
     }
