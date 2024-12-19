@@ -97,14 +97,18 @@ class BinOp(Expr):
         )
         lop = left.obj
         rop = right.obj
+        print(left, right)
+        print(lop, rop)
         if left.obj.size() != right.obj.size():
             if left.is_scalar:
                 lop = left.obj_scalar
             elif right.is_scalar:
                 rop = right.obj_scalar
-        return Column(
+        res = Column(
             plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
         )
+        print(res)
+        return res
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
