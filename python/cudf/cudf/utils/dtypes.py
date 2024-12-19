@@ -151,7 +151,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
     elif cudf.api.types.is_decimal128_dtype(dtype):
         return cudf.core.dtypes.Decimal128Dtype
-    elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
+    elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
         return dtype.type
 
     return infer_dtype_from_object(dtype)
