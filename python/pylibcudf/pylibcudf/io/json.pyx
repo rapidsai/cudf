@@ -461,7 +461,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(opts, stream.view()))
+                c_result = move(cpp_read_json(options.c_obj, stream.view()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
