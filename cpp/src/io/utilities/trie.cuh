@@ -82,8 +82,8 @@ CUDF_EXPORT trie create_serialized_trie(std::vector<std::string> const& keys,
  *
  * @return Boolean value; true if string is found, false otherwise
  */
-__host__ __device__ inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
-                                                         device_span<char const> key)
+CUDF_HOST_DEVICE inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
+                                                      device_span<char const> key)
 {
   if (trie.empty()) { return false; }
   if (key.empty()) { return trie.front().is_leaf; }

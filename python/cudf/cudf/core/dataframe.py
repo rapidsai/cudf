@@ -774,9 +774,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype = getattr(columns, "dtype", None)
                 self._data = ColumnAccessor(
                     {
-                        k: column.column_empty(
-                            len(self), dtype="object", masked=True
-                        )
+                        k: column_empty(len(self), dtype="object")
                         for k in columns
                     },
                     level_names=tuple(columns.names)
@@ -979,8 +977,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if columns is not None:
             for col_name in columns:
                 if col_name not in self._data:
-                    self._data[col_name] = column.column_empty(
-                        row_count=len(self), dtype=None, masked=True
+                    self._data[col_name] = column_empty(
+                        row_count=len(self), dtype=None
                     )
             self._data._level_names = (
                 tuple(columns.names)
@@ -1031,11 +1029,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             data = list(itertools.zip_longest(*data))
 
             if columns is not None and len(data) == 0:
-                data = [
-                    cudf.core.column.column_empty(row_count=0, dtype=None)
-                    for _ in columns
-                ]
-
+                data = [column_empty(row_count=0, dtype=None) for _ in columns]
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
             self._data.rangeindex = True
@@ -1074,9 +1068,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # the provided index, so we need to return a masked
                 # array of nulls if an index is given.
                 empty_column = functools.partial(
-                    cudf.core.column.column_empty,
-                    row_count=(0 if index is None else len(index)),
-                    masked=index is not None,
+                    column_empty,
+                    row_count=0 if index is None else len(index),
                 )
 
             data = {
@@ -1421,7 +1414,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         new_columns = (
                             value
                             if key == arg
-                            else column.column_empty(
+                            else column_empty(
                                 row_count=length, dtype=col.dtype
                             )
                             for key, col in self._column_labels_and_values
@@ -1809,13 +1802,37 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 for table in tables
             ]
-
-            concatted = libcudf.utils.data_from_pylibcudf_table(
-                plc.concatenate.concatenate(plc_tables),
-                column_names=column_names,
-                index_names=index_names,
-            )
-        out = cls._from_data(*concatted)
+            plc_result = plc.concatenate.concatenate(plc_tables)
+            if ignore:
+                index = None
+                data = {
+                    col_name: ColumnBase.from_pylibcudf(col)
+                    for col_name, col in zip(
+                        column_names, plc_result.columns(), strict=True
+                    )
+                }
+            else:
+                result_columns = [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_result.columns()
+                ]
+                index = _index_from_data(
+                    dict(
+                        zip(
+                            index_names,
+                            result_columns[: len(index_names)],
+                            strict=True,
+                        )
+                    )
+                )
+                data = dict(
+                    zip(
+                        column_names,
+                        result_columns[len(index_names) :],
+                        strict=True,
+                    )
+                )
+        out = cls._from_data(data=data, index=index)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
@@ -3179,10 +3196,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             if cond_col := cond._data.get(name):
-                result = cudf._lib.copying.copy_if_else(
-                    source_col, other_col, cond_col
-                )
-
+                result = source_col.copy_if_else(other_col, cond_col)
                 out.append(result._with_type_metadata(col.dtype))
             else:
                 out_mask = as_buffer(
@@ -3373,7 +3387,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if num_cols != 0:
                     ca = self._data._from_columns_like_self(
                         (
-                            column.column_empty(row_count=length, dtype=dtype)
+                            column_empty(row_count=length, dtype=dtype)
                             for _, dtype in self._dtypes
                         ),
                         verify=False,
@@ -3479,7 +3493,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if abs(periods) > len(self):
             df = cudf.DataFrame._from_data(
                 {
-                    name: column_empty(len(self), dtype=dtype, masked=True)
+                    name: column_empty(len(self), dtype=dtype)
                     for name, dtype in zip(self._column_names, self.dtypes)
                 }
             )
@@ -3859,9 +3873,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 result = DataFrame(index=idxs, columns=cols)
                 for key in aggs.keys():
                     col = self[key]
-                    col_empty = column_empty(
-                        len(idxs), dtype=col.dtype, masked=True
-                    )
+                    col_empty = column_empty(len(idxs), dtype=col.dtype)
                     ans = cudf.Series._from_column(
                         col_empty, index=cudf.Index(idxs)
                     )
@@ -6177,9 +6189,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         quant_index=False,
                     )._column
                     if len(res) == 0:
-                        res = column.column_empty(
-                            row_count=len(qs), dtype=ser.dtype
-                        )
+                        res = column_empty(row_count=len(qs), dtype=ser.dtype)
                     result[k] = res
             result = DataFrame._from_data(result)
 
@@ -7333,9 +7343,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
 
             all_nulls = functools.cache(
-                functools.partial(
-                    column_empty, self.shape[0], common_type, masked=True
-                )
+                functools.partial(column_empty, self.shape[0], common_type)
             )
 
             # homogenize the dtypes of the columns
@@ -7870,7 +7878,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return self._constructor_sliced._from_column(result_col)
 
     @acquire_spill_lock()
-    def _compute_columns(self, expr: str) -> ColumnBase:
+    def _compute_column(self, expr: str) -> ColumnBase:
+        """Helper function for eval"""
         plc_column = plc.transform.compute_column(
             plc.Table(
                 [col.to_pylibcudf(mode="read") for col in self._columns]
@@ -8006,7 +8015,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError(
                     "Cannot operate inplace if there is no assignment"
                 )
-            return Series._from_column(self._compute_columns(statements[0]))
+            return Series._from_column(self._compute_column(statements[0]))
 
         targets = []
         exprs = []
@@ -8024,7 +8033,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         ret = self if inplace else self.copy(deep=False)
         for name, expr in zip(targets, exprs):
-            ret._data[name] = self._compute_columns(expr)
+            ret._data[name] = self._compute_column(expr)
         if not inplace:
             return ret
 
@@ -8582,7 +8591,7 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
             # If column not in this df, fill with an all-null column
             if idx >= len(cols) or cols[idx] is None:
                 n = len(next(x for x in cols if x is not None))
-                cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
+                cols[idx] = column_empty(row_count=n, dtype=dtype)
             else:
                 # If column is categorical, rebase the codes with the
                 # combined categories, and cast the new codes to the

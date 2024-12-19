@@ -22,6 +22,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals import copying, sorting
 from cudf.core._internals.search import search_sorted
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
@@ -945,16 +946,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if len(dict_indices):
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            indices_columns = libcudf.interop.from_arrow(dict_indices_table)
+            plc_indices = plc.interop.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
-            for name, codes in zip(
-                dict_indices_table.column_names, indices_columns
+            for name, plc_codes in zip(
+                dict_indices_table.column_names, plc_indices.columns()
             ):
+                codes = libcudf.column.Column.from_pylibcudf(plc_codes)
                 categories = cudf_dictionaries_columns[name]
                 codes = as_unsigned_codes(len(categories), codes)
                 cudf_category_frame[name] = CategoricalColumn(
@@ -970,9 +972,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
-            name: col
-            for name, col in zip(
-                data.column_names, libcudf.interop.from_arrow(data)
+            name: libcudf.column.Column.from_pylibcudf(plc_col)
+            for name, plc_col in zip(
+                data.column_names, plc.interop.from_arrow(data).columns()
             )
         }
 
@@ -1031,7 +1033,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return cls._from_data({name: result[name] for name in column_names})
 
     @_performance_tracking
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Table:
         """
         Convert to arrow Table
 
@@ -1056,19 +1058,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 for name, col in self._column_labels_and_values
             }
         )
-
-    @_performance_tracking
-    def _positions_from_column_names(self, column_names) -> list[int]:
-        """Map each column name into their positions in the frame.
-
-        The order of indices returned corresponds to the column order in this
-        Frame.
-        """
-        return [
-            i
-            for i, name in enumerate(self._column_names)
-            if name in set(column_names)
-        ]
 
     @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
@@ -1476,7 +1465,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         else:
             ascending_lst = list(ascending)
 
-        return libcudf.sort.order_by(
+        return sorting.order_by(
             list(to_sort),
             ascending_lst,
             na_position,
@@ -1484,18 +1473,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def _split(self, splits):
+    def _split(self, splits: list[int]) -> list[Self]:
         """Split a frame with split points in ``splits``. Returns a list of
         Frames of length `len(splits) + 1`.
         """
         return [
-            self._from_columns_like_self(
-                libcudf.copying.columns_split(list(self._columns), splits)[
-                    split_idx
-                ],
-                self._column_names,
-            )
-            for split_idx in range(len(splits) + 1)
+            self._from_columns_like_self(split, self._column_names)
+            for split in copying.columns_split(self._columns, splits)
         ]
 
     @_performance_tracking
