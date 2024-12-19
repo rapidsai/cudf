@@ -40,6 +40,28 @@ def test_struct_dtype_roundtrip():
     assert arrow_type == struct_type
 
 
+def test_table_with_nested_dtype_to_arrow():
+    pa_array = pa.array([[{"": 1}]])
+    plc_table = plc.Table([plc.interop.from_arrow(pa_array)])
+    result = plc.interop.to_arrow(plc_table)
+    expected_schema = pa.schema(
+        [
+            pa.field(
+                "",
+                pa.list_(
+                    pa.field(
+                        "",
+                        pa.struct([pa.field("", pa.int64(), nullable=False)]),
+                        nullable=False,
+                    )
+                ),
+                nullable=False,
+            )
+        ]
+    )
+    assert result.schema == expected_schema
+
+
 def test_decimal128_roundtrip():
     decimal_type = pa.decimal128(10, 2)
     plc_type = plc.interop.from_arrow(decimal_type)
