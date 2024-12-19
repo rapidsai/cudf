@@ -3960,8 +3960,8 @@ def test_group_by_value_counts_with_count_column():
 def test_groupby_internal_groups_empty(gdf):
     # test that we don't segfault when calling the internal
     # .groups() method with an empty list:
-    gb = gdf.groupby("y")._groupby
-    _, _, grouped_vals = gb.groups([])
+    gb = gdf.groupby("y")
+    _, _, grouped_vals = gb._groups([])
     assert grouped_vals == []
 
 
