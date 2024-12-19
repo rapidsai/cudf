@@ -17,7 +17,7 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, MutableMapping
+    from collections.abc import MutableMapping
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
@@ -64,7 +64,16 @@ class ScanPartitionFlavor(IntEnum):
 
 
 class ScanPartitionPlan:
-    """Scan partitioning plan."""
+    """
+    Scan partitioning plan.
+
+    Notes
+    -----
+    The meaning of `factor` depends on the value of `flavor`:
+      - SINGLE_FILE: `factor` must be `1`.
+      - SPLIT_FILES: `factor` is the number of partitions per file.
+      - FUSED_FILES: `factor` is the number of files per partition.
+    """
 
     __slots__ = ("factor", "flavor")
     factor: int
@@ -81,7 +90,6 @@ class ScanPartitionPlan:
     @staticmethod
     def from_scan(ir: Scan) -> ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
-        plan = ScanPartitionPlan(1, ScanPartitionFlavor.SINGLE_FILE)
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
             parallel_options = ir.config_options.get("executor_options", {})
@@ -91,19 +99,19 @@ class ScanPartitionPlan:
             if file_size > 0:
                 if file_size > blocksize:
                     # Split large files
-                    plan = ScanPartitionPlan(
+                    return ScanPartitionPlan(
                         math.ceil(file_size / blocksize),
                         ScanPartitionFlavor.SPLIT_FILES,
                     )
                 else:
                     # Fuse small files
-                    plan = ScanPartitionPlan(
-                        max(int(blocksize / file_size), 1),
+                    return ScanPartitionPlan(
+                        max(blocksize // int(file_size), 1),
                         ScanPartitionFlavor.FUSED_FILES,
                     )
 
         # TODO: Use file sizes for csv and json
-        return plan
+        return ScanPartitionPlan(1, ScanPartitionFlavor.SINGLE_FILE)
 
 
 class SplitScan(IR):
@@ -123,6 +131,7 @@ class SplitScan(IR):
         "total_splits",
     )
     _non_child = (
+        "schema",
         "base_scan",
         "split_index",
         "total_splits",
@@ -134,8 +143,10 @@ class SplitScan(IR):
     total_splits: int
     """Total number of splits."""
 
-    def __init__(self, base_scan: Scan, split_index: int, total_splits: int):
-        self.schema = base_scan.schema
+    def __init__(
+        self, schema: Schema, base_scan: Scan, split_index: int, total_splits: int
+    ):
+        self.schema = schema
         self.base_scan = base_scan
         self.split_index = split_index
         self.total_splits = total_splits
@@ -149,14 +160,6 @@ class SplitScan(IR):
             raise NotImplementedError(
                 f"Unhandled Scan type for file splitting: {base_scan.typ}"
             )
-
-    def get_hashable(self) -> Hashable:
-        """Hashable representation of node."""
-        return (
-            self.base_scan,
-            self.split_index,
-            self.total_splits,
-        )
 
     @classmethod
     def do_evaluate(
@@ -290,7 +293,7 @@ def _(
                     ir.predicate,
                 )
                 slices.extend(
-                    SplitScan(base_scan, sindex, plan.factor)
+                    SplitScan(ir.schema, base_scan, sindex, plan.factor)
                     for sindex in range(plan.factor)
                 )
             new_node = Union(ir.schema, None, *slices)
