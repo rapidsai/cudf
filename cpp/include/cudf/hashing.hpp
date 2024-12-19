@@ -167,6 +167,26 @@ std::unique_ptr<column> sha512(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Computes the XXHash_32 hash value of each row in the given table
+ *
+ * This function computes the hash of each column using the `seed` for the first column
+ * and the resulting hash as a seed for the next column and so on.
+ * The result is a uint32 value for each row.
+ *
+ * @param input The table of columns to hash
+ * @param seed Optional seed value to use for the hash function
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns A column where each row is the hash of a row from the input
+ */
+std::unique_ptr<column> xxhash_32(
+  table_view const& input,
+  uint32_t seed                     = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Computes the XXHash_64 hash value of each row in the given table
  *
  * This function takes a 64-bit seed value and returns a column of type UINT64.

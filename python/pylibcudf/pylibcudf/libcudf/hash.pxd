@@ -44,6 +44,11 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
         const table_view& input
     ) except +libcudf_exception_handler
 
+    cdef unique_ptr[column] xxhash_32(
+        const table_view& input,
+        const uint32_t seed
+    ) except +libcudf_exception_handler
+
     cdef unique_ptr[column] xxhash_64(
         const table_view& input,
         const uint64_t seed
