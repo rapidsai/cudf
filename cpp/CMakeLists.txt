@@ -276,7 +276,7 @@ rapids_cpm_init()
 
 # Not using rapids-cmake since we never want to find, always download.
 CPMAddPackage(
-  NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW TRUE GIT_TAG
+  NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW FALSE GIT_TAG
   c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55 VERSION c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55
 )
 rapids_make_logger(cudf EXPORT_SET cudf-exports)
@@ -916,7 +916,9 @@ if(CUDF_LARGE_STRINGS_DISABLED)
 endif()
 
 # Define logging level
-target_compile_definitions(cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=${LIBCUDF_LOGGING_LEVEL}")
+target_compile_definitions(
+  cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=CUDF_LOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}"
+)
 
 # Enable remote IO through KvikIO
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)

@@ -10,52 +10,138 @@ from pylibcudf.libcudf.io.avro cimport (
 )
 from pylibcudf.libcudf.types cimport size_type
 
-__all__ = ["read_avro"]
+__all__ = ["read_avro", "AvroReaderOptions", "AvroReaderOptionsBuilder"]
+
+
+cdef class AvroReaderOptions:
+    """
+    The settings to use for ``read_avro``
+    For details, see :cpp:class:`cudf::io::avro_reader_options`
+    """
+    @staticmethod
+    def builder(SourceInfo source):
+        """
+        Create a AvroWriterOptionsBuilder object
+
+        For details, see :cpp:func:`cudf::io::avro_reader_options::builder`
+
+        Parameters
+        ----------
+        sink : SourceInfo
+            The source to read the Avro file from.
+
+        Returns
+        -------
+        AvroReaderOptionsBuilder
+            Builder to build AvroReaderOptions
+        """
+        cdef AvroReaderOptionsBuilder avro_builder = AvroReaderOptionsBuilder.__new__(
+            AvroReaderOptionsBuilder
+        )
+        avro_builder.c_obj = avro_reader_options.builder(source.c_obj)
+        avro_builder.source = source
+        return avro_builder
+
+    cpdef void set_columns(self, list col_names):
+        """
+        Set names of the column to be read.
+
+        Parameters
+        ----------
+        col_names : list[str]
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] vec
+        vec.reserve(len(col_names))
+        for name in col_names:
+            vec.push_back(str(name).encode())
+        self.c_obj.set_columns(vec)
+
+
+cdef class AvroReaderOptionsBuilder:
+    cpdef AvroReaderOptionsBuilder columns(self, list col_names):
+        """
+        Set names of the column to be read.
+
+        Parameters
+        ----------
+        col_names : list
+            List of column names
+
+        Returns
+        -------
+        AvroReaderOptionsBuilder
+        """
+        cdef vector[string] vec
+        vec.reserve(len(col_names))
+        for name in col_names:
+            vec.push_back(str(name).encode())
+        self.c_obj.columns(vec)
+        return self
+
+    cpdef AvroReaderOptionsBuilder skip_rows(self, size_type skip_rows):
+        """
+        Sets number of rows to skip.
+
+        Parameters
+        ----------
+        skip_rows : size_type
+            Number of rows to skip from start
+
+        Returns
+        -------
+        AvroReaderOptionsBuilder
+        """
+        self.c_obj.skip_rows(skip_rows)
+        return self
+
+    cpdef AvroReaderOptionsBuilder num_rows(self, size_type num_rows):
+        """
+        Sets number of rows to read.
+
+        Parameters
+        ----------
+        num_rows : size_type
+            Number of rows to read after skip
+
+        Returns
+        -------
+        AvroReaderOptionsBuilder
+        """
+        self.c_obj.num_rows(num_rows)
+        return self
+
+    cpdef AvroReaderOptions build(self):
+        """Create a AvroReaderOptions object"""
+        cdef AvroReaderOptions avro_options = AvroReaderOptions.__new__(
+            AvroReaderOptions
+        )
+        avro_options.c_obj = move(self.c_obj.build())
+        avro_options.source = self.source
+        return avro_options
 
 
 cpdef TableWithMetadata read_avro(
-    SourceInfo source_info,
-    list columns = None,
-    size_type skip_rows = 0,
-    size_type num_rows = -1
+    AvroReaderOptions options
 ):
     """
-    Reads an Avro dataset into a :py:class:`~.types.TableWithMetadata`.
+    Read from Avro format.
+
+    The source to read from and options are encapsulated
+    by the `options` object.
 
     For details, see :cpp:func:`read_avro`.
 
     Parameters
     ----------
-    source_info: SourceInfo
-        The SourceInfo object to read the avro dataset from.
-    columns: list, default None
-        Optional columns to read, if not provided, reads all columns in the file.
-    skip_rows: size_type, default 0
-        The number of rows to skip.
-    num_rows: size_type, default -1
-        The number of rows to read, after skipping rows.
-        If -1 is passed, all rows will be read.
-
-    Returns
-    -------
-    TableWithMetadata
-        The Table and its corresponding metadata (column names) that were read in.
+    options: AvroReaderOptions
+        Settings for controlling reading behavior
     """
-    cdef vector[string] c_columns
-    if columns is not None and len(columns) > 0:
-        c_columns.reserve(len(columns))
-        for col in columns:
-            c_columns.push_back(str(col).encode())
-
-    cdef avro_reader_options avro_opts = (
-        avro_reader_options.builder(source_info.c_obj)
-        .columns(c_columns)
-        .skip_rows(skip_rows)
-        .num_rows(num_rows)
-        .build()
-    )
-
     with nogil:
-        c_result = move(cpp_read_avro(avro_opts))
+        c_result = move(cpp_read_avro(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)

@@ -10,7 +10,6 @@ import pytest
 
 import cudf
 from cudf import NA
-from cudf._lib.copying import get_element
 from cudf.api.types import is_scalar
 from cudf.core.column.column import column_empty
 from cudf.testing import assert_eq
@@ -715,9 +714,8 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
     ],
 )
 def test_list_scalar_device_construction(data):
-    col = cudf.Series([data])._column
-    slr = get_element(col, 0)
-    assert slr.value == data
+    res = cudf.Series([data])._column.element_indexing(0)
+    assert res == data
 
 
 @pytest.mark.parametrize("nesting_level", [1, 2, 3])
@@ -729,10 +727,8 @@ def test_list_scalar_device_construction_null(nesting_level):
     arrow_type = pa.infer_type(data)
     arrow_arr = pa.array([None], type=arrow_type)
 
-    col = cudf.Series(arrow_arr)._column
-    slr = get_element(col, 0)
-
-    assert slr.value is cudf.NA
+    res = cudf.Series(arrow_arr)._column.element_indexing(0)
+    assert res is cudf.NA
 
 
 @pytest.mark.parametrize("input_obj", [[[1, NA, 3]], [[1, NA, 3], [4, 5, NA]]])
