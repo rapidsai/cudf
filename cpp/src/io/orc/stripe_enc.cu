@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
@@ -44,7 +45,11 @@ namespace io {
 namespace orc {
 namespace gpu {
 
+namespace nvcomp = cudf::io::detail::nvcomp;
+
 using cudf::detail::device_2dspan;
+using cudf::io::detail::compression_result;
+using cudf::io::detail::compression_status;
 
 constexpr int scratch_buffer_size        = 512 * 4;
 constexpr int compact_streams_block_size = 1024;
@@ -1385,7 +1390,7 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
   if (compression == SNAPPY) {
     try {
       if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
-        gpu_snap(comp_in, comp_out, comp_res, stream);
+        cudf::io::detail::gpu_snap(comp_in, comp_out, comp_res, stream);
       } else {
         nvcomp::batched_compress(
           nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
@@ -1429,7 +1434,7 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);
 
   if (collect_statistics) {
-    return cudf::io::collect_compression_statistics(comp_in, comp_res, stream);
+    return cudf::io::detail::collect_compression_statistics(comp_in, comp_res, stream);
   } else {
     return std::nullopt;
   }
