@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -966,7 +965,7 @@ class udf_aggregation final : public rolling_aggregation {
 };
 
 /**
- * @brief Derived class for specifying a custom aggregation specified in host-based UDF.
+ * @brief Derived class for specifying host-based UDF aggregation.
  */
 class host_udf_aggregation final : public groupby_aggregation {
  public:
@@ -975,28 +974,16 @@ class host_udf_aggregation final : public groupby_aggregation {
   host_udf_aggregation()                            = delete;
   host_udf_aggregation(host_udf_aggregation const&) = delete;
 
-  explicit host_udf_aggregation(std::unique_ptr<host_udf_base> udf_ptr_)
-    : aggregation{HOST_UDF}, udf_ptr{std::move(udf_ptr_)}
-  {
-    CUDF_EXPECTS(udf_ptr != nullptr, "Invalid host-based UDF instance.");
-  }
+  // Need to define the constructor and destructor in a separate source file where we have the
+  // complete declaration of `host_udf_base`.
+  explicit host_udf_aggregation(std::unique_ptr<host_udf_base> udf_ptr_);
+  ~host_udf_aggregation() override;
 
-  [[nodiscard]] bool is_equal(aggregation const& _other) const override
-  {
-    if (!this->aggregation::is_equal(_other)) { return false; }
-    auto const& other = dynamic_cast<host_udf_aggregation const&>(_other);
-    return udf_ptr->is_equal(*other.udf_ptr);
-  }
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override;
 
-  [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ udf_ptr->do_hash();
-  }
+  [[nodiscard]] size_t do_hash() const override;
 
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<host_udf_aggregation>(udf_ptr->clone());
-  }
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override;
 
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
