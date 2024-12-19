@@ -27,9 +27,8 @@ void distinct_inner_join(nvbench::state& state,
       cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
         ? cudf::nullable_join::YES
         : cudf::nullable_join::NO;
-    auto hj_obj = cudf::distinct_hash_join<cudf::has_nested::NO>{
-      build_input, probe_input, has_nulls, compare_nulls};
-    return hj_obj.inner_join();
+    auto hj_obj = cudf::distinct_hash_join{build_input, has_nulls, compare_nulls};
+    return hj_obj.inner_join(probe_input);
   };
 
   BM_join<Key, Nullable>(state, join);
@@ -46,9 +45,8 @@ void distinct_left_join(nvbench::state& state,
       cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
         ? cudf::nullable_join::YES
         : cudf::nullable_join::NO;
-    auto hj_obj = cudf::distinct_hash_join<cudf::has_nested::NO>{
-      build_input, probe_input, has_nulls, compare_nulls};
-    return hj_obj.left_join();
+    auto hj_obj = cudf::distinct_hash_join{build_input, has_nulls, compare_nulls};
+    return hj_obj.left_join(probe_input);
   };
 
   BM_join<Key, Nullable>(state, join);
