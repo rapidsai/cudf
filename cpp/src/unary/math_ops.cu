@@ -234,6 +234,21 @@ struct DeviceNot {
   }
 };
 
+// negation
+
+struct DeviceNegate {
+  template <typename T, CUDF_ENABLE_IF(std::is_signed_v<T> || cudf::is_duration_t<T>::value)>
+  T __device__ operator()(T data)
+  {
+    return -data;
+  }
+  template <typename T, CUDF_ENABLE_IF(!std::is_signed_v<T> && !cudf::is_duration_t<T>::value)>
+  T __device__ operator()(T data)
+  {
+    return data;
+  }
+};
+
 // fixed_point ops
 
 /*
@@ -276,6 +291,12 @@ template <typename T>
 struct fixed_point_abs {
   T n;
   __device__ T operator()(T data) { return numeric::detail::abs(data); }
+};
+
+template <typename T>
+struct fixed_point_negate {
+  T n;
+  __device__ T operator()(T data) { return -data; }
 };
 
 template <typename T, template <typename> typename FixedPointFunctor>
@@ -361,9 +382,19 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
     output->view(), dictionary::detail::get_indices_type_for_size(output->size()), stream, mr);
 }
 
+template <typename UFN, typename T>
+struct is_supported_type : std::is_arithmetic<T> {};
+
+template <typename T>
+struct is_supported_type<DeviceNegate, T>
+  : std::disjunction<std::is_arithmetic<T>, cudf::is_duration_t<T>> {};
+
+template <typename UFN, typename T>
+constexpr bool is_supported_type_v = is_supported_type<UFN, T>::value;
+
 template <typename UFN>
 struct MathOpDispatcher {
-  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<is_supported_type_v<UFN, T>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
@@ -377,7 +408,7 @@ struct MathOpDispatcher {
   }
 
   struct dictionary_dispatch {
-    template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+    template <typename T, std::enable_if_t<is_supported_type_v<UFN, T>>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
@@ -394,7 +425,7 @@ struct MathOpDispatcher {
 
   template <
     typename T,
-    std::enable_if_t<!std::is_arithmetic_v<T> and std::is_same_v<T, dictionary32>>* = nullptr>
+    std::enable_if_t<!is_supported_type_v<UFN, T> and std::is_same_v<T, dictionary32>>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
@@ -406,7 +437,7 @@ struct MathOpDispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic_v<T> and !std::is_same_v<T, dictionary32>,
+  std::enable_if_t<!is_supported_type_v<UFN, T> and !std::is_same_v<T, dictionary32>,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&...)
   {
@@ -550,9 +581,10 @@ struct FixedPointOpDispatcher {
   {
     // clang-format off
     switch (op) {
-      case cudf::unary_operator::CEIL:  return unary_op_with<T, fixed_point_ceil>(input, stream, mr);
-      case cudf::unary_operator::FLOOR: return unary_op_with<T, fixed_point_floor>(input, stream, mr);
-      case cudf::unary_operator::ABS:   return unary_op_with<T, fixed_point_abs>(input, stream, mr);
+      case cudf::unary_operator::CEIL:   return unary_op_with<T, fixed_point_ceil>(input, stream, mr);
+      case cudf::unary_operator::FLOOR:  return unary_op_with<T, fixed_point_floor>(input, stream, mr);
+      case cudf::unary_operator::ABS:    return unary_op_with<T, fixed_point_abs>(input, stream, mr);
+      case cudf::unary_operator::NEGATE: return unary_op_with<T, fixed_point_negate>(input, stream, mr);
       default: CUDF_FAIL("Unsupported fixed_point unary operation");
     }
     // clang-format on
@@ -639,6 +671,11 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
     case cudf::unary_operator::NOT:
       return cudf::type_dispatcher(
         input.type(), detail::LogicalOpDispatcher<detail::DeviceNot>{}, input, stream, mr);
+    case cudf::unary_operator::NEGATE:
+      CUDF_EXPECTS(cudf::is_signed(input.type()) || cudf::is_duration(input.type()),
+                   "NEGATE operator requires signed numeric types or duration types.");
+      return cudf::type_dispatcher(
+        input.type(), detail::MathOpDispatcher<detail::DeviceNegate>{}, input, stream, mr);
     default: CUDF_FAIL("Undefined unary operation");
   }
 }
