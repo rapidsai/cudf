@@ -167,7 +167,7 @@ def _(dtype: CategoricalDtype, str_agg: str) -> bool:
 
 def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
     """
-    Returns true if all are scan aggregations.
+    Returns True if all are scan aggregations.
 
     Raises
     ------
@@ -809,7 +809,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     or agg_obj.kind in valid_aggregations
                 ):
                     included_aggregations_i.append((agg, agg_obj.kind))
-                    col_aggregations.append(agg_obj.c_obj)
+                    col_aggregations.append(agg_obj.plc_obj)
             included_aggregations.append(included_aggregations_i)
             result_columns.append([])
             if col_aggregations:
