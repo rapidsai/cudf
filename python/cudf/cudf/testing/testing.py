@@ -692,8 +692,8 @@ def assert_frame_equal(
     )
 
     pd.testing.assert_index_equal(
-        left._data.to_pandas_index(),
-        right._data.to_pandas_index(),
+        left._data.to_pandas_index,
+        right._data.to_pandas_index,
         exact=check_column_type,
         check_names=check_names,
         check_exact=check_exact,

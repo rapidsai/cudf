@@ -10,12 +10,12 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
 import cudf.core.column.column as column
-import cudf.core.column.string as string
-from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
-from cudf.core._internals import unary
+from cudf.core._internals import binaryop, unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -188,8 +188,8 @@ class TimeDeltaColumn(ColumnBase):
                 this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
                     if other.is_valid():
-                        other = other.value.astype(common_dtype).astype(
-                            out_dtype
+                        other = cudf.Scalar(
+                            other.value.astype(common_dtype).astype(out_dtype)
                         )
                     else:
                         other = cudf.Scalar(None, out_dtype)
@@ -219,10 +219,8 @@ class TimeDeltaColumn(ColumnBase):
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
-        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if cudf.get_option(
-            "mode.pandas_compatible"
-        ) and out_dtype == cudf.dtype(np.bool_):
+        result = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b":
             result = result.fillna(op == "__ne__")
         return result
 
@@ -297,12 +295,15 @@ class TimeDeltaColumn(ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object", masked=False),
+                column.column_empty(0, dtype="object"),
             )
         else:
-            return string._timedelta_to_str_typecast_functions[self.dtype](
-                self, format=format
-            )
+            with acquire_spill_lock():
+                return type(self).from_pylibcudf(  # type: ignore[return-value]
+                    plc.strings.convert.convert_durations.from_durations(
+                        self.to_pylibcudf(mode="read"), format
+                    )
+                )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self.strftime("%D days %H:%M:%S")

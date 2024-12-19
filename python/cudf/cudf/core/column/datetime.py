@@ -19,10 +19,9 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-import cudf.core.column.string as string
 from cudf import _lib as libcudf
 from cudf.core._compat import PANDAS_GE_220
-from cudf.core._internals import unary
+from cudf.core._internals import binaryop, unary
 from cudf.core._internals.search import search_sorted
 from cudf.core._internals.timezones import (
     check_ambiguous_and_nonexistent,
@@ -354,9 +353,7 @@ class DatetimeColumn(column.ColumnBase):
 
         leap = day_of_year == cudf.Scalar(366)
         non_leap = day_of_year == cudf.Scalar(365)
-        return libcudf.copying.copy_if_else(leap, non_leap, leap_dates).fillna(
-            False
-        )
+        return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
     @property
     def is_leap_year(self) -> ColumnBase:
@@ -509,7 +506,9 @@ class DatetimeColumn(column.ColumnBase):
             )
         }
 
-    def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
+    def normalize_binop_value(  # type: ignore[override]
+        self, other: DatetimeLikeScalar
+    ) -> cudf.Scalar | cudf.DateOffset | ColumnBase:
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
@@ -596,17 +595,20 @@ class DatetimeColumn(column.ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object", masked=False),
+                column.column_empty(0, dtype="object"),
             )
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = cudf.core.column.column_empty(
-                0, dtype="object", masked=False
+            names = column.column_empty(0, dtype="object")
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(  # type: ignore[return-value]
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    self.to_pylibcudf(mode="read"),
+                    format,
+                    names.to_pylibcudf(mode="read"),
+                )
             )
-        return string._datetime_to_str_typecast_functions[self.dtype](
-            self, format, names
-        )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         format = _dtype_to_format_conversion.get(
@@ -789,12 +791,12 @@ class DatetimeColumn(column.ColumnBase):
         if out_dtype is None:
             return NotImplemented
 
-        result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if out_dtype != cudf.dtype(np.bool_) and op == "__add__":
+        result_col = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if out_dtype.kind != "b" and op == "__add__":
             return result_col
-        elif cudf.get_option(
-            "mode.pandas_compatible"
-        ) and out_dtype == cudf.dtype(np.bool_):
+        elif (
+            cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b"
+        ):
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
@@ -1014,7 +1016,7 @@ class DatetimeTZColumn(DatetimeColumn):
                 self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
             )
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return pa.compute.assume_timezone(
             self._local_time.to_arrow(), str(self.dtype.tz)
         )

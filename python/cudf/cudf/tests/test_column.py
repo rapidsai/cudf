@@ -7,7 +7,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
@@ -489,9 +488,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data["a"]]
-    got_mask = mask_to_bools(
-        gd_data["a"]._column.base_mask, 0, len(gd_data)
-    ).values_host
+    got_mask = gd_data["a"]._column._get_mask_as_column().values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -527,9 +524,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data]
-    got_mask = mask_to_bools(
-        gd_data._column.base_mask, 0, len(gd_data)
-    ).values_host
+    got_mask = gd_data._column._get_mask_as_column().values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 

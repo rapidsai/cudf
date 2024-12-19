@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.transform import one_hot_encode
+from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
@@ -429,8 +431,9 @@ def concat(
 
             result_columns = (
                 objs[0]
-                ._data.to_pandas_index()
-                .append([obj._data.to_pandas_index() for obj in objs[1:]])
+                ._data.to_pandas_index.append(
+                    [obj._data.to_pandas_index for obj in objs[1:]]
+                )
                 .unique()
             )
 
@@ -687,7 +690,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index().dtype
+            value_vars, dtype=frame._data.to_pandas_index.dtype
         )
     else:
         var_data = (
@@ -941,21 +944,46 @@ def _merge_sorted(
                 idx + objs[0].index.nlevels for idx in key_columns_indices
             ]
 
-    columns = [
-        [
-            *(obj.index._columns if not ignore_index else ()),
-            *obj._columns,
-        ]
+    columns = (
+        itertools.chain(obj.index._columns, obj._columns)
+        if not ignore_index
+        else obj._columns
         for obj in objs
+    )
+
+    input_tables = [
+        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns])
+        for source_columns in columns
+    ]
+
+    num_keys = len(key_columns_indices)
+
+    column_order = (
+        plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING
+    )
+
+    if not ascending:
+        na_position = "last" if na_position == "first" else "first"
+
+    null_precedence = (
+        plc.types.NullOrder.BEFORE
+        if na_position == "first"
+        else plc.types.NullOrder.AFTER
+    )
+
+    plc_table = plc.merge.merge(
+        input_tables,
+        key_columns_indices,
+        [column_order] * num_keys,
+        [null_precedence] * num_keys,
+    )
+
+    result_columns = [
+        Column.from_pylibcudf(col) for col in plc_table.columns()
     ]
 
     return objs[0]._from_columns_like_self(
-        cudf._lib.merge.merge_sorted(
-            input_columns=columns,
-            key_columns_indices=key_columns_indices,
-            ascending=ascending,
-            na_position=na_position,
-        ),
+        result_columns,
         column_names=objs[0]._column_names,
         index_names=None if ignore_index else objs[0]._index_names,
     )
@@ -1002,7 +1030,8 @@ def _pivot(
                 {
                     name: idx._column
                     for name, idx in zip(
-                        names, target._split(range(nrows, new_size, nrows))
+                        names,
+                        target._split(list(range(nrows, new_size, nrows))),
                     )
                 }
             )
@@ -1245,7 +1274,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
-            tuple(df._data.to_pandas_index().names) + df.index.names
+            tuple(df._data.to_pandas_index.names) + df.index.names
         )
         return res
     else:
@@ -1310,7 +1339,11 @@ def _one_hot_encode_column(
             f"np.iinfo({size_type_dtype}).max. Consider reducing "
             "size of category"
         )
-    data = one_hot_encode(column, categories)
+    result_labels = (
+        x if x is not None else "<NA>"
+        for x in categories.to_arrow().to_pylist()
+    )
+    data = dict(zip(result_labels, column.one_hot_encode(categories)))
 
     if drop_first and len(data):
         data.pop(next(iter(data)))

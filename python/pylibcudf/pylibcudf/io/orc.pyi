@@ -1,6 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from typing import Any, Self
+from typing import Any
+
+from typing_extensions import Self
 
 from pylibcudf.io.types import (
     CompressionType,
@@ -11,19 +13,21 @@ from pylibcudf.io.types import (
     TableWithMetadata,
 )
 from pylibcudf.table import Table
-from pylibcudf.types import DataType
 
-def read_orc(
-    source_info: SourceInfo,
-    columns: list[str] | None = None,
-    stripes: list[list[int]] | None = None,
-    skip_rows: int = 0,
-    nrows: int = -1,
-    use_index: bool = True,
-    use_np_dtypes: bool = True,
-    timestamp_type: DataType | None = None,
-    decimal128_columns: list[str] | None = None,
-) -> TableWithMetadata: ...
+class OrcReaderOptions:
+    def set_num_rows(self, nrows: int) -> None: ...
+    def set_skip_rows(self, skip_rows: int) -> None: ...
+    def set_stripes(self, stripes: list[list[int]]) -> None: ...
+    def set_decimal128_columns(self, val: list[str]) -> None: ...
+    def set_columns(self, col_names: list[str]) -> None: ...
+    @staticmethod
+    def builder(source: SourceInfo) -> OrcReaderOptionsBuilder: ...
+
+class OrcReaderOptionsBuilder:
+    def use_index(self, use: bool) -> Self: ...
+    def build(self) -> OrcReaderOptions: ...
+
+def read_orc(options: OrcReaderOptions) -> TableWithMetadata: ...
 
 class OrcColumnStatistics:
     def __init__(self): ...
