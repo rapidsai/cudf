@@ -25,11 +25,5 @@ include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 # find or build it via CPM
 CPMFindPackage(
   NAME cudf
-  FIND_PACKAGE_ARGUMENTS "PATHS ${cudf_ROOT} ${cudf_ROOT}/latest" GIT_REPOSITORY
-                         https://github.com/rapidsai/cudf
-  GIT_TAG ${CUDF_TAG}
-  GIT_SHALLOW
-    TRUE
-    SOURCE_SUBDIR
-    cpp
+  FIND_PACKAGE_ARGUMENTS "REQUIRED PATHS ${cudf_ROOT}/latest"
 )
