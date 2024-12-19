@@ -34,8 +34,6 @@ namespace cudf {
 namespace detail {
 namespace cg = cooperative_groups;
 
-#pragma GCC diagnostic ignored "-Wattributes"
-
 template <int block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
   compute_mixed_join_output_size(table_device_view left_table,
