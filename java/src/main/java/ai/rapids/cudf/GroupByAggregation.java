@@ -278,6 +278,15 @@ public final class GroupByAggregation {
   }
 
   /**
+   * Execute an aggregation using a host-side user-defined function (UDF).
+   * @param TODO
+   * @return A new GroupByAggregation instance
+   */
+  public static GroupByAggregation hostUDF(HostUDFWrapper wrapper) {
+    return new GroupByAggregation(Aggregation.hostUDF(wrapper));
+  }
+
+  /**
    * Merge the partial sets produced by multiple CollectSetAggregations.
    *
    * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
