@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>

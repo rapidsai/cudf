@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/reduction.hpp>
