@@ -285,12 +285,7 @@ def _table_to_schema(Table tbl, metadata):
     if metadata is None:
         metadata = [_maybe_create_nested_column_metadata(col) for col in tbl.columns()]
     else:
-        metadata = [
-            _maybe_create_nested_column_metadata(m)
-            if isinstance(m, str)
-            else m
-            for m in metadata
-        ]
+        metadata = [ColumnMetadata(m) if isinstance(m, str) else m for m in metadata]
 
     cdef vector[column_metadata] c_metadata
     c_metadata.reserve(len(metadata))
