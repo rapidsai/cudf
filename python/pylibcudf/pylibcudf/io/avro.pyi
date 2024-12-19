@@ -1,7 +1,5 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from rmm._cuda.stream import Stream
-
 from pylibcudf.io.types import SourceInfo, TableWithMetadata
 
 __all__ = ["AvroReaderOptions", "AvroReaderOptionsBuilder", "read_avro"]
@@ -16,6 +14,4 @@ class AvroReaderOptionsBuilder:
     def num_rows(num_rows: int) -> AvroReaderOptionsBuilder: ...
     def build(self) -> AvroReaderOptions: ...
 
-def read_avro(
-    options: AvroReaderOptions, stream: Stream = None
-) -> TableWithMetadata: ...
+def read_avro(options: AvroReaderOptions) -> TableWithMetadata: ...

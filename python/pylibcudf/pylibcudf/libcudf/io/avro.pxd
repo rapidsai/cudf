@@ -47,5 +47,4 @@ cdef extern from "cudf/io/avro.hpp" \
 
     cdef cudf_io_types.table_with_metadata read_avro(
         avro_reader_options &options,
-        cuda_stream_view stream,
     ) except +libcudf_exception_handler
