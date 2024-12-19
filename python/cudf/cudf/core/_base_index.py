@@ -1447,7 +1447,7 @@ class BaseIndex(Serializable):
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
         res = res.sort_values(
-            by=res._data.to_pandas_index()[1:], ignore_index=True
+            by=res._data.to_pandas_index[1:], ignore_index=True
         )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 

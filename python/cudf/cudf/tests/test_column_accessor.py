@@ -64,7 +64,7 @@ def test_to_pandas_simple(simple_data):
     # Index([], dtype='object'), and `integer` for RangeIndex()
     # to ignore this `inferred_type` comparison, we pass exact=False.
     assert_eq(
-        ca.to_pandas_index(),
+        ca.to_pandas_index,
         pd.DataFrame(
             {key: value.values_host for key, value in simple_data.items()}
         ).columns,
@@ -75,7 +75,7 @@ def test_to_pandas_simple(simple_data):
 def test_to_pandas_multiindex(mi_data):
     ca = ColumnAccessor(mi_data, multiindex=True)
     assert_eq(
-        ca.to_pandas_index(),
+        ca.to_pandas_index,
         pd.DataFrame(
             {key: value.values_host for key, value in mi_data.items()}
         ).columns,
@@ -89,7 +89,7 @@ def test_to_pandas_multiindex_names():
         level_names=("foo", "bar"),
     )
     assert_eq(
-        ca.to_pandas_index(),
+        ca.to_pandas_index,
         pd.MultiIndex.from_tuples(
             (("a", "b"), ("c", "d")), names=("foo", "bar")
         ),

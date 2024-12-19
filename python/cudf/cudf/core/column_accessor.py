@@ -207,10 +207,15 @@ class ColumnAccessor(abc.MutableMapping):
 
     @property
     def level_names(self) -> tuple[abc.Hashable, ...]:
+        if self.is_cached("to_pandas_index"):
+            return self.to_pandas_index.names
         if self._level_names is None or len(self._level_names) == 0:
             return tuple((None,) * max(1, self.nlevels))
         else:
             return self._level_names
+
+    def is_cached(self, attr_name: str) -> bool:
+        return attr_name in self.__dict__
 
     @property
     def nlevels(self) -> int:
@@ -262,7 +267,12 @@ class ColumnAccessor(abc.MutableMapping):
         new_ncols: int
             len(self) after self._data was modified
         """
-        cached_properties = ("columns", "names", "_grouped_data")
+        cached_properties = (
+            "columns",
+            "names",
+            "_grouped_data",
+            "to_pandas_index",
+        )
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
@@ -276,6 +286,7 @@ class ColumnAccessor(abc.MutableMapping):
             except AttributeError:
                 pass
 
+    @cached_property
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
@@ -726,10 +737,10 @@ class ColumnAccessor(abc.MutableMapping):
         }
         new_ncols = len(self)
         self._level_names = (
-            self._level_names[:level] + self._level_names[level + 1 :]
+            self.level_names[:level] + self.level_names[level + 1 :]
         )
 
-        if len(self._level_names) == 1:
+        if len(self.level_names) == 1:
             # can't use nlevels, as it depends on multiindex
             self.multiindex = False
         self._clear_cache(old_ncols, new_ncols)
