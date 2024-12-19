@@ -277,13 +277,20 @@ struct column_name_info {
 struct table_metadata {
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
-  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source.
+  std::vector<size_t> num_rows_per_source;  //!< Number of rows read from each data source
                                             //!< Currently only computed for Parquet readers if no
-                                            //!< AST filters being used. Empty vector otherwise.
+                                            //!< AST filters being used. Empty vector otherwise
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
                                                  //!< file as key-values pairs (deprecated)
   std::vector<std::unordered_map<std::string, std::string>>
     per_file_user_data;  //!< Per file format-dependent metadata as key-values pairs
+
+  size_t num_input_row_groups;  //!< Number of input row groups across all data sources. Currently
+                                //!< only computed for Parquet reader
+  size_t num_stats_filtered_row_groups;  //!< Number of row groups after applying stats filter.
+                                         //!< Currently only computed for Parquet reader
+  size_t num_bloom_filtered_row_groups;  //!< Number of row groups after applying bloom filter.
+                                         //!< Currently only computed for Parquet reader
 };
 
 /**

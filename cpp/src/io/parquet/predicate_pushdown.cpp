@@ -390,7 +390,8 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
+std::tuple<std::optional<std::vector<std::vector<size_type>>>, size_t, size_t, size_t>
+aggregate_reader_metadata::filter_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -479,7 +480,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
                   is_row_group_required.cend(),
                   [](auto i) { return bool(i); }) or
       predicate.null_count() == predicate.size()) {
-    return std::nullopt;
+    return {std::nullopt, total_row_groups, total_row_groups, total_row_groups};
   }
   size_type is_required_idx = 0;
   for (auto const& input_row_group_index : input_row_group_indices) {
@@ -492,7 +493,20 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     }
     filtered_row_group_indices.push_back(std::move(filtered_row_groups));
   }
-  return {std::move(filtered_row_group_indices)};
+
+  // Compute
+  auto const num_stats_filtered_row_groups =
+    std::accumulate(filtered_row_group_indices.begin(),
+                    filtered_row_group_indices.end(),
+                    0,
+                    [](size_type sum, auto const& per_file_row_groups) {
+                      return sum + per_file_row_groups.size();
+                    });
+
+  return {std::move(filtered_row_group_indices),
+          total_row_groups,
+          num_stats_filtered_row_groups,
+          num_stats_filtered_row_groups};  // bloom filtering not yet available
 }
 
 // convert column named expression to column index reference expression
