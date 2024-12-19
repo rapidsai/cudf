@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -156,28 +155,21 @@ struct host_udf_base {
                              std::is_same_v<T, groupby_aggregation>)>
     data_attribute(std::unique_ptr<T> value_) : value{std::move(value_)}
     {
+      CUDF_EXPECTS(std::get<std::unique_ptr<aggregation>>(value) != nullptr,
+                   "Invalid aggregation request.");
       if constexpr (std::is_same_v<T, aggregation>) {
         CUDF_EXPECTS(
           dynamic_cast<groupby_aggregation*>(std::get<std::unique_ptr<T>>(value).get()) != nullptr,
           "Requesting results from other aggregations is only supported in groupby "
           "aggregations.");
       }
-      CUDF_EXPECTS(std::get<std::unique_ptr<aggregation>>(value) != nullptr,
-                   "Invalid aggregation request.");
     }
 
     /**
      * @brief Copy constructor.
      * @param other The other data attribute to copy from
      */
-    data_attribute(data_attribute const& other)
-      : value{std::visit(
-          cudf::detail::visitor_overload{
-            [](auto const& val) { return value_type{val}; },
-            [](std::unique_ptr<aggregation> const& val) { return value_type{val->clone()}; }},
-          other.value)}
-    {
-    }
+    data_attribute(data_attribute const& other);
 
     /**
      * @brief Hash functor for `data_attribute`.
@@ -188,15 +180,7 @@ struct host_udf_base {
        * @param attr The data attribute to hash
        * @return The hash value of the data attribute
        */
-      std::size_t operator()(data_attribute const& attr) const
-      {
-        auto const hash_value =
-          std::visit(cudf::detail::visitor_overload{
-                       [](auto const& val) { return std::hash<int>{}(static_cast<int>(val)); },
-                       [](std::unique_ptr<aggregation> const& val) { return val->do_hash(); }},
-                     attr.value);
-        return std::hash<std::size_t>{}(attr.value.index()) ^ hash_value;
-      }
+      std::size_t operator()(data_attribute const& attr) const;
     };  // struct hash
 
     /**
@@ -209,26 +193,7 @@ struct host_udf_base {
        * @param rhs The right-hand side data attribute
        * @return True if the two data attributes are equal
        */
-      bool operator()(data_attribute const& lhs, data_attribute const& rhs) const
-      {
-        auto const& lhs_val = lhs.value;
-        auto const& rhs_val = rhs.value;
-        if (lhs_val.index() != rhs_val.index()) { return false; }
-        return std::visit(cudf::detail::visitor_overload{
-                            [](auto const& lhs_val, auto const& rhs_val) {
-                              if constexpr (std::is_same_v<decltype(lhs_val), decltype(rhs_val)>) {
-                                return lhs_val == rhs_val;
-                              } else {
-                                return false;
-                              }
-                            },
-                            [](std::unique_ptr<aggregation> const& lhs_val,
-                               std::unique_ptr<aggregation> const& rhs_val) {
-                              return lhs_val->is_equal(*rhs_val);
-                            }},
-                          lhs_val,
-                          rhs_val);
-      }
+      bool operator()(data_attribute const& lhs, data_attribute const& rhs) const;
     };  // struct equal_to
   };    // struct data_attribute
 
