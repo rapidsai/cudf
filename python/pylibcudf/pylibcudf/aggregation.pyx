@@ -122,6 +122,108 @@ cdef class Aggregation:
     def __hash__(self):
         return dereference(self.c_obj).do_hash()
 
+    def __reduce__(self):
+        cdef std_var_aggregation *std_var_cast
+        cdef quantile_aggregation *quantile_cast
+        cdef nunique_aggregation *nunique_cast
+        cdef nth_element_aggregation *nth_element_cast
+        cdef ewma_aggregation *ewma_cast
+        cdef rank_aggregation *rank_cast
+        cdef collect_list_aggregation *collect_list_cast
+        cdef collect_set_aggregation *collect_set_cast
+        cdef udf_aggregation *udf_cast
+        cdef correlation_aggregation *correlation_cast
+        cdef covariance_aggregation *covariance_cast
+
+        if self.kind() is Kind.SUM:
+            return (sum, ())
+        elif self.kind() is Kind.PRODUCT:
+            return (product, ())
+        elif self.kind() is Kind.MIN:
+            return (min, ())
+        elif self.kind() is Kind.MAX:
+            return (max, ())
+        elif self.kind() is Kind.COUNT_ALL:
+            return (count, (null_policy.INCLUDE,))
+        elif self.kind() is Kind.COUNT_VALID:
+            return (count, (null_policy.EXCLUDE,))
+        elif self.kind() is Kind.ANY:
+            return (any, ())
+        elif self.kind() is Kind.ALL:
+            return (all, ())
+        elif self.kind() is Kind.SUM_OF_SQUARES:
+            return (sum_of_squares, ())
+        elif self.kind() is Kind.MEAN:
+            return (mean, ())
+        elif self.kind() is Kind.VARIANCE:
+            std_var_cast = dynamic_cast[std_var_ptr](self.c_obj.get())
+            return (variance, (std_var_cast._ddof,))
+        elif self.kind() is Kind.STD:
+            std_var_cast = dynamic_cast[std_var_ptr](self.c_obj.get())
+            return (std, (std_var_cast._ddof,))
+        elif self.kind() is Kind.MEDIAN:
+            return (median, ())
+        elif self.kind() is Kind.QUANTILE:
+            quantile_cast = dynamic_cast[quantile_ptr](self.c_obj.get())
+            return (quantile, (quantile_cast._quantiles, quantile_cast._interpolation))
+        elif self.kind() is Kind.ARGMAX:
+            return (argmax, ())
+        elif self.kind() is Kind.ARGMIN:
+            return (argmin, ())
+        elif self.kind() is Kind.NUNIQUE:
+            nunique_cast = dynamic_cast[nunique_ptr](self.c_obj.get())
+            return (nunique, (nunique_cast._null_handling,))
+        elif self.kind() is Kind.NTH_ELEMENT:
+            nth_element_cast = dynamic_cast[nth_element_ptr](self.c_obj.get())
+            return (nth_element, (nth_element_cast._n, nth_element_cast._null_handling))
+        elif self.kind() is Kind.EWMA:
+            ewma_cast = dynamic_cast[ewma_ptr](self.c_obj.get())
+            return (ewma, (ewma_cast.center_of_mass, ewma_cast.history))
+        elif self.kind() is Kind.RANK:
+            rank_cast = dynamic_cast[rank_ptr](self.c_obj.get())
+            return (
+                rank, (
+                    rank_cast._method,
+                    rank_cast._column_order,
+                    rank_cast._null_handling,
+                    rank_cast._null_precedence,
+                    rank_cast._percentage
+                )
+            )
+        elif self.kind() is Kind.COLLECT_LIST:
+            collect_list_cast = dynamic_cast[collect_list_ptr](self.c_obj.get())
+            return (collect_list, (collect_list_cast._null_handling, ))
+        elif self.kind() is Kind.COLLECT_SET:
+            collect_set_cast = dynamic_cast[collect_set_ptr](self.c_obj.get())
+            return (
+                collect_set, (
+                    collect_set_cast._null_handling,
+                    collect_set_cast._nulls_equal,
+                    collect_set_cast._nans_equal
+                )
+            )
+        elif self.kind() in (Kind.CUDA, Kind.PTX):
+            udf_cast = dynamic_cast[udf_ptr](self.c_obj.get())
+            return (
+                udf, (
+                    udf_cast._source.decode("utf-8"),
+                    DataType.from_libcudf(udf_cast._output_type)
+                )
+            )
+        elif self.kind() is Kind.CORRELATION:
+            correlation_cast = dynamic_cast[correlation_ptr](self.c_obj.get())
+            return (
+                correlation, (
+                    correlation_cast._type,
+                    correlation_cast._min_periods
+                )
+            )
+        elif self.kind() is Kind.COVARIANCE:
+            covariance_cast = dynamic_cast[covariance_ptr](self.c_obj.get())
+            return (covariance, (covariance_cast._min_periods, covariance_cast._ddof))
+        else:
+            raise ValueError("Unsupported kind")
+
     # TODO: Ideally we would include the return type here, but we need to do so
     # in a way that Sphinx understands (currently have issues due to
     # https://github.com/cython/cython/issues/5609).
