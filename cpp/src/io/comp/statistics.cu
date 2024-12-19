@@ -21,7 +21,7 @@
 #include <cuda/functional>
 #include <thrust/transform_reduce.h>
 
-namespace cudf::io {
+namespace cudf::io::detail {
 
 writer_compression_statistics collect_compression_statistics(
   device_span<device_span<uint8_t const> const> inputs,
@@ -61,4 +61,4 @@ writer_compression_statistics collect_compression_statistics(
                                        output_size_successful};
 }
 
-}  // namespace cudf::io
+}  // namespace cudf::io::detail

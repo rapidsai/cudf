@@ -49,8 +49,7 @@ Mark Adler    madler@alumni.caltech.edu
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
 
 constexpr int max_bits    = 15;   // maximum bits in a code
 constexpr int max_l_codes = 286;  // maximum number of literal/length codes
@@ -1139,7 +1138,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         default: return compression_status::FAILURE;
       }
     }();
-    results[z].reserved = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
 
@@ -1224,5 +1222,4 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   }
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

@@ -71,6 +71,8 @@
 
 namespace cudf::io::orc::detail {
 
+namespace nvcomp = cudf::io::detail::nvcomp;
+
 template <typename T>
 [[nodiscard]] constexpr int varint_size(T val)
 {
@@ -2023,8 +2025,8 @@ size_t max_compression_output_size(CompressionKind compression_kind, uint32_t co
 {
   if (compression_kind == NONE) return 0;
 
-  return compress_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
-                                        compression_blocksize);
+  return nvcomp::compress_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
+                                                compression_blocksize);
 }
 
 std::unique_ptr<table_input_metadata> make_table_meta(table_view const& input)
