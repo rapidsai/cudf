@@ -124,11 +124,11 @@ struct host_udf_groupby_example : cudf::host_udf_base {
         input.at(cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
 
       auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
-      auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
-                                              num_groups,
-                                              cudf::mask_state::UNALLOCATED,
-                                              stream,
-                                              mr);
+      auto const output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
+                                                    num_groups,
+                                                    cudf::mask_state::UNALLOCATED,
+                                                    stream,
+                                                    mr);
 
       // Store row index if it is valid, otherwise store a negative value denoting a null row.
       rmm::device_uvector<cudf::size_type> valid_idx(num_groups, stream);
