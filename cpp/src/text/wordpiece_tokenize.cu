@@ -45,9 +45,9 @@
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/logical.h>
-#include <thrust/transform.h>
+#include <thrust/find.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/remove.h>
 
 namespace nvtext {
 namespace detail {
@@ -325,60 +325,60 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
 
   auto const begin        = d_str.data();
   auto const end          = begin + d_str.size_bytes();
-  auto const d_output     = d_tokens + (idx * max_tokens);
+  auto const d_output     = d_tokens + (str_idx * max_tokens);
   auto const d_output_end = d_output + max_tokens;
 
   __shared__ cudf::size_type s_tokens[block_size];
   __shared__ cudf::size_type token_count;
+  __shared__ cudf::size_type byte_count;
   using block_reduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename block_reduce::TempStorage temp_storage;
 
-  auto const lane_idx = idx % block_size;
-  // init
-  s_tokens[lane_idx] = cuda::std::numeric_limits<cudf::size_type>::max();
+  auto const lane_idx   = idx % block_size;
+  auto const init_token = cuda::std::numeric_limits<cudf::size_type>::max();
+
+  // initialize data
+  s_tokens[lane_idx] = init_token;
   token_count        = 0;
+  byte_count         = 0;
+  for (auto i = lane_idx; i < max_tokens; i += block_size) {
+    d_output[i] = init_token;
+  }
   __syncthreads();
 
   auto itr  = begin + lane_idx;
   auto oitr = d_output;
 
-  while (token_count < max_tokens) {
-    cudf::size_type tcount = 0;
+  while (token_count < max_tokens && byte_count < d_str.size_bytes()) {
+    cudf::size_type word_tokens = 0;
     if (itr < end) {
-      auto const ch = *itr;
-      if ((ch != ' ') && ((lane_idx == 0) || (*(itr - 1) == ' '))) {
-        // at the front edge of a word; find the end
-        auto wend = itr + 1;
-        while (wend < end && *wend != ' ') {
-          ++wend;
-        }
-        auto bytes = static_cast<cudf::size_type>(thrust::distance(itr, wend));
-        // lookup token and place them in (s_tokens+lane_idx)
-        auto token = cudf::string_view{itr, bytes};
-        tcount     = wp_tokenize_fn(d_strings, token, d_map, d_map2, s_tokens + lane_idx);
+      // look into processing multiple bytes per iteration (thread) here
+      if ((*itr != ' ') && ((itr == begin) || (*(itr - 1) == ' '))) {
+        // itr is the front edge of a word; find its end
+        auto const word_end = thrust::find(thrust::seq, itr, end, ' ');
+        auto const bytes    = static_cast<cudf::size_type>(thrust::distance(itr, word_end));
+        // lookup token(s) for this word and place them in (s_tokens+lane_idx)
+        auto word   = cudf::string_view{itr, bytes};
+        word_tokens = wp_tokenize_fn(d_strings, word, d_map, d_map2, s_tokens + lane_idx);
       }
     }
-    auto count = block_reduce(temp_storage).Sum(tcount);
+    auto count = block_reduce(temp_storage).Sum(word_tokens);
     __syncthreads();
 
     if (lane_idx == 0) {
-      // need to read the non-max s_tokens into global memory
-      // up to the max_tokens and re-init if we are continuing
-      count = cuda::std::min(count, max_tokens - token_count);
-      for (auto i = 0; i < count && oitr < d_output_end; ++i) {
-        if (s_tokens[i] < cuda::std::numeric_limits<cudf::size_type>::max()) {
-          *oitr++ = s_tokens[i];
-        }
+      // need to read the valid s_tokens into global memory
+      for (auto i = 0; (i < block_size) && (oitr < d_output_end); ++i) {
+        if (s_tokens[i] < init_token) { *oitr++ = s_tokens[i]; }
       }
-      token_count += count;
+      token_count += cuda::std::min(count, max_tokens - token_count);
+      byte_count += block_size;
     }
     __syncthreads();
 
-    s_tokens[lane_idx] = cuda::std::numeric_limits<cudf::size_type>::max();
+    s_tokens[lane_idx] = init_token;
     __syncthreads();
 
-    // maybe also keep track of the actual tokens in this string
-    // and return that number in order to build the final offsets
+    itr += block_size;
   }
 
   if (lane_idx == 0) { d_token_counts[str_idx] = token_count; }
@@ -412,14 +412,11 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
   auto [token_offsets, total_count] = cudf::detail::make_offsets_child_column(
     d_token_counts.begin(), d_token_counts.end(), stream, mr);
 
-  // d_tokens.resize(total_count, stream);
   auto tokens =
     cudf::make_numeric_column(output_type, total_count, cudf::mask_state::UNALLOCATED, stream, mr);
-  cudaMemcpyAsync(tokens->mutable_view().head(),
-                  d_tokens.data(),
-                  total_count * sizeof(cudf::size_type),
-                  cudaMemcpyDeviceToDevice,
-                  stream.value());
+  auto output         = tokens->mutable_view().begin<cudf::size_type>();
+  auto const sentinel = std::numeric_limits<cudf::size_type>::max();
+  thrust::remove_copy(rmm::exec_policy(stream), d_tokens.begin(), d_tokens.end(), output, sentinel);
 
   return cudf::make_lists_column(input.size(),
                                  std::move(token_offsets),
