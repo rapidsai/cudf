@@ -42,8 +42,8 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                  stream,
                                  mr);
 
-  // The functor returns the indices of minimums based on the sorted keys.
-  // We need the indices of minimums from the original unsorted keys
+  // The functor returns the indices of maximums based on the sorted keys.
+  // We need the indices of maximums from the original unsorted keys
   // so we use these indices and the key_sort_order to map to the correct indices.
   // We do not use cudf::gather since we can move the null-mask separately.
   auto indices_view = indices->view();
@@ -52,7 +52,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                  indices_view.begin<size_type>(),    // map first
                  indices_view.end<size_type>(),      // map last
                  key_sort_order.begin<size_type>(),  // input
-                 output.data()                       // result (most not overlap map)
+                 output.data()                       // result (must not overlap map)
   );
   auto null_count = indices_view.null_count();
   auto null_mask  = indices->release().null_mask.release();

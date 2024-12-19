@@ -53,7 +53,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                  indices_view.begin<size_type>(),    // map first
                  indices_view.end<size_type>(),      // map last
                  key_sort_order.begin<size_type>(),  // input
-                 output.data()                       // result (most not overlap map)
+                 output.data()                       // result (must not overlap map)
   );
   auto null_count = indices_view.null_count();
   auto null_mask  = indices->release().null_mask.release();
