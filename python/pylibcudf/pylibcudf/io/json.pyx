@@ -516,7 +516,7 @@ cpdef TableWithMetadata read_json(
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(cpp_read_json(opts, stream.view()))
+        c_result = move(cpp_read_json(options.c_obj, stream.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
