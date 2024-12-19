@@ -446,7 +446,6 @@ add_library(
   src/groupby/sort/group_quantiles.cu
   src/groupby/sort/group_std.cu
   src/groupby/sort/group_sum.cu
-  src/groupby/sort/scan.cpp
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
@@ -454,6 +453,8 @@ add_library(
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
+  src/groupby/sort/host_udf_aggregation.cpp
+  src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
