@@ -14,6 +14,8 @@ from utils import (
     write_source_str,
 )
 
+from rmm._cuda.stream import Stream
+
 import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
@@ -42,6 +44,16 @@ def csv_table_data(table_data):
         ]
     )
     return plc.interop.from_arrow(pa_table), pa_table
+
+
+@pytest.fixture(scope="module")
+def simple_csv_table_data():
+    return [
+        "1,2,3,4_4,'z'",
+        '4,5,6,5_5,""',
+        "7,8,9,9_87,'123'",
+        "1,1,1,10_11,abc",
+    ]
 
 
 @pytest.mark.parametrize("delimiter", [",", ";"])
@@ -389,3 +401,21 @@ def test_write_csv_na_rep(na_rep):
     pd_result = pa_tbl.to_pandas().to_csv(na_rep=na_rep, index=False)
 
     assert str_result == pd_result
+
+
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_csv_with_default_stream(
+    source_or_sink, simple_csv_table_data, stream
+):
+    buffer = "\n".join(simple_csv_table_data)
+
+    write_source_str(source_or_sink, buffer)
+
+    options = plc.io.csv.CsvReaderOptions.builder(
+        plc.io.SourceInfo([source_or_sink])
+    ).build()
+    plc_table_w_meta = plc.io.csv.read_csv(options, stream)
+    df = pd.read_csv(
+        StringIO(buffer),
+    )
+    assert_table_and_meta_eq(pa.Table.from_pandas(df), plc_table_w_meta)
