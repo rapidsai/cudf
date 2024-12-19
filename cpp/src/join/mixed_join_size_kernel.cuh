@@ -62,8 +62,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
 
   std::size_t thread_counter{0};
-  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * block_size;
-  cudf::size_type const stride         = block_size * gridDim.x;
+  auto const start_idx                 = cudf::detail::grid_1d::global_thread_id();
+  auto const stride                    = cudf::detail::grid_1d::grid_stride();
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
@@ -80,7 +80,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
+  for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
     auto query_pair = pair_func(outer_row_index);
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {

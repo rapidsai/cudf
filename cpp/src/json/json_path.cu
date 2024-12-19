@@ -928,7 +928,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
                               get_json_object_options options)
 {
   auto tid          = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   size_type warp_valid_count{0};
 
