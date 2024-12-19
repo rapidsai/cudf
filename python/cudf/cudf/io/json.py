@@ -54,6 +54,22 @@ def _get_cudf_schema_element_from_dtype(
     return lib_type, child_types
 
 
+def _to_plc_compression(
+    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None],
+) -> plc.io.types.CompressionType:
+    if compression is not None:
+        if compression == "gzip":
+            return plc.io.types.CompressionType.GZIP
+        elif compression == "bz2":
+            return plc.io.types.CompressionType.BZIP2
+        elif compression == "zip":
+            return plc.io.types.CompressionType.ZIP
+        else:
+            return plc.io.types.CompressionType.AUTO
+    else:
+        return plc.io.types.CompressionType.NONE
+
+
 @ioutils.doc_read_json()
 def read_json(
     path_or_buf,
@@ -115,17 +131,7 @@ def read_json(
             if isinstance(source, str) and not os.path.isfile(source):
                 filepaths_or_buffers[idx] = source.encode()
 
-        if compression is not None:
-            if compression == "gzip":
-                c_compression = plc.io.types.CompressionType.GZIP
-            elif compression == "bz2":
-                c_compression = plc.io.types.CompressionType.BZIP2
-            elif compression == "zip":
-                c_compression = plc.io.types.CompressionType.ZIP
-            else:
-                c_compression = plc.io.types.CompressionType.AUTO
-        else:
-            c_compression = plc.io.types.CompressionType.NONE
+        c_compression = _to_plc_compression(compression)
 
         if on_bad_lines.lower() == "error":
             c_on_bad_lines = plc.io.types.JSONRecoveryMode.FAIL
@@ -291,6 +297,7 @@ def _plc_write_json(
     include_nulls: bool = True,
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
+    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None] = None,
 ) -> None:
     try:
         tbl_w_meta = plc.io.TableWithMetadata(
@@ -307,6 +314,7 @@ def _plc_write_json(
             .na_rep(na_rep)
             .include_nulls(include_nulls)
             .lines(lines)
+            .compression(_to_plc_compression(compression))
             .build()
         )
         if rows_per_chunk != np.iinfo(np.int32).max:
