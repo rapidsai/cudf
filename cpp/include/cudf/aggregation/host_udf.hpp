@@ -24,6 +24,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <optional>
 #include <unordered_map>
@@ -33,7 +34,7 @@
 /**
  * @file host_udf.hpp
  * @brief Declare the base class for host-side user-defined function (`HOST_UDF`) and example of
- * `HOST_UDF` aggregation usage.
+ * subclass implementation.
  */
 
 namespace CUDF_EXPORT cudf {
@@ -52,6 +53,48 @@ namespace CUDF_EXPORT cudf {
  *  - If necessary, the derived class can also override `do_hash` to compute hashing for its
  *    instance, and `get_required_data` to selectively access to the input data as well as
  *    intermediate data provided by libcudf.
+ *
+ * Example of such implementation:
+ * @code{.cpp}
+ * struct my_udf_aggregation : cudf::host_udf_base {
+ *   my_udf_aggregation() = default;
+ *
+ *   // This UDF aggregation needs `GROUPED_VALUES` and `GROUP_OFFSETS`,
+ *   // and the result from groupby `MAX` aggregation.
+ *   [[nodiscard]] data_attribute_set_t get_required_data() const override {
+ *       return {groupby_data_attribute::GROUPED_VALUES,
+ *               groupby_data_attribute::GROUP_OFFSETS,
+ *               cudf::make_max_aggregation<cudf::groupby_aggregation>()};
+ *   }
+ *
+ *   [[nodiscard]] output_t get_empty_output(
+ *     [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
+ *     [[maybe_unused]] rmm::cuda_stream_view stream,
+ *     [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+ *   {
+ *     // This UDF aggregation always returns a column of type INT32.
+ *     return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
+ *   }
+ *
+ *   [[nodiscard]] output_t operator()(input_map_t const& input,
+ *                                     rmm::cuda_stream_view stream,
+ *                                     rmm::device_async_resource_ref mr) const override
+ *   {
+ *     // Perform UDF computation using the input data and return the result.
+ *   }
+ *
+ *   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
+ *   {
+ *     // Check if the other object is also instance of this class.
+ *     return dynamic_cast<my_udf_aggregation const*>(&other) != nullptr;
+ *   }
+ *
+ *   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
+ *   {
+ *     return std::make_unique<my_udf_aggregation>();
+ *   }
+ * };
+ * @endcode
  */
 struct host_udf_base {
   host_udf_base()          = default;
@@ -187,7 +230,7 @@ struct host_udf_base {
                           rhs_val);
       }
     };  // struct equal_to
-  };  // struct data_attribute
+  };    // struct data_attribute
 
   /**
    * @brief Set of attributes for the input data that is needed for computing the aggregation.
