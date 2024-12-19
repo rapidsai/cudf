@@ -1123,7 +1123,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Verify if this is really necessary or if we can rely on
         # DataFrame._concat.
         if len(source_data) > 1:
-            colnames = source_data[0]._data.to_pandas_index()
+            colnames = source_data[0]._data.to_pandas_index
             for obj in source_data[1:]:
                 obj.columns = colnames
 
@@ -2068,7 +2068,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         result_df = self_df.merge(other_df, on=col_names, how="outer")
         result_df = result_df.sort_values(
-            by=result_df._data.to_pandas_index()[self.nlevels :],
+            by=result_df._data.to_pandas_index[self.nlevels :],
             ignore_index=True,
         )
 
