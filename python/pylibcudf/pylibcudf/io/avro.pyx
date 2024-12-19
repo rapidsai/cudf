@@ -126,7 +126,7 @@ cdef class AvroReaderOptionsBuilder:
 
 
 cpdef TableWithMetadata read_avro(
-    AvroReaderOptions options,
+    AvroReaderOptions options
 ):
     """
     Read from Avro format.
@@ -142,6 +142,6 @@ cpdef TableWithMetadata read_avro(
         Settings for controlling reading behavior
     """
     with nogil:
-        c_result = move(cpp_read_avro(options.c_obj, stream.view()))
+        c_result = move(cpp_read_avro(options.c_obj))
 
     return TableWithMetadata.from_libcudf(c_result)

@@ -1,5 +1,4 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
-
 from pylibcudf.io.types import SourceInfo, TableWithMetadata
 
 __all__ = ["AvroReaderOptions", "AvroReaderOptionsBuilder", "read_avro"]
