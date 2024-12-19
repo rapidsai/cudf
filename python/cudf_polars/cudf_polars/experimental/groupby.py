@@ -41,7 +41,9 @@ def _(
 
     # Check group-by keys
     if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.keys])):
-        raise NotImplementedError(f"GroupBy {ir} does not support multiple partitions.")
+        raise NotImplementedError(
+            f"GroupBy {ir} does not support multiple partitions."
+        )  # pragma: no cover
 
     name_map: MutableMapping[str, Any] = {}
     agg_tree: Cast | Agg | None = None
@@ -98,7 +100,7 @@ def _(
             raise NotImplementedError(
                 f"GroupBy {ir} does not support multiple partitions "
                 f"with an {agg} expression."
-            )
+            )  # pragma: no cover
 
     gb_pwise = GroupBy(
         ir.schema,
