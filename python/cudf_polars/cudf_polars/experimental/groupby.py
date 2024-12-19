@@ -42,7 +42,8 @@ def _(
     # Check group-by keys
     if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.keys])):
         raise NotImplementedError(
-            f"GroupBy {ir} does not support multiple partitions."
+            "GroupBy does not support multiple partitions "
+            f"for these keys:\n{ir.keys}"
         )  # pragma: no cover
 
     name_map: MutableMapping[str, Any] = {}
@@ -69,8 +70,8 @@ def _(
         elif isinstance(agg, Agg):
             if agg.name not in _GB_AGG_SUPPORTED:
                 raise NotImplementedError(
-                    f"GroupBy {ir} does not support multiple partitions "
-                    f"with an {agg} expression."
+                    "GroupBy does not support multiple partitions "
+                    f"for this expression:\n{agg}"
                 )
 
             if agg.name in ("sum", "count"):
@@ -98,8 +99,8 @@ def _(
         else:
             # Unsupported expression
             raise NotImplementedError(
-                f"GroupBy {ir} does not support multiple partitions "
-                f"with an {agg} expression."
+                "GroupBy does not support multiple partitions "
+                f"for this expression:\n{agg}"
             )  # pragma: no cover
 
     gb_pwise = GroupBy(
