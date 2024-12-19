@@ -1885,3 +1885,9 @@ def test_dataframe_setitem():
     new_df = df + 1
     df[df.columns] = new_df
     tm.assert_equal(df, new_df)
+
+
+def test_dataframe_get_fast_slow_methods():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    assert isinstance(df.get_cudf_pandas_fast_object(), cudf.DataFrame)
+    assert isinstance(df.get_cudf_pandas_slow_object(), pd.DataFrame)
