@@ -208,10 +208,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
       operator()<aggregation::ARGMIN>(*argmin_agg);
       column_view const argmin_result = cache.get_result(values, *argmin_agg);
 
-      // We make a view of ARGMIN result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMIN result corresponding
-      // to null values was initialized to ARGMIN_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
+      // Compute the ARGMIN result without the null mask in the gather map.
       column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
@@ -250,10 +247,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
       operator()<aggregation::ARGMAX>(*argmax_agg);
       column_view const argmax_result = cache.get_result(values, *argmax_agg);
 
-      // We make a view of ARGMAX result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMAX result corresponding
-      // to null values was initialized to ARGMAX_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
+      // Compute the ARGMAX result without the null mask in the gather map.
       column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
