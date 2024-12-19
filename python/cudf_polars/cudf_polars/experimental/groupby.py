@@ -10,6 +10,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl.expr import Agg, BinOp, Cast, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import GroupBy, Select
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo, _concat, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
@@ -21,42 +22,26 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
+# Supported multi-partition aggregations
 _GB_AGG_SUPPORTED = ("sum", "count", "mean")
-
-
-def _single_fallback(
-    ir: IR,
-    child: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    unsupported_agg: Expr | None = None,
-):
-    if partition_info[child].count > 1:
-        msg = f"Class {type(ir)} does not support multiple partitions."
-        if unsupported_agg:
-            msg = msg[:-1] + f" with {unsupported_agg} expression."
-        raise NotImplementedError(msg)
-    else:  # pragma: no cover
-        new_node = ir.reconstruct([child])
-        partition_info[new_node] = PartitionInfo(count=1)
-        return new_node, partition_info
 
 
 @lower_ir_node.register(GroupBy)
 def _(
     ir: GroupBy, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    (child,) = ir.children
-    child, partition_info = rec(child)
+    # Extract child partitioning
+    child, partition_info = rec(ir.children[0])
 
+    # Handle single-partition case
     if partition_info[child].count == 1:
-        # Single partition
-        return _single_fallback(ir, child, partition_info)
+        single_part_node = ir.reconstruct([child])
+        partition_info[single_part_node] = partition_info[child]
+        return single_part_node, partition_info
 
-    # Check that we are grouping on element-wise
-    # keys (is this already guaranteed?)
-    for ne in ir.keys:
-        if not isinstance(ne.value, Col):  # pragma: no cover
-            return _single_fallback(ir, child, partition_info)
+    # Check group-by keys
+    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.keys])):
+        raise NotImplementedError(f"GroupBy {ir} does not support multiple partitions.")
 
     name_map: MutableMapping[str, Any] = {}
     agg_tree: Cast | Agg | None = None
@@ -81,7 +66,10 @@ def _(
             )
         elif isinstance(agg, Agg):
             if agg.name not in _GB_AGG_SUPPORTED:
-                return _single_fallback(ir, child, partition_info, agg)
+                raise NotImplementedError(
+                    f"GroupBy {ir} does not support multiple partitions "
+                    f"with an {agg} expression."
+                )
 
             if agg.name in ("sum", "count"):
                 agg_requests_pwise.append(ne)
@@ -106,8 +94,11 @@ def _(
                     agg_tree = Agg(dtype, "sum", agg.options, Col(dtype, tmp_name))
                     agg_requests_tree.append(NamedExpr(tmp_name, agg_tree))
         else:
-            # Unsupported
-            return _single_fallback(ir, child, partition_info, agg)  # pragma: no cover
+            # Unsupported expression
+            raise NotImplementedError(
+                f"GroupBy {ir} does not support multiple partitions "
+                f"with an {agg} expression."
+            )
 
     gb_pwise = GroupBy(
         ir.schema,
@@ -185,16 +176,16 @@ def _(
     elif output_count != 1:  # pragma: no cover
         raise ValueError(f"Expected single partition, got {output_count}")
 
-    # Simple tree reduction.
+    # Simple N-ary tree reduction
     j = 0
     graph: MutableMapping[Any, Any] = {}
-    split_every = 32
+    n_ary = 32  # TODO: Make this configurable
     name = get_key_name(ir)
     keys: list[Any] = [(child_name, i) for i in range(child_count)]
-    while len(keys) > split_every:
+    while len(keys) > n_ary:
         new_keys: list[Any] = []
-        for i, k in enumerate(range(0, len(keys), split_every)):
-            batch = keys[k : k + split_every]
+        for i, k in enumerate(range(0, len(keys), n_ary)):
+            batch = keys[k : k + n_ary]
             graph[(name, j, i)] = (
                 _tree_node,
                 ir.do_evaluate,
