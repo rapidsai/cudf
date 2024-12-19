@@ -16,20 +16,11 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/span.hpp>
-#include <cudf/utilities/traits.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
 
 #include <functional>
 #include <memory>
-#include <optional>
-#include <unordered_map>
-#include <unordered_set>
-#include <variant>
 #include <vector>
 
 /**
@@ -609,11 +600,11 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
 
-// Forward declaration of `host_udf_base`.
+// Forward declaration of `host_udf_base` for the factory function of `HOST_UDF` aggregation.
 struct host_udf_base;
 
 /**
- * @brief Factory to create a HOST_UDF aggregation
+ * @brief Factory to create a HOST_UDF aggregation.
  *
  * @param host_udf An instance of a class derived from `host_udf_base` to perform aggregation
  * @return A HOST_UDF aggregation object
