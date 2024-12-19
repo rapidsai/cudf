@@ -9,6 +9,7 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
+import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.select  # noqa: F401
 from cudf_polars.dsl.ir import IR, Cache, Filter, HStack, Projection, Select, Union
