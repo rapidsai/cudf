@@ -15,8 +15,8 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
+from cudf._lib.column import Column
 from cudf._lib.types import dtype_to_pylibcudf_type
-from cudf._lib.utils import data_from_pylibcudf_io
 from cudf.api.types import is_hashable, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.utils import ioutils
@@ -251,9 +251,17 @@ def read_csv(
     if na_values is not None:
         options.set_na_values([str(val) for val in na_values])
 
-    df = cudf.DataFrame._from_data(
-        *data_from_pylibcudf_io(plc.io.csv.read_csv(options))
-    )
+    table_w_meta = plc.io.csv.read_csv(options)
+    data = {
+        name: Column.from_pylibcudf(col)
+        for name, col in zip(
+            table_w_meta.column_names(include_children=False),
+            table_w_meta.columns,
+            strict=True,
+        )
+    }
+
+    df = cudf.DataFrame._from_data(data)
 
     if isinstance(dtype, abc.Mapping):
         for k, v in dtype.items():
