@@ -29,6 +29,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/reduction/detail/histogram.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -109,8 +110,7 @@ struct empty_column_constructor {
     using namespace cudf::detail;
 
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
-      return make_lists_column(
-        0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {}, stream, mr);
+      return cudf::lists::detail::make_empty_lists_column(values.type(), stream, mr);
     }
 
     if constexpr (k == aggregation::Kind::HISTOGRAM) {
