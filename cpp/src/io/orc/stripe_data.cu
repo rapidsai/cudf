@@ -190,12 +190,10 @@ class run_cache_manager {
    * @param[in] max_length The maximum length allowed to be consumed for the DATA stream.
    * @return A new maximum length.
    */
-  __device__ uint32_t adjust_max_length(uint32_t max_length)
+  [[nodiscard]] __device__ uint32_t adjust_max_length(uint32_t max_length)
   {
     auto new_max_length{max_length};
-    if (_status == status::CAN_READ_FROM_CACHE and _reusable_length > 0) {
-      new_max_length -= _reusable_length;
-    }
+    if (_status == status::CAN_READ_FROM_CACHE) { new_max_length -= _reusable_length; }
     return new_max_length;
   }
 
@@ -256,6 +254,8 @@ class run_cache_manager {
     __syncthreads();
 
     if (tid == 0) {
+      // Disable the run cache manager, since cache write-and-read happens at most once per row
+      // group.
       _status = status::DISABLED;
       rle->num_vals += _reusable_length;
     }
@@ -1019,6 +1019,8 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
     __syncwarp();
   }
   __syncthreads();
+  // Currently run_cache_manager is only designed to fix the TIMESTAMP's DATA stream bug where the
+  // data type is int64_t.
   if constexpr (cuda::std::is_same_v<T, int64_t>) {
     if (run_cache_manager_inst != nullptr) {
       // Run cache is read from during the 2nd iteration of the top-level while-loop in
