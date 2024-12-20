@@ -176,9 +176,13 @@ class column_view_base {
    *
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exclusive).
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    * @return The count of null elements in the given range
    */
-  [[nodiscard]] size_type null_count(size_type begin, size_type end) const;
+  [[nodiscard]] size_type null_count(
+    size_type begin,
+    size_type end,
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Indicates if the column contains null elements,
@@ -232,9 +236,14 @@ class column_view_base {
    * override the fundamental properties of memory accesses without needing to
    * change all of the different accessors for the underlying pointer.
    *
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Typed pointer to underlying data
    */
-  [[nodiscard]] virtual void const* get_data() const noexcept { return _data; }
+  [[nodiscard]] virtual void const* get_data(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const noexcept
+  {
+    return _data;
+  }
 
   data_type _type{type_id::EMPTY};   ///< Element type
   size_type _size{};                 ///< Number of elements
@@ -462,9 +471,11 @@ class column_view : public detail::column_view_base {
    * override the fundamental properties of memory accesses without needing to
    * change all of the different accessors for the underlying pointer.
    *
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Typed pointer to underlying data
    */
-  void const* get_data() const noexcept override;
+  void const* get_data(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const noexcept override;
 
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
@@ -692,9 +703,11 @@ class mutable_column_view : public detail::column_view_base {
    * override the fundamental properties of memory accesses without needing to
    * change all of the different accessors for the underlying pointer.
    *
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Typed pointer to underlying data
    */
-  [[nodiscard]] void const* get_data() const noexcept override;
+  [[nodiscard]] void const* get_data(
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const noexcept override;
 
  private:
   friend mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
