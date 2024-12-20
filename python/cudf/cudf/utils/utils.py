@@ -341,6 +341,15 @@ def is_na_like(obj):
     return obj is None or obj is cudf.NA or obj is cudf.NaT
 
 
+def _is_null_host_scalar(slr) -> bool:
+    # slr is NA like or NaT like
+    return (
+        is_na_like(slr)
+        or (isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr))
+        or slr is pd.NaT
+    )
+
+
 def _warn_no_dask_cudf(fn):
     @functools.wraps(fn)
     def wrapper(self):

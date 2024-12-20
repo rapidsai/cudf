@@ -92,7 +92,11 @@ from cudf.utils.dtypes import (
     min_signed_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
+from cudf.utils.utils import (
+    GetAttrGetItemMixin,
+    _external_only_api,
+    _is_null_host_scalar,
+)
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnLike, Dtype, NotImplementedType
@@ -3371,7 +3375,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
                 value = value.item()
-            if libcudf.scalar._is_null_host_scalar(value):
+            if _is_null_host_scalar(value):
                 dtype = "str"
             value = as_column(
                 value,
