@@ -39,6 +39,8 @@ from pylibcudf.libcudf.io.orc cimport (
     orc_writer_options,
     chunked_orc_writer_options,
 )
+from rmm._cuda.stream cimport Stream
+
 
 __all__ = [
     "OrcColumnStatistics",
@@ -405,7 +407,7 @@ cdef class OrcReaderOptionsBuilder:
         return orc_options
 
 
-cpdef TableWithMetadata read_orc(OrcReaderOptions options):
+cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None):
     """
     Read from ORC format.
 
@@ -419,10 +421,12 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options):
     options: OrcReaderOptions
         Settings for controlling reading behavior
     """
+    if stream is None:
+        stream = Stream()
     cdef table_with_metadata c_result
 
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj))
+        c_result = move(cpp_read_orc(options.c_obj, stream.view()))
 
     return TableWithMetadata.from_libcudf(c_result)
 
@@ -604,7 +608,7 @@ cdef class OrcWriterOptionsBuilder:
         return orc_options
 
 
-cpdef void write_orc(OrcWriterOptions options):
+cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
     """
     Write to ORC format.
 
@@ -622,8 +626,10 @@ cpdef void write_orc(OrcWriterOptions options):
     -------
     None
     """
+    if stream is None:
+        stream = Stream()
     with nogil:
-        cpp_write_orc(move(options.c_obj))
+        cpp_write_orc(move(options.c_obj), stream.view())
 
 
 cdef class OrcChunkedWriter:
@@ -655,7 +661,7 @@ cdef class OrcChunkedWriter:
             self.c_obj.get()[0].write(table.view())
 
     @staticmethod
-    def from_options(ChunkedOrcWriterOptions options):
+    def from_options(ChunkedOrcWriterOptions options, Stream stream = None):
         """
         Creates a chunked ORC writer from options
 
@@ -668,10 +674,12 @@ cdef class OrcChunkedWriter:
         -------
         OrcChunkedWriter
         """
+        if stream is None:
+            stream = Stream()
         cdef OrcChunkedWriter orc_writer = OrcChunkedWriter.__new__(
             OrcChunkedWriter
         )
-        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj))
+        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, stream.view()))
         return orc_writer
 
 
