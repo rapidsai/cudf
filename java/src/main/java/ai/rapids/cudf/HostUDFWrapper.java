@@ -13,23 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
 
-#include <cudf/aggregation.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/utilities/span.hpp>
+package ai.rapids.cudf;
 
-#include <memory>
-#include <tuple>
-#include <vector>
+/**
+ * A wrapper around native host UDF aggregations.
+ * <p>
+ * This class is used to store the native handle of a host UDF aggregation and is used as
+ * a proxy object to compute hash code and compare two host UDF aggregations for equality.
+ * <p>
+ * A new host UDF aggregation implementation must extend this class and override the
+ * {@code hashCode} and {@code equals} methods for such purposes.
+ */
+public abstract class HostUDFWrapper {
+  public final long udfNativeHandle;
 
-namespace cudf::groupby::detail::hash {
-
-// flatten aggs to filter in single pass aggs
-std::tuple<table_view,
-           cudf::detail::host_vector<aggregation::Kind>,
-           std::vector<std::unique_ptr<aggregation>>>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests,
-                         rmm::cuda_stream_view stream);
-
-}  // namespace cudf::groupby::detail::hash
+  public HostUDFWrapper(long udfNativeHandle) {
+    this.udfNativeHandle = udfNativeHandle;
+  }
+}
