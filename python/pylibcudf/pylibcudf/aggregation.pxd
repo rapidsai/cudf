@@ -13,6 +13,17 @@ from pylibcudf.libcudf.aggregation cimport (
     reduce_aggregation,
     rolling_aggregation,
     scan_aggregation,
+    std_var_aggregation,
+    quantile_aggregation,
+    nunique_aggregation,
+    nth_element_aggregation,
+    ewma_aggregation,
+    rank_aggregation,
+    collect_list_aggregation,
+    collect_set_aggregation,
+    udf_aggregation,
+    correlation_aggregation,
+    covariance_aggregation,
 )
 from pylibcudf.libcudf.types cimport (
     interpolation,
@@ -32,6 +43,17 @@ ctypedef groupby_scan_aggregation * gbsa_ptr
 ctypedef reduce_aggregation * ra_ptr
 ctypedef scan_aggregation * sa_ptr
 ctypedef rolling_aggregation * roa_ptr
+ctypedef std_var_aggregation * std_var_ptr
+ctypedef quantile_aggregation * quantile_ptr
+ctypedef nunique_aggregation * nunique_ptr
+ctypedef nth_element_aggregation * nth_element_ptr
+ctypedef ewma_aggregation * ewma_ptr
+ctypedef rank_aggregation * rank_ptr
+ctypedef collect_list_aggregation * collect_list_ptr
+ctypedef collect_set_aggregation * collect_set_ptr
+ctypedef udf_aggregation * udf_ptr
+ctypedef correlation_aggregation * correlation_ptr
+ctypedef covariance_aggregation * covariance_ptr
 
 
 cdef class Aggregation:
