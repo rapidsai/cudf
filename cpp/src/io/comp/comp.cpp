@@ -17,6 +17,7 @@
 #include "comp.hpp"
 
 #include "gpuinflate.hpp"
+#include "io/utilities/getenv_or.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 #include "nvcomp_adapter.hpp"
 
@@ -27,11 +28,18 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
 
 namespace cudf::io::detail {
 
 namespace {
+
+[[maybe_unused]] auto& h_comp_pool()
+{
+  static BS::thread_pool pool(std::thread::hardware_concurrency());
+  return pool;
+}
 
 /**
  * @brief GZIP host compressor (includes header)
@@ -99,27 +107,12 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
   return cudf::detail::make_std_vector_sync<uint8_t>(d_dst, stream);
 }
 
-}  // namespace
-
-std::vector<std::uint8_t> compress(compression_type compression,
-                                   host_span<uint8_t const> src,
-                                   rmm::cuda_stream_view stream)
+void device_compress(compression_type compression,
+                     device_span<device_span<uint8_t const> const> inputs,
+                     device_span<device_span<uint8_t> const> outputs,
+                     device_span<compression_result> results,
+                     rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
-  switch (compression) {
-    case compression_type::GZIP: return compress_gzip(src);
-    case compression_type::SNAPPY: return compress_snappy(src, stream);
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
-
-void compress(compression_type compression,
-              device_span<device_span<uint8_t const> const> inputs,
-              device_span<device_span<uint8_t> const> outputs,
-              device_span<compression_result> results,
-              rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
   switch (compression) {
     case compression_type::SNAPPY:
       if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
@@ -147,6 +140,89 @@ void compress(compression_type compression,
     }
     case compression_type::NONE: return;
     default: CUDF_FAIL("invalid compression type");
+  }
+}
+
+void host_compress(compression_type compression,
+                   device_span<device_span<uint8_t const> const> inputs,
+                   device_span<device_span<uint8_t> const> outputs,
+                   device_span<compression_result> results,
+                   rmm::cuda_stream_view stream)
+{
+  if (compression == compression_type::NONE) { return; }
+  auto const num_blocks = inputs.size();
+  auto h_results        = cudf::detail::make_host_vector<compression_result>(num_blocks, stream);
+  auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
+  auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
+  stream.synchronize();
+  for (size_t i = 0; i < num_blocks; ++i) {
+    auto const h_input  = cudf::detail::make_host_vector_sync(h_inputs[i], stream);
+    auto const h_output = compress(compression, h_input, stream);
+    cudf::detail::cuda_memcpy<uint8_t>(h_outputs[i].subspan(0, h_output.size()), h_output, stream);
+    h_results[i] = {h_output.size(), compression_status::SUCCESS};
+  }
+  cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
+}
+
+[[nodiscard]] bool host_compression_supported(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::SNAPPY: return true;
+    case compression_type::GZIP: return true;
+    case compression_type::NONE: return true;
+    default: return false;
+  }
+}
+
+[[nodiscard]] bool device_compression_supported(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::SNAPPY: return true;
+    case compression_type::ZSTD: return true;
+    case compression_type::LZ4: return true;
+    case compression_type::NONE: return true;
+    default: return false;
+  }
+}
+
+[[nodiscard]] bool use_host_compression(
+  compression_type compression,
+  [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
+  [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
+{
+  CUDF_EXPECTS(
+    not host_compression_supported(compression) or device_compression_supported(compression),
+    "Unsupported compression type");
+  if (not host_compression_supported(compression)) { return false; }
+  if (not device_compression_supported(compression)) { return true; }
+  return getenv_or("LIBCUDF_USE_HOST_COMPRESSION", false);
+}
+
+}  // namespace
+
+std::vector<std::uint8_t> compress(compression_type compression,
+                                   host_span<uint8_t const> src,
+                                   rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  switch (compression) {
+    case compression_type::GZIP: return compress_gzip(src);
+    case compression_type::SNAPPY: return compress_snappy(src, stream);
+    default: std::cout << (int)compression << std::endl; CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+void compress(compression_type compression,
+              device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<compression_result> results,
+              rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  if (not use_host_compression(compression, inputs, outputs)) {
+    device_compress(compression, inputs, outputs, results, stream);
+  } else {
+    host_compress(compression, inputs, outputs, results, stream);
   }
 }
 
