@@ -29,6 +29,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -166,7 +167,9 @@ struct host_udf_groupby_example : cudf::host_udf_base {
       {
         auto const start = offsets[idx];
         auto const end   = offsets[idx + 1];
-        if (start == end) { return {OutputType{0}, -1}; }
+
+        auto constexpr invalid_idx = cuda::std::numeric_limits<cudf::size_type>::lowest();
+        if (start == end) { return {OutputType{0}, invalid_idx}; }
 
         auto sum_sqr = OutputType{0};
         bool has_valid{false};
@@ -177,7 +180,7 @@ struct host_udf_groupby_example : cudf::host_udf_base {
           sum_sqr += val * val;
         }
 
-        if (!has_valid) { return {OutputType{0}, -1}; }
+        if (!has_valid) { return {OutputType{0}, invalid_idx}; }
         return {static_cast<OutputType>(group_indices[start] + 1) * sum_sqr -
                   static_cast<OutputType>(group_max[idx]) * static_cast<OutputType>(group_sum[idx]),
                 idx};
