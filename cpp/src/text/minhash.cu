@@ -47,8 +47,6 @@
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 
-#include <limits>
-
 namespace nvtext {
 namespace detail {
 namespace {
