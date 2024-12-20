@@ -17,6 +17,7 @@
 #include "cudf_jni_apis.hpp"
 
 #include <cudf/aggregation.hpp>
+#include <cudf/aggregation/host_udf.hpp>
 
 extern "C" {
 
