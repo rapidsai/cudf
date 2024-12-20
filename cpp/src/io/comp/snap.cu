@@ -19,8 +19,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
 constexpr int hash_bits = 12;
 
 // TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal
@@ -329,7 +328,6 @@ CUDF_KERNEL void __launch_bounds__(128)
     results[blockIdx.x].bytes_written = s->dst - s->dst_base;
     results[blockIdx.x].status =
       (s->dst > s->end) ? compression_status::FAILURE : compression_status::SUCCESS;
-    results[blockIdx.x].reserved = 0;
   }
 }
 
@@ -345,5 +343,4 @@ void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
   }
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

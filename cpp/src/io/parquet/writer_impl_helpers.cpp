@@ -21,6 +21,8 @@
 
 #include "writer_impl_helpers.hpp"
 
+#include "io/comp/nvcomp_adapter.hpp"
+
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>

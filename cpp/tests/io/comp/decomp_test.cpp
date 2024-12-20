@@ -30,6 +30,9 @@
 #include <vector>
 
 using cudf::device_span;
+using cudf::io::detail::compression_result;
+using cudf::io::detail::compression_status;
+namespace nvcomp = cudf::io::detail::nvcomp;
 
 /**
  * @brief Base test fixture for decompression
@@ -61,7 +64,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
     inf_out[0] = dst;
     inf_out.host_to_device_async(stream);
 
-    cudf::detail::hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
+    cudf::detail::hostdevice_vector<compression_result> inf_stat(1, stream);
     inf_stat[0] = {};
     inf_stat.host_to_device_async(stream);
 
@@ -69,7 +72,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       decompressed.data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
     inf_stat.device_to_host_sync(stream);
-    ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
+    ASSERT_EQ(inf_stat[0].status, compression_status::SUCCESS);
   }
 };
 
@@ -79,13 +82,13 @@ struct DecompressTest : public cudf::test::BaseFixture {
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::compression_result> d_inf_stat)
+                device_span<compression_result> d_inf_stat)
   {
-    cudf::io::gpuinflate(d_inf_in,
-                         d_inf_out,
-                         d_inf_stat,
-                         cudf::io::gzip_header_included::YES,
-                         cudf::get_default_stream());
+    cudf::io::detail::gpuinflate(d_inf_in,
+                                 d_inf_out,
+                                 d_inf_stat,
+                                 cudf::io::detail::gzip_header_included::YES,
+                                 cudf::get_default_stream());
   }
 };
 
@@ -95,9 +98,9 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::compression_result> d_inf_stat)
+                device_span<compression_result> d_inf_stat)
   {
-    cudf::io::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::get_default_stream());
+    cudf::io::detail::gpu_unsnap(d_inf_in, d_inf_out, d_inf_stat, cudf::get_default_stream());
   }
 };
 
@@ -107,17 +110,17 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
   void dispatch(device_span<device_span<uint8_t const>> d_inf_in,
                 device_span<device_span<uint8_t>> d_inf_out,
-                device_span<cudf::io::compression_result> d_inf_stat)
+                device_span<compression_result> d_inf_stat)
   {
-    rmm::device_buffer d_scratch{cudf::io::get_gpu_debrotli_scratch_size(1),
+    rmm::device_buffer d_scratch{cudf::io::detail::get_gpu_debrotli_scratch_size(1),
                                  cudf::get_default_stream()};
 
-    cudf::io::gpu_debrotli(d_inf_in,
-                           d_inf_out,
-                           d_inf_stat,
-                           d_scratch.data(),
-                           d_scratch.size(),
-                           cudf::get_default_stream());
+    cudf::io::detail::gpu_debrotli(d_inf_in,
+                                   d_inf_out,
+                                   d_inf_stat,
+                                   d_scratch.data(),
+                                   d_scratch.size(),
+                                   cudf::get_default_stream());
   }
 };
 
@@ -181,8 +184,8 @@ TEST_F(BrotliDecompressTest, HelloWorld)
 
 TEST_F(NvcompConfigTest, Compression)
 {
-  using cudf::io::nvcomp::compression_type;
-  auto const& comp_disabled = cudf::io::nvcomp::is_compression_disabled;
+  using nvcomp::compression_type;
+  auto const& comp_disabled = nvcomp::is_compression_disabled;
 
   EXPECT_FALSE(comp_disabled(compression_type::DEFLATE, {true, true}));
   // all integrations enabled required
@@ -201,8 +204,8 @@ TEST_F(NvcompConfigTest, Compression)
 
 TEST_F(NvcompConfigTest, Decompression)
 {
-  using cudf::io::nvcomp::compression_type;
-  auto const& decomp_disabled = cudf::io::nvcomp::is_decompression_disabled;
+  using nvcomp::compression_type;
+  auto const& decomp_disabled = nvcomp::is_decompression_disabled;
 
   EXPECT_FALSE(decomp_disabled(compression_type::DEFLATE, {true, true}));
   // all integrations enabled required
