@@ -587,6 +587,20 @@ cdef class JsonWriterOptions:
         """
         self.c_obj.set_false_value(val.encode())
 
+    cpdef void set_compression(self, compression_type comptype):
+        """
+        Sets compression type to be used
+
+        Parameters
+        ----------
+        comptype : CompressionType
+            Compression type for sink
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_compression(comptype)
 
 cdef class JsonWriterOptionsBuilder:
     cpdef JsonWriterOptionsBuilder metadata(self, TableWithMetadata tbl_w_meta):
@@ -651,6 +665,22 @@ cdef class JsonWriterOptionsBuilder:
         Self
         """
         self.c_obj.lines(val)
+        return self
+
+    cpdef JsonWriterOptionsBuilder compression(self, compression_type comptype):
+        """
+        Sets compression type of output sink.
+
+        Parameters
+        ----------
+        comptype : CompressionType
+            Compression type used
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.compression(comptype)
         return self
 
     cpdef JsonWriterOptions build(self):
