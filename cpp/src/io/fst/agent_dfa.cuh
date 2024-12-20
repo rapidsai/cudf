@@ -308,12 +308,14 @@ class WriteCoalescingCallbackWrapper {
   {
     __syncthreads();
     if constexpr (!DiscardTranslatedOutput) {
-      for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
+      for (thread_index_type out_char = threadIdx.x; out_char < tile_out_count;
+           out_char += blockDim.x) {
         out_it[tile_out_offset + out_char] = temp_storage.compacted_symbols[out_char];
       }
     }
     if constexpr (!DiscardIndexOutput) {
-      for (uint32_t out_char = threadIdx.x; out_char < tile_out_count; out_char += blockDim.x) {
+      for (thread_index_type out_char = threadIdx.x; out_char < tile_out_count;
+           out_char += blockDim.x) {
         out_idx_it[tile_out_offset + out_char] =
           temp_storage.compacted_offset[out_char] + tile_in_offset;
       }
