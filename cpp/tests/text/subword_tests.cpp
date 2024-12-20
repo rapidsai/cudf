@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -461,14 +462,21 @@ TEST(TextSubwordTest, WP1)
 
 TEST(TextSubwordTest, WP2)
 {
-  cudf::test::strings_column_wrapper vocabulary({"[UNK]", "!", "a", "I", "GP", "have", "##U"});
+  cudf::test::strings_column_wrapper vocabulary(
+    {"", "[UNK]", "!", "a", "I", "G", "have", "##P", "##U"});
   auto vocab = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
 
-  auto input   = cudf::test::strings_column_wrapper({"I have a GPU !"});
+  auto input =
+    cudf::test::strings_column_wrapper({"I have a GPU !", "do not have a gpu", "no gpu"});
   auto sv      = cudf::strings_column_view(input);
   auto results = nvtext::wordpiece_tokenize(sv, *vocab, 10);
+  // cudf::test::print(results->view());
 
   using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
-  LCW expected({LCW{3, 5, 2, 4, 6, 1}});
+  // clang-format off
+  LCW expected({LCW{4, 6, 3, 5, 7, 8, 2},
+                LCW{1, 1, 6, 3, 1},
+                LCW{1, 1}});
+  // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
