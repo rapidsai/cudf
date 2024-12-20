@@ -271,7 +271,7 @@ struct host_udf_base {
    * This is called in libcudf when the input values column is empty. In such situations libcudf
    * tries to generate the output directly without unnecessarily evaluating the intermediate data.
    *
-   * @param output_dtype The expected output data type
+   * @param output_dtype The output data type for reduction and segmented reduction results
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation when input values is empty
