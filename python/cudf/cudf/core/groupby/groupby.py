@@ -2445,7 +2445,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be used in the correlation or covariance
         # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        column_names = self.grouping.values_column_names
+        column_names = self.grouping._values_column_names
         num_cols = len(column_names)
 
         column_pair_structs = {}
@@ -3540,7 +3540,7 @@ class _Grouping(Serializable):
             )
 
     @property
-    def values_column_names(self) -> list[Hashable]:
+    def _values_column_names(self) -> list[Hashable]:
         # If the key columns are in `obj`, filter them out
         return [
             x for x in self._obj._column_names if x not in self._named_columns
@@ -3557,7 +3557,7 @@ class _Grouping(Serializable):
         This is mainly used in transform-like operations.
         """
         value_columns = self._obj._data.select_by_label(
-            self.values_column_names
+            self._values_column_names
         )
         return self._obj.__class__._from_data(value_columns)
 
