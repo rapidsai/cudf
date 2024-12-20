@@ -53,7 +53,7 @@ namespace CUDF_EXPORT cudf {
  * @return The `cudf::type_id` corresponding to the specified type
  */
 template <typename T>
-inline constexpr type_id type_to_id()
+CUDF_HOST_DEVICE inline constexpr type_id type_to_id()
 {
   return type_id::EMPTY;
 };
