@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "io/comp/comp.hpp"
+
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -24,43 +26,9 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-
-/**
- * @brief Status of a compression/decompression operation.
- */
-enum class compression_status : uint8_t {
-  SUCCESS,          ///< Successful, output is valid
-  FAILURE,          ///< Failed, output is invalid (e.g. input is unsupported in some way)
-  SKIPPED,          ///< Operation skipped (if conversion, uncompressed data can be used)
-  OUTPUT_OVERFLOW,  ///< Output buffer is too small; operation can succeed with larger output
-};
-
-/**
- * @brief Descriptor of compression/decompression result.
- */
-struct compression_result {
-  uint64_t bytes_written;
-  compression_status status;
-  uint32_t reserved;
-};
+namespace cudf::io::detail {
 
 enum class gzip_header_included { NO, YES };
-
-/**
- * @brief The value used for padding a data buffer such that its size will be multiple of it.
- *
- * Padding is necessary for input/output buffers of several compression/decompression kernels
- * (inflate_kernel and nvcomp snappy). Such kernels operate on aligned data pointers, which require
- * padding to the buffers so that the pointers can shift along the address space to satisfy their
- * alignment requirement.
- *
- * In the meantime, it is not entirely clear why such padding is needed. We need to further
- * investigate and implement a better fix rather than just padding the buffer.
- * See https://github.com/rapidsai/cudf/issues/13605.
- */
-constexpr std::size_t BUFFER_PADDING_MULTIPLE{8};
 
 /**
  * @brief Interface for decompressing GZIP-compressed data
@@ -169,5 +137,4 @@ void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
   device_span<compression_result const> results,
   rmm::cuda_stream_view stream);
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail
