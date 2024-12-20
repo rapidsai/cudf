@@ -1605,7 +1605,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.reduce.scan(
                 self.to_pylibcudf(mode="read"),
-                aggregation.make_aggregation(scan_op, kwargs).c_obj,
+                aggregation.make_aggregation(scan_op, kwargs).plc_obj,
                 plc.reduce.ScanType.INCLUSIVE
                 if inclusive
                 else plc.reduce.ScanType.EXCLUSIVE,
@@ -1637,7 +1637,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         with acquire_spill_lock():
             plc_scalar = plc.reduce.reduce(
                 self.to_pylibcudf(mode="read"),
-                aggregation.make_aggregation(reduction_op, kwargs).c_obj,
+                aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
             result_col = type(self).from_pylibcudf(
