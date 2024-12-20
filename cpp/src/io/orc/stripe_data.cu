@@ -135,21 +135,24 @@ struct orcdec_state_s {
 /**
  * @brief Manage caching of the first run of TIMESTAMP's DATA stream for a row group.
  *
- * This class is used to address a special case, where the first run spans two adjacent row groups
- * and its length is greater than the maximum length allowed to be consumed. This limit is imposed
- * by the decoder when processing the SECONDARY stream. This class shall be instantiated in the
- * shared memory, and be used to cache the DATA stream with a decoded data type of `int64_t`. As an
- * optimization, the actual cache is a local variable and does not reside in the shared memory.
+ * This class is used to address a special case, where the first run of the DATA stream spans two
+ * adjacent row groups and its length is greater than the maximum length allowed to be consumed.
+ * This limit is imposed by the decoder when processing the SECONDARY stream. This class shall be
+ * instantiated in the shared memory, and be used to cache the DATA stream with a decoded data type
+ * of `int64_t`. As an optimization, the actual cache is a local variable and does not reside in the
+ * shared memory.
  */
 class run_cache_manager {
  private:
   enum class status : uint8_t {
-    DISABLED,             ///< Run cache manager is disabled. No caching will be performed.
-    CAN_WRITE_TO_CACHE,   ///< Run cache manager is ready for write. This is expected to happen in
-                          ///< the first iteration of the top-level while-loop in
-                          ///< gpuDecodeOrcColumnData().
-    CAN_READ_FROM_CACHE,  ///< Run cache manager is ready for read. This is expected to happen in
-                          ///< the second iteration of the while-loop.
+    DISABLED,  ///< Run cache manager is disabled. No caching will be performed. If the special case
+               ///< happens, the run cache manager will be set to this status after the cache read
+               ///< is completed. This status also applies when the special case does not happen.
+    CAN_WRITE_TO_CACHE,  ///< Run cache manager is ready for write. If the special case happens, the
+                         ///< run cache manager will be set to this status.
+    CAN_READ_FROM_CACHE,  ///< Run cache manager is ready for read. If the special case happens, the
+                          ///< run cache manager will be set to this status after the cache write is
+                          ///< completed.
   };
 
  public:
@@ -207,14 +210,14 @@ class run_cache_manager {
   {
     if (_status != status::CAN_WRITE_TO_CACHE) { return; }
 
-    const auto tid = threadIdx.x;
+    auto const tid = threadIdx.x;
 
     // All threads in the block always take a uniform code path for the following branches.
     // _reusable_length ranges between [0, 512].
     if (_reusable_length > 0) {
-      const auto length_to_skip = _run_length - _reusable_length;
+      auto const length_to_skip = _run_length - _reusable_length;
       if (tid < _reusable_length) {
-        const auto src_idx = tid + length_to_skip;
+        auto const src_idx = tid + length_to_skip;
         cache              = src[src_idx];
       }
       // Block until all writes are done to safely change _status.
@@ -239,11 +242,11 @@ class run_cache_manager {
   {
     if (_status != status::CAN_READ_FROM_CACHE) { return; }
 
-    const auto tid = threadIdx.x;
+    auto const tid = threadIdx.x;
 
     // First, shift the data up
-    const auto dst_idx = tid + _reusable_length;
-    const auto v       = (dst_idx < rle->num_vals + _reusable_length) ? dst[tid] : 0;
+    auto const dst_idx = tid + _reusable_length;
+    auto const v       = (dst_idx < rle->num_vals + _reusable_length) ? dst[tid] : 0;
     __syncthreads();
 
     if (dst_idx < rle->num_vals + _reusable_length) { dst[dst_idx] = v; }
@@ -1023,7 +1026,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
   // data type is int64_t.
   if constexpr (cuda::std::is_same_v<T, int64_t>) {
     if (run_cache_manager_inst != nullptr) {
-      // Run cache is read from during the 2nd iteration of the top-level while-loop in
+      // Run cache is read from during the 2nd iteration of the top-level while loop in
       // gpuDecodeOrcColumnData().
       run_cache_manager_inst->read_from_cache(vals, rle, *cache);
       // Run cache is written to during the 1st iteration of the loop.
