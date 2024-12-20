@@ -36,6 +36,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/std/functional>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -243,7 +244,7 @@ CUDF_KERNEL void count_substrings_kernel(cudf::column_device_view const d_string
     }
   }
   auto const char_count = warp_reduce(temp_storage).Sum(count);
-  if (lane_idx == 0) { d_counts[str_idx] = std::max(1, char_count - width + 1); }
+  if (lane_idx == 0) { d_counts[str_idx] = cuda::std::max(1, char_count - width + 1); }
 }
 
 /**

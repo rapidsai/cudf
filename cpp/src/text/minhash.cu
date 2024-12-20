@@ -40,6 +40,8 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/std/functional>
+#include <cuda/std/limits>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -156,7 +158,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
     // initialize the output -- only needed for wider strings
     auto d_output = d_results + (str_idx * param_count);
     for (auto i = lane_idx; i < param_count; i += tile_size) {
-      d_output[i] = std::numeric_limits<hash_value_type>::max();
+      d_output[i] = cuda::std::numeric_limits<hash_value_type>::max();
     }
   }
 }
@@ -226,7 +228,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
       ? section_size
       : cuda::std::max(static_cast<cudf::size_type>(size_bytes > 0), section_size - width + 1);
 
-  auto const init     = size_bytes == 0 ? 0 : std::numeric_limits<hash_value_type>::max();
+  auto const init     = size_bytes == 0 ? 0 : cuda::std::numeric_limits<hash_value_type>::max();
   auto const lane_idx = block.thread_rank();
   auto const d_output = d_results + (str_idx * parameter_a.size());
 
@@ -235,7 +237,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
 
   // constants used in the permutation calculations
   constexpr uint64_t mersenne_prime  = (1UL << 61) - 1;
-  constexpr hash_value_type hash_max = std::numeric_limits<hash_value_type>::max();
+  constexpr hash_value_type hash_max = cuda::std::numeric_limits<hash_value_type>::max();
 
   // found to be an efficient shared memory size for both hash types
   __shared__ hash_value_type block_values[block_size * params_per_thread];
