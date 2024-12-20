@@ -861,7 +861,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 column_order,
                 null_precedence,
             )
-            columns = libcudf.utils.columns_from_pylibcudf_table(plc_table)
+            columns = [
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ]
         return self._from_columns_like_self(
             columns,
             column_names=self._column_names,

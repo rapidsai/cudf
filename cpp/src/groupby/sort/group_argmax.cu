@@ -42,22 +42,21 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                  stream,
                                  mr);
 
-  // The functor returns the index of maximum in the sorted values.
-  // We need the index of maximum in the original unsorted values.
-  // So use indices to gather the sort order used to sort `values`.
-  // Gather map cannot be null so we make a view with the mask removed.
-  // The values in data buffer of indices corresponding to null values was
-  // initialized to ARGMAX_SENTINEL. Using gather_if.
-  // This can't use gather because nulls in gathered column will not store ARGMAX_SENTINEL.
-  auto indices_view = indices->mutable_view();
-  thrust::gather_if(rmm::exec_policy(stream),
-                    indices_view.begin<size_type>(),    // map first
-                    indices_view.end<size_type>(),      // map last
-                    indices_view.begin<size_type>(),    // stencil
-                    key_sort_order.begin<size_type>(),  // input
-                    indices_view.begin<size_type>(),    // result
-                    [] __device__(auto i) { return (i != cudf::detail::ARGMAX_SENTINEL); });
-  return indices;
+  // The functor returns the indices of maximums based on the sorted keys.
+  // We need the indices of maximums from the original unsorted keys
+  // so we use these indices and the key_sort_order to map to the correct indices.
+  // We do not use cudf::gather since we can move the null-mask separately.
+  auto indices_view = indices->view();
+  auto output       = rmm::device_uvector<size_type>(indices_view.size(), stream, mr);
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 indices_view.begin<size_type>(),    // map first
+                 indices_view.end<size_type>(),      // map last
+                 key_sort_order.begin<size_type>(),  // input
+                 output.data()                       // result (must not overlap map)
+  );
+  auto null_count = indices_view.null_count();
+  auto null_mask  = indices->release().null_mask.release();
+  return std::make_unique<column>(std::move(output), std::move(*null_mask), null_count);
 }
 
 }  // namespace detail
