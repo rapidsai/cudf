@@ -23,7 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
 #include <cudf/detail/unary.hpp>
-#include <cudf/fixed_point/fixed_point.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>

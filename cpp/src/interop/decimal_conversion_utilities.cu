@@ -18,7 +18,7 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
-#include <cudf/fixed_point/fixed_point.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 
 #include <rmm/exec_policy.hpp>
 

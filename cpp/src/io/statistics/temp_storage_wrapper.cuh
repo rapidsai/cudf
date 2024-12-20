@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include "byte_array_view.cuh"
 #include "statistics.cuh"
 
-#include <cudf/fixed_point/fixed_point.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>

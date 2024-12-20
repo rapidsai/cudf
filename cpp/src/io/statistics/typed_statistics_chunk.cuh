@@ -27,7 +27,7 @@
 #include "statistics_type_identification.cuh"
 #include "temp_storage_wrapper.cuh"
 
-#include <cudf/fixed_point/fixed_point.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/limits>

@@ -18,7 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/alignment.hpp>
-#include <cudf/fixed_point/fixed_point.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
