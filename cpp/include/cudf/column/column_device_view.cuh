@@ -444,7 +444,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return string_view instance representing this element at this index
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
     char const* d_strings = static_cast<char const*>(_data);
@@ -503,7 +503,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return dictionary32 instance representing this element at this index
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, dictionary32>)>
-  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     size_type index    = element_index + offset();  // account for this view's _offset
     auto const indices = d_children[0];
@@ -521,7 +521,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return numeric::fixed_point representing the element at this index
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
-  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
     using rep        = typename T::rep;
@@ -1034,7 +1034,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return Reference to the element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  __device__ [[nodiscard]] T& element(size_type element_index) const noexcept
+  [[nodiscard]] __device__ T& element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
   }
@@ -1427,13 +1427,13 @@ struct pair_rep_accessor {
 
  private:
   template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
-  __device__ [[nodiscard]] inline auto get_rep(cudf::size_type i) const
+  [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
   template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
-  __device__ [[nodiscard]] inline auto get_rep(cudf::size_type i) const
+  [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();
   }

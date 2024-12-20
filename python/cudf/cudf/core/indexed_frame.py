@@ -27,6 +27,7 @@ import pylibcudf as plc
 import cudf
 import cudf._lib as libcudf
 import cudf.core
+import cudf.core._internals
 import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -1105,13 +1106,11 @@ class IndexedFrame(Frame):
             lhs = self.reindex(index=common, copy=False).values
             rhs = other.reindex(index=common, copy=False).values
             if isinstance(other, cudf.DataFrame):
-                result_index = other._data.to_pandas_index()
+                result_index = other._data.to_pandas_index
         elif isinstance(self, cudf.DataFrame) and isinstance(
             other, (cudf.Series, cudf.DataFrame)
         ):
-            common = self._data.to_pandas_index().union(
-                other.index.to_pandas()
-            )
+            common = self._data.to_pandas_index.union(other.index.to_pandas())
             if len(common) > self._num_columns or len(common) > len(
                 other.index
             ):
@@ -1123,7 +1122,7 @@ class IndexedFrame(Frame):
             rhs = other.reindex(index=common, copy=False).values
             lhs = lhs.values
             if isinstance(other, cudf.DataFrame):
-                result_cols = other._data.to_pandas_index()
+                result_cols = other._data.to_pandas_index
 
         elif isinstance(
             other, (cp.ndarray, np.ndarray)
@@ -2243,7 +2242,7 @@ class IndexedFrame(Frame):
         if not copy:
             raise ValueError("Truncating with copy=False is not supported.")
         axis = self._get_axis_from_axis_arg(axis)
-        ax = self.index if axis == 0 else self._data.to_pandas_index()
+        ax = self.index if axis == 0 else self._data.to_pandas_index
 
         if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
             raise ValueError("truncate requires a sorted index")
@@ -3063,21 +3062,21 @@ class IndexedFrame(Frame):
         return result
 
     def _positions_from_column_names(
-        self, column_names, offset_by_index_columns=False
-    ):
+        self,
+        column_names: set[abc.Hashable],
+        offset_by_index_columns: bool = True,
+    ) -> list[int]:
         """Map each column name into their positions in the frame.
 
         Return positions of the provided column names, offset by the number of
         index columns if `offset_by_index_columns` is True. The order of
         indices returned corresponds to the column order in this Frame.
         """
-        num_index_columns = (
-            len(self.index._data) if offset_by_index_columns else 0
-        )
+        start = self.index.nlevels if offset_by_index_columns else 0
         return [
-            i + num_index_columns
-            for i, name in enumerate(self._column_names)
-            if name in set(column_names)
+            i
+            for i, name in enumerate(self._column_names, start=start)
+            if name in column_names
         ]
 
     def drop_duplicates(
@@ -3114,7 +3113,7 @@ class IndexedFrame(Frame):
             subset, offset_by_index_columns=not ignore_index
         )
         return self._from_columns_like_self(
-            libcudf.stream_compaction.drop_duplicates(
+            cudf.core._internals.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
                 else list(self.index._columns + self._columns),
@@ -3127,7 +3126,9 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def duplicated(self, subset=None, keep="first"):
+    def duplicated(
+        self, subset=None, keep: Literal["first", "last", False] = "first"
+    ) -> cudf.Series:
         """
         Return boolean Series denoting duplicate rows.
 
@@ -3227,9 +3228,24 @@ class IndexedFrame(Frame):
             name = self.name
         else:
             columns = [self._data[n] for n in subset]
-        distinct = libcudf.stream_compaction.distinct_indices(
-            columns, keep=keep
-        )
+
+        _keep_options = {
+            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+        }
+
+        if (keep_option := _keep_options.get(keep)) is None:
+            raise ValueError('keep must be either "first", "last" or False')
+
+        with acquire_spill_lock():
+            plc_column = plc.stream_compaction.distinct_indices(
+                plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
+                keep_option,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+            )
+            distinct = libcudf.column.Column.from_pylibcudf(plc_column)
         result = copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
@@ -4353,12 +4369,10 @@ class IndexedFrame(Frame):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            libcudf.stream_compaction.drop_nulls(
+            cudf.core._internals.stream_compaction.drop_nulls(
                 [*self.index._columns, *data_columns],
                 how=how,
-                keys=self._positions_from_column_names(
-                    subset, offset_by_index_columns=True
-                ),
+                keys=self._positions_from_column_names(subset),
                 thresh=thresh,
             ),
             self._column_names,
@@ -4378,7 +4392,7 @@ class IndexedFrame(Frame):
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
-            libcudf.stream_compaction.apply_boolean_mask(
+            cudf.core._internals.stream_compaction.apply_boolean_mask(
                 list(self.index._columns + self._columns)
                 if keep_index
                 else list(self._columns),
@@ -6289,17 +6303,16 @@ class IndexedFrame(Frame):
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
 
-    def _preprocess_subset(self, subset):
+    def _preprocess_subset(self, subset) -> set[abc.Hashable]:
         if subset is None:
             subset = self._column_names
         elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
+            is_scalar(subset)
             or isinstance(subset, tuple)
             and subset in self._column_names
         ):
             subset = (subset,)
-        diff = set(subset) - set(self._data)
+        diff = set(subset) - set(self._column_names)
         if len(diff) != 0:
             raise KeyError(f"columns {diff} do not exist")
         return subset
@@ -6755,7 +6768,7 @@ def _drop_rows_by_labels(
             return obj.__class__._from_data(
                 join_res.iloc[:, idx_nlv:]._data,
                 index=midx,
-                columns=obj._data.to_pandas_index(),
+                columns=obj._data.to_pandas_index,
             )
 
     else:

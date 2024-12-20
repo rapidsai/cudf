@@ -26,12 +26,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.stream_compaction import (
-    apply_boolean_mask,
-    distinct_count as cpp_distinct_count,
-    drop_duplicates,
-    drop_nulls,
-)
 from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -43,6 +37,11 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_GE_210
 from cudf.core._internals import aggregation, copying, sorting, unary
+from cudf.core._internals.stream_compaction import (
+    apply_boolean_mask,
+    drop_duplicates,
+    drop_nulls,
+)
 from cudf.core._internals.timezones import get_compatible_timezone
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
@@ -276,10 +275,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def dropna(self) -> Self:
         if self.has_nulls():
-            return drop_nulls([self])[0]._with_type_metadata(self.dtype)
+            return drop_nulls([self])[0]._with_type_metadata(self.dtype)  # type: ignore[return-value]
         else:
             return self.copy()
 
+    @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
 
@@ -296,9 +296,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow([self], [("None", self.dtype)])[
-            "None"
-        ].chunk(0)
+        return plc.interop.to_arrow(self.to_pylibcudf(mode="read")).chunk(0)
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -335,26 +333,33 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.indices for chunk in data["None"].chunks],
+                [
+                    pa.chunked_array(
+                        [chunk.indices for chunk in data.column(0).chunks],
                         type=array.type.index_type,
                     )
-                }
+                ],
+                [None],
             )
             dictionaries_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.dictionary for chunk in data["None"].chunks],
+                [
+                    pa.chunked_array(
+                        [chunk.dictionary for chunk in data.column(0).chunks],
                         type=array.type.value_type,
                     )
-                }
+                ],
+                [None],
             )
-
-            codes = libcudf.interop.from_arrow(indices_table)[0]
-            categories = libcudf.interop.from_arrow(dictionaries_table)[0]
+            with acquire_spill_lock():
+                codes = cls.from_pylibcudf(
+                    plc.interop.from_arrow(indices_table).columns()[0]
+                )
+                categories = cls.from_pylibcudf(
+                    plc.interop.from_arrow(dictionaries_table).columns()[0]
+                )
             codes = cudf.core.column.categorical.as_unsigned_codes(
-                len(categories), codes
+                len(categories),
+                codes,  # type: ignore[arg-type]
             )
             return cudf.core.column.CategoricalColumn(
                 data=None,
@@ -365,10 +370,14 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 mask=codes.base_mask,
                 children=(codes,),
             )
-
-        result = libcudf.interop.from_arrow(data)[0]
-
-        return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
+        else:
+            result = cls.from_pylibcudf(
+                plc.interop.from_arrow(data).columns()[0]
+            )
+            # TODO: cudf_dtype_from_pa_type may be less necessary for some types
+            return result._with_type_metadata(
+                cudf_dtype_from_pa_type(array.type)
+            )
 
     @acquire_spill_lock()
     def _get_mask_as_column(self) -> ColumnBase:
@@ -849,7 +858,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             value = as_column(value, dtype=self.dtype, length=1)
         mask = value.contains(self)
-        return apply_boolean_mask(
+        return apply_boolean_mask(  # type: ignore[return-value]
             [as_column(range(0, len(self)), dtype=size_type_dtype)], mask
         )[0]
 
@@ -1084,9 +1093,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         try:
             return self._distinct_count[dropna]
         except KeyError:
-            self._distinct_count[dropna] = cpp_distinct_count(
-                self, ignore_nulls=dropna
-            )
+            with acquire_spill_lock():
+                result = plc.stream_compaction.distinct_count(
+                    self.to_pylibcudf(mode="read"),
+                    plc.types.NullPolicy.EXCLUDE
+                    if dropna
+                    else plc.types.NullPolicy.INCLUDE,
+                    plc.types.NanPolicy.NAN_IS_VALID,
+                )
+            self._distinct_count[dropna] = result
             return self._distinct_count[dropna]
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
@@ -1315,7 +1330,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if self.is_unique:
             return self.copy()
         else:
-            return drop_duplicates([self], keep="first")[
+            return drop_duplicates([self], keep="first")[  # type: ignore[return-value]
                 0
             ]._with_type_metadata(self.dtype)
 
@@ -1590,7 +1605,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.reduce.scan(
                 self.to_pylibcudf(mode="read"),
-                aggregation.make_aggregation(scan_op, kwargs).c_obj,
+                aggregation.make_aggregation(scan_op, kwargs).plc_obj,
                 plc.reduce.ScanType.INCLUSIVE
                 if inclusive
                 else plc.reduce.ScanType.EXCLUSIVE,
@@ -1622,7 +1637,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         with acquire_spill_lock():
             plc_scalar = plc.reduce.reduce(
                 self.to_pylibcudf(mode="read"),
-                aggregation.make_aggregation(reduction_op, kwargs).c_obj,
+                aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
             result_col = type(self).from_pylibcudf(
@@ -2076,18 +2091,26 @@ def as_column(
             if isinstance(arbitrary.dtype, pd.DatetimeTZDtype):
                 new_tz = get_compatible_timezone(arbitrary.dtype)
                 arbitrary = arbitrary.astype(new_tz)
-            if isinstance(arbitrary.dtype, pd.CategoricalDtype) and isinstance(
-                arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
-            ):
-                new_tz = get_compatible_timezone(
-                    arbitrary.dtype.categories.dtype
-                )
-                new_cats = arbitrary.dtype.categories.astype(new_tz)
-                new_dtype = pd.CategoricalDtype(
-                    categories=new_cats, ordered=arbitrary.dtype.ordered
-                )
-                arbitrary = arbitrary.astype(new_dtype)
-
+            if isinstance(arbitrary.dtype, pd.CategoricalDtype):
+                if isinstance(
+                    arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
+                ):
+                    new_tz = get_compatible_timezone(
+                        arbitrary.dtype.categories.dtype
+                    )
+                    new_cats = arbitrary.dtype.categories.astype(new_tz)
+                    new_dtype = pd.CategoricalDtype(
+                        categories=new_cats, ordered=arbitrary.dtype.ordered
+                    )
+                    arbitrary = arbitrary.astype(new_dtype)
+                elif (
+                    isinstance(
+                        arbitrary.dtype.categories.dtype, pd.IntervalDtype
+                    )
+                    and dtype is None
+                ):
+                    # Conversion to arrow converts IntervalDtype to StructDtype
+                    dtype = cudf.CategoricalDtype.from_pandas(arbitrary.dtype)
             return as_column(
                 pa.array(arbitrary, from_pandas=True),
                 nan_as_null=nan_as_null,

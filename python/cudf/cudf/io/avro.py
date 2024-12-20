@@ -3,7 +3,7 @@
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.utils import data_from_pylibcudf_io
+from cudf._lib.column import Column
 from cudf.utils import ioutils
 
 
@@ -33,11 +33,25 @@ def read_avro(
     if not isinstance(skip_rows, int) or skip_rows < 0:
         raise TypeError("skip_rows must be an int >= 0")
 
-    plc_result = plc.io.avro.read_avro(
-        plc.io.types.SourceInfo([filepath_or_buffer]),
-        columns,
-        skip_rows,
-        num_rows,
+    options = (
+        plc.io.avro.AvroReaderOptions.builder(
+            plc.io.types.SourceInfo([filepath_or_buffer])
+        )
+        .skip_rows(skip_rows)
+        .num_rows(num_rows)
+        .build()
     )
 
-    return cudf.DataFrame._from_data(*data_from_pylibcudf_io(plc_result))
+    if columns is not None and len(columns) > 0:
+        options.set_columns(columns)
+
+    plc_result = plc.io.avro.read_avro(options)
+    data = {
+        name: Column.from_pylibcudf(col)
+        for name, col in zip(
+            plc_result.column_names(include_children=False),
+            plc_result.columns,
+            strict=True,
+        )
+    }
+    return cudf.DataFrame._from_data(data)
