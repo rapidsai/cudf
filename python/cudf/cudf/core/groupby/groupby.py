@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import itertools
 import textwrap
 import types
@@ -3528,7 +3529,7 @@ class _Grouping(Serializable):
                     except (KeyError, TypeError):
                         self._handle_misc(by)
 
-    @property
+    @functools.cached_property
     def keys(self):
         """Return grouping key columns as index"""
         if len(self._key_columns) > 1:
