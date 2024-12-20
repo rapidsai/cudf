@@ -212,6 +212,8 @@ class run_cache_manager {
 
     auto const tid = threadIdx.x;
 
+    __syncthreads();
+
     // All threads in the block always take a uniform code path for the following branches.
     // _reusable_length ranges between [0, 512].
     if (_reusable_length > 0) {
@@ -220,11 +222,8 @@ class run_cache_manager {
         auto const src_idx = tid + length_to_skip;
         cache              = src[src_idx];
       }
-      // Block until all writes are done to safely change _status.
-      __syncthreads();
       if (tid == 0) { _status = status::CAN_READ_FROM_CACHE; }
     } else {
-      __syncthreads();
       if (tid == 0) { _status = status::DISABLED; }
     }
 
