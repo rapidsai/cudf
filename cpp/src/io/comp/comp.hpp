@@ -57,5 +57,20 @@ std::vector<uint8_t> compress(compression_type compression,
                               host_span<uint8_t const> src,
                               rmm::cuda_stream_view stream);
 
+/**
+ * @brief Compresses device memory buffers.
+ *
+ * @param compression Type of compression of the input data
+ * @param inputs      Device memory buffers to compress
+ * @param outputs     Device memory buffers to store the compressed output
+ * @param results     Compression results
+ * @param stream      CUDA stream used for device memory operations and kernel launches
+ */
+void compress(compression_type compression,
+              device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<compression_result> results,
+              rmm::cuda_stream_view stream);
+
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

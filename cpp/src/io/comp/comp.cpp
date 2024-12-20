@@ -16,6 +16,7 @@
 
 #include "comp.hpp"
 
+#include "gpuinflate.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 #include "nvcomp_adapter.hpp"
 
@@ -109,6 +110,43 @@ std::vector<std::uint8_t> compress(compression_type compression,
     case compression_type::GZIP: return compress_gzip(src);
     case compression_type::SNAPPY: return compress_snappy(src, stream);
     default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+void compress(compression_type compression,
+              device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<compression_result> results,
+              rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  switch (compression) {
+    case compression_type::SNAPPY:
+      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
+        gpu_snap(inputs, outputs, results, stream);
+      } else {
+        nvcomp::batched_compress(
+          nvcomp::compression_type::SNAPPY, inputs, outputs, results, stream);
+      }
+      break;
+    case compression_type::ZSTD: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
+      }
+      nvcomp::batched_compress(nvcomp::compression_type::ZSTD, inputs, outputs, results, stream);
+      break;
+    }
+    case compression_type::LZ4: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
+      }
+      nvcomp::batched_compress(nvcomp::compression_type::LZ4, inputs, outputs, results, stream);
+      break;
+    }
+    case compression_type::NONE: return;
+    default: CUDF_FAIL("invalid compression type");
   }
 }
 

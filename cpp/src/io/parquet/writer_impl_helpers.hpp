@@ -29,14 +29,6 @@
 namespace cudf::io::parquet::detail {
 
 /**
- * @brief Function that translates GDF compression to parquet compression.
- *
- * @param compression The compression type
- * @return The supported Parquet compression
- */
-Compression to_parquet_compression(compression_type compression);
-
-/**
  * @brief Function that translates the given compression codec to nvcomp compression type.
  *
  * @param codec Compression codec

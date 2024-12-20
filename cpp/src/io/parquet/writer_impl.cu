@@ -1455,6 +1455,31 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   stream.synchronize();
 }
 
+Compression to_parquet_compression(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::AUTO:
+    case compression_type::SNAPPY: return Compression::SNAPPY;
+    case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::LZ4:
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+      return Compression::LZ4_RAW;
+    case compression_type::NONE: return Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
+compression_type from_parquet_compression(Compression codec)
+{
+  switch (codec) {
+    case Compression::SNAPPY: return compression_type::SNAPPY;
+    case Compression::ZSTD: return compression_type::ZSTD;
+    case Compression::LZ4_RAW: return compression_type::LZ4;
+    case Compression::UNCOMPRESSED: return compression_type::NONE;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+
 /**
  * @brief Encode pages.
  *
@@ -1499,34 +1524,8 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                compression_result{0, compression_status::FAILURE});
 
   EncodePages(pages, write_v2_headers, comp_in, comp_out, comp_res, stream);
-  switch (compression) {
-    case Compression::SNAPPY:
-      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
-        gpu_snap(comp_in, comp_out, comp_res, stream);
-      } else {
-        nvcomp::batched_compress(
-          nvcomp::compression_type::SNAPPY, comp_in, comp_out, comp_res, stream);
-      }
-      break;
-    case Compression::ZSTD: {
-      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
-          reason) {
-        CUDF_FAIL("Compression error: " + reason.value());
-      }
-      nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-      break;
-    }
-    case Compression::LZ4_RAW: {
-      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
-          reason) {
-        CUDF_FAIL("Compression error: " + reason.value());
-      }
-      nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
-      break;
-    }
-    case Compression::UNCOMPRESSED: break;
-    default: CUDF_FAIL("invalid compression type");
-  }
+  cudf::io::detail::compress(
+    from_parquet_compression(compression), comp_in, comp_out, comp_res, stream);
 
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
