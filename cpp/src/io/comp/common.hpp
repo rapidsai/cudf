@@ -21,7 +21,7 @@
 namespace cudf::io::detail {
 
 /**
- * @brief The value used for padding a data buffer such that its size will be multiple of it.
+ * @brief The size used for padding a data buffer's size to a multiple of the padding.
  *
  * Padding is necessary for input/output buffers of several compression/decompression kernels
  * (inflate_kernel and nvcomp snappy). Such kernels operate on aligned data pointers, which require
