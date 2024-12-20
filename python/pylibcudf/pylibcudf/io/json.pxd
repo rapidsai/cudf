@@ -63,6 +63,7 @@ cdef class JsonWriterOptions:
     cpdef void set_rows_per_chunk(self, size_type val)
     cpdef void set_true_value(self, str val)
     cpdef void set_false_value(self, str val)
+    cpdef void set_compression(self, compression_type comptype)
 
 cdef class JsonWriterOptionsBuilder:
     cdef json_writer_options_builder c_obj
@@ -72,6 +73,7 @@ cdef class JsonWriterOptionsBuilder:
     cpdef JsonWriterOptionsBuilder na_rep(self, str val)
     cpdef JsonWriterOptionsBuilder include_nulls(self, bool val)
     cpdef JsonWriterOptionsBuilder lines(self, bool val)
+    cpdef JsonWriterOptionsBuilder compression(self, compression_type comptype)
     cpdef JsonWriterOptions build(self)
 
 cpdef void write_json(JsonWriterOptions options, Stream stream = *)
