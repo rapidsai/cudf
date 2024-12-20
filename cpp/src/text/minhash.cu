@@ -40,7 +40,6 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
-#include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
