@@ -10,14 +10,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import pylibcudf as plc
-
 import cudf
-import cudf.core.column.column as column
+from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
-from cudf.core._internals import binaryop, unary
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column.column import ColumnBase
+from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import (
     _all_bools_with_nulls,
@@ -188,8 +185,8 @@ class TimeDeltaColumn(ColumnBase):
                 this = self.astype(common_dtype).astype(out_dtype)
                 if isinstance(other, cudf.Scalar):
                     if other.is_valid():
-                        other = cudf.Scalar(
-                            other.value.astype(common_dtype).astype(out_dtype)
+                        other = other.value.astype(common_dtype).astype(
+                            out_dtype
                         )
                     else:
                         other = cudf.Scalar(None, out_dtype)
@@ -219,8 +216,10 @@ class TimeDeltaColumn(ColumnBase):
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
-        result = binaryop.binaryop(lhs, rhs, op, out_dtype)
-        if cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b":
+        result = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option(
+            "mode.pandas_compatible"
+        ) and out_dtype == cudf.dtype(np.bool_):
             result = result.fillna(op == "__ne__")
         return result
 
@@ -295,15 +294,12 @@ class TimeDeltaColumn(ColumnBase):
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype="object"),
+                column.column_empty(0, dtype="object", masked=False),
             )
         else:
-            with acquire_spill_lock():
-                return type(self).from_pylibcudf(  # type: ignore[return-value]
-                    plc.strings.convert.convert_durations.from_durations(
-                        self.to_pylibcudf(mode="read"), format
-                    )
-                )
+            return string._timedelta_to_str_typecast_functions[self.dtype](
+                self, format=format
+            )
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         return self.strftime("%D days %H:%M:%S")
@@ -311,7 +307,7 @@ class TimeDeltaColumn(ColumnBase):
     def as_timedelta_column(self, dtype: Dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
-        return unary.cast(self, dtype=dtype)  # type: ignore[return-value]
+        return libcudf.unary.cast(self, dtype=dtype)
 
     def find_and_replace(
         self,
@@ -471,7 +467,7 @@ class TimeDeltaColumn(ColumnBase):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """
+        """  # noqa: E501
 
         date_meta = {
             "seconds": ["m", "s"],

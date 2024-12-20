@@ -19,7 +19,6 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -218,8 +217,9 @@ struct minmax_functor {
     auto dev_result = reduce<cudf::string_view>(col, stream);
     // copy the minmax_pair to the host; does not copy the strings
     using OutputType = minmax_pair<cudf::string_view>;
-
-    auto const host_result = dev_result.value(stream);
+    OutputType host_result;
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
     // strings are copied to create the scalars here
     return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
             std::make_unique<string_scalar>(host_result.max_val, true, stream, mr)};
@@ -235,8 +235,10 @@ struct minmax_functor {
     // compute minimum and maximum values
     auto dev_result = reduce<T>(col, stream);
     // copy the minmax_pair to the host to call get_element
-    using OutputType       = minmax_pair<T>;
-    OutputType host_result = dev_result.value(stream);
+    using OutputType = minmax_pair<T>;
+    OutputType host_result;
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();
     return {detail::get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),

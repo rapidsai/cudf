@@ -19,7 +19,6 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/gather.hpp>
 #include <cudf/utilities/default_stream.hpp>

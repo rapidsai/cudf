@@ -30,10 +30,11 @@
 
 #include <rmm/device_uvector.hpp>
 
-#include <cuda/std/optional>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
+
+#include <optional>
 
 using cudf::device_span;
 
@@ -182,7 +183,7 @@ constexpr char to_lower(char const c) { return c >= 'A' && c <= 'Z' ? c + ('a' -
  * @param end Pointer to the first element after the string
  * @return true if string is valid infinity, else false.
  */
-CUDF_HOST_DEVICE constexpr bool is_infinity(char const* begin, char const* end)
+constexpr bool is_infinity(char const* begin, char const* end)
 {
   if (*begin == '-' || *begin == '+') begin++;
   char const* cinf = "infinity";
@@ -207,9 +208,9 @@ CUDF_HOST_DEVICE constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__host__ __device__ cuda::std::optional<T> parse_numeric(char const* begin,
-                                                         char const* end,
-                                                         parse_options_view const& opts)
+__host__ __device__ std::optional<T> parse_numeric(char const* begin,
+                                                   char const* end,
+                                                   parse_options_view const& opts)
 {
   T value{};
   bool all_digits_valid = true;
@@ -266,7 +267,7 @@ __host__ __device__ cuda::std::optional<T> parse_numeric(char const* begin,
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid) { return cuda::std::optional<T>{}; }
+  if (!all_digits_valid) { return std::optional<T>{}; }
 
   return value * sign;
 }
@@ -523,7 +524,7 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex = false)
   {
-    auto const value = [as_hex, &opts, begin, end]() -> cuda::std::optional<T> {
+    auto const value = [as_hex, &opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
@@ -572,7 +573,7 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
+    auto const value = [&opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
@@ -601,7 +602,7 @@ struct ConvertFunctor {
                                                       parse_options_view const& opts,
                                                       bool as_hex)
   {
-    auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
+    auto const value = [&opts, begin, end]() -> std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {

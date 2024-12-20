@@ -31,7 +31,6 @@
 
 #include <algorithm>
 
-namespace {
 template <typename T>
 CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
 {
@@ -110,7 +109,6 @@ std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const>
     xs.begin(), xs.end(), ys.begin(), [](T const& ts) { return ts.time_since_epoch().count(); });
   return T{typename T::duration{std::accumulate(ys.begin(), ys.end(), 0)}};
 }
-}  // namespace
 
 template <typename T>
 struct AtomicsTest : public cudf::test::BaseFixture {

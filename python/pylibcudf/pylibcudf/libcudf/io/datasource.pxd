@@ -1,5 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
-from pylibcudf.exception_handler cimport libcudf_exception_handler
+# Copyright (c) 2023, NVIDIA CORPORATION.
 
 
 cdef extern from "cudf/io/datasource.hpp" \

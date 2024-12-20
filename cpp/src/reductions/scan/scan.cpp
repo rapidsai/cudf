@@ -20,8 +20,8 @@
 #include <cudf/reduction.hpp>
 
 namespace cudf {
+
 namespace detail {
-namespace {
 std::unique_ptr<column> scan(column_view const& input,
                              scan_aggregation const& agg,
                              scan_type inclusive,
@@ -50,7 +50,6 @@ std::unique_ptr<column> scan(column_view const& input,
            : detail::scan_inclusive(input, agg, null_handling, stream, mr);
 }
 
-}  // namespace
 }  // namespace detail
 
 std::unique_ptr<column> scan(column_view const& input,

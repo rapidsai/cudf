@@ -194,12 +194,19 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::dictionary32>(
     get_column(&keys_schema_view, input->dictionary, keys_type, true, stream, mr);
 
   auto const dict_indices_type = [&schema]() -> data_type {
-    // cudf dictionary requires a signed type for the indices
+    // cudf dictionary requires an unsigned type for the indices,
+    // since it is invalid for an arrow dictionary to contain negative
+    // indices, we can safely use the unsigned equivalent without having
+    // to modify the buffers.
     switch (schema->storage_type) {
-      case NANOARROW_TYPE_INT8: return data_type(type_id::INT8);
-      case NANOARROW_TYPE_INT16: return data_type(type_id::INT16);
-      case NANOARROW_TYPE_INT32: return data_type(type_id::INT32);
-      case NANOARROW_TYPE_INT64: return data_type(type_id::INT64);
+      case NANOARROW_TYPE_INT8:
+      case NANOARROW_TYPE_UINT8: return data_type(type_id::UINT8);
+      case NANOARROW_TYPE_INT16:
+      case NANOARROW_TYPE_UINT16: return data_type(type_id::UINT16);
+      case NANOARROW_TYPE_INT32:
+      case NANOARROW_TYPE_UINT32: return data_type(type_id::UINT32);
+      case NANOARROW_TYPE_INT64:
+      case NANOARROW_TYPE_UINT64: return data_type(type_id::UINT64);
       default: CUDF_FAIL("Unsupported type_id for dictionary indices", cudf::data_type_error);
     }
   }();

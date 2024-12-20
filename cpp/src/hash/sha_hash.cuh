@@ -30,7 +30,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/limits>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -38,6 +37,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -252,7 +252,7 @@ struct HasherDispatcher {
   {
     Element const& key = input_col.element<Element>(row_index);
     if (isnan(key)) {
-      Element nan = cuda::std::numeric_limits<Element>::quiet_NaN();
+      Element nan = std::numeric_limits<Element>::quiet_NaN();
       hasher->process_fixed_width(nan);
     } else if (key == Element{0.0}) {
       hasher->process_fixed_width(Element{0.0});

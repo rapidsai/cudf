@@ -24,18 +24,12 @@ def test_write_json_basic(table_data, source_or_sink, lines, rows_per_chunk):
     plc_table_w_meta, pa_table = table_data
     sink = source_or_sink
 
-    options = (
-        plc.io.json.JsonWriterOptions.builder(
-            plc.io.SinkInfo([sink]), plc_table_w_meta.tbl
-        )
-        .metadata(plc_table_w_meta)
-        .lines(lines)
-        .build()
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_table_w_meta,
+        lines=lines,
+        rows_per_chunk=rows_per_chunk,
     )
-
-    options.set_rows_per_chunk(rows_per_chunk)
-
-    plc.io.json.write_json(options)
 
     exp = pa_table.to_pandas()
 
@@ -63,17 +57,12 @@ def test_write_json_nulls(na_rep, include_nulls):
 
     sink = io.StringIO()
 
-    options = (
-        plc.io.json.JsonWriterOptions.builder(
-            plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
-        )
-        .metadata(plc_tbl_w_meta)
-        .na_rep(na_rep)
-        .include_nulls(include_nulls)
-        .build()
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_tbl_w_meta,
+        na_rep=na_rep,
+        include_nulls=include_nulls,
     )
-
-    plc.io.json.write_json(options)
 
     exp = pa_tbl.to_pandas()
 
@@ -111,20 +100,14 @@ def test_write_json_bool_opts(true_value, false_value):
 
     sink = io.StringIO()
 
-    options = (
-        plc.io.json.JsonWriterOptions.builder(
-            plc.io.SinkInfo([sink]), plc_tbl_w_meta.tbl
-        )
-        .metadata(plc_tbl_w_meta)
-        .na_rep("null")
-        .include_nulls(True)
-        .build()
+    plc.io.json.write_json(
+        plc.io.SinkInfo([sink]),
+        plc_tbl_w_meta,
+        include_nulls=True,
+        na_rep="null",
+        true_value=true_value,
+        false_value=false_value,
     )
-
-    options.set_true_value(true_value)
-    options.set_false_value(false_value)
-
-    plc.io.json.write_json(options)
 
     exp = pa_tbl.to_pandas()
 

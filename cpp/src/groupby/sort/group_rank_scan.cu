@@ -29,7 +29,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/limits>
 #include <thrust/functional.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/pair.h>
@@ -186,7 +185,7 @@ std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
     group_labels,
     group_offsets,
     [] __device__(bool unequal, auto row_index_in_group) {
-      return unequal ? row_index_in_group + 1 : cuda::std::numeric_limits<size_type>::max();
+      return unequal ? row_index_in_group + 1 : std::numeric_limits<size_type>::max();
     },
     DeviceMin{},
     has_nested_nulls(table_view{{grouped_values}}),

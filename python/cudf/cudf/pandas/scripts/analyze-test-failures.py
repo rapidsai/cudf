@@ -41,7 +41,7 @@ def count_failures(log_file_name, pattern):
                     PANDAS_TEST_PREFIX
                 )
                 if fnmatch(line_module_name, pattern):
-                    if line.get("longrepr"):
+                    if "longrepr" in line and line["longrepr"]:
                         if isinstance(line["longrepr"], (tuple, list)):
                             message = line["longrepr"][2].splitlines()[0]
                         elif isinstance(line["longrepr"], str):

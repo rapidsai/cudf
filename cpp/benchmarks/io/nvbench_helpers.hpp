@@ -76,7 +76,6 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto value) {
     switch (value) {
       case cudf::io::compression_type::SNAPPY: return "SNAPPY";
-      case cudf::io::compression_type::GZIP: return "GZIP";
       case cudf::io::compression_type::NONE: return "NONE";
       default: return "Unknown";
     }

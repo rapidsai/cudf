@@ -9,13 +9,12 @@ import contextlib
 import os
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import nvtx
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
-import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
@@ -33,26 +32,8 @@ if TYPE_CHECKING:
 __all__: list[str] = ["execute_with_cudf"]
 
 
-_SUPPORTED_PREFETCHES = {
-    "column_view::get_data",
-    "mutable_column_view::get_data",
-    "gather",
-    "hash_join",
-}
-
-
-def _env_get_int(name, default):
-    try:
-        return int(os.getenv(name, default))
-    except (ValueError, TypeError):  # pragma: no cover
-        return default  # pragma: no cover
-
-
 @cache
-def default_memory_resource(
-    device: int,
-    cuda_managed_memory: bool,  # noqa: FBT001
-) -> rmm.mr.DeviceMemoryResource:
+def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
     """
     Return the default memory resource for cudf-polars.
 
@@ -61,35 +42,15 @@ def default_memory_resource(
     device
         Disambiguating device id when selecting the device. Must be
         the active device when this function is called.
-    cuda_managed_memory
-        Whether to use managed memory or not.
 
     Returns
     -------
     rmm.mr.DeviceMemoryResource
         The default memory resource that cudf-polars uses. Currently
-        a managed memory resource, if `cuda_managed_memory` is `True`.
-        else, an async pool resource is returned.
+        an async pool resource.
     """
     try:
-        if (
-            cuda_managed_memory
-            and pylibcudf.utils._is_concurrent_managed_access_supported()
-        ):
-            # Allocating 80% of the available memory for the pool.
-            # Leaving a 20% headroom to avoid OOM errors.
-            free_memory, _ = rmm.mr.available_device_memory()
-            free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
-            for key in _SUPPORTED_PREFETCHES:
-                pylibcudf.experimental.enable_prefetching(key)
-            mr = rmm.mr.PrefetchResourceAdaptor(
-                rmm.mr.PoolMemoryResource(
-                    rmm.mr.ManagedMemoryResource(),
-                    initial_pool_size=free_memory,
-                )
-            )
-        else:
-            mr = rmm.mr.CudaAsyncMemoryResource()
+        return rmm.mr.CudaAsyncMemoryResource()
     except RuntimeError as e:  # pragma: no cover
         msg, *_ = e.args
         if (
@@ -103,8 +64,6 @@ def default_memory_resource(
             ) from None
         else:
             raise
-    else:
-        return mr
 
 
 @contextlib.contextmanager
@@ -130,15 +89,10 @@ def set_memory_resource(
     at entry. If a memory resource is provided, it must be valid to
     use with the currently active device.
     """
-    previous = rmm.mr.get_current_device_resource()
     if mr is None:
         device: int = gpu.getDevice()
-        mr = default_memory_resource(
-            device=device,
-            cuda_managed_memory=bool(
-                _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) != 0
-            ),
-        )
+        mr = default_memory_resource(device)
+    previous = rmm.mr.get_current_device_resource()
     rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
@@ -175,13 +129,13 @@ def set_device(device: int | None) -> Generator[int, None, None]:
 
 def _callback(
     ir: IR,
+    config: GPUEngine,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
     *,
     device: int | None,
     memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
 ) -> pl.DataFrame:
     assert with_columns is None
     assert pyarrow_predicate is None
@@ -192,14 +146,7 @@ def _callback(
         set_device(device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "pylibcudf":
-            return ir.evaluate(cache={}).to_polars()
-        elif executor == "dask-experimental":
-            from cudf_polars.experimental.parallel import evaluate_dask
-
-            return evaluate_dask(ir).to_polars()
-        else:
-            raise ValueError(f"Unknown executor '{executor}'")
+        return ir.evaluate(cache={}, config=config).to_polars()
 
 
 def validate_config_options(config: dict) -> None:
@@ -216,27 +163,13 @@ def validate_config_options(config: dict) -> None:
     ValueError
         If the configuration contains unsupported options.
     """
-    if unsupported := (
-        config.keys()
-        - {"raise_on_fail", "parquet_options", "executor", "executor_options"}
-    ):
+    if unsupported := (config.keys() - {"raise_on_fail", "parquet_options"}):
         raise ValueError(
             f"Engine configuration contains unsupported settings: {unsupported}"
         )
     assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
         config.get("parquet_options", {})
     )
-
-    # Validate executor_options
-    executor = config.get("executor", "pylibcudf")
-    if executor == "dask-experimental":
-        unsupported = config.get("executor_options", {}).keys() - {
-            "max_rows_per_partition"
-        }
-    else:
-        unsupported = config.get("executor_options", {}).keys()
-    if unsupported:
-        raise ValueError(f"Unsupported executor_options for {executor}: {unsupported}")
 
 
 def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
@@ -265,11 +198,10 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     device = config.device
     memory_resource = config.memory_resource
     raise_on_fail = config.config.get("raise_on_fail", False)
-    executor = config.config.get("executor", None)
     validate_config_options(config.config)
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
-        translator = Translator(nt, config)
+        translator = Translator(nt)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
         if len(ir_translation_errors):
@@ -293,8 +225,8 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
                 partial(
                     _callback,
                     ir,
+                    config,
                     device=device,
                     memory_resource=memory_resource,
-                    executor=executor,
                 )
             )

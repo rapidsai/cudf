@@ -33,8 +33,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cuda/std/limits>
-#include <cuda/std/optional>
 #include <cuda/std/tuple>
 #include <cuda/std/utility>
 #include <thrust/detail/use_default.h>
@@ -50,8 +48,11 @@
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
+#include <limits>
 #include <memory>
+#include <optional>
 #include <type_traits>
+#include <utility>
 
 namespace CUDF_EXPORT cudf {
 
@@ -286,16 +287,15 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
-  device_row_comparator(
-    Nullate check_nulls,
-    table_device_view lhs,
-    table_device_view rhs,
-    device_span<detail::dremel_device_view const> l_dremel_device_views,
-    device_span<detail::dremel_device_view const> r_dremel_device_views,
-    cuda::std::optional<device_span<int const>> depth                  = cuda::std::nullopt,
-    cuda::std::optional<device_span<order const>> column_order         = cuda::std::nullopt,
-    cuda::std::optional<device_span<null_order const>> null_precedence = cuda::std::nullopt,
-    PhysicalElementComparator comparator                               = {}) noexcept
+  device_row_comparator(Nullate check_nulls,
+                        table_device_view lhs,
+                        table_device_view rhs,
+                        device_span<detail::dremel_device_view const> l_dremel_device_views,
+                        device_span<detail::dremel_device_view const> r_dremel_device_views,
+                        std::optional<device_span<int const>> depth                  = std::nullopt,
+                        std::optional<device_span<order const>> column_order         = std::nullopt,
+                        std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+                        PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel(l_dremel_device_views),
@@ -331,9 +331,9 @@ class device_row_comparator {
     Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
-    cuda::std::optional<device_span<order const>> column_order         = cuda::std::nullopt,
-    cuda::std::optional<device_span<null_order const>> null_precedence = cuda::std::nullopt,
-    PhysicalElementComparator comparator                               = {}) noexcept
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+    PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel{},
@@ -410,7 +410,7 @@ class device_row_comparator {
 
       return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
                                          _rhs.element<Element>(rhs_element_index)),
-                             cuda::std::numeric_limits<int>::max());
+                             std::numeric_limits<int>::max());
     }
 
     /**
@@ -455,7 +455,7 @@ class device_row_comparator {
         }
 
         if (lcol.num_child_columns() == 0) {
-          return cuda::std::pair(weak_ordering::EQUIVALENT, cuda::std::numeric_limits<int>::max());
+          return cuda::std::pair(weak_ordering::EQUIVALENT, std::numeric_limits<int>::max());
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
@@ -607,7 +607,7 @@ class device_row_comparator {
   __device__ constexpr weak_ordering operator()(size_type const lhs_index,
                                                 size_type const rhs_index) const noexcept
   {
-    int last_null_depth = cuda::std::numeric_limits<int>::max();
+    int last_null_depth = std::numeric_limits<int>::max();
     size_type list_column_index{-1};
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       if (_lhs.column(i).type().id() == type_id::LIST) { ++list_column_index; }
@@ -626,9 +626,9 @@ class device_row_comparator {
       // here, otherwise the current code would be failing.
       auto const [l_dremel_i, r_dremel_i] =
         _lhs.column(i).type().id() == type_id::LIST
-          ? cuda::std::make_tuple(optional_dremel_view(_l_dremel[list_column_index]),
-                                  optional_dremel_view(_r_dremel[list_column_index]))
-          : cuda::std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
+          ? std::make_tuple(optional_dremel_view(_l_dremel[list_column_index]),
+                            optional_dremel_view(_r_dremel[list_column_index]))
+          : std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
 
       auto element_comp = element_comparator{_check_nulls,
                                              _lhs.column(i),
@@ -658,9 +658,9 @@ class device_row_comparator {
   device_span<detail::dremel_device_view const> const _l_dremel;
   device_span<detail::dremel_device_view const> const _r_dremel;
   Nullate const _check_nulls;
-  cuda::std::optional<device_span<int const>> const _depth;
-  cuda::std::optional<device_span<order const>> const _column_order;
-  cuda::std::optional<device_span<null_order const>> const _null_precedence;
+  std::optional<device_span<int const>> const _depth;
+  std::optional<device_span<order const>> const _column_order;
+  std::optional<device_span<null_order const>> const _null_precedence;
   PhysicalElementComparator const _comparator;
 };  // class device_row_comparator
 
@@ -882,10 +882,10 @@ struct preprocessed_table {
    * @return Device array containing respective column orders. If no explicit column orders were
    * specified during the creation of this object then this will be `nullopt`.
    */
-  [[nodiscard]] cuda::std::optional<device_span<order const>> column_order() const
+  [[nodiscard]] std::optional<device_span<order const>> column_order() const
   {
-    return _column_order.size() ? cuda::std::optional<device_span<order const>>(_column_order)
-                                : cuda::std::nullopt;
+    return _column_order.size() ? std::optional<device_span<order const>>(_column_order)
+                                : std::nullopt;
   }
 
   /**
@@ -895,11 +895,10 @@ struct preprocessed_table {
    * @return Device array containing respective column null precedence. If no explicit column null
    * precedences were specified during the creation of this object then this will be `nullopt`.
    */
-  [[nodiscard]] cuda::std::optional<device_span<null_order const>> null_precedence() const
+  [[nodiscard]] std::optional<device_span<null_order const>> null_precedence() const
   {
-    return _null_precedence.size()
-             ? cuda::std::optional<device_span<null_order const>>(_null_precedence)
-             : cuda::std::nullopt;
+    return _null_precedence.size() ? std::optional<device_span<null_order const>>(_null_precedence)
+                                   : std::nullopt;
   }
 
   /**
@@ -910,10 +909,9 @@ struct preprocessed_table {
    * @return std::optional<device_span<int const>> Device array containing respective column depths.
    * If there are no nested columns in the table then this will be `nullopt`.
    */
-  [[nodiscard]] cuda::std::optional<device_span<int const>> depths() const
+  [[nodiscard]] std::optional<device_span<int const>> depths() const
   {
-    return _depths.size() ? cuda::std::optional<device_span<int const>>(_depths)
-                          : cuda::std::nullopt;
+    return _depths.size() ? std::optional<device_span<int const>>(_depths) : std::nullopt;
   }
 
   [[nodiscard]] device_span<detail::dremel_device_view const> dremel_device_views() const
@@ -942,8 +940,8 @@ struct preprocessed_table {
   rmm::device_uvector<size_type> const _depths;
 
   // Dremel encoding of list columns used for the comparison algorithm
-  cuda::std::optional<std::vector<detail::dremel_data>> _dremel_data;
-  cuda::std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
+  std::optional<std::vector<detail::dremel_data>> _dremel_data;
+  std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
 
   // Intermediate columns generated from transforming nested children columns into
   // integers columns using `cudf::rank()`, need to be kept alive.
@@ -1810,7 +1808,7 @@ class element_hasher {
   __device__ element_hasher(
     Nullate nulls,
     uint32_t seed             = DEFAULT_HASH_SEED,
-    hash_value_type null_hash = cuda::std::numeric_limits<hash_value_type>::max()) noexcept
+    hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
     : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
   {
   }
@@ -1894,7 +1892,7 @@ class device_row_hasher {
    */
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
-    static constexpr hash_value_type NULL_HASH = cuda::std::numeric_limits<hash_value_type>::max();
+    static constexpr hash_value_type NULL_HASH     = std::numeric_limits<hash_value_type>::max();
     static constexpr hash_value_type NON_NULL_HASH = 0;
 
    public:

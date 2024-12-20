@@ -151,14 +151,9 @@ class Consumer(CudfKafkaClient):
             "parquet": cudf.io.read_parquet,
         }
 
-        if message_format == "json":
-            result = cudf_readers[message_format](
-                kafka_datasource, engine="cudf", lines=True
-            )
-        else:
-            result = cudf_readers[message_format](
-                kafka_datasource, engine="cudf"
-            )
+        result = cudf_readers[message_format](
+            kafka_datasource, engine="cudf", lines=True
+        )
 
         # Close up the cudf datasource instance
         # TODO: Ideally the C++ destructor should handle the

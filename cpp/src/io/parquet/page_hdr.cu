@@ -433,7 +433,6 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
       // definition levels
       bs->page.chunk_row            = 0;
       bs->page.num_rows             = 0;
-      bs->page.is_num_rows_adjusted = false;
       bs->page.skipped_values       = -1;
       bs->page.skipped_leaf_values  = 0;
       bs->page.str_bytes            = 0;

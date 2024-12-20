@@ -37,29 +37,31 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, MutableMapping, Sequence
     from typing import Literal
 
+    from polars import GPUEngine
+
     from cudf_polars.typing import Schema
 
 
 __all__ = [
     "IR",
-    "Cache",
-    "ConditionalJoin",
-    "DataFrameScan",
-    "Distinct",
     "ErrorNode",
-    "Filter",
-    "GroupBy",
-    "HConcat",
-    "HStack",
-    "Join",
-    "MapFunction",
-    "Projection",
     "PythonScan",
     "Scan",
+    "Cache",
+    "DataFrameScan",
     "Select",
-    "Slice",
+    "GroupBy",
+    "Join",
+    "ConditionalJoin",
+    "HStack",
+    "Distinct",
     "Sort",
+    "Slice",
+    "Filter",
+    "Projection",
+    "MapFunction",
     "Union",
+    "HConcat",
 ]
 
 
@@ -130,7 +132,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
 class IR(Node["IR"]):
     """Abstract plan node, representing an unevaluated dataframe."""
 
-    __slots__ = ("_non_child_args", "schema")
+    __slots__ = ("schema", "_non_child_args")
     # This annotation is needed because of https://github.com/python/mypy/issues/17981
     _non_child: ClassVar[tuple[str, ...]] = ("schema",)
     # Concrete classes should set this up with the arguments that will
@@ -180,7 +182,9 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -189,6 +193,8 @@ class IR(Node["IR"]):
         cache
             Mapping from cached node ids to constructed DataFrames.
             Used to implement evaluation of the `Cache` node.
+        config
+            GPU engine configuration.
 
         Notes
         -----
@@ -208,8 +214,9 @@ class IR(Node["IR"]):
             translation phase should fail earlier.
         """
         return self.do_evaluate(
+            config,
             *self._non_child_args,
-            *(child.evaluate(cache=cache) for child in self.children),
+            *(child.evaluate(cache=cache, config=config) for child in self.children),
         )
 
 
@@ -253,23 +260,21 @@ class Scan(IR):
     """Input from files."""
 
     __slots__ = (
-        "cloud_options",
-        "config_options",
-        "n_rows",
-        "paths",
-        "predicate",
-        "reader_options",
-        "row_index",
-        "skip_rows",
         "typ",
+        "reader_options",
+        "cloud_options",
+        "paths",
         "with_columns",
+        "skip_rows",
+        "n_rows",
+        "row_index",
+        "predicate",
     )
     _non_child = (
         "schema",
         "typ",
         "reader_options",
         "cloud_options",
-        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -283,8 +288,6 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
-    config_options: dict[str, Any]
-    """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
     with_columns: list[str] | None
@@ -307,7 +310,6 @@ class Scan(IR):
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
-        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -319,7 +321,6 @@ class Scan(IR):
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
-        self.config_options = config_options
         self.paths = paths
         self.with_columns = with_columns
         self.skip_rows = skip_rows
@@ -330,7 +331,6 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
-            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -412,7 +412,6 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
-            json.dumps(self.config_options),
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
@@ -424,10 +423,10 @@ class Scan(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: dict[str, Any],
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -476,28 +475,23 @@ class Scan(IR):
                 with path.open() as f:
                     while f.readline() == "\n":
                         skiprows += 1
-                options = (
-                    plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
-                    .nrows(n_rows)
-                    .skiprows(skiprows)
-                    .lineterminator(str(eol))
-                    .quotechar(str(quote))
-                    .decimal(decimal)
-                    .keep_default_na(keep_default_na=False)
-                    .na_filter(na_filter=True)
-                    .build()
+                tbl_w_meta = plc.io.csv.read_csv(
+                    plc.io.SourceInfo([path]),
+                    delimiter=sep,
+                    quotechar=quote,
+                    lineterminator=eol,
+                    col_names=column_names,
+                    header=header,
+                    usecols=usecols,
+                    na_filter=True,
+                    na_values=null_values,
+                    keep_default_na=False,
+                    skiprows=skiprows,
+                    comment=comment,
+                    decimal=decimal,
+                    dtypes=schema,
+                    nrows=n_rows,
                 )
-                options.set_delimiter(str(sep))
-                if column_names is not None:
-                    options.set_names([str(name) for name in column_names])
-                options.set_header(header)
-                options.set_dtypes(schema)
-                if usecols is not None:
-                    options.set_use_cols_names([str(name) for name in usecols])
-                options.set_na_values(null_values)
-                if comment is not None:
-                    options.set_comment(comment)
-                tbl_w_meta = plc.io.csv.read_csv(options)
                 pieces.append(tbl_w_meta)
                 if read_partial:
                     n_rows -= tbl_w_meta.tbl.num_rows()
@@ -515,24 +509,19 @@ class Scan(IR):
                 colnames[0],
             )
         elif typ == "parquet":
-            parquet_options = config_options.get("parquet_options", {})
+            parquet_options = config.config.get("parquet_options", {})
             if parquet_options.get("chunked", True):
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
-                # We handle skip_rows != 0 by reading from the
-                # up to n_rows + skip_rows and slicing off the
-                # first skip_rows entries.
-                # TODO: Remove this workaround once
-                # https://github.com/rapidsai/cudf/issues/16186
-                # is fixed
-                nrows = n_rows + skip_rows
-                if nrows > -1:
-                    options.set_num_rows(nrows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
                 reader = plc.io.parquet.ChunkedParquetReader(
-                    options,
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    # We handle skip_rows != 0 by reading from the
+                    # up to n_rows + skip_rows and slicing off the
+                    # first skip_rows entries.
+                    # TODO: Remove this workaround once
+                    # https://github.com/rapidsai/cudf/issues/16186
+                    # is fixed
+                    nrows=n_rows + skip_rows,
+                    skip_rows=0,
                     chunk_read_limit=parquet_options.get(
                         "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
                     ),
@@ -578,18 +567,13 @@ class Scan(IR):
                 if predicate is not None and row_index is None:
                     # Can't apply filters during read if we have a row index.
                     filters = to_parquet_filter(predicate.value)
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
-                if n_rows != -1:
-                    options.set_num_rows(n_rows)
-                if skip_rows != 0:
-                    options.set_skip_rows(skip_rows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
-                if filters is not None:
-                    options.set_filter(filters)
-                tbl_w_meta = plc.io.parquet.read_parquet(options)
+                tbl_w_meta = plc.io.parquet.read_parquet(
+                    plc.io.SourceInfo(paths),
+                    columns=with_columns,
+                    filters=filters,
+                    nrows=n_rows,
+                    skip_rows=skip_rows,
+                )
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     # TODO: consider nested column names?
@@ -673,14 +657,16 @@ class Cache(IR):
 
     @classmethod
     def do_evaluate(
-        cls, key: int, df: DataFrame
+        cls, config: GPUEngine, key: int, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
         # return it.
         return df
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(
+        self, *, cache: MutableMapping[int, DataFrame], config: GPUEngine
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
@@ -688,7 +674,9 @@ class Cache(IR):
             return cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache))
+            return cache.setdefault(
+                self.key, value.evaluate(cache=cache, config=config)
+            )
 
 
 class DataFrameScan(IR):
@@ -698,16 +686,14 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "predicate", "projection")
-    _non_child = ("schema", "df", "projection", "predicate", "config_options")
+    __slots__ = ("df", "projection", "predicate")
+    _non_child = ("schema", "df", "projection", "predicate")
     df: Any
     """Polars LazyFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     predicate: expr.NamedExpr | None
     """Mask to apply."""
-    config_options: dict[str, Any]
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -715,13 +701,11 @@ class DataFrameScan(IR):
         df: Any,
         projection: Sequence[str] | None,
         predicate: expr.NamedExpr | None,
-        config_options: dict[str, Any],
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
         self.predicate = predicate
-        self.config_options = config_options
         self._non_child_args = (schema, df, self.projection, predicate)
         self.children = ()
 
@@ -733,18 +717,12 @@ class DataFrameScan(IR):
         not stable across runs, or repeat instances of the same equal dataframes.
         """
         schema_hash = tuple(self.schema.items())
-        return (
-            type(self),
-            schema_hash,
-            id(self.df),
-            self.projection,
-            self.predicate,
-            json.dumps(self.config_options),
-        )
+        return (type(self), schema_hash, id(self.df), self.projection, self.predicate)
 
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         schema: Schema,
         df: Any,
         projection: tuple[str, ...] | None,
@@ -792,6 +770,7 @@ class Select(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         exprs: tuple[expr.NamedExpr, ...],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
@@ -827,6 +806,7 @@ class Reduce(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         exprs: tuple[expr.NamedExpr, ...],
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover; not exposed by polars yet
@@ -840,11 +820,11 @@ class GroupBy(IR):
     """Perform a groupby."""
 
     __slots__ = (
-        "agg_infos",
         "agg_requests",
         "keys",
         "maintain_order",
         "options",
+        "agg_infos",
     )
     _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
     keys: tuple[expr.NamedExpr, ...]
@@ -919,6 +899,7 @@ class GroupBy(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
@@ -1014,7 +995,7 @@ class GroupBy(IR):
 class ConditionalJoin(IR):
     """A conditional inner join of two dataframes on a predicate."""
 
-    __slots__ = ("ast_predicate", "options", "predicate")
+    __slots__ = ("predicate", "options", "ast_predicate")
     _non_child = ("schema", "predicate", "options")
     predicate: expr.Expr
     options: tuple
@@ -1040,6 +1021,7 @@ class ConditionalJoin(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         predicate: plc.expressions.Expression,
         zlice: tuple[int, int] | None,
         suffix: str,
@@ -1074,7 +1056,7 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "options", "right_on")
+    __slots__ = ("left_on", "right_on", "options")
     _non_child = ("schema", "left_on", "right_on", "options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
@@ -1212,6 +1194,7 @@ class Join(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         left_on_exprs: Sequence[expr.NamedExpr],
         right_on_exprs: Sequence[expr.NamedExpr],
         options: tuple[
@@ -1335,6 +1318,7 @@ class HStack(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         exprs: Sequence[expr.NamedExpr],
         should_broadcast: bool,  # noqa: FBT001
         df: DataFrame,
@@ -1358,7 +1342,7 @@ class HStack(IR):
 class Distinct(IR):
     """Produce a new dataframe with distinct rows."""
 
-    __slots__ = ("keep", "stable", "subset", "zlice")
+    __slots__ = ("keep", "subset", "zlice", "stable")
     _non_child = ("schema", "keep", "subset", "zlice", "stable")
     keep: plc.stream_compaction.DuplicateKeepOption
     """Which distinct value to keep."""
@@ -1397,6 +1381,7 @@ class Distinct(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
         zlice: tuple[int, int] | None,
@@ -1445,7 +1430,7 @@ class Distinct(IR):
 class Sort(IR):
     """Sort a dataframe."""
 
-    __slots__ = ("by", "null_order", "order", "stable", "zlice")
+    __slots__ = ("by", "order", "null_order", "stable", "zlice")
     _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
     by: tuple[expr.NamedExpr, ...]
     """Sort keys."""
@@ -1486,6 +1471,7 @@ class Sort(IR):
     @classmethod
     def do_evaluate(
         cls,
+        config: GPUEngine,
         by: Sequence[expr.NamedExpr],
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
@@ -1526,7 +1512,7 @@ class Sort(IR):
 class Slice(IR):
     """Slice a dataframe."""
 
-    __slots__ = ("length", "offset")
+    __slots__ = ("offset", "length")
     _non_child = ("schema", "offset", "length")
     offset: int
     """Start of the slice."""
@@ -1541,7 +1527,9 @@ class Slice(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(cls, offset: int, length: int, df: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, config: GPUEngine, offset: int, length: int, df: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         return df.slice((offset, length))
 
@@ -1561,7 +1549,9 @@ class Filter(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(cls, mask_expr: expr.NamedExpr, df: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, config: GPUEngine, mask_expr: expr.NamedExpr, df: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         (mask,) = broadcast(mask_expr.evaluate(df), target_length=df.num_rows)
         return df.filter(mask)
@@ -1579,7 +1569,7 @@ class Projection(IR):
         self.children = (df,)
 
     @classmethod
-    def do_evaluate(cls, schema: Schema, df: DataFrame) -> DataFrame:
+    def do_evaluate(cls, config: GPUEngine, schema: Schema, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # This can reorder things.
         columns = broadcast(
@@ -1625,15 +1615,13 @@ class MapFunction(IR):
                 # polars requires that all to-explode columns have the
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
-            self.options = (tuple(to_explode),)
         elif self.name == "rename":
-            old, new, strict = self.options
+            old, new, _ = self.options
             # TODO: perhaps polars should validate renaming in the IR?
             if len(new) != len(set(new)) or (
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
                 raise NotImplementedError("Duplicate new names in rename.")
-            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -1651,14 +1639,14 @@ class MapFunction(IR):
             self.options = (
                 tuple(indices),
                 tuple(pivotees),
-                variable_name,
-                value_name,
+                (variable_name, schema[variable_name]),
+                (value_name, schema[value_name]),
             )
-        self._non_child_args = (schema, name, self.options)
+        self._non_child_args = (name, self.options)
 
     @classmethod
     def do_evaluate(
-        cls, schema: Schema, name: str, options: Any, df: DataFrame
+        cls, config: GPUEngine, name: str, options: Any, df: DataFrame
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if name == "rechunk":
@@ -1681,8 +1669,8 @@ class MapFunction(IR):
             (
                 indices,
                 pivotees,
-                variable_name,
-                value_name,
+                (variable_name, variable_dtype),
+                (value_name, value_dtype),
             ) = options
             npiv = len(pivotees)
             index_columns = [
@@ -1699,7 +1687,7 @@ class MapFunction(IR):
                         plc.interop.from_arrow(
                             pa.array(
                                 pivotees,
-                                type=plc.interop.to_arrow(schema[variable_name]),
+                                type=plc.interop.to_arrow(variable_dtype),
                             ),
                         )
                     ]
@@ -1707,10 +1695,7 @@ class MapFunction(IR):
                 df.num_rows,
             ).columns()
             value_column = plc.concatenate.concatenate(
-                [
-                    df.column_map[pivotee].astype(schema[value_name]).obj
-                    for pivotee in pivotees
-                ]
+                [df.column_map[pivotee].astype(value_dtype).obj for pivotee in pivotees]
             )
             return DataFrame(
                 [
@@ -1741,7 +1726,9 @@ class Union(IR):
             raise NotImplementedError("Schema mismatch")
 
     @classmethod
-    def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls, config: GPUEngine, zlice: tuple[int, int] | None, *dfs: DataFrame
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
@@ -1790,7 +1777,7 @@ class HConcat(IR):
         )
 
     @classmethod
-    def do_evaluate(cls, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(cls, config: GPUEngine, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         max_rows = max(df.num_rows for df in dfs)
         # Horizontal concatenation extends shorter tables with nulls

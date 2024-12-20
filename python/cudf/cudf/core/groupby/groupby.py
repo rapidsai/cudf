@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import itertools
+import pickle
 import textwrap
 import warnings
 from collections import abc
@@ -13,19 +14,17 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
-import cudf.core._internals
 from cudf import _lib as libcudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.null_mask import bitmask_or
+from cudf._lib.reshape import interleave_columns
+from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_list_like, is_numeric_dtype
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import sorting
 from cudf.core.abc import Serializable
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
@@ -431,9 +430,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             ]
         )
 
-        group_keys = cudf.core._internals.stream_compaction.drop_duplicates(
-            group_keys
-        )
+        group_keys = libcudf.stream_compaction.drop_duplicates(group_keys)
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
@@ -496,15 +493,14 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the size of each group.
         """
-        col = cudf.core.column.column_empty(len(self.obj), "int8")
-        result = (
-            cudf.Series._from_column(col, name=getattr(self.obj, "name", None))
+        col = cudf.core.column.column_empty(
+            len(self.obj), "int8", masked=False
+        )
+        return (
+            cudf.Series._from_column(col)
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
-        if not self._as_index:
-            result = result.rename("size").reset_index()
-        return result
 
     @_performance_tracking
     def cumcount(self, ascending: bool = True):
@@ -524,8 +520,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return (
             cudf.Series._from_column(
                 cudf.core.column.column_empty(
-                    len(self.obj),
-                    "int8",
+                    len(self.obj), "int8", masked=False
                 ),
                 index=self.obj.index,
             )
@@ -775,27 +770,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 join_keys = map(list, zip(*join_keys))
                 # By construction, left and right keys are related by
                 # a permutation, so we can use an inner join.
-                with acquire_spill_lock():
-                    plc_tables = [
-                        plc.Table(
-                            [col.to_pylibcudf(mode="read") for col in cols]
-                        )
-                        for cols in join_keys
-                    ]
-                    left_plc, right_plc = plc.join.inner_join(
-                        plc_tables[0],
-                        plc_tables[1],
-                        plc.types.NullEquality.EQUAL,
-                    )
-                    left_order = libcudf.column.Column.from_pylibcudf(left_plc)
-                    right_order = libcudf.column.Column.from_pylibcudf(
-                        right_plc
-                    )
+                left_order, right_order = libcudf.join.join(
+                    *join_keys, how="inner"
+                )
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                (right_order,) = sorting.sort_by_key(
+                (right_order,) = libcudf.sort.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],
@@ -1121,7 +1103,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         index = self.grouping.keys.unique().sort_values()
         num_groups = len(index)
-        has_null_group = any(col.has_nulls() for col in index._columns)
+        _, has_null_group = bitmask_or([*index._columns])
+
         if ascending:
             # Count ascending from 0 to num_groups - 1
             groups = range(num_groups)
@@ -1251,20 +1234,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 for off, size in zip(group_offsets, size_per_group):
                     rs.shuffle(indices[off : off + size])
             else:
-                keys = cp.random.default_rng(seed=random_state).random(
-                    size=nrows
+                rng = cp.random.default_rng(seed=random_state)
+                (indices,) = segmented_sort_by_key(
+                    [as_column(indices)],
+                    [as_column(rng.random(size=nrows))],
+                    as_column(group_offsets),
+                    [],
+                    [],
+                    stable=True,
                 )
-                with acquire_spill_lock():
-                    plc_table = plc.sorting.stable_segmented_sort_by_key(
-                        plc.Table(
-                            [as_column(indices).to_pylibcudf(mode="read")]
-                        ),
-                        plc.Table([as_column(keys).to_pylibcudf(mode="read")]),
-                        as_column(group_offsets).to_pylibcudf(mode="read"),
-                        [plc.types.Order.ASCENDING],
-                        [plc.types.NullOrder.AFTER],
-                    )
-                    indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
             want = np.arange(samples_per_group.sum(), dtype=size_type_dtype)
@@ -1287,7 +1265,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         obj_header, obj_frames = self.obj.serialize()
         header["obj"] = obj_header
-        header["obj_type_name"] = type(self.obj).__name__
+        header["obj_type"] = pickle.dumps(type(self.obj))
         header["num_obj_frames"] = len(obj_frames)
         frames.extend(obj_frames)
 
@@ -1302,7 +1280,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def deserialize(cls, header, frames):
         kwargs = header["kwargs"]
 
-        obj_type = Serializable._name_type_map[header["obj_type_name"]]
+        obj_type = pickle.loads(header["obj_type"])
         obj = obj_type.deserialize(
             header["obj"], frames[: header["num_obj_frames"]]
         )
@@ -1476,7 +1454,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                 RuntimeWarning,
             )
 
-        chunks = [grouped_values[s:e] for s, e in itertools.pairwise(offsets)]
+        chunks = [
+            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
+        ]
         chunk_results = [function(chk, *args) for chk in chunks]
         return self._post_process_chunk_results(
             chunk_results, group_names, group_keys, grouped_values
@@ -2221,17 +2201,6 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
-
-        @acquire_spill_lock()
-        def interleave_columns(source_columns):
-            return libcudf.column.Column.from_pylibcudf(
-                plc.reshape.interleave_columns(
-                    plc.Table(
-                        [c.to_pylibcudf(mode="read") for c in source_columns]
-                    )
-                )
-            )
-
         res = cudf.DataFrame._from_data(
             {
                 x: interleave_columns([gb_cov_corr._data[y] for y in ys])
@@ -3335,8 +3304,8 @@ class _Grouping(Serializable):
     def serialize(self):
         header = {}
         frames = []
-        header["names"] = self.names
-        header["_named_columns"] = self._named_columns
+        header["names"] = pickle.dumps(self.names)
+        header["_named_columns"] = pickle.dumps(self._named_columns)
         column_header, column_frames = cudf.core.column.serialize_columns(
             self._key_columns
         )
@@ -3346,8 +3315,8 @@ class _Grouping(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        names = header["names"]
-        _named_columns = header["_named_columns"]
+        names = pickle.loads(header["names"])
+        _named_columns = pickle.loads(header["_named_columns"])
         key_columns = cudf.core.column.deserialize_columns(
             header["columns"], frames
         )

@@ -33,13 +33,11 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/optional>
-#include <cuda/std/type_traits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
 #include <algorithm>
-#include <type_traits>
 
 /**
  * @file column_device_view.cuh
@@ -58,8 +56,8 @@ namespace CUDF_EXPORT cudf {
  *
  */
 struct nullate {
-  struct YES : cuda::std::bool_constant<true> {};
-  struct NO : cuda::std::bool_constant<false> {};
+  struct YES : std::bool_constant<true> {};
+  struct NO : std::bool_constant<false> {};
   /**
    * @brief `nullate::DYNAMIC` defers the determination of nullability to run time rather than
    * compile time. The calling code is responsible for specifying whether or not nulls are
@@ -82,7 +80,7 @@ struct nullate {
      * @return `true` if nulls are expected in the operation in which this object is applied,
      * otherwise false
      */
-    CUDF_HOST_DEVICE constexpr operator bool() const noexcept { return value; }
+    constexpr operator bool() const noexcept { return value; }
     bool value;  ///< True if nulls are expected
   };
 };
@@ -321,14 +319,14 @@ class alignas(16) column_device_view_base {
   }
 
   template <typename C, typename T, typename = void>
-  struct has_element_accessor_impl : cuda::std::false_type {};
+  struct has_element_accessor_impl : std::false_type {};
 
   template <typename C, typename T>
   struct has_element_accessor_impl<
     C,
     T,
-    void_t<decltype(cuda::std::declval<C>().template element<T>(cuda::std::declval<size_type>()))>>
-    : cuda::std::true_type {};
+    void_t<decltype(std::declval<C>().template element<T>(std::declval<size_type>()))>>
+    : std::true_type {};
 };
 // @cond
 // Forward declaration
@@ -444,7 +442,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return string_view instance representing this element at this index
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
     char const* d_strings = static_cast<char const*>(_data);
@@ -462,7 +460,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   struct index_element_fn {
     template <typename IndexType,
-              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_signed_v<IndexType>)>
+              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>)>
     __device__ size_type operator()(column_device_view const& indices, size_type index)
     {
       return static_cast<size_type>(indices.element<IndexType>(index));
@@ -470,10 +468,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
     template <typename IndexType,
               typename... Args,
-              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_signed_v<IndexType>))>
+              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>))>
     __device__ size_type operator()(Args&&... args)
     {
-      CUDF_UNREACHABLE("dictionary indices must be a signed integral type");
+      CUDF_UNREACHABLE("dictionary indices must be an unsigned integral type");
     }
   };
 
@@ -503,7 +501,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return dictionary32 instance representing this element at this index
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, dictionary32>)>
-  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
   {
     size_type index    = element_index + offset();  // account for this view's _offset
     auto const indices = d_children[0];
@@ -521,7 +519,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return numeric::fixed_point representing the element at this index
    */
   template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
-  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T element(size_type element_index) const noexcept
   {
     using namespace numeric;
     using rep        = typename T::rep;
@@ -536,7 +534,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return `true` if `column_device_view::element<T>()` has a valid overload, `false` otherwise
    */
   template <typename T>
-  CUDF_HOST_DEVICE static constexpr bool has_element_accessor()
+  static constexpr bool has_element_accessor()
   {
     return has_element_accessor_impl<column_device_view, T>::value;
   }
@@ -1034,7 +1032,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return Reference to the element at the specified index
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  [[nodiscard]] __device__ T& element(size_type element_index) const noexcept
+  __device__ [[nodiscard]] T& element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
   }
@@ -1046,7 +1044,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return `true` if `mutable_column_device_view::element<T>()` has a valid overload, `false`
    */
   template <typename T>
-  CUDF_HOST_DEVICE static constexpr bool has_element_accessor()
+  static constexpr bool has_element_accessor()
   {
     return has_element_accessor_impl<mutable_column_device_view, T>::value;
   }
@@ -1427,13 +1425,13 @@ struct pair_rep_accessor {
 
  private:
   template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
-  [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+  __device__ [[nodiscard]] inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
   template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
-  [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+  __device__ [[nodiscard]] inline auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();
   }

@@ -21,13 +21,13 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
-    "ExprTransformer",
-    "GenericTransformer",
-    "IRTransformer",
+    "PolarsIR",
+    "PolarsExpr",
     "NodeTraverser",
     "OptimizationArgs",
-    "PolarsExpr",
-    "PolarsIR",
+    "GenericTransformer",
+    "ExprTransformer",
+    "IRTransformer",
 ]
 
 PolarsIR: TypeAlias = Union[

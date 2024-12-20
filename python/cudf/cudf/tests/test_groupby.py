@@ -917,6 +917,7 @@ def test_groupby_apply_return_col_from_df():
     # tests a UDF that consists of purely colwise
     # ops, such as `lambda group: group.x + group.y`
     # which returns a column
+    func = lambda group: group.x + group.y  # noqa:E731
     df = cudf.DataFrame(
         {
             "id": range(10),
@@ -1221,7 +1222,7 @@ def test_groupby_column_numeral():
         pd.Series([0, 2, 0]),
         pd.Series([0, 2, 0], index=[0, 2, 1]),
     ],
-)
+)  # noqa: E501
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
     gdf = DataFrame.from_pandas(pdf)
@@ -2015,8 +2016,8 @@ def test_multi_agg():
 @pytest.mark.parametrize(
     "agg",
     (
-        [
-            *itertools.combinations(["count", "max", "min", "nunique"], 2),
+        list(itertools.combinations(["count", "max", "min", "nunique"], 2))
+        + [
             {"b": "min", "c": "mean"},
             {"b": "max", "c": "mean"},
             {"b": "count", "c": "mean"},
@@ -4074,17 +4075,3 @@ def test_get_group_list_like():
 
     with pytest.raises(KeyError):
         df.groupby(["a"]).get_group([1])
-
-
-def test_size_as_index_false():
-    df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
-    expected = df.groupby("a", as_index=False).size()
-    result = cudf.from_pandas(df).groupby("a", as_index=False).size()
-    assert_eq(result, expected)
-
-
-def test_size_series_with_name():
-    ser = pd.Series(range(3), name="foo")
-    expected = ser.groupby(ser).size()
-    result = cudf.from_pandas(ser).groupby(ser).size()
-    assert_eq(result, expected)

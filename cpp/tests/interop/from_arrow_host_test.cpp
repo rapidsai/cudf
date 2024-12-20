@@ -460,17 +460,19 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   // test dictionary arrays with different index types
   // cudf asserts that the index type must be unsigned
   auto array1 =
-    get_nanoarrow_dict_array<int64_t, int8_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+    get_nanoarrow_dict_array<int64_t, uint8_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
   auto array2 =
-    get_nanoarrow_dict_array<int64_t, int16_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+    get_nanoarrow_dict_array<int64_t, uint16_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
   auto array3 =
-    get_nanoarrow_dict_array<int64_t, int64_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+    get_nanoarrow_dict_array<int64_t, uint64_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
 
   // create equivalent cudf dictionary columns
   auto keys_col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 7});
-  auto ind1_col = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-  auto ind2_col = cudf::test::fixed_width_column_wrapper<int16_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-  auto ind3_col = cudf::test::fixed_width_column_wrapper<int64_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+  auto ind1_col = cudf::test::fixed_width_column_wrapper<uint8_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+  auto ind2_col =
+    cudf::test::fixed_width_column_wrapper<uint16_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+  auto ind3_col =
+    cudf::test::fixed_width_column_wrapper<uint64_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
 
   vector_of_columns columns;
   columns.emplace_back(cudf::make_dictionary_column(keys_col, ind1_col));
@@ -483,19 +485,19 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   ArrowSchemaInit(input_schema.get());
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 3));
 
-  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[0], NANOARROW_TYPE_INT8));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[0], NANOARROW_TYPE_UINT8));
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[0], "a"));
   NANOARROW_THROW_NOT_OK(ArrowSchemaAllocateDictionary(input_schema->children[0]));
   NANOARROW_THROW_NOT_OK(
     ArrowSchemaInitFromType(input_schema->children[0]->dictionary, NANOARROW_TYPE_INT64));
 
-  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[1], NANOARROW_TYPE_INT16));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[1], NANOARROW_TYPE_UINT16));
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[1], "b"));
   NANOARROW_THROW_NOT_OK(ArrowSchemaAllocateDictionary(input_schema->children[1]));
   NANOARROW_THROW_NOT_OK(
     ArrowSchemaInitFromType(input_schema->children[1]->dictionary, NANOARROW_TYPE_INT64));
 
-  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[2], NANOARROW_TYPE_INT64));
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(input_schema->children[2], NANOARROW_TYPE_UINT64));
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(input_schema->children[2], "c"));
   NANOARROW_THROW_NOT_OK(ArrowSchemaAllocateDictionary(input_schema->children[2]));
   NANOARROW_THROW_NOT_OK(

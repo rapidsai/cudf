@@ -308,11 +308,7 @@ std::unique_ptr<column> for_each_concatenate(host_span<column_view const> views,
 
   auto count = 0;
   for (auto& v : views) {
-    cudaMemcpyAsync(m_view.begin<T>() + count,
-                    v.begin<T>(),
-                    v.size() * sizeof(T),
-                    cudaMemcpyDeviceToDevice,
-                    stream.value());
+    thrust::copy(rmm::exec_policy(stream), v.begin<T>(), v.end<T>(), m_view.begin<T>() + count);
     count += v.size();
   }
 

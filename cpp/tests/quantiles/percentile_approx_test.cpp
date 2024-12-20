@@ -33,7 +33,6 @@
 
 #include <arrow/util/tdigest.h>
 
-namespace {
 std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _values,
                                                       int delta,
                                                       std::vector<double> const& percentages)
@@ -316,7 +315,6 @@ cudf::data_type get_appropriate_type()
   if constexpr (cudf::is_fixed_point<T>()) { return cudf::data_type{cudf::type_to_id<T>(), -7}; }
   return cudf::data_type{cudf::type_to_id<T>()};
 }
-}  // namespace
 
 using PercentileApproxTypes =
   cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;

@@ -772,18 +772,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(JNIEnv
   CATCH_STD(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(
-  JNIEnv* env, jclass clazz, jlong init, jlong release, jboolean fabric)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(JNIEnv* env,
+                                                                           jclass clazz,
+                                                                           jlong init,
+                                                                           jlong release)
 {
   try {
     cudf::jni::auto_set_device(env);
-
-    auto handle_type =
-      fabric ? std::optional{rmm::mr::cuda_async_memory_resource::allocation_handle_type::fabric}
-             : std::nullopt;
-
-    auto ret = new rmm::mr::cuda_async_memory_resource(init, release, handle_type);
-
+    auto ret = new rmm::mr::cuda_async_memory_resource(init, release);
     return reinterpret_cast<jlong>(ret);
   }
   CATCH_STD(env, 0)

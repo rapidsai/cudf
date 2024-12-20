@@ -28,9 +28,9 @@ pytestmark = pytest.mark.spilling
 # If spilling is enabled globally, we skip many test permutations
 # to reduce running time.
 if get_global_manager() is not None:
-    ALL_TYPES = ["float32"]
-    DATETIME_TYPES = ["datetime64[ms]"]
-    NUMERIC_TYPES = ["float32"]
+    ALL_TYPES = ["float32"]  # noqa: F811
+    DATETIME_TYPES = ["datetime64[ms]"]  # noqa: F811
+    NUMERIC_TYPES = ["float32"]  # noqa: F811
     # To save time, we skip tests marked "pytest.mark.xfail"
     pytest_xfail = pytest.mark.skipif
 
@@ -835,20 +835,3 @@ def test_crosstab_simple():
     expected = pd.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
     actual = cudf.crosstab(a, [b, c], rownames=["a"], colnames=["b", "c"])
     assert_eq(expected, actual, check_dtype=False)
-
-
-@pytest.mark.parametrize("index", [["ix"], ["ix", "foo"]])
-@pytest.mark.parametrize("columns", [["col"], ["col", "baz"]])
-def test_pivot_list_like_index_columns(index, columns):
-    data = {
-        "bar": ["x", "y", "z", "w"],
-        "col": ["a", "b", "a", "b"],
-        "foo": [1, 2, 3, 4],
-        "ix": [1, 1, 2, 2],
-        "baz": [0, 0, 0, 0],
-    }
-    pd_df = pd.DataFrame(data)
-    cudf_df = cudf.DataFrame(data)
-    result = cudf_df.pivot(columns=columns, index=index)
-    expected = pd_df.pivot(columns=columns, index=index)
-    assert_eq(result, expected)

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import operator
+import pickle
 import warnings
 from collections import abc
 from typing import TYPE_CHECKING, Any, Literal
 
+# TODO: The `numpy` import is needed for typing purposes during doc builds
+# only, need to figure out why the `np` alias is insufficient then remove.
 import cupy
 import numpy
 import numpy as np
@@ -16,15 +19,9 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-
-# TODO: The `numpy` import is needed for typing purposes during doc builds
-# only, need to figure out why the `np` alias is insufficient then remove.
 from cudf import _lib as libcudf
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, sorting
-from cudf.core._internals.search import search_sorted
-from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -48,7 +45,7 @@ if TYPE_CHECKING:
 
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
-class Frame(BinaryOperand, Scannable, Serializable):
+class Frame(BinaryOperand, Scannable):
     """A collection of Column objects with an optional index.
 
     Parameters
@@ -98,80 +95,37 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def serialize(self):
         # TODO: See if self._data can be serialized outright
-        frames = []
         header = {
-            "column_label_dtype": None,
-            "dtype-is-cudf-serialized": False,
+            "type-serialized": pickle.dumps(type(self)),
+            "column_names": pickle.dumps(self._column_names),
+            "column_rangeindex": pickle.dumps(self._data.rangeindex),
+            "column_multiindex": pickle.dumps(self._data.multiindex),
+            "column_label_dtype": pickle.dumps(self._data.label_dtype),
+            "column_level_names": pickle.dumps(self._data._level_names),
         }
-        if (label_dtype := self._data.label_dtype) is not None:
-            try:
-                header["column_label_dtype"], frames = (
-                    label_dtype.device_serialize()
-                )
-                header["dtype-is-cudf-serialized"] = True
-            except AttributeError:
-                header["column_label_dtype"] = label_dtype.str
-
-        header["columns"], column_frames = serialize_columns(self._columns)
-        column_names, column_names_numpy_type = (
-            zip(
-                *[
-                    (cname.item(), type(cname).__name__)
-                    if isinstance(cname, np.generic)
-                    else (cname, "")
-                    for cname in self._column_names
-                ]
-            )
-            if self._column_names
-            else ((), ())
-        )
-        header |= {
-            "column_names": column_names,
-            "column_names_numpy_type": column_names_numpy_type,
-            "column_rangeindex": self._data.rangeindex,
-            "column_multiindex": self._data.multiindex,
-            "column_level_names": self._data._level_names,
-        }
-        frames.extend(column_frames)
-
+        header["columns"], frames = serialize_columns(self._columns)
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
-        kwargs = {}
-        dtype_header = header["column_label_dtype"]
-        if header["dtype-is-cudf-serialized"]:
-            count = dtype_header["frame_count"]
-            kwargs["label_dtype"] = cls.device_deserialize(
-                header, frames[:count]
-            )
-            frames = frames[count:]
-        else:
-            kwargs["label_dtype"] = (
-                np.dtype(dtype_header) if dtype_header is not None else None
-            )
-
+        cls_deserialize = pickle.loads(header["type-serialized"])
+        column_names = pickle.loads(header["column_names"])
         columns = deserialize_columns(header["columns"], frames)
+        kwargs = {}
         for metadata in [
             "rangeindex",
             "multiindex",
+            "label_dtype",
             "level_names",
         ]:
             key = f"column_{metadata}"
             if key in header:
-                kwargs[metadata] = header[key]
-
-        column_names = [
-            getattr(np, cntype)(cname) if cntype != "" else cname
-            for cname, cntype in zip(
-                header["column_names"], header["column_names_numpy_type"]
-            )
-        ]
+                kwargs[metadata] = pickle.loads(header[key])
         col_accessor = ColumnAccessor(
             data=dict(zip(column_names, columns)), **kwargs
         )
-        return cls._from_data(col_accessor)
+        return cls_deserialize._from_data(col_accessor)
 
     @classmethod
     @_performance_tracking
@@ -471,8 +425,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ) -> cupy.ndarray | numpy.ndarray:
             if na_value is not None:
                 col = col.fillna(na_value)
-            if isinstance(col.dtype, cudf.CategoricalDtype):
-                col = col._get_decategorized_column()  # type: ignore[attr-defined]
             array = get_array(col)
             casted_array = module.asarray(array, dtype=dtype)
             if copy and casted_array is array:
@@ -493,9 +445,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 dtype = next(self._dtypes)[1]
             else:
                 dtype = find_common_type([dtype for _, dtype in self._dtypes])
-
-            if isinstance(dtype, cudf.CategoricalDtype):
-                dtype = dtype.categories.dtype
 
             if not isinstance(dtype, numpy.dtype):
                 raise NotImplementedError(
@@ -850,20 +799,15 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         null_precedence = [plc.types.NullOrder[key] for key in null_precedence]
 
-        with acquire_spill_lock():
-            plc_table = plc.quantiles.quantiles(
-                plc.Table(
-                    [c.to_pylibcudf(mode="read") for c in self._columns]
-                ),
+        return self._from_columns_like_self(
+            libcudf.quantiles.quantile_table(
+                [*self._columns],
                 q,
                 interpolation,
                 is_sorted,
                 column_order,
                 null_precedence,
-            )
-            columns = libcudf.utils.columns_from_pylibcudf_table(plc_table)
-        return self._from_columns_like_self(
-            columns,
+            ),
             column_names=self._column_names,
         )
 
@@ -946,17 +890,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if len(dict_indices):
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            plc_indices = plc.interop.from_arrow(dict_indices_table)
+            indices_columns = libcudf.interop.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
-            for name, plc_codes in zip(
-                dict_indices_table.column_names, plc_indices.columns()
+            for name, codes in zip(
+                dict_indices_table.column_names, indices_columns
             ):
-                codes = libcudf.column.Column.from_pylibcudf(plc_codes)
                 categories = cudf_dictionaries_columns[name]
                 codes = as_unsigned_codes(len(categories), codes)
                 cudf_category_frame[name] = CategoricalColumn(
@@ -972,9 +915,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
-            name: libcudf.column.Column.from_pylibcudf(plc_col)
-            for name, plc_col in zip(
-                data.column_names, plc.interop.from_arrow(data).columns()
+            name: col
+            for name, col in zip(
+                data.column_names, libcudf.interop.from_arrow(data)
             )
         }
 
@@ -1033,7 +976,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return cls._from_data({name: result[name] for name in column_names})
 
     @_performance_tracking
-    def to_arrow(self) -> pa.Table:
+    def to_arrow(self):
         """
         Convert to arrow Table
 
@@ -1058,6 +1001,19 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 for name, col in self._column_labels_and_values
             }
         )
+
+    @_performance_tracking
+    def _positions_from_column_names(self, column_names) -> list[int]:
+        """Map each column name into their positions in the frame.
+
+        The order of indices returned corresponds to the column order in this
+        Frame.
+        """
+        return [
+            i
+            for i, name in enumerate(self._column_names)
+            if name in set(column_names)
+        ]
 
     @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
@@ -1341,7 +1297,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
-        outcol = search_sorted(
+        outcol = libcudf.search.search_sorted(
             sources,
             values,
             side,
@@ -1424,7 +1380,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> idx = cudf.Index([3, 1, 2])
         >>> idx.argsort()
         array([1, 2, 0], dtype=int32)
-        """
+        """  # noqa: E501
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
         if kind != "quicksort":
@@ -1465,7 +1421,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         else:
             ascending_lst = list(ascending)
 
-        return sorting.order_by(
+        return libcudf.sort.order_by(
             list(to_sort),
             ascending_lst,
             na_position,
@@ -1473,25 +1429,23 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def _split(self, splits: list[int]) -> list[Self]:
+    def _split(self, splits):
         """Split a frame with split points in ``splits``. Returns a list of
         Frames of length `len(splits) + 1`.
         """
         return [
-            self._from_columns_like_self(split, self._column_names)
-            for split in copying.columns_split(self._columns, splits)
+            self._from_columns_like_self(
+                libcudf.copying.columns_split(list(self._columns), splits)[
+                    split_idx
+                ],
+                self._column_names,
+            )
+            for split_idx in range(len(splits) + 1)
         ]
 
     @_performance_tracking
     def _encode(self):
-        plc_table, plc_column = plc.transform.encode(
-            plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
-        )
-        columns = [
-            libcudf.column.Column.from_pylibcudf(col)
-            for col in plc_table.columns()
-        ]
-        indices = libcudf.column.Column.from_pylibcudf(plc_column)
+        columns, indices = libcudf.transform.table_encode(list(self._columns))
         keys = self._from_columns_like_self(columns)
         return keys, indices
 
@@ -1935,16 +1889,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if not is_scalar(repeats):
             repeats = as_column(repeats)
 
-        with acquire_spill_lock():
-            plc_table = plc.Table(
-                [col.to_pylibcudf(mode="read") for col in columns]
-            )
-            if isinstance(repeats, ColumnBase):
-                repeats = repeats.to_pylibcudf(mode="read")
-            return [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc.filling.repeat(plc_table, repeats).columns()
-            ]
+        return libcudf.filling.repeat(columns, repeats)
 
     @_performance_tracking
     @_warn_no_dask_cudf

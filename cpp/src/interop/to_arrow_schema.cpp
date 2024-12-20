@@ -44,7 +44,7 @@ struct dispatch_to_arrow_type {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   int operator()(column_view input_view, column_metadata const&, ArrowSchema* out)
   {
-    cudf::type_id const id = input_view.type().id();
+    cudf::type_id id = input_view.type().id();
     switch (id) {
       case cudf::type_id::TIMESTAMP_SECONDS:
         return ArrowSchemaSetTypeDateTime(
@@ -186,7 +186,7 @@ int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
                                                            column_metadata const& metadata,
                                                            ArrowSchema* out)
 {
-  cudf::dictionary_column_view const dview{input};
+  cudf::dictionary_column_view dview{input};
 
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out, id_to_arrow_type(dview.indices().type().id())));
   NANOARROW_RETURN_NOT_OK(ArrowSchemaAllocateDictionary(out));

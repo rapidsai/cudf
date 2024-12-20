@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+from cudf._lib.reduce import scan
 from cudf.api.types import is_numeric_dtype
 from cudf.core.window.rolling import _RollingBase
 
@@ -193,8 +194,13 @@ class ExponentialMovingWindow(_RollingBase):
         # as such we need to convert the nans to nulls before
         # passing them in.
         to_libcudf_column = source_column.astype("float64").nans_to_nulls()
-        return to_libcudf_column.scan(
-            agg_name, True, com=self.com, adjust=self.adjust
+
+        return scan(
+            agg_name,
+            to_libcudf_column,
+            True,
+            com=self.com,
+            adjust=self.adjust,
         )
 
 

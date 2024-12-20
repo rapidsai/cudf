@@ -116,9 +116,6 @@ def test_torch_train(data):
     return model(test_x1, test_x2)
 
 
-@pytest.mark.skip(
-    reason="AssertionError: The values for attribute 'device' do not match: cpu != cuda:0."
-)
 def test_torch_tensor_ctor():
     s = pd.Series(range(5))
     return torch.tensor(s.values)

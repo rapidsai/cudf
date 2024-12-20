@@ -6,12 +6,8 @@ import cupy
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
-from cudf._lib.column import Column
 from cudf.api.types import is_list_like
-from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import as_column
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.index import IntervalIndex, interval_range
@@ -149,7 +145,7 @@ def cut(
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
-                    f"Bin edges must be unique: {bins!r}.\n"
+                    f"Bin edges must be unique: {repr(bins)}.\n"
                     f"You can drop duplicate edges by setting the 'duplicates'"
                     "kwarg"
                 )
@@ -260,19 +256,9 @@ def cut(
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
-    with acquire_spill_lock():
-        plc_column = plc.labeling.label_bins(
-            input_arr.to_pylibcudf(mode="read"),
-            left_edges.to_pylibcudf(mode="read"),
-            plc.labeling.Inclusive.YES
-            if left_inclusive
-            else plc.labeling.Inclusive.NO,
-            right_edges.to_pylibcudf(mode="read"),
-            plc.labeling.Inclusive.YES
-            if right_inclusive
-            else plc.labeling.Inclusive.NO,
-        )
-        index_labels = Column.from_pylibcudf(plc_column)
+    index_labels = cudf._lib.labeling.label_bins(
+        input_arr, left_edges, left_inclusive, right_edges, right_inclusive
+    )
 
     if labels is False:
         # if labels is false we return the index labels, we return them
@@ -297,7 +283,7 @@ def cut(
             # should allow duplicate categories.
             return interval_labels[index_labels]
 
-    index_labels = as_unsigned_codes(len(interval_labels), index_labels)  # type: ignore[arg-type]
+    index_labels = as_unsigned_codes(len(interval_labels), index_labels)
 
     col = CategoricalColumn(
         data=None,

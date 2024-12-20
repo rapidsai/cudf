@@ -69,7 +69,7 @@ def test_basic_assert_index_equal(
         msg = str(e)
 
     if kind is not None:
-        if (kind is TypeError) and (
+        if (kind == TypeError) and (
             msg
             == (
                 "Categoricals can only be compared "

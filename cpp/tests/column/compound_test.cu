@@ -34,7 +34,6 @@
 
 struct CompoundColumnTest : public cudf::test::BaseFixture {};
 
-namespace {
 template <typename ColumnDeviceView>
 struct checker_for_level1 {
   ColumnDeviceView d_column;
@@ -63,7 +62,6 @@ struct checker_for_level2 {
     return bcheck;
   }
 };
-}  // namespace
 
 TEST_F(CompoundColumnTest, ChildrenLevel1)
 {

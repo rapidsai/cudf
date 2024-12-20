@@ -279,10 +279,7 @@ TEST_F(FromArrowTest, StructColumn)
   auto list_arr = get_arrow_list_array<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 2, 4, 5, 6, 7, 9});
   std::vector<int32_t> offset{0, 3, 4, 6};
   auto nested_list_arr = std::make_shared<arrow::ListArray>(
-    arrow::list(list(arrow::field("element", arrow::int64(), false))),
-    offset.size() - 1,
-    arrow::Buffer::Wrap(offset),
-    list_arr);
+    arrow::list(list(arrow::int64())), offset.size() - 1, arrow::Buffer::Wrap(offset), list_arr);
 
   std::vector<std::shared_ptr<arrow::Array>> child_arrays2({str2_array, int2_array});
   auto fields2 = std::vector<std::shared_ptr<arrow::Field>>{

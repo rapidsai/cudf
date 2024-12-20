@@ -18,7 +18,6 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
-#include <cuda/std/array>
 #include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -343,9 +342,8 @@ class WriteCoalescingCallbackWrapper {
 template <int32_t NUM_INSTANCES, typename TransitionTableT>
 class StateVectorTransitionOp {
  public:
-  __device__ __forceinline__
-  StateVectorTransitionOp(TransitionTableT const& transition_table,
-                          cuda::std::array<StateIndexT, NUM_INSTANCES>& state_vector)
+  __device__ __forceinline__ StateVectorTransitionOp(
+    TransitionTableT const& transition_table, std::array<StateIndexT, NUM_INSTANCES>& state_vector)
     : transition_table(transition_table), state_vector(state_vector)
   {
   }
@@ -362,7 +360,7 @@ class StateVectorTransitionOp {
   }
 
  public:
-  cuda::std::array<StateIndexT, NUM_INSTANCES>& state_vector;
+  std::array<StateIndexT, NUM_INSTANCES>& state_vector;
   TransitionTableT const& transition_table;
 };
 
@@ -622,7 +620,7 @@ struct AgentDFA {
     SymbolItT d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
-    cuda::std::array<StateIndexT, NUM_STATES>& state_vector)
+    std::array<StateIndexT, NUM_STATES>& state_vector)
   {
     using StateVectorTransitionOpT = StateVectorTransitionOp<NUM_STATES, TransitionTableT>;
 
@@ -798,10 +796,10 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   // Stage 1: Compute the state-transition vector
   if (IS_TRANS_VECTOR_PASS || IS_SINGLE_PASS) {
     // Keeping track of the state for each of the <NUM_STATES> state machines
-    cuda::std::array<StateIndexT, NUM_STATES> state_vector;
+    std::array<StateIndexT, NUM_STATES> state_vector;
 
     // Initialize the seed state transition vector with the identity vector
-    thrust::sequence(thrust::seq, cuda::std::begin(state_vector), cuda::std::end(state_vector));
+    thrust::sequence(thrust::seq, std::begin(state_vector), std::end(state_vector));
 
     // Compute the state transition vector
     agent_dfa.GetThreadStateTransitionVector<NUM_STATES>(symbol_matcher,

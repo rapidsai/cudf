@@ -112,7 +112,22 @@ def test_scan(
         n_rows=n_rows,
     )
     engine = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": is_chunked})
-
+    if (
+        is_chunked
+        and (columns is None or columns[0] != "a")
+        and (
+            # When we mask with the slice, it happens to remove the
+            # bad row
+            (mask is None and slice is not None)
+            # When we both slice and read a subset of rows it also
+            # removes the bad row
+            or (slice is None and n_rows is not None)
+        )
+    ):
+        # slice read produces wrong result for string column
+        request.applymarker(
+            pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/17311")
+        )
     if slice is not None:
         q = q.slice(*slice)
     if mask is not None:
@@ -362,6 +377,13 @@ def large_df(df, tmpdir_factory, chunked_slice):
 def test_scan_parquet_chunked(
     request, chunked_slice, large_df, chunk_read_limit, pass_read_limit
 ):
+    if chunked_slice in {"skip_partial", "partial"} and (
+        chunk_read_limit == 0 and pass_read_limit != 0
+    ):
+        request.applymarker(
+            pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/17311")
+        )
+
     assert_gpu_result_equal(
         large_df,
         engine=pl.GPUEngine(

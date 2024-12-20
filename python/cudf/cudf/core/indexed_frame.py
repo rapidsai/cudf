@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import itertools
 import operator
 import textwrap
 import warnings
@@ -22,12 +21,11 @@ import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
-import pylibcudf as plc
+import pylibcudf
 
 import cudf
 import cudf._lib as libcudf
 import cudf.core
-import cudf.core._internals
 import cudf.core.algorithms
 from cudf.api.extensions import no_default
 from cudf.api.types import (
@@ -38,7 +36,6 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -609,7 +606,7 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def equals(self, other) -> bool:
+    def equals(self, other) -> bool:  # noqa: D102
         return super().equals(other) and self.index.equals(other.index)
 
     @property
@@ -2820,20 +2817,7 @@ class IndexedFrame(Frame):
         """
         raise NotImplementedError
 
-    def hash_values(
-        self,
-        method: Literal[
-            "murmur3",
-            "xxhash64",
-            "md5",
-            "sha1",
-            "sha224",
-            "sha256",
-            "sha384",
-            "sha512",
-        ] = "murmur3",
-        seed: int | None = None,
-    ) -> cudf.Series:
+    def hash_values(self, method="murmur3", seed=None):
         """Compute the hash of values in this column.
 
         Parameters
@@ -2910,31 +2894,11 @@ class IndexedFrame(Frame):
                 "Provided seed value has no effect for the hash method "
                 f"`{method}`. Only {seed_hash_methods} support seeds."
             )
-        with acquire_spill_lock():
-            plc_table = plc.Table(
-                [c.to_pylibcudf(mode="read") for c in self._columns]
-            )
-            if method == "murmur3":
-                plc_column = plc.hashing.murmurhash3_x86_32(plc_table, seed)
-            elif method == "xxhash64":
-                plc_column = plc.hashing.xxhash_64(plc_table, seed)
-            elif method == "md5":
-                plc_column = plc.hashing.md5(plc_table)
-            elif method == "sha1":
-                plc_column = plc.hashing.sha1(plc_table)
-            elif method == "sha224":
-                plc_column = plc.hashing.sha224(plc_table)
-            elif method == "sha256":
-                plc_column = plc.hashing.sha256(plc_table)
-            elif method == "sha384":
-                plc_column = plc.hashing.sha384(plc_table)
-            elif method == "sha512":
-                plc_column = plc.hashing.sha512(plc_table)
-            else:
-                raise ValueError(f"Unsupported hashing algorithm {method}.")
-            result = libcudf.column.Column.from_pylibcudf(plc_column)
+        # Note that both Series and DataFrame return Series objects from this
+        # calculation, necessitating the unfortunate circular reference to the
+        # child class here.
         return cudf.Series._from_column(
-            result,
+            libcudf.hash.hash([*self._columns], method, seed),
             index=self.index,
         )
 
@@ -2954,10 +2918,10 @@ class IndexedFrame(Frame):
         if not gather_map.nullify and len(self) != gather_map.nrows:
             raise IndexError("Gather map is out of bounds")
         return self._from_columns_like_self(
-            copying.gather(
-                itertools.chain(self.index._columns, self._columns)
+            libcudf.copying.gather(
+                list(self.index._columns + self._columns)
                 if keep_index
-                else self._columns,
+                else list(self._columns),
                 gather_map.column,
                 nullify=gather_map.nullify,
             ),
@@ -3037,24 +3001,16 @@ class IndexedFrame(Frame):
                 keep_index=keep_index,
             )
 
-        columns_to_slice = (
-            itertools.chain(self.index._columns, self._columns)
-            if keep_index and not has_range_index
-            else self._columns
-        )
-        with acquire_spill_lock():
-            plc_tables = plc.copying.slice(
-                plc.Table(
-                    [col.to_pylibcudf(mode="read") for col in columns_to_slice]
-                ),
-                [start, stop],
-            )
-            sliced = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_tables[0].columns()
-            ]
+        columns_to_slice = [
+            *(
+                self.index._columns
+                if keep_index and not has_range_index
+                else []
+            ),
+            *self._columns,
+        ]
         result = self._from_columns_like_self(
-            sliced,
+            libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
             self._column_names,
             None if has_range_index or not keep_index else self.index.names,
         )
@@ -3064,21 +3020,21 @@ class IndexedFrame(Frame):
         return result
 
     def _positions_from_column_names(
-        self,
-        column_names: set[abc.Hashable],
-        offset_by_index_columns: bool = True,
-    ) -> list[int]:
+        self, column_names, offset_by_index_columns=False
+    ):
         """Map each column name into their positions in the frame.
 
         Return positions of the provided column names, offset by the number of
         index columns if `offset_by_index_columns` is True. The order of
         indices returned corresponds to the column order in this Frame.
         """
-        start = self.index.nlevels if offset_by_index_columns else 0
+        num_index_columns = (
+            len(self.index._data) if offset_by_index_columns else 0
+        )
         return [
-            i
-            for i, name in enumerate(self._column_names, start=start)
-            if name in column_names
+            i + num_index_columns
+            for i, name in enumerate(self._column_names)
+            if name in set(column_names)
         ]
 
     def drop_duplicates(
@@ -3115,7 +3071,7 @@ class IndexedFrame(Frame):
             subset, offset_by_index_columns=not ignore_index
         )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_duplicates(
+            libcudf.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
                 else list(self.index._columns + self._columns),
@@ -3128,9 +3084,7 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def duplicated(
-        self, subset=None, keep: Literal["first", "last", False] = "first"
-    ) -> cudf.Series:
+    def duplicated(self, subset=None, keep="first"):
         """
         Return boolean Series denoting duplicate rows.
 
@@ -3230,25 +3184,10 @@ class IndexedFrame(Frame):
             name = self.name
         else:
             columns = [self._data[n] for n in subset]
-
-        _keep_options = {
-            "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-            "last": plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-            False: plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-        }
-
-        if (keep_option := _keep_options.get(keep)) is None:
-            raise ValueError('keep must be either "first", "last" or False')
-
-        with acquire_spill_lock():
-            plc_column = plc.stream_compaction.distinct_indices(
-                plc.Table([col.to_pylibcudf(mode="read") for col in columns]),
-                keep_option,
-                plc.types.NullEquality.EQUAL,
-                plc.types.NanEquality.ALL_EQUAL,
-            )
-            distinct = libcudf.column.Column.from_pylibcudf(plc_column)
-        result = copying.scatter(
+        distinct = libcudf.stream_compaction.distinct_indices(
+            columns, keep=keep
+        )
+        result = libcudf.copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
             [as_column(True, length=len(self), dtype=bool)],
@@ -3257,26 +3196,14 @@ class IndexedFrame(Frame):
         return cudf.Series._from_column(result, index=self.index, name=name)
 
     @_performance_tracking
-    def _empty_like(self, keep_index: bool = True) -> Self:
-        with acquire_spill_lock():
-            plc_table = plc.copying.empty_like(
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in (
-                            itertools.chain(self.index._columns, self._columns)
-                            if keep_index
-                            else self._columns
-                        )
-                    ]
-                )
-            )
-            columns = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
-            ]
+    def _empty_like(self, keep_index=True) -> Self:
         result = self._from_columns_like_self(
-            columns,
+            libcudf.copying.columns_empty_like(
+                [
+                    *(self.index._columns if keep_index else ()),
+                    *self._columns,
+                ]
+            ),
             self._column_names,
             self.index.names if keep_index else None,
         )
@@ -3284,24 +3211,25 @@ class IndexedFrame(Frame):
         result._data.rangeindex = self._data.rangeindex
         return result
 
-    def _split(self, splits, keep_index: bool = True) -> list[Self]:
+    def _split(self, splits, keep_index=True):
         if self._num_rows == 0:
             return []
 
-        columns_split = copying.columns_split(
-            itertools.chain(self.index._columns, self._columns)
-            if keep_index
-            else self._columns,
+        columns_split = libcudf.copying.columns_split(
+            [
+                *(self.index._columns if keep_index else []),
+                *self._columns,
+            ],
             splits,
         )
 
         return [
             self._from_columns_like_self(
-                split,
+                columns_split[i],
                 self._column_names,
                 self.index.names if keep_index else None,
             )
-            for split in columns_split
+            for i in range(len(splits) + 1)
         ]
 
     @_performance_tracking
@@ -3545,7 +3473,7 @@ class IndexedFrame(Frame):
 
         col = _post_process_output_col(ans_col, retty)
 
-        col.set_base_mask(ans_mask.as_mask())
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
         result = cudf.Series._from_column(col, index=self.index)
 
         return result
@@ -3889,6 +3817,7 @@ class IndexedFrame(Frame):
                 if name in df._data
                 else cudf.core.column.column.column_empty(
                     dtype=dtypes.get(name, np.float64),
+                    masked=True,
                     row_count=len(index),
                 )
             )
@@ -4007,13 +3936,7 @@ class IndexedFrame(Frame):
 
         cols = (
             col.round(decimals[name], how=how)
-            if name in decimals
-            and (
-                col.dtype.kind in "fiu"
-                or isinstance(
-                    col.dtype, (cudf.Decimal32Dtype, cudf.Decimal64Dtype)
-                )
-            )
+            if name in decimals and col.dtype.kind in "fiu"
             else col.copy(deep=True)
             for name, col in self._column_labels_and_values
         )
@@ -4371,10 +4294,12 @@ class IndexedFrame(Frame):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.drop_nulls(
+            libcudf.stream_compaction.drop_nulls(
                 [*self.index._columns, *data_columns],
                 how=how,
-                keys=self._positions_from_column_names(subset),
+                keys=self._positions_from_column_names(
+                    subset, offset_by_index_columns=True
+                ),
                 thresh=thresh,
             ),
             self._column_names,
@@ -4394,7 +4319,7 @@ class IndexedFrame(Frame):
                 f"{len(boolean_mask.column)} not {len(self)}"
             )
         return self._from_columns_like_self(
-            cudf.core._internals.stream_compaction.apply_boolean_mask(
+            libcudf.stream_compaction.apply_boolean_mask(
                 list(self.index._columns + self._columns)
                 if keep_index
                 else list(self._columns),
@@ -5358,20 +5283,10 @@ class IndexedFrame(Frame):
         else:
             idx_cols = ()
 
-        with acquire_spill_lock():
-            plc_table = plc.lists.explode_outer(
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in itertools.chain(idx_cols, self._columns)
-                    ]
-                ),
-                column_index + len(idx_cols),
-            )
-            exploded = [
-                libcudf.column.Column.from_pylibcudf(col)
-                for col in plc_table.columns()
-            ]
+        exploded = libcudf.lists.explode_outer(
+            [*idx_cols, *self._columns],
+            column_index + len(idx_cols),
+        )
         # We must copy inner datatype of the exploded list column to
         # maintain struct dtype key names
         element_type = cast(
@@ -5390,7 +5305,7 @@ class IndexedFrame(Frame):
         )
 
     @_performance_tracking
-    def tile(self, count: int):
+    def tile(self, count):
         """Repeats the rows `count` times to form a new Frame.
 
         Parameters
@@ -5414,24 +5329,10 @@ class IndexedFrame(Frame):
         -------
         The indexed frame containing the tiled "rows".
         """
-        with acquire_spill_lock():
-            plc_table = plc.reshape.tile(
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in itertools.chain(
-                            self.index._columns, self._columns
-                        )
-                    ]
-                ),
-                count,
-            )
-            tiled = [
-                libcudf.column.Column.from_pylibcudf(plc)
-                for plc in plc_table.columns()
-            ]
         return self._from_columns_like_self(
-            tiled,
+            libcudf.reshape.tile(
+                [*self.index._columns, *self._columns], count
+            ),
             column_names=self._column_names,
             index_names=self._index_names,
         )
@@ -5515,7 +5416,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def add(self, other, axis, level=None, fill_value=None):
+    def add(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5556,7 +5457,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def radd(self, other, axis, level=None, fill_value=None):
+    def radd(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5597,7 +5498,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def subtract(self, other, axis, level=None, fill_value=None):
+    def subtract(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5640,7 +5541,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rsub(self, other, axis, level=None, fill_value=None):
+    def rsub(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5681,7 +5582,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def multiply(self, other, axis, level=None, fill_value=None):
+    def multiply(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5724,7 +5625,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rmul(self, other, axis, level=None, fill_value=None):
+    def rmul(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5765,7 +5666,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def mod(self, other, axis, level=None, fill_value=None):
+    def mod(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5806,7 +5707,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rmod(self, other, axis, level=None, fill_value=None):
+    def rmod(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5847,7 +5748,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def pow(self, other, axis, level=None, fill_value=None):
+    def pow(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5888,7 +5789,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rpow(self, other, axis, level=None, fill_value=None):
+    def rpow(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5929,7 +5830,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def floordiv(self, other, axis, level=None, fill_value=None):
+    def floordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5970,7 +5871,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rfloordiv(self, other, axis, level=None, fill_value=None):
+    def rfloordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -6011,7 +5912,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def truediv(self, other, axis, level=None, fill_value=None):
+    def truediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -6056,7 +5957,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rtruediv(self, other, axis, level=None, fill_value=None):
+    def rtruediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -6100,7 +6001,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def eq(self, other, axis="columns", level=None, fill_value=None):
+    def eq(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__eq__", fill_value=fill_value, can_reindex=True
         )
@@ -6140,7 +6041,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ne(self, other, axis="columns", level=None, fill_value=None):
+    def ne(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__ne__", fill_value=fill_value, can_reindex=True
         )
@@ -6180,7 +6081,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def lt(self, other, axis="columns", level=None, fill_value=None):
+    def lt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__lt__", fill_value=fill_value, can_reindex=True
         )
@@ -6220,7 +6121,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def le(self, other, axis="columns", level=None, fill_value=None):
+    def le(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__le__", fill_value=fill_value, can_reindex=True
         )
@@ -6260,7 +6161,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def gt(self, other, axis="columns", level=None, fill_value=None):
+    def gt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__gt__", fill_value=fill_value, can_reindex=True
         )
@@ -6300,21 +6201,22 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ge(self, other, axis="columns", level=None, fill_value=None):
+    def ge(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
 
-    def _preprocess_subset(self, subset) -> set[abc.Hashable]:
+    def _preprocess_subset(self, subset):
         if subset is None:
             subset = self._column_names
         elif (
-            is_scalar(subset)
+            not np.iterable(subset)
+            or isinstance(subset, str)
             or isinstance(subset, tuple)
             and subset in self._column_names
         ):
             subset = (subset,)
-        diff = set(subset) - set(self._column_names)
+        diff = set(subset) - set(self._data)
         if len(diff) != 0:
             raise KeyError(f"columns {diff} do not exist")
         return subset
@@ -6368,7 +6270,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = plc.aggregation.RankMethod[method.upper()]
+        method_enum = pylibcudf.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
@@ -6402,49 +6304,9 @@ class IndexedFrame(Frame):
             elif source._num_columns != num_cols:
                 dropped_cols = True
 
-        column_order = (
-            plc.types.Order.ASCENDING
-            if ascending
-            else plc.types.Order.DESCENDING
+        result_columns = libcudf.sort.rank_columns(
+            [*source._columns], method_enum, na_option, ascending, pct
         )
-        # ascending
-        #    #top    = na_is_smallest
-        #    #bottom = na_is_largest
-        #    #keep   = na_is_largest
-        # descending
-        #    #top    = na_is_largest
-        #    #bottom = na_is_smallest
-        #    #keep   = na_is_smallest
-        if ascending:
-            if na_option == "top":
-                null_precedence = plc.types.NullOrder.BEFORE
-            else:
-                null_precedence = plc.types.NullOrder.AFTER
-        else:
-            if na_option == "top":
-                null_precedence = plc.types.NullOrder.AFTER
-            else:
-                null_precedence = plc.types.NullOrder.BEFORE
-        c_null_handling = (
-            plc.types.NullPolicy.EXCLUDE
-            if na_option == "keep"
-            else plc.types.NullPolicy.INCLUDE
-        )
-
-        with acquire_spill_lock():
-            result_columns = [
-                libcudf.column.Column.from_pylibcudf(
-                    plc.sorting.rank(
-                        col.to_pylibcudf(mode="read"),
-                        method_enum,
-                        column_order,
-                        c_null_handling,
-                        null_precedence,
-                        pct,
-                    )
-                )
-                for col in source._columns
-            ]
 
         if dropped_cols:
             result = type(source)._from_data(

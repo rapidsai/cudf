@@ -71,9 +71,6 @@ def test_holoviews_heatmap(df):
     )
 
 
-@pytest.mark.skip(
-    reason="AttributeError: 'ndarray' object has no attribute '_fsproxy_wrapped'"
-)
 def test_holoviews_histogram(df):
     return get_plot_info(hv.Histogram(df.values))
 

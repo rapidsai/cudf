@@ -7,7 +7,6 @@ import msgpack
 import numpy as np
 import pandas as pd
 import pytest
-from packaging import version
 
 import cudf
 from cudf.testing import _utils as utils, assert_eq
@@ -150,19 +149,13 @@ def test_serialize(df, to_host):
 
 def test_serialize_dtype_error_checking():
     dtype = cudf.IntervalDtype("float", "right")
-    # Must call device_serialize (not serialize) to ensure that the type metadata is
-    # encoded in the header.
-    header, frames = dtype.device_serialize()
+    header, frames = dtype.serialize()
+    with pytest.raises(AssertionError):
+        # Invalid number of frames
+        type(dtype).deserialize(header, [None] * (header["frame_count"] + 1))
     with pytest.raises(AssertionError):
         # mismatching class
         cudf.StructDtype.deserialize(header, frames)
-    # The is-cuda flag list length must match the number of frames
-    header["is-cuda"] = [False]
-    with pytest.raises(AssertionError):
-        # Invalid number of frames
-        type(dtype).deserialize(
-            header, [np.zeros(1)] * (header["frame_count"] + 1)
-        )
 
 
 def test_serialize_dataframe():
@@ -389,10 +382,6 @@ def test_serialize_string_check_buffer_sizes():
     assert expect == got
 
 
-@pytest.mark.skipif(
-    version.parse(np.__version__) < version.parse("2.0.0"),
-    reason="The serialization of numpy 2.0 types is incompatible with numpy 1.x",
-)
 def test_deserialize_cudf_23_12(datadir):
     fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_23.12.pkl"
 

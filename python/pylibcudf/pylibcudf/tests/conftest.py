@@ -15,12 +15,7 @@ from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
-from utils import (
-    ALL_PA_TYPES,
-    DEFAULT_PA_TYPES,
-    NON_NESTED_PA_TYPES,
-    NUMERIC_PA_TYPES,
-)
+from utils import ALL_PA_TYPES, DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
 
 
 def _type_to_str(typ):
@@ -84,13 +79,29 @@ def _get_vals_of_type(pa_type, length, seed):
         )
 
 
-# TODO: Consider adapting this helper function
-# to consider nullability
-def _generate_table_data(types, nrows, seed=42):
+# TODO: Consider adding another fixture/adapting this
+# fixture to consider nullability
+@pytest.fixture(scope="session", params=[0, 100])
+def table_data(request):
+    """
+    Returns (TableWithMetadata, pa_table).
+
+    This is the default fixture you should be using for testing
+    pylibcudf I/O writers.
+
+    Contains one of each category (e.g. int, bool, list, struct)
+    of dtypes.
+    """
+    nrows = request.param
+
     table_dict = {}
+    # Colnames in the format expected by
+    # plc.io.TableWithMetadata
     colnames = []
 
-    for typ in types:
+    seed = 42
+
+    for typ in ALL_PA_TYPES:
         child_colnames = []
 
         def _generate_nested_data(typ):
@@ -138,32 +149,6 @@ def _generate_table_data(types, nrows, seed=42):
     return plc.io.TableWithMetadata(
         plc.interop.from_arrow(pa_table), column_names=colnames
     ), pa_table
-
-
-@pytest.fixture(scope="session", params=[0, 100])
-def table_data(request):
-    """
-    Returns (TableWithMetadata, pa_table).
-
-    This is the default fixture you should be using for testing
-    pylibcudf I/O writers.
-
-    Contains one of each category (e.g. int, bool, list, struct)
-    of dtypes.
-    """
-    nrows = request.param
-    return _generate_table_data(ALL_PA_TYPES, nrows)
-
-
-@pytest.fixture(scope="session", params=[0, 100])
-def table_data_with_non_nested_pa_types(request):
-    """
-    Returns (TableWithMetadata, pa_table).
-
-    This fixture is for testing with non-nested PyArrow types.
-    """
-    nrows = request.param
-    return _generate_table_data(NON_NESTED_PA_TYPES, nrows)
 
 
 @pytest.fixture(params=[(0, 0), ("half", 0), (-1, "half")])

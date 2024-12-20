@@ -18,7 +18,6 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/types.hpp>
@@ -103,15 +102,12 @@ class groupby_simple_aggregations_collector final
 };
 
 // flatten aggs to filter in single pass aggs
-std::tuple<table_view,
-           cudf::detail::host_vector<aggregation::Kind>,
-           std::vector<std::unique_ptr<aggregation>>>
-flatten_single_pass_aggs(host_span<aggregation_request const> requests,
-                         rmm::cuda_stream_view stream)
+std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<std::unique_ptr<aggregation>>>
+flatten_single_pass_aggs(host_span<aggregation_request const> requests)
 {
   std::vector<column_view> columns;
   std::vector<std::unique_ptr<aggregation>> aggs;
-  auto agg_kinds = cudf::detail::make_empty_host_vector<aggregation::Kind>(requests.size(), stream);
+  std::vector<aggregation::Kind> agg_kinds;
 
   for (auto const& request : requests) {
     auto const& agg_v = request.aggregations;

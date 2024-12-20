@@ -23,7 +23,6 @@
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -49,7 +48,7 @@ void extract_populated_keys(SetType const& key_set,
 template <typename GlobalSetType>
 cudf::table create_sparse_results_table(cudf::table_view const& flattened_values,
                                         cudf::aggregation::Kind const* d_agg_kinds,
-                                        host_span<cudf::aggregation::Kind const> agg_kinds,
+                                        std::vector<cudf::aggregation::Kind> agg_kinds,
                                         bool direct_aggregations,
                                         GlobalSetType const& global_set,
                                         rmm::device_uvector<cudf::size_type>& populated_keys,
@@ -108,7 +107,7 @@ template void extract_populated_keys<nullable_global_set_t>(
 template cudf::table create_sparse_results_table<global_set_t>(
   cudf::table_view const& flattened_values,
   cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
+  std::vector<cudf::aggregation::Kind> agg_kinds,
   bool direct_aggregations,
   global_set_t const& global_set,
   rmm::device_uvector<cudf::size_type>& populated_keys,
@@ -117,7 +116,7 @@ template cudf::table create_sparse_results_table<global_set_t>(
 template cudf::table create_sparse_results_table<nullable_global_set_t>(
   cudf::table_view const& flattened_values,
   cudf::aggregation::Kind const* d_agg_kinds,
-  host_span<cudf::aggregation::Kind const> agg_kinds,
+  std::vector<cudf::aggregation::Kind> agg_kinds,
   bool direct_aggregations,
   nullable_global_set_t const& global_set,
   rmm::device_uvector<cudf::size_type>& populated_keys,

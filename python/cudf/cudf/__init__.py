@@ -99,7 +99,6 @@ rmm.register_reinitialize_hook(clear_cache)
 
 
 __all__ = [
-    "NA",
     "BaseIndex",
     "CategoricalDtype",
     "CategoricalIndex",
@@ -115,6 +114,7 @@ __all__ = [
     "IntervalIndex",
     "ListDtype",
     "MultiIndex",
+    "NA",
     "NaT",
     "RangeIndex",
     "Scalar",

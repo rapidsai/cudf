@@ -10,13 +10,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Please keep pr-builder as the top job here
   pr-builder:
     needs:
       - changed-files
       - checks
       - conda-cpp-build
-      - cpp-linters
       - conda-cpp-checks
       - conda-cpp-tests
       - conda-python-build
@@ -39,30 +37,18 @@ jobs:
       - unit-tests-cudf-pandas
       - pandas-tests
       - pandas-tests-diff
-      - telemetry-setup
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-25.02
     if: always()
     with:
       needs: ${{ toJSON(needs) }}
-  telemetry-setup:
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    env:
-      OTEL_SERVICE_NAME: 'pr-cudf'
-    steps:
-      - name: Telemetry setup
-        if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
-        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   changed-files:
     secrets: inherit
-    needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/changed-files.yaml@branch-25.02
     with:
       files_yaml: |
         test_cpp:
           - '**'
-          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -73,7 +59,6 @@ jobs:
           - '!python/**'
         test_cudf_pandas:
           - '**'
-          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!docs/**'
@@ -82,7 +67,6 @@ jobs:
           - '!notebooks/**'
         test_java:
           - '**'
-          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -92,14 +76,12 @@ jobs:
           - '!python/**'
         test_notebooks:
           - '**'
-          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
           - '!java/**'
         test_python:
           - '**'
-          - '!.devcontainer/**'
           - '!CONTRIBUTING.md'
           - '!README.md'
           - '!ci/cudf_pandas_scripts/**'
@@ -109,24 +91,15 @@ jobs:
           - '!notebooks/**'
   checks:
     secrets: inherit
-    needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-25.02
     with:
       enable_check_generated_files: false
-      ignored_pr_jobs: "telemetry-summarize"
   conda-cpp-build:
     needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-25.02
     with:
       build_type: pull-request
-  cpp-linters:
-    secrets: inherit
-    needs: checks
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.02
-    with:
-      build_type: pull-request
-      run_script: "ci/cpp_linters.sh"
   conda-cpp-checks:
     needs: conda-cpp-build
     secrets: inherit
@@ -286,7 +259,6 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
   devcontainer:
     secrets: inherit
-    needs: telemetry-setup
     uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-25.02
     with:
       arch: '["amd64"]'
@@ -326,13 +298,3 @@ jobs:
         node_type: cpu4
         build_type: pull-request
         run_script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
-
-  telemetry-summarize:
-    # This job must use a self-hosted runner to record telemetry traces.
-    runs-on: linux-amd64-cpu4
-    needs: pr-builder
-    if: ${{ vars.TELEMETRY_ENABLED == 'true' && !cancelled() }}
-    continue-on-error: true
-    steps:
-      - name: Telemetry summarize
-        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main

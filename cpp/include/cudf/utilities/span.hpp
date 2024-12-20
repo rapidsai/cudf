@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/detail/utilities/host_vector.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -70,22 +69,52 @@ class span_base {
 
   static constexpr std::size_t extent = Extent;  ///< The extent of the span
 
-  CUDF_HOST_DEVICE constexpr span_base() noexcept {}
+  constexpr span_base() noexcept {}
   /**
    * @brief Constructs a span from a pointer and a size.
    *
    * @param data Pointer to the first element in the span.
    * @param size The number of elements in the span.
    */
-  CUDF_HOST_DEVICE constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
+  constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
   // constexpr span_base(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
-  CUDF_HOST_DEVICE constexpr span_base(span_base const&) noexcept = default;  ///< Copy constructor
+  constexpr span_base(span_base const&) noexcept = default;  ///< Copy constructor
   /**
    * @brief Copy assignment operator.
    *
    * @return Reference to this span.
    */
-  CUDF_HOST_DEVICE constexpr span_base& operator=(span_base const&) noexcept = default;
+  constexpr span_base& operator=(span_base const&) noexcept = default;
+
+  // not noexcept due to undefined behavior when size = 0
+  /**
+   * @brief Returns a reference to the first element in the span.
+   *
+   * Calling front on an empty span results in undefined behavior.
+   *
+   * @return Reference to the first element in the span
+   */
+  [[nodiscard]] constexpr reference front() const { return _data[0]; }
+  // not noexcept due to undefined behavior when size = 0
+  /**
+   * @brief Returns a reference to the last element in the span.
+   *
+   * Calling last on an empty span results in undefined behavior.
+   *
+   * @return Reference to the last element in the span
+   */
+  [[nodiscard]] constexpr reference back() const { return _data[_size - 1]; }
+  // not noexcept due to undefined behavior when idx < 0 || idx >= size
+  /**
+   * @brief Returns a reference to the idx-th element of the sequence.
+   *
+   * The behavior is undefined if idx is out of range (i.e., if it is greater than or equal to
+   * size()).
+   *
+   * @param idx the index of the element to access
+   * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
+   */
+  constexpr reference operator[](size_type idx) const { return _data[idx]; }
 
   /**
    * @brief Returns an iterator to the first element of the span.
@@ -94,7 +123,7 @@ class span_base {
    *
    * @return An iterator to the first element of the span
    */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr iterator begin() const noexcept { return _data; }
+  [[nodiscard]] constexpr iterator begin() const noexcept { return _data; }
   /**
    * @brief Returns an iterator to the element following the last element of the span.
    *
@@ -102,36 +131,32 @@ class span_base {
    *
    * @return An iterator to the element following the last element of the span
    */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr iterator end() const noexcept { return _data + _size; }
+  [[nodiscard]] constexpr iterator end() const noexcept { return _data + _size; }
   /**
    * @brief Returns a pointer to the beginning of the sequence.
    *
    * @return A pointer to the first element of the span
    */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr pointer data() const noexcept { return _data; }
+  [[nodiscard]] constexpr pointer data() const noexcept { return _data; }
 
   /**
    * @brief Returns the number of elements in the span.
    *
    * @return The number of elements in the span
    */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr size_type size() const noexcept { return _size; }
+  [[nodiscard]] constexpr size_type size() const noexcept { return _size; }
   /**
    * @brief Returns the size of the sequence in bytes.
    *
    * @return The size of the sequence in bytes
    */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr size_type size_bytes() const noexcept
-  {
-    return sizeof(T) * _size;
-  }
-
+  [[nodiscard]] constexpr size_type size_bytes() const noexcept { return sizeof(T) * _size; }
   /**
    * @brief Checks if the span is empty.
    *
    * @return True if the span is empty, false otherwise
    */
-  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool empty() const noexcept { return _size == 0; }
+  [[nodiscard]] constexpr bool empty() const noexcept { return _size == 0; }
 
   /**
    * @brief Obtains a subspan consisting of the first N elements of the sequence
@@ -155,9 +180,9 @@ class span_base {
     return Derived(_data + _size - count, count);
   }
 
- protected:
-  pointer _data{nullptr};  ///< Pointer to the first element in the span
-  size_type _size{0};      ///< The number of elements in the span
+ private:
+  pointer _data{nullptr};
+  size_type _size{0};
 };
 
 }  // namespace detail
@@ -263,39 +288,6 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
     : base(other.data(), other.size()), _is_device_accessible{other.is_device_accessible()}
   {
   }
-  // not noexcept due to undefined behavior when idx < 0 || idx >= size
-  /**
-   * @brief Returns a reference to the idx-th element of the sequence.
-   *
-   * The behavior is undefined if idx is out of range (i.e., if it is greater than or equal to
-   * size()).
-   *
-   * @param idx the index of the element to access
-   * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
-   */
-  constexpr typename base::reference operator[](size_type idx) const { return this->_data[idx]; }
-
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the first element in the span.
-   *
-   * Calling front on an empty span results in undefined behavior.
-   *
-   * @return Reference to the first element in the span
-   */
-  [[nodiscard]] constexpr typename base::reference front() const { return this->_data[0]; }
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the last element in the span.
-   *
-   * Calling last on an empty span results in undefined behavior.
-   *
-   * @return Reference to the last element in the span
-   */
-  [[nodiscard]] constexpr typename base::reference back() const
-  {
-    return this->_data[this->_size - 1];
-  }
 
   /**
    * @brief Returns whether the data is device accessible (e.g. pinned memory)
@@ -347,7 +339,7 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;  ///< Base type
   using base::base;
 
-  CUDF_HOST_DEVICE constexpr device_span() noexcept : base() {}  // required to compile on centos
+  constexpr device_span() noexcept : base() {}  // required to compile on centos
 
   /// Constructor from container
   /// @param in The container to construct the span from
@@ -382,49 +374,9 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
             std::enable_if_t<(Extent == OtherExtent || Extent == dynamic_extent) &&
                                std::is_convertible_v<OtherT (*)[], T (*)[]>,  // NOLINT
                              void>* = nullptr>
-  CUDF_HOST_DEVICE constexpr device_span(device_span<OtherT, OtherExtent> const& other) noexcept
+  constexpr device_span(device_span<OtherT, OtherExtent> const& other) noexcept
     : base(other.data(), other.size())
   {
-  }
-
-  // not noexcept due to undefined behavior when idx < 0 || idx >= size
-  /**
-   * @brief Returns a reference to the idx-th element of the sequence.
-   *
-   * The behavior is undefined if idx is out of range (i.e., if it is greater than or equal to
-   * size()).
-   *
-   * @param idx the index of the element to access
-   * @return A reference to the idx-th element of the sequence, i.e., `data()[idx]`
-   */
-  __device__ constexpr typename base::reference operator[](size_type idx) const
-  {
-    return this->_data[idx];
-  }
-
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the first element in the span.
-   *
-   * Calling front on an empty span results in undefined behavior.
-   *
-   * @return Reference to the first element in the span
-   */
-  [[nodiscard]] __device__ constexpr typename base::reference front() const
-  {
-    return this->_data[0];
-  }
-  // not noexcept due to undefined behavior when size = 0
-  /**
-   * @brief Returns a reference to the last element in the span.
-   *
-   * Calling last on an empty span results in undefined behavior.
-   *
-   * @return Reference to the last element in the span
-   */
-  [[nodiscard]] __device__ constexpr typename base::reference back() const
-  {
-    return this->_data[this->_size - 1];
   }
 
   /**
@@ -465,9 +417,7 @@ class base_2dspan {
   constexpr base_2dspan(RowType<T, dynamic_extent> flat_view, size_t columns)
     : _flat{flat_view}, _size{columns == 0 ? 0 : flat_view.size() / columns, columns}
   {
-#ifndef __CUDA_ARCH__
     CUDF_EXPECTS(_size.first * _size.second == flat_view.size(), "Invalid 2D span size");
-#endif
   }
 
   /**

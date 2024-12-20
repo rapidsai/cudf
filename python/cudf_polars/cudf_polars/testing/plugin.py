@@ -47,9 +47,6 @@ def pytest_configure(config: pytest.Config) -> None:
 EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
-    "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
-    "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
-    "tests/unit/io/test_delta.py::test_read_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_csv_18057": "Need to determine if file is compressed",
     "tests/unit/io/test_lazy_csv.py::test_scan_csv_slice_offset_zero": "Integer overflow in sliced read",
     "tests/unit/io/test_lazy_parquet.py::test_dsl2ir_cached_metadata[False]": "cudf-polars doesn't use metadata read by rust preprocessing",
@@ -67,6 +64,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read[False]": "Incomplete handling of projected reads with mismatching schemas, cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read_dtype_mismatch[False]": "Different exception raised, but correctly raises an exception",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_unaligned_schema_read_missing_cols_from_first[False]": "Different exception raised, but correctly raises an exception",
+    "tests/unit/io/test_lazy_parquet.py::test_glob_n_rows": "https://github.com/rapidsai/cudf/issues/17311",
     "tests/unit/io/test_parquet.py::test_read_parquet_only_loads_selected_columns_15098": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection0-False-none]": "Mismatching column read cudf#16394",
     "tests/unit/io/test_parquet.py::test_allow_missing_columns[projection1-False-none]": "Mismatching column read cudf#16394",

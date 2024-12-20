@@ -86,8 +86,7 @@ class CudfEngine(ArrowDatasetEngine):
             )
 
         dataset_kwargs = dataset_kwargs or {}
-        if partitions:
-            dataset_kwargs["partitioning"] = partitioning or "hive"
+        dataset_kwargs["partitioning"] = partitioning or "hive"
 
         # Use cudf to read in data
         try:

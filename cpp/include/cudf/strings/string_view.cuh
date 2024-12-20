@@ -31,8 +31,6 @@
 #include <thrust/execution_policy.h>
 #endif
 
-#include <cuda/std/utility>
-
 #include <algorithm>
 
 // This file should only include device code logic.
@@ -77,8 +75,8 @@ __device__ inline size_type characters_in_string(char const* str, size_type byte
  * @param pos Character position to count to
  * @return The number of bytes and the left over non-counted position value
  */
-__device__ inline cuda::std::pair<size_type, size_type> bytes_to_character_position(
-  string_view d_str, size_type pos)
+__device__ inline std::pair<size_type, size_type> bytes_to_character_position(string_view d_str,
+                                                                              size_type pos)
 {
   size_type bytes    = 0;
   auto ptr           = d_str.data();
@@ -305,7 +303,7 @@ __device__ inline char_utf8 string_view::operator[](size_type pos) const
 __device__ inline size_type string_view::byte_offset(size_type pos) const
 {
   if (length() == size_bytes()) return pos;
-  return cuda::std::get<0>(strings::detail::bytes_to_character_position(*this, pos));
+  return std::get<0>(strings::detail::bytes_to_character_position(*this, pos));
 }
 
 __device__ inline int string_view::compare(string_view const& in) const
@@ -375,23 +373,24 @@ __device__ inline size_type string_view::find_impl(char const* str,
                                                    size_type pos,
                                                    size_type count) const
 {
-  if (!str || pos < 0) { return npos; }
-  if (pos > 0 && pos > length()) { return npos; }
+  auto const nchars = length();
+  if (!str || pos < 0 || pos > nchars) return npos;
+  if (count < 0) count = nchars;
 
   // use iterator to help reduce character/byte counting
-  auto const itr  = begin() + pos;
+  auto itr        = begin() + pos;
   auto const spos = itr.byte_offset();
-  auto const epos =
-    (count >= 0) && ((pos + count) < length()) ? (itr + count).byte_offset() : size_bytes();
+  auto const epos = ((pos + count) < nchars) ? (itr + count).byte_offset() : size_bytes();
 
   auto const find_length = (epos - spos) - bytes + 1;
-  auto const d_target    = string_view{str, bytes};
 
   auto ptr = data() + (forward ? spos : (epos - bytes));
   for (size_type idx = 0; idx < find_length; ++idx) {
-    if (d_target.compare(ptr, bytes) == 0) {
-      return forward ? pos : character_offset(epos - bytes - idx);
+    bool match = true;
+    for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
+      match = (ptr[jdx] == str[jdx]);
     }
+    if (match) { return forward ? pos : character_offset(epos - bytes - idx); }
     // use pos to record the current find position
     pos += strings::detail::is_begin_utf8_char(*ptr);
     forward ? ++ptr : --ptr;

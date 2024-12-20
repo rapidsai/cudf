@@ -8,15 +8,13 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
-from cudf._lib.column import Column
+from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.column import ColumnBase, as_column, column_empty
+from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils.dtypes import min_unsigned_type
 
@@ -423,8 +421,8 @@ def concat(
                         # if join is inner and it contains an empty df
                         # we return an empty df, hence creating an empty
                         # column with dtype metadata retained.
-                        result_data[name] = column_empty(
-                            row_count=0, dtype=col.dtype
+                        result_data[name] = cudf.core.column.column_empty_like(
+                            col, newsize=0
                         )
                     else:
                         result_data[name] = col
@@ -460,8 +458,8 @@ def concat(
                     else:
                         col_label = (k, name)
                     if empty_inner:
-                        result_data[col_label] = column_empty(
-                            row_count=0, dtype=col.dtype
+                        result_data[col_label] = (
+                            cudf.core.column.column_empty_like(col, newsize=0)
                         )
                     else:
                         result_data[col_label] = col
@@ -943,56 +941,27 @@ def _merge_sorted(
                 idx + objs[0].index.nlevels for idx in key_columns_indices
             ]
 
-    columns = (
-        itertools.chain(obj.index._columns, obj._columns)
-        if not ignore_index
-        else obj._columns
+    columns = [
+        [
+            *(obj.index._columns if not ignore_index else ()),
+            *obj._columns,
+        ]
         for obj in objs
-    )
-
-    input_tables = [
-        plc.Table([col.to_pylibcudf(mode="read") for col in source_columns])
-        for source_columns in columns
-    ]
-
-    num_keys = len(key_columns_indices)
-
-    column_order = (
-        plc.types.Order.ASCENDING if ascending else plc.types.Order.DESCENDING
-    )
-
-    if not ascending:
-        na_position = "last" if na_position == "first" else "first"
-
-    null_precedence = (
-        plc.types.NullOrder.BEFORE
-        if na_position == "first"
-        else plc.types.NullOrder.AFTER
-    )
-
-    plc_table = plc.merge.merge(
-        input_tables,
-        key_columns_indices,
-        [column_order] * num_keys,
-        [null_precedence] * num_keys,
-    )
-
-    result_columns = [
-        Column.from_pylibcudf(col) for col in plc_table.columns()
     ]
 
     return objs[0]._from_columns_like_self(
-        result_columns,
+        cudf._lib.merge.merge_sorted(
+            input_columns=columns,
+            key_columns_indices=key_columns_indices,
+            ascending=ascending,
+            na_position=na_position,
+        ),
         column_names=objs[0]._column_names,
         index_names=None if ignore_index else objs[0]._index_names,
     )
 
 
-def _pivot(
-    col_accessor: ColumnAccessor,
-    index: cudf.Index | cudf.MultiIndex,
-    columns: cudf.Index | cudf.MultiIndex,
-) -> cudf.DataFrame:
+def _pivot(col_accessor: ColumnAccessor, index, columns) -> cudf.DataFrame:
     """
     Reorganize the values of the DataFrame according to the given
     index and columns.
@@ -1022,15 +991,16 @@ def _pivot(
             ]
             new_size = nrows * len(names)
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target_col = column_empty(row_count=new_size, dtype=col.dtype)
+            target_col = cudf.core.column.column_empty_like(
+                col, masked=True, newsize=new_size
+            )
             target_col[scatter_map] = col
             target = cudf.Index._from_column(target_col)
             result.update(
                 {
                     name: idx._column
                     for name, idx in zip(
-                        names,
-                        target._split(list(range(nrows, new_size, nrows))),
+                        names, target._split(range(nrows, new_size, nrows))
                     )
                 }
             )
@@ -1039,15 +1009,15 @@ def _pivot(
     ca = ColumnAccessor(
         result,
         multiindex=True,
-        level_names=(None, *columns._column_names),
+        level_names=(None,) + columns._column_names,
         verify=False,
     )
-    return cudf.DataFrame._from_data(ca, index=index_labels)
+    return cudf.DataFrame._from_data(
+        ca, index=cudf.Index(index_labels, name=index.name)
+    )
 
 
-def pivot(
-    data: cudf.DataFrame, columns=None, index=no_default, values=no_default
-) -> cudf.DataFrame:
+def pivot(data, columns=None, index=no_default, values=no_default):
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -1057,10 +1027,10 @@ def pivot(
 
     Parameters
     ----------
-    columns : scalar or list of scalars, optional
-        Column label(s) used to construct the columns of the result.
-    index : scalar or list of scalars, optional
-        Column label(s) used to construct the index of the result.
+    columns : column name, optional
+        Column used to construct the columns of the result.
+    index : column name, optional
+        Column used to construct the index of the result.
     values : column name or list of column names, optional
         Column(s) whose values are rearranged to produce the result.
         If not specified, all remaining columns of the DataFrame
@@ -1099,46 +1069,24 @@ def pivot(
     """
     values_is_list = True
     if values is no_default:
-        already_selected = set(
-            itertools.chain(
-                [index] if is_scalar(index) else index,
-                [columns] if is_scalar(columns) else columns,
-            )
-        )
         cols_to_select = [
-            col for col in data._column_names if col not in already_selected
+            col for col in data._column_names if col not in (index, columns)
         ]
     elif not isinstance(values, (list, tuple)):
         cols_to_select = [values]
         values_is_list = False
     else:
-        cols_to_select = values  # type: ignore[assignment]
+        cols_to_select = values
     if index is no_default:
-        index_data = data.index
+        index = data.index
     else:
-        index_data = data.loc[:, index]
-        if index_data.ndim == 2:
-            index_data = cudf.MultiIndex.from_frame(index_data)
-            if not is_scalar(index) and len(index) == 1:
-                # pandas converts single level MultiIndex to Index
-                index_data = index_data.get_level_values(0)
-        else:
-            index_data = cudf.Index(index_data)
-
-    column_data = data.loc[:, columns]
-    if column_data.ndim == 2:
-        column_data = cudf.MultiIndex.from_frame(column_data)
-    else:
-        column_data = cudf.Index(column_data)
+        index = cudf.Index(data.loc[:, index])
+    columns = cudf.Index(data.loc[:, columns])
 
     # Create a DataFrame composed of columns from both
     # columns and index
     ca = ColumnAccessor(
-        dict(
-            enumerate(
-                itertools.chain(index_data._columns, column_data._columns)
-            )
-        ),
+        dict(enumerate(itertools.chain(index._columns, columns._columns))),
         verify=False,
     )
     columns_index = cudf.DataFrame._from_data(ca)
@@ -1147,9 +1095,7 @@ def pivot(
     if len(columns_index) != len(columns_index.drop_duplicates()):
         raise ValueError("Duplicate index-column pairs found. Cannot reshape.")
 
-    result = _pivot(
-        data._data.select_by_label(cols_to_select), index_data, column_data
-    )
+    result = _pivot(data._data.select_by_label(cols_to_select), index, columns)
 
     # MultiIndex to Index
     if not values_is_list:
@@ -1326,9 +1272,7 @@ def _one_hot_encode_column(
     """
     if isinstance(column.dtype, cudf.CategoricalDtype):
         if column.size == column.null_count:
-            column = column_empty(
-                row_count=column.size, dtype=categories.dtype
-            )
+            column = column_empty_like(categories, newsize=column.size)
         else:
             column = column._get_decategorized_column()  # type: ignore[attr-defined]
 
@@ -1338,11 +1282,7 @@ def _one_hot_encode_column(
             f"np.iinfo({size_type_dtype}).max. Consider reducing "
             "size of category"
         )
-    result_labels = (
-        x if x is not None else "<NA>"
-        for x in categories.to_arrow().to_pylist()
-    )
-    data = dict(zip(result_labels, column.one_hot_encode(categories)))
+    data = one_hot_encode(column, categories)
 
     if drop_first and len(data):
         data.pop(next(iter(data)))

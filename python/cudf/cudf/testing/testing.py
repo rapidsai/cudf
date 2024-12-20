@@ -10,8 +10,8 @@ import pandas as pd
 from pandas import testing as tm
 
 import cudf
+from cudf._lib.unary import is_nan
 from cudf.api.types import is_numeric_dtype, is_string_dtype
-from cudf.core._internals.unary import is_nan
 from cudf.core.missing import NA, NaT
 
 
@@ -77,7 +77,7 @@ def _check_types(
         ):
             return
 
-    if type(left) is not type(right):
+    if type(left) != type(right):
         raise_assert_detail(
             obj, "Class types are different", f"{type(left)}", f"{type(right)}"
         )
@@ -149,7 +149,7 @@ def assert_column_equal(
         ):
             pass
         else:
-            if type(left) is not type(right) or left.dtype != right.dtype:
+            if type(left) != type(right) or left.dtype != right.dtype:
                 msg1 = f"{left.dtype}"
                 msg2 = f"{right.dtype}"
                 raise_assert_detail(obj, "Dtypes are different", msg1, msg2)

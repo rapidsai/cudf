@@ -946,8 +946,6 @@ class json_writer_options_builder;
 class json_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
-  // Specify the compression format of the sink
-  compression_type _compression = compression_type::NONE;
   // maximum number of rows to write in each chunk (limits memory use)
   size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // Set of columns to output
@@ -1025,13 +1023,6 @@ class json_writer_options {
   [[nodiscard]] std::string const& get_na_rep() const { return _na_rep; }
 
   /**
-   * @brief Returns compression type used for sink
-   *
-   * @return compression type for sink
-   */
-  [[nodiscard]] compression_type get_compression() const { return _compression; }
-
-  /**
    * @brief Whether to output nulls as 'null'.
    *
    * @return `true` if nulls are output as 'null'
@@ -1074,13 +1065,6 @@ class json_writer_options {
    * @param tbl Table for the output
    */
   void set_table(table_view tbl) { _table = tbl; }
-
-  /**
-   * @brief Sets compression type to be used
-   *
-   * @param comptype Compression type for sink
-   */
-  void set_compression(compression_type comptype) { _compression = comptype; }
 
   /**
    * @brief Sets metadata.
@@ -1166,18 +1150,6 @@ class json_writer_options_builder {
   json_writer_options_builder& table(table_view tbl)
   {
     options._table = tbl;
-    return *this;
-  }
-
-  /**
-   * @brief Sets compression type of output sink
-   *
-   * @param comptype Compression type used
-   * @return this for chaining
-   */
-  json_writer_options_builder& compression(compression_type comptype)
-  {
-    options._compression = comptype;
     return *this;
   }
 

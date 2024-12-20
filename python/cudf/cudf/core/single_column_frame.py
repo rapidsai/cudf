@@ -83,7 +83,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def ndim(self) -> int:
+    def ndim(self) -> int:  # noqa: D401
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -105,12 +105,12 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def values(self) -> cupy.ndarray:
+    def values(self) -> cupy.ndarray:  # noqa: D102
         return self._column.values
 
     @property  # type: ignore
     @_performance_tracking
-    def values_host(self) -> numpy.ndarray:
+    def values_host(self) -> numpy.ndarray:  # noqa: D102
         return self._column.values_host
 
     @classmethod
@@ -380,7 +380,7 @@ class SingleColumnFrame(Frame, NotIterable):
             source_col=self._column, other=other, inplace=inplace
         )
 
-        result = input_col.copy_if_else(other, cond)
+        result = cudf._lib.copying.copy_if_else(input_col, other, cond)
         return result._with_type_metadata(self.dtype)
 
     @_performance_tracking

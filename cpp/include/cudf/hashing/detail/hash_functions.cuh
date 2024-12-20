@@ -18,8 +18,7 @@
 
 #include <cudf/utilities/traits.hpp>
 
-#include <cuda/std/cmath>
-#include <cuda/std/limits>
+#include <limits>
 
 namespace cudf::hashing::detail {
 
@@ -30,7 +29,7 @@ template <typename T>
 T __device__ inline normalize_nans(T const& key)
 {
   if constexpr (cudf::is_floating_point<T>()) {
-    if (cuda::std::isnan(key)) { return cuda::std::numeric_limits<T>::quiet_NaN(); }
+    if (std::isnan(key)) { return std::numeric_limits<T>::quiet_NaN(); }
   }
   return key;
 }

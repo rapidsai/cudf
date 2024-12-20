@@ -17,11 +17,11 @@
 #include "file_io_utilities.hpp"
 #include "getenv_or.hpp"
 
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -56,7 +56,7 @@ class file_source : public datasource {
       cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
-                    _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
+                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
     } else {
       _cufile_in = detail::make_cufile_input(filepath);
     }
@@ -128,8 +128,7 @@ class file_source : public datasource {
                                                   rmm::cuda_stream_view stream) override
   {
     rmm::device_buffer out_data(size, stream);
-    size_t const read =
-      device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
     out_data.resize(read, stream);
     return datasource::buffer::create(std::move(out_data));
   }
@@ -445,8 +444,7 @@ class remote_file_source : public datasource {
                                                   rmm::cuda_stream_view stream) override
   {
     rmm::device_buffer out_data(size, stream);
-    size_t const read =
-      device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
     out_data.resize(read, stream);
     return datasource::buffer::create(std::move(out_data));
   }
@@ -473,7 +471,7 @@ class remote_file_source : public datasource {
   static bool is_supported_remote_url(std::string const& url)
   {
     // Regular expression to match "s3://"
-    static std::regex const pattern{R"(^s3://)", std::regex_constants::icase};
+    static std::regex pattern{R"(^s3://)", std::regex_constants::icase};
     return std::regex_search(url, pattern);
   }
 

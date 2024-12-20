@@ -31,7 +31,6 @@
 #include <algorithm>
 #include <iostream>
 
-namespace {
 struct valid_bit_functor {
   cudf::bitmask_type const* _null_mask;
   __device__ bool operator()(cudf::size_type element_index) const noexcept
@@ -39,7 +38,13 @@ struct valid_bit_functor {
     return cudf::bit_is_set(_null_mask, element_index);
   }
 };
-}  // namespace
+
+std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& bits)
+{
+  for (auto _bit : bits)
+    stream << int(_bit);
+  return stream;
+}
 
 struct SetBitmaskTest : public cudf::test::BaseFixture {
   void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  // Device Ptr

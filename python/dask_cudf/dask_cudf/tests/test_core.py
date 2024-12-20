@@ -489,7 +489,7 @@ def test_repartition_hash_staged(npartitions):
     )
 
     # Make sure we are getting a dask_cudf dataframe
-    assert type(ddf_new) is type(ddf)
+    assert type(ddf_new) == type(ddf)
 
     # Check that the length was preserved
     assert len(ddf_new) == len(ddf)
@@ -956,7 +956,7 @@ def test_implicit_array_conversion_cupy_sparse():
 
     # NOTE: The calculation here doesn't need to make sense.
     # We just need to make sure we get the right type back.
-    assert type(result) is type(expect)
+    assert type(result) == type(expect)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [1.1, 2.3, 4.5]])
@@ -1019,29 +1019,3 @@ def test_rename_axis_after_join():
     result = ddf1.join(ddf2, how="outer")
     expected = df1.join(df2, how="outer")
     dd.assert_eq(result, expected, check_index=False)
-
-
-def test_clip_dataframe():
-    df = cudf.DataFrame(
-        {
-            "id": ["a", "b", "c", "d"],
-            "score": [-1, 1, 4, 6],
-        }
-    )
-    expect = df.clip(lower=["b", 1], upper=["d", 5], axis=1)
-    got = dd.from_pandas(df, npartitions=2).clip(
-        lower=["b", 1], upper=["d", 5], axis=1
-    )
-    dd.assert_eq(expect, got)
-
-
-def test_clip_series():
-    ser = cudf.Series([-0.5, 0.5, 4.5, 5.5])
-    expect = ser.clip(lower=0, upper=5).round().astype(int)
-    got = (
-        dd.from_pandas(ser, npartitions=2)
-        .clip(lower=0, upper=5)
-        .round()
-        .astype(int)
-    )
-    dd.assert_eq(expect, got)

@@ -22,7 +22,6 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>

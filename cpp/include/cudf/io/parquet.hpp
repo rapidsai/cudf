@@ -410,7 +410,6 @@ class parquet_reader_options_builder {
    *
    * @param val Boolean value whether to read matching projected and filter columns from mismatched
    * Parquet sources.
-   *
    * @return this for chaining.
    */
   parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)

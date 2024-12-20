@@ -799,7 +799,8 @@ def _set_missing_values(
             valid_mask = _ensure_gpu_buffer(
                 valid_mask[0], valid_mask[1], allow_copy
             )
-            bitmask = as_column(valid_mask._buf, dtype="bool").as_mask()
+            boolmask = as_column(valid_mask._buf, dtype="bool")
+            bitmask = cudf._lib.transform.bools_to_mask(boolmask)
             return cudf_col.set_mask(bitmask)
         elif null == _MaskKind.BITMASK:
             valid_mask = _ensure_gpu_buffer(
