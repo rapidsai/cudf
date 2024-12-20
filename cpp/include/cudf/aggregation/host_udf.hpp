@@ -101,6 +101,26 @@ struct host_udf_base {
   virtual ~host_udf_base() = default;
 
   /**
+   * @brief Define the possible data needed for reduction.
+   */
+  enum class reduction_data_attribute : int32_t {
+    INPUT_VALUES,  ///< The input values column.
+    OUTPUT_DTYPE,  ///< Data type for the output result.
+    INIT_VALUE     ///< The initial value for computing reduction.
+  };
+
+  /**
+   * @brief Define the possible data needed for segmented reduction.
+   */
+  enum class segmented_reduction_data_attribute : int32_t {
+    INPUT_VALUES,  ///< The input values column.
+    OUTPUT_DTYPE,  ///< Data type for the output result.
+    INIT_VALUE,    ///< The initial value for computing reduction.
+    NULL_POLICY,   ///< To control null handling (INCLUDE or EXCLUDE nulls).
+    OFFSETS        ///< The offsets defining segments for segmented reduction.
+  };
+
+  /**
    * @brief Define the possible data needed for groupby aggregations.
    *
    * Note that only sort-based groupby aggregations are supported.
@@ -131,7 +151,10 @@ struct host_udf_base {
     /**
      * @brief Hold all possible data types for the input of the aggregation in the derived class.
      */
-    using value_type = std::variant<groupby_data_attribute, std::unique_ptr<aggregation>>;
+    using value_type = std::variant<reduction_data_attribute,
+                                    segmented_reduction_data_attribute,
+                                    groupby_data_attribute,
+                                    std::unique_ptr<aggregation>>;
     value_type value;  ///< The actual data attribute, wrapped by this struct
                        ///< as a wrapper is needed to define `hash` and `equal_to` functors.
 
@@ -142,7 +165,10 @@ struct host_udf_base {
      * @brief Construct a new data attribute from an aggregation attribute.
      * @param value_ An aggregation attribute
      */
-    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, groupby_data_attribute>)>
+    template <typename T,
+              CUDF_ENABLE_IF(std::is_same_v<T, reduction_data_attribute> ||
+                             std::is_same_v<T, segmented_reduction_data_attribute> ||
+                             std::is_same_v<T, groupby_data_attribute>)>
     data_attribute(T value_) : value{value_}
     {
     }
@@ -220,7 +246,12 @@ struct host_udf_base {
    * @brief Hold all possible types of the data that is passed to the derived class for executing
    * the aggregation.
    */
-  using input_data_t = std::variant<column_view, size_type, device_span<size_type const>>;
+  using input_data_t = std::variant<column_view,
+                                    data_type,
+                                    std::optional<std::reference_wrapper<scalar const>>,
+                                    null_policy,
+                                    size_type,
+                                    device_span<size_type const>>;
 
   /**
    * @brief Input to the aggregation, mapping from each data attribute to its actual data.
@@ -229,12 +260,10 @@ struct host_udf_base {
     unordered_map<data_attribute, input_data_t, data_attribute::hash, data_attribute::equal_to>;
 
   /**
-   * @brief Output type of the aggregation.
-   *
-   * Currently only a single type is supported as the output of the aggregation, but it will hold
-   * more type in the future when reduction is supported.
+   * @brief Output type of the aggregation. It can be either a scalar (for reduction) or a column
+   * (for segmented reduction or groupby aggregations).
    */
-  using output_t = std::variant<std::unique_ptr<column>>;
+  using output_t = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
 
   /**
    * @brief Get the output when the input values column is empty.

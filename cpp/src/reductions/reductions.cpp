@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
@@ -144,6 +145,39 @@ struct reduce_dispatch_functor {
         auto td_agg = static_cast<cudf::detail::merge_tdigest_aggregation const&>(agg);
         return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
       }
+      case aggregation::HOST_UDF: {
+        auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+        auto const data_attrs = [&]() -> host_udf_base::data_attribute_set_t {
+          if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
+          // Empty attribute set means everything.
+          return {host_udf_base::reduction_data_attribute::INPUT_VALUES,
+                  host_udf_base::reduction_data_attribute::OUTPUT_DTYPE,
+                  host_udf_base::reduction_data_attribute::INIT_VALUE};
+        }();
+
+        // Do not cache udf_input, as the actual input data may change from run to run.
+        host_udf_base::input_map_t udf_input;
+        for (auto const& attr : data_attrs) {
+          CUDF_EXPECTS(std::holds_alternative<host_udf_base::reduction_data_attribute>(attr.value),
+                       "Invalid input data attribute for HOST_UDF reduction.");
+          switch (std::get<host_udf_base::reduction_data_attribute>(attr.value)) {
+            case host_udf_base::reduction_data_attribute::INPUT_VALUES:
+              udf_input.emplace(attr, col);
+              break;
+            case host_udf_base::reduction_data_attribute::OUTPUT_DTYPE:
+              udf_input.emplace(attr, output_dtype);
+              break;
+            case host_udf_base::reduction_data_attribute::INIT_VALUE:
+              udf_input.emplace(attr, init);
+              break;
+            default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF reduction.");
+          }
+        }
+        auto output = (*udf_ptr)(udf_input, stream, mr);
+        CUDF_EXPECTS(std::holds_alternative<std::unique_ptr<scalar>>(output),
+                     "Invalid output type from HOST_UDF reduction.");
+        return std::get<std::unique_ptr<scalar>>(std::move(output));
+      }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }
@@ -161,9 +195,11 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
-                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {
+                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL ||
+                            agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
-      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
+      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
+      "aggregation types");
   }
 
   // Returns default scalar if input column is empty or all null
