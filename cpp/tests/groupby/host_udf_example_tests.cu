@@ -93,13 +93,18 @@ struct host_udf_reduction_example : cudf::host_udf_base {
     using InputType  = double;
     using OutputType = int64_t;
 
-    template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_same_v<InputType, T>)>
+    template <typename T,
+              typename U,
+              typename... Args,
+              CUDF_ENABLE_IF(!std::is_same_v<InputType, T> || !std::is_same_v<OutputType, U>)>
     output_t operator()(Args...) const
     {
-      CUDF_FAIL("Unsupported input type.");
+      CUDF_FAIL("Unsupported input/output type.");
     }
 
-    template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
+    template <typename T,
+              typename U,
+              CUDF_ENABLE_IF(std::is_same_v<InputType, T>&& std::is_same_v<OutputType, U>)>
     output_t operator()(input_map_t const& input,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr) const
@@ -237,19 +242,24 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_base {
 
   struct segmented_reduce_fn {
     // Store pointer to the parent class so we can call its functions.
-    host_udf_reduction_example const* parent;
+    host_udf_segmented_reduction_example const* parent;
 
     // For simplicity, this example only accepts a single type input and output.
     using InputType  = double;
     using OutputType = int64_t;
 
-    template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_same_v<InputType, T>)>
+    template <typename T,
+              typename U,
+              typename... Args,
+              CUDF_ENABLE_IF(!std::is_same_v<InputType, T> || !std::is_same_v<OutputType, U>)>
     output_t operator()(Args...) const
     {
-      CUDF_FAIL("Unsupported input type.");
+      CUDF_FAIL("Unsupported input/output type.");
     }
 
-    template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
+    template <typename T,
+              typename U,
+              CUDF_ENABLE_IF(std::is_same_v<InputType, T>&& std::is_same_v<OutputType, U>)>
     output_t operator()(input_map_t const& input,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr) const
@@ -369,7 +379,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
     // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
     // Since init value is not given, it is set to 0.
     // [ 3 * (0^2 + init^2 + 2^2), 2 * (3^2 + init^2), 5 * (5^2 + init^2 + init^2 + 8^2 + 9^2) ]
-    auto const expected = int64s_col{12, 18, 850};
+    auto const expected = int64s_col{{12, 18, 850}, {true, true, true}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
@@ -388,7 +398,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
 
     // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
     // [ 3 * (3 + 0^2 + 3^2 + 2^2), 2 * (3 + 3^2 + 3^2), 5 * (3 + 5^2 + 3^2 + 3^2 + 8^2 + 9^2) ]
-    auto const expected = int64s_col{48, 42, 955};
+    auto const expected = int64s_col{{48, 42, 955}, {true, true, true}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
@@ -406,7 +416,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
       cudf::get_current_device_resource_ref());
 
     // [ 3 * (3 + 0^2 + 2^2), 2 * (3 + 3^2), 5 * (3 + 5^2 + 8^2 + 9^2) ]
-    auto const expected = int64s_col{21, 24, 865};
+    auto const expected = int64s_col{{21, 24, 865}, {true, true, true}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
