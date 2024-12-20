@@ -198,7 +198,8 @@ rmm::device_buffer decompress_stripe_data(
     switch (decompressor.compression()) {
       case compression_type::ZLIB:
         if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
-          gpuinflate(inflate_in_view, inflate_out, inflate_res, gzip_header_included::NO, stream);
+          gpuinflate(
+            inflate_in_view, inflate_out_view, inflate_res, gzip_header_included::NO, stream);
         } else {
           nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
                                      inflate_in_view,
