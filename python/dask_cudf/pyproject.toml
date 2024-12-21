@@ -96,8 +96,6 @@ empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
     "error::FutureWarning",
     "error::DeprecationWarning",
-    # https://github.com/rapidsai/build-planning/issues/116
-    "ignore:.*cuda..* module is deprecated.*:DeprecationWarning",
     # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
     "ignore:.*datetime.*utcnow.*scheduled for removal:DeprecationWarning:botocore",
     "ignore:create_block_manager_from_blocks is deprecated and will be removed in a future version. Use public APIs instead.:DeprecationWarning",
