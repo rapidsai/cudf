@@ -15,7 +15,6 @@
  */
 
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
@@ -44,8 +43,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-
-namespace nvcomp = cudf::io::detail::nvcomp;
 
 using cudf::detail::device_2dspan;
 using cudf::io::detail::compression_result;
@@ -1374,7 +1371,7 @@ compression_type from_orc_compression(orc::CompressionKind compression)
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<uint8_t> compressed_data,
   uint32_t num_compressed_blocks,
-  CompressionKind compression,
+  compression_type compression,
   uint32_t comp_blk_size,
   uint32_t max_comp_blk_size,
   uint32_t comp_block_align,
@@ -1399,8 +1396,7 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
                                                                             max_comp_blk_size,
                                                                             comp_block_align);
 
-  cudf::io::detail::compress(
-    from_orc_compression(compression), comp_in, comp_out, comp_res, stream);
+  cudf::io::detail::compress(compression, comp_in, comp_out, comp_res, stream);
 
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(

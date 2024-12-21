@@ -58,6 +58,30 @@ std::vector<uint8_t> compress(compression_type compression,
                               rmm::cuda_stream_view stream);
 
 /**
+ * @brief Maximum size of uncompressed blocks that can be compressed.
+ *
+ * @param compression Compression type
+ * @returns maximum block size
+ */
+[[nodiscard]] std::optional<size_t> compress_max_allowed_block_size(compression_type compression);
+
+/**
+ * @brief Gets input and output alignment requirements for the given compression type.
+ *
+ * @param compression Compression type
+ * @returns required alignment
+ */
+[[nodiscard]] size_t compress_required_block_alignment(compression_type compression);
+
+/**
+ * @brief Gets the maximum size any chunk could compress to in the batch.
+ *
+ * @param compression Compression type
+ * @param uncompressed_size Size of the largest uncompressed chunk in the batch
+ */
+[[nodiscard]] size_t max_compressed_size(compression_type compression, uint32_t uncompressed_size);
+
+/**
  * @brief Compresses device memory buffers.
  *
  * @param compression Type of compression of the input data

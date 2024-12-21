@@ -342,7 +342,7 @@ class writer::impl {
   // Writer options.
   stripe_size_limits const _max_stripe_size;
   size_type const _row_index_stride;
-  CompressionKind const _compression_kind;
+  compression_type const _compression;
   size_t const _compression_blocksize;
   std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;

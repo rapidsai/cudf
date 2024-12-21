@@ -36,10 +36,20 @@ namespace cudf::io::detail {
 
 namespace {
 
-[[maybe_unused]] auto& h_comp_pool()
+auto& h_comp_pool()
 {
   static BS::thread_pool pool(std::thread::hardware_concurrency());
   return pool;
+}
+
+std::optional<nvcomp::compression_type> to_nvcomp_compression(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::SNAPPY: return nvcomp::compression_type::SNAPPY;
+    case compression_type::ZSTD: return nvcomp::compression_type::ZSTD;
+    case compression_type::LZ4: return nvcomp::compression_type::LZ4;
+    default: return std::nullopt;
+  }
 }
 
 /**
@@ -180,7 +190,6 @@ void host_compress(compression_type compression,
 [[nodiscard]] bool host_compression_supported(compression_type compression)
 {
   switch (compression) {
-    case compression_type::SNAPPY: return true;
     case compression_type::GZIP: return true;
     case compression_type::NONE: return true;
     default: return false;
@@ -212,6 +221,36 @@ void host_compress(compression_type compression,
 }
 
 }  // namespace
+
+std::optional<size_t> compress_max_allowed_block_size(compression_type compression)
+{
+  if (auto nvcomp_type = to_nvcomp_compression(compression);
+      nvcomp_type.has_value() and not nvcomp::is_compression_disabled(*nvcomp_type)) {
+    return nvcomp::compress_max_allowed_chunk_size(*nvcomp_type);
+  }
+  return std::nullopt;
+}
+
+[[nodiscard]] size_t compress_required_block_alignment(compression_type compression)
+{
+  auto nvcomp_type = to_nvcomp_compression(compression);
+  if (compression == compression_type::NONE or not nvcomp_type.has_value() or
+      nvcomp::is_compression_disabled(*nvcomp_type)) {
+    return 1ul;
+  }
+
+  return nvcomp::required_alignment(*nvcomp_type);
+}
+
+[[nodiscard]] size_t max_compressed_size(compression_type compression, uint32_t uncompressed_size)
+{
+  if (compression == compression_type::NONE) { return uncompressed_size; }
+
+  if (auto nvcomp_type = to_nvcomp_compression(compression); nvcomp_type.has_value()) {
+    return nvcomp::compress_max_output_chunk_size(*nvcomp_type, uncompressed_size);
+  }
+  CUDF_FAIL("Unsupported compression type");
+}
 
 std::vector<std::uint8_t> compress(compression_type compression,
                                    host_span<uint8_t const> src,
