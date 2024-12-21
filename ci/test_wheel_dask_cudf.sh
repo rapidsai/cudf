@@ -30,20 +30,10 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
-rapids-logger "pytest dask_cudf (dask-expr)"
+rapids-logger "pytest dask_cudf"
 pushd python/dask_cudf/dask_cudf
-DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest \
+python -m pytest \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
-  --numprocesses=8 \
-  --dist=worksteal \
-  .
-popd
-
-# Run tests in dask_cudf/tests and dask_cudf/io/tests (legacy)
-rapids-logger "pytest dask_cudf (legacy)"
-pushd python/dask_cudf/dask_cudf
-DASK_DATAFRAME__QUERY_PLANNING=False python -m pytest \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-legacy.xml" \
   --numprocesses=8 \
   --dist=worksteal \
   .
