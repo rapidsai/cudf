@@ -184,11 +184,11 @@ class run_cache_manager {
  * @brief Helper class to help run_cache_manager cache the first run of TIMESTAMP's DATA stream for
  * a row group.
  *
- * The run_cache_manager is intended to be stored in the shared memory, whereas the actual cache in
- * the local storage as an optimization. If a function is to use run_cache_manager, both the manager
- * and the cache objects need to be passed. This class is introduced to simplify the function call,
- * so that only a single cache_helper object needs to be passed. To that end, public methods
- * originally belonging to run_cache_manager have been moved to this class.
+ * The run_cache_manager is intended to be stored in the shared memory, whereas the actual cache is
+ * in the local storage (as an optimization). If a function is to use run_cache_manager, both the
+ * manager and the cache objects need to be passed. This class is introduced to simplify the
+ * function call, so that only a single cache_helper object needs to be passed. To that end, public
+ * methods originally belonging to run_cache_manager have been moved to this class.
  */
 class cache_helper {
  public:
@@ -239,7 +239,6 @@ class cache_helper {
    * @brief Copy the excess data from the intermediate buffer for the DATA stream to the cache.
    *
    * @param[in] src Intermediate buffer for the DATA stream.
-   * @param[out] cache_storage Local variable serving as the cache for the DATA stream.
    */
   __device__ void write_to_cache(int64_t* src)
   {
