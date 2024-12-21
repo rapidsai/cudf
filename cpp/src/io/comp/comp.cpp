@@ -23,6 +23,7 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -149,17 +150,29 @@ void host_compress(compression_type compression,
                    device_span<compression_result> results,
                    rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   if (compression == compression_type::NONE) { return; }
   auto const num_blocks = inputs.size();
   auto h_results        = cudf::detail::make_host_vector<compression_result>(num_blocks, stream);
   auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
   auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
   stream.synchronize();
+
+  std::vector<std::future<size_t>> tasks;
+  auto streams = cudf::detail::fork_streams(stream, h_comp_pool().get_thread_count());
   for (size_t i = 0; i < num_blocks; ++i) {
-    auto const h_input  = cudf::detail::make_host_vector_sync(h_inputs[i], stream);
-    auto const h_output = compress(compression, h_input, stream);
-    cudf::detail::cuda_memcpy<uint8_t>(h_outputs[i].subspan(0, h_output.size()), h_output, stream);
-    h_results[i] = {h_output.size(), compression_status::SUCCESS};
+    auto cur_stream = streams[i % streams.size()];
+    auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
+      auto const h_in  = cudf::detail::make_host_vector_sync(d_in, cur_stream);
+      auto const h_out = compress(compression, h_in, cur_stream);
+      cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
+      return h_out.size();
+    };
+    tasks.emplace_back(h_comp_pool().submit_task(std::move(task)));
+  }
+
+  for (auto i = 0ul; i < num_blocks; ++i) {
+    h_results[i] = {tasks[i].get(), compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
 }
@@ -195,7 +208,7 @@ void host_compress(compression_type compression,
     "Unsupported compression type");
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
-  return getenv_or("LIBCUDF_USE_HOST_COMPRESSION", false);
+  return getenv_or("LIBCUDF_USE_HOST_COMPRESSION", 0);
 }
 
 }  // namespace
