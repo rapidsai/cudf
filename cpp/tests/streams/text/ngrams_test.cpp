@@ -45,7 +45,7 @@ TEST_F(TextNGramsTest, HashCharacterNgrams)
   auto input =
     cudf::test::strings_column_wrapper({"the quick brown fox", "jumped over the lazy dog."});
   nvtext::hash_character_ngrams(
-    cudf::strings_column_view(input), 5, cudf::test::get_default_stream());
+    cudf::strings_column_view(input), 5, 5, cudf::test::get_default_stream());
 }
 
 TEST_F(TextNGramsTest, NgramsTokenize)
