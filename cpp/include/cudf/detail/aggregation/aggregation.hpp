@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <functional>
@@ -89,6 +90,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class udf_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class host_udf_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_lists_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_sets_aggregation const& agg);
@@ -135,6 +138,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
   virtual void visit(class udf_aggregation const& agg);
+  virtual void visit(class host_udf_aggregation const& agg);
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
@@ -961,6 +965,35 @@ class udf_aggregation final : public rolling_aggregation {
 };
 
 /**
+ * @brief Derived class for specifying host-based UDF aggregation.
+ */
+class host_udf_aggregation final : public groupby_aggregation {
+ public:
+  std::unique_ptr<host_udf_base> udf_ptr;
+
+  host_udf_aggregation()                            = delete;
+  host_udf_aggregation(host_udf_aggregation const&) = delete;
+
+  // Need to define the constructor and destructor in a separate source file where we have the
+  // complete declaration of `host_udf_base`.
+  explicit host_udf_aggregation(std::unique_ptr<host_udf_base> udf_ptr_);
+  ~host_udf_aggregation() override;
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override;
+
+  [[nodiscard]] size_t do_hash() const override;
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override;
+
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
 class merge_lists_aggregation final : public groupby_aggregation, public reduce_aggregation {
@@ -1462,6 +1495,12 @@ struct target_type_impl<Source,
   using type = struct_view;
 };
 
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::HOST_UDF> {
+  // Just a placeholder. The actual return type is unknown.
+  using type = struct_view;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -1579,6 +1618,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
     case aggregation::EWMA:
       return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
+    case aggregation::HOST_UDF:
+      return f.template operator()<aggregation::HOST_UDF>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
