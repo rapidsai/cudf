@@ -4077,7 +4077,7 @@ def test_get_group_list_like():
 
 
 def test_get_group_list_like_len_2():
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], 'c': [3, 2, 1]})
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [3, 2, 1]})
     result = df.groupby(["a", "b"]).get_group((1, 4))
     expected = df.to_pandas().groupby(["a", "b"]).get_group((1, 4))
     assert_eq(result, expected)
