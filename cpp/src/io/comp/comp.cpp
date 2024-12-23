@@ -174,7 +174,7 @@ void host_compress(compression_type compression,
 [[nodiscard]] bool host_compression_supported(compression_type compression)
 {
   switch (compression) {
-    case compression_type::GZIP: return true;
+    case compression_type::GZIP:
     case compression_type::NONE: return true;
     default: return false;
   }
@@ -184,10 +184,10 @@ void host_compress(compression_type compression,
 {
   auto const nvcomp_type = to_nvcomp_compression(compression);
   switch (compression) {
-    case compression_type::SNAPPY: return true;
-    case compression_type::ZSTD:
     case compression_type::LZ4:
-    case compression_type::ZLIB: return not nvcomp::is_compression_disabled(nvcomp_type.value());
+    case compression_type::ZLIB:
+    case compression_type::ZSTD: return not nvcomp::is_compression_disabled(nvcomp_type.value());
+    case compression_type::SNAPPY:
     case compression_type::NONE: return true;
     default: return false;
   }
@@ -203,6 +203,7 @@ void host_compress(compression_type compression,
     "Unsupported compression type");
   if (not host_compression_supported(compression)) { return false; }
   if (not device_compression_supported(compression)) { return true; }
+  // If both host and device compression are supported, use the host if the env var is set
   return getenv_or("LIBCUDF_USE_HOST_COMPRESSION", 0);
 }
 
@@ -257,10 +258,10 @@ void compress(compression_type compression,
               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  if (not use_host_compression(compression, inputs, outputs)) {
-    device_compress(compression, inputs, outputs, results, stream);
+  if (use_host_compression(compression, inputs, outputs)) {
+    return host_compress(compression, inputs, outputs, results, stream);
   } else {
-    host_compress(compression, inputs, outputs, results, stream);
+    return device_compress(compression, inputs, outputs, results, stream);
   }
 }
 
