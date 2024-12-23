@@ -130,9 +130,7 @@ def _setup_numba():
             if driver_version < (12, 0):
                 patch_numba_linker_cuda_11()
             else:
-                from pynvjitlink.patch import patch_numba_linker
-
-                patch_numba_linker()
+                numba_config.CUDA_ENABLE_PYNVJITLINK = True
 
 
 class _CUDFNumbaConfig:
