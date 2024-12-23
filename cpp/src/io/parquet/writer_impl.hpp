@@ -144,7 +144,7 @@ class writer::impl {
   rmm::cuda_stream_view _stream;
 
   // Writer options.
-  Compression const _compression;
+  compression_type const _compression;
   size_t const _max_row_group_size;
   size_type const _max_row_group_rows;
   size_t const _max_page_size_bytes;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "gpuinflate.hpp"
+#include "comp.hpp"
 
 #include <rmm/exec_policy.hpp>
 
