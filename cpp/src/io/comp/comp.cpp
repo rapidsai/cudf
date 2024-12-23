@@ -125,6 +125,8 @@ void device_compress(compression_type compression,
                      device_span<compression_result> results,
                      rmm::cuda_stream_view stream)
 {
+  if (compression == compression_type::NONE) { return; }
+
   auto const nvcomp_type = to_nvcomp_compression(compression);
   auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_compression_disabled(*nvcomp_type)
                                                    : "invalid compression type";
@@ -144,8 +146,8 @@ void host_compress(compression_type compression,
                    device_span<compression_result> results,
                    rmm::cuda_stream_view stream)
 {
-  CUDF_FUNC_RANGE();
   if (compression == compression_type::NONE) { return; }
+
   auto const num_blocks = inputs.size();
   auto h_results        = cudf::detail::make_host_vector<compression_result>(num_blocks, stream);
   auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
