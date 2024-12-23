@@ -48,6 +48,7 @@ std::optional<nvcomp::compression_type> to_nvcomp_compression(compression_type c
     case compression_type::SNAPPY: return nvcomp::compression_type::SNAPPY;
     case compression_type::ZSTD: return nvcomp::compression_type::ZSTD;
     case compression_type::LZ4: return nvcomp::compression_type::LZ4;
+    case compression_type::ZLIB: return nvcomp::compression_type::DEFLATE;
     default: return std::nullopt;
   }
 }
@@ -149,6 +150,14 @@ void device_compress(compression_type compression,
       nvcomp::batched_compress(nvcomp::compression_type::LZ4, inputs, outputs, results, stream);
       break;
     }
+    case compression_type::ZLIB: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::DEFLATE);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
+      }
+      nvcomp::batched_compress(nvcomp::compression_type::DEFLATE, inputs, outputs, results, stream);
+      break;
+    }
     case compression_type::NONE: return;
     default: CUDF_FAIL("invalid compression type");
   }
@@ -198,10 +207,12 @@ void host_compress(compression_type compression,
 
 [[nodiscard]] bool device_compression_supported(compression_type compression)
 {
+  auto const nvcomp_type = to_nvcomp_compression(compression);
   switch (compression) {
     case compression_type::SNAPPY: return true;
-    case compression_type::ZSTD: return true;
-    case compression_type::LZ4: return true;
+    case compression_type::ZSTD:
+    case compression_type::LZ4:
+    case compression_type::ZLIB: return not nvcomp::is_compression_disabled(nvcomp_type.value());
     case compression_type::NONE: return true;
     default: return false;
   }
@@ -260,7 +271,7 @@ std::vector<std::uint8_t> compress(compression_type compression,
   switch (compression) {
     case compression_type::GZIP: return compress_gzip(src);
     case compression_type::SNAPPY: return compress_snappy(src, stream);
-    default: std::cout << (int)compression << std::endl; CUDF_FAIL("Unsupported compression type");
+    default: CUDF_FAIL("Unsupported compression type");
   }
 }
 
