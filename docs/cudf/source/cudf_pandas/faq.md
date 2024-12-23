@@ -142,6 +142,24 @@ cuDF (learn more in [this
 blog](https://medium.com/rapids-ai/easy-cpu-gpu-arrays-and-dataframes-run-your-dask-code-where-youd-like-e349d92351d)) and the [RAPIDS Accelerator for Apache Spark](https://nvidia.github.io/spark-rapids/)
 provides a similar configuration-based plugin for Spark.
 
+
+## Recommendation for libraries that are type aware.
+
+When working with `cudf.pandas` proxy objects, it is important to access the real underlying objects to ensure compatibility with libraries that are `cudf` or `pandas` aware. You can use the following methods to retrieve the actual `cudf` or `pandas` objects:
+
+- `get_cudf_pandas_fast_object()`: This method returns the fast `cudf` object from the proxy.
+- `get_cudf_pandas_slow_object()`: This method returns the slow `pandas` object from the proxy.
+
+Here is an example of how to use these methods:
+
+```python
+# Assuming `proxy_obj` is a cudf.pandas proxy object
+fast_obj = proxy_obj.get_cudf_pandas_fast_object()
+slow_obj = proxy_obj.get_cudf_pandas_slow_object()
+
+# Now you can use `fast_obj` and `slow_obj` with libraries that are cudf or pandas aware
+```
+
 (are-there-any-known-limitations)=
 ## Are there any known limitations?
 
