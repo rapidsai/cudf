@@ -125,41 +125,16 @@ void device_compress(compression_type compression,
                      device_span<compression_result> results,
                      rmm::cuda_stream_view stream)
 {
+  auto const nvcomp_type = to_nvcomp_compression(compression);
+  auto nvcomp_disabled   = nvcomp_type.has_value() ? nvcomp::is_compression_disabled(*nvcomp_type)
+                                                   : "invalid compression type";
+  if (not nvcomp_disabled) {
+    return nvcomp::batched_compress(*nvcomp_type, inputs, outputs, results, stream);
+  }
+
   switch (compression) {
-    case compression_type::SNAPPY:
-      if (nvcomp::is_compression_disabled(nvcomp::compression_type::SNAPPY)) {
-        gpu_snap(inputs, outputs, results, stream);
-      } else {
-        nvcomp::batched_compress(
-          nvcomp::compression_type::SNAPPY, inputs, outputs, results, stream);
-      }
-      break;
-    case compression_type::ZSTD: {
-      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD);
-          reason) {
-        CUDF_FAIL("Compression error: " + reason.value());
-      }
-      nvcomp::batched_compress(nvcomp::compression_type::ZSTD, inputs, outputs, results, stream);
-      break;
-    }
-    case compression_type::LZ4: {
-      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
-          reason) {
-        CUDF_FAIL("Compression error: " + reason.value());
-      }
-      nvcomp::batched_compress(nvcomp::compression_type::LZ4, inputs, outputs, results, stream);
-      break;
-    }
-    case compression_type::ZLIB: {
-      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::DEFLATE);
-          reason) {
-        CUDF_FAIL("Compression error: " + reason.value());
-      }
-      nvcomp::batched_compress(nvcomp::compression_type::DEFLATE, inputs, outputs, results, stream);
-      break;
-    }
-    case compression_type::NONE: return;
-    default: CUDF_FAIL("invalid compression type");
+    case compression_type::SNAPPY: return gpu_snap(inputs, outputs, results, stream);
+    default: CUDF_FAIL("Compression error: " + nvcomp_disabled.value());
   }
 }
 
