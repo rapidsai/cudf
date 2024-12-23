@@ -51,6 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OTEL_SERVICE_NAME: 'pr-cudf'
+      SHARED_ACTIONS_REPO: 'msarahan/shared-actions'
+      SHARED_ACTIONS_REF: 'extract-run-attempt-from-trace-id'
     steps:
       - name: Telemetry setup
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
