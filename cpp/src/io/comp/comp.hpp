@@ -96,5 +96,18 @@ void compress(compression_type compression,
               device_span<compression_result> results,
               rmm::cuda_stream_view stream);
 
+/**
+ * @brief Aggregate results of compression into a single statistics object.
+ *
+ * @param inputs List of uncompressed input buffers
+ * @param results List of compression results
+ * @param stream CUDA stream to use
+ * @return writer_compression_statistics
+ */
+[[nodiscard]] writer_compression_statistics collect_compression_statistics(
+  device_span<device_span<uint8_t const> const> inputs,
+  device_span<compression_result const> results,
+  rmm::cuda_stream_view stream);
+
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

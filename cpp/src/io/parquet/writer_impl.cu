@@ -23,8 +23,7 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "interop/decimal_conversion_utilities.cuh"
-#include "io/comp/gpuinflate.hpp"
-#include "io/comp/nvcomp_adapter.hpp"
+#include "io/comp/comp.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
@@ -66,6 +65,20 @@
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
+
+Compression to_parquet_compression(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::AUTO:
+    case compression_type::SNAPPY: return Compression::SNAPPY;
+    case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::LZ4:
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+      return Compression::LZ4_RAW;
+    case compression_type::NONE: return Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
 
 struct aggregate_writer_metadata {
   aggregate_writer_metadata(host_span<partition_info const> partitions,
@@ -1172,7 +1185,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                      size_t max_page_size_bytes,
                      size_type max_page_size_rows,
                      bool write_v2_headers,
-                     Compression compression_codec,
+                     compression_type compression,
                      rmm::cuda_stream_view stream)
 {
   if (chunks.is_empty()) { return cudf::detail::hostdevice_vector<size_type>{}; }
@@ -1187,7 +1200,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
-                   page_alignment(compression_codec),
+                   compress_required_block_alignment(compression),
                    write_v2_headers,
                    nullptr,
                    nullptr,
@@ -1212,7 +1225,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
-                   page_alignment(compression_codec),
+                   compress_required_block_alignment(compression),
                    write_v2_headers,
                    nullptr,
                    nullptr,
@@ -1221,12 +1234,10 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
 
   // Get per-page max compressed size
   cudf::detail::hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
-  std::transform(page_sizes.begin(),
-                 page_sizes.end(),
-                 comp_page_sizes.begin(),
-                 [compression_codec](auto page_size) {
-                   return max_compression_output_size(compression_codec, page_size);
-                 });
+  std::transform(
+    page_sizes.begin(), page_sizes.end(), comp_page_sizes.begin(), [compression](auto page_size) {
+      return max_compressed_size(compression, page_size);
+    });
   comp_page_sizes.host_to_device_async(stream);
 
   // Use per-page max compressed size to calculate chunk.compressed_size
@@ -1238,7 +1249,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
-                   page_alignment(compression_codec),
+                   compress_required_block_alignment(compression),
                    write_v2_headers,
                    nullptr,
                    nullptr,
@@ -1247,16 +1258,13 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
   return comp_page_sizes;
 }
 
-size_t max_page_bytes(Compression compression, size_t max_page_size_bytes)
+size_t max_page_bytes(compression_type compression, size_t max_page_size_bytes)
 {
-  if (compression == Compression::UNCOMPRESSED) { return max_page_size_bytes; }
+  if (compression == compression_type::NONE) { return max_page_size_bytes; }
 
-  auto const ncomp_type   = to_nvcomp_compression_type(compression);
-  auto const nvcomp_limit = nvcomp::is_compression_disabled(ncomp_type)
-                              ? std::nullopt
-                              : nvcomp::compress_max_allowed_chunk_size(ncomp_type);
+  auto const comp_limit = compress_max_allowed_block_size(compression);
 
-  auto max_size = std::min(nvcomp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
+  auto max_size = std::min(comp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
   // page size must fit in a 32-bit signed integer
   return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
 }
@@ -1265,7 +1273,7 @@ std::pair<std::vector<rmm::device_uvector<size_type>>, std::vector<rmm::device_u
 build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
                          host_span<parquet_column_device_view const> col_desc,
                          device_2dspan<PageFragment const> frags,
-                         Compression compression,
+                         compression_type compression,
                          dictionary_policy dict_policy,
                          size_t max_dict_size,
                          rmm::cuda_stream_view stream)
@@ -1404,7 +1412,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
  * @param num_columns Total number of columns
  * @param num_pages Total number of pages
  * @param num_stats_bfr Number of statistics buffers
- * @param compression Compression format
+ * @param alignment Page alignment
  * @param max_page_size_bytes Maximum uncompressed page size, in bytes
  * @param max_page_size_rows Maximum page size, in rows
  * @param write_v2_headers True if version 2 page headers are to be written
@@ -1419,7 +1427,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                         uint32_t num_columns,
                         uint32_t num_pages,
                         uint32_t num_stats_bfr,
-                        Compression compression,
+                        size_t alignment,
                         size_t max_page_size_bytes,
                         size_type max_page_size_rows,
                         bool write_v2_headers,
@@ -1435,7 +1443,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
-                   page_alignment(compression),
+                   alignment,
                    write_v2_headers,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
@@ -1453,31 +1461,6 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
     }
   }
   stream.synchronize();
-}
-
-Compression to_parquet_compression(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::AUTO:
-    case compression_type::SNAPPY: return Compression::SNAPPY;
-    case compression_type::ZSTD: return Compression::ZSTD;
-    case compression_type::LZ4:
-      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
-      return Compression::LZ4_RAW;
-    case compression_type::NONE: return Compression::UNCOMPRESSED;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
-
-compression_type from_parquet_compression(Compression codec)
-{
-  switch (codec) {
-    case Compression::SNAPPY: return compression_type::SNAPPY;
-    case Compression::ZSTD: return compression_type::ZSTD;
-    case Compression::LZ4_RAW: return compression_type::LZ4;
-    case Compression::UNCOMPRESSED: return compression_type::NONE;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
 }
 
 /**
@@ -1503,7 +1486,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                   statistics_chunk const* chunk_stats,
                   statistics_chunk const* column_stats,
                   std::optional<writer_compression_statistics>& comp_stats,
-                  Compression compression,
+                  compression_type compression,
                   int32_t column_index_truncate_length,
                   bool write_v2_headers,
                   rmm::cuda_stream_view stream)
@@ -1513,7 +1496,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                            ? device_span<statistics_chunk const>(page_stats, num_pages)
                            : device_span<statistics_chunk const>();
 
-  uint32_t max_comp_pages = (compression != Compression::UNCOMPRESSED) ? num_pages : 0;
+  uint32_t max_comp_pages = (compression != compression_type::NONE) ? num_pages : 0;
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
@@ -1524,8 +1507,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                compression_result{0, compression_status::FAILURE});
 
   EncodePages(pages, write_v2_headers, comp_in, comp_out, comp_res, stream);
-  cudf::io::detail::compress(
-    from_parquet_compression(compression), comp_in, comp_out, comp_res, stream);
+  compress(compression, comp_in, comp_out, comp_res, stream);
 
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
@@ -1743,7 +1725,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    size_type max_page_size_rows,
                                    int32_t column_index_truncate_length,
                                    statistics_freq stats_granularity,
-                                   Compression compression,
+                                   compression_type compression,
                                    bool collect_compression_statistics,
                                    dictionary_policy dict_policy,
                                    size_t max_dictionary_size,
@@ -2145,7 +2127,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   // Clear compressed buffer size if compression has been turned off
-  if (compression == Compression::UNCOMPRESSED) { max_comp_bfr_size = 0; }
+  if (compression == compression_type::NONE) { max_comp_bfr_size = 0; }
 
   // Initialize data pointers
   uint32_t const num_stats_bfr =
@@ -2213,7 +2195,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                        num_columns,
                        num_pages,
                        num_stats_bfr,
-                       compression,
+                       compress_required_block_alignment(compression),
                        max_page_size_bytes,
                        max_page_size_rows,
                        write_v2_headers,
@@ -2269,7 +2251,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         auto const dev_bfr      = ck.is_compressed ? ck.compressed_bfr : ck.uncompressed_bfr;
         auto& column_chunk_meta = row_group.columns[i].meta_data;
 
-        if (ck.is_compressed) { column_chunk_meta.codec = compression; }
+        if (ck.is_compressed) { column_chunk_meta.codec = to_parquet_compression(compression); }
         if (!out_sink[p]->is_device_write_preferred(ck.compressed_size)) {
           all_device_write = false;
         }
@@ -2374,7 +2356,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
-    _compression(to_parquet_compression(options.get_compression())),
+    _compression(options.get_compression()),
     _max_row_group_size{options.get_row_group_size_bytes()},
     _max_row_group_rows{options.get_row_group_size_rows()},
     _max_page_size_bytes(max_page_bytes(_compression, options.get_max_page_size_bytes())),
@@ -2405,7 +2387,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    single_write_mode mode,
                    rmm::cuda_stream_view stream)
   : _stream(stream),
-    _compression(to_parquet_compression(options.get_compression())),
+    _compression(options.get_compression()),
     _max_row_group_size{options.get_row_group_size_bytes()},
     _max_row_group_rows{options.get_row_group_size_rows()},
     _max_page_size_bytes(max_page_bytes(_compression, options.get_max_page_size_bytes())),
