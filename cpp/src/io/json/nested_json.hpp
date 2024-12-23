@@ -464,6 +464,13 @@ std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
  */
 column_name_info make_column_name_info(schema_element const& schema, std::string const& col_name);
 
+/** @brief Create a unified schema from options dtype variant
+ *
+ * @param options The reader options to influence the relevant type inference and pruning.
+ * @return The unified schema
+ */
+schema_element unified_schema(cudf::io::json_reader_options const& options);
+
 /**
  * @brief Helper class to get path of a column by column id from reduced column tree
  *
