@@ -814,7 +814,7 @@ dependencies:
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - *numba-cuda-dep
+              - numba-cuda==0.2.0
               - pandas==2.2.3
           - matrix:
             packages:
