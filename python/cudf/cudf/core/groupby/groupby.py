@@ -641,7 +641,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
-        if is_list_like(self._by):
+        if is_list_like(self._by) and len(self._by) == 1:
             if isinstance(name, tuple) and len(name) == 1:
                 name = name[0]
             else:
