@@ -44,28 +44,18 @@ namespace {
  *
  * The aggregation computes `sum(value^2, for value in group)` (this is sum of squared).
  */
-struct host_udf_reduction_example : cudf::host_udf_base {
+struct host_udf_reduction_example : cudf::host_udf_reduction_base {
   host_udf_reduction_example() = default;
 
-  [[nodiscard]] output_t get_empty_output(
-    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
-    [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  [[nodiscard]] std::unique_ptr<cudf::scalar> operator()(
+    input_map_t const& input,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const override
   {
-    CUDF_EXPECTS(output_dtype.has_value(), "Data type for the reduction result must be specified.");
-    return cudf::make_default_constructed_scalar(output_dtype.value(), stream, mr);
-  }
-
-  [[nodiscard]] output_t operator()(input_map_t const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr) const override
-  {
-    auto const& values =
-      std::get<cudf::column_view>(input.at(reduction_data_attribute::INPUT_VALUES));
-    auto const output_dtype =
-      std::get<cudf::data_type>(input.at(reduction_data_attribute::OUTPUT_DTYPE));
+    auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
+    auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
     return cudf::double_type_dispatcher(
-      values.type(), output_dtype, reduce_fn{this}, input, stream, mr);
+      values.type(), output_dtype, reduce_fn{}, input, stream, mr);
   }
 
   [[nodiscard]] std::size_t do_hash() const override
@@ -86,9 +76,6 @@ struct host_udf_reduction_example : cudf::host_udf_base {
   }
 
   struct reduce_fn {
-    // Store pointer to the parent class so we can call its functions.
-    host_udf_reduction_example const* parent;
-
     // For simplicity, this example only accepts a single type input and output.
     using InputType  = double;
     using OutputType = int64_t;
@@ -97,7 +84,7 @@ struct host_udf_reduction_example : cudf::host_udf_base {
               typename U,
               typename... Args,
               CUDF_ENABLE_IF(!std::is_same_v<InputType, T> || !std::is_same_v<OutputType, U>)>
-    output_t operator()(Args...) const
+    std::unique_ptr<cudf::scalar> operator()(Args...) const
     {
       CUDF_FAIL("Unsupported input/output type.");
     }
@@ -105,21 +92,21 @@ struct host_udf_reduction_example : cudf::host_udf_base {
     template <typename T,
               typename U,
               CUDF_ENABLE_IF(std::is_same_v<InputType, T>&& std::is_same_v<OutputType, U>)>
-    output_t operator()(input_map_t const& input,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr) const
+    [[nodiscard]] std::unique_ptr<cudf::scalar> operator()(input_map_t const& input,
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::device_async_resource_ref mr) const
     {
-      auto const& values =
-        std::get<cudf::column_view>(input.at(reduction_data_attribute::INPUT_VALUES));
-      auto const output_dtype =
-        std::get<cudf::data_type>(input.at(reduction_data_attribute::OUTPUT_DTYPE));
+      auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
+      auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
       CUDF_EXPECTS(output_dtype == cudf::data_type{cudf::type_to_id<OutputType>()},
                    "Invalid output type.");
-      if (values.size() == 0) { return parent->get_empty_output(output_dtype, stream, mr); }
+      if (values.size() == 0) {
+        return cudf::make_default_constructed_scalar(output_dtype, stream, mr);
+      }
 
       auto const input_init_value =
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
-          input.at(reduction_data_attribute::INIT_VALUE));
+          input.at(data_attribute::INIT_VALUE));
       auto const init_value = [&]() -> InputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
           auto const numeric_init_scalar =
@@ -198,29 +185,18 @@ namespace {
  *
  * The aggregation computes `sum(value^2, for value in group)` (this is sum of squared).
  */
-struct host_udf_segmented_reduction_example : cudf::host_udf_base {
+struct host_udf_segmented_reduction_example : cudf::host_udf_segmented_reduction_base {
   host_udf_segmented_reduction_example() = default;
 
-  [[nodiscard]] output_t get_empty_output(
-    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
-    [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  [[nodiscard]] std::unique_ptr<cudf::column> operator()(
+    input_map_t const& input,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const override
   {
-    CUDF_EXPECTS(output_dtype.has_value(),
-                 "Data type for the segmented reduction result must be specified.");
-    return cudf::make_default_constructed_scalar(output_dtype.value(), stream, mr);
-  }
-
-  [[nodiscard]] output_t operator()(input_map_t const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr) const override
-  {
-    auto const& values =
-      std::get<cudf::column_view>(input.at(segmented_reduction_data_attribute::INPUT_VALUES));
-    auto const output_dtype =
-      std::get<cudf::data_type>(input.at(segmented_reduction_data_attribute::OUTPUT_DTYPE));
+    auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
+    auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
     return cudf::double_type_dispatcher(
-      values.type(), output_dtype, segmented_reduce_fn{this}, input, stream, mr);
+      values.type(), output_dtype, segmented_reduce_fn{}, input, stream, mr);
   }
 
   [[nodiscard]] std::size_t do_hash() const override
@@ -241,9 +217,6 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_base {
   }
 
   struct segmented_reduce_fn {
-    // Store pointer to the parent class so we can call its functions.
-    host_udf_segmented_reduction_example const* parent;
-
     // For simplicity, this example only accepts a single type input and output.
     using InputType  = double;
     using OutputType = int64_t;
@@ -252,7 +225,7 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_base {
               typename U,
               typename... Args,
               CUDF_ENABLE_IF(!std::is_same_v<InputType, T> || !std::is_same_v<OutputType, U>)>
-    output_t operator()(Args...) const
+    std::unique_ptr<cudf::column> operator()(Args...) const
     {
       CUDF_FAIL("Unsupported input/output type.");
     }
@@ -260,30 +233,28 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_base {
     template <typename T,
               typename U,
               CUDF_ENABLE_IF(std::is_same_v<InputType, T>&& std::is_same_v<OutputType, U>)>
-    output_t operator()(input_map_t const& input,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr) const
+    std::unique_ptr<cudf::column> operator()(input_map_t const& input,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr) const
     {
-      auto const& values =
-        std::get<cudf::column_view>(input.at(segmented_reduction_data_attribute::INPUT_VALUES));
-      auto const output_dtype =
-        std::get<cudf::data_type>(input.at(segmented_reduction_data_attribute::OUTPUT_DTYPE));
+      auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
+      auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
       CUDF_EXPECTS(output_dtype == cudf::data_type{cudf::type_to_id<OutputType>()},
                    "Invalid output type.");
-      auto const offsets = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(segmented_reduction_data_attribute::OFFSETS));
+      auto const offsets =
+        std::get<cudf::device_span<cudf::size_type const>>(input.at(data_attribute::OFFSETS));
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
       auto const num_segments = static_cast<cudf::size_type>(offsets.size()) - 1;
 
       if (values.size() == 0) {
-        if (num_segments <= 0) { return parent->get_empty_output(output_dtype, stream, mr); }
+        if (num_segments <= 0) { return cudf::make_empty_column(output_dtype); }
         return cudf::make_numeric_column(
           output_dtype, num_segments, cudf::mask_state::ALL_NULL, stream, mr);
       }
 
       auto const input_init_value =
         std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
-          input.at(segmented_reduction_data_attribute::INIT_VALUE));
+          input.at(data_attribute::INIT_VALUE));
       auto const init_value = [&]() -> InputType {
         if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
           auto const numeric_init_scalar =
@@ -294,8 +265,7 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_base {
         return InputType{0};
       }();
 
-      auto const null_handling =
-        std::get<cudf::null_policy>(input.at(segmented_reduction_data_attribute::NULL_POLICY));
+      auto const null_handling = std::get<cudf::null_policy>(input.at(data_attribute::NULL_POLICY));
       auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
       auto output              = cudf::make_numeric_column(
         output_dtype, num_segments, cudf::mask_state::UNALLOCATED, stream);
@@ -466,7 +436,7 @@ namespace {
  * For each group of values, the aggregation computes
  * `(group_idx + 1) * group_sum_of_squares - group_max * group_sum`.
  */
-struct host_udf_groupby_example : cudf::host_udf_base {
+struct host_udf_groupby_example : cudf::host_udf_groupby_base {
   host_udf_groupby_example() = default;
 
   [[nodiscard]] data_attribute_set_t get_required_data() const override
@@ -480,18 +450,17 @@ struct host_udf_groupby_example : cudf::host_udf_base {
             cudf::make_sum_aggregation<cudf::groupby_aggregation>()};
   }
 
-  [[nodiscard]] output_t get_empty_output(
-    [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
-    [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::device_async_resource_ref mr) const override
+  [[nodiscard]] std::unique_ptr<cudf::column> get_empty_output(
+    rmm::cuda_stream_view, rmm::device_async_resource_ref) const override
   {
     return cudf::make_empty_column(
       cudf::data_type{cudf::type_to_id<typename groupby_fn::OutputType>()});
   }
 
-  [[nodiscard]] output_t operator()(input_map_t const& input,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr) const override
+  [[nodiscard]] std::unique_ptr<cudf::column> operator()(
+    input_map_t const& input,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const override
   {
     auto const& values =
       std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
@@ -524,19 +493,19 @@ struct host_udf_groupby_example : cudf::host_udf_base {
     using OutputType = double;
 
     template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_same_v<InputType, T>)>
-    output_t operator()(Args...) const
+    std::unique_ptr<cudf::column> operator()(Args...) const
     {
       CUDF_FAIL("Unsupported input type.");
     }
 
     template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
-    output_t operator()(input_map_t const& input,
-                        rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr) const
+    std::unique_ptr<cudf::column> operator()(input_map_t const& input,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr) const
     {
       auto const& values =
         std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
-      if (values.size() == 0) { return parent->get_empty_output(std::nullopt, stream, mr); }
+      if (values.size() == 0) { return parent->get_empty_output(stream, mr); }
 
       auto const offsets = std::get<cudf::device_span<cudf::size_type const>>(
         input.at(groupby_data_attribute::GROUP_OFFSETS));

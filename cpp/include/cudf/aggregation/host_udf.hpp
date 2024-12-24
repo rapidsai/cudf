@@ -145,12 +145,47 @@ struct host_udf_reduction_base : host_udf_base {
    * the aggregation.
    */
   using input_data_t =
-    std::variant<column_view, data_type, std::optional<std::reference_wrapper<scalar const>>>;
+    std::variant<column_view,                                        /* INPUT_VALUES */
+                 data_type,                                          /* OUTPUT_DTYPE */
+                 std::optional<std::reference_wrapper<scalar const>> /* INIT_VALUE */
+                 >;
 
   /**
    * @brief Input to the aggregation, mapping from each data attribute to its actual data.
    */
   using input_map_t = std::unordered_map<data_attribute, input_data_t>;
+  /*
+struct input_map_t : std::unordered_map<data_attribute, input_data_t> {
+  template <data_attribute attr>
+  using output_t =
+    std::conditional_t<attr == data_attribute::INPUT_VALUES,
+                       column_view,
+                       std::conditional_t<attr == data_attribute::OUTPUT_DTYPE,
+                                          data_type,
+                                          std::optional<std::reference_wrapper<scalar const>>>>;
+  template <data_attribute attr>
+  output_t<attr> get() const;
+
+  template <>
+  [[nodiscard]] output_t<data_attribute::INPUT_VALUES> get<data_attribute::INPUT_VALUES>() const
+  {
+    return std::get<column_view>(at(data_attribute::INPUT_VALUES));
+  }
+
+  template <>
+  [[nodiscard]] output_t<data_attribute::OUTPUT_DTYPE> get<data_attribute::OUTPUT_DTYPE>() const
+  {
+    return std::get<data_type>(at(data_attribute::OUTPUT_DTYPE));
+  }
+
+  template <>
+  [[nodiscard]] output_t<data_attribute::INIT_VALUE> get<data_attribute::INIT_VALUE>() const
+  {
+    return std::get<std::optional<std::reference_wrapper<scalar const>>>(
+      at(data_attribute::INIT_VALUE));
+  }
+};
+*/
 
   /**
    * @brief Perform the main computation for the host-based UDF.
@@ -185,11 +220,13 @@ struct host_udf_segmented_reduction_base : host_udf_base {
    * @brief Hold all possible types of the data that is passed to the derived class for executing
    * the aggregation.
    */
-  using input_data_t = std::variant<column_view,
-                                    data_type,
-                                    std::optional<std::reference_wrapper<scalar const>>,
-                                    null_policy,
-                                    device_span<size_type const>>;
+  using input_data_t =
+    std::variant<column_view,                                         /* INPUT_VALUES */
+                 data_type,                                           /* OUTPUT_DTYPE */
+                 std::optional<std::reference_wrapper<scalar const>>, /* INIT_VALUE */
+                 null_policy,                                         /* NULL_POLICY */
+                 device_span<size_type const>                         /* OFFSETS */
+                 >;
 
   /**
    * @brief Input to the aggregation, mapping from each data attribute to its actual data.
@@ -334,7 +371,11 @@ struct host_udf_groupby_base : host_udf_base {
    * @brief Hold all possible types of the data that is passed to the derived class for executing
    * the aggregation.
    */
-  using input_data_t = std::variant<column_view, size_type, device_span<size_type const>>;
+  using input_data_t =
+    std::variant<column_view, /* INPUT_VALUES, GROUPED_VALUES, SORTED_GROUPED_VALUES */
+                 size_type,   /* NUM_GROUPS */
+                 device_span<size_type const> /* GROUP_OFFSETS, GROUP_LABELS */
+                 >;
 
   /**
    * @brief Input to the aggregation, mapping from each data attribute to its actual data.

@@ -20,7 +20,7 @@
 
 namespace cudf {
 
-host_udf_base::data_attribute::data_attribute(data_attribute const& other)
+host_udf_groupby_base::data_attribute::data_attribute(data_attribute const& other)
   : value{std::visit(cudf::detail::visitor_overload{[](auto const& val) { return value_type{val}; },
                                                     [](std::unique_ptr<aggregation> const& val) {
                                                       return value_type{val->clone()};
@@ -29,7 +29,8 @@ host_udf_base::data_attribute::data_attribute(data_attribute const& other)
 {
 }
 
-std::size_t host_udf_base::data_attribute::hash::operator()(data_attribute const& attr) const
+std::size_t host_udf_groupby_base::data_attribute::hash::operator()(
+  data_attribute const& attr) const
 {
   auto const hash_value =
     std::visit(cudf::detail::visitor_overload{
@@ -39,8 +40,8 @@ std::size_t host_udf_base::data_attribute::hash::operator()(data_attribute const
   return std::hash<std::size_t>{}(attr.value.index()) ^ hash_value;
 }
 
-bool host_udf_base::data_attribute::equal_to::operator()(data_attribute const& lhs,
-                                                         data_attribute const& rhs) const
+bool host_udf_groupby_base::data_attribute::equal_to::operator()(data_attribute const& lhs,
+                                                                 data_attribute const& rhs) const
 {
   auto const& lhs_val = lhs.value;
   auto const& rhs_val = rhs.value;

@@ -146,37 +146,17 @@ struct reduce_dispatch_functor {
         return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       case aggregation::HOST_UDF: {
-        auto const& udf_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-        auto const data_attrs = [&]() -> host_udf_base::data_attribute_set_t {
-          if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
-          // Empty attribute set means everything.
-          return {host_udf_base::reduction_data_attribute::INPUT_VALUES,
-                  host_udf_base::reduction_data_attribute::OUTPUT_DTYPE,
-                  host_udf_base::reduction_data_attribute::INIT_VALUE};
-        }();
-
         // Do not cache udf_input, as the actual input data may change from run to run.
-        host_udf_base::input_map_t udf_input;
-        for (auto const& attr : data_attrs) {
-          CUDF_EXPECTS(std::holds_alternative<host_udf_base::reduction_data_attribute>(attr.value),
-                       "Invalid input data attribute for HOST_UDF reduction.");
-          switch (std::get<host_udf_base::reduction_data_attribute>(attr.value)) {
-            case host_udf_base::reduction_data_attribute::INPUT_VALUES:
-              udf_input.emplace(attr, col);
-              break;
-            case host_udf_base::reduction_data_attribute::OUTPUT_DTYPE:
-              udf_input.emplace(attr, output_dtype);
-              break;
-            case host_udf_base::reduction_data_attribute::INIT_VALUE:
-              udf_input.emplace(attr, init);
-              break;
-            default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF reduction.");
-          }
-        }
-        auto output = (*udf_ptr)(udf_input, stream, mr);
-        CUDF_EXPECTS(std::holds_alternative<std::unique_ptr<scalar>>(output),
-                     "Invalid output type from HOST_UDF reduction.");
-        return std::get<std::unique_ptr<scalar>>(std::move(output));
+        host_udf_reduction_base::input_map_t udf_input;
+        udf_input.emplace(host_udf_reduction_base::data_attribute::INPUT_VALUES, col);
+        udf_input.emplace(host_udf_reduction_base::data_attribute::OUTPUT_DTYPE, output_dtype);
+        udf_input.emplace(host_udf_reduction_base::data_attribute::INIT_VALUE, init);
+
+        auto const& udf_base_ptr =
+          dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+        auto const udf_ptr = dynamic_cast<host_udf_reduction_base const*>(udf_base_ptr.get());
+        CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.");
+        return (*udf_ptr)(udf_input, stream, mr);
       }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported reduction operator");
     }
