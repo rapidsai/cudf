@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources column.pyx groupby.pyx scalar.pyx strings_udf.pyx types.pyx utils.pyx)
+set(cython_sources column.pyx scalar.pyx strings_udf.pyx types.pyx)
 set(linked_libraries cudf::cudf)
 
 rapids_cython_create_modules(
