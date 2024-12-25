@@ -18,9 +18,11 @@
 
 #include "nvcomp_adapter.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/pinned_memory.hpp>
 
 #include <nvcomp/deflate.h>
 #include <nvcomp/gzip.h>
@@ -29,6 +31,26 @@
 #include <nvcomp/zstd.h>
 
 #include <mutex>
+
+#define NVCOMP_HOST_PINNED_HEADER <nvcomp/host_pinned.hpp>
+#if __has_include(NVCOMP_HOST_PINNED_HEADER)
+#define NVCOMP_HAS_PINNED_MEMORY_RESOURCE_SUPPORT 1
+#include NVCOMP_HOST_PINNED_HEADER
+#else
+#define NVCOMP_HAS_PINNED_MEMORY_RESOURCE_SUPPORT 0
+#endif
+
+// can't use nvcomp C++ functions under cudf::io::detail::nvcomp namespace :(
+namespace {
+[[maybe_unused]] void set_nvcomp_pinned_memory_resource()
+{
+#if NVCOMP_HAS_PINNED_MEMORY_RESOURCE_SUPPORT
+  static std::once_flag flag;
+  std::call_once(flag,
+                 []() { nvcomp::set_pinned_memory_resource(cudf::get_pinned_memory_resource()); });
+#endif
+}
+}  // namespace
 
 namespace cudf::io::detail::nvcomp {
 namespace {
@@ -268,6 +290,8 @@ void batched_decompress(compression_type compression,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
+  if constexpr (NVCOMP_HAS_PINNED_MEMORY_RESOURCE_SUPPORT) { set_nvcomp_pinned_memory_resource(); }
+
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
