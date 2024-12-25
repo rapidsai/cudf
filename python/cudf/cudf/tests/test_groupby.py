@@ -4076,6 +4076,13 @@ def test_get_group_list_like():
         df.groupby(["a"]).get_group([1])
 
 
+def test_get_group_list_like_len_2():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [3, 2, 1]})
+    result = df.groupby(["a", "b"]).get_group((1, 4))
+    expected = df.to_pandas().groupby(["a", "b"]).get_group((1, 4))
+    assert_eq(result, expected)
+
+
 def test_size_as_index_false():
     df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
     expected = df.groupby("a", as_index=False).size()
