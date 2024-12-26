@@ -2970,7 +2970,9 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return self._column.total_seconds().values
+        return cudf.Index._from_column(
+            self._column.total_seconds(), name=self.name
+        )
 
     def ceil(self, freq: str) -> Self:
         """
