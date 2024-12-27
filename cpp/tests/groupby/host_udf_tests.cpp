@@ -195,37 +195,37 @@ struct host_udf_groupby_test : cudf::host_udf_groupby_base {
 
     data_attribute_set_t check_attrs = input_attrs;
     if (check_attrs.empty()) {
-      check_attrs = data_attribute_set_t{groupby_data_attribute::INPUT_VALUES,
-                                         groupby_data_attribute::GROUPED_VALUES,
-                                         groupby_data_attribute::SORTED_GROUPED_VALUES,
-                                         groupby_data_attribute::NUM_GROUPS,
-                                         groupby_data_attribute::GROUP_OFFSETS,
-                                         groupby_data_attribute::GROUP_LABELS};
+      check_attrs = data_attribute_set_t{data_attribute::INPUT_VALUES,
+                                         data_attribute::GROUPED_VALUES,
+                                         data_attribute::SORTED_GROUPED_VALUES,
+                                         data_attribute::NUM_GROUPS,
+                                         data_attribute::GROUP_OFFSETS,
+                                         data_attribute::GROUP_LABELS};
     }
     EXPECT_EQ(input.size(), check_attrs.size());
     for (auto const& attr : check_attrs) {
       EXPECT_TRUE(input.count(attr) > 0);
-      EXPECT_TRUE(std::holds_alternative<groupby_data_attribute>(attr.value) ||
+      EXPECT_TRUE(std::holds_alternative<data_attribute::buildin_attribute>(attr.value) ||
                   std::holds_alternative<std::unique_ptr<cudf::aggregation>>(attr.value));
-      if (std::holds_alternative<groupby_data_attribute>(attr.value)) {
-        switch (std::get<groupby_data_attribute>(attr.value)) {
-          case groupby_data_attribute::INPUT_VALUES: {
+      if (std::holds_alternative<data_attribute::buildin_attribute>(attr.value)) {
+        switch (std::get<data_attribute::buildin_attribute>(attr.value)) {
+          case data_attribute::INPUT_VALUES: {
             EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
           } break;
-          case groupby_data_attribute::GROUPED_VALUES: {
+          case data_attribute::GROUPED_VALUES: {
             EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
           } break;
-          case groupby_data_attribute::SORTED_GROUPED_VALUES: {
+          case data_attribute::SORTED_GROUPED_VALUES: {
             EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
           } break;
-          case groupby_data_attribute::NUM_GROUPS: {
+          case data_attribute::NUM_GROUPS: {
             EXPECT_TRUE(std::holds_alternative<cudf::size_type>(input.at(attr)));
           } break;
-          case groupby_data_attribute::GROUP_OFFSETS: {
+          case data_attribute::GROUP_OFFSETS: {
             EXPECT_TRUE(
               std::holds_alternative<cudf::device_span<cudf::size_type const>>(input.at(attr)));
           } break;
-          case groupby_data_attribute::GROUP_LABELS: {
+          case data_attribute::GROUP_LABELS: {
             EXPECT_TRUE(
               std::holds_alternative<cudf::device_span<cudf::size_type const>>(input.at(attr)));
           } break;
@@ -349,12 +349,12 @@ TEST_F(HostUDFTest, GroupbySomeInput)
   auto const keys      = int32s_col{0, 1, 2};
   auto const vals      = int32s_col{0, 1, 2};
   auto const all_attrs = cudf::host_udf_groupby_base::data_attribute_set_t{
-    cudf::host_udf_groupby_base::groupby_data_attribute::INPUT_VALUES,
-    cudf::host_udf_groupby_base::groupby_data_attribute::GROUPED_VALUES,
-    cudf::host_udf_groupby_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
-    cudf::host_udf_groupby_base::groupby_data_attribute::NUM_GROUPS,
-    cudf::host_udf_groupby_base::groupby_data_attribute::GROUP_OFFSETS,
-    cudf::host_udf_groupby_base::groupby_data_attribute::GROUP_LABELS};
+    cudf::host_udf_groupby_base::data_attribute::INPUT_VALUES,
+    cudf::host_udf_groupby_base::data_attribute::GROUPED_VALUES,
+    cudf::host_udf_groupby_base::data_attribute::SORTED_GROUPED_VALUES,
+    cudf::host_udf_groupby_base::data_attribute::NUM_GROUPS,
+    cudf::host_udf_groupby_base::data_attribute::GROUP_OFFSETS,
+    cudf::host_udf_groupby_base::data_attribute::GROUP_LABELS};
   for (int i = 0; i < NUM_RANDOM_TESTS; ++i) {
     bool test_run    = false;
     auto input_attrs = get_subset(all_attrs);

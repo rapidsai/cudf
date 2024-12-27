@@ -443,9 +443,9 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
   {
     // We need grouped values, group offsets, group labels, and also results from groups'
     // MAX and SUM aggregations.
-    return {groupby_data_attribute::GROUPED_VALUES,
-            groupby_data_attribute::GROUP_OFFSETS,
-            groupby_data_attribute::GROUP_LABELS,
+    return {data_attribute::GROUPED_VALUES,
+            data_attribute::GROUP_OFFSETS,
+            data_attribute::GROUP_LABELS,
             cudf::make_max_aggregation<cudf::groupby_aggregation>(),
             cudf::make_sum_aggregation<cudf::groupby_aggregation>()};
   }
@@ -462,8 +462,7 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const override
   {
-    auto const& values =
-      std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
+    auto const& values = std::get<cudf::column_view>(input.at(data_attribute::GROUPED_VALUES));
     return cudf::type_dispatcher(values.type(), groupby_fn{this}, input, stream, mr);
   }
 
@@ -503,16 +502,15 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr) const
     {
-      auto const& values =
-        std::get<cudf::column_view>(input.at(groupby_data_attribute::GROUPED_VALUES));
+      auto const& values = std::get<cudf::column_view>(input.at(data_attribute::GROUPED_VALUES));
       if (values.size() == 0) { return parent->get_empty_output(stream, mr); }
 
-      auto const offsets = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(groupby_data_attribute::GROUP_OFFSETS));
+      auto const offsets =
+        std::get<cudf::device_span<cudf::size_type const>>(input.at(data_attribute::GROUP_OFFSETS));
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
-      auto const num_groups    = static_cast<int>(offsets.size()) - 1;
-      auto const group_indices = std::get<cudf::device_span<cudf::size_type const>>(
-        input.at(groupby_data_attribute::GROUP_LABELS));
+      auto const num_groups = static_cast<int>(offsets.size()) - 1;
+      auto const group_indices =
+        std::get<cudf::device_span<cudf::size_type const>>(input.at(data_attribute::GROUP_LABELS));
       auto const group_max = std::get<cudf::column_view>(
         input.at(cudf::make_max_aggregation<cudf::groupby_aggregation>()));
       auto const group_sum = std::get<cudf::column_view>(

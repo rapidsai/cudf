@@ -802,35 +802,36 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
   auto const data_attrs = [&]() -> host_udf_groupby_base::data_attribute_set_t {
     if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
     // Empty attribute set means everything.
-    return {host_udf_groupby_base::groupby_data_attribute::INPUT_VALUES,
-            host_udf_groupby_base::groupby_data_attribute::GROUPED_VALUES,
-            host_udf_groupby_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
-            host_udf_groupby_base::groupby_data_attribute::NUM_GROUPS,
-            host_udf_groupby_base::groupby_data_attribute::GROUP_OFFSETS,
-            host_udf_groupby_base::groupby_data_attribute::GROUP_LABELS};
+    return {host_udf_groupby_base::data_attribute::INPUT_VALUES,
+            host_udf_groupby_base::data_attribute::GROUPED_VALUES,
+            host_udf_groupby_base::data_attribute::SORTED_GROUPED_VALUES,
+            host_udf_groupby_base::data_attribute::NUM_GROUPS,
+            host_udf_groupby_base::data_attribute::GROUP_OFFSETS,
+            host_udf_groupby_base::data_attribute::GROUP_LABELS};
   }();
 
   // Do not cache udf_input, as the actual input data may change from run to run.
   host_udf_groupby_base::input_map_t udf_input;
   for (auto const& attr : data_attrs) {
-    if (std::holds_alternative<host_udf_groupby_base::groupby_data_attribute>(attr.value)) {
-      switch (std::get<host_udf_groupby_base::groupby_data_attribute>(attr.value)) {
-        case host_udf_groupby_base::groupby_data_attribute::INPUT_VALUES:
+    if (std::holds_alternative<host_udf_groupby_base::data_attribute::buildin_attribute>(
+          attr.value)) {
+      switch (std::get<host_udf_groupby_base::data_attribute::buildin_attribute>(attr.value)) {
+        case host_udf_groupby_base::data_attribute::INPUT_VALUES:
           udf_input.emplace(attr, values);
           break;
-        case host_udf_groupby_base::groupby_data_attribute::GROUPED_VALUES:
+        case host_udf_groupby_base::data_attribute::GROUPED_VALUES:
           udf_input.emplace(attr, get_grouped_values());
           break;
-        case host_udf_groupby_base::groupby_data_attribute::SORTED_GROUPED_VALUES:
+        case host_udf_groupby_base::data_attribute::SORTED_GROUPED_VALUES:
           udf_input.emplace(attr, get_sorted_values());
           break;
-        case host_udf_groupby_base::groupby_data_attribute::NUM_GROUPS:
+        case host_udf_groupby_base::data_attribute::NUM_GROUPS:
           udf_input.emplace(attr, helper.num_groups(stream));
           break;
-        case host_udf_groupby_base::groupby_data_attribute::GROUP_OFFSETS:
+        case host_udf_groupby_base::data_attribute::GROUP_OFFSETS:
           udf_input.emplace(attr, helper.group_offsets(stream));
           break;
-        case host_udf_groupby_base::groupby_data_attribute::GROUP_LABELS:
+        case host_udf_groupby_base::data_attribute::GROUP_LABELS:
           udf_input.emplace(attr, helper.group_labels(stream));
           break;
         default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF groupby aggregation.");

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -44,6 +45,10 @@ namespace CUDF_EXPORT cudf {
 
 /**
  * @brief The interface for host-based UDF implementation.
+ *
+ * This struct declares the functions `do_hash`, `is_equal`, and `clone` that must be defined in
+ * the users' UDF implementation. These function are required for libcudf aggregation framework
+ * to perform its operations.
  *
  * An implementation of host-based UDF needs to be derived from this base class, defining
  * its own version of the required functions. In particular:
@@ -102,6 +107,8 @@ struct host_udf_base {
 
   /**
    * @brief Computes hash value of the class's instance.
+   * Overriding this function is optional when the derived class has data members such that each
+   * instance needs to be differentiated from each other.
    * @return The hash value of the instance
    */
   [[nodiscard]] virtual std::size_t do_hash() const
@@ -128,7 +135,37 @@ struct host_udf_base {
 };
 
 /**
- * @brief
+ * @brief The interface for host-based UDF implementation in reduction context.
+ *
+ * An implementation of host-based UDF for reduction needs to be derived from this class.
+ * In addition to implementing the virtual functions declared in the `host_udf_base` struct, such
+ * derived class must also define the `operator()` function which performs the reduction.
+ *
+ * Example:
+ * @code{.cpp}
+ * struct my_udf_aggregation : cudf::host_udf_reduction_base {
+ *   my_udf_aggregation() = default;
+ *
+ *   [[nodiscard]] std::unique_ptr<scalar> operator()(
+ *     input_map_t const& input,
+ *     rmm::cuda_stream_view stream,
+ *     rmm::device_async_resource_ref mr) const override
+ *   {
+ *     // Perform reduction computation using the input data and return the result.
+ *   }
+ *
+ *   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
+ *   {
+ *     // Check if the other object is also instance of this class.
+ *     return dynamic_cast<my_udf_aggregation const*>(&other) != nullptr;
+ *   }
+ *
+ *   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
+ *   {
+ *     return std::make_unique<my_udf_aggregation>();
+ *   }
+ * };
+ * @endcode
  */
 struct host_udf_reduction_base : host_udf_base {
   /**
@@ -151,41 +188,19 @@ struct host_udf_reduction_base : host_udf_base {
                  >;
 
   /**
-   * @brief Input to the aggregation, mapping from each data attribute to its actual data.
+   * @brief Input to the aggregation, mapping from each data attribute to its actual
    */
-  using input_map_t = std::unordered_map<data_attribute, input_data_t>;
-  /*
-struct input_map_t : std::unordered_map<data_attribute, input_data_t> {
-  template <data_attribute attr>
-  using output_t =
-    std::conditional_t<attr == data_attribute::INPUT_VALUES,
-                       column_view,
-                       std::conditional_t<attr == data_attribute::OUTPUT_DTYPE,
-                                          data_type,
-                                          std::optional<std::reference_wrapper<scalar const>>>>;
-  template <data_attribute attr>
-  output_t<attr> get() const;
-
-  template <>
-  [[nodiscard]] output_t<data_attribute::INPUT_VALUES> get<data_attribute::INPUT_VALUES>() const
-  {
-    return std::get<column_view>(at(data_attribute::INPUT_VALUES));
-  }
-
-  template <>
-  [[nodiscard]] output_t<data_attribute::OUTPUT_DTYPE> get<data_attribute::OUTPUT_DTYPE>() const
-  {
-    return std::get<data_type>(at(data_attribute::OUTPUT_DTYPE));
-  }
-
-  template <>
-  [[nodiscard]] output_t<data_attribute::INIT_VALUE> get<data_attribute::INIT_VALUE>() const
-  {
-    return std::get<std::optional<std::reference_wrapper<scalar const>>>(
-      at(data_attribute::INIT_VALUE));
-  }
-};
-*/
+  struct input_map_t : std::unordered_map<data_attribute, input_data_t> {
+    template <data_attribute attr>
+    using output_t =
+      std::conditional_t<attr == data_attribute::INPUT_VALUES,
+                         column_view,
+                         std::conditional_t<attr == data_attribute::OUTPUT_DTYPE,
+                                            data_type,
+                                            std::optional<std::reference_wrapper<scalar const>>>>;
+    template <data_attribute attr>
+    output_t<attr> get() const;
+  };
 
   /**
    * @brief Perform the main computation for the host-based UDF.
@@ -200,6 +215,22 @@ struct input_map_t : std::unordered_map<data_attribute, input_data_t> {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 };
+
+#define MAP_DATA_ATTRIBUTE(context, attr, output_type)                                             \
+  template <>                                                                                      \
+  [[nodiscard]] inline host_udf_##context##_base::input_map_t::output_t<                           \
+    host_udf_##context##_base::data_attribute::attr>                                               \
+    host_udf_##context##_base::input_map_t::get<host_udf_##context##_base::data_attribute::attr>() \
+      const                                                                                        \
+  {                                                                                                \
+    return std::get<output_type>(at(data_attribute::attr));                                        \
+  }
+
+#define MAP_ATTRIBUTE_REDUCTION(attr, output_type) MAP_DATA_ATTRIBUTE(reduction, attr, output_type)
+
+MAP_ATTRIBUTE_REDUCTION(INPUT_VALUES, column_view)
+MAP_ATTRIBUTE_REDUCTION(OUTPUT_DTYPE, data_type)
+MAP_ATTRIBUTE_REDUCTION(INIT_VALUE, std::optional<std::reference_wrapper<scalar const>>)
 
 /**
  * @brief
@@ -229,9 +260,24 @@ struct host_udf_segmented_reduction_base : host_udf_base {
                  >;
 
   /**
-   * @brief Input to the aggregation, mapping from each data attribute to its actual data.
+   * @brief Input to the aggregation, mapping from each data attribute to its actual
    */
-  using input_map_t = std::unordered_map<data_attribute, input_data_t>;
+  struct input_map_t : std::unordered_map<data_attribute, input_data_t> {
+    template <data_attribute attr>
+    using output_t = std::conditional_t<
+      attr == data_attribute::INPUT_VALUES,
+      column_view,
+      std::conditional_t<
+        attr == data_attribute::OUTPUT_DTYPE,
+        data_type,
+        std::conditional_t<attr == data_attribute::INIT_VALUE,
+                           std::optional<std::reference_wrapper<scalar const>>,
+                           std::conditional_t<attr == data_attribute::NULL_POLICY,
+                                              null_policy,
+                                              device_span<cudf::size_type const>>>>>;
+    template <data_attribute attr>
+    output_t<attr> get() const;
+  };
 
   /**
    * @brief Perform the main computation for the host-based UDF.
@@ -247,42 +293,51 @@ struct host_udf_segmented_reduction_base : host_udf_base {
     rmm::device_async_resource_ref mr) const = 0;
 };
 
+#define MAP_ATTRIBUTE_SEGMENTED_REDUCTION(attr, output_type) \
+  MAP_DATA_ATTRIBUTE(segmented_reduction, attr, output_type)
+
+MAP_ATTRIBUTE_SEGMENTED_REDUCTION(INPUT_VALUES, column_view)
+MAP_ATTRIBUTE_SEGMENTED_REDUCTION(OUTPUT_DTYPE, data_type)
+MAP_ATTRIBUTE_SEGMENTED_REDUCTION(INIT_VALUE, std::optional<std::reference_wrapper<scalar const>>)
+MAP_ATTRIBUTE_SEGMENTED_REDUCTION(NULL_POLICY, null_policy)
+MAP_ATTRIBUTE_SEGMENTED_REDUCTION(OFFSETS, device_span<cudf::size_type const>)
+
 /**
  * @brief
  */
 struct host_udf_groupby_base : host_udf_base {
-  /**
-   * @brief Define the possible data needed for groupby aggregations.
-   *
-   * Note that only sort-based groupby aggregations are supported.
-   */
-  enum class groupby_data_attribute : int32_t {
-    INPUT_VALUES,    ///< The input values column.
-    GROUPED_VALUES,  ///< The input values grouped according to the input `keys` for which the
-                     ///< values within each group maintain their original order.
-    SORTED_GROUPED_VALUES,  ///< The input values grouped according to the input `keys` and
-                            ///< sorted within each group.
-    NUM_GROUPS,             ///< The number of groups (i.e., number of distinct keys).
-    GROUP_OFFSETS,          ///< The offsets separating groups.
-    GROUP_LABELS            ///< Group labels (which is also the same as group indices).
-  };
-
   /**
    * @brief Describe possible data that may be needed in the derived class for its operations.
    *
    * Such data can be either intermediate data such as sorted values or group labels etc, or the
    * results of other aggregations.
    *
-   * Each derived host-based UDF class may need a different set of data. It is inefficient to
+   * Each derived host-based UDF class may need a different set of  It is inefficient to
    * evaluate and pass down all these possible data at once from libcudf. A solution for that is,
    * the derived class can define a subset of data that it needs and libcudf will evaluate
    * and pass down only data requested from that set.
    */
   struct data_attribute {
     /**
+     * @brief Define the data that can be provided by libcudf groupby framework.
+     *
+     * Note that only sort-based groupby aggregations are supported.
+     */
+    enum buildin_attribute : int32_t {
+      INPUT_VALUES,    ///< The input values column.
+      GROUPED_VALUES,  ///< The input values grouped according to the input `keys` for which the
+                       ///< values within each group maintain their original order.
+      SORTED_GROUPED_VALUES,  ///< The input values grouped according to the input `keys` and
+                              ///< sorted within each group.
+      NUM_GROUPS,             ///< The number of groups (i.e., number of distinct keys).
+      GROUP_OFFSETS,          ///< The offsets separating groups.
+      GROUP_LABELS            ///< Group labels (which is also the same as group indices).
+    };
+
+    /**
      * @brief Hold all possible data types for the input of the aggregation in the derived class.
      */
-    using value_type = std::variant<groupby_data_attribute, std::unique_ptr<aggregation>>;
+    using value_type = std::variant<buildin_attribute, std::unique_ptr<aggregation>>;
     value_type value;  ///< The actual data attribute, wrapped by this struct
                        ///< as a wrapper is needed to define `hash` and `equal_to` functors.
 
@@ -293,7 +348,7 @@ struct host_udf_groupby_base : host_udf_base {
      * @brief Construct a new data attribute from an aggregation attribute.
      * @param value_ An aggregation attribute
      */
-    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, groupby_data_attribute>)>
+    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, buildin_attribute>)>
     data_attribute(T value_) : value{value_}
     {
     }
@@ -378,16 +433,34 @@ struct host_udf_groupby_base : host_udf_base {
                  >;
 
   /**
-   * @brief Input to the aggregation, mapping from each data attribute to its actual data.
+   * @brief Input to the aggregation, mapping from each data attribute to its actual
    */
-  using input_map_t = std::
-    unordered_map<data_attribute, input_data_t, data_attribute::hash, data_attribute::equal_to>;
+  struct input_map_t : std::unordered_map<data_attribute,
+                                          input_data_t,
+                                          data_attribute::hash,
+                                          data_attribute::equal_to> {
+    template <data_attribute::buildin_attribute attr>
+    using output_t = std::conditional_t<attr == data_attribute::INPUT_VALUES ||
+                                          attr == data_attribute::GROUPED_VALUES ||
+                                          attr == data_attribute::SORTED_GROUPED_VALUES,
+                                        column_view,
+                                        std::conditional_t<attr == data_attribute::NUM_GROUPS,
+                                                           cudf::size_type,
+                                                           device_span<cudf::size_type const>>>;
+    template <data_attribute::buildin_attribute attr>
+    output_t<attr> get() const;
+
+    column_view get(std::unique_ptr<aggregation> aggregation) const
+    {
+      return std::get<column_view>(at(std::move(aggregation)));
+    }
+  };
 
   /**
    * @brief Get the output when the input values column is empty.
    *
    * This is called in libcudf when the input values column is empty. In such situations libcudf
-   * tries to generate the output directly without unnecessarily evaluating the intermediate data.
+   * tries to generate the output directly without unnecessarily evaluating the intermediate
    *
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
@@ -409,6 +482,15 @@ struct host_udf_groupby_base : host_udf_base {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 };
+
+#define MAP_ATTRIBUTE_GROUPBY(attr, output_type) MAP_DATA_ATTRIBUTE(groupby, attr, output_type)
+
+MAP_ATTRIBUTE_GROUPBY(INPUT_VALUES, column_view)
+MAP_ATTRIBUTE_GROUPBY(GROUPED_VALUES, column_view)
+MAP_ATTRIBUTE_GROUPBY(SORTED_GROUPED_VALUES, column_view)
+MAP_ATTRIBUTE_GROUPBY(NUM_GROUPS, cudf::size_type)
+MAP_ATTRIBUTE_GROUPBY(GROUP_OFFSETS, device_span<cudf::size_type const>)
+MAP_ATTRIBUTE_GROUPBY(GROUP_LABELS, device_span<cudf::size_type const>)
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
