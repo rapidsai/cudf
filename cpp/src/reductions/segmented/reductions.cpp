@@ -101,22 +101,12 @@ struct segmented_reduce_dispatch_functor {
       case segmented_reduce_aggregation::NUNIQUE:
         return segmented_nunique(col, offsets, null_handling, stream, mr);
       case aggregation::HOST_UDF: {
-        // Do not cache udf_input, as the actual input data may change from run to run.
-        host_udf_segmented_reduction_base::input_map_t udf_input;
-        udf_input.emplace(host_udf_segmented_reduction_base::data_attribute::INPUT_VALUES, col);
-        udf_input.emplace(host_udf_segmented_reduction_base::data_attribute::OUTPUT_DTYPE,
-                          output_dtype);
-        udf_input.emplace(host_udf_segmented_reduction_base::data_attribute::INIT_VALUE, init);
-        udf_input.emplace(host_udf_segmented_reduction_base::data_attribute::NULL_POLICY,
-                          null_handling);
-        udf_input.emplace(host_udf_segmented_reduction_base::data_attribute::OFFSETS, offsets);
-
         auto const& udf_base_ptr =
           dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
         auto const udf_ptr =
           dynamic_cast<host_udf_segmented_reduction_base const*>(udf_base_ptr.get());
         CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for segmented reduction.");
-        return (*udf_ptr)(udf_input, stream, mr);
+        return (*udf_ptr)(col, offsets, output_dtype, null_handling, init, stream, mr);
       }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported aggregation type.");
     }

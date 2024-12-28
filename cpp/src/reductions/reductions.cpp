@@ -146,17 +146,11 @@ struct reduce_dispatch_functor {
         return tdigest::detail::reduce_merge_tdigest(col, td_agg.max_centroids, stream, mr);
       }
       case aggregation::HOST_UDF: {
-        // Do not cache udf_input, as the actual input data may change from run to run.
-        host_udf_reduction_base::input_map_t udf_input;
-        udf_input.emplace(host_udf_reduction_base::data_attribute::INPUT_VALUES, col);
-        udf_input.emplace(host_udf_reduction_base::data_attribute::OUTPUT_DTYPE, output_dtype);
-        udf_input.emplace(host_udf_reduction_base::data_attribute::INIT_VALUE, init);
-
         auto const& udf_base_ptr =
           dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
         auto const udf_ptr = dynamic_cast<host_udf_reduction_base const*>(udf_base_ptr.get());
         CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.");
-        return (*udf_ptr)(udf_input, stream, mr);
+        return (*udf_ptr)(col, output_dtype, init, stream, mr);
       }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported reduction operator");
     }

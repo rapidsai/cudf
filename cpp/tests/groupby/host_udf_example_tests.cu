@@ -48,20 +48,14 @@ struct host_udf_reduction_example : cudf::host_udf_reduction_base {
   host_udf_reduction_example() = default;
 
   [[nodiscard]] std::unique_ptr<cudf::scalar> operator()(
-    input_map_t const& input,
+    cudf::column_view const& input,
+    cudf::data_type output_dtype,
+    std::optional<std::reference_wrapper<cudf::scalar const>> init,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const override
   {
-    auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
-    auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
     return cudf::double_type_dispatcher(
-      values.type(), output_dtype, reduce_fn{}, input, stream, mr);
-  }
-
-  [[nodiscard]] std::size_t do_hash() const override
-  {
-    // Just return the same hash for all instances of this class.
-    return std::size_t{12345};
+      input.type(), output_dtype, reduce_fn{}, input, output_dtype, init, stream, mr);
   }
 
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
@@ -92,36 +86,34 @@ struct host_udf_reduction_example : cudf::host_udf_reduction_base {
     template <typename T,
               typename U,
               CUDF_ENABLE_IF(std::is_same_v<InputType, T>&& std::is_same_v<OutputType, U>)>
-    [[nodiscard]] std::unique_ptr<cudf::scalar> operator()(input_map_t const& input,
-                                                           rmm::cuda_stream_view stream,
-                                                           rmm::device_async_resource_ref mr) const
+    [[nodiscard]] std::unique_ptr<cudf::scalar> operator()(
+      cudf::column_view const& input,
+      cudf::data_type output_dtype,
+      std::optional<std::reference_wrapper<cudf::scalar const>> init,
+      rmm::cuda_stream_view stream,
+      rmm::device_async_resource_ref mr) const
     {
-      auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
-      auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
       CUDF_EXPECTS(output_dtype == cudf::data_type{cudf::type_to_id<OutputType>()},
                    "Invalid output type.");
-      if (values.size() == 0) {
+      if (input.size() == 0) {
         return cudf::make_default_constructed_scalar(output_dtype, stream, mr);
       }
 
-      auto const input_init_value =
-        std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
-          input.at(data_attribute::INIT_VALUE));
       auto const init_value = [&]() -> InputType {
-        if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
+        if (init.has_value() && init.value().get().is_valid(stream)) {
           auto const numeric_init_scalar =
-            dynamic_cast<cudf::numeric_scalar<InputType> const*>(&input_init_value.value().get());
+            dynamic_cast<cudf::numeric_scalar<InputType> const*>(&init.value().get());
           CUDF_EXPECTS(numeric_init_scalar != nullptr, "Invalid init scalar for reduction.");
           return numeric_init_scalar->value(stream);
         }
         return InputType{0};
       }();
 
-      auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
-      auto const result        = thrust::transform_reduce(rmm::exec_policy(stream),
+      auto const input_dv_ptr = cudf::column_device_view::create(input, stream);
+      auto const result       = thrust::transform_reduce(rmm::exec_policy(stream),
                                                    thrust::make_counting_iterator(0),
-                                                   thrust::make_counting_iterator(values.size()),
-                                                   transform_fn{*values_dv_ptr},
+                                                   thrust::make_counting_iterator(input.size()),
+                                                   transform_fn{*input_dv_ptr},
                                                    static_cast<OutputType>(init_value),
                                                    thrust::plus<>{});
 
@@ -189,20 +181,24 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_segmented_reduction
   host_udf_segmented_reduction_example() = default;
 
   [[nodiscard]] std::unique_ptr<cudf::column> operator()(
-    input_map_t const& input,
+    cudf::column_view const& input,
+    cudf::device_span<cudf::size_type const> offsets,
+    cudf::data_type output_dtype,
+    cudf::null_policy null_handling,
+    std::optional<std::reference_wrapper<cudf::scalar const>> init,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const override
   {
-    auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
-    auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
-    return cudf::double_type_dispatcher(
-      values.type(), output_dtype, segmented_reduce_fn{}, input, stream, mr);
-  }
-
-  [[nodiscard]] std::size_t do_hash() const override
-  {
-    // Just return the same hash for all instances of this class.
-    return std::size_t{12345};
+    return cudf::double_type_dispatcher(input.type(),
+                                        output_dtype,
+                                        segmented_reduce_fn{},
+                                        input,
+                                        offsets,
+                                        output_dtype,
+                                        null_handling,
+                                        init,
+                                        stream,
+                                        mr);
   }
 
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
@@ -233,41 +229,38 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_segmented_reduction
     template <typename T,
               typename U,
               CUDF_ENABLE_IF(std::is_same_v<InputType, T>&& std::is_same_v<OutputType, U>)>
-    std::unique_ptr<cudf::column> operator()(input_map_t const& input,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr) const
+    std::unique_ptr<cudf::column> operator()(
+      cudf::column_view const& input,
+      cudf::device_span<cudf::size_type const> offsets,
+      cudf::data_type output_dtype,
+      cudf::null_policy null_handling,
+      std::optional<std::reference_wrapper<cudf::scalar const>> init,
+      rmm::cuda_stream_view stream,
+      rmm::device_async_resource_ref mr) const
     {
-      auto const& values      = std::get<cudf::column_view>(input.at(data_attribute::INPUT_VALUES));
-      auto const output_dtype = std::get<cudf::data_type>(input.at(data_attribute::OUTPUT_DTYPE));
       CUDF_EXPECTS(output_dtype == cudf::data_type{cudf::type_to_id<OutputType>()},
                    "Invalid output type.");
-      auto const offsets =
-        std::get<cudf::device_span<cudf::size_type const>>(input.at(data_attribute::OFFSETS));
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
       auto const num_segments = static_cast<cudf::size_type>(offsets.size()) - 1;
 
-      if (values.size() == 0) {
+      if (input.size() == 0) {
         if (num_segments <= 0) { return cudf::make_empty_column(output_dtype); }
         return cudf::make_numeric_column(
           output_dtype, num_segments, cudf::mask_state::ALL_NULL, stream, mr);
       }
 
-      auto const input_init_value =
-        std::get<std::optional<std::reference_wrapper<cudf::scalar const>>>(
-          input.at(data_attribute::INIT_VALUE));
       auto const init_value = [&]() -> InputType {
-        if (input_init_value.has_value() && input_init_value.value().get().is_valid(stream)) {
+        if (init.has_value() && init.value().get().is_valid(stream)) {
           auto const numeric_init_scalar =
-            dynamic_cast<cudf::numeric_scalar<InputType> const*>(&input_init_value.value().get());
+            dynamic_cast<cudf::numeric_scalar<InputType> const*>(&init.value().get());
           CUDF_EXPECTS(numeric_init_scalar != nullptr, "Invalid init scalar for reduction.");
           return numeric_init_scalar->value(stream);
         }
         return InputType{0};
       }();
 
-      auto const null_handling = std::get<cudf::null_policy>(input.at(data_attribute::NULL_POLICY));
-      auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
-      auto output              = cudf::make_numeric_column(
+      auto const input_dv_ptr = cudf::column_device_view::create(input, stream);
+      auto output             = cudf::make_numeric_column(
         output_dtype, num_segments, cudf::mask_state::UNALLOCATED, stream);
 
       // Store row index if it is valid, otherwise store a negative value denoting a null row.
@@ -278,7 +271,7 @@ struct host_udf_segmented_reduction_example : cudf::host_udf_segmented_reduction
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_segments),
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
-        transform_fn{*values_dv_ptr, offsets, static_cast<OutputType>(init_value), null_handling});
+        transform_fn{*input_dv_ptr, offsets, static_cast<OutputType>(init_value), null_handling});
 
       auto const valid_idx_cv = cudf::column_view{
         cudf::data_type{cudf::type_id::INT32}, num_segments, valid_idx.begin(), nullptr, 0};
@@ -462,14 +455,8 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const override
   {
-    auto const& values = std::get<cudf::column_view>(input.at(data_attribute::GROUPED_VALUES));
+    auto const& values = input.get<data_attribute::GROUPED_VALUES>();
     return cudf::type_dispatcher(values.type(), groupby_fn{this}, input, stream, mr);
-  }
-
-  [[nodiscard]] std::size_t do_hash() const override
-  {
-    // Just return the same hash for all instances of this class.
-    return std::size_t{12345};
   }
 
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
@@ -502,21 +489,17 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr) const
     {
-      auto const& values = std::get<cudf::column_view>(input.at(data_attribute::GROUPED_VALUES));
+      auto const& values = input.get<data_attribute::GROUPED_VALUES>();
       if (values.size() == 0) { return parent->get_empty_output(stream, mr); }
 
-      auto const offsets =
-        std::get<cudf::device_span<cudf::size_type const>>(input.at(data_attribute::GROUP_OFFSETS));
+      auto const offsets = input.get<data_attribute::GROUP_OFFSETS>();
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
-      auto const num_groups = static_cast<int>(offsets.size()) - 1;
-      auto const group_indices =
-        std::get<cudf::device_span<cudf::size_type const>>(input.at(data_attribute::GROUP_LABELS));
-      auto const group_max = std::get<cudf::column_view>(
-        input.at(cudf::make_max_aggregation<cudf::groupby_aggregation>()));
-      auto const group_sum = std::get<cudf::column_view>(
-        input.at(cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+      auto const num_groups    = static_cast<int>(offsets.size()) - 1;
+      auto const group_indices = input.get<data_attribute::GROUP_LABELS>();
+      auto const group_max     = input.get(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+      auto const group_sum     = input.get(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
-      auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
+      auto const input_dv_ptr = cudf::column_device_view::create(values, stream);
       auto const output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
                                                     num_groups,
                                                     cudf::mask_state::UNALLOCATED,
@@ -531,7 +514,7 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_groups),
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
-        transform_fn{*values_dv_ptr,
+        transform_fn{*input_dv_ptr,
                      offsets,
                      group_indices,
                      group_max.begin<InputType>(),

@@ -44,71 +44,29 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief The interface for host-based UDF implementation.
+ * @brief The fundamental interface for host-based UDF implementation.
  *
- * This struct declares the functions `do_hash`, `is_equal`, and `clone` that must be defined in
+ * This class declares the functions `do_hash`, `is_equal`, and `clone` that must be defined in
  * the users' UDF implementation. These function are required for libcudf aggregation framework
  * to perform its operations.
- *
- * An implementation of host-based UDF needs to be derived from this base class, defining
- * its own version of the required functions. In particular:
- *  - The derived class is required to implement `get_empty_output`, `operator()`, `is_equal`,
- *    and `clone` functions.
- *  - If necessary, the derived class can also override `do_hash` to compute hashing for its
- *    instance, and `get_required_data` to selectively access to the input data as well as
- *    intermediate data provided by libcudf.
- *
- * Example of such implementation:
- * @code{.cpp}
- * struct my_udf_aggregation : cudf::host_udf_base {
- *   my_udf_aggregation() = default;
- *
- *   // This UDF aggregation needs `GROUPED_VALUES` and `GROUP_OFFSETS`,
- *   // and the result from groupby `MAX` aggregation.
- *   [[nodiscard]] data_attribute_set_t get_required_data() const override
- *   {
- *       return {groupby_data_attribute::GROUPED_VALUES,
- *               groupby_data_attribute::GROUP_OFFSETS,
- *               cudf::make_max_aggregation<cudf::groupby_aggregation>()};
- *   }
- *
- *   [[nodiscard]] output_t get_empty_output(
- *     [[maybe_unused]] std::optional<cudf::data_type> output_dtype,
- *     [[maybe_unused]] rmm::cuda_stream_view stream,
- *     [[maybe_unused]] rmm::device_async_resource_ref mr) const override
- *   {
- *     // This UDF aggregation always returns a column of type INT32.
- *     return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
- *   }
- *
- *   [[nodiscard]] output_t operator()(input_map_t const& input,
- *                                     rmm::cuda_stream_view stream,
- *                                     rmm::device_async_resource_ref mr) const override
- *   {
- *     // Perform UDF computation using the input data and return the result.
- *   }
- *
- *   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
- *   {
- *     // Check if the other object is also instance of this class.
- *     return dynamic_cast<my_udf_aggregation const*>(&other) != nullptr;
- *   }
- *
- *   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
- *   {
- *     return std::make_unique<my_udf_aggregation>();
- *   }
- * };
- * @endcode
  */
-struct host_udf_base {
-  host_udf_base()          = default;
-  virtual ~host_udf_base() = default;
+class host_udf_base {
+  // Declare constructor private to prevent the users from deriving from this class.
+ protected:
+  host_udf_base() = default;  ///< Default constructor
+
+  // Only allow deriving from the classes below.
+  friend class host_udf_reduction_base;
+  friend class host_udf_segmented_reduction_base;
+  friend class host_udf_groupby_base;
+
+ public:
+  virtual ~host_udf_base() = default;  ///< Default destructor
 
   /**
-   * @brief Computes hash value of the class's instance.
-   * Overriding this function is optional when the derived class has data members such that each
-   * instance needs to be differentiated from each other.
+   * @brief Computes hash value of the instance.
+   * Overriding this function is optional when the derived class has data members such that
+   * each instance needs to be differentiated from each other.
    * @return The hash value of the instance
    */
   [[nodiscard]] virtual std::size_t do_hash() const
@@ -118,7 +76,7 @@ struct host_udf_base {
 
   /**
    * @brief Compares two instances of the derived class for equality.
-   * @param other The other derived class's instance to compare with
+   * @param other The other instance to compare with
    * @return True if the two instances are equal
    */
   [[nodiscard]] virtual bool is_equal(host_udf_base const& other) const = 0;
@@ -126,20 +84,20 @@ struct host_udf_base {
   /**
    * @brief Clones the instance.
    *
-   * A class derived from `host_udf_base` should not store too much data such that its instances
-   * remain lightweight for efficient cloning.
+   * The instances of the derived class should be lightweight for efficient cloning.
    *
-   * @return A new instance cloned from this
+   * @return A new instance cloned from this one
    */
   [[nodiscard]] virtual std::unique_ptr<host_udf_base> clone() const = 0;
 };
 
 /**
- * @brief The interface for host-based UDF implementation in reduction context.
+ * @brief The interface for host-based UDF implementation for reduction context.
  *
  * An implementation of host-based UDF for reduction needs to be derived from this class.
- * In addition to implementing the virtual functions declared in the `host_udf_base` struct, such
- * derived class must also define the `operator()` function which performs the reduction.
+ * In addition to implementing the virtual functions declared in the base class `host_udf_base`,
+ * such derived class must also define the `operator()` function to perform reduction
+ * operations.
  *
  * Example:
  * @code{.cpp}
@@ -147,16 +105,20 @@ struct host_udf_base {
  *   my_udf_aggregation() = default;
  *
  *   [[nodiscard]] std::unique_ptr<scalar> operator()(
- *     input_map_t const& input,
+ *     column_view const& input,
+ *     data_type output_dtype,
+ *     std::optional<std::reference_wrapper<scalar const>> init,
  *     rmm::cuda_stream_view stream,
  *     rmm::device_async_resource_ref mr) const override
  *   {
- *     // Perform reduction computation using the input data and return the result.
+ *     // Perform reduction computation using the input data and return the reduction result.
+ *     // This is where the actual reduction logic is implemented.
  *   }
  *
  *   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
  *   {
  *     // Check if the other object is also instance of this class.
+ *     // If there are internal state variables, they may need to be checked for equality as well.
  *     return dynamic_cast<my_udf_aggregation const*>(&other) != nullptr;
  *   }
  *
@@ -169,141 +131,143 @@ struct host_udf_base {
  */
 struct host_udf_reduction_base : host_udf_base {
   /**
-   * @brief Define the possible data needed for reduction.
-   */
-  enum class data_attribute : int32_t {
-    INPUT_VALUES,  ///< The input values column.
-    OUTPUT_DTYPE,  ///< Data type for the output result.
-    INIT_VALUE     ///< The initial value for computing reduction.
-  };
-
-  /**
-   * @brief Hold all possible types of the data that is passed to the derived class for executing
-   * the aggregation.
-   */
-  using input_data_t =
-    std::variant<column_view,                                        /* INPUT_VALUES */
-                 data_type,                                          /* OUTPUT_DTYPE */
-                 std::optional<std::reference_wrapper<scalar const>> /* INIT_VALUE */
-                 >;
-
-  /**
-   * @brief Input to the aggregation, mapping from each data attribute to its actual
-   */
-  struct input_map_t : std::unordered_map<data_attribute, input_data_t> {
-    template <data_attribute attr>
-    using output_t =
-      std::conditional_t<attr == data_attribute::INPUT_VALUES,
-                         column_view,
-                         std::conditional_t<attr == data_attribute::OUTPUT_DTYPE,
-                                            data_type,
-                                            std::optional<std::reference_wrapper<scalar const>>>>;
-    template <data_attribute attr>
-    output_t<attr> get() const;
-  };
-
-  /**
-   * @brief Perform the main computation for the host-based UDF.
+   * @brief Perform reduction operations.
    *
-   * @param input The input data needed for performing all computation
+   * @param input The input column for reduction
+   * @param output_dtype The data type for the final output scalar
+   * @param init The initial value of the reduction
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation
    */
   [[nodiscard]] virtual std::unique_ptr<scalar> operator()(
-    input_map_t const& input,
+    column_view const& input,
+    data_type output_dtype,
+    std::optional<std::reference_wrapper<scalar const>> init,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 };
 
-#define MAP_DATA_ATTRIBUTE(context, attr, output_type)                                             \
-  template <>                                                                                      \
-  [[nodiscard]] inline host_udf_##context##_base::input_map_t::output_t<                           \
-    host_udf_##context##_base::data_attribute::attr>                                               \
-    host_udf_##context##_base::input_map_t::get<host_udf_##context##_base::data_attribute::attr>() \
-      const                                                                                        \
-  {                                                                                                \
-    return std::get<output_type>(at(data_attribute::attr));                                        \
-  }
-
-#define MAP_ATTRIBUTE_REDUCTION(attr, output_type) MAP_DATA_ATTRIBUTE(reduction, attr, output_type)
-
-MAP_ATTRIBUTE_REDUCTION(INPUT_VALUES, column_view)
-MAP_ATTRIBUTE_REDUCTION(OUTPUT_DTYPE, data_type)
-MAP_ATTRIBUTE_REDUCTION(INIT_VALUE, std::optional<std::reference_wrapper<scalar const>>)
-
 /**
- * @brief
+ * @brief The interface for host-based UDF implementation for segmented reduction context.
+ *
+ * An implementation of host-based UDF for segmented reduction needs to be derived from this class.
+ * In addition to implementing the virtual functions declared in the base class `host_udf_base`,
+ * such derived class must also define the `operator()` function to perform segmented reduction.
+ *
+ * Example:
+ * @code{.cpp}
+ * struct my_udf_aggregation : cudf::host_udf_segmented_reduction_base {
+ *   my_udf_aggregation() = default;
+ *
+ *   [[nodiscard]] std::unique_ptr<column> operator()(
+ *     column_view const& input,
+ *     device_span<size_type const> offsets,
+ *     data_type output_dtype,
+ *     null_policy null_handling,
+ *     std::optional<std::reference_wrapper<scalar const>> init,
+ *     rmm::cuda_stream_view stream,
+ *     rmm::device_async_resource_ref mr) const override
+ *   {
+ *     // Perform computation using the input data and return the result.
+ *     // This is where the actual segmented reduction logic is implemented.
+ *   }
+ *
+ *   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
+ *   {
+ *     // Check if the other object is also instance of this class.
+ *     // If there are internal state variables, they may need to be checked for equality as well.
+ *     return dynamic_cast<my_udf_aggregation const*>(&other) != nullptr;
+ *   }
+ *
+ *   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
+ *   {
+ *     return std::make_unique<my_udf_aggregation>();
+ *   }
+ * };
+ * @endcode
  */
 struct host_udf_segmented_reduction_base : host_udf_base {
   /**
-   * @brief Define the possible data needed for segmented reduction.
-   */
-  enum class data_attribute : int32_t {
-    INPUT_VALUES,  ///< The input values column.
-    OUTPUT_DTYPE,  ///< Data type for the output result.
-    INIT_VALUE,    ///< The initial value for computing reduction.
-    NULL_POLICY,   ///< To control null handling (INCLUDE or EXCLUDE nulls).
-    OFFSETS        ///< The offsets defining segments for segmented reduction.
-  };
-
-  /**
-   * @brief Hold all possible types of the data that is passed to the derived class for executing
-   * the aggregation.
-   */
-  using input_data_t =
-    std::variant<column_view,                                         /* INPUT_VALUES */
-                 data_type,                                           /* OUTPUT_DTYPE */
-                 std::optional<std::reference_wrapper<scalar const>>, /* INIT_VALUE */
-                 null_policy,                                         /* NULL_POLICY */
-                 device_span<size_type const>                         /* OFFSETS */
-                 >;
-
-  /**
-   * @brief Input to the aggregation, mapping from each data attribute to its actual
-   */
-  struct input_map_t : std::unordered_map<data_attribute, input_data_t> {
-    template <data_attribute attr>
-    using output_t = std::conditional_t<
-      attr == data_attribute::INPUT_VALUES,
-      column_view,
-      std::conditional_t<
-        attr == data_attribute::OUTPUT_DTYPE,
-        data_type,
-        std::conditional_t<attr == data_attribute::INIT_VALUE,
-                           std::optional<std::reference_wrapper<scalar const>>,
-                           std::conditional_t<attr == data_attribute::NULL_POLICY,
-                                              null_policy,
-                                              device_span<cudf::size_type const>>>>>;
-    template <data_attribute attr>
-    output_t<attr> get() const;
-  };
-
-  /**
-   * @brief Perform the main computation for the host-based UDF.
+   * @brief Perform segmented reduction operations.
    *
-   * @param input The input data needed for performing all computation
+   * @param input The input column for reduction
+   * @param offsets A list of offsets defining the segments for reduction
+   * @param output_dtype The data type for the final output column
+   * @param init The initial value of the reduction
+   * @param null_handling If `INCLUDE` then the reduction result is valid only if all elements in
+   *        the segment are valid, and if `EXCLUDE` then the reduction result is valid if any
+   *        element in the segment is valid
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation
    */
   [[nodiscard]] virtual std::unique_ptr<column> operator()(
-    input_map_t const& input,
+    column_view const& input,
+    device_span<size_type const> offsets,
+    data_type output_dtype,
+    null_policy null_handling,
+    std::optional<std::reference_wrapper<scalar const>> init,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const = 0;
 };
 
-#define MAP_ATTRIBUTE_SEGMENTED_REDUCTION(attr, output_type) \
-  MAP_DATA_ATTRIBUTE(segmented_reduction, attr, output_type)
-
-MAP_ATTRIBUTE_SEGMENTED_REDUCTION(INPUT_VALUES, column_view)
-MAP_ATTRIBUTE_SEGMENTED_REDUCTION(OUTPUT_DTYPE, data_type)
-MAP_ATTRIBUTE_SEGMENTED_REDUCTION(INIT_VALUE, std::optional<std::reference_wrapper<scalar const>>)
-MAP_ATTRIBUTE_SEGMENTED_REDUCTION(NULL_POLICY, null_policy)
-MAP_ATTRIBUTE_SEGMENTED_REDUCTION(OFFSETS, device_span<cudf::size_type const>)
-
 /**
- * @brief
+ * @brief The interface for host-based UDF implementation for groupby aggregation context.
+ *
+ * An implementation of host-based UDF for groupby needs to be derived from this class.
+ * In addition to implementing the virtual functions declared in the base class `host_udf_base`,
+ * such derived class must also define the functions `get_empty_output` to return result when the
+ * input is empty, and `operator()` to perform its groupby operations. Optionally, the derived
+ * class can override the `get_required_data` function to selectively specify what data is
+ * needed for its operations. Only the required data will be evaluated in libcudf to avoid
+ * unnecessary work.
+ *
+ * @note Only sort-based groupby aggregations are supported at this time. Hash-based groupby
+ * aggregations require more complex data structure and is not yet supported.
+ *
+ * Example:
+ * @code{.cpp}
+ * struct my_udf_aggregation : cudf::host_udf_groupby_base {
+ *   my_udf_aggregation() = default;
+ *
+ *   [[nodiscard]] data_attribute_set_t get_required_data() const override
+ *   {
+ *       // This UDF aggregation needs `GROUPED_VALUES` and `GROUP_OFFSETS`,
+ *       // and the result from groupby `MAX` aggregation.
+ *       return {data_attribute::GROUPED_VALUES,
+ *               data_attribute::GROUP_OFFSETS,
+ *               cudf::make_max_aggregation<cudf::groupby_aggregation>()};
+ *   }
+ *
+ *   [[nodiscard]] std::unique_ptr<column> get_empty_output(
+ *     rmm::cuda_stream_view stream,
+ *     rmm::device_async_resource_ref mr) const override
+ *   {
+ *     // Return a column corresponding to the result when the input value column is empty.
+ *   }
+ *
+ *   [[nodiscard]] std::unique_ptr<column> operator()(
+ *     input_map_t const& input,
+ *     rmm::cuda_stream_view stream,
+ *     rmm::device_async_resource_ref mr) const override
+ *   {
+ *     // Perform UDF computation using the input data and return the result.
+ *   }
+ *
+ *   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
+ *   {
+ *     // Check if the other object is also instance of this class.
+ *     // If there are internal state variables, they may need to be checked for equality as well.
+ *     return dynamic_cast<my_udf_aggregation const*>(&other) != nullptr;
+ *   }
+ *
+ *   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
+ *   {
+ *     return std::make_unique<my_udf_aggregation>();
+ *   }
+ * };
+ * @endcode
  */
 struct host_udf_groupby_base : host_udf_base {
   /**
@@ -312,18 +276,17 @@ struct host_udf_groupby_base : host_udf_base {
    * Such data can be either intermediate data such as sorted values or group labels etc, or the
    * results of other aggregations.
    *
-   * Each derived host-based UDF class may need a different set of  It is inefficient to
+   * Each derived host-based UDF class may need a different set of data. It is inefficient to
    * evaluate and pass down all these possible data at once from libcudf. A solution for that is,
    * the derived class can define a subset of data that it needs and libcudf will evaluate
-   * and pass down only data requested from that set.
+   * and pass down only the data requested from that set.
    */
   struct data_attribute {
     /**
-     * @brief Define the data that can be provided by libcudf groupby framework.
-     *
-     * Note that only sort-based groupby aggregations are supported.
+     * @brief Define the data that can be provided by libcudf for any sort-based groupby
+     * aggregation.
      */
-    enum buildin_attribute : int32_t {
+    enum general_attribute : int32_t {
       INPUT_VALUES,    ///< The input values column.
       GROUPED_VALUES,  ///< The input values grouped according to the input `keys` for which the
                        ///< values within each group maintain their original order.
@@ -337,7 +300,7 @@ struct host_udf_groupby_base : host_udf_base {
     /**
      * @brief Hold all possible data types for the input of the aggregation in the derived class.
      */
-    using value_type = std::variant<buildin_attribute, std::unique_ptr<aggregation>>;
+    using value_type = std::variant<general_attribute, std::unique_ptr<aggregation>>;
     value_type value;  ///< The actual data attribute, wrapped by this struct
                        ///< as a wrapper is needed to define `hash` and `equal_to` functors.
 
@@ -348,7 +311,7 @@ struct host_udf_groupby_base : host_udf_base {
      * @brief Construct a new data attribute from an aggregation attribute.
      * @param value_ An aggregation attribute
      */
-    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, buildin_attribute>)>
+    template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, general_attribute>)>
     data_attribute(T value_) : value{value_}
     {
     }
@@ -418,7 +381,7 @@ struct host_udf_groupby_base : host_udf_base {
    * empty set is returned. That means all the data attributes (except results from other
    * aggregations in groupby) will be needed.
    *
-   * @return A set of `data_attribute`
+   * @return A set of `data_attribute`, empty set means all data attributes are needed
    */
   [[nodiscard]] virtual data_attribute_set_t get_required_data() const { return {}; }
 
@@ -427,9 +390,9 @@ struct host_udf_groupby_base : host_udf_base {
    * the aggregation.
    */
   using input_data_t =
-    std::variant<column_view, /* INPUT_VALUES, GROUPED_VALUES, SORTED_GROUPED_VALUES */
-                 size_type,   /* NUM_GROUPS */
-                 device_span<size_type const> /* GROUP_OFFSETS, GROUP_LABELS */
+    std::variant<column_view,     /* INPUT_VALUES, GROUPED_VALUES, SORTED_GROUPED_VALUES */
+                 cudf::size_type, /* NUM_GROUPS */
+                 device_span<cudf::size_type const> /* GROUP_OFFSETS, GROUP_LABELS */
                  >;
 
   /**
@@ -439,7 +402,7 @@ struct host_udf_groupby_base : host_udf_base {
                                           input_data_t,
                                           data_attribute::hash,
                                           data_attribute::equal_to> {
-    template <data_attribute::buildin_attribute attr>
+    template <data_attribute::general_attribute attr>
     using output_t = std::conditional_t<attr == data_attribute::INPUT_VALUES ||
                                           attr == data_attribute::GROUPED_VALUES ||
                                           attr == data_attribute::SORTED_GROUPED_VALUES,
@@ -447,7 +410,7 @@ struct host_udf_groupby_base : host_udf_base {
                                         std::conditional_t<attr == data_attribute::NUM_GROUPS,
                                                            cudf::size_type,
                                                            device_span<cudf::size_type const>>>;
-    template <data_attribute::buildin_attribute attr>
+    template <data_attribute::general_attribute attr>
     output_t<attr> get() const;
 
     column_view get(std::unique_ptr<aggregation> aggregation) const
@@ -460,7 +423,7 @@ struct host_udf_groupby_base : host_udf_base {
    * @brief Get the output when the input values column is empty.
    *
    * This is called in libcudf when the input values column is empty. In such situations libcudf
-   * tries to generate the output directly without unnecessarily evaluating the intermediate
+   * tries to generate the output directly without unnecessarily evaluating the intermediate data.
    *
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
@@ -483,7 +446,14 @@ struct host_udf_groupby_base : host_udf_base {
     rmm::device_async_resource_ref mr) const = 0;
 };
 
-#define MAP_ATTRIBUTE_GROUPBY(attr, output_type) MAP_DATA_ATTRIBUTE(groupby, attr, output_type)
+#define MAP_ATTRIBUTE_GROUPBY(attr, output_type)                                               \
+  template <>                                                                                  \
+  [[nodiscard]] inline host_udf_groupby_base::input_map_t::output_t<                           \
+    host_udf_groupby_base::data_attribute::attr>                                               \
+  host_udf_groupby_base::input_map_t::get<host_udf_groupby_base::data_attribute::attr>() const \
+  {                                                                                            \
+    return std::get<output_type>(at(data_attribute::attr));                                    \
+  }
 
 MAP_ATTRIBUTE_GROUPBY(INPUT_VALUES, column_view)
 MAP_ATTRIBUTE_GROUPBY(GROUPED_VALUES, column_view)
