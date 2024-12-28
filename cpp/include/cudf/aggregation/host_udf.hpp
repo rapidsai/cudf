@@ -433,7 +433,7 @@ struct host_udf_groupby_base : host_udf_base {
      * @return The data corresponding to the given template parameter.
      */
     template <data_attribute::general_attribute attr>
-    output_t<attr> get() const;
+    output_t<attr> const& get() const;
 
     /**
      * @brief Retrieve the output result corresponding to some groupby aggregation.
@@ -444,7 +444,7 @@ struct host_udf_groupby_base : host_udf_base {
      * @param aggregation A groupby aggregation corresponding to the requested data
      * @return A `column_view` object storing the output result of the given aggregation
      */
-    column_view get(std::unique_ptr<aggregation> aggregation) const
+    column_view const& get(std::unique_ptr<aggregation> aggregation) const
     {
       return std::get<column_view>(at(std::move(aggregation)));
     }
@@ -480,7 +480,7 @@ struct host_udf_groupby_base : host_udf_base {
 #define MAP_ATTRIBUTE_GROUPBY(attr, output_type)                                               \
   template <>                                                                                  \
   [[nodiscard]] inline host_udf_groupby_base::input_map_t::output_t<                           \
-    host_udf_groupby_base::data_attribute::attr>                                               \
+    host_udf_groupby_base::data_attribute::attr> const&                                        \
   host_udf_groupby_base::input_map_t::get<host_udf_groupby_base::data_attribute::attr>() const \
   {                                                                                            \
     return std::get<output_type>(at(data_attribute::attr));                                    \
