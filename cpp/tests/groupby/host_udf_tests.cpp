@@ -85,30 +85,60 @@ struct host_udf_groupby_test : cudf::host_udf_groupby_base {
       if (std::holds_alternative<data_attribute::general_attribute>(attr.value)) {
         switch (std::get<data_attribute::general_attribute>(attr.value)) {
           case data_attribute::INPUT_VALUES: {
-            EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
-          } break;
+            auto const& raw_attr_value = input.at(attr);
+            auto const& attr_value     = input.get<data_attribute::INPUT_VALUES>();
+            EXPECT_TRUE(std::holds_alternative<cudf::column_view>(raw_attr_value));
+            EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
+            break;
+          }
           case data_attribute::GROUPED_VALUES: {
-            EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
-          } break;
+            auto const& raw_attr_value = input.at(attr);
+            auto const& attr_value     = input.get<data_attribute::GROUPED_VALUES>();
+            EXPECT_TRUE(std::holds_alternative<cudf::column_view>(raw_attr_value));
+            EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
+            break;
+          }
           case data_attribute::SORTED_GROUPED_VALUES: {
-            EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
-          } break;
+            auto const& raw_attr_value = input.at(attr);
+            auto const& attr_value     = input.get<data_attribute::SORTED_GROUPED_VALUES>();
+            EXPECT_TRUE(std::holds_alternative<cudf::column_view>(raw_attr_value));
+            EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
+            break;
+          }
           case data_attribute::NUM_GROUPS: {
-            EXPECT_TRUE(std::holds_alternative<cudf::size_type>(input.at(attr)));
-          } break;
+            auto const& raw_attr_value = input.at(attr);
+            auto const& attr_value     = input.get<data_attribute::NUM_GROUPS>();
+            EXPECT_TRUE(std::holds_alternative<cudf::size_type>(raw_attr_value));
+            EXPECT_TRUE((std::is_same_v<cudf::size_type, std::decay_t<decltype(attr_value)>>));
+            break;
+          }
           case data_attribute::GROUP_OFFSETS: {
+            auto const& raw_attr_value = input.at(attr);
+            auto const& attr_value     = input.get<data_attribute::GROUP_OFFSETS>();
             EXPECT_TRUE(
-              std::holds_alternative<cudf::device_span<cudf::size_type const>>(input.at(attr)));
-          } break;
+              std::holds_alternative<cudf::device_span<cudf::size_type const>>(raw_attr_value));
+            EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
+                                        std::decay_t<decltype(attr_value)>>));
+            break;
+          }
           case data_attribute::GROUP_LABELS: {
+            auto const& raw_attr_value = input.at(attr);
+            auto const& attr_value     = input.get<data_attribute::GROUP_LABELS>();
             EXPECT_TRUE(
-              std::holds_alternative<cudf::device_span<cudf::size_type const>>(input.at(attr)));
-          } break;
+              std::holds_alternative<cudf::device_span<cudf::size_type const>>(raw_attr_value));
+            EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
+                                        std::decay_t<decltype(attr_value)>>));
+            break;
+          }
           default:
             CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF groupby aggregation.");
         }
       } else {  // std::holds_alternative<std::unique_ptr<cudf::aggregation>>(attr.value)
-        EXPECT_TRUE(std::holds_alternative<cudf::column_view>(input.at(attr)));
+        auto const& raw_attr_value = input.at(attr);
+        auto const& attr_value =
+          input.get(std::get<std::unique_ptr<cudf::aggregation>>(attr.value)->clone());
+        EXPECT_TRUE(std::holds_alternative<cudf::column_view>(raw_attr_value));
+        EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
       }
     }
 

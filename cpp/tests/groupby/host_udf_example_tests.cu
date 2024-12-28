@@ -492,12 +492,12 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
       auto const& values = input.get<data_attribute::GROUPED_VALUES>();
       if (values.size() == 0) { return parent->get_empty_output(stream, mr); }
 
-      auto const offsets = input.get<data_attribute::GROUP_OFFSETS>();
+      auto const& offsets = input.get<data_attribute::GROUP_OFFSETS>();
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
-      auto const num_groups    = static_cast<int>(offsets.size()) - 1;
-      auto const group_indices = input.get<data_attribute::GROUP_LABELS>();
-      auto const group_max     = input.get(cudf::make_max_aggregation<cudf::groupby_aggregation>());
-      auto const group_sum     = input.get(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+      auto const num_groups     = static_cast<int>(offsets.size()) - 1;
+      auto const& group_indices = input.get<data_attribute::GROUP_LABELS>();
+      auto const& group_max = input.get(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+      auto const& group_sum = input.get(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
       auto const input_dv_ptr = cudf::column_device_view::create(values, stream);
       auto const output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
