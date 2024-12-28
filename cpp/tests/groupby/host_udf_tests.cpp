@@ -45,7 +45,11 @@ struct host_udf_groupby_test : cudf::host_udf_groupby_base {
   }
 
   [[nodiscard]] std::size_t do_hash() const override { return 0; }
-  [[nodiscard]] bool is_equal(host_udf_base const& other) const override { return true; }
+  [[nodiscard]] bool is_equal(host_udf_base const& other) const override
+  {
+    // Just check if the other object is also instance of this class.
+    return dynamic_cast<host_udf_groupby_test const*>(&other) != nullptr;
+  }
   [[nodiscard]] std::unique_ptr<host_udf_base> clone() const override
   {
     return std::make_unique<host_udf_groupby_test>(test_location_line, test_run, input_attrs);
@@ -78,6 +82,9 @@ struct host_udf_groupby_test : cudf::host_udf_groupby_base {
                                          data_attribute::GROUP_LABELS};
     }
     EXPECT_EQ(input.size(), check_attrs.size());
+
+    // Perform tests on types for the input data: we must ensure the data corresponding to each
+    // data attribute having the correct type.
     for (auto const& attr : check_attrs) {
       EXPECT_TRUE(input.count(attr) > 0);
       EXPECT_TRUE(std::holds_alternative<data_attribute::general_attribute>(attr.value) ||

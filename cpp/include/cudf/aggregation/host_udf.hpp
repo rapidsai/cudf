@@ -51,22 +51,24 @@ namespace CUDF_EXPORT cudf {
  * to perform its operations.
  */
 class host_udf_base {
-  // Declare constructor private to prevent the users from deriving from this class.
+  // Declare constructor protected to prevent the users from deriving from this class.
  protected:
   host_udf_base() = default;  ///< Default constructor
 
-  // Only allow deriving from the classes below.
-  friend class host_udf_reduction_base;
-  friend class host_udf_segmented_reduction_base;
-  friend class host_udf_groupby_base;
+  // Only allow deriving from the structs below.
+  friend struct host_udf_reduction_base;
+  friend struct host_udf_segmented_reduction_base;
+  friend struct host_udf_groupby_base;
 
  public:
   virtual ~host_udf_base() = default;  ///< Default destructor
 
   /**
    * @brief Computes hash value of the instance.
+   *
    * Overriding this function is optional when the derived class has data members such that
    * each instance needs to be differentiated from each other.
+   *
    * @return The hash value of the instance
    */
   [[nodiscard]] virtual std::size_t do_hash() const
@@ -244,7 +246,7 @@ struct host_udf_segmented_reduction_base : host_udf_base {
  *     rmm::cuda_stream_view stream,
  *     rmm::device_async_resource_ref mr) const override
  *   {
- *     // Return a column corresponding to the result when the input value column is empty.
+ *     // Return a column corresponding to the result when the input values column is empty.
  *   }
  *
  *   [[nodiscard]] std::unique_ptr<column> operator()(
@@ -273,8 +275,8 @@ struct host_udf_groupby_base : host_udf_base {
   /**
    * @brief Describe possible data that may be needed in the derived class for its operations.
    *
-   * Such data can be either intermediate data such as sorted values or group labels etc, or the
-   * results of other aggregations.
+   * Such data can be either general groupby data such as sorted values or group labels etc, or the
+   * results of other groupby aggregations.
    *
    * Each derived host-based UDF class may need a different set of data. It is inefficient to
    * evaluate and pass down all these possible data at once from libcudf. A solution for that is,
@@ -365,7 +367,7 @@ struct host_udf_groupby_base : host_udf_base {
        */
       bool operator()(data_attribute const& lhs, data_attribute const& rhs) const;
     };  // struct equal_to
-  };  // struct data_attribute
+  };    // struct data_attribute
 
   /**
    * @brief Set of attributes for the input data that is needed for computing the aggregation.
@@ -377,11 +379,14 @@ struct host_udf_groupby_base : host_udf_base {
    * @brief Return a set of attributes for the data that is needed for computing the aggregation.
    *
    * The derived class should return the attributes corresponding to only the data that it needs to
-   * avoid unnecessary computation performed in libcudf. If this function is not overridden, an
-   * empty set is returned. That means all the data attributes (except results from other
-   * aggregations in groupby) will be needed.
+   * avoid unnecessary computation performed in libcudf. Data attributes can include either general
+   * data attributes, or output results from other groupby aggregations.
    *
-   * @return A set of `data_attribute`, empty set means all data attributes are needed
+   * If this function is not overridden, an empty set is returned. This is equivalent to returning
+   * a set containing all the general data attributes.
+   *
+   * @return A set of `data_attribute`, empty set means all data corresponding to every general
+   *         data attribute will be needed
    */
   [[nodiscard]] virtual data_attribute_set_t get_required_data() const { return {}; }
 
@@ -390,18 +395,25 @@ struct host_udf_groupby_base : host_udf_base {
    * the aggregation.
    */
   using input_data_t =
-    std::variant<column_view,     /* INPUT_VALUES, GROUPED_VALUES, SORTED_GROUPED_VALUES */
-                 cudf::size_type, /* NUM_GROUPS */
-                 device_span<cudf::size_type const> /* GROUP_OFFSETS, GROUP_LABELS */
+    std::variant<column_view, /* INPUT_VALUES, GROUPED_VALUES, SORTED_GROUPED_VALUES */
+                 size_type,   /* NUM_GROUPS */
+                 device_span<size_type const> /* GROUP_OFFSETS, GROUP_LABELS */
                  >;
 
   /**
-   * @brief Input to the aggregation, mapping from each data attribute to its actual
+   * @brief Input to the aggregation, mapping from each data attribute to its actual data.
+   *
+   * Note that we must explicitly specify the prefix `cudf::` to differentiate `cudf::size_type`
+   * from the internal type `std::unordered_map::size_type`.
    */
   struct input_map_t : std::unordered_map<data_attribute,
                                           input_data_t,
                                           data_attribute::hash,
                                           data_attribute::equal_to> {
+    /**
+     * @brief Define the conditional output type for the template function `get<>` below, allowing
+     * to retrieve different data types similar to `std::get<>`.
+     */
     template <data_attribute::general_attribute attr>
     using output_t = std::conditional_t<attr == data_attribute::INPUT_VALUES ||
                                           attr == data_attribute::GROUPED_VALUES ||
@@ -410,9 +422,28 @@ struct host_udf_groupby_base : host_udf_base {
                                         std::conditional_t<attr == data_attribute::NUM_GROUPS,
                                                            cudf::size_type,
                                                            device_span<cudf::size_type const>>>;
+
+    /**
+     * @brief Reconstruct different data types from values stored in the internal hash map based on
+     * `general_attribute` value given by the template parameter.
+     *
+     * @note The given parameter value must be requested in the data attribute set returned by
+     * `get_required_data` function. Otherwise, `std::out_of_range` exception will occur.
+     *
+     * @return The data corresponding to the given template parameter.
+     */
     template <data_attribute::general_attribute attr>
     output_t<attr> get() const;
 
+    /**
+     * @brief Retrieve the output result corresponding to some groupby aggregation.
+     *
+     * @note The given aggregation must be requested in the data attribute set returned by
+     * `get_required_data` function. Otherwise, `std::out_of_range` exception will occur.
+     *
+     * @param aggregation A groupby aggregation corresponding to the requested data
+     * @return A `column_view` object storing the output result of the given aggregation
+     */
     column_view get(std::unique_ptr<aggregation> aggregation) const
     {
       return std::get<column_view>(at(std::move(aggregation)));
@@ -427,7 +458,7 @@ struct host_udf_groupby_base : host_udf_base {
    *
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
-   * @return The output result of the aggregation when input values is empty
+   * @return The output result of the aggregation when the input values column is empty
    */
   [[nodiscard]] virtual std::unique_ptr<column> get_empty_output(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const = 0;
@@ -455,6 +486,7 @@ struct host_udf_groupby_base : host_udf_base {
     return std::get<output_type>(at(data_attribute::attr));                                    \
   }
 
+// Map each data attribute to its data type.
 MAP_ATTRIBUTE_GROUPBY(INPUT_VALUES, column_view)
 MAP_ATTRIBUTE_GROUPBY(GROUPED_VALUES, column_view)
 MAP_ATTRIBUTE_GROUPBY(SORTED_GROUPED_VALUES, column_view)
