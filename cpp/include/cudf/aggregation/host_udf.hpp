@@ -477,6 +477,9 @@ struct host_udf_groupby_base : host_udf_base {
     rmm::device_async_resource_ref mr) const = 0;
 };
 
+/**
+ * @brief Map each data attribute enum to its data type.
+ */
 #define MAP_ATTRIBUTE_GROUPBY(attr, output_type)                                               \
   template <>                                                                                  \
   [[nodiscard]] inline host_udf_groupby_base::input_map_t::output_t<                           \
@@ -486,7 +489,6 @@ struct host_udf_groupby_base : host_udf_base {
     return std::get<output_type>(at(data_attribute::attr));                                    \
   }
 
-// Map each data attribute to its data type.
 MAP_ATTRIBUTE_GROUPBY(INPUT_VALUES, column_view)
 MAP_ATTRIBUTE_GROUPBY(GROUPED_VALUES, column_view)
 MAP_ATTRIBUTE_GROUPBY(SORTED_GROUPED_VALUES, column_view)
