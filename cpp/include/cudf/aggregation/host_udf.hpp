@@ -51,8 +51,8 @@ namespace CUDF_EXPORT cudf {
  * to perform its operations.
  */
 class host_udf_base {
-  // Declare constructor protected to prevent the users from deriving from this class.
- protected:
+  // Declare constructor private to prevent the users from deriving from this class.
+ private:
   host_udf_base() = default;  ///< Default constructor
 
   // Only allow deriving from the structs below.
