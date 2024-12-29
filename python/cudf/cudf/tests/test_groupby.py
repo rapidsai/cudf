@@ -3960,8 +3960,8 @@ def test_group_by_value_counts_with_count_column():
 def test_groupby_internal_groups_empty(gdf):
     # test that we don't segfault when calling the internal
     # .groups() method with an empty list:
-    gb = gdf.groupby("y")._groupby
-    _, _, grouped_vals = gb.groups([])
+    gb = gdf.groupby("y")
+    _, _, grouped_vals = gb._groups([])
     assert grouped_vals == []
 
 
@@ -4074,6 +4074,13 @@ def test_get_group_list_like():
 
     with pytest.raises(KeyError):
         df.groupby(["a"]).get_group([1])
+
+
+def test_get_group_list_like_len_2():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [3, 2, 1]})
+    result = df.groupby(["a", "b"]).get_group((1, 4))
+    expected = df.to_pandas().groupby(["a", "b"]).get_group((1, 4))
+    assert_eq(result, expected)
 
 
 def test_size_as_index_false():

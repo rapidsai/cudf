@@ -16,14 +16,12 @@
 
 #pragma once
 
+#include "common.hpp"
+
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <memory>
-#include <string>
 #include <vector>
-
-using cudf::host_span;
 
 namespace CUDF_EXPORT cudf {
 namespace io::detail {

@@ -30,7 +30,7 @@
 
 #include <mutex>
 
-namespace cudf::io::nvcomp {
+namespace cudf::io::detail::nvcomp {
 namespace {
 
 // Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
@@ -478,4 +478,4 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
   }
 }
 
-}  // namespace cudf::io::nvcomp
+}  // namespace cudf::io::detail::nvcomp
