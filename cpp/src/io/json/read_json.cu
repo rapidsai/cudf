@@ -30,6 +30,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -37,22 +38,31 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
 
+#include <BS_thread_pool.hpp>
+#include <BS_thread_pool_utils.hpp>
+
 #include <numeric>
 
 namespace cudf::io::json::detail {
 
 namespace {
 
+namespace pools {
+  BS::synced_stream sync_out;
+  BS::thread_pool tpool(num_threads);
+  rmm::cuda_stream_pool spool = rmm::cuda_stream_pool(num_threads);
+}
+
 class compressed_host_buffer_source final : public datasource {
  public:
   explicit compressed_host_buffer_source(std::unique_ptr<datasource> const& src,
                                          compression_type comptype)
     : _comptype{comptype}, _dbuf_ptr{src->host_read(0, src->size())}
-  {
+  { 
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
-    if (comptype == compression_type::GZIP || comptype == compression_type::ZIP ||
-        comptype == compression_type::SNAPPY) {
+    if (_comptype == compression_type::GZIP || _comptype == compression_type::ZIP ||
+        _comptype == compression_type::SNAPPY) {
       _decompressed_ch_buffer_size = cudf::io::detail::get_uncompressed_size(_comptype, ch_buffer);
     } else {
       _decompressed_buffer         = cudf::io::detail::decompress(_comptype, ch_buffer);
@@ -96,7 +106,20 @@ class compressed_host_buffer_source final : public datasource {
     return std::make_unique<non_owning_buffer>(_decompressed_buffer.data() + offset, count);
   }
 
-  [[nodiscard]] bool supports_device_read() const override { return false; }
+  std::future<size_t> device_read_async(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
+  {
+    return pools::tpool.submit_task([this, offset, size, &dst, &stream] {
+      pools::sync_out.println("thread work begins\n");
+      auto hbuf = host_read(offset, size);
+      pools::sync_out.println("done with host read\n");
+      cudaMemcpyAsync(
+        dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, stream.value());
+      pools::sync_out.println("after unsynchronized cudaMemcpyAsync\n");
+      return hbuf->size();
+    });
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return true; }
 
   [[nodiscard]] size_t size() const override { return _decompressed_ch_buffer_size; }
 
@@ -310,6 +333,12 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   auto buffer =
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
+
+  auto h_buffer = cudf::detail::make_std_vector_sync(buffer, stream);
+  for(auto c : h_buffer) 
+    std::printf("%c", c);
+  std::printf("\n");
+
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
@@ -430,7 +459,10 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   // We append a line delimiter between two files to make sure the last line of file i and the first
   // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
   // delimiter.
+  std::printf("Reading from %lu to %lu\n", range_offset, range_offset + range_size);
   auto constexpr num_delimiter_chars = 1;
+  std::vector<std::future<size_t>> thread_tasks;
+  bool is_multithreading = false;
 
   auto delimiter_map = cudf::detail::make_empty_host_vector<std::size_t>(sources.size(), stream);
   std::vector<std::size_t> prefsum_source_sizes(sources.size());
@@ -452,8 +484,12 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     auto data_size = std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
     auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
                        (num_delimiter_chars * delimiter_map.size());
-    if (sources[i]->is_device_read_preferred(data_size)) {
-      bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
+    if (sources[i]->supports_device_read()) {
+      //bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
+      is_multithreading = true;
+      std::printf("source %lu: range_offset = %lu, data_size = %lu\n", i, range_offset, data_size);
+      thread_tasks.emplace_back(sources[i]->device_read_async(range_offset, data_size, destination, pools::spool.get_stream()));
+      bytes_read += data_size;
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
@@ -481,6 +517,26 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                     buffer.data());
   }
   stream.synchronize();
+  if(is_multithreading) {
+    std::printf("thread_tasks.size() = %lu\n", thread_tasks.size());
+    size_t total_bytes_read = 0;
+    for(size_t tid = 0; tid < thread_tasks.size(); tid++) {
+      total_bytes_read += thread_tasks[tid].get();
+      std::printf("Done with tid %lu\n", tid);
+    }
+    /*
+    long unsigned const total_bytes_read = std::accumulate(thread_tasks.begin(), thread_tasks.end(), 0, [](auto sum, auto& task) {
+      return sum + task.get();
+    });
+    */
+    std::printf("herehere\n");
+    CUDF_EXPECTS(total_bytes_read == total_bytes_to_read, "something's fishy");
+    /*
+    for(size_t sid = 0; sid < pools::spool.get_pool_size(); sid++)
+      pools::spool.get_stream(sid).synchronize();
+    */
+  }
+
   return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
 }
 
@@ -505,10 +561,19 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     return read_json_impl(sources, reader_opts, stream, mr);
 
   std::vector<std::unique_ptr<datasource>> compressed_sources;
-  for (size_t i = 0; i < sources.size(); i++) {
-    compressed_sources.emplace_back(
-      std::make_unique<compressed_host_buffer_source>(sources[i], reader_opts.get_compression()));
+  std::vector<std::future<std::unique_ptr<compressed_host_buffer_source>>> thread_tasks;
+  for(auto &src : sources) {
+    thread_tasks.emplace_back(
+      pools::tpool.submit_task([&reader_opts, &src] {
+        auto compsrc = std::make_unique<compressed_host_buffer_source>(src, reader_opts.get_compression());
+        return compsrc;
+      })
+    );
   }
+  std::transform(thread_tasks.begin(), thread_tasks.end(), std::back_inserter(compressed_sources), 
+    [](auto &task) {
+      return task.get();
+  });
   // in read_json_impl, we need the compressed source size to actually be the
   // uncompressed source size for correct batching
   return read_json_impl(compressed_sources, reader_opts, stream, mr);

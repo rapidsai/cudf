@@ -23,8 +23,11 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+
+#include <BS_thread_pool.hpp>
 
 #include <memory>
 
@@ -35,6 +38,7 @@ namespace io::json::detail {
 constexpr int num_subchunks            = 10;  // per chunk_size
 constexpr size_t min_subchunk_size     = 10000;
 constexpr int max_subchunks_prealloced = 3;
+constexpr int num_threads = 16;
 
 /**
  * @brief Read from array of data sources into RMM buffer. The size of the returned device span

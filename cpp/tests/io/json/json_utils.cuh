@@ -39,6 +39,7 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  std::cout << "chunk_size = " << chunk_size << std::endl;
   auto total_source_size = [&sources]() {
     return std::accumulate(sources.begin(), sources.end(), 0ul, [=](size_t sum, auto& source) {
       auto const size = source->size();
@@ -98,6 +99,7 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
   std::vector<cudf::io::table_with_metadata> tables;
   auto creader_opts_chunk = creader_opts;
   for (auto const& [chunk_start, chunk_end] : record_ranges) {
+    std::cout << "chunk_start = " << chunk_start << ", chunk_end = " << chunk_end << std::endl;
     creader_opts_chunk.set_byte_range_offset(chunk_start);
     creader_opts_chunk.set_byte_range_size(chunk_end - chunk_start);
     tables.push_back(cudf::io::json::detail::read_json(csources, creader_opts_chunk, stream, mr));

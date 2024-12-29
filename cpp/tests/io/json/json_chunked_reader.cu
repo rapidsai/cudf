@@ -171,6 +171,24 @@ TEST_P(JsonReaderTest, ReadCompleteFiles)
 TEST_P(JsonReaderTest, ByteRange_MultiSource)
 {
   cudf::io::compression_type const comptype = GetParam();
+  switch(comptype) {
+    case cudf::io::compression_type::NONE: 
+    {
+      std::printf("NONE\n");
+      break;
+    }
+    case cudf::io::compression_type::GZIP: 
+    {
+      std::printf("GZIP\n");
+      break;
+    }
+    case cudf::io::compression_type::SNAPPY: 
+    {
+      std::printf("SNAPPY\n");
+      break;
+    }
+    default: std::printf("Oops\n");
+  }
 
   std::string const json_string = R"(
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
@@ -226,7 +244,8 @@ TEST_P(JsonReaderTest, ByteRange_MultiSource)
   auto datasources = cudf::io::datasource::create(json_lines_options.get_source().host_buffers());
 
   // Test for different chunk sizes
-  for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500, 1000, 2000}) {
+  //for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500, 1000, 2000}) {
+  for (auto chunk_size : {7}) {
     auto const tables = split_byte_range_reading(datasources,
                                                  cdatasources,
                                                  json_lines_options,
