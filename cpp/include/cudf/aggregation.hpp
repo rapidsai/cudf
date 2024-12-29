@@ -601,7 +601,7 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            data_type output_type);
 
 // Forward declaration of `host_udf_base` for the factory function of `HOST_UDF` aggregation.
-struct host_udf_base;
+class host_udf_base;
 
 /**
  * @brief Factory to create a HOST_UDF aggregation.
