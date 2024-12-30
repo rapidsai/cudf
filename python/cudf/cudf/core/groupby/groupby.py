@@ -418,6 +418,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     _VALID_SCANS = {
         "cumsum",
+        "cumprod",
         "cummin",
         "cummax",
     }
@@ -425,6 +426,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     # Necessary because the function names don't directly map to the docs.
     _SCAN_DOCSTRINGS = {
         "cumsum": {"op_name": "Cumulative sum"},
+        "cumprod": {"op_name": "Cumulative product"},
         "cummin": {"op_name": "Cumulative min"},
         "cummax": {"op_name": "Cumulative max"},
     }

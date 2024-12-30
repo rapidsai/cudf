@@ -2472,16 +2472,25 @@ def test_groupby_unique(by, data, dtype):
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
     expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
+    gdf = cudf.from_pandas(pdf)
+    got_df = gdf.groupby(["x", "y"], sort=True).agg(func)
     # pd.groupby.cumcount returns a series.
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
 
     check_dtype = func not in _index_type_aggs
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True), func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True), func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
