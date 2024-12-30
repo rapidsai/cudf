@@ -2970,7 +2970,7 @@ class TimedeltaIndex(Index):
 
         This method is currently not implemented.
         """
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._column.total_seconds(), name=self.name
         )
 
