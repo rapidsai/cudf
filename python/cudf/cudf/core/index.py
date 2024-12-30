@@ -2964,7 +2964,7 @@ class TimedeltaIndex(Index):
     def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
         return self._column.std(skipna=skipna, ddof=ddof)
 
-    def total_seconds(self) -> cupy.ndarray:
+    def total_seconds(self) -> Index:
         """
         Return total duration of each element expressed in seconds.
 
