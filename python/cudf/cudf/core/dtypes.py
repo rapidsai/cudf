@@ -57,7 +57,8 @@ def dtype(arbitrary):
         if np_dtype.kind in set("OU"):
             return np.dtype("object")
         elif (
-            np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+            np_dtype
+            not in cudf.utils.dtypes.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
         ):
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype

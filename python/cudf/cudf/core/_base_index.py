@@ -10,7 +10,6 @@ import pandas as pd
 from typing_extensions import Self
 
 import cudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core._internals import copying
@@ -24,7 +23,11 @@ from cudf.core.column import ColumnBase, column
 from cudf.core.copy_types import GatherMap
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
-from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    can_convert_to_column,
+    is_mixed_with_object_dtype,
+)
 from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
@@ -2047,7 +2050,7 @@ class BaseIndex(Serializable):
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if gather_map.dtype.kind not in "iu":
-            gather_map = gather_map.astype(size_type_dtype)
+            gather_map = gather_map.astype(SIZE_TYPE_DTYPE)
 
         GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(

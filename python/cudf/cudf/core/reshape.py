@@ -12,13 +12,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.utils.dtypes import min_unsigned_type
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, min_unsigned_type
 
 if TYPE_CHECKING:
     from cudf._typing import Dtype
@@ -1333,10 +1332,10 @@ def _one_hot_encode_column(
         else:
             column = column._get_decategorized_column()  # type: ignore[attr-defined]
 
-    if column.size * categories.size >= np.iinfo(size_type_dtype).max:
+    if column.size * categories.size >= np.iinfo(SIZE_TYPE_DTYPE).max:
         raise ValueError(
             "Size limitation exceeded: column.size * category.size < "
-            f"np.iinfo({size_type_dtype}).max. Consider reducing "
+            f"np.iinfo({SIZE_TYPE_DTYPE}).max. Consider reducing "
             "size of category"
         )
     result_labels = (

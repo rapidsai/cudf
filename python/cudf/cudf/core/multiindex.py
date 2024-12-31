@@ -17,7 +17,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype, is_scalar
 from cudf.core import column
@@ -34,7 +33,7 @@ from cudf.core.index import (
     ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
-from cudf.utils.dtypes import is_column_like
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_column_like
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
@@ -199,7 +198,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     )
                 if lo == -1:
                     # Now we can gather and insert null automatically
-                    code[code == -1] = np.iinfo(size_type_dtype).min
+                    code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
             source_data[i] = result_col._with_type_metadata(level.dtype)
 
@@ -1571,11 +1570,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.MultiIndex:
-        # cudf uses np.iinfo(size_type_dtype).min as missing code
+        # cudf uses np.iinfo(SIZE_TYPE_DTYPE).min as missing code
         # pandas uses -1 as missing code
         pd_codes = (
             code.find_and_replace(
-                column.as_column(np.iinfo(size_type_dtype).min, length=1),
+                column.as_column(np.iinfo(SIZE_TYPE_DTYPE).min, length=1),
                 column.as_column(-1, length=1),
             )
             for code in self._codes
@@ -1906,7 +1905,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         result = column.as_column(
             -1,
             length=len(target),
-            dtype=libcudf.types.size_type_dtype,
+            dtype=SIZE_TYPE_DTYPE,
         )
         if not len(self):
             return _return_get_indexer_result(result.values)
