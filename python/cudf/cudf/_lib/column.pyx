@@ -34,7 +34,7 @@ from cudf._lib.types cimport (
     dtype_to_pylibcudf_type,
 )
 
-from cudf._lib.types import dtype_from_pylibcudf_column
+from cudf._lib.types import PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES
 
 from pylibcudf cimport DataType as plc_DataType
 cimport pylibcudf.libcudf.copying as cpp_copying
@@ -62,6 +62,38 @@ cdef get_element(column_view col_view, size_type index):
     return DeviceScalar.from_unique_ptr(
         move(c_output), dtype=dtype_from_column_view(col_view)
     )
+
+
+def dtype_from_pylibcudf_column(col):
+    type_ = col.type()
+    tid = type_.id()
+
+    if tid == plc.TypeId.LIST:
+        child = col.list_view().child()
+        return cudf.ListDtype(dtype_from_pylibcudf_column(child))
+    elif tid == plc.TypeId.STRUCT:
+        fields = {
+            str(i): dtype_from_pylibcudf_column(col.child(i))
+            for i in range(col.num_children())
+        }
+        return cudf.StructDtype(fields)
+    elif tid == plc.TypeId.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == plc.TypeId.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == plc.TypeId.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
 
 
 cdef class Column:

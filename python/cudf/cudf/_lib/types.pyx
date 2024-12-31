@@ -12,6 +12,7 @@ from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 import pylibcudf as plc
 
 import cudf
+from cudf.utils.dtypes import _get_base_dtype
 
 
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
@@ -117,56 +118,7 @@ cpdef dtype_to_pylibcudf_type(dtype):
         return plc.DataType(tid, -dtype.scale)
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
-        dtype = np.dtype(f"<M8[{dtype.unit}]")
+        dtype = _get_base_dtype(dtype)
     else:
         dtype = np.dtype(dtype)
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
-
-
-def dtype_from_pylibcudf_lists_column(col):
-    child = col.list_view().child()
-    tid = child.type().id()
-
-    if tid == plc.TypeId.LIST:
-        return cudf.ListDtype(dtype_from_pylibcudf_lists_column(child))
-    elif tid == plc.TypeId.EMPTY:
-        return cudf.ListDtype("int8")
-    else:
-        return cudf.ListDtype(
-            dtype_from_pylibcudf_column(child)
-        )
-
-
-def dtype_from_pylibcudf_structs_column(col):
-    fields = {
-        str(i): dtype_from_pylibcudf_column(col.child(i))
-        for i in range(col.num_children())
-    }
-    return cudf.StructDtype(fields)
-
-
-def dtype_from_pylibcudf_column(col):
-    type_ = col.type()
-    tid = type_.id()
-
-    if tid == plc.TypeId.LIST:
-        return dtype_from_pylibcudf_lists_column(col)
-    elif tid == plc.TypeId.STRUCT:
-        return dtype_from_pylibcudf_structs_column(col)
-    elif tid == plc.TypeId.DECIMAL64:
-        return cudf.Decimal64Dtype(
-            precision=cudf.Decimal64Dtype.MAX_PRECISION,
-            scale=-type_.scale()
-        )
-    elif tid == plc.TypeId.DECIMAL32:
-        return cudf.Decimal32Dtype(
-            precision=cudf.Decimal32Dtype.MAX_PRECISION,
-            scale=-type_.scale()
-        )
-    elif tid == plc.TypeId.DECIMAL128:
-        return cudf.Decimal128Dtype(
-            precision=cudf.Decimal128Dtype.MAX_PRECISION,
-            scale=-type_.scale()
-        )
-    else:
-        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
