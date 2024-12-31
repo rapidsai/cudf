@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import functools
+import math
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -37,20 +38,6 @@ _unit_to_nanoseconds_conversion = {
     "m": 60_000_000_000,
     "h": 3_600_000_000_000,
     "D": 86_400_000_000_000,
-}
-
-_dtype_total_seconds_factor = {
-    np.dtype("timedelta64[s]"): 1.0,
-    np.dtype("timedelta64[ms]"): 1e-3,
-    np.dtype("timedelta64[us]"): 1e-6,
-    np.dtype("timedelta64[ns]"): 1e-9,
-}
-
-_dtype_total_seconds_decimal_round = {
-    np.dtype("timedelta64[s]"): 1,
-    np.dtype("timedelta64[ms]"): 3,
-    np.dtype("timedelta64[us]"): 6,
-    np.dtype("timedelta64[ns]"): 9,
 }
 
 
@@ -277,9 +264,15 @@ class TimeDeltaColumn(ColumnBase):
         return np.datetime_data(self.dtype)[0]
 
     def total_seconds(self) -> ColumnBase:
+        conversion = _unit_to_nanoseconds_conversion[self.time_unit] / 1e9
+        # Typecast to decimal128 to avoid floating point precision issues
+        # https://github.com/rapidsai/cudf/issues/17664
         return (
-            self.astype("int64") * _dtype_total_seconds_factor[self.dtype]
-        ).round(decimals=_dtype_total_seconds_decimal_round[self.dtype])
+            (self.astype("int64") * conversion)
+            .astype(cudf.Decimal128Dtype(38, 9))
+            .round(decimals=abs(int(math.log10(conversion))))
+            .astype("float64")
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")

@@ -1522,12 +1522,6 @@ def test_timedelta_series_total_seconds(data, dtype):
 @pytest.mark.parametrize("data", _TIMEDELTA_DATA)
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_index_total_seconds(request, data, dtype):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(1132.324 in data and dtype == "timedelta64[ms]"),
-            reason="https://github.com/rapidsai/cudf/issues/17664",
-        )
-    )
     gi = cudf.Index(data, dtype=dtype)
     pi = gi.to_pandas()
 
