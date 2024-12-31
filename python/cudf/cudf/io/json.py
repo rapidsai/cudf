@@ -14,10 +14,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type
 from cudf.core.buffer import acquire_spill_lock
 from cudf.utils import ioutils
-from cudf.utils.dtypes import _maybe_convert_to_default_type
+from cudf.utils.dtypes import (
+    _maybe_convert_to_default_type,
+    dtype_to_pylibcudf_type,
+)
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase

@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
-import pandas as pd
 
 from libcpp.memory cimport make_shared, shared_ptr
 
@@ -12,7 +11,6 @@ from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 import pylibcudf as plc
 
 import cudf
-from cudf.utils.dtypes import _get_base_dtype
 
 
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
@@ -61,26 +59,19 @@ cdef dtype_from_lists_column_view(column_view cv):
 
     if child.type().id() == libcudf_types.type_id.LIST:
         return cudf.ListDtype(dtype_from_lists_column_view(child))
-    elif child.type().id() == libcudf_types.type_id.EMPTY:
-        return cudf.ListDtype("int8")
     else:
-        return cudf.ListDtype(
-            dtype_from_column_view(child)
-        )
-
-cdef dtype_from_structs_column_view(column_view cv):
-    fields = {
-        str(i): dtype_from_column_view(cv.child(i))
-        for i in range(cv.num_children())
-    }
-    return cudf.StructDtype(fields)
+        return cudf.ListDtype(dtype_from_column_view(child))
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:
         return dtype_from_lists_column_view(cv)
     elif tid == libcudf_types.type_id.STRUCT:
-        return dtype_from_structs_column_view(cv)
+        fields = {
+            str(i): dtype_from_column_view(cv.child(i))
+            for i in range(cv.num_children())
+        }
+        return cudf.StructDtype(fields)
     elif tid == libcudf_types.type_id.DECIMAL64:
         return cudf.Decimal64Dtype(
             precision=cudf.Decimal64Dtype.MAX_PRECISION,
@@ -100,25 +91,3 @@ cdef dtype_from_column_view(column_view cv):
         return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
             <underlying_type_t_type_id>(tid)
         ]
-
-
-cpdef dtype_to_pylibcudf_type(dtype):
-    if isinstance(dtype, cudf.ListDtype):
-        return plc.DataType(plc.TypeId.LIST)
-    elif isinstance(dtype, cudf.StructDtype):
-        return plc.DataType(plc.TypeId.STRUCT)
-    elif isinstance(dtype, cudf.Decimal128Dtype):
-        tid = plc.TypeId.DECIMAL128
-        return plc.DataType(tid, -dtype.scale)
-    elif isinstance(dtype, cudf.Decimal64Dtype):
-        tid = plc.TypeId.DECIMAL64
-        return plc.DataType(tid, -dtype.scale)
-    elif isinstance(dtype, cudf.Decimal32Dtype):
-        tid = plc.TypeId.DECIMAL32
-        return plc.DataType(tid, -dtype.scale)
-    # libcudf types don't support timezones so convert to the base type
-    elif isinstance(dtype, pd.DatetimeTZDtype):
-        dtype = _get_base_dtype(dtype)
-    else:
-        dtype = np.dtype(dtype)
-    return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])

@@ -11,6 +11,8 @@ import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
 
+import pylibcudf as plc
+
 import cudf
 
 if TYPE_CHECKING:
@@ -602,6 +604,30 @@ def _get_base_dtype(dtype: pd.DatetimeTZDtype) -> np.dtype:
         return np.dtype(f"<M8[{dtype.unit}]")
     else:
         return dtype.base
+
+
+def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
+    if isinstance(dtype, cudf.ListDtype):
+        return plc.DataType(plc.TypeId.LIST)
+    elif isinstance(dtype, cudf.StructDtype):
+        return plc.DataType(plc.TypeId.STRUCT)
+    elif isinstance(dtype, cudf.Decimal128Dtype):
+        tid = plc.TypeId.DECIMAL128
+        return plc.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.Decimal64Dtype):
+        tid = plc.TypeId.DECIMAL64
+        return plc.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.Decimal32Dtype):
+        tid = plc.TypeId.DECIMAL32
+        return plc.DataType(tid, -dtype.scale)
+    # libcudf types don't support timezones so convert to the base type
+    elif isinstance(dtype, pd.DatetimeTZDtype):
+        dtype = _get_base_dtype(dtype)
+    else:
+        dtype = np.dtype(dtype)
+    return plc.DataType(
+        cudf._lib.types.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype]
+    )
 
 
 # Type dispatch loops similar to what are found in `np.add.types`

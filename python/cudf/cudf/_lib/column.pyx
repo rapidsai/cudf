@@ -19,7 +19,7 @@ from cudf.core.buffer import (
     as_buffer,
     cuda_array_interface_wrapper,
 )
-from cudf.utils.dtypes import _get_base_dtype
+from cudf.utils.dtypes import _get_base_dtype, dtype_to_pylibcudf_type
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -29,10 +29,7 @@ from libcpp.vector cimport vector
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
-from cudf._lib.types cimport (
-    dtype_from_column_view,
-    dtype_to_pylibcudf_type,
-)
+from cudf._lib.types cimport dtype_from_column_view
 
 from cudf._lib.types import PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES
 
@@ -68,26 +65,26 @@ def dtype_from_pylibcudf_column(col):
     type_ = col.type()
     tid = type_.id()
 
-    if tid == plc.TypeId.LIST:
+    if tid == pylibcudf.TypeId.LIST:
         child = col.list_view().child()
         return cudf.ListDtype(dtype_from_pylibcudf_column(child))
-    elif tid == plc.TypeId.STRUCT:
+    elif tid == pylibcudf.TypeId.STRUCT:
         fields = {
             str(i): dtype_from_pylibcudf_column(col.child(i))
             for i in range(col.num_children())
         }
         return cudf.StructDtype(fields)
-    elif tid == plc.TypeId.DECIMAL64:
+    elif tid == pylibcudf.TypeId.DECIMAL64:
         return cudf.Decimal64Dtype(
             precision=cudf.Decimal64Dtype.MAX_PRECISION,
             scale=-type_.scale()
         )
-    elif tid == plc.TypeId.DECIMAL32:
+    elif tid == pylibcudf.TypeId.DECIMAL32:
         return cudf.Decimal32Dtype(
             precision=cudf.Decimal32Dtype.MAX_PRECISION,
             scale=-type_.scale()
         )
-    elif tid == plc.TypeId.DECIMAL128:
+    elif tid == pylibcudf.TypeId.DECIMAL128:
         return cudf.Decimal128Dtype(
             precision=cudf.Decimal128Dtype.MAX_PRECISION,
             scale=-type_.scale()
@@ -456,7 +453,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef plc_DataType dtype = dtype_to_pylibcudf_type(data_dtype)
+        cdef plc_DataType dtype = <plc_DataType>dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data

@@ -11,11 +11,11 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.index import _index_from_data
 from cudf.utils import ioutils
+from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
 try:
     import ujson as json  # type: ignore[import-untyped]

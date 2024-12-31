@@ -26,7 +26,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
+from cudf._lib.types import size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
@@ -64,6 +64,7 @@ from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
     get_time_unit,
     is_column_like,
