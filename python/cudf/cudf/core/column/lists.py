@@ -274,7 +274,7 @@ class ListColumn(ColumnBase):
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.to_pylibcudf(mode="read"),
-                cudf.Scalar("None").device_value.c_value,
+                cudf.Scalar("None").device_value,
                 separators.to_pylibcudf(mode="read"),
             )
             return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
@@ -384,7 +384,7 @@ class ListColumn(ColumnBase):
         return type(self).from_pylibcudf(
             plc.lists.contains(
                 self.to_pylibcudf(mode="read"),
-                search_key.device_value.c_value,
+                search_key.device_value,
             )
         )
 
@@ -393,7 +393,7 @@ class ListColumn(ColumnBase):
         return type(self).from_pylibcudf(
             plc.lists.index_of(
                 self.to_pylibcudf(mode="read"),
-                search_key.device_value.c_value,
+                search_key.device_value,
                 plc.lists.DuplicateFindOption.FIND_FIRST,
             )
         )

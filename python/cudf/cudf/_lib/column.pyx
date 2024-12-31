@@ -841,6 +841,6 @@ cdef class Column:
     def from_scalar(py_val, size_type size):
         return Column.from_pylibcudf(
             pylibcudf.Column.from_scalar(
-                py_val.device_value.c_value, size
+                py_val.device_value, size
             )
         )

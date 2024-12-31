@@ -240,8 +240,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            cudf.Scalar(lo, self.dtype).device_value.c_value,
-            cudf.Scalar(hi, self.dtype).device_value.c_value,
+            cudf.Scalar(lo, self.dtype).device_value,
+            cudf.Scalar(hi, self.dtype).device_value,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -418,7 +418,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                         self.to_pylibcudf(mode="read"),
                         begin,
                         end,
-                        slr.device_value.c_value,
+                        slr.device_value,
                     )
                 )
             if is_string_dtype(self.dtype):
@@ -438,7 +438,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 self.to_pylibcudf(mode="write"),
                 begin,
                 end,
-                slr.device_value.c_value,
+                slr.device_value,
             )
         return self
 
@@ -449,7 +449,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         plc_col = plc.copying.shift(
             self.to_pylibcudf(mode="read"),
             offset,
-            fill_value.device_value.c_value,
+            fill_value.device_value,
         )
         return type(self).from_pylibcudf(plc_col)  # type: ignore[return-value]
 
@@ -718,7 +718,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 plc_table = plc.copying.boolean_mask_scatter(
                     plc.Table([value.to_pylibcudf(mode="read")])
                     if isinstance(value, Column)
-                    else [value.device_value.c_value],
+                    else [value.device_value],
                     plc.Table([self.to_pylibcudf(mode="read")]),
                     key.to_pylibcudf(mode="read"),
                 )
@@ -800,7 +800,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     else plc.replace.ReplacePolicy.FOLLOWING
                 )
             elif is_scalar(fill_value):
-                plc_replace = cudf.Scalar(fill_value).device_value.c_value
+                plc_replace = cudf.Scalar(fill_value).device_value
             else:
                 plc_replace = fill_value.to_pylibcudf(mode="read")
             plc_column = plc.replace.replace_nulls(
@@ -1580,7 +1580,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.copying.copy_if_else(
                 self.to_pylibcudf(mode="read"),
-                other.device_value.c_value
+                other.device_value
                 if isinstance(other, cudf.Scalar)
                 else other.to_pylibcudf(mode="read"),
                 boolean_mask.to_pylibcudf(mode="read"),

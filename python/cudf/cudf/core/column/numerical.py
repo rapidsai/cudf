@@ -382,12 +382,8 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
-                true_string=cudf.Scalar(
-                    "True", dtype="str"
-                ).device_value.c_value,
-                false_string=cudf.Scalar(
-                    "False", dtype="str"
-                ).device_value.c_value,
+                true_string=cudf.Scalar("True", dtype="str").device_value,
+                false_string=cudf.Scalar("False", dtype="str").device_value,
             )
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers

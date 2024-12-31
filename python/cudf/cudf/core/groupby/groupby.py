@@ -852,7 +852,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
             [periods] * len(values),
             [
-                cudf.Scalar(val, dtype=col.dtype).device_value.c_value
+                cudf.Scalar(val, dtype=col.dtype).device_value
                 for val, col in zip(fill_values, values)
             ],
         )
