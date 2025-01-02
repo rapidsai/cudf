@@ -82,10 +82,9 @@ struct output_fn {
 }  // namespace
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
-                                       bool has_nulls,
                                        cudf::null_equality compare_nulls,
                                        rmm::cuda_stream_view stream)
-  : _has_nulls{has_nulls},
+  : _has_nulls{cudf::has_nested_nulls(build)},
     _has_nested_columns{cudf::has_nested_columns(build)},
     _nulls_equal{compare_nulls},
     _build{build},
@@ -157,7 +156,8 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
 
   auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
+  auto const has_nulls        = _has_nulls or cudf::has_nested_nulls(probe);
+  auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
   auto const iter             = cudf::detail::make_counting_transform_iterator(
     0, build_keys_fn<lhs_index_type>{d_probe_hasher});
 
@@ -195,11 +195,11 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
 
   if (_has_nested_columns) {
     auto const device_comparator =
-      two_table_equal.equal_to<true>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+      two_table_equal.equal_to<true>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
     comparator_helper(device_comparator);
   } else {
     auto const device_comparator =
-      two_table_equal.equal_to<false>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+      two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
     comparator_helper(device_comparator);
   }
 
@@ -255,8 +255,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
       preprocessed_probe, _preprocessed_build);
 
     auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
-    auto const iter           = cudf::detail::make_counting_transform_iterator(
+    auto const has_nulls        = _has_nulls or cudf::has_nested_nulls(probe);
+    auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
+    auto const iter             = cudf::detail::make_counting_transform_iterator(
       0, build_keys_fn<lhs_index_type>{d_probe_hasher});
 
     auto const output_begin =
@@ -289,11 +290,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
 
     if (_has_nested_columns) {
       auto const device_comparator =
-        two_table_equal.equal_to<true>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+        two_table_equal.equal_to<true>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
       comparator_helper(device_comparator);
     } else {
       auto const device_comparator =
-        two_table_equal.equal_to<false>(nullate::DYNAMIC{_has_nulls}, _nulls_equal);
+        two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
       comparator_helper(device_comparator);
     }
   }
@@ -305,11 +306,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
 distinct_hash_join::~distinct_hash_join() = default;
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
-                                       nullable_join has_nulls,
                                        null_equality compare_nulls,
                                        rmm::cuda_stream_view stream)
-  : _impl{
-      std::make_unique<impl_type>(build, has_nulls == nullable_join::YES, compare_nulls, stream)}
+  : _impl{std::make_unique<impl_type>(build, compare_nulls, stream)}
 {
 }
 

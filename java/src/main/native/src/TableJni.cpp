@@ -2901,10 +2901,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMap
     j_right_keys,
     compare_nulls_equal,
     [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-                         ? cudf::nullable_join::YES
-                         : cudf::nullable_join::NO;
-      cudf::distinct_hash_join hash(right, has_nulls, nulleq);
+      cudf::distinct_hash_join hash(right, nulleq);
       return hash.left_join(left);
     });
 }
@@ -3114,13 +3111,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMa
     j_right_keys,
     compare_nulls_equal,
     [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-                         ? cudf::nullable_join::YES
-                         : cudf::nullable_join::NO;
       std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
         maps;
-      cudf::distinct_hash_join hash(right, has_nulls, nulleq);
+      cudf::distinct_hash_join hash(right, nulleq);
       return hash.inner_join(left);
     });
 }

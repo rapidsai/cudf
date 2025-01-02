@@ -89,7 +89,7 @@ TEST_F(DistinctJoinTest, IntegerInnerJoin)
   auto build_table = cudf::table_view{{build->view()}};
   auto probe_table = cudf::table_view{{probe->view()}};
 
-  auto distinct_join = cudf::distinct_hash_join{build_table, cudf::nullable_join::NO};
+  auto distinct_join = cudf::distinct_hash_join{build_table};
 
   auto result = distinct_join.inner_join(probe_table);
 

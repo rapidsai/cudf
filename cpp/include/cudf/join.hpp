@@ -487,13 +487,10 @@ class distinct_hash_join {
    * @brief Constructs a distinct hash join object for subsequent probe calls
    *
    * @param build The build table that contains distinct elements
-   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
-   *        any `probe` table that will be used later for join
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   distinct_hash_join(cudf::table_view const& build,
-                     nullable_join has_nulls      = nullable_join::YES,
                      null_equality compare_nulls  = null_equality::EQUAL,
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 

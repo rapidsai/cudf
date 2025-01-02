@@ -101,13 +101,10 @@ class distinct_hash_join {
    * @throw cudf::logic_error if the number of columns in `build` table is 0.
    *
    * @param build The build table, from which the hash table is built
-   * @param has_nulls Flag to indicate if any nulls exist in the `build` table or
-   *        any `probe` table that will be used later for join.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   distinct_hash_join(cudf::table_view const& build,
-                     bool has_nulls,
                      cudf::null_equality compare_nulls,
                      rmm::cuda_stream_view stream);
 
@@ -141,7 +138,7 @@ class distinct_hash_join {
                                            cudf::detail::cuco_allocator<char>,
                                            cuco_storage_type>;
 
-  bool _has_nulls;           ///< True if nulls are present in either build table or probe table
+  bool _has_nulls;           ///< True if nulls are present in the build table
   bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
   cudf::null_equality _nulls_equal;  ///< Whether to consider nulls as equal
   cudf::table_view _build;           ///< Input table to build the hash map
