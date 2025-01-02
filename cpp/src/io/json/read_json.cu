@@ -129,7 +129,7 @@ class compressed_host_buffer_source final : public datasource {
     return pools::tpool.submit_task([this, offset, size] { return host_read(offset, size); });
   }
 
-  [[nodiscard]] bool supports_device_read() const override { return false; }
+  [[nodiscard]] bool supports_device_read() const override { return true; }
 
   [[nodiscard]] bool supports_multithreaded_host_read() const override { return true; }
 
@@ -466,11 +466,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
   // delimiter.
   auto constexpr num_delimiter_chars = 1;
-  /*
-  std::vector<std::future<size_t>> thread_tasks;
-  bool is_multithreading = false;
-  */
-  std::vector<std::future<std::unique_ptr<datasource::buffer>>> thread_tasks;
+  std::vector<std::future<std::unique_ptr<datasource::buffer>>> host_thread_tasks;
+  std::vector<std::future<size_t>> device_thread_tasks;
 
   auto delimiter_map = cudf::detail::make_empty_host_vector<std::size_t>(sources.size(), stream);
   std::vector<std::size_t> prefsum_source_sizes(sources.size());
@@ -493,9 +490,11 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
                        (num_delimiter_chars * delimiter_map.size());
     if (sources[i]->supports_device_read()) {
-      bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
+      device_thread_tasks.emplace_back(sources[i]->device_read_async(
+        range_offset, data_size, destination, pools::spool.get_stream()));
+      bytes_read += data_size;
     } else if (sources[i]->supports_multithreaded_host_read()) {
-      thread_tasks.emplace_back(sources[i]->host_read_async(range_offset, data_size));
+      host_thread_tasks.emplace_back(sources[i]->host_read_async(range_offset, data_size));
       bytes_read += data_size;
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
@@ -523,10 +522,19 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                     d_delimiter_map.data(),
                     buffer.data());
   }
-  if (thread_tasks.size()) {
+  stream.synchronize();
+
+  if (device_thread_tasks.size()) {
+    long unsigned const bytes_read = std::accumulate(
+      device_thread_tasks.begin(), device_thread_tasks.end(), 0, [](size_t sum, auto& task) {
+        return sum + task.get();
+      });
+    CUDF_EXPECTS(bytes_read == total_bytes_to_read, "something's fishy");
+  }
+  if (host_thread_tasks.size()) {
     size_t bytes_read = 0;
-    for (size_t i = 0; i < thread_tasks.size(); i++) {
-      auto hbuf = thread_tasks[i].get();
+    for (size_t i = 0; i < host_thread_tasks.size(); i++) {
+      auto hbuf = host_thread_tasks[i].get();
       auto destination =
         reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read + (num_delimiter_chars * i);
       CUDF_CUDA_TRY(cudaMemcpyAsync(destination,
@@ -538,8 +546,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     }
     CUDF_EXPECTS(bytes_read == total_bytes_to_read, "something's fishy");
     CUDF_CUDA_TRY(cudaDeviceSynchronize());
-  } else
-    stream.synchronize();
+  }
 
   return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
 }
