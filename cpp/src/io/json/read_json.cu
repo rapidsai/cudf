@@ -107,21 +107,8 @@ class compressed_host_buffer_source final : public datasource {
 
   std::future<size_t> device_read_async(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
   {
-      /*
-      CUcontext ctx;
-      cuCtxCreate(&ctx, CU_CTX_SCHED_SPIN, 0);
-      cudaInitDevice(0, cudaDeviceScheduleSpin, cudaInitDeviceFlagsAreValid);
-      cudaSetDevice(0);
-      // cudaMemcpyAsync and stream synchronize...
-      cuCtxDestroy(ctx);
-      // TODO: there's a problem here. We ideally want to create a new context per thread and then have destroy it once the memcpy async is done
-      // it's strange that if we do the memcpy on the default stream then we are okay
-      // There's default stream per thread which we can explicitly invoke with cudaStreamPerThread without actually compiling with 
-      // --default-stream per-thread, but that would cause the stream tests to fail. How do we fix this?
-      // The straightforward way to enable multithreading for now is to take the host memory hit - dispatch host work in a virtual
-      // host_read_async function to create the uncompressed buffers. And then just do a batched memcpy.
-      */
-
+    // TODO: There's default stream per thread which we can explicitly invoke with cudaStreamPerThread without actually compiling with 
+    // --default-stream per-thread, but that would cause the stream tests to fail. How do we fix this?
     return pools::tpool.submit_task([this, offset, size, dst] {
       auto hbuf = host_read(offset, size);
       CUDF_CUDA_TRY(cudaMemcpyAsync(dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, cudaStreamPerThread));
