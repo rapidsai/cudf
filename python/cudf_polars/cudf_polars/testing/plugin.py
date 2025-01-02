@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite setting GPU engine as default."""
@@ -140,6 +140,22 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func1-func1-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func1-func2-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/arithmetic/test_list_arithmetic.py::test_list_arithmetic_values[func1-func3-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_array.py::test_array_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_left-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_right-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_both-none]": "cudf-polars doesn't nullify division by zero",
+    "tests/unit/operations/arithmetic/test_list.py::test_list_arithmetic_values[exec_op_with_expr_no_type_coercion-broadcast_none-none]": "cudf-polars doesn't nullify division by zero",
     "tests/unit/operations/test_abs.py::test_abs_duration": "Need to raise for unsupported uops on timelike values",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input7-expected7-Float32-Float32]": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/operations/test_group_by.py::test_group_by_mean_by_dtype[input10-expected10-Date-output_dtype10]": "Unsupported groupby-agg for a particular dtype",
