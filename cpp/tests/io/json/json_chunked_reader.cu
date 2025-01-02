@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ TEST_P(JsonReaderTest, ReadCompleteFiles)
 TEST_P(JsonReaderTest, ByteRange_MultiSource)
 {
   cudf::io::compression_type const comptype = GetParam();
-  std::string const json_string = R"(
+  std::string const json_string             = R"(
     { "a": { "y" : 6}, "b" : [1, 2, 3], "c": 11 }
     { "a": { "y" : 6}, "b" : [4, 5   ], "c": 12 }
     { "a": { "y" : 6}, "b" : [6      ], "c": 13 }

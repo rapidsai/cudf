@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,16 +48,16 @@ namespace cudf::io::json::detail {
 namespace {
 
 namespace pools {
-  BS::thread_pool tpool(std::thread::hardware_concurrency());
-  rmm::cuda_stream_pool spool(std::thread::hardware_concurrency());
-}
+BS::thread_pool tpool(std::thread::hardware_concurrency());
+rmm::cuda_stream_pool spool(std::thread::hardware_concurrency());
+}  // namespace pools
 
 class compressed_host_buffer_source final : public datasource {
  public:
   explicit compressed_host_buffer_source(std::unique_ptr<datasource> const& src,
                                          compression_type comptype)
     : _comptype{comptype}, _dbuf_ptr{src->host_read(0, src->size())}
-  { 
+  {
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
     if (_comptype == compression_type::GZIP || _comptype == compression_type::ZIP ||
@@ -105,23 +105,28 @@ class compressed_host_buffer_source final : public datasource {
     return std::make_unique<non_owning_buffer>(_decompressed_buffer.data() + offset, count);
   }
 
-  std::future<size_t> device_read_async(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
+  std::future<size_t> device_read_async(size_t offset,
+                                        size_t size,
+                                        uint8_t* dst,
+                                        rmm::cuda_stream_view stream) override
   {
-    // TODO: There's default stream per thread which we can explicitly invoke with cudaStreamPerThread without actually compiling with 
-    // --default-stream per-thread, but that would cause the stream tests to fail. How do we fix this?
+    // TODO: There's default stream per thread which we can explicitly invoke with
+    // cudaStreamPerThread without actually compiling with
+    // --default-stream per-thread, but that would cause the stream tests to fail. How do we fix
+    // this?
     return pools::tpool.submit_task([this, offset, size, dst] {
       auto hbuf = host_read(offset, size);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, cudaStreamPerThread));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, cudaStreamPerThread));
       CUDF_CUDA_TRY(cudaStreamSynchronize(cudaStreamPerThread));
       return hbuf->size();
     });
   }
 
-  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset, size_t size) override
+  std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                   size_t size) override
   {
-    return pools::tpool.submit_task([this, offset, size] {
-      return host_read(offset, size);
-    });
+    return pools::tpool.submit_task([this, offset, size] { return host_read(offset, size); });
   }
 
   [[nodiscard]] bool supports_device_read() const override { return false; }
@@ -518,20 +523,23 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                     d_delimiter_map.data(),
                     buffer.data());
   }
-  if(thread_tasks.size()) {
+  if (thread_tasks.size()) {
     size_t bytes_read = 0;
-    for(size_t i = 0; i < thread_tasks.size(); i++) {
+    for (size_t i = 0; i < thread_tasks.size(); i++) {
       auto hbuf = thread_tasks[i].get();
-      auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
-                         (num_delimiter_chars * i);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        destination, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, pools::spool.get_stream().value()));
+      auto destination =
+        reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read + (num_delimiter_chars * i);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(destination,
+                                    hbuf->data(),
+                                    hbuf->size(),
+                                    cudaMemcpyHostToDevice,
+                                    pools::spool.get_stream().value()));
       bytes_read += hbuf->size();
     }
     CUDF_EXPECTS(bytes_read == total_bytes_to_read, "something's fishy");
     CUDF_CUDA_TRY(cudaDeviceSynchronize());
-  }
-  else stream.synchronize();
+  } else
+    stream.synchronize();
 
   return buffer.first(bytes_read + (delimiter_map.size() * num_delimiter_chars));
 }
@@ -558,18 +566,17 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 
   std::vector<std::unique_ptr<datasource>> compressed_sources;
   std::vector<std::future<std::unique_ptr<compressed_host_buffer_source>>> thread_tasks;
-  for(auto &src : sources) {
-    thread_tasks.emplace_back(
-      pools::tpool.submit_task([&reader_opts, &src] {
-        auto compsrc = std::make_unique<compressed_host_buffer_source>(src, reader_opts.get_compression());
-        return compsrc;
-      })
-    );
+  for (auto& src : sources) {
+    thread_tasks.emplace_back(pools::tpool.submit_task([&reader_opts, &src] {
+      auto compsrc =
+        std::make_unique<compressed_host_buffer_source>(src, reader_opts.get_compression());
+      return compsrc;
+    }));
   }
-  std::transform(thread_tasks.begin(), thread_tasks.end(), std::back_inserter(compressed_sources), 
-    [](auto &task) {
-      return task.get();
-  });
+  std::transform(thread_tasks.begin(),
+                 thread_tasks.end(),
+                 std::back_inserter(compressed_sources),
+                 [](auto& task) { return task.get(); });
   // in read_json_impl, we need the compressed source size to actually be the
   // uncompressed source size for correct batching
   return read_json_impl(compressed_sources, reader_opts, stream, mr);

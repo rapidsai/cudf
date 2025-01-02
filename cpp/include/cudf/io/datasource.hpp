@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -181,9 +181,10 @@ class datasource {
 
   [[nodiscard]] virtual bool supports_multithreaded_host_read() const { return false; }
 
-  virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset, size_t size)
+  virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                           size_t size)
   {
-    CUDF_FAIL("Datasource classes that supports asynchronous host reads need to override it"); 
+    CUDF_FAIL("Datasource classes that supports asynchronous host reads need to override it");
   }
 
   /**
