@@ -110,4 +110,4 @@ void compress(compression_type compression,
   rmm::cuda_stream_view stream);
 
 }  // namespace io::detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
