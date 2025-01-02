@@ -40,6 +40,7 @@ class Agg(Expr):
         self.dtype = dtype
         self.name = name
         self.options = options
+        self.is_pointwise = False
         self.children = children
         if name not in Agg._SUPPORTED:
             raise NotImplementedError(

@@ -12,9 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources column.pyx groupby.pyx interop.pyx scalar.pyx strings_udf.pyx types.pyx
-                   utils.pyx
-)
+set(cython_sources column.pyx scalar.pyx strings_udf.pyx types.pyx)
 set(linked_libraries cudf::cudf)
 
 rapids_cython_create_modules(
@@ -24,8 +22,3 @@ rapids_cython_create_modules(
 )
 
 target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
-target_include_directories(interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
-
-include(${rapids-cmake-dir}/export/find_package_root.cmake)
-include(../../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
-target_link_libraries(interop PUBLIC nanoarrow)
