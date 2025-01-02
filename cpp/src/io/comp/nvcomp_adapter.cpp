@@ -18,6 +18,7 @@
 
 #include "nvcomp_adapter.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
