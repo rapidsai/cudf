@@ -48,9 +48,7 @@ namespace cudf::io::json::detail {
 namespace {
 
 namespace pools {
-  BS::synced_stream sync_out;
   BS::thread_pool tpool(num_threads);
-  // TODO: replace this with fork_streams output
   rmm::cuda_stream_pool spool = rmm::cuda_stream_pool(num_threads);
 }
 
@@ -107,48 +105,23 @@ class compressed_host_buffer_source final : public datasource {
     return std::make_unique<non_owning_buffer>(_decompressed_buffer.data() + offset, count);
   }
 
-#if 0
   std::future<size_t> device_read_async(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
   {
-    return pools::tpool.submit_task([this, offset, size, dst, &stream] {
-      pools::sync_out.println("thread work begins\n");
-      auto hbuf = host_read(offset, size);
-      pools::sync_out.println("done with host read\n");
-
       /*
       CUcontext ctx;
       cuCtxCreate(&ctx, CU_CTX_SCHED_SPIN, 0);
-      */
+      cudaInitDevice(0, cudaDeviceScheduleSpin, cudaInitDeviceFlagsAreValid);
+      cudaSetDevice(0);
+      // cudaMemcpyAsync and stream synchronize...
+      cuCtxDestroy(ctx);
       // TODO: there's a problem here. We ideally want to create a new context per thread and then have destroy it once the memcpy async is done
       // it's strange that if we do the memcpy on the default stream then we are okay
       // There's default stream per thread which we can explicitly invoke with cudaStreamPerThread without actually compiling with 
       // --default-stream per-thread, but that would cause the stream tests to fail. How do we fix this?
       // The straightforward way to enable multithreading for now is to take the host memory hit - dispatch host work in a virtual
       // host_read_async function to create the uncompressed buffers. And then just do a batched memcpy.
+      */
 
-      auto err = cudaInitDevice(0, cudaDeviceScheduleSpin, cudaInitDeviceFlagsAreValid);
-      pools::sync_out.println("cuda error code: ", cudaGetErrorName(err));
-
-      err = cudaSetDevice(0);
-      pools::sync_out.println("cuda error code: ", cudaGetErrorName(err));
-
-      err = cudaMemcpyAsync(dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, stream);
-      pools::sync_out.println("cuda error code: ", cudaGetErrorName(err));
-
-      stream.synchronize();
-      //cuCtxDestroy(ctx);
-      err = cudaDeviceReset();
-      pools::sync_out.println("cuda error code: ", cudaGetErrorName(err));
-
-      pools::sync_out.println("after unsynchronized cudaMemcpyAsync\n");
-
-      return hbuf->size();
-    });
-  }
-#endif
-
-  std::future<size_t> device_read_async(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
-  {
     return pools::tpool.submit_task([this, offset, size, dst] {
       auto hbuf = host_read(offset, size);
       CUDF_CUDA_TRY(cudaMemcpyAsync(dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, cudaStreamPerThread));
