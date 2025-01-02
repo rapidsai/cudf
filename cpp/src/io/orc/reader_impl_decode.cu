@@ -269,7 +269,7 @@ rmm::device_buffer decompress_stripe_data(
                                                          num_uncompressed_blocks};
     device_span<device_span<uint8_t>> copy_out_view{inflate_out.data() + num_compressed_blocks,
                                                     num_uncompressed_blocks};
-    gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
+    cudf::io::detail::gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
   }
 
   // Copy without stream sync, thus need to wait for stream sync below to access.

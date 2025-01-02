@@ -23,6 +23,7 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "interop/decimal_conversion_utilities.cuh"
+#include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_gpu.hpp"

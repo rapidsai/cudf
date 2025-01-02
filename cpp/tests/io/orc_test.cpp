@@ -40,6 +40,8 @@
 #include <array>
 #include <type_traits>
 
+namespace nvcomp = cudf::io::detail::nvcomp;
+
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
   std::conditional_t<std::is_same_v<T, cudf::string_view>,
@@ -1135,7 +1137,7 @@ TEST_F(OrcReaderTest, SingleInputs)
 
 TEST_F(OrcReaderTest, zstdCompressionRegression)
 {
-  if (cudf::io::nvcomp::is_decompression_disabled(cudf::io::nvcomp::compression_type::ZSTD)) {
+  if (nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD)) {
     GTEST_SKIP() << "Newer nvCOMP version is required";
   }
 
@@ -1700,8 +1702,8 @@ TEST_F(OrcMetadataReaderTest, TestNested)
 
 TEST_F(OrcReaderTest, ZstdMaxCompressionRate)
 {
-  if (cudf::io::nvcomp::is_decompression_disabled(cudf::io::nvcomp::compression_type::ZSTD) or
-      cudf::io::nvcomp::is_compression_disabled(cudf::io::nvcomp::compression_type::ZSTD)) {
+  if (nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD) or
+      nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD)) {
     GTEST_SKIP() << "Newer nvCOMP version is required";
   }
 
