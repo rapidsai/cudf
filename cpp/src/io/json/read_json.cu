@@ -48,8 +48,8 @@ namespace cudf::io::json::detail {
 namespace {
 
 namespace pools {
-  BS::thread_pool tpool(num_threads);
-  rmm::cuda_stream_pool spool = rmm::cuda_stream_pool(num_threads);
+  BS::thread_pool tpool(std::thread::hardware_concurrency());
+  rmm::cuda_stream_pool spool(std::thread::hardware_concurrency());
 }
 
 class compressed_host_buffer_source final : public datasource {
@@ -340,14 +340,6 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
   auto buffer =
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
-
-  /*
-  auto h_buffer = cudf::detail::make_std_vector_sync(buffer, stream);
-  for(auto c : h_buffer) 
-    std::printf("%c", c);
-  std::printf("\n");
-  */
-
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
@@ -497,11 +489,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                        (num_delimiter_chars * delimiter_map.size());
     if (sources[i]->supports_device_read()) {
       bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
-      /*
-      is_multithreading = true;
-      thread_tasks.emplace_back(sources[i]->device_read_async(range_offset, data_size, destination, pools::spool.get_stream()));
-      bytes_read += data_size;
-      */
     } else if (sources[i]->supports_multithreaded_host_read()) {
       thread_tasks.emplace_back(sources[i]->host_read_async(range_offset, data_size));
       bytes_read += data_size;
@@ -531,14 +518,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                     d_delimiter_map.data(),
                     buffer.data());
   }
-  /*
-  if(is_multithreading) {
-    long unsigned const total_bytes_read = std::accumulate(thread_tasks.begin(), thread_tasks.end(), 0, [](auto sum, auto& task) {
-      return sum + task.get();
-    });
-    CUDF_EXPECTS(total_bytes_read == total_bytes_to_read, "something's fishy");
-  }
-  */
   if(thread_tasks.size()) {
     size_t bytes_read = 0;
     for(size_t i = 0; i < thread_tasks.size(); i++) {

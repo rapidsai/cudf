@@ -226,7 +226,6 @@ TEST_P(JsonReaderTest, ByteRange_MultiSource)
 
   // Test for different chunk sizes
   for (auto chunk_size : {7, 10, 15, 20, 40, 50, 100, 200, 500, 1000, 2000}) {
-  //for (auto chunk_size : {7}) {
     auto const tables = split_byte_range_reading(datasources,
                                                  cdatasources,
                                                  json_lines_options,
