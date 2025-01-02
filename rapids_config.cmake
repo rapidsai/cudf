@@ -12,6 +12,8 @@
 # the License.
 # =============================================================================
 file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" _rapids_version)
+set(rapids-cmake-repo "vyasr/rapids-cmake")
+set(rapids-cmake-branch "feat/logger")
 if(_rapids_version MATCHES [[^([0-9][0-9])\.([0-9][0-9])\.([0-9][0-9])]])
   set(RAPIDS_VERSION_MAJOR "${CMAKE_MATCH_1}")
   set(RAPIDS_VERSION_MINOR "${CMAKE_MATCH_2}")
