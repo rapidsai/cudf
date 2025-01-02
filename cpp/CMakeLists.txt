@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -277,7 +277,7 @@ rapids_cpm_init()
 # Not using rapids-cmake since we never want to find, always download.
 CPMAddPackage(
   NAME rapids_logger GITHUB_REPOSITORY rapidsai/rapids-logger GIT_SHALLOW FALSE GIT_TAG
-  c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55 VERSION c510947ae9d3a67530cfe3e5eaccb5a3b8ea0e55
+  1043e0f3989d75ad52f5212544b8154777e86fc9 VERSION 1043e0f3989d75ad52f5212544b8154777e86fc9
 )
 rapids_make_logger(cudf EXPORT_SET cudf-exports)
 
