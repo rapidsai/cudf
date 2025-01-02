@@ -47,6 +47,8 @@ namespace cudf {
 namespace detail {
 namespace {
 
+bool constexpr has_nulls = true;  ///< Always has nulls
+
 /**
  * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
  */
@@ -84,8 +86,7 @@ struct output_fn {
 distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
                                        cudf::null_equality compare_nulls,
                                        rmm::cuda_stream_view stream)
-  : _has_nulls{cudf::has_nested_nulls(build)},
-    _has_nested_columns{cudf::has_nested_columns(build)},
+  : _has_nested_columns{cudf::has_nested_columns(build)},
     _nulls_equal{compare_nulls},
     _build{build},
     _preprocessed_build{
@@ -107,7 +108,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
   if (this->_build.num_rows() == 0) { return; }
 
   auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
-  auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
+  auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
 
   auto const iter =
     cudf::detail::make_counting_transform_iterator(0, build_keys_fn<rhs_index_type>{d_hasher});
@@ -156,7 +157,6 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
 
   auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const has_nulls        = _has_nulls or cudf::has_nested_nulls(probe);
   auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
   auto const iter             = cudf::detail::make_counting_transform_iterator(
     0, build_keys_fn<lhs_index_type>{d_probe_hasher});
@@ -255,7 +255,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
       preprocessed_probe, _preprocessed_build);
 
     auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const has_nulls        = _has_nulls or cudf::has_nested_nulls(probe);
     auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
     auto const iter             = cudf::detail::make_counting_transform_iterator(
       0, build_keys_fn<lhs_index_type>{d_probe_hasher});

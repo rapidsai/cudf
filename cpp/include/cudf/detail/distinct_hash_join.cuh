@@ -138,7 +138,6 @@ class distinct_hash_join {
                                            cudf::detail::cuco_allocator<char>,
                                            cuco_storage_type>;
 
-  bool _has_nulls;           ///< True if nulls are present in the build table
   bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
   cudf::null_equality _nulls_equal;  ///< Whether to consider nulls as equal
   cudf::table_view _build;           ///< Input table to build the hash map
