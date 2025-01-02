@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import collections.abc
-import pickle
 import time
 import weakref
 from threading import RLock
@@ -366,7 +365,7 @@ class SpillableBufferOwner(BufferOwner):
             f"<{self.__class__.__name__} size={format_bytes(self._size)} "
             f"spillable={self.spillable} exposed={self.exposed} "
             f"num-spill-locks={len(self._spill_locks)} "
-            f"ptr={ptr_info} owner={repr(self._owner)}>"
+            f"ptr={ptr_info} owner={self._owner!r}>"
         )
 
 
@@ -415,8 +414,7 @@ class SpillableBuffer(ExposureTrackedBuffer):
         header: dict[str, Any] = {}
         frames: list[Buffer | memoryview]
         with self._owner.lock:
-            header["type-serialized"] = pickle.dumps(self.__class__)
-            header["owner-type-serialized"] = pickle.dumps(type(self._owner))
+            header["owner-type-serialized-name"] = type(self._owner).__name__
             header["frame_count"] = 1
             if self.is_spilled:
                 frames = [self.memoryview()]

@@ -48,13 +48,13 @@ std::vector<std::uint8_t> compress_gzip(host_span<uint8_t const> src)
   zs.avail_out = 0;
   zs.next_out  = nullptr;
 
-  int windowbits    = 15;
-  int gzip_encoding = 16;
-  int ret           = deflateInit2(
+  constexpr int windowbits    = 15;
+  constexpr int gzip_encoding = 16;
+  int ret                     = deflateInit2(
     &zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, windowbits | gzip_encoding, 8, Z_DEFAULT_STRATEGY);
   CUDF_EXPECTS(ret == Z_OK, "GZIP DEFLATE compression initialization failed.");
 
-  uint32_t estcomplen = deflateBound(&zs, src.size());
+  uint32_t const estcomplen = deflateBound(&zs, src.size());
   dst.resize(estcomplen);
   zs.avail_out = estcomplen;
   zs.next_out  = dst.data();
@@ -87,15 +87,14 @@ std::vector<std::uint8_t> compress_snappy(host_span<uint8_t const> src,
   outputs[0] = d_dst;
   outputs.host_to_device_async(stream);
 
-  cudf::detail::hostdevice_vector<cudf::io::compression_result> hd_status(1, stream);
+  cudf::detail::hostdevice_vector<compression_result> hd_status(1, stream);
   hd_status[0] = {};
   hd_status.host_to_device_async(stream);
 
   nvcomp::batched_compress(nvcomp::compression_type::SNAPPY, inputs, outputs, hd_status, stream);
 
   hd_status.device_to_host_sync(stream);
-  CUDF_EXPECTS(hd_status[0].status == cudf::io::compression_status::SUCCESS,
-               "snappy compression failed");
+  CUDF_EXPECTS(hd_status[0].status == compression_status::SUCCESS, "snappy compression failed");
   return cudf::detail::make_std_vector_sync<uint8_t>(d_dst, stream);
 }
 

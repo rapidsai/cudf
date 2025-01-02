@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ static const __device__ __constant__ int32_t powers_of_ten[10] = {
 
 struct get_period {
   template <typename T>
-  constexpr int32_t operator()()
+  int32_t operator()()
   {
     if constexpr (is_chrono<T>()) { return T::period::den; }
     CUDF_FAIL("Invalid, non chrono type");
@@ -42,7 +42,7 @@ struct get_period {
 /**
  * @brief Function that translates cuDF time unit to clock frequency
  */
-constexpr int32_t to_clockrate(type_id timestamp_type_id)
+inline int32_t to_clockrate(type_id timestamp_type_id)
 {
   return timestamp_type_id == type_id::EMPTY
            ? 0

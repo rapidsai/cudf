@@ -81,6 +81,14 @@ class BooleanFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self.is_pointwise = self.name not in (
+            BooleanFunction.Name.All,
+            BooleanFunction.Name.Any,
+            BooleanFunction.Name.IsDuplicated,
+            BooleanFunction.Name.IsFirstDistinct,
+            BooleanFunction.Name.IsLastDistinct,
+            BooleanFunction.Name.IsUnique,
+        )
         if self.name is BooleanFunction.Name.IsIn and not all(
             c.dtype == self.children[0].dtype for c in self.children
         ):
@@ -195,7 +203,7 @@ class BooleanFunction(Expr):
                 # If the input null count was non-zero, we must
                 # post-process the result to insert the correct value.
                 h_result = plc.interop.to_arrow(result).as_py()
-                if is_any and not h_result or not is_any and h_result:
+                if (is_any and not h_result) or (not is_any and h_result):
                     # Any                     All
                     # False || Null => Null   True && Null => Null
                     return Column(plc.Column.all_null_like(column.obj, 1))

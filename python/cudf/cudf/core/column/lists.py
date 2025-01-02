@@ -13,11 +13,11 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.strings.convert.convert_lists import format_list_column
+import cudf.core.column.column as column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
@@ -69,10 +69,7 @@ class ListColumn(ColumnBase):
 
     @cached_property
     def memory_usage(self):
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
         current_base_child = self.base_children[1]
         current_offset = self.offset
@@ -97,7 +94,7 @@ class ListColumn(ColumnBase):
         ) * current_base_child.dtype.itemsize
 
         if current_base_child.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+            n += plc.null_mask.bitmask_allocation_size_bytes(
                 current_base_child.size
             )
         return n
@@ -153,7 +150,7 @@ class ListColumn(ColumnBase):
         """
         return cast(NumericalColumn, self.children[0])
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         offsets = self.offsets.to_arrow()
         elements = (
             pa.nulls(len(self.elements))
@@ -163,7 +160,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = pa.py_buffer(self.mask.memoryview())
+            nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
@@ -190,8 +187,8 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def normalize_binop_value(self, other):
-        if not isinstance(other, ListColumn):
+    def normalize_binop_value(self, other) -> Self:
+        if not isinstance(other, type(self)):
             return NotImplemented
         return other
 
@@ -258,7 +255,7 @@ class ListColumn(ColumnBase):
             data=None,
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
-            mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
+            mask=as_column(mask_col).as_mask(),
             offset=0,
             null_count=0,
             children=(offset_col, data_col),
@@ -274,8 +271,13 @@ class ListColumn(ColumnBase):
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
 
-        # Call libcudf to format the list column
-        return format_list_column(lc, separators)
+        with acquire_spill_lock():
+            plc_column = plc.strings.convert.convert_lists.format_list_column(
+                lc.to_pylibcudf(mode="read"),
+                cudf.Scalar("None").device_value.c_value,
+                separators.to_pylibcudf(mode="read"),
+            )
+            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def _transform_leaves(self, func, *args, **kwargs) -> Self:
         # return a new list column with the same nested structure

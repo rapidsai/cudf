@@ -19,6 +19,7 @@
 #include "groupby/sort/group_reductions.hpp"
 
 #include <cudf/aggregation.hpp>
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -45,6 +46,42 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
+namespace {
+
+/**
+ * @brief Creates column views with only valid elements in both input column views
+ *
+ * @param column_0 The first column
+ * @param column_1 The second column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return tuple with new null mask (if null masks of input differ) and new column views
+ */
+auto column_view_with_common_nulls(column_view const& column_0,
+                                   column_view const& column_1,
+                                   rmm::cuda_stream_view stream)
+{
+  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}}, stream);
+  if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
+  auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
+    return column_view(col.type(),
+                       col.size(),
+                       col.head(),
+                       static_cast<cudf::bitmask_type const*>(nullmask),
+                       null_count,
+                       col.offset(),
+                       std::vector(col.child_begin(), col.child_end()));
+  };
+  auto new_column_0 = null_count == column_0.null_count()
+                        ? column_0
+                        : column_view_with_new_nullmask(column_0, new_nullmask.data(), null_count);
+  auto new_column_1 = null_count == column_1.null_count()
+                        ? column_1
+                        : column_view_with_new_nullmask(column_1, new_nullmask.data(), null_count);
+  return std::make_tuple(std::move(new_nullmask), new_column_0, new_column_1);
+}
+
+}  // namespace
+
 /**
  * @brief Functor to dispatch aggregation with
  *
@@ -170,13 +207,10 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
     } else {
       auto argmin_agg = make_argmin_aggregation();
       operator()<aggregation::ARGMIN>(*argmin_agg);
-      column_view argmin_result = cache.get_result(values, *argmin_agg);
+      column_view const argmin_result = cache.get_result(values, *argmin_agg);
 
-      // We make a view of ARGMIN result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMIN result corresponding
-      // to null values was initialized to ARGMIN_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
-      column_view null_removed_map(
+      // Compute the ARGMIN result without the null mask in the gather map.
+      column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
         static_cast<void const*>(argmin_result.template data<size_type>()),
@@ -212,13 +246,10 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
     } else {
       auto argmax_agg = make_argmax_aggregation();
       operator()<aggregation::ARGMAX>(*argmax_agg);
-      column_view argmax_result = cache.get_result(values, *argmax_agg);
+      column_view const argmax_result = cache.get_result(values, *argmax_agg);
 
-      // We make a view of ARGMAX result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMAX result corresponding
-      // to null values was initialized to ARGMAX_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
-      column_view null_removed_map(
+      // Compute the ARGMAX result without the null mask in the gather map.
+      column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
         static_cast<void const*>(argmax_result.template data<size_type>()),
@@ -248,8 +279,8 @@ void aggregate_result_functor::operator()<aggregation::MEAN>(aggregation const& 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::SUM>(*sum_agg);
   operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view sum_result   = cache.get_result(values, *sum_agg);
-  column_view count_result = cache.get_result(values, *count_agg);
+  column_view const sum_result   = cache.get_result(values, *sum_agg);
+  column_view const count_result = cache.get_result(values, *count_agg);
 
   // TODO (dm): Special case for timestamp. Add target_type_impl for it.
   //            Blocked until we support operator+ on timestamps
@@ -291,8 +322,8 @@ void aggregate_result_functor::operator()<aggregation::VARIANCE>(aggregation con
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
   operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view mean_result = cache.get_result(values, *mean_agg);
-  column_view group_sizes = cache.get_result(values, *count_agg);
+  column_view const mean_result = cache.get_result(values, *mean_agg);
+  column_view const group_sizes = cache.get_result(values, *count_agg);
 
   auto result = detail::group_var(get_grouped_values(),
                                   mean_result,
@@ -312,7 +343,7 @@ void aggregate_result_functor::operator()<aggregation::STD>(aggregation const& a
   auto& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
   auto var_agg  = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
-  column_view var_result = cache.get_result(values, *var_agg);
+  column_view const var_result = cache.get_result(values, *var_agg);
 
   auto result = cudf::detail::unary_operation(var_result, unary_operator::SQRT, stream, mr);
   cache.add_result(values, agg, std::move(result));
@@ -325,8 +356,8 @@ void aggregate_result_functor::operator()<aggregation::QUANTILE>(aggregation con
 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view group_sizes = cache.get_result(values, *count_agg);
-  auto& quantile_agg      = dynamic_cast<cudf::detail::quantile_aggregation const&>(agg);
+  column_view const group_sizes = cache.get_result(values, *count_agg);
+  auto& quantile_agg            = dynamic_cast<cudf::detail::quantile_aggregation const&>(agg);
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
@@ -346,7 +377,7 @@ void aggregate_result_functor::operator()<aggregation::MEDIAN>(aggregation const
 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view group_sizes = cache.get_result(values, *count_agg);
+  column_view const group_sizes = cache.get_result(values, *count_agg);
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
@@ -391,7 +422,7 @@ void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation 
   } else {
     CUDF_FAIL("Wrong count aggregation kind");
   }
-  column_view group_sizes = cache.get_result(values, *count_agg);
+  column_view const group_sizes = cache.get_result(values, *count_agg);
 
   cache.add_result(values,
                    agg,
@@ -565,38 +596,6 @@ void aggregate_result_functor::operator()<aggregation::MERGE_HISTOGRAM>(aggregat
 }
 
 /**
- * @brief Creates column views with only valid elements in both input column views
- *
- * @param column_0 The first column
- * @param column_1 The second column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return tuple with new null mask (if null masks of input differ) and new column views
- */
-auto column_view_with_common_nulls(column_view const& column_0,
-                                   column_view const& column_1,
-                                   rmm::cuda_stream_view stream)
-{
-  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}}, stream);
-  if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
-  auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
-    return column_view(col.type(),
-                       col.size(),
-                       col.head(),
-                       static_cast<cudf::bitmask_type const*>(nullmask),
-                       null_count,
-                       col.offset(),
-                       std::vector(col.child_begin(), col.child_end()));
-  };
-  auto new_column_0 = null_count == column_0.null_count()
-                        ? column_0
-                        : column_view_with_new_nullmask(column_0, new_nullmask.data(), null_count);
-  auto new_column_1 = null_count == column_1.null_count()
-                        ? column_1
-                        : column_view_with_new_nullmask(column_1, new_nullmask.data(), null_count);
-  return std::make_tuple(std::move(new_nullmask), new_column_0, new_column_1);
-}
-
-/**
  * @brief Perform covariance between two child columns of non-nullable struct column.
  *
  */
@@ -734,7 +733,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view valid_counts = cache.get_result(values, *count_agg);
+  column_view const valid_counts = cache.get_result(values, *count_agg);
 
   cache.add_result(values,
                    agg,
@@ -789,6 +788,65 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                                                               max_centroids,
                                                               stream,
                                                               mr));
+}
+
+template <>
+void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const& udf_ptr   = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+  auto const data_attrs = [&]() -> host_udf_base::data_attribute_set_t {
+    if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
+    // Empty attribute set means everything.
+    return {host_udf_base::groupby_data_attribute::INPUT_VALUES,
+            host_udf_base::groupby_data_attribute::GROUPED_VALUES,
+            host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
+            host_udf_base::groupby_data_attribute::NUM_GROUPS,
+            host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
+            host_udf_base::groupby_data_attribute::GROUP_LABELS};
+  }();
+
+  // Do not cache udf_input, as the actual input data may change from run to run.
+  host_udf_base::input_map_t udf_input;
+  for (auto const& attr : data_attrs) {
+    CUDF_EXPECTS(std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value) ||
+                   std::holds_alternative<std::unique_ptr<aggregation>>(attr.value),
+                 "Invalid input data attribute for HOST_UDF groupby aggregation.");
+    if (std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value)) {
+      switch (std::get<host_udf_base::groupby_data_attribute>(attr.value)) {
+        case host_udf_base::groupby_data_attribute::INPUT_VALUES:
+          udf_input.emplace(attr, values);
+          break;
+        case host_udf_base::groupby_data_attribute::GROUPED_VALUES:
+          udf_input.emplace(attr, get_grouped_values());
+          break;
+        case host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES:
+          udf_input.emplace(attr, get_sorted_values());
+          break;
+        case host_udf_base::groupby_data_attribute::NUM_GROUPS:
+          udf_input.emplace(attr, helper.num_groups(stream));
+          break;
+        case host_udf_base::groupby_data_attribute::GROUP_OFFSETS:
+          udf_input.emplace(attr, helper.group_offsets(stream));
+          break;
+        case host_udf_base::groupby_data_attribute::GROUP_LABELS:
+          udf_input.emplace(attr, helper.group_labels(stream));
+          break;
+        default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF groupby aggregation.");
+      }
+    } else {  // data is result from another aggregation
+      auto other_agg = std::get<std::unique_ptr<aggregation>>(attr.value)->clone();
+      cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
+      auto result = cache.get_result(values, *other_agg);
+      udf_input.emplace(std::move(other_agg), std::move(result));
+    }
+  }
+
+  auto output = (*udf_ptr)(udf_input, stream, mr);
+  CUDF_EXPECTS(std::holds_alternative<std::unique_ptr<column>>(output),
+               "Invalid output type from HOST_UDF groupby aggregation.");
+  cache.add_result(values, agg, std::get<std::unique_ptr<column>>(std::move(output)));
 }
 
 }  // namespace detail

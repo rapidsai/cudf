@@ -23,9 +23,11 @@
 
 #include <dlpack/dlpack.h>
 
+namespace {
 struct dlpack_deleter {
   void operator()(DLManagedTensor* tensor) { tensor->deleter(tensor); }
 };
+}  // namespace
 
 struct DLPackTest : public cudf::test::BaseFixture {};
 

@@ -21,8 +21,8 @@
 
 namespace cudf::detail {
 
-template <typename RowHasher>
-rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+template <typename RowEqual>
+rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
@@ -100,7 +100,7 @@ rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
 }
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
@@ -110,7 +110,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
@@ -120,7 +120,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::physical_equality_comparator>>& set,
@@ -130,7 +130,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::physical_equality_comparator>>& set,

@@ -31,7 +31,7 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("name", "options", "op", "request")
+    __slots__ = ("name", "op", "options", "request")
     _non_child = ("dtype", "name", "options")
 
     def __init__(
@@ -40,6 +40,7 @@ class Agg(Expr):
         self.dtype = dtype
         self.name = name
         self.options = options
+        self.is_pointwise = False
         self.children = children
         if name not in Agg._SUPPORTED:
             raise NotImplementedError(

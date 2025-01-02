@@ -132,6 +132,8 @@ ConfigureTest(
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/histogram_tests.cpp
+  groupby/host_udf_example_tests.cu
+  groupby/host_udf_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -742,6 +744,7 @@ ConfigureTest(
 )
 ConfigureTest(
   STREAM_TEXT_TEST
+  streams/text/bpe_test.cpp
   streams/text/edit_distance_test.cpp
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp

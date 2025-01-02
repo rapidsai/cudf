@@ -80,8 +80,8 @@ std::array<char, 33> const escapable_chars{
  */
 std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
 {
-  auto size       = static_cast<size_type>(pattern.size());
-  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+  auto size             = static_cast<size_type>(pattern.size());
+  size_type const count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
     return is_begin_utf8_char(static_cast<uint8_t>(ch));
   });
   std::vector<char32_t> result(count + 1);
@@ -89,7 +89,7 @@ std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
   char const* input_ptr = pattern.data();
   for (size_type idx = 0; idx < size; ++idx) {
     char_utf8 output_character = 0;
-    size_type ch_width         = to_char_utf8(input_ptr, output_character);
+    size_type const ch_width   = to_char_utf8(input_ptr, output_character);
     input_ptr += ch_width;
     idx += ch_width - 1;
     *output_ptr++ = output_character;
@@ -102,7 +102,7 @@ std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
 
 int32_t reprog::add_inst(int32_t t)
 {
-  reinst inst;
+  reinst inst{};
   inst.type        = t;
   inst.u2.left_id  = 0;
   inst.u1.right_id = 0;
@@ -968,7 +968,7 @@ class regex_compiler {
     }
     if (token != RBRA) { push_operator(token, subid); }
 
-    static std::vector<int> tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
+    static std::vector<int> const tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
     _last_was_and =
       std::any_of(tokens.cbegin(), tokens.cend(), [token](auto t) { return t == token; });
   }
@@ -1046,7 +1046,7 @@ reprog reprog::create_from(std::string_view pattern,
 {
   reprog rtn;
   auto pattern32 = string_to_char32_vector(pattern);
-  regex_compiler compiler(pattern32.data(), flags, capture, rtn);
+  regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
@@ -1114,7 +1114,7 @@ void reprog::build_start_ids()
   std::stack<int> ids;
   ids.push(_startinst_id);
   while (!ids.empty()) {
-    int id = ids.top();
+    int const id = ids.top();
     ids.pop();
     reinst const& inst = _insts[id];
     if (inst.type == OR) {

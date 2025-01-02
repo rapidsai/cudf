@@ -7,13 +7,13 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import StructColumn, as_column
+from cudf.core.column.column import as_column
+from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf._typing import ScalarLike
     from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
@@ -207,19 +207,6 @@ class IntervalColumn(StructColumn):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
-        if cudf.get_option("mode.pandas_compatible"):
-            return pd.Interval(**result, closed=self.dtype.closed)
-        return result
-
-    def _reduce(
-        self,
-        op: str,
-        skipna: bool | None = None,
-        min_count: int = 0,
-        *args,
-        **kwargs,
-    ) -> ScalarLike:
-        result = super()._reduce(op, skipna, min_count, *args, **kwargs)
         if cudf.get_option("mode.pandas_compatible"):
             return pd.Interval(**result, closed=self.dtype.closed)
         return result

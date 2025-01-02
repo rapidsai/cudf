@@ -10,23 +10,21 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-import pylibcudf
+import pylibcudf as plc
 
 import cudf
-from cudf._lib.types import LIBCUDF_TO_SUPPORTED_NUMPY_TYPES
 from cudf.core.dtypes import ListDtype, StructDtype
+from cudf._lib.types import PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES
+from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 from cudf.core.missing import NA, NaT
 
-cimport pylibcudf.libcudf.types as libcudf_types
 # We currently need this cimport because some of the implementations here
 # access the c_obj of the scalar, and because we need to be able to call
 # pylibcudf.Scalar.from_libcudf. Both of those are temporarily acceptable until
 # DeviceScalar is phased out entirely from cuDF Cython (at which point
 # cudf.Scalar will be directly backed by pylibcudf.Scalar).
-from pylibcudf cimport Scalar as plc_Scalar
+from pylibcudf cimport Scalar as plc_Scalar, type_id as plc_TypeID
 from pylibcudf.libcudf.scalar.scalar cimport list_scalar, scalar, struct_scalar
-
-from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 
 def _replace_nested(obj, check, replacement):
@@ -62,12 +60,12 @@ def gather_metadata(dtypes):
     """
     out = []
     for name, dtype in dtypes.items():
-        v = pylibcudf.interop.ColumnMetadata(name)
+        v = plc.interop.ColumnMetadata(name)
         if isinstance(dtype, cudf.StructDtype):
             v.children_meta = gather_metadata(dtype.fields)
         elif isinstance(dtype, cudf.ListDtype):
             # Offsets column is unnamed and has no children
-            v.children_meta.append(pylibcudf.interop.ColumnMetadata(""))
+            v.children_meta.append(plc.interop.ColumnMetadata(""))
             v.children_meta.extend(
                 gather_metadata({"": dtype.element_type})
             )
@@ -81,7 +79,7 @@ cdef class DeviceScalar:
     # that from_unique_ptr is implemented is probably dereferencing this in an
     # invalid state. See what the best way to fix that is.
     def __cinit__(self, *args, **kwargs):
-        self.c_value = pylibcudf.Scalar.__new__(pylibcudf.Scalar)
+        self.c_value = plc.Scalar.__new__(plc.Scalar)
 
     def __init__(self, value, dtype):
         """
@@ -127,20 +125,20 @@ cdef class DeviceScalar:
             pa_array = pa.array([pa.scalar(value, type=pa_type)])
 
         pa_table = pa.Table.from_arrays([pa_array], names=[""])
-        table = pylibcudf.interop.from_arrow(pa_table)
+        table = plc.interop.from_arrow(pa_table)
 
         column = table.columns()[0]
         if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                column = pylibcudf.unary.cast(
-                    column, pylibcudf.DataType(pylibcudf.TypeId.DECIMAL32, -dtype.scale)
+                column = plc.unary.cast(
+                    column, plc.DataType(plc.TypeId.DECIMAL32, -dtype.scale)
                 )
             elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                column = pylibcudf.unary.cast(
-                    column, pylibcudf.DataType(pylibcudf.TypeId.DECIMAL64, -dtype.scale)
+                column = plc.unary.cast(
+                    column, plc.DataType(plc.TypeId.DECIMAL64, -dtype.scale)
                 )
 
-        self.c_value = pylibcudf.copying.get_element(column, 0)
+        self.c_value = plc.copying.get_element(column, 0)
         self._dtype = dtype
 
     def _to_host_scalar(self):
@@ -150,7 +148,7 @@ cdef class DeviceScalar:
         null_type = NaT if is_datetime or is_timedelta else NA
 
         metadata = gather_metadata({"": self.dtype})[0]
-        ps = pylibcudf.interop.to_arrow(self.c_value, metadata)
+        ps = plc.interop.to_arrow(self.c_value, metadata)
         if not ps.is_valid:
             return null_type
 
@@ -218,41 +216,40 @@ cdef class DeviceScalar:
         return s
 
     @staticmethod
-    cdef DeviceScalar from_pylibcudf(pscalar, dtype=None):
+    def from_pylibcudf(pscalar, dtype=None):
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         s.c_value = pscalar
         s._set_dtype(dtype)
         return s
 
     cdef void _set_dtype(self, dtype=None):
-        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
-
+        cdef plc_TypeID cdtype_id = self.c_value.type().id()
         if dtype is not None:
             self._dtype = dtype
-        elif cdtype.id() in {
-            libcudf_types.type_id.DECIMAL32,
-            libcudf_types.type_id.DECIMAL64,
-            libcudf_types.type_id.DECIMAL128,
+        elif cdtype_id in {
+            plc_TypeID.DECIMAL32,
+            plc_TypeID.DECIMAL64,
+            plc_TypeID.DECIMAL128,
         }:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
-        elif cdtype.id() == libcudf_types.type_id.STRUCT:
+        elif cdtype_id == plc_TypeID.STRUCT:
             struct_table_view = (<struct_scalar*>self.get_raw_ptr())[0].view()
             self._dtype = StructDtype({
                 str(i): dtype_from_column_view(struct_table_view.column(i))
                 for i in range(struct_table_view.num_columns())
             })
-        elif cdtype.id() == libcudf_types.type_id.LIST:
+        elif cdtype_id == plc_TypeID.LIST:
             if (
                 <list_scalar*>self.get_raw_ptr()
-            )[0].view().type().id() == libcudf_types.type_id.LIST:
+            )[0].view().type().id() == plc_TypeID.LIST:
                 self._dtype = dtype_from_column_view(
                     (<list_scalar*>self.get_raw_ptr())[0].view()
                 )
             else:
                 self._dtype = ListDtype(
-                    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
+                    PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                         <underlying_type_t_type_id>(
                             (<list_scalar*>self.get_raw_ptr())[0]
                             .view().type().id()
@@ -260,8 +257,8 @@ cdef class DeviceScalar:
                     ]
                 )
         else:
-            self._dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
-                <underlying_type_t_type_id>(cdtype.id())
+            self._dtype = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
+                <underlying_type_t_type_id>(cdtype_id)
             ]
 
 

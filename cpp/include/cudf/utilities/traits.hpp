@@ -169,7 +169,7 @@ bool is_equality_comparable(data_type type);
  * @return false  `T` is not numeric
  */
 template <typename T>
-constexpr inline bool is_numeric()
+CUDF_HOST_DEVICE constexpr inline bool is_numeric()
 {
   return cuda::std::is_arithmetic<T>();
 }
@@ -218,6 +218,29 @@ constexpr inline bool is_index_type()
 bool is_index_type(data_type type);
 
 /**
+ * @brief Indicates whether the type `T` is a signed numeric type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is signed numeric
+ */
+template <typename T>
+constexpr inline bool is_signed()
+{
+  return std::is_signed_v<T>;
+}
+
+/**
+ * @brief Indicates whether `type` is a signed numeric `data_type`.
+ *
+ * "Signed Numeric" types include fundamental integral types such as `INT*`
+ * but can also be `FLOAT*` types.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is signed numeric
+ */
+bool is_signed(data_type type);
+
+/**
  * @brief Indicates whether the type `T` is a unsigned numeric type.
  *
  * @tparam T  The type to verify
@@ -248,9 +271,9 @@ bool is_unsigned(data_type type);
  * @return true if the iterator's value type is unsigned
  */
 template <typename Iterator>
-constexpr inline bool is_signed_iterator()
+CUDF_HOST_DEVICE constexpr inline bool is_signed_iterator()
 {
-  return std::is_signed_v<typename std::iterator_traits<Iterator>::value_type>;
+  return cuda::std::is_signed_v<typename cuda::std::iterator_traits<Iterator>::value_type>;
 }
 
 /**
@@ -333,9 +356,9 @@ bool is_numeric_not_bool(data_type type);
  * @return false  `T` is not floating point
  */
 template <typename T>
-constexpr inline bool is_floating_point()
+CUDF_HOST_DEVICE constexpr inline bool is_floating_point()
 {
-  return std::is_floating_point_v<T>;
+  return cuda::std::is_floating_point_v<T>;
 }
 
 /**
@@ -392,7 +415,7 @@ bool is_boolean(data_type type);
  * @return false  `T` is not a timestamp
  */
 template <typename T>
-constexpr inline bool is_timestamp()
+CUDF_HOST_DEVICE constexpr inline bool is_timestamp()
 {
   return is_timestamp_t<T>::value;
 }
@@ -416,13 +439,14 @@ bool is_timestamp(data_type type);
  * @return false  `T` is not a fixed-point type
  */
 template <typename T>
-constexpr inline bool is_fixed_point()
+CUDF_HOST_DEVICE constexpr inline bool is_fixed_point()
 {
-  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T> ||
-         std::is_same_v<numeric::decimal128, T> ||
-         std::is_same_v<numeric::fixed_point<int32_t, numeric::Radix::BASE_2>, T> ||
-         std::is_same_v<numeric::fixed_point<int64_t, numeric::Radix::BASE_2>, T> ||
-         std::is_same_v<numeric::fixed_point<__int128_t, numeric::Radix::BASE_2>, T>;
+  return cuda::std::is_same_v<numeric::decimal32, T> ||
+         cuda::std::is_same_v<numeric::decimal64, T> ||
+         cuda::std::is_same_v<numeric::decimal128, T> ||
+         cuda::std::is_same_v<numeric::fixed_point<int32_t, numeric::Radix::BASE_2>, T> ||
+         cuda::std::is_same_v<numeric::fixed_point<int64_t, numeric::Radix::BASE_2>, T> ||
+         cuda::std::is_same_v<numeric::fixed_point<__int128_t, numeric::Radix::BASE_2>, T>;
 }
 
 /**
@@ -442,7 +466,7 @@ bool is_fixed_point(data_type type);
  * @return false  `T` is not a duration
  */
 template <typename T>
-constexpr inline bool is_duration()
+CUDF_HOST_DEVICE constexpr inline bool is_duration()
 {
   return is_duration_t<T>::value;
 }
@@ -466,7 +490,7 @@ bool is_duration(data_type type);
  * @return false  `T` is neither a duration nor a timestamp type
  */
 template <typename T>
-constexpr inline bool is_chrono()
+CUDF_HOST_DEVICE constexpr inline bool is_chrono()
 {
   return is_duration<T>() || is_timestamp<T>();
 }
@@ -534,7 +558,7 @@ bool is_dictionary(data_type type);
  * @return false `T` corresponds to a variable-width element type
  */
 template <typename T>
-constexpr inline bool is_fixed_width()
+CUDF_HOST_DEVICE constexpr inline bool is_fixed_width()
 {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
@@ -567,10 +591,11 @@ class string_view;
  * @return false `T` corresponds to a "simple" type
  */
 template <typename T>
-constexpr inline bool is_compound()
+CUDF_HOST_DEVICE constexpr inline bool is_compound()
 {
-  return std::is_same_v<T, cudf::string_view> or std::is_same_v<T, cudf::dictionary32> or
-         std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>;
+  return cuda::std::is_same_v<T, cudf::string_view> or
+         cuda::std::is_same_v<T, cudf::dictionary32> or cuda::std::is_same_v<T, cudf::list_view> or
+         cuda::std::is_same_v<T, cudf::struct_view>;
 }
 
 /**
@@ -599,9 +624,9 @@ bool is_compound(data_type type);
  * @return false T is not a nested type
  */
 template <typename T>
-constexpr inline bool is_nested()
+CUDF_HOST_DEVICE constexpr inline bool is_nested()
 {
-  return std::is_same_v<T, cudf::list_view> || std::is_same_v<T, cudf::struct_view>;
+  return cuda::std::is_same_v<T, cudf::list_view> || cuda::std::is_same_v<T, cudf::struct_view>;
 }
 
 /**
