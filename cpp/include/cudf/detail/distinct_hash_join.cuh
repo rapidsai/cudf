@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,7 +142,7 @@ class distinct_hash_join {
                                            cuco_storage_type>;
 
   bool _has_nulls;           ///< True if nulls are present in either build table or probe table
-  bool _has_nested_columns;  ///< True if the table has nested columns
+  bool _has_nested_columns;  ///< True if nested columns are present in build and probe tables
   cudf::null_equality _nulls_equal;  ///< Whether to consider nulls as equal
   cudf::table_view _build;           ///< Input table to build the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
