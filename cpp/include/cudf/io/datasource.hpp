@@ -179,6 +179,13 @@ class datasource {
    */
   virtual size_t host_read(size_t offset, size_t size, uint8_t* dst) = 0;
 
+  [[nodiscard]] virtual bool supports_multithreaded_host_read() const { return false; }
+
+  virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset, size_t size)
+  {
+    CUDF_FAIL("Datasource classes that supports asynchronous host reads need to override it"); 
+  }
+
   /**
    * @brief Whether or not this source supports reading directly into device memory.
    *

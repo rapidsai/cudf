@@ -38,7 +38,7 @@ namespace io::json::detail {
 constexpr int num_subchunks            = 10;  // per chunk_size
 constexpr size_t min_subchunk_size     = 10000;
 constexpr int max_subchunks_prealloced = 3;
-constexpr int num_threads = 16;
+constexpr int num_threads = 1;
 
 /**
  * @brief Read from array of data sources into RMM buffer. The size of the returned device span
