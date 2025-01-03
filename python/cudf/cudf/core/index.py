@@ -339,7 +339,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return column.column_empty(0, dtype=self.dtype)
 
-    def _pandas_reprable(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     def _is_numeric(self) -> bool:
@@ -1488,7 +1488,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             if isinstance(self._values, StringColumn):
                 output = repr(self.to_pandas(nullable=True))
             else:
-                output = repr(self._pandas_reprable().to_pandas())
+                output = repr(self._pandas_repr_compatible().to_pandas())
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -3595,7 +3595,7 @@ class IntervalIndex(Index):
     def _is_boolean(self) -> bool:
         return False
 
-    def _pandas_reprable(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     @property

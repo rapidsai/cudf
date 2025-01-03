@@ -1458,7 +1458,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             )
             show_dimensions = pd.get_option("display.show_dimensions")
             preprocess = preprocess.copy(deep=False)
-            preprocess.index = preprocess.index._pandas_reprable()
+            preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")
@@ -1483,7 +1483,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 na_rep=str(cudf.NA),
             )
         else:
-            output = repr(preprocess._pandas_reprable().to_pandas())
+            output = repr(preprocess._pandas_repr_compatible().to_pandas())
 
         lines = output.split("\n")
         if isinstance(preprocess.dtype, cudf.CategoricalDtype):

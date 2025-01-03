@@ -2003,7 +2003,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 lower = cudf.concat([lower_left, lower_right], axis=1)
                 output = cudf.concat([upper, lower])
 
-        return output._pandas_reprable()
+        return output._pandas_repr_compatible()
 
     @_performance_tracking
     def __repr__(self):

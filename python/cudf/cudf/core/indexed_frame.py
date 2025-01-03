@@ -4402,10 +4402,10 @@ class IndexedFrame(Frame):
             index_names=self.index.names if keep_index else None,
         )
 
-    def _pandas_reprable(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         """Return Self but with columns prepared for a pandas-like repr."""
-        result = super()._pandas_reprable()
-        result.index = self.index._pandas_reprable()
+        result = super()._pandas_repr_compatible()
+        result.index = self.index._pandas_repr_compatible()
         return result
 
     def take(self, indices, axis=0):

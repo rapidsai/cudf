@@ -820,7 +820,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             inplace=inplace,
         )
 
-    def _pandas_reprable(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         """Return Self but with columns prepared for a pandas-like repr."""
         columns = (col._prep_pandas_compat_repr() for col in self._columns)
         return self._from_data_like_self(
