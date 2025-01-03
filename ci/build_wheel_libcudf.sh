@@ -1,12 +1,10 @@
 #!/bin/bash
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 set -euo pipefail
 
 package_name="libcudf"
 package_dir="python/libcudf"
-
-RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
 rapids-logger "Generating build requirements"
 
@@ -16,13 +14,6 @@ rapids-dependency-file-generator \
   --file-key "py_rapids_build_${package_name}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};cuda_suffixed=true" \
 | tee /tmp/requirements-build.txt
-
-gh repo clone vyasr/gha-tools -- -b feat/get_wheel_artifact
-export PATH="${PWD}/gha-tools/tools:${PATH}"
-
-LIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 1776 cpp wheel)
-echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEEL_DIR}/librmm_*.whl)" > /tmp/constraints.txt
-export PIP_CONSTRAINT="/tmp/constraints.txt"
 
 rapids-logger "Installing build requirements"
 python -m pip install \
@@ -36,6 +27,8 @@ export PIP_NO_BUILD_ISOLATION=0
 
 export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON"
 ./ci/build_wheel.sh "${package_name}" "${package_dir}"
+
+RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
 mkdir -p ${package_dir}/final_dist
 python -m auditwheel repair \
