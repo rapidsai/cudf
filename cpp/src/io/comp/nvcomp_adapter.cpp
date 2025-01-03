@@ -127,7 +127,8 @@ void batched_decompress(compression_type compression,
                         rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  if constexpr (NVCOMP_HAS_PINNED_MEMORY_RESOURCE_SUPPORT) { set_nvcomp_pinned_memory_resource(); }
+  // if constexpr (NVCOMP_HAS_PINNED_MEMORY_RESOURCE_SUPPORT) { set_nvcomp_pinned_memory_resource();
+  // }
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
