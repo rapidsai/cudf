@@ -315,6 +315,7 @@ namespace {
  */
 CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_strings,
                                              cudf::size_type ngrams,
+                                             uint32_t seed,
                                              cudf::size_type const* d_ngram_offsets,
                                              cudf::hash_value_type* d_results)
 {
@@ -332,7 +333,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
   __shared__ cudf::hash_value_type hvs[block_size];  // temp store for hash values
 
   auto const ngram_offset = d_ngram_offsets[str_idx];
-  auto const hasher       = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{0};
+  auto const hasher       = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{seed};
 
   auto const end        = d_str.data() + d_str.size_bytes();
   auto const warp_count = (d_str.size_bytes() / cudf::detail::warp_size) + 1;
@@ -368,6 +369,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
 
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& input,
                                                     cudf::size_type ngrams,
+                                                    uint32_t seed,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
@@ -400,7 +402,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
   character_ngram_hash_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    *d_strings, ngrams, d_offsets, d_hashes);
+    *d_strings, ngrams, seed, d_offsets, d_hashes);
 
   return make_lists_column(
     input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{}, stream, mr);
@@ -419,11 +421,12 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
 
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& strings,
                                                     cudf::size_type ngrams,
+                                                    uint32_t seed,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash_character_ngrams(strings, ngrams, stream, mr);
+  return detail::hash_character_ngrams(strings, ngrams, seed, stream, mr);
 }
 
 }  // namespace nvtext
