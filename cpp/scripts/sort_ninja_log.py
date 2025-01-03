@@ -3,6 +3,7 @@
 #
 import argparse
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -144,9 +145,14 @@ def format_file_size(input_size):
     return file_size_str
 
 
+def replace_placeholder_patterns(input_string: str) -> str:
+    pattern = r'(_h_env_placehold)[_placehold]+'
+    return re.sub(pattern, r'\1...', input_string)
+
+
 # adjust name for display
-def format_file_name(name):
-    return name.replace("placehold_placehold", "ph")
+def format_file_name(name: str) -> str:
+    return replace_placeholder_patterns(name)
 
 
 # Output chart results in HTML format
