@@ -128,6 +128,8 @@ void batched_decompress(compression_type compression,
 {
   CUDF_FUNC_RANGE();
   if constexpr (NVCOMP_HAS_PINNED_MEMORY_RESOURCE_SUPPORT) { set_nvcomp_pinned_memory_resource(); }
+
+  CUDF_LOG_WARN("After setting nvcomp pinned memory resource");
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
