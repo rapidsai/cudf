@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -758,7 +758,6 @@ def test_multiindex_copy_sem(data, names):
     # Test same behavior when used on DataFrame
     gdf.index = gmi_copy
     pdf.index = pmi_copy
-    breakpoint()
     assert repr(gdf) == repr(pdf)
 
 
