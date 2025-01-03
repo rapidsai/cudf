@@ -21,7 +21,7 @@ python -m pip install \
     --prefer-binary \
     -r /tmp/requirements-build.txt
 
-gh repo clone vyasr/gha-tools -b feat/get_wheel_artifact
+gh repo clone vyasr/gha-tools -- -b feat/get_wheel_artifact
 export PATH="${PWD}/gha-tools/tools:${PATH}"
 
 LIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 1776 cpp wheel)

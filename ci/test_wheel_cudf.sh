@@ -5,7 +5,7 @@ set -eou pipefail
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 
-gh repo clone vyasr/gha-tools -b feat/get_wheel_artifact
+gh repo clone vyasr/gha-tools -- -b feat/get_wheel_artifact
 export PATH="${PWD}/gha-tools/tools:${PATH}"
 
 # Download the cudf, libcudf, and pylibcudf built in the previous step
