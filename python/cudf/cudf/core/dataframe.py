@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1890,7 +1890,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             dtype = {cc: dtype for cc in self._column_names}
         return super().astype(dtype, copy, errors)
 
-    def _clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output: Self) -> str:
         """
         This method takes in partial/preprocessed dataframe
         and returns correct representation of it with correct
@@ -1925,7 +1925,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         return "\n".join(lines)
 
-    def _clean_nulls_from_dataframe(self, df):
+    def _clean_nulls_from_dataframe(self, df: Self) -> Self:
         """
         This function converts all ``null`` values to ``<NA>`` for
         representation as a string in `__repr__`.
@@ -1934,7 +1934,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         for formatting purposes, we convert columns to `str` dtype for
         filling with `<NA>` values.
         """
-        for col in df._data:
+        for col in df._columns:
             if isinstance(
                 df._data[col].dtype, (cudf.StructDtype, cudf.ListDtype)
             ):
@@ -1959,7 +1959,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         return df
 
-    def _get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self) -> Self:
         """
         Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
@@ -1967,9 +1967,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         for printing with the dataframe.
         """
         max_rows = pd.options.display.max_rows
-        nrows = np.max([len(self) if max_rows is None else max_rows, 1])
-        if pd.options.display.max_rows == 0:
-            nrows = len(self)
+        if max_rows in {0, None}:
+            max_rows = len(self)
+        nrows = max(max_rows, 1)
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns
@@ -1977,7 +1977,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
         if len(self) <= nrows and self._num_columns <= ncols:
-            output = self.copy(deep=False)
+            output = self
         elif self.empty and len(self.index) > 0:
             max_seq_items = pd.options.display.max_seq_items
             # In case of Empty DataFrame with index, Pandas prints
@@ -2037,10 +2037,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 lower = cudf.concat([lower_left, lower_right], axis=1)
                 output = cudf.concat([upper, lower])
 
-        output = self._clean_nulls_from_dataframe(output)
-        output.index = output.index._clean_nulls_from_index()
-
-        return output
+        return output._pandas_reprable()
 
     @_performance_tracking
     def __repr__(self):

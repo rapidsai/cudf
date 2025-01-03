@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -4401,6 +4401,12 @@ class IndexedFrame(Frame):
             column_names=self._column_names,
             index_names=self.index.names if keep_index else None,
         )
+
+    def _pandas_reprable(self) -> Self:
+        """Return Self but with columns prepared for a pandas-like repr."""
+        result = super()._pandas_reprable()
+        result.index = self.index._pandas_reprable()
+        return result
 
     def take(self, indices, axis=0):
         """Return a new frame containing the rows specified by *indices*.

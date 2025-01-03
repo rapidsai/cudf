@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
+    from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
@@ -66,6 +67,16 @@ class ListColumn(ColumnBase):
             null_count=null_count,
             children=children,
         )
+
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        # TODO: handle if self.has_nulls(): case
+        return self
 
     @cached_property
     def memory_usage(self):
