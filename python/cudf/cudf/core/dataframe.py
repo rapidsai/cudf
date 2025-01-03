@@ -1925,40 +1925,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         return "\n".join(lines)
 
-    def _clean_nulls_from_dataframe(self, df: Self) -> Self:
-        """
-        This function converts all ``null`` values to ``<NA>`` for
-        representation as a string in `__repr__`.
-
-        Since we utilize Pandas `__repr__` at all places in our code
-        for formatting purposes, we convert columns to `str` dtype for
-        filling with `<NA>` values.
-        """
-        for col in df._columns:
-            if isinstance(
-                df._data[col].dtype, (cudf.StructDtype, cudf.ListDtype)
-            ):
-                # TODO we need to handle this
-                pass
-            elif df._data[col].has_nulls():
-                fill_value = (
-                    str(cudf.NaT)
-                    if isinstance(
-                        df._data[col],
-                        (
-                            cudf.core.column.DatetimeColumn,
-                            cudf.core.column.TimeDeltaColumn,
-                        ),
-                    )
-                    else str(cudf.NA)
-                )
-
-                df[col] = df._data[col].astype("str").fillna(fill_value)
-            else:
-                df[col] = df._data[col]
-
-        return df
-
     def _get_renderable_dataframe(self) -> Self:
         """
         Takes rows and columns from pandas settings or estimation from size.
