@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
-#include "text/utilities/tokenize_ops.cuh"
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
@@ -237,25 +234,25 @@ namespace {
 
 template <typename MapRefType, typename MapRefType2>
 __device__ cudf::size_type wp_tokenize_fn(cudf::column_device_view const& d_strings,
-                                          cudf::string_view token,
+                                          cudf::string_view word,
                                           MapRefType d_map,
                                           MapRefType2 d_map2,
                                           cudf::size_type* d_tokens)
 {
-  // if (token.length() >= 200) {  // max word length
+  // if (word.length() >= 200) {  // max word length
   //   d_tokens[token_idx++] = cuda::std::numeric_limits<cudf::size_type>::max();
   //   return token_idx;
   // }
 
-  // lookup token in map
+  // lookup word in map
   auto token_idx = 0;
-  auto itr       = d_map.find(token);
+  auto itr       = d_map.find(word);
   if (itr != d_map.end()) {
     d_tokens[token_idx++] = itr->second;
     return token_idx;
   }
-  // reduce string by one character and try again
-  auto piece = token.substr(0, token.length() - 1);
+  // reduce word by one character and try again
+  auto piece = word.substr(0, word.length() - 1);
   while (!piece.empty()) {
     itr = d_map.find(piece);
     if (itr == d_map.end()) {
@@ -274,9 +271,9 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::column_device_view const& d_stri
   }
 
   // token = token.substr(piece.length(), token.length() - piece.length());
-  token =
-    cudf::string_view(token.data() + piece.size_bytes(), token.size_bytes() - piece.size_bytes());
-  piece = token;
+  word =
+    cudf::string_view(word.data() + piece.size_bytes(), word.size_bytes() - piece.size_bytes());
+  piece = word;
   while (!piece.empty()) {
     auto itr = d_map2.find(piece);
     if (itr == d_map2.end()) {
@@ -286,11 +283,11 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::column_device_view const& d_stri
     d_tokens[token_idx++] = itr->second;
 
     // token = token.substr(piece.length(), token.length() - piece.length());
-    token =
-      cudf::string_view(token.data() + piece.size_bytes(), token.size_bytes() - piece.size_bytes());
-    piece = token;
+    word =
+      cudf::string_view(word.data() + piece.size_bytes(), word.size_bytes() - piece.size_bytes());
+    piece = word;
   }
-  if (!token.empty()) {
+  if (!word.empty()) {
     // very uncommon
     auto const unk = cudf::string_view("[UNK]", 5);
     auto const itr = d_map.find(unk);
@@ -304,7 +301,8 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::column_device_view const& d_stri
   return token_idx;
 }
 
-constexpr int block_size = 256;
+constexpr int block_size = 64;
+// constexpr int tile_size = 32;
 
 template <typename MapRefType, typename MapRefType2>
 CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
@@ -349,10 +347,14 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
   auto itr  = begin + lane_idx;
   auto oitr = d_output;
 
+  // each thread processes one byte of the d_str;
+  // continue until all bytes have been consumed or the max token count has been reached
   while (token_count < max_tokens && byte_count < d_str.size_bytes()) {
     cudf::size_type word_tokens = 0;
     if (itr < end) {
       // look into processing multiple bytes per iteration (thread) here
+      // - if current byte is space, ++itr (need to recheck with end)
+      // - if not space then ++itr at the end of this iff not already incremented
       if ((*itr != ' ') && ((itr == begin) || (*(itr - 1) == ' '))) {
         // itr is the front edge of a word; find its end
         auto const word_end = thrust::find(thrust::seq, itr, end, ' ');
@@ -368,7 +370,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
     if (lane_idx == 0) {
       // need to read the valid s_tokens into global memory
       for (auto i = 0; (i < block_size) && (oitr < d_output_end); ++i) {
-        if (s_tokens[i] < init_token) { *oitr++ = s_tokens[i]; }
+        if (s_tokens[i] != init_token) { *oitr++ = s_tokens[i]; }
       }
       token_count += cuda::std::min(count, max_tokens - token_count);
       byte_count += block_size;

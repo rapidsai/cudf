@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -6333,6 +6333,20 @@ class StringColumn(column.ColumnBase):
                 vocabulary,
                 delimiter.device_value.c_value,
                 default_id,
+            )
+        )
+
+    @acquire_spill_lock()
+    def wordpiece_tokenize(
+        self,
+        vocabulary: plc.nvtext.wordpiece_tokenize.WordPieceVocabulary,
+        max_tokens_per_row: int,
+    ) -> Self:
+        return type(self).from_pylibcudf(  # type: ignore[return-value]
+            plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
+                self.to_pylibcudf(mode="read"),
+                vocabulary,
+                max_tokens_per_row,
             )
         )
 
