@@ -452,7 +452,7 @@ struct expression_evaluator {
          ++operator_index) {
       // Execute operator
       auto const op    = plan.operators[operator_index];
-      auto const arity = ast_operator_arity(op);
+      auto const arity = plan.operator_arities[operator_index];
       if (arity == 1) {
         // Unary operator
         auto const& input =
