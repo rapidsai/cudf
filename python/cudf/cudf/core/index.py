@@ -1129,7 +1129,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping) -> Self:
-        return type(self)._from_data(data, name=self.name)
+        return _index_from_data(data, self.name)
 
     @classmethod
     @_performance_tracking

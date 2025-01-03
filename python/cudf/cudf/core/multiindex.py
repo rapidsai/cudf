@@ -364,7 +364,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping) -> Self:
         mi = type(self)._from_data(data, name=self.name)
-        mi.names = self.names
+        if mi.nlevels == self.nlevels:
+            mi.names = self.names
         return mi
 
     @classmethod
