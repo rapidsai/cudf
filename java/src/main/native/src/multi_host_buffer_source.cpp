@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <sstream>
 #include <vector>
 
 namespace cudf {
@@ -58,23 +59,16 @@ std::unique_ptr<cudf::io::datasource::buffer> multi_host_buffer_source::host_rea
   auto buffer_index = locate_offset_index(offset);
   auto next_offset  = offsets_[buffer_index + 1];
   if (end_offset <= next_offset) {
+    // read range hits only a single buffer, so return a zero-copy view of the data
     auto src = addrs_[buffer_index] + offset - offsets_[buffer_index];
     return std::make_unique<non_owning_buffer>(src, size);
   }
   auto buf        = std::vector<uint8_t>(size);
-  uint8_t* dst    = buf.data();
-  auto bytes_left = size;
-  while (bytes_left > 0) {
-    auto next_offset = offsets_[buffer_index + 1];
-    auto buffer_size = next_offset = offsets_[buffer_index];
-    auto buffer_left               = next_offset - offset;
-    auto src                       = addrs_[buffer_index] + buffer_size - buffer_left;
-    auto copy_size                 = std::min(buffer_left, bytes_left);
-    std::memcpy(dst, src, copy_size);
-    offset += copy_size;
-    dst += copy_size;
-    bytes_left -= copy_size;
-    ++buffer_index;
+  auto bytes_read = host_read(offset, size, buf.data());
+  if (bytes_read != size) {
+    std::stringstream ss;
+    ss << "Expected host read of " << size << " found " << bytes_read;
+    throw std::logic_error(ss.str());
   }
   return std::make_unique<owning_buffer<std::vector<uint8_t>>>(std::move(buf));
 }
@@ -87,11 +81,11 @@ size_t multi_host_buffer_source::host_read(size_t offset, size_t size, uint8_t* 
   auto buffer_index = locate_offset_index(offset);
   auto bytes_left   = size;
   while (bytes_left > 0) {
-    auto next_offset = offsets_[buffer_index + 1];
-    auto buffer_size = next_offset = offsets_[buffer_index];
-    auto buffer_left               = next_offset - offset;
-    auto src                       = addrs_[buffer_index] + buffer_size - buffer_left;
-    auto copy_size                 = std::min(buffer_left, bytes_left);
+    auto next_offset   = offsets_[buffer_index + 1];
+    auto buffer_left   = next_offset - offset;
+    auto buffer_offset = offset - offsets_[buffer_index];
+    auto src           = addrs_[buffer_index] + buffer_offset;
+    auto copy_size     = std::min(buffer_left, bytes_left);
     std::memcpy(dst, src, copy_size);
     offset += copy_size;
     dst += copy_size;
@@ -104,24 +98,13 @@ size_t multi_host_buffer_source::host_read(size_t offset, size_t size, uint8_t* 
 std::unique_ptr<cudf::io::datasource::buffer> multi_host_buffer_source::device_read(
   size_t offset, size_t size, rmm::cuda_stream_view stream)
 {
-  if (size == 0) { return 0; }
-  if (offset < 0 || offset >= offsets_.back()) { throw std::runtime_error("bad offset"); }
-  if (offset + size > offsets_.back()) { throw std::runtime_error("read past end of file"); }
   rmm::device_buffer buf(size, stream);
-  auto dst          = static_cast<uint8_t*>(buf.data());
-  auto buffer_index = locate_offset_index(offset);
-  auto bytes_left   = size;
-  while (bytes_left > 0) {
-    auto next_offset = offsets_[buffer_index + 1];
-    auto buffer_size = next_offset = offsets_[buffer_index];
-    auto buffer_left               = next_offset - offset;
-    auto src                       = addrs_[buffer_index] + buffer_size - buffer_left;
-    auto copy_size                 = std::min(buffer_left, bytes_left);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(dst, src, copy_size, cudaMemcpyHostToDevice, stream.value()));
-    offset += copy_size;
-    dst += copy_size;
-    bytes_left -= copy_size;
-    ++buffer_index;
+  auto dst        = static_cast<uint8_t*>(buf.data());
+  auto bytes_read = device_read(offset, size, dst, stream);
+  if (bytes_read != size) {
+    std::stringstream ss;
+    ss << "Expected device read of " << size << " found " << bytes_read;
+    throw std::logic_error(ss.str());
   }
   return std::make_unique<owning_buffer<rmm::device_buffer>>(std::move(buf));
 }
