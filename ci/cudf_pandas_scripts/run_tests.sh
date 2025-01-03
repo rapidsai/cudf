@@ -62,7 +62,7 @@ else
     # generate constraints (possibly pinning to oldest support versions of dependencies)
     rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
     echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEEL_DIR}/librmm_*.whl)" >> ./constraints.txt
-    echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEEL_DIR}/rmm_*.whl)" >> ./constraints.txt
+    echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${PYLIBRMM_WHEEL_DIR}/rmm_*.whl)" >> ./constraints.txt
 
     python -m pip install \
         -v \

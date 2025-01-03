@@ -22,7 +22,7 @@ PYLIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/libcudf_dist/libcudf_*.whl)" > /tmp/constraints.txt
 echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo /tmp/pylibcudf_dist/pylibcudf_*.whl)" >> /tmp/constraints.txt
 echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEEL_DIR}/librmm_*.whl)" >> /tmp/constraints.txt
-echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEEL_DIR}/rmm_*.whl)" >> /tmp/constraints.txt
+echo "rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${PYLIBRMM_WHEEL_DIR}/rmm_*.whl)" >> /tmp/constraints.txt
 export PIP_CONSTRAINT="/tmp/constraints.txt"
 
 ./ci/build_wheel.sh cudf ${package_dir}
