@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -20,6 +20,13 @@ python -m pip install \
     -v \
     --prefer-binary \
     -r /tmp/requirements-build.txt
+
+gh repo clone vyasr/gha-tools -b feat/get_wheel_artifact
+export PATH="${PWD}/gha-tools/tools:${PATH}"
+
+LIBRMM_WHEEL_DIR=$(RAPIDS_PY_WHEEL_NAME="rmm_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-artifact rmm 1776 cpp wheel)
+echo "librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEEL_DIR}/librmm_*.whl)" > /tmp/constraints.txt
+export PIP_CONSTRAINT="/tmp/constraints.txt"
 
 # build with '--no-build-isolation', for better sccache hit rate
 # 0 really means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/5735)
