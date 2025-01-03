@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,8 +199,9 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
 template <typename state_buf>
 inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf* sb, int src_pos)
 {
-  char const* ptr     = nullptr;
-  cudf::size_type len = 0;
+  char const* ptr = nullptr;
+  using len_type  = std::tuple_element<1, string_index_pair>::type;
+  len_type len    = 0;
 
   if (s->dict_base) {
     // String dictionary

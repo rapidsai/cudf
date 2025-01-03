@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -280,9 +280,24 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   }
 }
 
+/**
+ * @brief Function for copying strings from the parquet page into column memory.
+ *
+ * All of the threads in the block will help with memcpy's, but only on a max of
+ * 32 strings at once due to memory caching issues.
+ * The # strings copied at once (and how many threads per string) is determined
+ * from the average string length, with a target memcpy of 4-bytes per thread.
+ *
+ * @param s Page state
+ * @param sb Page state buffers
+ * @param start The value index to start copying strings for
+ * @param end One past the end value index to stop copying strings for
+ * @param t The current thread's index
+ * @param string_output_offset Starting offset into the output column data for writing
+ */
 template <int block_size, bool has_lists_t, bool split_decode_t, typename state_buf>
-__device__ inline void gpuDecodeString(
-  page_state_s* s, state_buf* const sb, int start, int end, int t, size_t& string_output_offset)
+__device__ inline size_t gpuDecodeString(
+  page_state_s* s, state_buf* const sb, int start, int end, int t, size_t string_output_offset)
 {
   // nesting level that is storing actual leaf values
   int const leaf_level_index    = s->col.max_nesting_depth - 1;
@@ -366,7 +381,6 @@ __device__ inline void gpuDecodeString(
       outputs[t] = thread_output_string;
       inputs[t]  = reinterpret_cast<uint8_t const*>(thread_input_string);
       lengths[t] = string_length;
-      __syncthreads();
 
       // Choose M, N to be powers of 2 to divide T evenly and allow bit shifts.
       // For T threads: clamp N btw T/32 (1 string per warp) & 32 (cache miss if larger)
@@ -420,6 +434,9 @@ __device__ inline void gpuDecodeString(
       int const string_lane     = t & (threads_per_string - 1);
       int const start_str_idx   = t >> threads_per_string_log2;
 
+      // Sync writing the string info to shared memory above, prior to using it below.
+      __syncthreads();
+
       // loop over all strings in this batch
       // threads work on consecutive strings so that all bytes are close in memory
       for (int str_idx = start_str_idx; str_idx < batch_size; str_idx += strings_at_once) {
@@ -444,6 +461,8 @@ __device__ inline void gpuDecodeString(
 
     pos += batch_size;
   }
+
+  return string_output_offset;
 }
 
 template <int decode_block_size, typename level_t, typename state_buf>
@@ -1042,6 +1061,60 @@ __device__ int skip_decode(stream_type& parquet_stream, int num_to_skip, int t)
   return num_skipped;
 }
 
+template <decode_kernel_mask kernel_mask_t>
+constexpr bool has_dict()
+{
+  return (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) ||
+         (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_DICT) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST);
+}
+
+template <decode_kernel_mask kernel_mask_t>
+constexpr bool has_bools()
+{
+  return (kernel_mask_t == decode_kernel_mask::BOOLEAN) ||
+         (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST);
+}
+
+template <decode_kernel_mask kernel_mask_t>
+constexpr bool has_nesting()
+{
+  return (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
+}
+
+template <decode_kernel_mask kernel_mask_t>
+constexpr bool has_lists()
+{
+  return (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+}
+
+template <decode_kernel_mask kernel_mask_t>
+constexpr bool is_split_decode()
+{
+  return (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT) ||
+         (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) ||
+         (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+}
+
 /**
  * @brief Kernel for computing fixed width non dictionary column data stored in the pages
  *
@@ -1064,43 +1137,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            size_t num_rows,
                            kernel_error::pointer error_code)
 {
-  constexpr bool has_dict_t = (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) ||
-                              (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
-                              (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
-                              (kernel_mask_t == decode_kernel_mask::STRING_DICT) ||
-                              (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
-                              (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST);
-
-  constexpr bool has_bools_t = (kernel_mask_t == decode_kernel_mask::BOOLEAN) ||
-                               (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
-                               (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST);
-
-  constexpr bool has_nesting_t =
-    (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_DICT_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED);
-
-  constexpr bool has_lists_t =
-    (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_NO_DICT_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_DICT_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
-
-  constexpr bool split_decode_t =
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT) ||
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_NESTED) ||
-    (kernel_mask_t == decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
-
+  constexpr bool has_dict_t     = has_dict<kernel_mask_t>();
+  constexpr bool has_bools_t    = has_bools<kernel_mask_t>();
+  constexpr bool has_nesting_t  = has_nesting<kernel_mask_t>();
+  constexpr bool has_lists_t    = has_lists<kernel_mask_t>();
+  constexpr bool split_decode_t = is_split_decode<kernel_mask_t>();
   constexpr bool has_strings_t =
     (static_cast<uint32_t>(kernel_mask_t) & STRINGS_MASK_NON_DELTA) != 0;
 
@@ -1294,7 +1335,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     // decode the values themselves
     if constexpr (has_strings_t) {
-      gpuDecodeString<decode_block_size_t, has_lists_t, split_decode_t>(
+      string_output_offset = gpuDecodeString<decode_block_size_t, has_lists_t, split_decode_t>(
         s, sb, valid_count, next_valid_count, t, string_output_offset);
     } else if constexpr (split_decode_t) {
       gpuDecodeFixedWidthSplitValues<decode_block_size_t, has_lists_t>(
