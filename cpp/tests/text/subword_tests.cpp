@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/subword_tokenize.hpp>
+#include <nvtext/wordpiece_tokenize.hpp>
 
 #include <fstream>
 #include <vector>
@@ -437,4 +439,44 @@ TEST(TextSubwordTest, ZeroHashBinCoefficient)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
+}
+
+TEST(TextSubwordTest, WP1)
+{
+  cudf::test::strings_column_wrapper vocabulary(
+    {"ate", "brown", "cheese", "dog", "fox", "jumped", "lazy", "quick", "over", "the", "[UNK]"});
+  auto vocab = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
+
+  auto input =
+    cudf::test::strings_column_wrapper({"the quick brown fox jumped over", "the lazy brown dog"});
+  auto sv      = cudf::strings_column_view(input);
+  auto results = nvtext::wordpiece_tokenize(sv, *vocab, 100);
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
+  // clang-format off
+  LCW expected({LCW{ 9, 7, 1, 4, 5, 8},
+                LCW{ 9, 6, 1, 3}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST(TextSubwordTest, WP2)
+{
+  cudf::test::strings_column_wrapper vocabulary(
+    {"", "[UNK]", "!", "a", "I", "G", "have", "##P", "##U"});
+  auto vocab = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
+
+  auto input =
+    cudf::test::strings_column_wrapper({"I have a GPU !", "do not have a gpu", "no gpu"});
+  auto sv      = cudf::strings_column_view(input);
+  auto results = nvtext::wordpiece_tokenize(sv, *vocab, 10);
+  // cudf::test::print(results->view());
+
+  using LCW = cudf::test::lists_column_wrapper<cudf::size_type>;
+  // clang-format off
+  LCW expected({LCW{4, 6, 3, 5, 7, 8, 2},
+                LCW{1, 1, 6, 3, 1},
+                LCW{1, 1}});
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
