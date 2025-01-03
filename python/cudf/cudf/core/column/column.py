@@ -2405,6 +2405,7 @@ def as_column(
                 and arbitrary.null_count > 0
             ):
                 arbitrary = arbitrary.cast(pa.float64())
+                arbitrary = pc.fill_null(arbitrary, np.nan)
             if (
                 cudf.get_option("default_integer_bitwidth")
                 and pa.types.is_integer(arbitrary.type)
