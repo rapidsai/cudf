@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -178,43 +178,6 @@ class datasource {
    * @return The number of bytes read (can be smaller than size)
    */
   virtual size_t host_read(size_t offset, size_t size, uint8_t* dst) = 0;
-
-  /**
-   * @brief Whether or not this source supports multithreaded reading
-   *
-   * If this function returns true, the datasource will receive calls to host_read_async() instead
-   * of host_read() when the reader processes the data on the host. The reader needs to handle to
-   * transfer of data from host to device.
-   *
-   * Data source implementations that don't support multithreaded host reads don't need to override
-   * this function. The implementations that do should override it to return false.
-   *
-   * @return bool Whether this source supports host_read_async() calls
-   */
-  [[nodiscard]] virtual bool supports_multithreaded_host_read() const { return false; }
-
-  /**
-   * @brief Asynchronously reads and returns a host buffer containing the selected range
-   *
-   * Returns a future value that contains a unique pointer to a owning or non-owning datasource
-   * buffer. Calling `get()` method of the return value synchronizes this function.
-   *
-   * Data source implementations that don't support multithreaded host reads don't need to override
-   * this function.
-   *
-   * @throws cudf::logic_error when the object does not support multithreaded host reads, i.e.
-   * `supports_multithreaded_host_read()` returns `false`.
-   *
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to read
-   *
-   * @return Unique pointer to datasource buffer as a future value (can be smaller than size)
-   */
-  virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
-                                                                           size_t size)
-  {
-    CUDF_FAIL("Datasource classes that supports asynchronous host reads need to override it");
-  }
 
   /**
    * @brief Whether or not this source supports reading directly into device memory.
