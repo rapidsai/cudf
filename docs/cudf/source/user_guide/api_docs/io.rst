@@ -35,10 +35,10 @@ Parquet
 
    read_parquet
    DataFrame.to_parquet
-   cudf.io.parquet.read_parquet_metadata
-   cudf.io.parquet.ParquetDatasetWriter
-   cudf.io.parquet.ParquetDatasetWriter.close
-   cudf.io.parquet.ParquetDatasetWriter.write_table
+   io.parquet.read_parquet_metadata
+   io.parquet.ParquetDatasetWriter
+   io.parquet.ParquetDatasetWriter.close
+   io.parquet.ParquetDatasetWriter.write_table
 
 
 ORC

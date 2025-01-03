@@ -11193,3 +11193,32 @@ def test_dataframe_init_column():
     expect = cudf.DataFrame({"a": s})
     actual = cudf.DataFrame._from_arrays(s._column, columns=["a"])
     assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize("name", [None, "foo", 1, 1.0])
+def test_dataframe_column_name(name):
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    pdf = df.to_pandas()
+
+    df.columns.name = name
+    pdf.columns.name = name
+
+    assert_eq(df, pdf)
+    assert_eq(df.columns.name, pdf.columns.name)
+
+
+@pytest.mark.parametrize("names", [["abc", "def"], [1, 2], ["abc", 10]])
+def test_dataframe_multiindex_column_names(names):
+    arrays = [["A", "A", "B", "B"], ["one", "two", "one", "two"]]
+    tuples = list(zip(*arrays))
+    index = pd.MultiIndex.from_tuples(tuples, names=["first", "second"])
+
+    pdf = pd.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]], columns=index)
+    df = cudf.from_pandas(pdf)
+
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)
+    pdf.columns.names = names
+    df.columns.names = names
+    assert_eq(df, pdf)
+    assert_eq(df.columns.names, pdf.columns.names)

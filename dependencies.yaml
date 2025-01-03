@@ -757,7 +757,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pynvml>=11.4.1,<12.0.0a0
+          - pynvml>=12.0.0,<13.0.0a0
           - rapids-dask-dependency==25.2.*,>=0.0.0a0
   run_custreamz:
     common:
@@ -878,7 +878,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.23.*
-              - pyarrow==14.0.0
+              - pyarrow==14.*
           - matrix:
             packages:
       - output_types: conda
@@ -903,7 +903,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numpy==1.24.*
-              - pyarrow==14.0.1
+              - pyarrow==14.*
           - matrix:
             packages:
   test_python_cudf_polars:

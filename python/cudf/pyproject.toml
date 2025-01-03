@@ -98,8 +98,6 @@ filterwarnings = [
     "error",
     "ignore:::.*xdist.*",
     "ignore:::.*pytest.*",
-    # https://github.com/rapidsai/build-planning/issues/116
-    "ignore:.*cuda..* module is deprecated.*:DeprecationWarning",
     # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
     "ignore:.*datetime.*utcnow.*scheduled for removal.*:DeprecationWarning:botocore",
     # Deprecation warning from Pyarrow Table.to_pandas() with pandas-2.2+
