@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 #
 import argparse
 import os
@@ -144,6 +144,11 @@ def format_file_size(input_size):
     return file_size_str
 
 
+# adjust name for display
+def format_file_name(name):
+    return name.replace("placehold_placehold", "ph")
+
+
 # Output chart results in HTML format
 # Builds a standalone html file with no javascript or styles
 def output_html(entries, sorted_list, cmp_entries, args):
@@ -223,7 +228,8 @@ def output_html(entries, sorted_list, cmp_entries, args):
             print("<td height='20px' width='", size, "px' ", sep="", end="")
             # title text is shown as hover-text by most browsers
             print(color, "title='", end="")
-            print(name, "\n", build_time_str, "' ", sep="", end="")
+            display_name = format_file_name(name)
+            print(display_name, "\n", build_time_str, "' ", sep="", end="")
             # centers the name if it fits in the box
             print("align='center' nowrap>", end="")
             # use a slightly smaller, fixed-width font
@@ -265,7 +271,8 @@ def output_html(entries, sorted_list, cmp_entries, args):
         file_size_str = format_file_size(file_size)
 
         # output entry row
-        print("<tr ", color, "><td>", name, "</td>", sep="", end="")
+        display_name = format_file_name(name)
+        print("<tr ", color, "><td>", display_name, "</td>", sep="", end="")
         print("<td align='right'>", build_time_str, "</td>", sep="", end="")
         print("<td align='right'>", file_size_str, "</td>", sep="", end="")
         # output diff column
