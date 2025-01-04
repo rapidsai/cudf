@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -416,11 +416,11 @@ std::optional<std::string> is_compression_disabled(compression_type compression,
   memo_map_lock.unlock();
 
   if (reason.has_value()) {
-    CUDF_LOG_INFO("nvCOMP is disabled for {} compression; reason: {}",
+    CUDF_LOG_INFO("nvCOMP is disabled for %s compression; reason: %s",
                   compression_type_name(compression),
                   reason.value());
   } else {
-    CUDF_LOG_INFO("nvCOMP is enabled for {} compression", compression_type_name(compression));
+    CUDF_LOG_INFO("nvCOMP is enabled for %s compression", compression_type_name(compression));
   }
 
   return reason;
@@ -445,11 +445,11 @@ std::optional<std::string> is_decompression_disabled(compression_type compressio
   memo_map_lock.unlock();
 
   if (reason.has_value()) {
-    CUDF_LOG_INFO("nvCOMP is disabled for {} decompression; reason: {}",
+    CUDF_LOG_INFO("nvCOMP is disabled for %s decompression; reason: %s",
                   compression_type_name(compression),
                   reason.value());
   } else {
-    CUDF_LOG_INFO("nvCOMP is enabled for {} decompression", compression_type_name(compression));
+    CUDF_LOG_INFO("nvCOMP is enabled for %s decompression", compression_type_name(compression));
   }
 
   return reason;
