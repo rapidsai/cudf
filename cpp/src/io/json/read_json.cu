@@ -48,8 +48,19 @@ namespace cudf::io::json::detail {
 namespace {
 
 namespace pools {
-BS::thread_pool tpool(std::thread::hardware_concurrency());
-rmm::cuda_stream_pool spool(std::thread::hardware_concurrency());
+
+BS::thread_pool& tpool()
+{
+  static BS::thread_pool _tpool(std::thread::hardware_concurrency());
+  return _tpool;
+}
+
+rmm::cuda_stream_pool& spool()
+{
+  static rmm::cuda_stream_pool _spool(std::thread::hardware_concurrency());
+  return _spool;
+}
+
 }  // namespace pools
 
 class compressed_host_buffer_source final : public datasource {
@@ -110,7 +121,8 @@ class compressed_host_buffer_source final : public datasource {
                                         uint8_t* dst,
                                         rmm::cuda_stream_view stream) override
   {
-    return pools::tpool.submit_task([this, offset, size, dst, stream] {
+    auto& thread_pool = pools::tpool();
+    return thread_pool.submit_task([this, offset, size, dst, stream] {
       auto hbuf = host_read(offset, size);
       CUDF_CUDA_TRY(
         cudaMemcpyAsync(dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, stream.value()));
@@ -455,6 +467,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   // delimiter.
   auto constexpr num_delimiter_chars = 1;
   std::vector<std::future<size_t>> thread_tasks;
+  auto& stream_pool = pools::spool();
 
   auto delimiter_map = cudf::detail::make_empty_host_vector<std::size_t>(sources.size(), stream);
   std::vector<std::size_t> prefsum_source_sizes(sources.size());
@@ -478,7 +491,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                        (num_delimiter_chars * delimiter_map.size());
     if (sources[i]->supports_device_read()) {
       thread_tasks.emplace_back(sources[i]->device_read_async(
-        range_offset, data_size, destination, pools::spool.get_stream()));
+        range_offset, data_size, destination, stream_pool.get_stream()));
       bytes_read += data_size;
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
@@ -541,8 +554,9 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
 
   std::vector<std::unique_ptr<datasource>> compressed_sources;
   std::vector<std::future<std::unique_ptr<compressed_host_buffer_source>>> thread_tasks;
+  auto& thread_pool = pools::tpool();
   for (auto& src : sources) {
-    thread_tasks.emplace_back(pools::tpool.submit_task([&reader_opts, &src] {
+    thread_tasks.emplace_back(thread_pool.submit_task([&reader_opts, &src] {
       auto compsrc =
         std::make_unique<compressed_host_buffer_source>(src, reader_opts.get_compression());
       return compsrc;
