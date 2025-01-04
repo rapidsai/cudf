@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 
 namespace cudf {
 
-host_udf_base::data_attribute::data_attribute(data_attribute const& other)
+host_udf_groupby_base::data_attribute::data_attribute(data_attribute const& other)
   : value{std::visit(cudf::detail::visitor_overload{[](auto const& val) { return value_type{val}; },
                                                     [](std::unique_ptr<aggregation> const& val) {
                                                       return value_type{val->clone()};
@@ -29,7 +29,8 @@ host_udf_base::data_attribute::data_attribute(data_attribute const& other)
 {
 }
 
-std::size_t host_udf_base::data_attribute::hash::operator()(data_attribute const& attr) const
+std::size_t host_udf_groupby_base::data_attribute::hash::operator()(
+  data_attribute const& attr) const
 {
   auto const hash_value =
     std::visit(cudf::detail::visitor_overload{
@@ -39,8 +40,8 @@ std::size_t host_udf_base::data_attribute::hash::operator()(data_attribute const
   return std::hash<std::size_t>{}(attr.value.index()) ^ hash_value;
 }
 
-bool host_udf_base::data_attribute::equal_to::operator()(data_attribute const& lhs,
-                                                         data_attribute const& rhs) const
+bool host_udf_groupby_base::data_attribute::equal_to::operator()(data_attribute const& lhs,
+                                                                 data_attribute const& rhs) const
 {
   auto const& lhs_val = lhs.value;
   auto const& rhs_val = rhs.value;
@@ -99,5 +100,9 @@ template CUDF_EXPORT std::unique_ptr<aggregation> make_host_udf_aggregation<aggr
   std::unique_ptr<host_udf_base>);
 template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
   make_host_udf_aggregation<groupby_aggregation>(std::unique_ptr<host_udf_base>);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+  make_host_udf_aggregation<reduce_aggregation>(std::unique_ptr<host_udf_base>);
+template CUDF_EXPORT std::unique_ptr<segmented_reduce_aggregation>
+  make_host_udf_aggregation<segmented_reduce_aggregation>(std::unique_ptr<host_udf_base>);
 
 }  // namespace cudf
