@@ -1,11 +1,11 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import copy
 import decimal
 import operator
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -171,13 +171,44 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
         # pyarrow only supports decimal128
         if isinstance(dtype, Decimal32Dtype):
             plc_type = plc.DataType(plc.TypeId.DECIMAL32, -dtype.scale)
-        if isinstance(dtype, Decimal64Dtype):
+        elif isinstance(dtype, Decimal64Dtype):
             plc_type = plc.DataType(plc.TypeId.DECIMAL64, -dtype.scale)
         plc_column = plc.unary.cast(
             plc.Column.from_scalar(plc_scalar, 1), plc_type
         )
         plc_scalar = plc.copying.get_element(plc_column, 0)
     return plc_scalar
+
+
+def gather_metadata(
+    dtypes: dict[str, Any],
+) -> list[plc.interop.ColumnMetadata]:
+    """Convert a dict of dtypes to a list of ColumnMetadata objects.
+
+    The metadata is constructed recursively so that nested types are
+    represented as nested ColumnMetadata objects.
+
+    Parameters
+    ----------
+    dtypes : dict
+        A dict mapping column names to dtypes.
+
+    Returns
+    -------
+    List[ColumnMetadata]
+        A list of ColumnMetadata objects.
+    """
+    out = []
+    for name, dtype in dtypes.items():
+        v = plc.interop.ColumnMetadata(name)
+        if isinstance(dtype, cudf.StructDtype):
+            v.children_meta = gather_metadata(dtype.fields)
+        elif isinstance(dtype, cudf.ListDtype):
+            # Offsets column is unnamed and has no children
+            v.children_meta.append(plc.interop.ColumnMetadata(""))
+            v.children_meta.extend(gather_metadata({"": dtype.element_type}))
+        out.append(v)
+    return out
 
 
 # Note that the metaclass below can easily be generalized for use with
@@ -339,7 +370,33 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         return not cudf._lib.scalar._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self) -> None:
-        self._host_value = self._device_value._to_host_scalar()
+        is_datetime = self.dtype.kind == "M"
+        is_timedelta = self.dtype.kind == "m"
+
+        null_type = NaT if is_datetime or is_timedelta else NA
+
+        metadata = gather_metadata({"": self.dtype})[0]
+        ps = plc.interop.to_arrow(self._device_value, metadata)
+        if not ps.is_valid:
+            self._host_value = null_type
+        else:
+            # TODO: The special handling of specific types below does not currently
+            # extend to nested types containing those types (e.g. List[timedelta]
+            # where the timedelta would overflow). We should eventually account for
+            # those cases, but that will require more careful consideration of how
+            # to traverse the contents of the nested data.
+            if is_datetime or is_timedelta:
+                time_unit, _ = np.datetime_data(self.dtype)
+                # Cast to int64 to avoid overflow
+                ps_cast = ps.cast("int64").as_py()
+                out_type = np.datetime64 if is_datetime else np.timedelta64
+                self._host_value = out_type(ps_cast, time_unit)
+            elif cudf.api.types.is_numeric_dtype(self.dtype):
+                self._host_value = ps.type.to_pandas_dtype()(ps.as_py())
+            else:
+                host_value = ps.as_py()
+                _replace_nested(host_value, lambda item: item is None, NA)
+                self._host_value = host_value
 
     def _sync(self) -> None:
         """
@@ -353,7 +410,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 self._host_value, self._host_dtype
             )
         elif self._is_device_value_current and not self._is_host_value_current:
-            self._host_value = self._device_value.value
+            self._device_value_to_host()
             self._host_dtype = self._host_value.dtype
         else:
             raise ValueError("Invalid cudf.Scalar")
@@ -476,10 +533,10 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def _scalar_unaop(self, op) -> None | Self:
         out_dtype = self._unaop_result_type_or_error(op)
         if not self.is_valid():
-            return
+            return None
         else:
             result = self._dispatch_scalar_unaop(op)
-            return Scalar(result, dtype=out_dtype)
+            return Scalar(result, dtype=out_dtype)  # type: ignore[return-value]
 
     def _dispatch_scalar_unaop(self, op):
         if op == "__floor__":
@@ -491,4 +548,4 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def astype(self, dtype) -> Self:
         if self.dtype == dtype:
             return self
-        return Scalar(self.value, dtype)
+        return Scalar(self.value, dtype)  # type: ignore[return-value]
