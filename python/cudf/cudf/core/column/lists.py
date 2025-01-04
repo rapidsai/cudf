@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -274,7 +274,7 @@ class ListColumn(ColumnBase):
         with acquire_spill_lock():
             plc_column = plc.strings.convert.convert_lists.format_list_column(
                 lc.to_pylibcudf(mode="read"),
-                cudf.Scalar("None").device_value.c_value,
+                plc.interop.from_arrow(pa.scalar("None")),
                 separators.to_pylibcudf(mode="read"),
             )
             return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
@@ -380,20 +380,20 @@ class ListColumn(ColumnBase):
         )
 
     @acquire_spill_lock()
-    def contains_scalar(self, search_key: cudf.Scalar) -> ColumnBase:
+    def contains_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.contains(
                 self.to_pylibcudf(mode="read"),
-                search_key.device_value.c_value,
+                plc.interop.from_arrow(search_key),
             )
         )
 
     @acquire_spill_lock()
-    def index_of_scalar(self, search_key: cudf.Scalar) -> ColumnBase:
+    def index_of_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.index_of(
                 self.to_pylibcudf(mode="read"),
-                search_key.device_value.c_value,
+                plc.interop.from_arrow(search_key),
                 plc.lists.DuplicateFindOption.FIND_FIRST,
             )
         )
@@ -558,7 +558,7 @@ class ListMethods(ColumnMethods):
         dtype: bool
         """
         return self._return_or_inplace(
-            self._column.contains_scalar(cudf.Scalar(search_key))
+            self._column.contains_scalar(pa.scalar(search_key))
         )
 
     def index(self, search_key: ScalarLike | ColumnLike) -> ParentType:
@@ -607,7 +607,7 @@ class ListMethods(ColumnMethods):
         """
 
         if is_scalar(search_key):
-            result = self._column.index_of_scalar(cudf.Scalar(search_key))
+            result = self._column.index_of_scalar(pa.scalar(search_key))
         else:
             result = self._column.index_of_column(as_column(search_key))
         return self._return_or_inplace(result)

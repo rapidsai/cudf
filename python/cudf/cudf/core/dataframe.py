@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -6262,10 +6262,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # TODO: propagate nulls through isin
         # https://github.com/rapidsai/cudf/issues/7556
 
-        fill_value = cudf.Scalar(False)
-
         def make_false_column_like_self():
-            return column.as_column(fill_value, length=len(self), dtype="bool")
+            return column.as_column(False, length=len(self), dtype="bool")
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.

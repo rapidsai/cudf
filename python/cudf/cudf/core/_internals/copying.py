@@ -1,7 +1,9 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
+import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -11,6 +13,7 @@ from cudf.core.buffer import acquire_spill_lock
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from cudf._typing import ScalarLike
     from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
 
@@ -36,7 +39,7 @@ def gather(
 
 @acquire_spill_lock()
 def scatter(
-    sources: list[ColumnBase | cudf.Scalar],
+    sources: list[ColumnBase | ScalarLike],
     scatter_map: NumericalColumn,
     target_columns: list[ColumnBase],
     bounds_check: bool = True,
@@ -67,7 +70,7 @@ def scatter(
     plc_tbl = plc.copying.scatter(
         plc.Table([col.to_pylibcudf(mode="read") for col in sources])  # type: ignore[union-attr]
         if isinstance(sources[0], cudf._lib.column.Column)
-        else [slr.device_value.c_value for slr in sources],  # type: ignore[union-attr]
+        else [plc.interop.from_arrow(pa.scalar(slr)) for slr in sources],  # type: ignore[union-attr]
         scatter_map.to_pylibcudf(mode="read"),
         plc.Table([col.to_pylibcudf(mode="read") for col in target_columns]),
     )

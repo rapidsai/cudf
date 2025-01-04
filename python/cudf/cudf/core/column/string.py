@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -302,8 +302,10 @@ class StringMethods(ColumnMethods):
             with acquire_spill_lock():
                 plc_column = plc.strings.combine.join_strings(
                     self._column.to_pylibcudf(mode="read"),
-                    cudf.Scalar(sep).device_value.c_value,
-                    cudf.Scalar(na_rep, "str").device_value.c_value,
+                    plc.interop.from_arrow(pa.scalar(sep)),
+                    plc.interop.from_arrow(
+                        pa.scalar(na_rep, type=pa.string())
+                    ),
                 )
                 data = Column.from_pylibcudf(plc_column)
         else:
@@ -359,8 +361,10 @@ class StringMethods(ColumnMethods):
                             )
                         ]
                     ),
-                    cudf.Scalar(sep).device_value.c_value,
-                    cudf.Scalar(na_rep, "str").device_value.c_value,
+                    plc.interop.from_arrow(pa.scalar(sep)),
+                    plc.interop.from_arrow(
+                        pa.scalar(na_rep, type=pa.string())
+                    ),
                 )
                 data = Column.from_pylibcudf(plc_column)
 
@@ -522,11 +526,9 @@ class StringMethods(ColumnMethods):
             with acquire_spill_lock():
                 plc_column = plc.strings.combine.join_list_elements(
                     strings_column.to_pylibcudf(mode="read"),
-                    cudf.Scalar(sep).device_value.c_value,
-                    cudf.Scalar(string_na_rep).device_value.c_value,
-                    cudf._lib.scalar.DeviceScalar(
-                        "", cudf.dtype("object")
-                    ).c_value,
+                    plc.interop.from_arrow(pa.scalar(sep)),
+                    plc.interop.from_arrow(pa.scalar(string_na_rep)),
+                    plc.interop.from_arrow(pa.scalar("")),
                     plc.strings.combine.SeparatorOnNulls.YES,
                     plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
                 )
@@ -547,8 +549,8 @@ class StringMethods(ColumnMethods):
                 plc_column = plc.strings.combine.join_list_elements(
                     strings_column.to_pylibcudf(mode="read"),
                     sep_column.to_pylibcudf(mode="read"),
-                    cudf.Scalar(sep_na_rep).device_value.c_value,
-                    cudf.Scalar(string_na_rep).device_value.c_value,
+                    plc.interop.from_arrow(pa.scalar(sep_na_rep)),
+                    plc.interop.from_arrow(pa.scalar(string_na_rep)),
                     plc.strings.combine.SeparatorOnNulls.YES,
                     plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
                 )
@@ -800,14 +802,14 @@ class StringMethods(ColumnMethods):
             else:
                 if case is False:
                     input_column = self.lower()._column  # type: ignore[union-attr]
-                    plc_pat = cudf.Scalar(pat.lower(), dtype="str")  # type: ignore[union-attr]
+                    pat_normed = pat.lower()  # type: ignore[union-attr]
                 else:
                     input_column = self._column
-                    plc_pat = cudf.Scalar(pat, dtype="str")
+                    pat_normed = pat
                 with acquire_spill_lock():
                     plc_result = plc.strings.find.contains(
                         input_column.to_pylibcudf(mode="read"),
-                        plc_pat.device_value.c_value,
+                        plc.interop.from_arrow(pa.scalar(pat_normed)),
                     )
                     result_col = Column.from_pylibcudf(plc_result)
         else:
@@ -892,8 +894,8 @@ class StringMethods(ColumnMethods):
         with acquire_spill_lock():
             plc_result = plc.strings.contains.like(
                 self._column.to_pylibcudf(mode="read"),
-                cudf.Scalar(pat, "str").device_value.c_value,
-                cudf.Scalar(esc, "str").device_value.c_value,
+                plc.interop.from_arrow(pa.scalar(pat)),
+                plc.interop.from_arrow(pa.scalar(esc)),
             )
             result = Column.from_pylibcudf(plc_result)
 
@@ -1071,14 +1073,14 @@ class StringMethods(ColumnMethods):
                     plc.strings.regex_program.RegexProgram.create(
                         pat, plc.strings.regex_flags.RegexFlags.DEFAULT
                     ),
-                    cudf.Scalar(repl, "str").device_value.c_value,
+                    plc.interop.from_arrow(pa.scalar(repl)),
                     n,
                 )
             else:
                 plc_result = plc.strings.replace.replace(
                     self._column.to_pylibcudf(mode="read"),
-                    cudf.Scalar(pat).device_value.c_value,
-                    cudf.Scalar(repl).device_value.c_value,
+                    plc.interop.from_arrow(pa.scalar(pat)),
+                    plc.interop.from_arrow(pa.scalar(repl)),
                     n,
                 )
             result = Column.from_pylibcudf(plc_result)
@@ -1194,13 +1196,13 @@ class StringMethods(ColumnMethods):
         2    cm
         dtype: object
         """
-        param_dtype = np.dtype(np.int32)
+        param_dtype = pa.int32()
         with acquire_spill_lock():
             plc_result = plc.strings.slice.slice_strings(
                 self._column.to_pylibcudf(mode="read"),
-                cudf.Scalar(start, param_dtype).device_value.c_value,
-                cudf.Scalar(stop, param_dtype).device_value.c_value,
-                cudf.Scalar(step, param_dtype).device_value.c_value,
+                plc.interop.from_arrow(pa.scalar(start, param_dtype)),
+                plc.interop.from_arrow(pa.scalar(stop, param_dtype)),
+                plc.interop.from_arrow(pa.scalar(step, param_dtype)),
             )
             result = Column.from_pylibcudf(plc_result)
         return self._return_or_inplace(result)
@@ -2174,7 +2176,7 @@ class StringMethods(ColumnMethods):
                 plc.strings.char_types.StringCharacterTypes.ALL_TYPES
                 if keep
                 else plc.strings.char_types.StringCharacterTypes.ALPHANUM,
-                cudf.Scalar(repl, "str").device_value.c_value,
+                plc.interop.from_arrow(pa.scalar(repl)),
                 plc.strings.char_types.StringCharacterTypes.ALPHANUM
                 if keep
                 else plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
@@ -2499,7 +2501,7 @@ class StringMethods(ColumnMethods):
         with acquire_spill_lock():
             plc_result = plc.json.get_json_object(
                 self._column.to_pylibcudf(mode="read"),
-                cudf.Scalar(json_path, "str").device_value.c_value,
+                plc.interop.from_arrow(pa.scalar(json_path)),
                 options,
             )
             result = Column.from_pylibcudf(plc_result)
@@ -6033,8 +6035,10 @@ class StringColumn(column.ColumnBase):
                                 rhs.to_pylibcudf(mode="read"),
                             ]
                         ),
-                        cudf.Scalar("").device_value.c_value,
-                        cudf.Scalar(None, "str").device_value.c_value,
+                        plc.interop.from_arrow(pa.scalar("")),
+                        plc.interop.from_arrow(
+                            pa.scalar(None, type=pa.string())
+                        ),
                     )
                     return Column.from_pylibcudf(plc_column)
             elif op in {
@@ -6160,13 +6164,13 @@ class StringColumn(column.ColumnBase):
     def byte_pair_encoding(
         self,
         merge_pairs: plc.nvtext.byte_pair_encode.BPEMergePairs,
-        separator: cudf.Scalar,
+        separator: str,
     ) -> Self:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.byte_pair_encode.byte_pair_encoding(
                 self.to_pylibcudf(mode="read"),
                 merge_pairs,
-                separator.device_value.c_value,
+                plc.interop.from_arrow(pa.scalar(separator)),
             )
         )
 
@@ -6324,14 +6328,14 @@ class StringColumn(column.ColumnBase):
     def tokenize_with_vocabulary(
         self,
         vocabulary: plc.nvtext.tokenize.TokenizeVocabulary,
-        delimiter: cudf.Scalar,
+        delimiter: str,
         default_id: int,
     ) -> Self:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.tokenize.tokenize_with_vocabulary(
                 self.to_pylibcudf(mode="read"),
                 vocabulary,
-                delimiter.device_value.c_value,
+                plc.interop.from_arrow(pa.scalar(delimiter)),
                 default_id,
             )
         )

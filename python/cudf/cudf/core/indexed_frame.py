@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -3247,7 +3247,7 @@ class IndexedFrame(Frame):
             )
             distinct = libcudf.column.Column.from_pylibcudf(plc_column)
         result = copying.scatter(
-            [cudf.Scalar(False, dtype=bool)],
+            [False],
             distinct,
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
