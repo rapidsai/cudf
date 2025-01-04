@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,26 +160,18 @@ using std::is_scoped_enum;
 #endif
 
 // helpers to do bit operations on scoped enums
-template <class T1,
-          class T2,
-          typename std::enable_if_t<(is_scoped_enum<T1>::value and std::is_same_v<T1, T2>) or
-                                    (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
-                                    (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
-            nullptr>
-constexpr uint32_t BitAnd(T1 a, T2 b)
+template <typename... Ts,
+          CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
+constexpr std::uint32_t BitAnd(Ts... bits)
 {
-  return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
+  return (... & static_cast<std::uint32_t>(bits));
 }
 
-template <class T1,
-          class T2,
-          typename std::enable_if_t<(is_scoped_enum<T1>::value and std::is_same_v<T1, T2>) or
-                                    (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
-                                    (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
-            nullptr>
-constexpr uint32_t BitOr(T1 a, T2 b)
+template <typename... Ts,
+          CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
+constexpr std::uint32_t BitOr(Ts... bits)
 {
-  return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
+  return (... | static_cast<std::uint32_t>(bits));
 }
 
 /**
@@ -224,15 +216,35 @@ enum class decode_kernel_mask {
   FIXED_WIDTH_NO_DICT_LIST   = (1 << 13),  // Run decode kernel for fixed width non-dictionary pages
   BYTE_STREAM_SPLIT_FIXED_WIDTH_LIST =
     (1 << 14),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data for fixed width lists
-  BOOLEAN        = (1 << 15),  // Run decode kernel for boolean data
-  BOOLEAN_NESTED = (1 << 16),  // Run decode kernel for nested boolean data
-  BOOLEAN_LIST   = (1 << 17),  // Run decode kernel for list boolean data
+  BOOLEAN             = (1 << 15),  // Run decode kernel for boolean data
+  BOOLEAN_NESTED      = (1 << 16),  // Run decode kernel for nested boolean data
+  BOOLEAN_LIST        = (1 << 17),  // Run decode kernel for list boolean data
+  STRING_NESTED       = (1 << 18),  // Run decode kernel for nested string data
+  STRING_LIST         = (1 << 19),  // Run decode kernel for list string data
+  STRING_DICT         = (1 << 20),  // Run decode kernel for dictionary string data
+  STRING_DICT_NESTED  = (1 << 21),  // Run decode kernel for nested dictionary string data
+  STRING_DICT_LIST    = (1 << 22),  // Run decode kernel for list dictionary string data
+  STRING_STREAM_SPLIT = (1 << 23),  // Run decode kernel for BYTE_STREAM_SPLIT string data
+  STRING_STREAM_SPLIT_NESTED =
+    (1 << 24),  // Run decode kernel for nested BYTE_STREAM_SPLIT string data
+  STRING_STREAM_SPLIT_LIST = (1 << 25)  // Run decode kernel for list BYTE_STREAM_SPLIT string data
 };
 
+constexpr uint32_t STRINGS_MASK_NON_DELTA = BitOr(decode_kernel_mask::STRING,
+                                                  decode_kernel_mask::STRING_NESTED,
+                                                  decode_kernel_mask::STRING_LIST,
+                                                  decode_kernel_mask::STRING_DICT,
+                                                  decode_kernel_mask::STRING_DICT_NESTED,
+                                                  decode_kernel_mask::STRING_DICT_LIST,
+                                                  decode_kernel_mask::STRING_STREAM_SPLIT,
+                                                  decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
+                                                  decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+
 // mask representing all the ways in which a string can be encoded
-constexpr uint32_t STRINGS_MASK =
-  BitOr(BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY, decode_kernel_mask::STRING),
-        decode_kernel_mask::DELTA_LENGTH_BA);
+constexpr uint32_t STRINGS_MASK = BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY,
+                                        decode_kernel_mask::DELTA_LENGTH_BA,
+                                        STRINGS_MASK_NON_DELTA);
+
 /**
  * @brief Nesting information specifically needed by the decode and preprocessing
  * kernels.
@@ -816,28 +828,6 @@ void DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
 void WriteFinalOffsets(host_span<size_type const> offsets,
                        host_span<size_type* const> buff_addrs,
                        rmm::cuda_stream_view stream);
-
-/**
- * @brief Launches kernel for reading the string column data stored in the pages
- *
- * The page data will be written to the output pointed to in the page's
- * associated column chunk.
- *
- * @param[in,out] pages All pages to be decoded
- * @param[in] chunks All chunks to be decoded
- * @param[in] num_rows Total number of rows to read
- * @param[in] min_row Minimum number of rows to read
- * @param[in] level_type_size Size in bytes of the type for level decoding
- * @param[out] error_code Error code for kernel failures
- * @param[in] stream CUDA stream to use
- */
-void DecodeStringPageData(cudf::detail::hostdevice_span<PageInfo> pages,
-                          cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                          size_t num_rows,
-                          size_t min_row,
-                          int level_type_size,
-                          kernel_error::pointer error_code,
-                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for reading the DELTA_BINARY_PACKED column data stored in the pages

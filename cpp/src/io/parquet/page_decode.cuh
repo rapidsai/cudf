@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -197,12 +197,11 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @return A pair containing a pointer to the string and its length
  */
 template <typename state_buf>
-inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_state_s* s,
-                                                                        state_buf* sb,
-                                                                        int src_pos)
+inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf* sb, int src_pos)
 {
   char const* ptr = nullptr;
-  size_t len      = 0;
+  using len_type  = std::tuple_element<1, string_index_pair>::type;
+  len_type len    = 0;
 
   if (s->dict_base) {
     // String dictionary
@@ -211,9 +210,7 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_sta
         ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] * sizeof(string_index_pair)
         : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
-      auto const* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
-      ptr             = src->first;
-      len             = src->second;
+      return *reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
     }
   } else {
     // Plain encoding

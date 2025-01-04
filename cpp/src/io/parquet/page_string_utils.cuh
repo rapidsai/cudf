@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,21 +72,6 @@ inline __device__ void wideStrcpy(uint8_t* dst, uint8_t const* src, size_t len, 
 }
 
 /**
- * @brief char-parallel string copy.
- */
-inline __device__ void ll_strcpy(uint8_t* dst, uint8_t const* src, size_t len, uint32_t lane_id)
-{
-  using cudf::detail::warp_size;
-  if (len > 64) {
-    wideStrcpy(dst, src, len, lane_id);
-  } else {
-    for (int i = lane_id; i < len; i += warp_size) {
-      dst[i] = src[i];
-    }
-  }
-}
-
-/**
  * @brief Perform exclusive scan on an array of any length using a single block of threads.
  */
 template <int block_size>
@@ -100,9 +85,13 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
   for (int pos = 0; pos < length; pos += block_size) {
     int const tidx = pos + t;
     size_type tval = tidx < length ? arr[tidx] : 0;
+
     size_type block_sum;
-    block_scan(scan_storage).ExclusiveScan(tval, tval, initial_value, cub::Sum(), block_sum);
-    if (tidx < length) { arr[tidx] = tval; }
+    size_type new_tval;
+    block_scan(scan_storage).ExclusiveSum(tval, new_tval, block_sum);
+    __syncthreads();
+
+    if (tidx < length) { arr[tidx] = new_tval + initial_value; }
     initial_value += block_sum;
   }
 }
