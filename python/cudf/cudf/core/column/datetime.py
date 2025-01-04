@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -211,6 +211,8 @@ class DatetimeColumn(column.ColumnBase):
         "__radd__",
         "__rsub__",
     }
+
+    _PANDAS_NA_REPR = str(pd.NaT)
 
     def __init__(
         self,

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -79,6 +79,8 @@ class TimeDeltaColumn(ColumnBase):
         "__rtruediv__",
         "__rfloordiv__",
     }
+
+    _PANDAS_NA_REPR = str(pd.NaT)
 
     def __init__(
         self,

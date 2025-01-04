@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -818,6 +818,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 )
             ),
             inplace=inplace,
+        )
+
+    def _pandas_repr_compatible(self) -> Self:
+        """Return Self but with columns prepared for a pandas-like repr."""
+        columns = (col._prep_pandas_compat_repr() for col in self._columns)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(columns, verify=False)
         )
 
     @_performance_tracking
