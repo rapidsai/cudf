@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -156,8 +156,9 @@ add_library(
   src/ScalarJni.cpp
   src/TableJni.cpp
   src/aggregation128_utils.cu
-  src/maps_column_view.cu
   src/check_nvcomp_output_sizes.cu
+  src/maps_column_view.cu
+  src/multi_host_buffer_source.cpp
 )
 
 # Disable NVTX if necessary

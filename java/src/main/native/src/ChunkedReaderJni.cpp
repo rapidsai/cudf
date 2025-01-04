@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include "cudf_jni_apis.hpp"
 #include "jni_utils.hpp"
+#include "multi_host_buffer_source.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/io/orc.hpp>
@@ -36,7 +37,7 @@ extern "C" {
 
 // This function should take all the parameters that `Table.readParquet` takes,
 // plus one more parameter `long chunkSizeByteLimit`.
-JNIEXPORT jlong JNICALL
+JNIEXPORT jlongArray JNICALL
 Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
                                                 jclass,
                                                 jlong chunk_read_limit,
@@ -44,27 +45,26 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
                                                 jobjectArray filter_col_names,
                                                 jbooleanArray j_col_binary_read,
                                                 jstring inp_file_path,
-                                                jlong buffer,
-                                                jlong buffer_length,
+                                                jlongArray addrs_sizes,
                                                 jint unit)
 {
-  JNI_NULL_CHECK(env, j_col_binary_read, "Null col_binary_read", 0);
+  JNI_NULL_CHECK(env, j_col_binary_read, "Null col_binary_read", nullptr);
   bool read_buffer = true;
-  if (buffer == 0) {
-    JNI_NULL_CHECK(env, inp_file_path, "Input file or buffer must be supplied", 0);
+  if (addrs_sizes == nullptr) {
+    JNI_NULL_CHECK(env, inp_file_path, "Input file or buffer must be supplied", nullptr);
     read_buffer = false;
   } else if (inp_file_path != nullptr) {
-    JNI_THROW_NEW(
-      env, cudf::jni::ILLEGAL_ARG_CLASS, "Cannot pass in both a buffer and an inp_file_path", 0);
-  } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", 0);
+    JNI_THROW_NEW(env,
+                  cudf::jni::ILLEGAL_ARG_CLASS,
+                  "Cannot pass in both buffers and an inp_file_path",
+                  nullptr);
   }
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inp_file_path);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inp_file_path cannot be empty", 0);
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inp_file_path cannot be empty", nullptr);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
@@ -75,9 +75,15 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     cudf::jni::native_jbooleanArray n_col_binary_read(env, j_col_binary_read);
     (void)n_col_binary_read;
 
-    auto const source = read_buffer ? cudf::io::source_info(reinterpret_cast<char*>(buffer),
-                                                            static_cast<std::size_t>(buffer_length))
-                                    : cudf::io::source_info(filename.get());
+    cudf::jni::native_jlongArray n_addrs_sizes(env, addrs_sizes);
+    std::unique_ptr<cudf::io::datasource> multi_buffer_source;
+    cudf::io::source_info source;
+    if (read_buffer) {
+      multi_buffer_source.reset(new cudf::jni::multi_host_buffer_source(n_addrs_sizes));
+      source = cudf::io::source_info(multi_buffer_source.get());
+    } else {
+      source = cudf::io::source_info(filename.get());
+    }
 
     auto opts_builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
@@ -86,13 +92,18 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     auto const read_opts = opts_builder.convert_strings_to_categories(false)
                              .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
                              .build();
-
-    return reinterpret_cast<jlong>(
+    n_addrs_sizes.cancel();
+    n_col_binary_read.cancel();
+    auto reader_handle = reinterpret_cast<jlong>(
       new cudf::io::chunked_parquet_reader(static_cast<std::size_t>(chunk_read_limit),
                                            static_cast<std::size_t>(pass_read_limit),
                                            read_opts));
+    cudf::jni::native_jlongArray result(env, 2);
+    result[0] = reader_handle;
+    result[1] = cudf::jni::release_as_jlong(multi_buffer_source);
+    return result.get_jArray();
   }
-  CATCH_STD(env, 0);
+  CATCH_STD(env, nullptr);
 }
 
 JNIEXPORT jlong JNICALL
@@ -173,6 +184,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_close(JNIEnv* en
   try {
     cudf::jni::auto_set_device(env);
     delete reinterpret_cast<cudf::io::chunked_parquet_reader*>(handle);
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_destroyMultiHostBufferSource(
+  JNIEnv* env, jclass, jlong handle)
+{
+  JNI_NULL_CHECK(env, handle, "handle is null", );
+
+  try {
+    delete reinterpret_cast<cudf::jni::multi_host_buffer_source*>(handle);
   }
   CATCH_STD(env, );
 }

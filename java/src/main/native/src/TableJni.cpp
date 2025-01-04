@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "jni_compiled_expr.hpp"
 #include "jni_utils.hpp"
 #include "jni_writer_data_sink.hpp"
+#include "multi_host_buffer_source.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -2071,20 +2072,17 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv* env,
                                                                    jobjectArray filter_col_names,
                                                                    jbooleanArray j_col_binary_read,
                                                                    jstring inputfilepath,
-                                                                   jlong buffer,
-                                                                   jlong buffer_length,
+                                                                   jlongArray addrs_and_sizes,
                                                                    jint unit)
 {
   JNI_NULL_CHECK(env, j_col_binary_read, "null col_binary_read", 0);
   bool read_buffer = true;
-  if (buffer == 0) {
+  if (addrs_and_sizes == nullptr) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
     read_buffer = false;
   } else if (inputfilepath != NULL) {
     JNI_THROW_NEW(
       env, cudf::jni::ILLEGAL_ARG_CLASS, "cannot pass in both a buffer and an inputfilepath", NULL);
-  } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", NULL);
   }
 
   try {
@@ -2096,10 +2094,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv* env,
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
     cudf::jni::native_jbooleanArray n_col_binary_read(env, j_col_binary_read);
-
-    auto source = read_buffer ? cudf::io::source_info(reinterpret_cast<char*>(buffer),
-                                                      static_cast<std::size_t>(buffer_length))
-                              : cudf::io::source_info(filename.get());
+    cudf::jni::native_jlongArray n_addrs_sizes(env, addrs_and_sizes);
+    std::unique_ptr<cudf::io::datasource> multi_buffer_source;
+    cudf::io::source_info source;
+    if (read_buffer) {
+      multi_buffer_source.reset(new cudf::jni::multi_host_buffer_source(n_addrs_sizes));
+      source = cudf::io::source_info(multi_buffer_source.get());
+    } else {
+      source = cudf::io::source_info(filename.get());
+    }
 
     auto builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
@@ -2110,7 +2113,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv* env,
       builder.convert_strings_to_categories(false)
         .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
         .build();
-    return convert_table_for_return(env, cudf::io::read_parquet(opts).tbl);
+    auto tbl = cudf::io::read_parquet(opts).tbl;
+    n_col_binary_read.cancel();
+    n_addrs_sizes.cancel();
+    return convert_table_for_return(env, tbl);
   }
   CATCH_STD(env, NULL);
 }
