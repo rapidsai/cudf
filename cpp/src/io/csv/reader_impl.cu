@@ -771,7 +771,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     if (!reader_opts.is_enabled_mangle_dupe_cols()) {
       for (auto& col_name : column_names) {
         if (++col_names_counts[col_name] > 1) {
-          CUDF_LOG_WARN("Multiple columns with name {}; only the first appearance is parsed",
+          CUDF_LOG_WARN("Multiple columns with name %s; only the first appearance is parsed",
                         col_name);
 
           auto const idx    = &col_name - column_names.data();

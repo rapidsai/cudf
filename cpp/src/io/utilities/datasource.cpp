@@ -55,7 +55,7 @@ class file_source : public datasource {
     if (cufile_integration::is_kvikio_enabled()) {
       cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath);
-      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
+      CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode %s.",
                     _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
     } else {
       _cufile_in = detail::make_cufile_input(filepath);
@@ -230,7 +230,7 @@ class memory_mapped_source : public file_source {
   {
     if (_map_addr != nullptr) {
       auto const result = munmap(_map_addr, _map_size);
-      if (result != 0) { CUDF_LOG_WARN("munmap failed with {}", result); }
+      if (result != 0) { CUDF_LOG_WARN("munmap failed with %d", result); }
       _map_addr = nullptr;
     }
   }
