@@ -35,6 +35,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/functional>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
@@ -196,7 +197,7 @@ struct sub_offset_fn {
   {
     // keep delimiter search within this sub-block
     auto const end =
-      d_input_chars + std::min(last_offset, ((idx + 2) * LS_SUB_BLOCK_SIZE) + first_offset);
+      d_input_chars + cuda::std::min(last_offset, ((idx + 2) * LS_SUB_BLOCK_SIZE) + first_offset);
     // starting point of this sub-block
     auto itr = d_input_chars + first_offset + ((idx + 1) * LS_SUB_BLOCK_SIZE);
     while ((itr < end) &&
