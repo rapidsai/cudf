@@ -2983,7 +2983,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowDynamicNegative() {
-    try (ColumnVector precedingCol = ColumnVector.fromInts(3, 3, 3, 4, 4);
+    try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 4, 4);
          ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, 0)) {
       try (WindowOptions window = WindowOptions.builder()
           .minPeriods(2).window(precedingCol, followingCol).build()) {
@@ -3014,7 +3014,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testWindowDynamic() {
     try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 1, 2);
-         ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 2, 2)) {
+         ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 1, 0)) {
       try (WindowOptions window = WindowOptions.builder().minPeriods(2)
           .window(precedingCol, followingCol).build()) {
         try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
