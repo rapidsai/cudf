@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import warnings
 from collections.abc import Iterator
@@ -17,13 +17,6 @@ from dask.dataframe.backends import (
     DataFrameBackendEntrypoint,
     PandasBackendEntrypoint,
 )
-from dask.dataframe.core import (
-    DataFrame,
-    Index,
-    Series,
-    get_parallel_type,
-    meta_nonempty,
-)
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat_dispatch,
@@ -33,6 +26,7 @@ from dask.dataframe.dispatch import (
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
+    meta_nonempty,
     partd_encode_dispatch,
     pyarrow_schema_dispatch,
     to_pyarrow_table_dispatch,
@@ -51,11 +45,6 @@ from dask.utils import Dispatch, is_arraylike
 import cudf
 from cudf.api.types import is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
-
-get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
-get_parallel_type.register(cudf.Series, lambda _: Series)
-get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
-
 
 # Required for Arrow filesystem support in read_parquet
 PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
@@ -322,7 +311,7 @@ def tolist_cudf(obj):
 
 
 @is_categorical_dtype_dispatch.register(
-    (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
+    (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype)  # , Series)
 )
 @_dask_cudf_performance_tracking
 def is_categorical_dtype_cudf(obj):

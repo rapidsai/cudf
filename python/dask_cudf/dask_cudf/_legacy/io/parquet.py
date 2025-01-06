@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 import itertools
 import warnings
 from functools import partial
@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from pyarrow import dataset as pa_ds, parquet as pq
 
+import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
 try:
@@ -446,6 +447,8 @@ def set_object_dtypes_from_pa_schema(df, schema):
             ):
                 df._data[col_name] = col.astype(typ)
 
+
+to_parquet = dd.to_parquet
 
 if create_metadata_file_dd is None:
     create_metadata_file = create_metadata_file_dd

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import random
 
@@ -9,7 +9,7 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
+from dask.dataframe.dispatch import make_meta as dask_make_meta, meta_nonempty
 from dask.utils import M
 
 import cudf
@@ -291,37 +291,6 @@ def test_set_index_sorted():
         with pytest.raises(ValueError):
             # Cannot set `sorted=True` for non-sorted column
             gddf1.set_index("val", sorted=True)
-
-
-@pytest.mark.parametrize("nelem", [10, 200, 1333])
-@pytest.mark.parametrize("index", [None, "myindex"])
-def test_rearrange_by_divisions(nelem, index):
-    with dask.config.set(scheduler="single-threaded"):
-        rng = np.random.default_rng(seed=0)
-        df = pd.DataFrame(
-            {
-                "x": rng.integers(0, 20, size=nelem),
-                "y": rng.normal(size=nelem),
-                "z": rng.choice(["dog", "cat", "bird"], nelem),
-            }
-        )
-        df["z"] = df["z"].astype("category")
-
-        ddf1 = dd.from_pandas(df, npartitions=4)
-        gdf1 = dask_cudf.from_cudf(
-            cudf.DataFrame.from_pandas(df), npartitions=4
-        )
-        ddf1.index.name = index
-        gdf1.index.name = index
-        divisions = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
-
-        expect = dd.shuffle.rearrange_by_divisions(
-            ddf1, "x", divisions=divisions, shuffle_method="tasks"
-        )
-        result = dd.shuffle.rearrange_by_divisions(
-            gdf1, "x", divisions=divisions, shuffle_method="tasks"
-        )
-        dd.assert_eq(expect, result)
 
 
 def test_assign():
@@ -613,20 +582,20 @@ def test_hash_object_dispatch(index):
     )
 
     # DataFrame
-    result = dd.core.hash_object_dispatch(obj, index=index)
+    result = dd.dispatch.hash_object_dispatch(obj, index=index)
     expected = dask_cudf.backends.hash_object_cudf(obj, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # Series
-    result = dd.core.hash_object_dispatch(obj["x"], index=index)
+    result = dd.dispatch.hash_object_dispatch(obj["x"], index=index)
     expected = dask_cudf.backends.hash_object_cudf(obj["x"], index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # DataFrame with MultiIndex
     obj_multi = obj.set_index(["x", "z"], drop=True)
-    result = dd.core.hash_object_dispatch(obj_multi, index=index)
+    result = dd.dispatch.hash_object_dispatch(obj_multi, index=index)
     expected = dask_cudf.backends.hash_object_cudf(obj_multi, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
@@ -817,7 +786,7 @@ def test_merging_categorical_columns():
 
     ddf_1 = dask_cudf.from_cudf(df_1, npartitions=2)
 
-    ddf_1 = dd.categorical.categorize(ddf_1, columns=["cat_col"])
+    ddf_1 = ddf_1.categorize(columns=["cat_col"])
 
     df_2 = cudf.DataFrame(
         {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
@@ -825,7 +794,7 @@ def test_merging_categorical_columns():
 
     ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
 
-    ddf_2 = dd.categorical.categorize(ddf_2, columns=["cat_col"])
+    ddf_2 = ddf_2.categorize(columns=["cat_col"])
 
     expected = cudf.DataFrame(
         {

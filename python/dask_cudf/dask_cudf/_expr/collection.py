@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import warnings
 from functools import cached_property
@@ -15,6 +15,7 @@ from dask_expr._util import _raise_if_object_series
 
 from dask import config
 from dask.dataframe.core import is_dataframe_like
+from dask.dataframe.dispatch import get_parallel_type
 from dask.typing import no_default
 
 import cudf
@@ -185,6 +186,13 @@ class Index(DXIndex, CudfFrameBase):
     pass  # Same as pandas (for now)
 
 
+# dask.dataframe dispatch
+get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
+get_parallel_type.register(cudf.Series, lambda _: Series)
+get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
+
+
+# dask_expr dispatch (might go away?)
 get_collection_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_collection_type.register(cudf.Series, lambda _: Series)
 get_collection_type.register(cudf.BaseIndex, lambda _: Index)
