@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,21 +135,24 @@ struct orcdec_state_s {
 /**
  * @brief Manage caching of the first run of TIMESTAMP's DATA stream for a row group.
  *
- * This class is used to address a special case, where the first run spans two adjacent row groups
- * and its length is greater than the maximum length allowed to be consumed. This limit is imposed
- * by the decoder when processing the SECONDARY stream. This class shall be instantiated in the
- * shared memory, and be used to cache the DATA stream with a decoded data type of `int64_t`. As an
- * optimization, the actual cache is a local variable and does not reside in the shared memory.
+ * This class is used to address a special case, where the first run of the DATA stream spans two
+ * adjacent row groups and its length is greater than the maximum length allowed to be consumed.
+ * This limit is imposed by the decoder when processing the SECONDARY stream. This class shall be
+ * instantiated in the shared memory, and be used to cache the DATA stream with a decoded data type
+ * of `int64_t`. As an optimization, the actual cache is implemented in the cache_helper class as a
+ * local variable and does not reside in the shared memory.
  */
 class run_cache_manager {
  private:
   enum class status : uint8_t {
-    DISABLED,             ///< Run cache manager is disabled. No caching will be performed.
-    CAN_WRITE_TO_CACHE,   ///< Run cache manager is ready for write. This is expected to happen in
-                          ///< the first iteration of the top-level while-loop in
-                          ///< gpuDecodeOrcColumnData().
-    CAN_READ_FROM_CACHE,  ///< Run cache manager is ready for read. This is expected to happen in
-                          ///< the second iteration of the while-loop.
+    DISABLED,  ///< Run cache manager is disabled. No caching will be performed. If the special case
+               ///< happens, the run cache manager will be set to this status after the cache read
+               ///< is completed. This status also applies when the special case does not happen.
+    CAN_WRITE_TO_CACHE,  ///< Run cache manager is ready for write. If the special case happens, the
+                         ///< run cache manager will be set to this status.
+    CAN_READ_FROM_CACHE,  ///< Run cache manager is ready for read. If the special case happens, the
+                          ///< run cache manager will be set to this status after the cache write is
+                          ///< completed.
   };
 
  public:
@@ -167,6 +170,38 @@ class run_cache_manager {
     _run_length      = 0;
   }
 
+ private:
+  status _status;  ///< The status of the run cache manager.
+  uint32_t
+    _reusable_length;  ///< The number of data to be cached and reused later. For example, if a run
+                       ///< has a length of 512 but the maximum length allowed to be consumed is
+                       ///< capped at 162, then 350 (512-162) data will be cached.
+  uint32_t _run_length;  ///< The length of the run, 512 in the above example.
+  friend class cache_helper;
+};
+
+/**
+ * @brief Helper class to help run_cache_manager cache the first run of TIMESTAMP's DATA stream for
+ * a row group.
+ *
+ * The run_cache_manager is intended to be stored in the shared memory, whereas the actual cache is
+ * in the local storage (as an optimization). If a function is to use run_cache_manager, both the
+ * manager and the cache objects need to be passed. This class is introduced to simplify the
+ * function call, so that only a single cache_helper object needs to be passed. To that end, public
+ * methods originally belonging to run_cache_manager have been moved to this class.
+ */
+class cache_helper {
+ public:
+  /**
+   * @brief Constructor.
+   *
+   * @param[in] run_cache_manager_inst An instance of run_cache_manager.
+   */
+  __device__ explicit cache_helper(run_cache_manager& run_cache_manager_inst)
+    : _manager(run_cache_manager_inst)
+  {
+  }
+
   /**
    * @brief Set the reusable length object.
    *
@@ -177,9 +212,10 @@ class run_cache_manager {
    */
   __device__ void set_reusable_length(uint32_t run_length, uint32_t max_length)
   {
-    if (_status == status::CAN_WRITE_TO_CACHE) {
-      _run_length      = run_length;
-      _reusable_length = (_run_length > max_length) ? (_run_length - max_length) : 0;
+    if (_manager._status == run_cache_manager::status::CAN_WRITE_TO_CACHE) {
+      _manager._run_length = run_length;
+      _manager._reusable_length =
+        (_manager._run_length > max_length) ? (_manager._run_length - max_length) : 0;
     }
   }
 
@@ -190,11 +226,11 @@ class run_cache_manager {
    * @param[in] max_length The maximum length allowed to be consumed for the DATA stream.
    * @return A new maximum length.
    */
-  __device__ uint32_t adjust_max_length(uint32_t max_length)
+  [[nodiscard]] __device__ uint32_t adjust_max_length(uint32_t max_length)
   {
     auto new_max_length{max_length};
-    if (_status == status::CAN_READ_FROM_CACHE and _reusable_length > 0) {
-      new_max_length -= _reusable_length;
+    if (_manager._status == run_cache_manager::status::CAN_READ_FROM_CACHE) {
+      new_max_length -= _manager._reusable_length;
     }
     return new_max_length;
   }
@@ -203,28 +239,26 @@ class run_cache_manager {
    * @brief Copy the excess data from the intermediate buffer for the DATA stream to the cache.
    *
    * @param[in] src Intermediate buffer for the DATA stream.
-   * @param[out] cache Local variable serving as the cache for the DATA stream.
    */
-  __device__ void write_to_cache(int64_t* src, int64_t& cache)
+  __device__ void write_to_cache(int64_t* src)
   {
-    if (_status != status::CAN_WRITE_TO_CACHE) { return; }
+    if (_manager._status != run_cache_manager::status::CAN_WRITE_TO_CACHE) { return; }
 
-    const auto tid = threadIdx.x;
+    auto const tid = threadIdx.x;
+
+    __syncthreads();
 
     // All threads in the block always take a uniform code path for the following branches.
     // _reusable_length ranges between [0, 512].
-    if (_reusable_length > 0) {
-      const auto length_to_skip = _run_length - _reusable_length;
-      if (tid < _reusable_length) {
-        const auto src_idx = tid + length_to_skip;
-        cache              = src[src_idx];
+    if (_manager._reusable_length > 0) {
+      auto const length_to_skip = _manager._run_length - _manager._reusable_length;
+      if (tid < _manager._reusable_length) {
+        auto const src_idx = tid + length_to_skip;
+        _storage           = src[src_idx];
       }
-      // Block until all writes are done to safely change _status.
-      __syncthreads();
-      if (tid == 0) { _status = status::CAN_READ_FROM_CACHE; }
+      if (tid == 0) { _manager._status = run_cache_manager::status::CAN_READ_FROM_CACHE; }
     } else {
-      __syncthreads();
-      if (tid == 0) { _status = status::DISABLED; }
+      if (tid == 0) { _manager._status = run_cache_manager::status::DISABLED; }
     }
 
     __syncthreads();
@@ -235,41 +269,38 @@ class run_cache_manager {
    *
    * @param[in,out] dst Intermediate buffer for the DATA stream.
    * @param[in,out] rle Run length decoder state object.
-   * @param[in] cache Local variable serving as the cache for the DATA stream.
    */
-  __device__ void read_from_cache(int64_t* dst, orc_rlev2_state_s* rle, int64_t cache)
+  __device__ void read_from_cache(int64_t* dst, orc_rlev2_state_s* rle)
   {
-    if (_status != status::CAN_READ_FROM_CACHE) { return; }
+    if (_manager._status != run_cache_manager::status::CAN_READ_FROM_CACHE) { return; }
 
-    const auto tid = threadIdx.x;
+    auto const tid = threadIdx.x;
 
     // First, shift the data up
-    const auto dst_idx = tid + _reusable_length;
-    const auto v       = (dst_idx < rle->num_vals + _reusable_length) ? dst[tid] : 0;
+    auto const dst_idx = tid + _manager._reusable_length;
+    auto const v       = (dst_idx < rle->num_vals + _manager._reusable_length) ? dst[tid] : 0;
     __syncthreads();
 
-    if (dst_idx < rle->num_vals + _reusable_length) { dst[dst_idx] = v; }
+    if (dst_idx < rle->num_vals + _manager._reusable_length) { dst[dst_idx] = v; }
     __syncthreads();
 
     // Second, insert the cached data
-    if (tid < _reusable_length) { dst[tid] = cache; }
+    if (tid < _manager._reusable_length) { dst[tid] = _storage; }
     __syncthreads();
 
     if (tid == 0) {
-      _status = status::DISABLED;
-      rle->num_vals += _reusable_length;
+      // Disable the run cache manager, since cache write-and-read happens at most once per row
+      // group.
+      _manager._status = run_cache_manager::status::DISABLED;
+      rle->num_vals += _manager._reusable_length;
     }
 
     __syncthreads();
   }
 
  private:
-  status _status;  ///< The status of the run cache manager.
-  uint32_t
-    _reusable_length;  ///< The number of data to be cached and reused later. For example, if a run
-                       ///< has a length of 512 but the maximum length allowed to be consumed is
-                       ///< capped at 162, then 350 (512-162) data will be cached.
-  uint32_t _run_length;  ///< The length of the run, 512 in the above example.
+  run_cache_manager& _manager;  ///< An instance of run_cache_manager.
+  int64_t _storage;             ///< Per-thread cache storage.
 };
 
 /**
@@ -771,9 +802,8 @@ static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
  * @param[in] maxvals maximum number of values to decode
  * @param[in] t thread id
  * @param[in] has_buffered_values If true, means there are already buffered values
- * @param[in] run_cache_manager_inst If non-null, the run cache manager will be used to manage
+ * @param[in] cache_helper_inst If non-null, the run cache manager will be used to manage
  * caching of the first run of the DATA stream.
- * @param[in] cache Local variable serving as the cache.
  *
  * @return number of values decoded
  */
@@ -783,14 +813,11 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
                                          T* vals,
                                          uint32_t maxvals,
                                          int t,
-                                         bool has_buffered_values                  = false,
-                                         run_cache_manager* run_cache_manager_inst = nullptr,
-                                         int64_t* cache                            = nullptr)
+                                         bool has_buffered_values        = false,
+                                         cache_helper* cache_helper_inst = nullptr)
 {
   if (t == 0) {
-    if (run_cache_manager_inst != nullptr) {
-      maxvals = run_cache_manager_inst->adjust_max_length(maxvals);
-    }
+    if (cache_helper_inst != nullptr) { maxvals = cache_helper_inst->adjust_max_length(maxvals); }
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
     uint32_t lastpos = bs->pos;
     auto numvals     = 0;
@@ -834,9 +861,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
         }
       }
 
-      if (run_cache_manager_inst != nullptr) {
-        run_cache_manager_inst->set_reusable_length(n, maxvals);
-      }
+      if (cache_helper_inst != nullptr) { cache_helper_inst->set_reusable_length(n, maxvals); }
 
       if ((numvals != 0) and (numvals + n > maxvals)) break;
       // case where there are buffered values and can't consume a whole chunk
@@ -1019,13 +1044,15 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
     __syncwarp();
   }
   __syncthreads();
+  // Currently run_cache_manager is only designed to fix the TIMESTAMP's DATA stream bug where the
+  // data type is int64_t.
   if constexpr (cuda::std::is_same_v<T, int64_t>) {
-    if (run_cache_manager_inst != nullptr) {
-      // Run cache is read from during the 2nd iteration of the top-level while-loop in
+    if (cache_helper_inst != nullptr) {
+      // Run cache is read from during the 2nd iteration of the top-level while loop in
       // gpuDecodeOrcColumnData().
-      run_cache_manager_inst->read_from_cache(vals, rle, *cache);
+      cache_helper_inst->read_from_cache(vals, rle);
       // Run cache is written to during the 1st iteration of the loop.
-      run_cache_manager_inst->write_to_cache(vals, *cache);
+      cache_helper_inst->write_to_cache(vals);
     }
   }
   return rle->num_vals;
@@ -1564,7 +1591,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   bool const is_valid       = s->chunk.type_kind != STRUCT;
   size_t const max_num_rows = s->chunk.column_num_rows;
   __shared__ run_cache_manager run_cache_manager_inst;
-  int64_t cache{};
+  cache_helper cache_helper_inst(run_cache_manager_inst);
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
@@ -1768,8 +1795,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = Integer_RLEv1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
         } else {
-          numvals = Integer_RLEv2<int64_t>(
-            bs, &s->u.rlev2, s->vals.i64, numvals, t, false, &run_cache_manager_inst, &cache);
+          numvals = Integer_RLEv2<int64_t>(bs,
+                                           &s->u.rlev2,
+                                           s->vals.i64,
+                                           numvals,
+                                           t,
+                                           false /**has_buffered_values */,
+                                           &cache_helper_inst);
         }
         if (s->chunk.type_kind == DECIMAL) {
           // If we're using an index, we may have to drop values from the initial run
