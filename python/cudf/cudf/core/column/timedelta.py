@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import functools
+import math
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -265,7 +266,15 @@ class TimeDeltaColumn(ColumnBase):
         return np.datetime_data(self.dtype)[0]
 
     def total_seconds(self) -> ColumnBase:
-        raise NotImplementedError("total_seconds is currently not implemented")
+        conversion = _unit_to_nanoseconds_conversion[self.time_unit] / 1e9
+        # Typecast to decimal128 to avoid floating point precision issues
+        # https://github.com/rapidsai/cudf/issues/17664
+        return (
+            (self.astype("int64") * conversion)
+            .astype(cudf.Decimal128Dtype(38, 9))
+            .round(decimals=abs(int(math.log10(conversion))))
+            .astype("float64")
+        )
 
     def ceil(self, freq: str) -> ColumnBase:
         raise NotImplementedError("ceil is currently not implemented")
