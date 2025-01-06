@@ -10,10 +10,11 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
+from cudf._lib.column import Column
 from cudf._lib.types import dtype_to_pylibcudf_type
-from cudf._lib.utils import data_from_pylibcudf_io
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.index import _index_from_data
 from cudf.utils import ioutils
 
 try:
@@ -240,15 +241,27 @@ def read_orc(
         elif not isinstance(num_rows, int) or num_rows < -1:
             raise TypeError("num_rows must be an int >= -1")
 
-        tbl_w_meta = plc.io.orc.read_orc(
-            plc.io.SourceInfo(filepaths_or_buffers),
-            columns,
-            stripes,
-            skiprows,
-            num_rows,
-            use_index,
-            dtype_to_pylibcudf_type(cudf.dtype(timestamp_type)),
+        options = (
+            plc.io.orc.OrcReaderOptions.builder(
+                plc.io.types.SourceInfo(filepaths_or_buffers)
+            )
+            .use_index(use_index)
+            .build()
         )
+        if num_rows >= 0:
+            options.set_num_rows(num_rows)
+        if skiprows >= 0:
+            options.set_skip_rows(skiprows)
+        if stripes is not None and len(stripes) > 0:
+            options.set_stripes(stripes)
+        if timestamp_type is not None:
+            options.set_timestamp_type(
+                dtype_to_pylibcudf_type(cudf.dtype(timestamp_type))
+            )
+        if columns is not None and len(columns) > 0:
+            options.set_columns(columns)
+
+        tbl_w_meta = plc.io.orc.read_orc(options)
 
         if isinstance(columns, list) and len(columns) == 0:
             # When `columns=[]`, index needs to be
@@ -311,11 +324,35 @@ def read_orc(
                     actual_index_names = list(index_col_names.values())
                     col_names = names[len(actual_index_names) :]
 
-            data, index = data_from_pylibcudf_io(
-                tbl_w_meta,
-                col_names if columns is None else names,
-                actual_index_names,
-            )
+            result_col_names = col_names if columns is None else names
+            if actual_index_names is None:
+                index = None
+                data = {
+                    name: Column.from_pylibcudf(col)
+                    for name, col in zip(
+                        result_col_names, tbl_w_meta.columns, strict=True
+                    )
+                }
+            else:
+                result_columns = [
+                    Column.from_pylibcudf(col) for col in tbl_w_meta.columns
+                ]
+                index = _index_from_data(
+                    dict(
+                        zip(
+                            actual_index_names,
+                            result_columns[: len(actual_index_names)],
+                            strict=True,
+                        )
+                    )
+                )
+                data = dict(
+                    zip(
+                        result_col_names,
+                        result_columns[len(actual_index_names) :],
+                        strict=True,
+                    )
+                )
 
             if is_range_index:
                 index = range_idx

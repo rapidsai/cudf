@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -40,6 +40,7 @@ class Agg(Expr):
         self.dtype = dtype
         self.name = name
         self.options = options
+        self.is_pointwise = False
         self.children = children
         if name not in Agg._SUPPORTED:
             raise NotImplementedError(
@@ -68,7 +69,11 @@ class Agg(Expr):
             # TODO: handle nans
             req = plc.aggregation.variance(ddof=options)
         elif name == "count":
-            req = plc.aggregation.count(null_handling=plc.types.NullPolicy.EXCLUDE)
+            req = plc.aggregation.count(
+                null_handling=plc.types.NullPolicy.EXCLUDE
+                if not options
+                else plc.types.NullPolicy.INCLUDE
+            )
         elif name == "quantile":
             _, quantile = self.children
             if not isinstance(quantile, Literal):
