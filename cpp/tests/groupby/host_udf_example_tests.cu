@@ -432,17 +432,6 @@ namespace {
 struct host_udf_groupby_example : cudf::host_udf_groupby_base {
   host_udf_groupby_example() = default;
 
-  [[nodiscard]] data_attribute_set_t get_required_data() const override
-  {
-    // We need grouped values, group offsets, group labels, and also results from groups'
-    // MAX and SUM aggregations.
-    return {data_attribute::GROUPED_VALUES,
-            data_attribute::GROUP_OFFSETS,
-            data_attribute::GROUP_LABELS,
-            cudf::make_max_aggregation<cudf::groupby_aggregation>(),
-            cudf::make_sum_aggregation<cudf::groupby_aggregation>()};
-  }
-
   [[nodiscard]] std::unique_ptr<cudf::column> get_empty_output(
     rmm::cuda_stream_view, rmm::device_async_resource_ref) const override
   {
@@ -451,12 +440,10 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
   }
 
   [[nodiscard]] std::unique_ptr<cudf::column> operator()(
-    input_map_t const& input,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const override
+    rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const override
   {
-    auto const& values = input.get<data_attribute::GROUPED_VALUES>();
-    return cudf::type_dispatcher(values.type(), groupby_fn{this}, input, stream, mr);
+    auto const values = get_data<groupby_data::GROUPED_VALUES>();
+    return cudf::type_dispatcher(values.type(), groupby_fn{*this}, stream, mr);
   }
 
   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
@@ -472,9 +459,9 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
 
   struct groupby_fn {
     // Store pointer to the parent class so we can call its functions.
-    host_udf_groupby_example const* parent;
+    host_udf_groupby_example const& parent;
 
-    // For simplicity, this example only accepts double input and always produces double output.
+    // For simplicity, this example only accepts a single type input and output.
     using InputType  = double;
     using OutputType = double;
 
@@ -485,19 +472,20 @@ struct host_udf_groupby_example : cudf::host_udf_groupby_base {
     }
 
     template <typename T, CUDF_ENABLE_IF(std::is_same_v<InputType, T>)>
-    std::unique_ptr<cudf::column> operator()(input_map_t const& input,
-                                             rmm::cuda_stream_view stream,
+    std::unique_ptr<cudf::column> operator()(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr) const
     {
-      auto const& values = input.get<data_attribute::GROUPED_VALUES>();
-      if (values.size() == 0) { return parent->get_empty_output(stream, mr); }
+      auto const values = parent.get_data<groupby_data::GROUPED_VALUES>();
+      if (values.size() == 0) { return parent.get_empty_output(stream, mr); }
 
-      auto const& offsets = input.get<data_attribute::GROUP_OFFSETS>();
+      auto const offsets = parent.get_data<groupby_data::GROUP_OFFSETS>();
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
-      auto const num_groups     = static_cast<int>(offsets.size()) - 1;
-      auto const& group_indices = input.get<data_attribute::GROUP_LABELS>();
-      auto const& group_max = input.get(cudf::make_max_aggregation<cudf::groupby_aggregation>());
-      auto const& group_sum = input.get(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+      auto const num_groups    = static_cast<int>(offsets.size()) - 1;
+      auto const group_indices = parent.get_data<groupby_data::GROUP_LABELS>();
+      auto const group_max =
+        parent.compute_aggregation(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+      auto const group_sum =
+        parent.compute_aggregation(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
       auto const input_dv_ptr = cudf::column_device_view::create(values, stream);
       auto const output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},

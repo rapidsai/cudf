@@ -615,8 +615,10 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto mean_agg = make_mean_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::MEAN>(*mean_agg);
 
   auto const mean0 = cache.get_result(values_child0, *mean_agg);
   auto const mean1 = cache.get_result(values_child1, *mean_agg);
@@ -664,8 +666,10 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
     column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto std_agg = make_std_aggregation();
-  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
-  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child0, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr)
+    .operator()<aggregation::STD>(*std_agg);
 
   // Compute covariance here to avoid repeated computation of mean & count
   auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
@@ -796,55 +800,39 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
   if (cache.has_result(values, agg)) { return; }
 
   auto const& udf_base_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-  auto const udf_ptr       = dynamic_cast<host_udf_groupby_base const*>(udf_base_ptr.get());
+  auto const udf_ptr       = dynamic_cast<host_udf_groupby_base*>(udf_base_ptr.get());
   CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
 
-  auto const data_attrs = [&]() -> host_udf_groupby_base::data_attribute_set_t {
-    if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
-    // Empty attribute set means everything.
-    return {host_udf_groupby_base::data_attribute::INPUT_VALUES,
-            host_udf_groupby_base::data_attribute::GROUPED_VALUES,
-            host_udf_groupby_base::data_attribute::SORTED_GROUPED_VALUES,
-            host_udf_groupby_base::data_attribute::NUM_GROUPS,
-            host_udf_groupby_base::data_attribute::GROUP_OFFSETS,
-            host_udf_groupby_base::data_attribute::GROUP_LABELS};
-  }();
-
-  // Do not cache udf_input, as the actual input data may change from run to run.
-  host_udf_groupby_base::input_map_t udf_input;
-  for (auto const& attr : data_attrs) {
-    if (std::holds_alternative<host_udf_groupby_base::data_attribute::general_attribute>(
-          attr.value)) {
-      switch (std::get<host_udf_groupby_base::data_attribute::general_attribute>(attr.value)) {
-        case host_udf_groupby_base::data_attribute::INPUT_VALUES:
-          udf_input.emplace(attr, values);
-          break;
-        case host_udf_groupby_base::data_attribute::GROUPED_VALUES:
-          udf_input.emplace(attr, get_grouped_values());
-          break;
-        case host_udf_groupby_base::data_attribute::SORTED_GROUPED_VALUES:
-          udf_input.emplace(attr, get_sorted_values());
-          break;
-        case host_udf_groupby_base::data_attribute::NUM_GROUPS:
-          udf_input.emplace(attr, helper.num_groups(stream));
-          break;
-        case host_udf_groupby_base::data_attribute::GROUP_OFFSETS:
-          udf_input.emplace(attr, helper.group_offsets(stream));
-          break;
-        case host_udf_groupby_base::data_attribute::GROUP_LABELS:
-          udf_input.emplace(attr, helper.group_labels(stream));
-          break;
-        default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF groupby aggregation.");
-      }
-    } else {  // data is result from another aggregation
-      auto other_agg = std::get<std::unique_ptr<aggregation>>(attr.value)->clone();
-      cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
-      auto result = cache.get_result(values, *other_agg);
-      udf_input.emplace(std::move(other_agg), std::move(result));
-    }
+  auto& data_callbacks = udf_ptr->data_assessor_callbacks;
+  if (data_callbacks.empty()) {
+    data_callbacks.emplace(host_udf_groupby_base::groupby_data::INPUT_VALUES,
+                           [&]() -> host_udf_groupby_base::groupby_data_t { return values; });
+    data_callbacks.emplace(
+      host_udf_groupby_base::groupby_data::GROUPED_VALUES,
+      [&]() -> host_udf_groupby_base::groupby_data_t { return get_grouped_values(); });
+    data_callbacks.emplace(
+      host_udf_groupby_base::groupby_data::SORTED_GROUPED_VALUES,
+      [&]() -> host_udf_groupby_base::groupby_data_t { return get_sorted_values(); });
+    data_callbacks.emplace(
+      host_udf_groupby_base::groupby_data::NUM_GROUPS,
+      [&]() -> host_udf_groupby_base::groupby_data_t { return helper.num_groups(stream); });
+    data_callbacks.emplace(
+      host_udf_groupby_base::groupby_data::GROUP_OFFSETS,
+      [&]() -> host_udf_groupby_base::groupby_data_t { return helper.group_offsets(stream); });
+    data_callbacks.emplace(
+      host_udf_groupby_base::groupby_data::GROUP_LABELS,
+      [&]() -> host_udf_groupby_base::groupby_data_t { return helper.group_labels(stream); });
   }
 
-  cache.add_result(values, agg, (*udf_ptr)(udf_input, stream, mr));
+  auto& agg_callback = udf_ptr->aggregation_assessor_callback;
+  if (!agg_callback) {
+    agg_callback = [&](std::unique_ptr<aggregation> other_agg) -> column_view {
+      cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
+      return cache.get_result(values, *other_agg);
+    };
+  }
+
+  cache.add_result(values, agg, (*udf_ptr)(stream, mr));
 }
 
 }  // namespace detail

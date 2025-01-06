@@ -16,51 +16,8 @@
 
 #include <cudf/aggregation/host_udf.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/utilities/visitor_overload.hpp>
 
 namespace cudf {
-
-host_udf_groupby_base::data_attribute::data_attribute(data_attribute const& other)
-  : value{std::visit(cudf::detail::visitor_overload{[](auto const& val) { return value_type{val}; },
-                                                    [](std::unique_ptr<aggregation> const& val) {
-                                                      return value_type{val->clone()};
-                                                    }},
-                     other.value)}
-{
-}
-
-std::size_t host_udf_groupby_base::data_attribute::hash::operator()(
-  data_attribute const& attr) const
-{
-  auto const hash_value =
-    std::visit(cudf::detail::visitor_overload{
-                 [](auto const& val) { return std::hash<int>{}(static_cast<int>(val)); },
-                 [](std::unique_ptr<aggregation> const& val) { return val->do_hash(); }},
-               attr.value);
-  return std::hash<std::size_t>{}(attr.value.index()) ^ hash_value;
-}
-
-bool host_udf_groupby_base::data_attribute::equal_to::operator()(data_attribute const& lhs,
-                                                                 data_attribute const& rhs) const
-{
-  auto const& lhs_val = lhs.value;
-  auto const& rhs_val = rhs.value;
-  if (lhs_val.index() != rhs_val.index()) { return false; }
-  return std::visit(
-    cudf::detail::visitor_overload{
-      [](auto const& lhs_val, auto const& rhs_val) {
-        if constexpr (std::is_same_v<decltype(lhs_val), decltype(rhs_val)>) {
-          return lhs_val == rhs_val;
-        } else {
-          return false;
-        }
-      },
-      [](std::unique_ptr<aggregation> const& lhs_val, std::unique_ptr<aggregation> const& rhs_val) {
-        return lhs_val->is_equal(*rhs_val);
-      }},
-    lhs_val,
-    rhs_val);
-}
 
 namespace detail {
 
