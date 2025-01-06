@@ -34,8 +34,6 @@ namespace detail {
 
 namespace {
 
-using hash_value_type = uint32_t;
-
 /**
  * @brief Computes the hash value of a row in the given table.
  *
