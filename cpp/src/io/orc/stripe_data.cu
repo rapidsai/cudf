@@ -802,9 +802,8 @@ static const __device__ __constant__ uint8_t ClosestFixedBitsMap[65] = {
  * @param[in] maxvals maximum number of values to decode
  * @param[in] t thread id
  * @param[in] has_buffered_values If true, means there are already buffered values
- * @param[in] run_cache_manager_inst If non-null, the run cache manager will be used to manage
+ * @param[in] cache_helper_inst If non-null, the run cache manager will be used to manage
  * caching of the first run of the DATA stream.
- * @param[in] cache Local variable serving as the cache.
  *
  * @return number of values decoded
  */
