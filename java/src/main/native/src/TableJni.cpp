@@ -2907,16 +2907,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMap
     j_right_keys,
     compare_nulls_equal,
     [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-                         ? cudf::nullable_join::YES
-                         : cudf::nullable_join::NO;
-      if (cudf::has_nested_columns(right)) {
-        cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
-        return hash.left_join();
-      } else {
-        cudf::distinct_hash_join<cudf::has_nested::NO> hash(right, left, has_nulls, nulleq);
-        return hash.left_join();
-      }
+      cudf::distinct_hash_join hash(right, nulleq);
+      return hash.left_join(left);
     });
 }
 
@@ -3125,22 +3117,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMa
     j_right_keys,
     compare_nulls_equal,
     [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-                         ? cudf::nullable_join::YES
-                         : cudf::nullable_join::NO;
-      std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-        maps;
-      if (cudf::has_nested_columns(right)) {
-        cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
-        maps = hash.inner_join();
-      } else {
-        cudf::distinct_hash_join<cudf::has_nested::NO> hash(right, left, has_nulls, nulleq);
-        maps = hash.inner_join();
-      }
-      // Unique join returns {right map, left map} but all the other joins
-      // return {left map, right map}. Swap here to make it consistent.
-      return std::make_pair(std::move(maps.second), std::move(maps.first));
+      cudf::distinct_hash_join hash(right, nulleq);
+      return hash.inner_join(left);
     });
 }
 
