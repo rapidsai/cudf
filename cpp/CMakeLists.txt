@@ -276,7 +276,7 @@ rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
 rapids_cpm_rapids_logger()
-rapids_make_logger(cudf EXPORT_SET cudf-exports)
+rapids_make_logger(cudf EXPORT_SET cudf-exports LOGGER_DEFAULT_LEVEL WARN)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
