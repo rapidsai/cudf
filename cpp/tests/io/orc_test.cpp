@@ -2068,6 +2068,7 @@ TEST_P(OrcCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(OrcCompressionTest,
                         OrcCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));
