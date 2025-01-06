@@ -4870,7 +4870,7 @@ class StringMethods(ColumnMethods):
                 self._column.count_tokens_column(delim)  # type: ignore[arg-type]
             )
 
-        elif isinstance(delim, cudf.Scalar):
+        elif isinstance(delim, plc.Scalar):
             return self._return_or_inplace(
                 self._column.count_tokens_scalar(delim)  # type: ignore[arg-type]
             )
