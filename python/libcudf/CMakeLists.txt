@@ -34,9 +34,6 @@ endif()
 
 unset(cudf_FOUND)
 
-# Find Python early so that later commands can use it
-find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)
-
 set(BUILD_TESTS OFF)
 set(BUILD_BENCHMARKS OFF)
 set(CUDF_BUILD_TESTUTIL OFF)
