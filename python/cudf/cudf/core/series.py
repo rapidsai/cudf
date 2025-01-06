@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -4125,8 +4125,8 @@ class DatetimeProperties(BaseDatelikeProperties):
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.millisecond.astype("int32") * cudf.Scalar(
-            1000, dtype="int32"
+        extra = self.series._column.millisecond.astype("int32") * np.int32(
+            1000
         )
         return self._return_result_like_self(micro + extra)
 

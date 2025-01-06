@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -240,8 +240,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            cudf.Scalar(lo, self.dtype).device_value.c_value,
-            cudf.Scalar(hi, self.dtype).device_value.c_value,
+            plc.interop.from_arrow(
+                pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
+            plc.interop.from_arrow(
+                pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1018,7 +1022,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # https://github.com/rapidsai/cudf/issues/14515 by
             # providing a mode in which cudf::contains does not mask
             # the result.
-            result = result.fillna(cudf.Scalar(rhs.null_count > 0))
+            result = result.fillna(rhs.null_count > 0)
         return result
 
     def as_mask(self) -> Buffer:
