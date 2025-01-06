@@ -1,7 +1,8 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import copy
+import functools
 import itertools
 import textwrap
 import types
@@ -30,7 +31,7 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import (
@@ -48,7 +49,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Hashable, Iterable
 
     from cudf._typing import (
         AggType,
@@ -418,6 +419,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     _VALID_SCANS = {
         "cumsum",
+        "cumprod",
         "cummin",
         "cummax",
     }
@@ -425,6 +427,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     # Necessary because the function names don't directly map to the docs.
     _SCAN_DOCSTRINGS = {
         "cumsum": {"op_name": "Cumulative sum"},
+        "cumprod": {"op_name": "Cumulative product"},
         "cummin": {"op_name": "Cumulative min"},
         "cummax": {"op_name": "Cumulative max"},
     }
@@ -641,7 +644,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
-        if is_list_like(self._by):
+        if is_list_like(self._by) and len(self._by) == 1:
             if isinstance(name, tuple) and len(name) == 1:
                 name = name[0]
             else:
@@ -745,7 +748,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 plc.Table(
                     [
                         col.to_pylibcudf(mode="read")
-                        for col in self.grouping.keys._columns
+                        for col in self.grouping._key_columns
                     ]
                 ),
                 plc.types.NullPolicy.EXCLUDE
@@ -1047,8 +1050,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             ) and not _is_all_scan_aggregate(normalized_aggs):
                 # Even with `sort=False`, pandas guarantees that
                 # groupby preserves the order of rows within each group.
-                left_cols = list(self.grouping.keys.drop_duplicates()._columns)
-                right_cols = list(result_index._columns)
+                left_cols = self.grouping.keys.drop_duplicates()._columns
+                right_cols = result_index._columns
                 join_keys = [
                     _match_join_keys(lcol, rcol, "inner")
                     for lcol, rcol in zip(left_cols, right_cols)
@@ -2445,7 +2448,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be used in the correlation or covariance
         # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        column_names = self.grouping.values._column_names
+        column_names = self.grouping._values_column_names
         num_cols = len(column_names)
 
         column_pair_structs = {}
@@ -2480,7 +2483,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
-        ).groupby(by=self.grouping.keys)
+        ).groupby(by=self.grouping)
 
         try:
             gb_cov_corr = column_pair_groupby.agg(func)
@@ -2679,10 +2682,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
-
-        values = self.obj.__class__._from_data(
-            self.grouping.values._data, self.obj.index
-        )
+        values = self.grouping.values
+        values.index = self.obj.index
         return values - self.shift(periods=periods)
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
@@ -2786,9 +2787,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                 raise ValueError("Method can only be of 'ffill', 'bfill'.")
             return getattr(self, method, limit)()
 
-        values = self.obj.__class__._from_data(
-            self.grouping.values._data, self.obj.index
-        )
+        values = self.grouping.values
+        values.index = self.obj.index
         return values.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
@@ -3504,7 +3504,9 @@ class _Grouping(Serializable):
                 self._handle_level(level)
         else:
             by_list = by if isinstance(by, list) else [by]
-
+            if not len(self._obj) and not len(by_list):
+                # We pretend to groupby an empty column
+                by_list = [cudf.Index._from_column(column_empty(0))]
             for by in by_list:
                 if callable(by):
                     self._handle_callable(by)
@@ -3526,21 +3528,24 @@ class _Grouping(Serializable):
                     except (KeyError, TypeError):
                         self._handle_misc(by)
 
-    @property
+    @functools.cached_property
     def keys(self):
         """Return grouping key columns as index"""
-        nkeys = len(self._key_columns)
-
-        if nkeys == 0:
-            return cudf.Index([], name=None)
-        elif nkeys > 1:
+        if len(self._key_columns) > 1:
             return cudf.MultiIndex._from_data(
-                dict(zip(range(nkeys), self._key_columns))
+                dict(enumerate(self._key_columns))
             )._set_names(self.names)
         else:
             return cudf.Index._from_column(
                 self._key_columns[0], name=self.names[0]
             )
+
+    @property
+    def _values_column_names(self) -> list[Hashable]:
+        # If the key columns are in `obj`, filter them out
+        return [
+            x for x in self._obj._column_names if x not in self._named_columns
+        ]
 
     @property
     def values(self) -> cudf.core.frame.Frame:
@@ -3552,11 +3557,9 @@ class _Grouping(Serializable):
 
         This is mainly used in transform-like operations.
         """
-        # If the key columns are in `obj`, filter them out
-        value_column_names = [
-            x for x in self._obj._column_names if x not in self._named_columns
-        ]
-        value_columns = self._obj._data.select_by_label(value_column_names)
+        value_columns = self._obj._data.select_by_label(
+            self._values_column_names
+        )
         return self._obj.__class__._from_data(value_columns)
 
     def _handle_callable(self, by):

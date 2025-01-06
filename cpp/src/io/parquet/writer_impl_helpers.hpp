@@ -20,11 +20,11 @@
  */
 
 #pragma once
-#include "io/comp/nvcomp_adapter.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/nvcomp_adapter.hpp>
 
 namespace cudf::io::parquet::detail {
 
@@ -42,7 +42,7 @@ Compression to_parquet_compression(compression_type compression);
  * @param codec Compression codec
  * @return Translated nvcomp compression type
  */
-nvcomp::compression_type to_nvcomp_compression_type(Compression codec);
+cudf::io::detail::nvcomp::compression_type to_nvcomp_compression_type(Compression codec);
 
 /**
  * @brief Function that computes input alignment requirements for the given compression type.

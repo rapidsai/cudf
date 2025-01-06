@@ -19,6 +19,7 @@
 #include "groupby/sort/group_reductions.hpp"
 
 #include <cudf/aggregation.hpp>
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -208,10 +209,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
       operator()<aggregation::ARGMIN>(*argmin_agg);
       column_view const argmin_result = cache.get_result(values, *argmin_agg);
 
-      // We make a view of ARGMIN result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMIN result corresponding
-      // to null values was initialized to ARGMIN_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
+      // Compute the ARGMIN result without the null mask in the gather map.
       column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmin_result.size(),
@@ -250,10 +248,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
       operator()<aggregation::ARGMAX>(*argmax_agg);
       column_view const argmax_result = cache.get_result(values, *argmax_agg);
 
-      // We make a view of ARGMAX result without a null mask and gather using
-      // this mask. The values in data buffer of ARGMAX result corresponding
-      // to null values was initialized to ARGMAX_SENTINEL which is an out of
-      // bounds index value and causes the gathered value to be null.
+      // Compute the ARGMAX result without the null mask in the gather map.
       column_view const null_removed_map(
         data_type(type_to_id<size_type>()),
         argmax_result.size(),
@@ -793,6 +788,65 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
                                                               max_centroids,
                                                               stream,
                                                               mr));
+}
+
+template <>
+void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const& udf_ptr   = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+  auto const data_attrs = [&]() -> host_udf_base::data_attribute_set_t {
+    if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
+    // Empty attribute set means everything.
+    return {host_udf_base::groupby_data_attribute::INPUT_VALUES,
+            host_udf_base::groupby_data_attribute::GROUPED_VALUES,
+            host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
+            host_udf_base::groupby_data_attribute::NUM_GROUPS,
+            host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
+            host_udf_base::groupby_data_attribute::GROUP_LABELS};
+  }();
+
+  // Do not cache udf_input, as the actual input data may change from run to run.
+  host_udf_base::input_map_t udf_input;
+  for (auto const& attr : data_attrs) {
+    CUDF_EXPECTS(std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value) ||
+                   std::holds_alternative<std::unique_ptr<aggregation>>(attr.value),
+                 "Invalid input data attribute for HOST_UDF groupby aggregation.");
+    if (std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value)) {
+      switch (std::get<host_udf_base::groupby_data_attribute>(attr.value)) {
+        case host_udf_base::groupby_data_attribute::INPUT_VALUES:
+          udf_input.emplace(attr, values);
+          break;
+        case host_udf_base::groupby_data_attribute::GROUPED_VALUES:
+          udf_input.emplace(attr, get_grouped_values());
+          break;
+        case host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES:
+          udf_input.emplace(attr, get_sorted_values());
+          break;
+        case host_udf_base::groupby_data_attribute::NUM_GROUPS:
+          udf_input.emplace(attr, helper.num_groups(stream));
+          break;
+        case host_udf_base::groupby_data_attribute::GROUP_OFFSETS:
+          udf_input.emplace(attr, helper.group_offsets(stream));
+          break;
+        case host_udf_base::groupby_data_attribute::GROUP_LABELS:
+          udf_input.emplace(attr, helper.group_labels(stream));
+          break;
+        default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF groupby aggregation.");
+      }
+    } else {  // data is result from another aggregation
+      auto other_agg = std::get<std::unique_ptr<aggregation>>(attr.value)->clone();
+      cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
+      auto result = cache.get_result(values, *other_agg);
+      udf_input.emplace(std::move(other_agg), std::move(result));
+    }
+  }
+
+  auto output = (*udf_ptr)(udf_input, stream, mr);
+  CUDF_EXPECTS(std::holds_alternative<std::unique_ptr<column>>(output),
+               "Invalid output type from HOST_UDF groupby aggregation.");
+  cache.add_result(values, agg, std::get<std::unique_ptr<column>>(std::move(output)));
 }
 
 }  // namespace detail
