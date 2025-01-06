@@ -102,15 +102,15 @@ XXHash_32<numeric::decimal128>::result_type
 }
 
 template <>
-hash_value_type __device__ inline XXHash_32<cudf::list_view>::operator()(
+XXHash_32<cudf::list_view>::result_type __device__ inline XXHash_32<cudf::list_view>::operator()(
   cudf::list_view const& key) const
 {
   CUDF_UNREACHABLE("List column hashing is not supported");
 }
 
 template <>
-hash_value_type __device__ inline XXHash_32<cudf::struct_view>::operator()(
-  cudf::struct_view const& key) const
+XXHash_32<cudf::struct_view>::result_type
+  __device__ inline XXHash_32<cudf::struct_view>::operator()(cudf::struct_view const& key) const
 {
   CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }
