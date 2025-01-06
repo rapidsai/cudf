@@ -810,11 +810,11 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - *numba-cuda-dep
+              - numba-cuda==0.2.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - numba-cuda==0.2.0
+              - *numba-cuda-dep
               - pandas==2.2.3
           - matrix:
             packages:
