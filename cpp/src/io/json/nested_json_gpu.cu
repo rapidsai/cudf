@@ -1473,10 +1473,11 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   to_stack_op::start_state,
                                   stream);
 
-  auto stack_ops_bufsize = d_num_stack_ops.value(stream);
+  // Copy back to actual number of stack operations
+  auto num_stack_ops = d_num_stack_ops.value(stream);
   // Sequence of stack symbols and their position in the original input (sparse representation)
-  rmm::device_uvector<StackSymbolT> stack_ops{stack_ops_bufsize, stream};
-  rmm::device_uvector<SymbolOffsetT> stack_op_indices{stack_ops_bufsize, stream};
+  rmm::device_uvector<StackSymbolT> stack_ops{num_stack_ops, stream};
+  rmm::device_uvector<SymbolOffsetT> stack_op_indices{num_stack_ops, stream};
 
   // Run bracket-brace FST to retrieve starting positions of structs and lists
   json_to_stack_ops_fst.Transduce(json_in.begin(),
@@ -1486,9 +1487,6 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   thrust::make_discard_iterator(),
                                   to_stack_op::start_state,
                                   stream);
-
-  // Copy back to actual number of stack operations
-  auto const num_stack_ops = d_num_stack_ops.value(stream);
 
   // Stack operations with indices are converted to top of the stack for each character in the input
   if (stack_behavior == stack_behavior_t::ResetOnDelimiter) {

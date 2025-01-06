@@ -315,7 +315,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                         {"dtype": source_column.dtype}
                         if callable(agg_name)
                         else self.agg_params,
-                    ).c_obj,
+                    ).plc_obj,
                 )
             )
 
