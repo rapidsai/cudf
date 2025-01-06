@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/type_traits>
+
 namespace cudf {
 namespace binops {
 namespace compiled {
@@ -51,7 +53,7 @@ struct type_casted_accessor {
   {
     if constexpr (column_device_view::has_element_accessor<Element>()) {
       auto const element = col.element<Element>(is_scalar ? 0 : i);
-      if constexpr (std::is_convertible_v<Element, CastType>) {
+      if constexpr (cuda::std::is_convertible_v<Element, CastType>) {
         return static_cast<CastType>(element);
       } else if constexpr (is_fixed_point<Element>() && cuda::std::is_floating_point_v<CastType>) {
         return convert_fixed_to_floating<CastType>(element);
@@ -75,7 +77,7 @@ struct typed_casted_writer {
                                     FromType val) const
   {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
-                  std::is_constructible_v<Element, FromType>) {
+                  cuda::std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
     } else if constexpr (is_fixed_point<Element>()) {
       auto const scale = numeric::scale_type{col.type().scale()};
@@ -109,18 +111,18 @@ struct ops_wrapper {
   template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
-    if constexpr (std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>) {
+    if constexpr (cuda::std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>) {
       TypeCommon x =
         type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs, is_lhs_scalar);
       TypeCommon y =
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
-        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
-                      std::is_same_v<BinaryOperator, ops::NullMax> or
-                      std::is_same_v<BinaryOperator, ops::NullMin>) {
+        if constexpr (cuda::std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullNotEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMax> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
             x,
@@ -134,7 +136,7 @@ struct ops_wrapper {
           return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
         }
         // To suppress nvcc warning
-        return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
+        return cuda::std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>())
         out.element<decltype(result)>(i) = result;
@@ -161,16 +163,16 @@ struct ops2_wrapper {
   __device__ void operator()(size_type i)
   {
     if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
-                  std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+                  cuda::std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
       TypeLhs x   = lhs.element<TypeLhs>(is_lhs_scalar ? 0 : i);
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
-        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
-                      std::is_same_v<BinaryOperator, ops::NullMax> or
-                      std::is_same_v<BinaryOperator, ops::NullMin>) {
+        if constexpr (cuda::std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullNotEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMax> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
             x,
@@ -184,7 +186,7 @@ struct ops2_wrapper {
           return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
         }
         // To suppress nvcc warning
-        return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
+        return cuda::std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeLhs, TypeRhs>())
         out.element<decltype(result)>(i) = result;
