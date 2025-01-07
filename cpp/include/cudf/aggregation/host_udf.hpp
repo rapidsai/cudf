@@ -319,7 +319,7 @@ struct host_udf_groupby_base : host_udf_base {
   std::function<column_view(std::unique_ptr<aggregation>)> aggregation_assessor_callback;
 
   /**
-   * @brief Perform computing a built-in groupby aggregation and access its result.
+   * @brief Compute a built-in groupby aggregation and access its result.
    *
    * This allows the derived class to call any other built-in groupby aggregations on the same input
    * values column and access the output for its operations.
