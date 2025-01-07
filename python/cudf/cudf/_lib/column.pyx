@@ -62,7 +62,7 @@ cdef get_element(column_view col_view, size_type index):
     )
 
 
-def dtype_from_pylibcudf_column(col):
+def dtype_from_pylibcudf_column(Column col not None):
     type_ = col.type()
     tid = type_.id()
 
@@ -433,7 +433,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef plc_DataType dtype = dtype_to_pylibcudf_type(data_dtype)
+        cdef plc_DataType dtype = <plc_DataType?>dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
