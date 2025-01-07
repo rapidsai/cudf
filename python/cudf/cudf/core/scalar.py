@@ -367,7 +367,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def is_valid(self) -> bool:
         if not self._is_host_value_current:
             self._device_value_to_host()
-        return not cudf._lib.scalar._is_null_host_scalar(self._host_value)
+        return not cudf.utils.utils._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self) -> None:
         is_datetime = self.dtype.kind == "M"

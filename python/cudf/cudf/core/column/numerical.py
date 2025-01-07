@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -151,7 +151,7 @@ class NumericalColumn(NumericalBaseColumn):
             cudf.Scalar(
                 value,
                 dtype=self.dtype
-                if cudf._lib.scalar._is_null_host_scalar(value)
+                if cudf.utils.utils._is_null_host_scalar(value)
                 else None,
             )
             if is_scalar(value)
@@ -785,7 +785,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if cudf._lib.scalar._is_null_host_scalar(col_to_normalize[0]):
+            if cudf.utils.utils._is_null_host_scalar(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column

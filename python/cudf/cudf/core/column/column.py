@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ import rmm
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
-from cudf._lib.scalar import as_device_scalar
 from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -71,7 +70,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.utils.utils import _array_ufunc, mask_dtype
+from cudf.utils.utils import _array_ufunc, _is_null_host_scalar, mask_dtype
 
 if TYPE_CHECKING:
     import builtins
@@ -777,9 +776,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=True):
             return self.copy()
         elif method is None:
-            if is_scalar(fill_value) and libcudf.scalar._is_null_host_scalar(
-                fill_value
-            ):
+            if is_scalar(fill_value) and _is_null_host_scalar(fill_value):
                 return self.copy()
             else:
                 fill_value = self._validate_fillna_value(fill_value)
@@ -1984,12 +1981,12 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    as_device_scalar(
+                    cudf.Scalar(
                         arbitrary.start, dtype=np.dtype(np.int64)
-                    ).c_value,
-                    as_device_scalar(
+                    ).device_value.c_value,
+                    cudf.Scalar(
                         arbitrary.step, dtype=np.dtype(np.int64)
-                    ).c_value,
+                    ).device_value.c_value,
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:

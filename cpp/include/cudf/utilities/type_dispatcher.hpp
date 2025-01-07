@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ namespace CUDF_EXPORT cudf {
  * @return The `cudf::type_id` corresponding to the specified type
  */
 template <typename T>
-inline constexpr type_id type_to_id()
+CUDF_HOST_DEVICE inline constexpr type_id type_to_id()
 {
   return type_id::EMPTY;
 };

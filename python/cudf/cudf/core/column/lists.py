@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -236,7 +236,7 @@ class ListColumn(ColumnBase):
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if cudf._lib.scalar._is_null_host_scalar(data):
+            if cudf.utils.utils._is_null_host_scalar(data):
                 mask_col.append(False)
                 offset_vals.append(offset)
             else:

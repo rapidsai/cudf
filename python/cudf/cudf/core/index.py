@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -842,14 +842,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._column.take(gather_map, nullify, check_bounds),
             name=self.name,
         )
 
     @_performance_tracking
     def _apply_boolean_mask(self, boolean_mask):
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
@@ -857,7 +857,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._as_int_index()._split(splits), name=self.name
         )
 
@@ -1657,7 +1657,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if isinstance(self, (DatetimeIndex, TimedeltaIndex))
                 else str(cudf.NA)
             )
-            return cudf.Index._from_column(
+            return Index._from_column(
                 self._column.astype("str").fillna(fill_value),
                 name=self.name,
             )
@@ -2964,13 +2964,13 @@ class TimedeltaIndex(Index):
     def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
         return self._column.std(skipna=skipna, ddof=ddof)
 
-    def total_seconds(self) -> cupy.ndarray:
+    def total_seconds(self) -> Index:
         """
         Return total duration of each element expressed in seconds.
 
         This method is currently not implemented.
         """
-        return self._column.total_seconds().values
+        return Index._from_column(self._column.total_seconds(), name=self.name)
 
     def ceil(self, freq: str) -> Self:
         """
