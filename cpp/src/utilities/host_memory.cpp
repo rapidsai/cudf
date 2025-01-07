@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ class fixed_pinned_pool_memory_resource {
       pool_size_{rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
       pool_{new host_pooled_mr(upstream_mr_, pool_size_, pool_size_)}
   {
-    CUDF_LOG_INFO("Pinned pool size = {}", pool_size_);
+    CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
     pool_begin_ = pool_->allocate_async(pool_size_, stream_);
