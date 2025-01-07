@@ -522,8 +522,8 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   stream.synchronize();
 
   if (thread_tasks.size()) {
-    long unsigned const bytes_read =
-      std::accumulate(thread_tasks.begin(), thread_tasks.end(), 0, [](size_t sum, auto& task) {
+    auto const bytes_read = std::accumulate(
+      thread_tasks.begin(), thread_tasks.end(), std::size_t{0}, [](std::size_t sum, auto& task) {
         return sum + task.get();
       });
     CUDF_EXPECTS(bytes_read == total_bytes_to_read, "something's fishy");
@@ -557,9 +557,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   auto& thread_pool = pools::tpool();
   for (auto& src : sources) {
     thread_tasks.emplace_back(thread_pool.submit_task([&reader_opts, &src] {
-      auto compsrc =
-        std::make_unique<compressed_host_buffer_source>(src, reader_opts.get_compression());
-      return compsrc;
+      return std::make_unique<compressed_host_buffer_source>(src, reader_opts.get_compression());
     }));
   }
   std::transform(thread_tasks.begin(),
