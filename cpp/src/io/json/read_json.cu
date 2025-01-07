@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -311,13 +311,6 @@ table_with_metadata read_batch(host_span<std::unique_ptr<datasource>> sources,
     cudf::device_span<char const>(reinterpret_cast<char const*>(bufview.data()), bufview.size());
   stream.synchronize();
 
-  auto h_buffer = cudf::detail::make_std_vector_sync(buffer, stream);
-  for(auto c : h_buffer) {
-    std::printf("%c", c);
-    if(c == '\n') break;
-  }
-  std::printf("=============================\n");
-
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
 }
 
@@ -405,19 +398,6 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     batched_reader_opts.set_byte_range_size(batch_offsets[i + 1] - batch_offsets[i]);
     partial_tables.emplace_back(
       read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
-  }
-
-  for(auto &tbl : partial_tables) {
-    std::cout << tbl.tbl->num_columns() << std::endl;
-    std::cout << "tbl.metadata.schema_info: ";
-    for(auto &colinfo : tbl.metadata.schema_info) {
-      std::cout << colinfo.name << " ";
-    }
-    std::cout << std::endl << "tbl.columns.ids: ";
-    for(int i = 0; i < tbl.tbl->num_columns(); i++) {
-      std::cout << static_cast<std::underlying_type<cudf::type_id>::type>(tbl.tbl->get_column(i).type().id()) << " ";
-    }
-    std::cout << std::endl;
   }
 
   auto expects_schema_equality =

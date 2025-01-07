@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@
 constexpr size_t default_data_size = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-void json_read_common(cudf::io::source_info const &source,
+void json_read_common(cudf::io::source_info const& source,
                       size_t source_size,
                       cudf::size_type num_rows_to_read,
                       nvbench::state& state,
@@ -68,10 +68,6 @@ cudf::size_type json_write_bm_data(
 {
   auto const tbl = create_random_table(
     cycle_dtypes(dtypes, num_cols), table_size_bytes{data_size}, data_profile_builder());
-  for(int i = 0; i < tbl->num_columns(); i++) {
-    std::cout << static_cast<std::underlying_type<cudf::type_id>::type>(tbl->get_column(i).type().id()) << " ";
-  }
-  std::cout << std::endl;
   auto const view = tbl->view();
 
   cudf::io::json_writer_options const write_opts =
@@ -102,10 +98,10 @@ void BM_json_read_io(nvbench::state& state, nvbench::type_list<nvbench::enum_typ
 }
 
 template <cudf::io::compression_type comptype>
-void BM_json_read_compressed_io(
-  nvbench::state& state, nvbench::type_list<nvbench::enum_type<comptype>>)
+void BM_json_read_compressed_io(nvbench::state& state,
+                                nvbench::type_list<nvbench::enum_type<comptype>>)
 {
-  size_t const data_size = state.get_int64("data_size");
+  size_t const data_size   = state.get_int64("data_size");
   size_t const num_sources = state.get_int64("num_sources");
 
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -118,14 +114,20 @@ void BM_json_read_compressed_io(
                                          static_cast<int32_t>(data_type::STRUCT)});
 
   std::vector<char> out_buffer;
-  auto sink = cudf::io::sink_info(&out_buffer);
+  auto sink           = cudf::io::sink_info(&out_buffer);
   auto const num_rows = json_write_bm_data(sink, d_type, comptype, data_size);
 
   std::vector<cudf::host_span<char const>> hostbufs(
     num_sources,
     cudf::host_span<char const>(reinterpret_cast<char const*>(out_buffer.data()),
                                 out_buffer.size()));
-  json_read_common(cudf::io::source_info{cudf::host_span<cudf::host_span<char const>>(hostbufs.data(), hostbufs.size())}, out_buffer.size() * num_sources, num_rows * num_sources, state, comptype, data_size * num_sources);
+  json_read_common(cudf::io::source_info{cudf::host_span<cudf::host_span<char const>>(
+                     hostbufs.data(), hostbufs.size())},
+                   out_buffer.size() * num_sources,
+                   num_rows * num_sources,
+                   state,
+                   comptype,
+                   data_size * num_sources);
 }
 
 template <data_type DataType, io_type IO>
@@ -166,8 +168,7 @@ NVBENCH_BENCH_TYPES(BM_json_read_io, NVBENCH_TYPE_AXES(io_list))
   .set_type_axes_names({"io"})
   .set_min_samples(4);
 
-NVBENCH_BENCH_TYPES(BM_json_read_compressed_io,
-                    NVBENCH_TYPE_AXES(compression_list))
+NVBENCH_BENCH_TYPES(BM_json_read_compressed_io, NVBENCH_TYPE_AXES(compression_list))
   .set_name("json_read_compressed_io")
   .set_type_axes_names({"compression_type"})
   .add_int64_power_of_two_axis("data_size", nvbench::range(20, 29, 1))
