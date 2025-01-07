@@ -33,7 +33,7 @@ from libcpp.vector cimport vector
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
-from pylibcudf cimport DataType as plc_DataType
+from pylibcudf cimport DataType as plc_DataType, Column as plc_Column
 cimport pylibcudf.libcudf.copying as cpp_copying
 cimport pylibcudf.libcudf.types as libcudf_types
 cimport pylibcudf.libcudf.unary as libcudf_unary
@@ -62,7 +62,7 @@ cdef get_element(column_view col_view, size_type index):
     )
 
 
-def dtype_from_pylibcudf_column(Column col not None):
+def dtype_from_pylibcudf_column(plc_Column col not None):
     type_ = col.type()
     tid = type_.id()
 
