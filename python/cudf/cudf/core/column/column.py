@@ -1985,12 +1985,12 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    cudf.Scalar(
-                        arbitrary.start, dtype=np.dtype(np.int64)
-                    ).device_value.c_value,
-                    cudf.Scalar(
-                        arbitrary.step, dtype=np.dtype(np.int64)
-                    ).device_value.c_value,
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.start, type=pa.int64())
+                    ),
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.step, type=pa.int64())
+                    ),
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:

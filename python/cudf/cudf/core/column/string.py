@@ -6316,10 +6316,10 @@ class StringColumn(column.ColumnBase):
         )
 
     @acquire_spill_lock()
-    def count_tokens_scalar(self, delimiter: cudf.Scalar) -> NumericalColumn:
+    def count_tokens_scalar(self, delimiter: plc.Scalar) -> NumericalColumn:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.tokenize.count_tokens_scalar(
-                self.to_pylibcudf(mode="read"), delimiter.device_value.c_value
+                self.to_pylibcudf(mode="read"), delimiter
             )
         )
 
