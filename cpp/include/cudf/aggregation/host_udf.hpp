@@ -361,7 +361,7 @@ struct host_udf_groupby_base : host_udf_base {
 /**
  * @brief Map each `groupby_data` enum to its corresponding data type.
  */
-#define MAP_GROUPBY_DATA_TYPY(attr, output_type)                                                  \
+#define MAP_GROUPBY_DATA_TYPE(attr, output_type)                                                  \
   template <>                                                                                     \
   [[nodiscard]] inline host_udf_groupby_base::data_t<host_udf_groupby_base::groupby_data::attr>   \
   host_udf_groupby_base::get_data<host_udf_groupby_base::groupby_data::attr>() const              \
@@ -373,12 +373,12 @@ struct host_udf_groupby_base : host_udf_base {
     return std::get<output_type>(data_accessor());                                                \
   }
 
-MAP_GROUPBY_DATA_TYPY(INPUT_VALUES, column_view)
-MAP_GROUPBY_DATA_TYPY(GROUPED_VALUES, column_view)
-MAP_GROUPBY_DATA_TYPY(SORTED_GROUPED_VALUES, column_view)
-MAP_GROUPBY_DATA_TYPY(NUM_GROUPS, cudf::size_type)
-MAP_GROUPBY_DATA_TYPY(GROUP_OFFSETS, device_span<cudf::size_type const>)
-MAP_GROUPBY_DATA_TYPY(GROUP_LABELS, device_span<cudf::size_type const>)
+MAP_GROUPBY_DATA_TYPE(INPUT_VALUES, column_view)
+MAP_GROUPBY_DATA_TYPE(GROUPED_VALUES, column_view)
+MAP_GROUPBY_DATA_TYPE(SORTED_GROUPED_VALUES, column_view)
+MAP_GROUPBY_DATA_TYPE(NUM_GROUPS, cudf::size_type)
+MAP_GROUPBY_DATA_TYPE(GROUP_OFFSETS, device_span<cudf::size_type const>)
+MAP_GROUPBY_DATA_TYPE(GROUP_LABELS, device_span<cudf::size_type const>)
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
