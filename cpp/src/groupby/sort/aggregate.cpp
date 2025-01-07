@@ -799,7 +799,7 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
   auto const udf_ptr       = dynamic_cast<host_udf_groupby_base*>(udf_base_ptr.get());
   CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
 
-  auto& data_callbacks = udf_ptr->data_assessor_callbacks;
+  auto& data_callbacks = udf_ptr->data_accessor_callbacks;
   if (data_callbacks.empty()) {
     data_callbacks.emplace(host_udf_groupby_base::groupby_data::INPUT_VALUES,
                            [&]() -> host_udf_groupby_base::groupby_data_t { return values; });
@@ -820,7 +820,7 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
       [&]() -> host_udf_groupby_base::groupby_data_t { return helper.group_labels(stream); });
   }
 
-  auto& agg_callback = udf_ptr->aggregation_assessor_callback;
+  auto& agg_callback = udf_ptr->aggregation_accessor_callback;
   if (!agg_callback) {
     agg_callback = [&](std::unique_ptr<aggregation> other_agg) -> column_view {
       cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
