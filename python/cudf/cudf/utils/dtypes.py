@@ -200,7 +200,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     If `val` is None, returns None.
     """
 
-    if cudf._lib.scalar._is_null_host_scalar(val) or isinstance(
+    if cudf.utils.utils._is_null_host_scalar(val) or isinstance(
         val, cudf.Scalar
     ):
         return val
