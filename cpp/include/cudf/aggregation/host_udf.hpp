@@ -292,7 +292,7 @@ struct host_udf_groupby_base : host_udf_base {
    *
    * Only the data specified in `groupby_data` enum can be accessed through these callbacks.
    */
-  std::unordered_map<groupby_data, std::function<groupby_data_t(void)>> data_assessor_callbacks;
+  std::unordered_map<groupby_data, std::function<groupby_data_t(void)>> data_accessor_callbacks;
 
   /**
    * @brief Define the conditional output type for the template function `get_data<>`
@@ -316,7 +316,7 @@ struct host_udf_groupby_base : host_udf_base {
   /**
    * @brief Callback to access the result from other groupby aggregations.
    */
-  std::function<column_view(std::unique_ptr<aggregation>)> aggregation_assessor_callback;
+  std::function<column_view(std::unique_ptr<aggregation>)> aggregation_accessor_callback;
 
   /**
    * @brief Compute a built-in groupby aggregation and access its result.
@@ -329,9 +329,9 @@ struct host_udf_groupby_base : host_udf_base {
    */
   [[nodiscard]] column_view compute_aggregation(std::unique_ptr<aggregation> other_agg) const
   {
-    CUDF_EXPECTS(aggregation_assessor_callback,
+    CUDF_EXPECTS(aggregation_accessor_callback,
                  "Uninitialized callback for computing aggregation.");
-    return aggregation_assessor_callback(std::move(other_agg));
+    return aggregation_accessor_callback(std::move(other_agg));
   }
 
   /**
@@ -366,9 +366,9 @@ struct host_udf_groupby_base : host_udf_base {
   [[nodiscard]] inline host_udf_groupby_base::data_t<host_udf_groupby_base::groupby_data::attr>   \
   host_udf_groupby_base::get_data<host_udf_groupby_base::groupby_data::attr>() const              \
   {                                                                                               \
-    CUDF_EXPECTS(data_assessor_callbacks.count(groupby_data::attr) > 0,                           \
+    CUDF_EXPECTS(data_accessor_callbacks.count(groupby_data::attr) > 0,                           \
                  "Uninitialized data accessor callbacks.");                                       \
-    auto const& data_accessor = data_assessor_callbacks.at(groupby_data::attr);                   \
+    auto const& data_accessor = data_accessor_callbacks.at(groupby_data::attr);                   \
     CUDF_EXPECTS(data_accessor, "Uninitialized accessor callback for data attribute " #attr "."); \
     return std::get<output_type>(data_accessor());                                                \
   }
