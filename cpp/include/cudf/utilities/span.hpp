@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,7 +201,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   /// @param data Pointer to the first element in the span
   /// @param size The number of elements in the span
   /// @param is_device_accessible Whether the data is device accessible (e.g. pinned memory)
-  constexpr host_span(T* data, std::size_t size, bool is_device_accessible)
+  CUDF_HOST_DEVICE constexpr host_span(T* data, std::size_t size, bool is_device_accessible)
     : base(data, size), _is_device_accessible{is_device_accessible}
   {
   }
@@ -311,8 +311,8 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    * @param count The number of elements in the subspan
    * @return A subspan of the sequence, of requested count and offset
    */
-  [[nodiscard]] constexpr host_span subspan(typename base::size_type offset,
-                                            typename base::size_type count) const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr host_span subspan(
+    typename base::size_type offset, typename base::size_type count) const noexcept
   {
     return host_span{this->data() + offset, count, _is_device_accessible};
   }
@@ -434,8 +434,8 @@ struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Ex
    * @param count The number of elements in the subspan
    * @return A subspan of the sequence, of requested count and offset
    */
-  [[nodiscard]] constexpr device_span subspan(typename base::size_type offset,
-                                              typename base::size_type count) const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr device_span subspan(
+    typename base::size_type offset, typename base::size_type count) const noexcept
   {
     return device_span{this->data() + offset, count};
   }
@@ -475,28 +475,28 @@ class base_2dspan {
    *
    * @return A pointer to the first element of the span
    */
-  [[nodiscard]] constexpr auto data() const noexcept { return _flat.data(); }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr auto data() const noexcept { return _flat.data(); }
 
   /**
    * @brief Returns the size in the span as pair.
    *
    * @return pair representing rows and columns size of the span
    */
-  [[nodiscard]] constexpr auto size() const noexcept { return _size; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr auto size() const noexcept { return _size; }
 
   /**
    * @brief Returns the number of elements in the span.
    *
    * @return Number of elements in the span
    */
-  [[nodiscard]] constexpr auto count() const noexcept { return _flat.size(); }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr auto count() const noexcept { return _flat.size(); }
 
   /**
    * @brief Checks if the span is empty.
    *
    * @return True if the span is empty, false otherwise
    */
-  [[nodiscard]] constexpr bool is_empty() const noexcept { return count() == 0; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_empty() const noexcept { return count() == 0; }
 
   /**
    * @brief Returns a reference to the row-th element of the sequence.
@@ -507,7 +507,7 @@ class base_2dspan {
    * @param row the index of the element to access
    * @return A reference to the row-th element of the sequence, i.e., `data()[row]`
    */
-  constexpr RowType<T, dynamic_extent> operator[](size_t row) const
+  CUDF_HOST_DEVICE constexpr RowType<T, dynamic_extent> operator[](size_t row) const
   {
     return _flat.subspan(row * _size.second, _size.second);
   }
@@ -517,7 +517,10 @@ class base_2dspan {
    *
    * @return A flattened span of the 2D span
    */
-  [[nodiscard]] constexpr RowType<T, dynamic_extent> flat_view() const { return _flat; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr RowType<T, dynamic_extent> flat_view() const
+  {
+    return _flat;
+  }
 
   /**
    * @brief Construct a 2D span from another 2D span of convertible type
