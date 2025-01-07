@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -14,6 +14,8 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 from pandas.api import types as pd_types
+
+import pylibcudf as plc
 
 import cudf
 from cudf.core._compat import PANDAS_LT_300
@@ -142,8 +144,8 @@ def is_scalar(val):
         val,
         (
             cudf.Scalar,
-            cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
+            plc.Scalar,
         ),
     ) or (
         pd_types.is_scalar(val)

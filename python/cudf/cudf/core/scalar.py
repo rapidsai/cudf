@@ -47,7 +47,7 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
     -------
     tuple[ScalarLike, Dtype]
     """
-    valid = not cudf._lib.scalar._is_null_host_scalar(value)
+    valid = not cudf.utils.utils._is_null_host_scalar(value)
 
     if isinstance(value, list):
         if dtype is not None:
