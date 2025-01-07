@@ -461,6 +461,7 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
+  src/hash/xxhash_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
