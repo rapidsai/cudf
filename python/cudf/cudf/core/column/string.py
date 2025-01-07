@@ -2176,7 +2176,7 @@ class StringMethods(ColumnMethods):
                 plc.strings.char_types.StringCharacterTypes.ALL_TYPES
                 if keep
                 else plc.strings.char_types.StringCharacterTypes.ALPHANUM,
-                plc.interop.from_arrow(pa.scalar(repl)),
+                plc.interop.from_arrow(pa.scalar(repl, type=pa.string())),
                 plc.strings.char_types.StringCharacterTypes.ALPHANUM
                 if keep
                 else plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
@@ -6511,23 +6511,23 @@ class StringColumn(column.ColumnBase):
     @acquire_spill_lock()
     def _split_record(
         self,
-        delimiter: cudf.Scalar,
+        delimiter: plc.Scalar,
         maxsplit: int,
         method: Callable[[plc.Column, plc.Scalar, int], plc.Column],
     ) -> Self:
         plc_column = method(
             self.to_pylibcudf(mode="read"),
-            delimiter.device_value.c_value,
+            delimiter,
             maxsplit,
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def split_record(self, delimiter: cudf.Scalar, maxsplit: int) -> Self:
+    def split_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:
         return self._split_record(
             delimiter, maxsplit, plc.strings.split.split.split_record
         )
 
-    def rsplit_record(self, delimiter: cudf.Scalar, maxsplit: int) -> Self:
+    def rsplit_record(self, delimiter: plc.Scalar, maxsplit: int) -> Self:
         return self._split_record(
             delimiter, maxsplit, plc.strings.split.split.rsplit_record
         )
@@ -6535,13 +6535,13 @@ class StringColumn(column.ColumnBase):
     @acquire_spill_lock()
     def _split(
         self,
-        delimiter: cudf.Scalar,
+        delimiter: plc.Scalar,
         maxsplit: int,
         method: Callable[[plc.Column, plc.Scalar, int], plc.Column],
     ) -> dict[int, Self]:
         plc_table = method(
             self.to_pylibcudf(mode="read"),
-            delimiter.device_value.c_value,
+            delimiter,
             maxsplit,
         )
         return dict(
@@ -6551,10 +6551,10 @@ class StringColumn(column.ColumnBase):
             )
         )
 
-    def split(self, delimiter: cudf.Scalar, maxsplit: int) -> dict[int, Self]:
+    def split(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.split)
 
-    def rsplit(self, delimiter: cudf.Scalar, maxsplit: int) -> dict[int, Self]:
+    def rsplit(self, delimiter: plc.Scalar, maxsplit: int) -> dict[int, Self]:
         return self._split(delimiter, maxsplit, plc.strings.split.split.rsplit)
 
     @acquire_spill_lock()
