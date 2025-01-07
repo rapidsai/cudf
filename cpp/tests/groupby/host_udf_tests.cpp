@@ -23,7 +23,6 @@
 #include <cudf/reduction.hpp>
 
 #include <random>
-#include <unordered_set>
 #include <vector>
 
 namespace {
