@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite setting GPU engine as default."""
@@ -174,6 +174,19 @@ EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 
+TESTS_TO_SKIP: Mapping[str, str] = {
+    # On Ubuntu 20.04, the tzdata package contains a bunch of symlinks
+    # for obsolete timezone names. However, the chrono_tz package that
+    # polars uses doesn't read /usr/share/zoneinfo, instead packaging
+    # the current zoneinfo database from IANA. Consequently, when this
+    # hypothesis-generated test runs and generates timezones from the
+    # available zoneinfo-reported timezones, we can get an error from
+    # polars that the requested timezone is unknown.
+    # Since this is random, just skip it, rather than xfailing.
+    "tests/unit/lazyframe/test_serde.py::test_lf_serde_roundtrip_binary": "chrono_tz doesn't have all tzdata symlink names",
+}
+
+
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
 ) -> None:
@@ -182,5 +195,7 @@ def pytest_collection_modifyitems(
         # Don't xfail tests if running without fallback
         return
     for item in items:
-        if item.nodeid in EXPECTED_FAILURES:
+        if item.nodeid in TESTS_TO_SKIP:
+            item.add_marker(pytest.mark.skip(reason=TESTS_TO_SKIP[item.nodeid]))
+        elif item.nodeid in EXPECTED_FAILURES:
             item.add_marker(pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid]))
