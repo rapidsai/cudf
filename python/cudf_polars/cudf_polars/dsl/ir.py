@@ -1139,6 +1139,9 @@ class Join(IR):
         self.options = options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
+        # TODO: Implement maintain_order
+        if options[5] != "none":
+            raise NotImplementedError("maintain_order not implemented yet")
         if any(
             isinstance(e.value, expr.Literal)
             for e in itertools.chain(self.left_on, self.right_on)
@@ -1254,8 +1257,7 @@ class Join(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        how, join_nulls, zlice, suffix, coalesce, maintain_order = options
-        # TODO: Implement maintain_order param
+        how, join_nulls, zlice, suffix, coalesce, _ = options
         if how == "cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
