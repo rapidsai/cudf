@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -11,7 +11,6 @@ from cudf.core.buffer import acquire_spill_lock
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cudf._typing import ScalarLike
     from cudf.core.column import ColumnBase
     from cudf.core.column.numerical import NumericalColumn
 
@@ -37,7 +36,7 @@ def gather(
 
 @acquire_spill_lock()
 def scatter(
-    sources: list[ColumnBase | ScalarLike],
+    sources: list[ColumnBase | cudf.Scalar],
     scatter_map: NumericalColumn,
     target_columns: list[ColumnBase],
     bounds_check: bool = True,
