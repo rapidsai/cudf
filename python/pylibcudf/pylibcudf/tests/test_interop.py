@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np

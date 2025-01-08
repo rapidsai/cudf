@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# Copyright (c) 2024, NVIDIA CORPORATION.
 from libc.stdint cimport uint64_t, int64_t
 from libcpp cimport bool
 from libcpp.optional cimport optional
