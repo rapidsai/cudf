@@ -196,11 +196,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         // only do string buffer for leaf
         if (idx == max_depth - 1 and out_buf.string_size() == 0 and
             col_string_sizes[pass.chunks[c].src_col_index] > 0) {
-          out_buf.create_string_data(
-            col_string_sizes[pass.chunks[c].src_col_index],
-            col_string_sizes[pass.chunks[c].src_col_index] >
-              static_cast<size_t>(strings::detail::get_offset64_threshold()),
-            _stream);
+          out_buf.create_string_data(col_string_sizes[pass.chunks[c].src_col_index],
+                                     pass.chunks[c].is_large_string_col,
+                                     _stream);
         }
         if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
