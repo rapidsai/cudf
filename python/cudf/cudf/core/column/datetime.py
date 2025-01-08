@@ -212,6 +212,8 @@ class DatetimeColumn(column.ColumnBase):
         "__rsub__",
     }
 
+    _PANDAS_NA_REPR = str(pd.NaT)
+
     def __init__(
         self,
         data: Buffer,
