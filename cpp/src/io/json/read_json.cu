@@ -55,16 +55,6 @@ BS::thread_pool& tpool()
   return _tpool;
 }
 
-/*
-rmm::cuda_stream_pool& spool()
-{
-  // allocating the stream pool on the heap since a static pool object is destroyed
-  // after main and that's undefined behaviour for CUDA driver API
-  static rmm::cuda_stream_pool* _spool_ptr = new rmm::cuda_stream_pool{};
-  return *_spool_ptr;
-}
-*/
-
 }  // namespace pools
 
 class compressed_host_buffer_source final : public datasource {
@@ -471,7 +461,6 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   // delimiter.
   auto constexpr num_delimiter_chars = 1;
   std::vector<std::future<size_t>> thread_tasks;
-  //auto& stream_pool = pools::spool();
   auto stream_pool = cudf::detail::fork_streams(stream, pools::tpool().get_thread_count());
 
   auto delimiter_map = cudf::detail::make_empty_host_vector<std::size_t>(sources.size(), stream);
@@ -489,7 +478,9 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
 
   auto const total_bytes_to_read = std::min(range_size, prefsum_source_sizes.back() - range_offset);
   range_offset -= start_source ? prefsum_source_sizes[start_source - 1] : 0;
-  for (std::size_t i = start_source, cur_stream = 0; i < sources.size() && bytes_read < total_bytes_to_read; i++) {
+  for (std::size_t i = start_source, cur_stream = 0;
+       i < sources.size() && bytes_read < total_bytes_to_read;
+       i++) {
     if (sources[i]->is_empty()) continue;
     auto data_size = std::min(sources[i]->size() - range_offset, total_bytes_to_read - bytes_read);
     auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read +
