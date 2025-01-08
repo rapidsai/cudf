@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 [build-system]
 build-backend = "rapids_build_backend.build"
@@ -39,10 +39,10 @@ classifiers = [
 ]
 
 [project.entry-points."dask.dataframe.backends"]
-cudf = "dask_cudf.backends:CudfBackendEntrypoint"
+cudf = "dask_cudf.backends:LegacyCudfBackendEntrypoint"
 
 [project.entry-points."dask_expr.dataframe.backends"]
-cudf = "dask_cudf.backends:CudfDXBackendEntrypoint"
+cudf = "dask_cudf.backends:CudfBackendEntrypoint"
 
 [project.optional-dependencies]
 test = [
@@ -102,8 +102,5 @@ filterwarnings = [
     # https://github.com/dask/partd/blob/main/partd/pandas.py#L198
     "ignore:Passing a BlockManager to DataFrame is deprecated and will raise in a future version. Use public APIs instead.:DeprecationWarning",
     "ignore:String support for `aggregate_files` is experimental. Behavior may change in the future.:FutureWarning:dask",
-    # Dask now loudly throws warnings: https://github.com/dask/dask/pull/11437
-    # When the legacy implementation is removed we can remove this warning and stop running pytests with `DASK_DATAFRAME__QUERY_PLANNING=False`
-    "ignore:The legacy Dask DataFrame implementation is deprecated and will be removed in a future version.*:FutureWarning",
 ]
 xfail_strict = true
