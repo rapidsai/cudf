@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,7 +86,7 @@ template <typename Grouping, direction Direction>
 struct fixed_window_clamper {
   Grouping groups;
   cudf::size_type delta;
-  [[nodiscard]] __device__ cudf::size_type operator()(cudf::size_type i)
+  [[nodiscard]] __device__ constexpr cudf::size_type operator()(cudf::size_type i) const
   {
     auto label = groups.label(i);
     auto start = groups.start(label);
