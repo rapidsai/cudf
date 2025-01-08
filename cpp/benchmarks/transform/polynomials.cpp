@@ -64,10 +64,13 @@ static void BM_transform_polynomials(nvbench::state& state)
       expr = "( " + expr + " ) * x + " + std::to_string(constants[i + 1]);
     }
 
+    static_assert(std::is_same_v<key_type, float> || std::is_same_v<key_type, double>);
+    std::string type = std::is_same_v<key_type, float> ? "float" : "double";
+
     std::string udf = R"***(
 __device__ inline void    fdsf   (
-       float* out,
-       float x
+       )***" + type + R"***(* out,
+       )***" + type + R"***( x
 )
 {
   *out = )***" + expr +
