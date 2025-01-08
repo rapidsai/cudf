@@ -396,11 +396,12 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
     __syncthreads();
 
     cudf::size_type word_tokens = 0;
-    auto const word_pos         = lane_idx < words_found ? start_words[lane_idx] : init_token;
+
     // each thread now processes a word
-    if (word_pos != init_token) {
-      auto offset = word_lengths[lane_idx];  // these are offsets now
-      auto size   = word_lengths[lane_idx + 1] - offset;
+    if (lane_idx < words_found) {
+      auto const word_pos = start_words[lane_idx];
+      auto const offset   = word_lengths[lane_idx];  // these are offsets now
+      auto const size     = word_lengths[lane_idx + 1] - offset;
       // if (size >= 200) {  // max word length
       //   s_tokens[offset] = 100;
       //   word_tokens      = 1;
@@ -429,10 +430,6 @@ CUDF_KERNEL void tokenize_kernel(cudf::column_device_view const d_strings,
                        : init_token;
     }
     __syncthreads();
-
-    s_tokens[lane_idx] = init_token;
-    __syncthreads();
-
     itr += block_size;
   }
 
