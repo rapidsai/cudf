@@ -73,37 +73,31 @@ static void BM_ast_transform(nvbench::state& state)
                  });
 
   // Create expression trees
-
-  // Note that a std::list is required here because of its guarantees against reference invalidation
-  // when items are added or removed. References to items in a std::vector are not safe if the
-  // vector must re-allocate.
-  auto expressions = std::list<cudf::ast::operation>();
+  cudf::ast::tree tree;
 
   // Construct tree that chains additions like (((a + b) + c) + d)
   auto const op = cudf::ast::ast_operator::ADD;
   if (reuse_columns) {
-    expressions.push_back(cudf::ast::operation(op, column_refs.at(0), column_refs.at(0)));
+    tree.push(cudf::ast::operation(op, column_refs.at(0), column_refs.at(0)));
     for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
-      expressions.push_back(cudf::ast::operation(op, expressions.back(), column_refs.at(0)));
+      tree.push(cudf::ast::operation(op, tree.back(), column_refs.at(0)));
     }
   } else {
-    expressions.push_back(cudf::ast::operation(op, column_refs.at(0), column_refs.at(1)));
-    std::transform(std::next(column_refs.cbegin(), 2),
-                   column_refs.cend(),
-                   std::back_inserter(expressions),
-                   [&](auto const& column_ref) {
-                     return cudf::ast::operation(op, expressions.back(), column_ref);
-                   });
+    tree.push(cudf::ast::operation(op, column_refs.at(0), column_refs.at(1)));
+    std::for_each(
+      std::next(column_refs.cbegin(), 2), column_refs.cend(), [&](auto const& column_ref) {
+        tree.push(cudf::ast::operation(op, tree.back(), column_ref));
+      });
   }
 
-  auto const& expression_tree_root = expressions.back();
+  auto const& expression = tree.back();
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(static_cast<size_t>(num_rows) * (tree_levels + 1));
   state.add_global_memory_writes<key_type>(num_rows);
 
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch&) { cudf::compute_column(table, expression_tree_root); });
+             [&](nvbench::launch&) { cudf::compute_column(table, expression); });
 }
 
 template <cudf::ast::ast_operator cmp_op, cudf::ast::ast_operator reduce_op>
@@ -143,30 +137,30 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
                  [](auto const& column_id) { return cudf::ast::column_reference(column_id); });
 
   // Create expression trees
-  std::list<cudf::ast::operation> expressions;
+  cudf::ast::tree tree;
 
   // Construct AST tree (a == b && c == d && e == f && ...)
 
-  expressions.emplace_back(cudf::ast::operation(cmp_op, column_refs[0], column_refs[1]));
+  tree.push(cudf::ast::operation(cmp_op, column_refs[0], column_refs[1]));
 
   std::for_each(thrust::make_counting_iterator(1),
                 thrust::make_counting_iterator(tree_levels),
                 [&](size_t idx) {
-                  auto const& lhs = expressions.back();
-                  auto const& rhs = expressions.emplace_back(
+                  auto const& lhs = tree.back();
+                  auto const& rhs = tree.push(
                     cudf::ast::operation(cmp_op, column_refs[idx * 2], column_refs[idx * 2 + 1]));
-                  expressions.emplace_back(cudf::ast::operation(reduce_op, lhs, rhs));
+                  tree.push(cudf::ast::operation(reduce_op, lhs, rhs));
                 });
-
-  auto const& expression_tree_root = expressions.back();
 
   // Use the number of bytes read from global memory
   state.add_element_count(chars_size, "chars_size");
   state.add_global_memory_reads<nvbench::uint8_t>(chars_size);
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
+  auto const& expression = tree.back();
+
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch&) { cudf::compute_column(table, expression_tree_root); });
+             [&](nvbench::launch&) { cudf::compute_column(table, expression); });
 }
 
 #define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
