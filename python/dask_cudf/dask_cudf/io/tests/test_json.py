@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import math
 import os
@@ -11,10 +11,6 @@ import dask.dataframe as dd
 from dask.utils import tmpfile
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support for dask<2024.4.0
-pytestmark = skip_dask_expr(lt_version="2024.4.0")
 
 
 def test_read_json_backend_dispatch(tmp_path):
@@ -136,8 +132,4 @@ def test_deprecated_api_paths(tmp_path):
     # Encourage top-level read_json import only
     with pytest.warns(match="dask_cudf.io.read_json is now deprecated"):
         df2 = dask_cudf.io.read_json(path)
-    dd.assert_eq(df, df2, check_divisions=False)
-
-    with pytest.warns(match="dask_cudf.io.json.read_json is now deprecated"):
-        df2 = dask_cudf.io.json.read_json(path)
     dd.assert_eq(df, df2, check_divisions=False)
