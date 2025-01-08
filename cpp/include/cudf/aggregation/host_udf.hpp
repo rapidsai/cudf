@@ -195,10 +195,10 @@ struct host_udf_segmented_reduction_base : host_udf_base {
    * @param input The input column for reduction
    * @param offsets A list of offsets defining the segments for reduction
    * @param output_dtype The data type for the final output column
-   * @param init The initial value of the reduction
    * @param null_handling If `INCLUDE` then the reduction result is valid only if all elements in
    *        the segment are valid, and if `EXCLUDE` then the reduction result is valid if any
    *        element in the segment is valid
+   * @param init The initial value of the reduction
    * @param stream The CUDA stream to use for any kernel launches
    * @param mr Device memory resource to use for any allocations
    * @return The output result of the aggregation
