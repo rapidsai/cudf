@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import hashlib
 import struct
@@ -34,7 +34,9 @@ def hash_single_uint32(val, seed=0):
 
 
 def hash_combine_32(lhs, rhs):
-    return np.uint32(lhs ^ (rhs + 0x9E3779B9 + (lhs << 6) + (lhs >> 2)))
+    return np.uint32(
+        int((lhs ^ (rhs + 0x9E3779B9 + (lhs << 6) + (lhs >> 2)))) % 2**32
+    )
 
 
 def uint_hash_combine_32(lhs, rhs):
@@ -80,22 +82,6 @@ def list_struct_table():
     return data
 
 
-def python_hash_value(x, method):
-    if method == "murmurhash3_x86_32":
-        return libcudf_mmh3_x86_32(x)
-    elif method == "murmurhash3_x64_128":
-        hasher = mmh3.mmh3_x64_128(seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED)
-        hasher.update(x)
-        # libcudf returns a tuple of two 64-bit integers
-        return hasher.utupledigest()
-    elif method == "xxhash_64":
-        return xxhash.xxh64(
-            x, seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
-        ).intdigest()
-    else:
-        return getattr(hashlib, method)(x).hexdigest()
-
-
 @pytest.mark.parametrize(
     "method", ["sha1", "sha224", "sha256", "sha384", "sha512", "md5"]
 )
@@ -115,6 +101,23 @@ def test_hash_column_sha_md5(
     assert_column_eq(got, expect)
 
 
+def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
+    def py_hasher(val):
+        return xxhash.xxh32(
+            scalar_to_binary(val), seed=plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+        ).intdigest()
+
+    expect = pa.array(
+        [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
+        type=pa.uint32(),
+    )
+    got = plc.hashing.xxhash_32(
+        plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+    )
+
+    assert_column_eq(got, expect)
+
+
 def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
     def py_hasher(val):
         return xxhash.xxh64(
@@ -125,7 +128,9 @@ def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
         [py_hasher(val) for val in pa_scalar_input_column.to_pylist()],
         type=pa.uint64(),
     )
-    got = plc.hashing.xxhash_64(plc_scalar_input_tbl, 0)
+    got = plc.hashing.xxhash_64(
+        plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
+    )
 
     assert_column_eq(got, expect)
 
