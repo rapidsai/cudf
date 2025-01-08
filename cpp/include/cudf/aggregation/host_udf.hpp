@@ -46,7 +46,7 @@ namespace CUDF_EXPORT cudf {
  * @brief The fundamental interface for host-based UDF implementation.
  *
  * This class declares the functions `do_hash`, `is_equal`, and `clone` that must be defined in
- * the users' UDF implementation. These function are required for libcudf aggregation framework
+ * the users' UDF implementation. These functions are required for libcudf aggregation framework
  * to perform its operations.
  */
 class host_udf_base {
