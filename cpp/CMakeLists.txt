@@ -276,7 +276,7 @@ rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
 rapids_cpm_rapids_logger()
-rapids_make_logger(cudf EXPORT_SET cudf-exports)
+rapids_make_logger(cudf EXPORT_SET cudf-exports LOGGER_DEFAULT_LEVEL WARN)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
@@ -462,6 +462,7 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
+  src/hash/xxhash_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
