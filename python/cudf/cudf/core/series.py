@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -5181,6 +5181,66 @@ class TimedeltaProperties(BaseDatelikeProperties):
         ca = ColumnAccessor(self.series._column.components(), verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index
+        )
+
+    def total_seconds(self) -> Series:
+        """
+        Return total duration of each element expressed in seconds.
+
+        This method is available directly on TimedeltaIndex
+        and on Series containing timedelta values under the ``.dt`` namespace.
+
+        Returns
+        -------
+        Index or Series
+            When the calling object is a TimedeltaIndex,
+            the return type is an Index with a float64 dtype. When the calling object
+            is a Series, the return type is Series of type `float64` whose
+            index is the same as the original.
+
+        See Also
+        --------
+        datetime.timedelta.total_seconds : Standard library version
+            of this method.
+        TimedeltaIndex.components : Return a DataFrame with components of
+            each Timedelta.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> s = cudf.Series(pd.to_timedelta(np.arange(5), unit="D"))
+        >>> s
+        0    0 days 00:00:00
+        1    1 days 00:00:00
+        2    2 days 00:00:00
+        3    3 days 00:00:00
+        4    4 days 00:00:00
+        dtype: timedelta64[ns]
+
+        >>> s.dt.total_seconds()
+        0         0.0
+        1     86400.0
+        2    172800.0
+        3    259200.0
+        4    345600.0
+        dtype: float64
+
+        **TimedeltaIndex**
+
+        >>> idx = cudf.from_pandas(pd.to_timedelta(np.arange(5), unit="D"))
+        >>> idx
+        TimedeltaIndex(['0 days', '1 days', '2 days', '3 days', '4 days'],
+                       dtype='timedelta64[ns]', freq=None)
+
+        >>> idx.total_seconds()
+        Index([0.0, 86400.0, 172800.0, 259200.0, 345600.0], dtype='float64')
+        """
+        return self._return_result_like_self(
+            self.series._column.total_seconds()
         )
 
 

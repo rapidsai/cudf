@@ -110,8 +110,9 @@ class aggregation {
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX  UDF based reduction
-    CUDA,            ///< CUDA UDF based reduction
+    PTX,             ///< PTX  based UDF aggregation
+    CUDA,            ///< CUDA based UDF aggregation
+    HOST_UDF,        ///< host based UDF aggregation
     MERGE_LISTS,     ///< merge multiple lists values into one list
     MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
     MERGE_M2,        ///< merge partial values of M2 aggregation,
@@ -120,7 +121,7 @@ class aggregation {
     TDIGEST,         ///< create a tdigest from a set of input values
     MERGE_TDIGEST,   ///< create a tdigest by merging multiple tdigests together
     HISTOGRAM,       ///< compute frequency of each element
-    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation,
+    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation
   };
 
   aggregation() = delete;
@@ -598,6 +599,18 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
+
+// Forward declaration of `host_udf_base` for the factory function of `HOST_UDF` aggregation.
+struct host_udf_base;
+
+/**
+ * @brief Factory to create a HOST_UDF aggregation.
+ *
+ * @param host_udf An instance of a class derived from `host_udf_base` to perform aggregation
+ * @return A HOST_UDF aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base> host_udf);
 
 /**
  * @brief Factory to create a MERGE_LISTS aggregation.

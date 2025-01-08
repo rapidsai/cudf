@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -132,6 +132,8 @@ ConfigureTest(
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
   groupby/histogram_tests.cpp
+  groupby/host_udf_example_tests.cu
+  groupby/host_udf_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -190,6 +192,7 @@ ConfigureTest(
   hashing/sha256_test.cpp
   hashing/sha384_test.cpp
   hashing/sha512_test.cpp
+  hashing/xxhash_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
 

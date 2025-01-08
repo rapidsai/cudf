@@ -621,7 +621,7 @@ class CategoricalColumn(column.ColumnBase):
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
             value
-        ) and cudf._lib.scalar._is_null_host_scalar(value):
+        ) and cudf.utils.utils._is_null_host_scalar(value):
             to_add_categories = 0
         else:
             if cudf.api.types.is_scalar(value):
@@ -1192,10 +1192,10 @@ class CategoricalColumn(column.ColumnBase):
         codes = [o.codes for o in objs]
 
         newsize = sum(map(len, codes))
-        if newsize > libcudf.MAX_COLUMN_SIZE:
+        if newsize > np.iinfo(libcudf.types.size_type_dtype).max:
             raise MemoryError(
                 f"Result of concat cannot have "
-                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
+                f"size > {libcudf.types.size_type_dtype}_MAX"
             )
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype)

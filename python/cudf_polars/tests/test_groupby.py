@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -213,3 +213,9 @@ def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
         )
     q = df.lazy().group_by(key_names, maintain_order=True).agg(pl.col("value").sum())
     assert_gpu_result_equal(q)
+
+
+def test_groupby_len_with_nulls():
+    df = pl.DataFrame({"a": [1, 1, 1, 2], "b": [1, None, 2, 3]})
+    q = df.lazy().group_by("a").agg(pl.col("b").len())
+    assert_gpu_result_equal(q, check_row_order=False)

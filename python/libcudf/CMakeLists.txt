@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -33,9 +33,6 @@ if(cudf_FOUND)
 endif()
 
 unset(cudf_FOUND)
-
-# Find Python early so that later commands can use it
-find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)
 
 set(BUILD_TESTS OFF)
 set(BUILD_BENCHMARKS OFF)

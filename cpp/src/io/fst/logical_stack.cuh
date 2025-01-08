@@ -513,6 +513,12 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       stream));
   }
 
+  // Check if the last element of d_kv_operations is 0. If not, then we have a problem.
+  if (num_symbols_in && !supports_reset_op) {
+    StackOpT last_symbol = d_kv_ops_current.element(num_symbols_in - 1, stream);
+    CUDF_EXPECTS(last_symbol.stack_level == 0, "The logical stack is not empty!");
+  }
+
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
