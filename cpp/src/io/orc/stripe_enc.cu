@@ -1356,18 +1356,6 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
     srcs.begin(), dsts.begin(), lengths.begin(), lengths.size(), stream);
 }
 
-compression_type from_orc_compression(orc::CompressionKind compression)
-{
-  switch (compression) {
-    case orc::CompressionKind::NONE: return compression_type::NONE;
-    case orc::CompressionKind::SNAPPY: return compression_type::SNAPPY;
-    case orc::CompressionKind::ZLIB: return compression_type::ZLIB;
-    case orc::CompressionKind::ZSTD: return compression_type::ZSTD;
-    case orc::CompressionKind::LZ4: return compression_type::LZ4;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
-
 std::optional<writer_compression_statistics> CompressOrcDataStreams(
   device_span<uint8_t> compressed_data,
   uint32_t num_compressed_blocks,
