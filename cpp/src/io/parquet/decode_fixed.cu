@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -960,9 +960,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                           page_processing_stage::DECODE)) {
     return;
   }
-
-  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
-  if (s->num_rows == 0) { return; }
 
   using value_decoder_type = std::conditional_t<
     split_decode_t,
