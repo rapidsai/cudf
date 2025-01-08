@@ -253,8 +253,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            cudf.Scalar(lo, self.dtype).device_value,
-            cudf.Scalar(hi, self.dtype).device_value,
+            plc.interop.from_arrow(
+                pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
+            plc.interop.from_arrow(
+                pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1026,7 +1030,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # https://github.com/rapidsai/cudf/issues/14515 by
             # providing a mode in which cudf::contains does not mask
             # the result.
-            result = result.fillna(cudf.Scalar(rhs.null_count > 0))
+            result = result.fillna(rhs.null_count > 0)
         return result
 
     def as_mask(self) -> Buffer:
@@ -1992,12 +1996,12 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    cudf.Scalar(
-                        arbitrary.start, dtype=np.dtype(np.int64)
-                    ).device_value,
-                    cudf.Scalar(
-                        arbitrary.step, dtype=np.dtype(np.int64)
-                    ).device_value,
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.start, type=pa.int64())
+                    ),
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.step, type=pa.int64())
+                    ),
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:

@@ -3255,7 +3255,7 @@ class IndexedFrame(Frame):
             )
             distinct = libcudf.column.Column.from_pylibcudf(plc_column)
         result = copying.scatter(
-            [cudf.Scalar(False, dtype=bool)],
+            [cudf.Scalar(False)],
             distinct,
             [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,

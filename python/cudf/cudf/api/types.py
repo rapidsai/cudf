@@ -13,6 +13,7 @@ from typing import cast
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api import types as pd_types
 
 import pylibcudf as plc
@@ -146,6 +147,7 @@ def is_scalar(val):
             cudf.Scalar,
             cudf.core.tools.datetimes.DateOffset,
             plc.Scalar,
+            pa.Scalar,
         ),
     ) or (
         pd_types.is_scalar(val)

@@ -2327,8 +2327,7 @@ class DatetimeIndex(Index):
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._column.millisecond.astype("int32")
-                * cudf.Scalar(1000, dtype="int32")
+                self._column.millisecond.astype("int32") * np.int32(1000)
             )
             + self._column.microsecond,
             name=self.name,
