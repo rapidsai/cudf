@@ -58,7 +58,10 @@ static void bench_subword_tokenizer(nvbench::state& state)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
-  std::vector<char const*> h_strings(num_rows, "This is a test ");
+  std::vector<char const*> h_strings(
+    num_rows,
+    "This is a test This is a test This is a test This is a test This is a test This is a test "
+    "This is a test This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   static std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};
@@ -89,7 +92,10 @@ static void bench_wordpiece_tokenizer(nvbench::state& state)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
-  std::vector<char const*> h_strings(num_rows, "This is a test ");
+  std::vector<char const*> h_strings(
+    num_rows,
+    "This is a test This is a test This is a test This is a test This is a test This is a test "
+    "This is a test This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   auto input = cudf::strings_column_view{strings};
 
