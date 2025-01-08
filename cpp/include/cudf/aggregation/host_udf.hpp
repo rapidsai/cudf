@@ -93,11 +93,11 @@ class host_udf_base {
 };
 
 /**
- * @brief The interface for host-based UDF implementation for reduction context.
+ * @brief The interface for host-based UDF implementation for reduction contexts.
  *
  * An implementation of host-based UDF for reduction needs to be derived from this class.
  * In addition to implementing the virtual functions declared in the base class `host_udf_base`,
- * such derived class must also define the `operator()` function to perform reduction
+ * such derived classes must also define the `operator()` function to perform reduction
  * operations.
  *
  * Example:
