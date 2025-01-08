@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -77,6 +77,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnLike, Dtype, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.strings import StringColumn
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -91,6 +92,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         "max",
         "min",
     }
+
+    _PANDAS_NA_REPR = str(pd.NA)
 
     def data_array_view(
         self, *, mode: Literal["write", "read"] = "write"
@@ -176,6 +179,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             f"dtype: {self.dtype}"
         )
 
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        if self.has_nulls():
+            return self.astype("str").fillna(self._PANDAS_NA_REPR)
+        return self
+
     def to_pandas(
         self,
         *,
@@ -239,8 +253,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            cudf.Scalar(lo, self.dtype).device_value.c_value,
-            cudf.Scalar(hi, self.dtype).device_value.c_value,
+            plc.interop.from_arrow(
+                pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
+            plc.interop.from_arrow(
+                pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -1015,7 +1033,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # https://github.com/rapidsai/cudf/issues/14515 by
             # providing a mode in which cudf::contains does not mask
             # the result.
-            result = result.fillna(cudf.Scalar(rhs.null_count > 0))
+            result = result.fillna(rhs.null_count > 0)
         return result
 
     def as_mask(self) -> Buffer:
@@ -1981,12 +1999,12 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    cudf.Scalar(
-                        arbitrary.start, dtype=np.dtype(np.int64)
-                    ).device_value.c_value,
-                    cudf.Scalar(
-                        arbitrary.step, dtype=np.dtype(np.int64)
-                    ).device_value.c_value,
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.start, type=pa.int64())
+                    ),
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.step, type=pa.int64())
+                    ),
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
