@@ -370,15 +370,16 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         return not cudf.utils.utils._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self) -> None:
-        is_datetime = self.dtype.kind == "M"
-        is_timedelta = self.dtype.kind == "m"
-
-        null_type = NaT if is_datetime or is_timedelta else NA
-
-        metadata = gather_metadata({"": self.dtype})[0]
-        ps = plc.interop.to_arrow(self._device_value, metadata)
+        # metadata = [gather_metadata]({"": self.dtype})[0]
+        # ps = plc.interop.to_arrow(self._device_value, metadata)
+        ps = plc.interop.to_arrow(self._device_value)
+        is_datetime = pa.types.is_timestamp(ps.type)
+        is_timedelta = pa.types.is_duration(ps.type)
         if not ps.is_valid:
-            self._host_value = null_type
+            if is_datetime or is_timedelta:
+                self._host_value = NaT
+            else:
+                self._host_value = NA
         else:
             # TODO: The special handling of specific types below does not currently
             # extend to nested types containing those types (e.g. List[timedelta]
@@ -386,15 +387,28 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             # those cases, but that will require more careful consideration of how
             # to traverse the contents of the nested data.
             if is_datetime or is_timedelta:
-                time_unit, _ = np.datetime_data(self.dtype)
+                time_unit = ps.type.unit
                 # Cast to int64 to avoid overflow
-                ps_cast = ps.cast("int64").as_py()
+                ps_cast = ps.cast(pa.int64()).as_py()
                 out_type = np.datetime64 if is_datetime else np.timedelta64
                 self._host_value = out_type(ps_cast, time_unit)
-            elif cudf.api.types.is_numeric_dtype(self.dtype):
+            elif (
+                pa.types.is_integer(ps.type)
+                or pa.types.is_floating(ps.type)
+                or pa.types.is_boolean(ps.type)
+            ):
                 self._host_value = ps.type.to_pandas_dtype()(ps.as_py())
             else:
-                host_value = ps.as_py()
+                if pa.types.is_struct(ps.type):
+                    # struct names are empty from pylibcudf, so as_py() will raise
+                    host_value = dict(
+                        zip(
+                            (str(i) for i in range(ps.type.num_fields)),
+                            ps.values(),
+                        )
+                    )
+                else:
+                    host_value = ps.as_py()
                 _replace_nested(host_value, lambda item: item is None, NA)
                 self._host_value = host_value
 

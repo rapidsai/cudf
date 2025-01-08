@@ -57,7 +57,7 @@ cdef get_element(column_view col_view, size_type index):
             cpp_copying.get_element(col_view, index)
         )
     plc_scalar = plc_Scalar.from_libcudf(move(c_output))
-    return plc.interop.to_arrow(plc_scalar).as_py()
+    return pylibcudf.interop.to_arrow(plc_scalar).as_py()
 
 
 cdef class Column:

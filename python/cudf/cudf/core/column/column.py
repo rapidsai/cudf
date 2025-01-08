@@ -564,14 +564,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if idx > len(self) - 1 or idx < 0:
             raise IndexError("single positional indexer is out-of-bounds")
         with acquire_spill_lock():
-            dscalar = libcudf.scalar.DeviceScalar.from_pylibcudf(
-                plc.copying.get_element(
-                    self.to_pylibcudf(mode="read"),
-                    idx,
-                ),
-                dtype=self.dtype,
+            plc_scalar = plc.copying.get_element(
+                self.to_pylibcudf(mode="read"),
+                idx,
             )
-        return dscalar.value
+        return cudf.Scalar.from_device_scalar(plc_scalar).value
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride
@@ -1983,10 +1980,10 @@ def as_column(
                     len(arbitrary),
                     cudf.Scalar(
                         arbitrary.start, dtype=np.dtype(np.int64)
-                    ).device_value.c_value,
+                    ).device_value,
                     cudf.Scalar(
                         arbitrary.step, dtype=np.dtype(np.int64)
-                    ).device_value.c_value,
+                    ).device_value,
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
