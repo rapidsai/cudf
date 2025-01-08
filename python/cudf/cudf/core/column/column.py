@@ -78,6 +78,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnLike, Dtype, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.strings import StringColumn
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -92,6 +93,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         "max",
         "min",
     }
+
+    _PANDAS_NA_REPR = str(pd.NA)
 
     def data_array_view(
         self, *, mode: Literal["write", "read"] = "write"
@@ -176,6 +179,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             f"{self.to_arrow().to_string()}\n"
             f"dtype: {self.dtype}"
         )
+
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        if self.has_nulls():
+            return self.astype("str").fillna(self._PANDAS_NA_REPR)
+        return self
 
     def to_pandas(
         self,
