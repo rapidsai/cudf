@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,13 +34,6 @@
 
 namespace CUDF_EXPORT cudf {
 
-/**
- * @brief Enum to indicate whether the distinct join table has nested columns or not
- *
- * @ingroup column_join
- */
-enum class has_nested : bool { YES, NO };
-
 // forward declaration
 namespace hashing::detail {
 
@@ -61,7 +54,6 @@ class hash_join;
 /**
  * @brief Forward declaration for our distinct hash join
  */
-template <cudf::has_nested HasNested>
 class distinct_hash_join;
 }  // namespace detail
 
@@ -469,20 +461,19 @@ class hash_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  const std::unique_ptr<impl_type const> _impl;
+  std::unique_ptr<impl_type const> _impl;
 };
 
 /**
  * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
+ * This class enables the distinct hash join scheme that builds hash table once, and probes as many
+ * times as needed (possibly in parallel).
+ *
  * @note Behavior is undefined if the build table contains duplicates.
  * @note All NaNs are considered as equal
- *
- * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
-// TODO: `HasNested` to be removed via dispatching
-template <cudf::has_nested HasNested>
 class distinct_hash_join {
  public:
   distinct_hash_join() = delete;
@@ -496,15 +487,10 @@ class distinct_hash_join {
    * @brief Constructs a distinct hash join object for subsequent probe calls
    *
    * @param build The build table that contains distinct elements
-   * @param probe The probe table, from which the keys are probed
-   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
-   *        any `probe` table that will be used later for join
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   distinct_hash_join(cudf::table_view const& build,
-                     cudf::table_view const& probe,
-                     nullable_join has_nulls      = nullable_join::YES,
                      null_equality compare_nulls  = null_equality::EQUAL,
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
@@ -512,16 +498,18 @@ class distinct_hash_join {
    * @brief Returns the row indices that can be used to construct the result of performing
    * an inner join between two tables. @see cudf::inner_join().
    *
+   * @param probe The probe table, from which the keys are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned indices' device memory.
    *
-   * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to
+   * @return A pair of columns [`probe_indices`, `build_indices`] that can be used to
    * construct the result of performing an inner join between two tables
    * with `build` and `probe` as the join keys.
    */
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                           std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  inner_join(cudf::table_view const& probe,
+             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
@@ -532,19 +520,22 @@ class distinct_hash_join {
    * the row index of the matched row from the build table if there is a match. Otherwise, contains
    * `JoinNoneValue`.
    *
+   * @param probe The probe table, from which the keys are probed
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
+   *
    * @return A `build_indices` column that can be used to construct the result of
    * performing a left join between two tables with `build` and `probe` as the join
    * keys.
    */
   [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> left_join(
+    cudf::table_view const& probe,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
-  using impl_type = typename cudf::detail::distinct_hash_join<HasNested>;  ///< Implementation type
+  using impl_type = cudf::detail::distinct_hash_join;  ///< Implementation type
 
   std::unique_ptr<impl_type> _impl;  ///< Distinct hash join implementation
 };

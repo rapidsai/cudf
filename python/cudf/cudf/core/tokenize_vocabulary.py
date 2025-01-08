@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -42,9 +42,8 @@ class TokenizeVocabulary:
         """
         if delimiter is None:
             delimiter = ""
-        delim = cudf.Scalar(delimiter, dtype="str")
         result = text._column.tokenize_with_vocabulary(
-            self.vocabulary, delim, default_id
+            self.vocabulary, delimiter, default_id
         )
 
         return cudf.Series._from_column(result)
