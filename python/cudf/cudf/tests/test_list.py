@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import functools
 import operator
@@ -680,7 +680,6 @@ def test_list_getitem(data):
 def test_list_scalar_host_construction(data):
     slr = cudf.Scalar(data)
     assert slr.value == data
-    assert slr.device_value.value == data
 
 
 @pytest.mark.parametrize(

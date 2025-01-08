@@ -126,6 +126,33 @@ def _replace_nested(obj, check, replacement):
                 _replace_nested(v, check, replacement)
 
 
+def _maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:
+    """
+    Convert a "nested" pyarrow scalar to a Python object.
+
+    These scalars come from pylibcudf.Scalar where field names can be
+    duplicate empty strings.
+
+    Parameters
+    ----------
+    pa_scalar: pa.Scalar
+
+    Returns
+    -------
+    Any
+        Python scalar
+    """
+    if pa.types.is_struct(pa_scalar.type):
+        return {
+            str(i): _maybe_nested_pa_scalar_to_py(val)
+            for i, (_, val) in pa_scalar.items()
+        }
+    elif pa.types.is_list(pa_scalar.type):
+        return [_maybe_nested_pa_scalar_to_py(val) for val in pa_scalar]
+    else:
+        return pa_scalar.as_py()
+
+
 def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
     """
     Convert a value and dtype to a pylibcudf Scalar for device-side cudf.Scalar
@@ -158,12 +185,6 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
         pa_type = pa.string()
     else:
         pa_type = pa.from_numpy_dtype(dtype)
-
-    if isinstance(pa_type, pa.ListType) and value is None:
-        # pyarrow doesn't correctly handle None values for list types, so
-        # we have to create this one manually.
-        # https://github.com/apache/arrow/issues/40319
-        value = [None]
 
     pa_scalar = pa.scalar(value, type=pa_type)
     plc_scalar = plc.interop.from_arrow(pa_scalar)
@@ -399,17 +420,8 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             ):
                 self._host_value = ps.type.to_pandas_dtype()(ps.as_py())
             else:
-                if pa.types.is_struct(ps.type):
-                    # struct names are empty from pylibcudf, so as_py() will raise
-                    host_value = dict(
-                        zip(
-                            (str(i) for i in range(ps.type.num_fields)),
-                            ps.values(),
-                        )
-                    )
-                else:
-                    host_value = ps.as_py()
-                _replace_nested(host_value, lambda item: item is None, NA)
+                host_value = _maybe_nested_pa_scalar_to_py(ps)
+                # _replace_nested(host_value, lambda item: item is None, NA)
                 self._host_value = host_value
 
     def _sync(self) -> None:
