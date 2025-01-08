@@ -49,7 +49,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Hashable, Iterable
 
     from cudf._typing import (
         AggType,
@@ -2448,7 +2448,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be used in the correlation or covariance
         # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        column_names = self.grouping.values._column_names
+        column_names = self.grouping._values_column_names
         num_cols = len(column_names)
 
         column_pair_structs = {}
@@ -2682,10 +2682,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
-
-        values = self.obj.__class__._from_data(
-            self.grouping.values._data, self.obj.index
-        )
+        values = self.grouping.values
+        values.index = self.obj.index
         return values - self.shift(periods=periods)
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
@@ -2789,9 +2787,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                 raise ValueError("Method can only be of 'ffill', 'bfill'.")
             return getattr(self, method, limit)()
 
-        values = self.obj.__class__._from_data(
-            self.grouping.values._data, self.obj.index
-        )
+        values = self.grouping.values
+        values.index = self.obj.index
         return values.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
@@ -3544,6 +3541,13 @@ class _Grouping(Serializable):
             )
 
     @property
+    def _values_column_names(self) -> list[Hashable]:
+        # If the key columns are in `obj`, filter them out
+        return [
+            x for x in self._obj._column_names if x not in self._named_columns
+        ]
+
+    @property
     def values(self) -> cudf.core.frame.Frame:
         """Return value columns as a frame.
 
@@ -3553,11 +3557,9 @@ class _Grouping(Serializable):
 
         This is mainly used in transform-like operations.
         """
-        # If the key columns are in `obj`, filter them out
-        value_column_names = [
-            x for x in self._obj._column_names if x not in self._named_columns
-        ]
-        value_columns = self._obj._data.select_by_label(value_column_names)
+        value_columns = self._obj._data.select_by_label(
+            self._values_column_names
+        )
         return self._obj.__class__._from_data(value_columns)
 
     def _handle_callable(self, by):

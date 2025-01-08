@@ -260,26 +260,3 @@ cdef class DeviceScalar:
             self._dtype = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                 <underlying_type_t_type_id>(cdtype_id)
             ]
-
-
-def as_device_scalar(val, dtype=None):
-    if isinstance(val, (cudf.Scalar, DeviceScalar)):
-        if dtype == val.dtype or dtype is None:
-            if isinstance(val, DeviceScalar):
-                return val
-            else:
-                return val.device_value
-        else:
-            raise TypeError("Can't update dtype of existing GPU scalar")
-    else:
-        return cudf.Scalar(val, dtype=dtype).device_value
-
-
-def _is_null_host_scalar(slr):
-    if cudf.utils.utils.is_na_like(slr):
-        return True
-    elif (isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr)) or \
-            slr is pd.NaT:
-        return True
-    else:
-        return False

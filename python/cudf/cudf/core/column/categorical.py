@@ -621,7 +621,7 @@ class CategoricalColumn(column.ColumnBase):
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
             value
-        ) and cudf._lib.scalar._is_null_host_scalar(value):
+        ) and cudf.utils.utils._is_null_host_scalar(value):
             to_add_categories = 0
         else:
             if cudf.api.types.is_scalar(value):

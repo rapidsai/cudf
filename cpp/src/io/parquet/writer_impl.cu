@@ -719,7 +719,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
             // all others
             default:
               CUDF_LOG_WARN(
-                "Unsupported page encoding requested: {}; the requested encoding will be ignored",
+                "Unsupported page encoding requested: %d; the requested encoding will be ignored",
                 static_cast<int>(col_meta.get_encoding()));
               return;
           }
