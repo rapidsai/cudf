@@ -404,7 +404,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         if (col_string_sizes[idx] <=
             static_cast<size_t>(strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.emplace_back(col_string_sizes[idx]);
+          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }
       }
     }
