@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -124,7 +124,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
         ):
-            raise NotImplementedError(f"String function {self.name}")
+            raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
