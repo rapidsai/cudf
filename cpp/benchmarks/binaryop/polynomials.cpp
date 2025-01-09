@@ -58,7 +58,8 @@ static void BM_binaryop_polynomials(nvbench::state& state)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
 
-    auto result = cudf::make_column_from_scalar(constants[0], num_rows);
+    auto result =
+      cudf::make_column_from_scalar(constants[0], num_rows, launch.get_stream().get_stream());
 
     for (cudf::size_type i = 0; i < order; i++) {
       auto product = cudf::binary_operation(result->view(),
