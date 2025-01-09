@@ -37,7 +37,7 @@ def pa_scalar_to_plc_scalar(pa_scalar: pa.Scalar) -> plc.Scalar:
     -------
     plc.Scalar
     """
-    return plc.interop.to_arrow(pa_scalar)
+    return plc.interop.from_arrow(pa_scalar)
 
 
 # Note that the metaclass below can easily be generalized for use with
