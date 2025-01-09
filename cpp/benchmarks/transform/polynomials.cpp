@@ -78,7 +78,11 @@ __device__ inline void    fdsf   (
 }
 )***";
 
-    cudf::transform(column_view, udf, cudf::data_type{cudf::type_to_id<key_type>()}, false);
+    cudf::transform(column_view,
+                    udf,
+                    cudf::data_type{cudf::type_to_id<key_type>()},
+                    false,
+                    launch.get_stream().get_stream());
   });
 }
 
