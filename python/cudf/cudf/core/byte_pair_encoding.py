@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -53,7 +53,6 @@ class BytePairEncoder:
         1             this is it
         dtype: object
         """
-        sep = cudf.Scalar(separator, dtype="str")
         return cudf.Series._from_column(
-            text._column.byte_pair_encoding(self.merge_pairs, sep)
+            text._column.byte_pair_encoding(self.merge_pairs, separator)
         )

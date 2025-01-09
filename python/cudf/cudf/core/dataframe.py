@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -92,7 +92,11 @@ from cudf.utils.dtypes import (
     min_signed_type,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
+from cudf.utils.utils import (
+    GetAttrGetItemMixin,
+    _external_only_api,
+    _is_null_host_scalar,
+)
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnLike, Dtype, NotImplementedType
@@ -1890,7 +1894,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             dtype = {cc: dtype for cc in self._column_names}
         return super().astype(dtype, copy, errors)
 
-    def _clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output: Self) -> str:
         """
         This method takes in partial/preprocessed dataframe
         and returns correct representation of it with correct
@@ -1925,41 +1929,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         return "\n".join(lines)
 
-    def _clean_nulls_from_dataframe(self, df):
-        """
-        This function converts all ``null`` values to ``<NA>`` for
-        representation as a string in `__repr__`.
-
-        Since we utilize Pandas `__repr__` at all places in our code
-        for formatting purposes, we convert columns to `str` dtype for
-        filling with `<NA>` values.
-        """
-        for col in df._data:
-            if isinstance(
-                df._data[col].dtype, (cudf.StructDtype, cudf.ListDtype)
-            ):
-                # TODO we need to handle this
-                pass
-            elif df._data[col].has_nulls():
-                fill_value = (
-                    str(cudf.NaT)
-                    if isinstance(
-                        df._data[col],
-                        (
-                            cudf.core.column.DatetimeColumn,
-                            cudf.core.column.TimeDeltaColumn,
-                        ),
-                    )
-                    else str(cudf.NA)
-                )
-
-                df[col] = df._data[col].astype("str").fillna(fill_value)
-            else:
-                df[col] = df._data[col]
-
-        return df
-
-    def _get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self) -> Self:
         """
         Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
@@ -1967,9 +1937,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         for printing with the dataframe.
         """
         max_rows = pd.options.display.max_rows
-        nrows = np.max([len(self) if max_rows is None else max_rows, 1])
-        if pd.options.display.max_rows == 0:
-            nrows = len(self)
+        if max_rows in {0, None}:
+            max_rows = len(self)
+        nrows = max(max_rows, 1)
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns
@@ -1977,7 +1947,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         )
 
         if len(self) <= nrows and self._num_columns <= ncols:
-            output = self.copy(deep=False)
+            output = self
         elif self.empty and len(self.index) > 0:
             max_seq_items = pd.options.display.max_seq_items
             # In case of Empty DataFrame with index, Pandas prints
@@ -2037,10 +2007,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 lower = cudf.concat([lower_left, lower_right], axis=1)
                 output = cudf.concat([upper, lower])
 
-        output = self._clean_nulls_from_dataframe(output)
-        output.index = output.index._clean_nulls_from_index()
-
-        return output
+        return output._pandas_repr_compatible()
 
     @_performance_tracking
     def __repr__(self):
@@ -3371,7 +3338,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
                 value = value.item()
-            if libcudf.scalar._is_null_host_scalar(value):
+            if _is_null_host_scalar(value):
                 dtype = "str"
             value = as_column(
                 value,
@@ -6262,10 +6229,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         # TODO: propagate nulls through isin
         # https://github.com/rapidsai/cudf/issues/7556
 
-        fill_value = cudf.Scalar(False)
-
         def make_false_column_like_self():
-            return column.as_column(fill_value, length=len(self), dtype="bool")
+            return column.as_column(False, length=len(self), dtype="bool")
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.

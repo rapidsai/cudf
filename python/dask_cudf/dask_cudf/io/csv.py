@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import os
 from glob import glob
@@ -25,11 +25,11 @@ def read_csv(path, blocksize="default", **kwargs):
     >>> import dask_cudf
     >>> df = dask_cudf.read_csv("myfiles.*.csv")
 
-    In some cases it can break up large files:
+    It can break up large files if blocksize is specified:
 
     >>> df = dask_cudf.read_csv("largefile.csv", blocksize="256 MiB")
 
-    It can read CSV files from external resources (e.g. S3, HTTP, FTP)
+    It can read CSV files from external resources (e.g. S3, HTTP, FTP):
 
     >>> df = dask_cudf.read_csv("s3://bucket/myfiles.*.csv")
     >>> df = dask_cudf.read_csv("https://www.mycloud.com/sample.csv")
@@ -44,15 +44,15 @@ def read_csv(path, blocksize="default", **kwargs):
     ----------
     path : str, path object, or file-like object
         Either a path to a file (a str, :py:class:`pathlib.Path`, or
-        py._path.local.LocalPath), URL (including http, ftp, and S3
-        locations), or any object with a read() method (such as
+        ``py._path.local.LocalPath``), URL (including HTTP, FTP, and S3
+        locations), or any object with a ``read()`` method (such as
         builtin :py:func:`open` file handler function or
         :py:class:`~io.StringIO`).
     blocksize : int or str, default "256 MiB"
         The target task partition size. If ``None``, a single block
         is used for each file.
     **kwargs : dict
-        Passthrough key-word arguments that are sent to
+        Passthrough keyword arguments that are sent to
         :func:`cudf:cudf.read_csv`.
 
     Notes
