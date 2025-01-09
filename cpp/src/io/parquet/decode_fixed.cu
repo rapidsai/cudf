@@ -991,9 +991,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     return;
   }
 
-  // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
-  if (s->num_rows == 0) { return; }
-
   bool const should_process_nulls = is_nullable(s) && maybe_has_nulls(s);
 
   // shared buffer. all shared memory is suballocated out of here
