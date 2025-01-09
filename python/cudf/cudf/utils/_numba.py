@@ -1,11 +1,13 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
-
+import contextlib
 import glob
 import os
 import sys
 from functools import lru_cache
 
+import numba
 from numba import config as numba_config
+from packaging import version
 
 
 # Use an lru_cache with a single value to allow a delayed import of
@@ -133,18 +135,19 @@ def _setup_numba():
                 numba_config.CUDA_ENABLE_PYNVJITLINK = True
 
 
-class _CUDFNumbaConfig:
-    def __enter__(self):
-        self.CUDA_LOW_OCCUPANCY_WARNINGS = (
-            numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
-        )
-        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+@contextlib.contextmanager
+def _CUDFNumbaConfig():
+    CUDA_LOW_OCCUPANCY_WARNINGS = numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
+    numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
-        self.CAPTURED_ERRORS = numba_config.CAPTURED_ERRORS
+    is_numba_lt_061 = version.parse(numba.__version__) < version.parse("0.61")
+
+    if is_numba_lt_061:
+        CAPTURED_ERRORS = numba_config.CAPTURED_ERRORS
         numba_config.CAPTURED_ERRORS = "new_style"
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = (
-            self.CUDA_LOW_OCCUPANCY_WARNINGS
-        )
-        numba_config.CAPTURED_ERRORS = self.CAPTURED_ERRORS
+    try:
+        yield
+    finally:
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = CUDA_LOW_OCCUPANCY_WARNINGS
+        if is_numba_lt_061:
+            numba_config.CAPTURED_ERRORS = CAPTURED_ERRORS
