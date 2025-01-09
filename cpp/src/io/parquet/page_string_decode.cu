@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
 
+#include <cuda/atomic>
 #include <thrust/logical.h>
 #include <thrust/transform_scan.h>
 
@@ -953,6 +954,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
                           size_t num_rows,
+                          size_t* str_offsets,
                           kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
@@ -1127,15 +1129,31 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   // Now turn the array of lengths into offsets, but skip if this is a large string column. In the
   // latter case, offsets will be computed during string column creation.
-  if (not s->col.is_large_string_col) {
-    int value_count = nesting_info_base[leaf_level_index].value_count;
+  int value_count = nesting_info_base[leaf_level_index].value_count;
 
-    // if no repetition we haven't calculated start/end bounds and instead just skipped
-    // values until we reach first_row. account for that here.
-    if (!has_repetition) { value_count -= s->first_row; }
+  // if no repetition we haven't calculated start/end bounds and instead just skipped
+  // values until we reach first_row. account for that here.
+  if (!has_repetition) { value_count -= s->first_row; }
 
-    auto const offptr = reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-    block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+  // If we read > 0 values from this page.
+  if (value_count > 0) {
+    if (not s->col.is_large_string_col) {
+      auto const offptr =
+        reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
+      block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
+    } else {
+      if (!t) {
+        cuda::atomic_ref<size_t, cuda::std::thread_scope_device> ref{
+          str_offsets[pages[page_idx].chunk_idx]};
+        ref.fetch_min(s->page.str_offset, cuda::std::memory_order_relaxed);
+        // auto offset = ref.load(cuda::std::memory_order_relaxed);
+        // printf("page=%d, value_count=%d, s->page.str_offset = %lu, offset = %lu\n",
+        //        page_idx,
+        //        value_count,
+        //        s->page.str_offset,
+        //        offset);
+      }
+    }
   }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
@@ -1253,6 +1271,7 @@ void __host__ DecodeStringPageData(cudf::detail::hostdevice_span<PageInfo> pages
                                    size_t num_rows,
                                    size_t min_row,
                                    int level_type_size,
+                                   size_t* str_offsets,
                                    kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream)
 {
@@ -1260,13 +1279,14 @@ void __host__ DecodeStringPageData(cudf::detail::hostdevice_span<PageInfo> pages
 
   dim3 dim_block(decode_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
+  cudf::detail::device_scalar<size_t> str_offset{std::numeric_limits<size_t>::max(), stream};
 
   if (level_type_size == 1) {
     gpuDecodeStringPageData<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, str_offsets, error_code);
   } else {
     gpuDecodeStringPageData<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, error_code);
+      pages.device_ptr(), chunks, min_row, num_rows, str_offsets, error_code);
   }
 }
 

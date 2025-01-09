@@ -253,10 +253,12 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   [[nodiscard]] void const* string_data() const { return _string_data.data(); }
   [[nodiscard]] size_t string_size() const { return _string_data.size(); }
   [[nodiscard]] bool is_large_strings_column() const { return _is_large_strings_col; }
+  void set_str_offset(size_t str_offset_) { str_offset = str_offset_; }
 
  private:
   rmm::device_buffer _string_data{};
   bool _is_large_strings_col{};
+  size_t str_offset{0};
 };
 
 using column_buffer = gather_column_buffer;

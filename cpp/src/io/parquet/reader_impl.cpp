@@ -27,6 +27,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
+#include <limits>
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -99,24 +100,13 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
     // Compute column string sizes (using page string offsets) for this subpass
     col_string_sizes = calculate_page_string_offsets();
-
-    // ensure cumulative column string sizes have been initialized
-    if (pass.cumulative_col_string_sizes.empty()) {
-      pass.cumulative_col_string_sizes.resize(_input_columns.size(), 0);
-    }
-
-    // Add to the cumulative column string sizes of this pass
-    std::transform(pass.cumulative_col_string_sizes.begin(),
-                   pass.cumulative_col_string_sizes.end(),
-                   col_string_sizes.begin(),
-                   pass.cumulative_col_string_sizes.begin(),
-                   std::plus<>{});
+    // std::cout << "str_buffer_size = " << col_string_sizes[3] << std::endl;
 
     // Check for overflow in cumulative column string sizes of this pass so that the page string
     // offsets of overflowing (large) string columns are treated as 64-bit.
     auto const threshold         = static_cast<size_t>(strings::detail::get_offset64_threshold());
-    auto const has_large_strings = std::any_of(pass.cumulative_col_string_sizes.cbegin(),
-                                               pass.cumulative_col_string_sizes.cend(),
+    auto const has_large_strings = std::any_of(col_string_sizes.cbegin(),
+                                               col_string_sizes.cend(),
                                                [=](std::size_t sz) { return sz > threshold; });
     if (has_large_strings and not strings::detail::is_large_strings_enabled()) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
@@ -124,11 +114,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
     // Mark any chunks for which the cumulative column string size has exceeded the
     // large strings threshold
-    if (has_large_strings) {
-      for (auto& chunk : pass.chunks) {
-        auto const idx = chunk.src_col_index;
-        if (pass.cumulative_col_string_sizes[idx] > threshold) { chunk.is_large_string_col = true; }
-      }
+    for (auto& chunk : pass.chunks) {
+      auto const idx            = chunk.src_col_index;
+      chunk.is_large_string_col = (col_string_sizes[idx] > threshold);
     }
   }
 
@@ -210,11 +198,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         // only do string buffer for leaf
         if (idx == max_depth - 1 and out_buf.string_size() == 0 and
             col_string_sizes[pass.chunks[c].src_col_index] > 0) {
-          out_buf.create_string_data(
-            col_string_sizes[pass.chunks[c].src_col_index],
-            pass.cumulative_col_string_sizes[pass.chunks[c].src_col_index] >
-              static_cast<size_t>(strings::detail::get_offset64_threshold()),
-            _stream);
+          out_buf.create_string_data(col_string_sizes[pass.chunks[c].src_col_index],
+                                     pass.chunks[c].is_large_string_col,
+                                     _stream);
         }
         if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
@@ -238,7 +224,10 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
-  int s_idx = 0;
+  int s_idx        = 0;
+  auto str_offsets = cudf::detail::hostdevice_vector<size_t>{_input_columns.size(), _stream};
+  std::fill(str_offsets.begin(), str_offsets.end(), std::numeric_limits<size_t>::max());
+  str_offsets.host_to_device_sync(_stream);
 
   auto decode_data = [&](decode_kernel_mask decoder_mask) {
     DecodePageData(subpass.pages,
@@ -258,6 +247,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
+                         str_offsets.d_begin(),
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -269,6 +259,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
+                         str_offsets.d_begin(),
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -280,6 +271,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                num_rows,
                                skip_rows,
                                level_type_size,
+                               str_offsets.d_begin(),
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -383,6 +375,10 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
+  str_offsets.device_to_host_sync(_stream);
+  std::for_each(str_offsets.begin(), str_offsets.end(), [](auto& offset) {
+    if (offset == std::numeric_limits<size_t>::max()) { offset = 0; }
+  });
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -416,11 +412,15 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         final_offsets.emplace_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
-        // need to cap off the string offsets column
-        auto const sz = static_cast<size_type>(col_string_sizes[idx]);
-        if (sz <= strings::detail::get_offset64_threshold()) {
+        // only if it is not a large strings column
+        if (col_string_sizes[idx] <=
+            static_cast<size_t>(strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.emplace_back(sz);
+          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
+        }
+        // Nested large strings column
+        else if (input_col.nesting_depth() > 0) {
+          out_buf.set_str_offset(str_offsets[idx]);
         }
       }
     }

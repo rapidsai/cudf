@@ -836,6 +836,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
+                          size_t* str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
@@ -880,6 +881,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
+                          size_t* str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
@@ -902,6 +904,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
+                                size_t* str_offsets,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream);
 

@@ -51,6 +51,9 @@ TEST_F(MergeTest, MergeLargeStrings)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
 
+  // Make sure the LIBCUDF_LARGE_STRINGS_THRESHOLD is set to normal
+  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+
   // also test with large strings column as input
   input_views.clear();
   input_views.push_back(view);            // regular column
