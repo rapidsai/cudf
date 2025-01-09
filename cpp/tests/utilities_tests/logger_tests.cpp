@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ TEST_F(LoggerTest, DefaultLevel)
   cudf::default_logger().warn("warn");
   cudf::default_logger().error("error");
   cudf::default_logger().critical("critical");
-  ASSERT_EQ(this->sink_content(), "info\nwarn\nerror\ncritical\n");
+  ASSERT_EQ(this->sink_content(), "warn\nerror\ncritical\n");
 }
 
 TEST_F(LoggerTest, CustomLevel)

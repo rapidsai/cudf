@@ -81,6 +81,8 @@ class TimeDeltaColumn(ColumnBase):
         "__rfloordiv__",
     }
 
+    _PANDAS_NA_REPR = str(pd.NaT)
+
     def __init__(
         self,
         data: Buffer,
