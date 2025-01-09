@@ -60,6 +60,7 @@ from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
 
@@ -3034,7 +3035,7 @@ class IndexedFrame(Frame):
                         NumericalColumn,
                         as_column(
                             range(start, stop, stride),
-                            dtype=libcudf.types.size_type_dtype,
+                            dtype=SIZE_TYPE_DTYPE,
                         ),
                     ),
                     len(self),
