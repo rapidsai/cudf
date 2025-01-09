@@ -58,6 +58,7 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
@@ -253,10 +254,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            plc.interop.from_arrow(
+            pa_scalar_to_plc_scalar(
                 pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
             ),
-            plc.interop.from_arrow(
+            pa_scalar_to_plc_scalar(
                 pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
             ),
         )
@@ -1999,10 +2000,10 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(arbitrary.start, type=pa.int64())
                     ),
-                    plc.interop.from_arrow(
+                    pa_scalar_to_plc_scalar(
                         pa.scalar(arbitrary.step, type=pa.int64())
                     ),
                 )
