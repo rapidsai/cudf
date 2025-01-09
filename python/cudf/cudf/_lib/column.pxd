@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from typing import Literal
 
@@ -13,6 +13,8 @@ from pylibcudf.libcudf.column.column_view cimport (
 from pylibcudf.libcudf.types cimport size_type
 from rmm.librmm.device_buffer cimport device_buffer
 
+cdef dtype_from_lists_column_view(column_view cv)
+cdef dtype_from_column_view(column_view cv)
 
 cdef class Column:
     cdef public:
