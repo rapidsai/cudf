@@ -142,10 +142,12 @@ def _maybe_nested_pa_scalar_to_py(pa_scalar: pa.Scalar) -> Any:
     Any
         Python scalar
     """
-    if pa.types.is_struct(pa_scalar.type):
+    if not pa_scalar.is_valid:
+        return pa_scalar.as_py()
+    elif pa.types.is_struct(pa_scalar.type):
         return {
             str(i): _maybe_nested_pa_scalar_to_py(val)
-            for i, (_, val) in pa_scalar.items()
+            for i, (_, val) in enumerate(pa_scalar.items())
         }
     elif pa.types.is_list(pa_scalar.type):
         return [_maybe_nested_pa_scalar_to_py(val) for val in pa_scalar]
@@ -421,7 +423,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 self._host_value = ps.type.to_pandas_dtype()(ps.as_py())
             else:
                 host_value = _maybe_nested_pa_scalar_to_py(ps)
-                # _replace_nested(host_value, lambda item: item is None, NA)
+                _replace_nested(host_value, lambda item: item is None, NA)
                 self._host_value = host_value
 
     def _sync(self) -> None:
