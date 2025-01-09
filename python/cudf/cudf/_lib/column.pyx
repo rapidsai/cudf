@@ -496,7 +496,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef plc_DataType dtype = <plc_DataType>dtype_to_pylibcudf_type(data_dtype)
+        cdef plc_DataType dtype = <plc_DataType?>dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
