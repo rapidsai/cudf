@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -630,9 +630,15 @@ struct EncPage {
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
 
-  [[nodiscard]] constexpr bool is_v2() const { return page_type == PageType::DATA_PAGE_V2; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
+  {
+    return page_type == PageType::DATA_PAGE_V2;
+  }
 
-  [[nodiscard]] constexpr auto level_bytes() const { return def_lvl_bytes + rep_lvl_bytes; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr auto level_bytes() const
+  {
+    return def_lvl_bytes + rep_lvl_bytes;
+  }
 };
 
 /**

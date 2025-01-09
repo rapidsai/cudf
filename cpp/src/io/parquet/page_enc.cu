@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,9 @@
 
 #include <cub/cub.cuh>
 #include <cuda/std/chrono>
+#include <cuda/std/limits>
+#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/gather.h>
@@ -227,7 +230,8 @@ void __device__ calculate_frag_size(frag_init_state_s* const s, int t)
 
   __syncthreads();
   // page fragment size must fit in a 32-bit signed integer
-  if (s->frag.fragment_data_size > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+  if (s->frag.fragment_data_size >
+      static_cast<uint32_t>(cuda::std::numeric_limits<int32_t>::max())) {
     // TODO need to propagate this error back to the host
     CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
   }
@@ -356,7 +360,7 @@ struct BitwiseOr {
 template <Type PT, typename I>
 __device__ uint8_t const* delta_encode(page_enc_state_s<0>* s, uint64_t* buffer, void* temp_space)
 {
-  using output_type = std::conditional_t<PT == INT32, int32_t, int64_t>;
+  using output_type = cuda::std::conditional_t<PT == INT32, int32_t, int64_t>;
   __shared__ delta_binary_packer<output_type> packer;
 
   auto const t = threadIdx.x;
@@ -736,7 +740,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           : frag_g.fragment_data_size;
 
       // page fragment size must fit in a 32-bit signed integer
-      if (fragment_data_size > std::numeric_limits<int32_t>::max()) {
+      if (fragment_data_size > cuda::std::numeric_limits<int32_t>::max()) {
         CUDF_UNREACHABLE("page fragment size exceeds maximum for i32");
       }
 
@@ -815,7 +819,7 @@ CUDF_KERNEL void __launch_bounds__(128)
             page_size + rle_pad +
             (write_v2_headers ? page_g.max_lvl_size : def_level_size + rep_level_size);
           // page size must fit in 32-bit signed integer
-          if (max_data_size > std::numeric_limits<int32_t>::max()) {
+          if (max_data_size > cuda::std::numeric_limits<int32_t>::max()) {
             CUDF_UNREACHABLE("page size exceeds maximum for i32");
           }
           // if byte_array then save the variable bytes size
@@ -1345,7 +1349,7 @@ __device__ auto julian_days_with_time(int64_t v)
   auto const dur_time_of_day       = dur_total - dur_days;
   auto const dur_time_of_day_nanos = duration_cast<nanoseconds>(dur_time_of_day);
   auto const julian_days           = dur_days + ceil<days>(julian_calendar_epoch_diff());
-  return std::make_pair(dur_time_of_day_nanos, julian_days);
+  return cuda::std::pair{dur_time_of_day_nanos, julian_days};
 }
 
 // this has been split out into its own kernel because of the amount of shared memory required
@@ -1710,7 +1714,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
                      : 0;
         val_idx  = val_idx_in_leaf_col;
       }
-      return std::make_tuple(is_valid, val_idx);
+      return cuda::std::make_tuple(is_valid, val_idx);
     }();
 
     cur_val_idx += nvals;
@@ -1949,7 +1953,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       // need to test for use_dictionary because it might be boolean
       uint32_t const val_idx =
         (s->ck.use_dictionary) ? val_idx_in_leaf_col - s->chunk_start_val : val_idx_in_leaf_col;
-      return std::make_tuple(is_valid, val_idx);
+      return cuda::std::tuple{is_valid, val_idx};
     }();
 
     cur_val_idx += nvals;
@@ -2199,7 +2203,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
         auto const arr_size =
           get_element<statistics::byte_array_view>(*s->col.leaf_column, val_idx).size_bytes();
         // the lengths are assumed to be INT32, check for overflow
-        if (arr_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
+        if (arr_size > static_cast<size_t>(cuda::std::numeric_limits<int32_t>::max())) {
           CUDF_UNREACHABLE("byte array size exceeds 2GB");
         }
         v = static_cast<int32_t>(arr_size);
@@ -2640,7 +2644,7 @@ class header_encoder {
       cpw_put_fldh(current_header_ptr, field, current_field_index, FieldType::LIST);
     auto const t_num   = static_cast<uint8_t>(type);
     current_header_ptr = cpw_put_uint8(
-      current_header_ptr, static_cast<uint8_t>((std::min(len, size_t{0xfu}) << 4) | t_num));
+      current_header_ptr, static_cast<uint8_t>((cuda::std::min(len, size_t{0xfu}) << 4) | t_num));
     if (len >= 0xf) { current_header_ptr = cpw_put_uint32(current_header_ptr, len); }
     current_field_index = 0;
   }
@@ -2801,10 +2805,8 @@ __device__ bool increment_utf8_at(unsigned char* ptr)
  *
  * @return Pair object containing a pointer to the truncated data and its length.
  */
-__device__ std::pair<void const*, uint32_t> truncate_utf8(device_span<unsigned char const> span,
-                                                          bool is_min,
-                                                          void* scratch,
-                                                          int32_t truncate_length)
+__device__ cuda::std::pair<void const*, uint32_t> truncate_utf8(
+  device_span<unsigned char const> span, bool is_min, void* scratch, int32_t truncate_length)
 {
   // we know at this point that truncate_length < size_bytes, so
   // there is data at [len]. work backwards until we find
@@ -2841,10 +2843,10 @@ __device__ std::pair<void const*, uint32_t> truncate_utf8(device_span<unsigned c
  *
  * @return Pair object containing a pointer to the truncated data and its length.
  */
-__device__ std::pair<void const*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
-                                                            bool is_min,
-                                                            void* scratch,
-                                                            int32_t truncate_length)
+__device__ cuda::std::pair<void const*, uint32_t> truncate_binary(device_span<uint8_t const> arr,
+                                                                  bool is_min,
+                                                                  void* scratch,
+                                                                  int32_t truncate_length)
 {
   if (is_min) { return {arr.data(), truncate_length}; }
   memcpy(scratch, arr.data(), truncate_length);
@@ -2868,10 +2870,10 @@ __device__ std::pair<void const*, uint32_t> truncate_binary(device_span<uint8_t 
 /**
  * @brief Attempt to truncate a UTF-8 string to at most truncate_length bytes.
  */
-__device__ std::pair<void const*, uint32_t> truncate_string(string_view const& str,
-                                                            bool is_min,
-                                                            void* scratch,
-                                                            int32_t truncate_length)
+__device__ cuda::std::pair<void const*, uint32_t> truncate_string(string_view const& str,
+                                                                  bool is_min,
+                                                                  void* scratch,
+                                                                  int32_t truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or str.size_bytes() <= truncate_length) {
     return {str.data(), str.size_bytes()};
@@ -2892,7 +2894,7 @@ __device__ std::pair<void const*, uint32_t> truncate_string(string_view const& s
 /**
  * @brief Attempt to truncate a binary array to at most truncate_length bytes.
  */
-__device__ std::pair<void const*, uint32_t> truncate_byte_array(
+__device__ cuda::std::pair<void const*, uint32_t> truncate_byte_array(
   statistics::byte_array_view const& arr, bool is_min, void* scratch, int32_t truncate_length)
 {
   if (truncate_length == NO_TRUNC_STATS or arr.size_bytes() <= truncate_length) {
@@ -2913,11 +2915,11 @@ __device__ std::pair<void const*, uint32_t> truncate_byte_array(
  * valid min or max binary value.  String and byte array types will be truncated if they exceed
  * truncate_length.
  */
-__device__ std::pair<void const*, uint32_t> get_extremum(statistics_val const* stats_val,
-                                                         statistics_dtype dtype,
-                                                         void* scratch,
-                                                         bool is_min,
-                                                         int32_t truncate_length)
+__device__ cuda::std::pair<void const*, uint32_t> get_extremum(statistics_val const* stats_val,
+                                                               statistics_dtype dtype,
+                                                               void* scratch,
+                                                               bool is_min,
+                                                               int32_t truncate_length)
 {
   switch (dtype) {
     case dtype_bool: return {stats_val, sizeof(bool)};
