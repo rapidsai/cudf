@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -389,26 +389,34 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
 
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
-  
+
   // recursive lambda to construct schema_element
   // TODO: how do we get this to work for array of arrays
-  std::function<schema_element(cudf::host_span<column const> cols, cudf::host_span<column_name_info const> names, schema_element &schema)> construct_schema;
+  std::function<schema_element(cudf::host_span<column const> cols,
+                               cudf::host_span<column_name_info const> names,
+                               schema_element & schema)>
+    construct_schema;
   schema_element schema{data_type{cudf::type_id::STRUCT}};
-  construct_schema = [&construct_schema](cudf::host_span<column const> children, cudf::host_span<column_name_info const> children_props, schema_element &schema) -> schema_element {
+  construct_schema = [&construct_schema](cudf::host_span<column const> children,
+                                         cudf::host_span<column_name_info const> children_props,
+                                         schema_element& schema) -> schema_element {
     CUDF_EXPECTS(children.size() == children_props.size(), "Somethings fishy");
 
     std::vector<std::string> col_order;
-    for(size_t i = 0; i < children.size(); i++)
+    for (size_t i = 0; i < children.size(); i++)
       col_order.push_back(children_props[i].name);
     schema.column_order = std::move(col_order);
 
-    for(size_t i = 0; i < children.size(); i++) {
+    for (auto i = 0ul; i < children.size(); i++) {
       schema_element child_schema{children[i].type()};
       std::vector<column> grandchildren_cols;
-      for(size_t j = 0; j < children[i].num_children(); j++)
+      for (size_type j = 0; j < children[i].num_children(); j++)
         grandchildren_cols.emplace_back(children[i].child(j));
-      schema.child_types[children_props[i].name] = construct_schema(grandchildren_cols, children_props[i].children, child_schema);
+      schema.child_types[children_props[i].name] =
+        construct_schema(grandchildren_cols, children_props[i].children, child_schema);
     }
+
+    return schema;
   };
   // Dispatch individual batches to read_batch and push the resulting table into
   // partial_tables array. Note that the reader options need to be updated for each
@@ -419,11 +427,12 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     partial_tables.emplace_back(
       read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
 
-    auto &tbl = partial_tables.back().tbl;
+    auto& tbl = partial_tables.back().tbl;
     std::vector<column> children;
-    for(size_t j = 0; j < tbl->num_columns(); j++)
+    for (size_type j = 0; j < tbl->num_columns(); j++)
       children.emplace_back(tbl->get_column(j));
-    batched_reader_opts.set_dtypes(construct_schema(children, partial_tables.back().metadata.schema_info, schema));
+    batched_reader_opts.set_dtypes(
+      construct_schema(children, partial_tables.back().metadata.schema_info, schema));
   }
 
   auto expects_schema_equality =
