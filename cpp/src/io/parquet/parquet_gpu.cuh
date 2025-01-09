@@ -34,7 +34,7 @@ using slot_type   = cuco::pair<key_type, mapped_type>;
 auto constexpr map_cg_size =
   1;  ///< A CUDA Cooperative Group of 1 thread (set for best performance) to handle each subset.
       ///< Note: Adjust insert and find loops to use `cg::tile<map_cg_size>` if increasing this.
-auto constexpr window_size =
+auto constexpr bucket_size =
   1;  ///< Number of concurrent slots (set for best performance) handled by each thread.
 auto constexpr occupancy_factor = 1.43f;  ///< cuCollections suggests using a hash map of size
                                           ///< N * (1/0.7) = 1.43 to target a 70% occupancy factor.
@@ -43,12 +43,12 @@ auto constexpr KEY_SENTINEL   = key_type{-1};
 auto constexpr VALUE_SENTINEL = mapped_type{-1};
 auto constexpr SCOPE          = cuda::thread_scope_block;
 
-using storage_type     = cuco::aow_storage<slot_type,
-                                       window_size,
-                                       cuco::extent<std::size_t>,
-                                       cudf::detail::cuco_allocator<char>>;
+using storage_type     = cuco::bucket_storage<slot_type,
+                                          bucket_size,
+                                          cuco::extent<std::size_t>,
+                                          cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
-using window_type      = typename storage_type::window_type;
+using bucket_type      = typename storage_type::bucket_type;
 
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
@@ -100,7 +100,7 @@ inline size_type __device__ row_to_value_idx(size_type idx,
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(device_span<window_type> const map_storage,
+void populate_chunk_hash_maps(device_span<bucket_type> const map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
@@ -111,7 +111,7 @@ void populate_chunk_hash_maps(device_span<window_type> const map_storage,
  * @param chunks Flat span of chunks to compact hash maps for
  * @param stream CUDA stream to use
  */
-void collect_map_entries(device_span<window_type> const map_storage,
+void collect_map_entries(device_span<bucket_type> const map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream);
 
@@ -128,7 +128,7 @@ void collect_map_entries(device_span<window_type> const map_storage,
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(device_span<window_type> const map_storage,
+void get_dictionary_indices(device_span<bucket_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 

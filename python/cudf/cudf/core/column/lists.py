@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.buffer import acquire_spill_lock
@@ -29,6 +28,7 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
+    from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
@@ -67,6 +67,16 @@ class ListColumn(ColumnBase):
             null_count=null_count,
             children=children,
         )
+
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        # TODO: handle if self.has_nulls(): case
+        return self
 
     @cached_property
     def memory_usage(self):
@@ -151,7 +161,7 @@ class ListColumn(ColumnBase):
         """
         return cast(NumericalColumn, self.children[0])
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         offsets = self.offsets.to_arrow()
         elements = (
             pa.nulls(len(self.elements))
@@ -161,7 +171,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = pa.py_buffer(self.mask.memoryview())
+            nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
@@ -237,7 +247,7 @@ class ListColumn(ColumnBase):
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if cudf._lib.scalar._is_null_host_scalar(data):
+            if cudf.utils.utils._is_null_host_scalar(data):
                 mask_col.append(False)
                 offset_vals.append(offset)
             else:
@@ -256,7 +266,7 @@ class ListColumn(ColumnBase):
             data=None,
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
-            mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
+            mask=as_column(mask_col).as_mask(),
             offset=0,
             null_count=0,
             children=(offset_col, data_col),
@@ -272,8 +282,13 @@ class ListColumn(ColumnBase):
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
 
-        # Call libcudf to format the list column
-        return format_list_column(lc, separators)
+        with acquire_spill_lock():
+            plc_column = plc.strings.convert.convert_lists.format_list_column(
+                lc.to_pylibcudf(mode="read"),
+                plc.interop.from_arrow(pa.scalar("None")),
+                separators.to_pylibcudf(mode="read"),
+            )
+            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def _transform_leaves(self, func, *args, **kwargs) -> Self:
         # return a new list column with the same nested structure
@@ -376,20 +391,20 @@ class ListColumn(ColumnBase):
         )
 
     @acquire_spill_lock()
-    def contains_scalar(self, search_key: cudf.Scalar) -> ColumnBase:
+    def contains_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.contains(
                 self.to_pylibcudf(mode="read"),
-                search_key.device_value.c_value,
+                plc.interop.from_arrow(search_key),
             )
         )
 
     @acquire_spill_lock()
-    def index_of_scalar(self, search_key: cudf.Scalar) -> ColumnBase:
+    def index_of_scalar(self, search_key: pa.Scalar) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.lists.index_of(
                 self.to_pylibcudf(mode="read"),
-                search_key.device_value.c_value,
+                plc.interop.from_arrow(search_key),
                 plc.lists.DuplicateFindOption.FIND_FIRST,
             )
         )
@@ -554,7 +569,7 @@ class ListMethods(ColumnMethods):
         dtype: bool
         """
         return self._return_or_inplace(
-            self._column.contains_scalar(cudf.Scalar(search_key))
+            self._column.contains_scalar(pa.scalar(search_key))
         )
 
     def index(self, search_key: ScalarLike | ColumnLike) -> ParentType:
@@ -603,7 +618,7 @@ class ListMethods(ColumnMethods):
         """
 
         if is_scalar(search_key):
-            result = self._column.index_of_scalar(cudf.Scalar(search_key))
+            result = self._column.index_of_scalar(pa.scalar(search_key))
         else:
             result = self._column.index_of_column(as_column(search_key))
         return self._return_or_inplace(result)

@@ -1,10 +1,9 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import functools
 import inspect
-import pickle
 import textwrap
 import warnings
 from collections import abc
@@ -17,7 +16,6 @@ import pandas as pd
 from typing_extensions import Self, assert_never
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -28,7 +26,6 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
@@ -415,7 +412,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 return indices
 
 
-class Series(SingleColumnFrame, IndexedFrame, Serializable):
+class Series(SingleColumnFrame, IndexedFrame):
     """
     One-dimensional GPU array (including time series).
 
@@ -526,7 +523,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
             mask = None
             if not valid_codes.all():
-                mask = libcudf.transform.bools_to_mask(valid_codes)
+                mask = valid_codes.as_mask()
             col = CategoricalColumn(
                 data=col.data,
                 size=codes.size,
@@ -900,7 +897,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self.index.serialize()
+        header["index"], index_frames = self.index.device_serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -916,8 +913,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             header, frames[header["index_frame_count"] :]
         )
 
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
         obj.index = index
 
         return obj
@@ -1453,35 +1449,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 warnings.simplefilter("ignore", FutureWarning)
                 preprocess = cudf.concat([top, bottom])
         else:
-            preprocess = self.copy()
-        preprocess.index = preprocess.index._clean_nulls_from_index()
-        if (
-            preprocess.nullable
-            and not isinstance(
-                preprocess.dtype,
-                (
-                    cudf.CategoricalDtype,
-                    cudf.ListDtype,
-                    cudf.StructDtype,
-                    cudf.core.dtypes.DecimalDtype,
-                ),
-            )
-        ) or preprocess.dtype.kind == "m":
-            fill_value = (
-                str(cudf.NaT)
-                if preprocess.dtype.kind in "mM"
-                else str(cudf.NA)
-            )
-            output = repr(
-                preprocess.astype("str").fillna(fill_value).to_pandas()
-            )
-        elif isinstance(preprocess.dtype, cudf.CategoricalDtype):
+            preprocess = self
+        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
             min_rows = (
                 height
                 if pd.get_option("display.min_rows") == 0
                 else pd.get_option("display.min_rows")
             )
             show_dimensions = pd.get_option("display.show_dimensions")
+            preprocess = preprocess.copy(deep=False)
+            preprocess.index = preprocess.index._pandas_repr_compatible()
             if preprocess.dtype.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")
@@ -1506,7 +1483,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 na_rep=str(cudf.NA),
             )
         else:
-            output = repr(preprocess.to_pandas())
+            output = repr(preprocess._pandas_repr_compatible().to_pandas())
 
         lines = output.split("\n")
         if isinstance(preprocess.dtype, cudf.CategoricalDtype):
@@ -3414,7 +3391,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_performance_tracking
-    def digitize(self, bins, right=False):
+    def digitize(self, bins: np.ndarray, right: bool = False) -> Self:
         """Return the indices of the bins to which each value belongs.
 
         Notes
@@ -3445,9 +3422,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    2
         dtype: int32
         """
-        return Series._from_column(
-            cudf.core.column.numerical.digitize(self._column, bins, right),
-            name=self.name,
+        return type(self)._from_column(
+            self._column.digitize(bins, right), name=self.name
         )
 
     @_performance_tracking
@@ -4130,8 +4106,8 @@ class DatetimeProperties(BaseDatelikeProperties):
         # Need to manually promote column to int32 because
         # pandas-matching binop behaviour requires that this
         # __mul__ returns an int16 column.
-        extra = self.series._column.millisecond.astype("int32") * cudf.Scalar(
-            1000, dtype="int32"
+        extra = self.series._column.millisecond.astype("int32") * np.int32(
+            1000
         )
         return self._return_result_like_self(micro + extra)
 
@@ -5186,6 +5162,66 @@ class TimedeltaProperties(BaseDatelikeProperties):
         ca = ColumnAccessor(self.series._column.components(), verify=False)
         return self.series._constructor_expanddim._from_data(
             ca, index=self.series.index
+        )
+
+    def total_seconds(self) -> Series:
+        """
+        Return total duration of each element expressed in seconds.
+
+        This method is available directly on TimedeltaIndex
+        and on Series containing timedelta values under the ``.dt`` namespace.
+
+        Returns
+        -------
+        Index or Series
+            When the calling object is a TimedeltaIndex,
+            the return type is an Index with a float64 dtype. When the calling object
+            is a Series, the return type is Series of type `float64` whose
+            index is the same as the original.
+
+        See Also
+        --------
+        datetime.timedelta.total_seconds : Standard library version
+            of this method.
+        TimedeltaIndex.components : Return a DataFrame with components of
+            each Timedelta.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> s = cudf.Series(pd.to_timedelta(np.arange(5), unit="D"))
+        >>> s
+        0    0 days 00:00:00
+        1    1 days 00:00:00
+        2    2 days 00:00:00
+        3    3 days 00:00:00
+        4    4 days 00:00:00
+        dtype: timedelta64[ns]
+
+        >>> s.dt.total_seconds()
+        0         0.0
+        1     86400.0
+        2    172800.0
+        3    259200.0
+        4    345600.0
+        dtype: float64
+
+        **TimedeltaIndex**
+
+        >>> idx = cudf.from_pandas(pd.to_timedelta(np.arange(5), unit="D"))
+        >>> idx
+        TimedeltaIndex(['0 days', '1 days', '2 days', '3 days', '4 days'],
+                       dtype='timedelta64[ns]', freq=None)
+
+        >>> idx.total_seconds()
+        Index([0.0, 86400.0, 172800.0, 259200.0, 345600.0], dtype='float64')
+        """
+        return self._return_result_like_self(
+            self.series._column.total_seconds()
         )
 
 

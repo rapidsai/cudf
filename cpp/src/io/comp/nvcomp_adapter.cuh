@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "gpuinflate.hpp"
+#include "comp.hpp"
 
 #include <cudf/utilities/span.hpp>
 
@@ -27,7 +27,7 @@
 
 #include <optional>
 
-namespace cudf::io::nvcomp {
+namespace cudf::io::detail::nvcomp {
 
 struct batched_args {
   rmm::device_uvector<void const*> input_data_ptrs;
@@ -76,4 +76,4 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
 std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream);
 
-}  // namespace cudf::io::nvcomp
+}  // namespace cudf::io::detail::nvcomp

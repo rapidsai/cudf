@@ -12,7 +12,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf._lib.column import Column
-from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
@@ -432,8 +431,9 @@ def concat(
 
             result_columns = (
                 objs[0]
-                ._data.to_pandas_index()
-                .append([obj._data.to_pandas_index() for obj in objs[1:]])
+                ._data.to_pandas_index.append(
+                    [obj._data.to_pandas_index for obj in objs[1:]]
+                )
                 .unique()
             )
 
@@ -690,7 +690,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = cudf.Series(
-            value_vars, dtype=frame._data.to_pandas_index().dtype
+            value_vars, dtype=frame._data.to_pandas_index.dtype
         )
     else:
         var_data = (
@@ -1030,7 +1030,8 @@ def _pivot(
                 {
                     name: idx._column
                     for name, idx in zip(
-                        names, target._split(range(nrows, new_size, nrows))
+                        names,
+                        target._split(list(range(nrows, new_size, nrows))),
                     )
                 }
             )
@@ -1273,7 +1274,7 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
-            tuple(df._data.to_pandas_index().names) + df.index.names
+            tuple(df._data.to_pandas_index.names) + df.index.names
         )
         return res
     else:
@@ -1338,7 +1339,11 @@ def _one_hot_encode_column(
             f"np.iinfo({size_type_dtype}).max. Consider reducing "
             "size of category"
         )
-    data = one_hot_encode(column, categories)
+    result_labels = (
+        x if x is not None else "<NA>"
+        for x in categories.to_arrow().to_pylist()
+    )
+    data = dict(zip(result_labels, column.one_hot_encode(categories)))
 
     if drop_first and len(data):
         data.pop(next(iter(data)))

@@ -15,7 +15,6 @@ import pylibcudf as plc
 import cudf
 from cudf._lib.column import Column
 from cudf._lib.types import dtype_to_pylibcudf_type
-from cudf._lib.utils import _data_from_columns, data_from_pylibcudf_io
 from cudf.core.buffer import acquire_spill_lock
 from cudf.utils import ioutils
 from cudf.utils.dtypes import _maybe_convert_to_default_type
@@ -52,6 +51,22 @@ def _get_cudf_schema_element_from_dtype(
         ]
 
     return lib_type, child_types
+
+
+def _to_plc_compression(
+    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None],
+) -> plc.io.types.CompressionType:
+    if compression is not None:
+        if compression == "gzip":
+            return plc.io.types.CompressionType.GZIP
+        elif compression == "bz2":
+            return plc.io.types.CompressionType.BZIP2
+        elif compression == "zip":
+            return plc.io.types.CompressionType.ZIP
+        else:
+            return plc.io.types.CompressionType.AUTO
+    else:
+        return plc.io.types.CompressionType.NONE
 
 
 @ioutils.doc_read_json()
@@ -91,11 +106,6 @@ def read_json(
         if dtype is None:
             dtype = True
 
-        if kwargs:
-            raise ValueError(
-                "cudf engine doesn't support the "
-                f"following keyword arguments: {list(kwargs.keys())}"
-            )
         if args:
             raise ValueError(
                 "cudf engine doesn't support the "
@@ -120,17 +130,7 @@ def read_json(
             if isinstance(source, str) and not os.path.isfile(source):
                 filepaths_or_buffers[idx] = source.encode()
 
-        if compression is not None:
-            if compression == "gzip":
-                c_compression = plc.io.types.CompressionType.GZIP
-            elif compression == "bz2":
-                c_compression = plc.io.types.CompressionType.BZIP2
-            elif compression == "zip":
-                c_compression = plc.io.types.CompressionType.ZIP
-            else:
-                c_compression = plc.io.types.CompressionType.AUTO
-        else:
-            c_compression = plc.io.types.CompressionType.NONE
+        c_compression = _to_plc_compression(compression)
 
         if on_bad_lines.lower() == "error":
             c_on_bad_lines = plc.io.types.JSONRecoveryMode.FAIL
@@ -166,43 +166,53 @@ def read_json(
         if cudf.get_option("io.json.low_memory") and lines:
             res_cols, res_col_names, res_child_names = (
                 plc.io.json.chunked_read_json(
-                    plc.io.SourceInfo(filepaths_or_buffers),
-                    processed_dtypes,
-                    c_compression,
-                    keep_quotes=keep_quotes,
-                    mixed_types_as_string=mixed_types_as_string,
-                    prune_columns=prune_columns,
-                    recovery_mode=c_on_bad_lines,
+                    plc.io.json._setup_json_reader_options(
+                        plc.io.SourceInfo(filepaths_or_buffers),
+                        processed_dtypes,
+                        c_compression,
+                        keep_quotes=keep_quotes,
+                        mixed_types_as_string=mixed_types_as_string,
+                        prune_columns=prune_columns,
+                        recovery_mode=c_on_bad_lines,
+                    )
                 )
             )
-            df = cudf.DataFrame._from_data(
-                *_data_from_columns(
-                    columns=[Column.from_pylibcudf(col) for col in res_cols],
-                    column_names=res_col_names,
-                    index_names=None,
-                )
-            )
+            data = {
+                name: Column.from_pylibcudf(col)
+                for name, col in zip(res_col_names, res_cols, strict=True)
+            }
+            df = cudf.DataFrame._from_data(data)
             ioutils._add_df_col_struct_names(df, res_child_names)
             return df
         else:
             table_w_meta = plc.io.json.read_json(
-                plc.io.SourceInfo(filepaths_or_buffers),
-                processed_dtypes,
-                c_compression,
-                lines,
-                byte_range_offset=byte_range[0]
-                if byte_range is not None
-                else 0,
-                byte_range_size=byte_range[1] if byte_range is not None else 0,
-                keep_quotes=keep_quotes,
-                mixed_types_as_string=mixed_types_as_string,
-                prune_columns=prune_columns,
-                recovery_mode=c_on_bad_lines,
+                plc.io.json._setup_json_reader_options(
+                    plc.io.SourceInfo(filepaths_or_buffers),
+                    processed_dtypes,
+                    c_compression,
+                    lines,
+                    byte_range_offset=byte_range[0]
+                    if byte_range is not None
+                    else 0,
+                    byte_range_size=byte_range[1]
+                    if byte_range is not None
+                    else 0,
+                    keep_quotes=keep_quotes,
+                    mixed_types_as_string=mixed_types_as_string,
+                    prune_columns=prune_columns,
+                    recovery_mode=c_on_bad_lines,
+                    extra_parameters=kwargs,
+                )
             )
-
-            df = cudf.DataFrame._from_data(
-                *data_from_pylibcudf_io(table_w_meta)
-            )
+            data = {
+                name: Column.from_pylibcudf(col)
+                for name, col in zip(
+                    table_w_meta.column_names(include_children=False),
+                    table_w_meta.columns,
+                    strict=True,
+                )
+            }
+            df = cudf.DataFrame._from_data(data)
 
             # Post-processing to add in struct column names
             ioutils._add_df_col_struct_names(df, table_w_meta.child_names)
@@ -289,23 +299,29 @@ def _plc_write_json(
     include_nulls: bool = True,
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
+    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None] = None,
 ) -> None:
     try:
-        plc.io.json.write_json(
-            plc.io.SinkInfo([path_or_buf]),
-            plc.io.TableWithMetadata(
-                plc.Table(
-                    [col.to_pylibcudf(mode="read") for col in table._columns]
-                ),
-                colnames,
+        tbl_w_meta = plc.io.TableWithMetadata(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in table._columns]
             ),
-            na_rep,
-            include_nulls,
-            lines,
-            rows_per_chunk,
-            true_value="true",
-            false_value="false",
+            colnames,
         )
+        options = (
+            plc.io.json.JsonWriterOptions.builder(
+                plc.io.SinkInfo([path_or_buf]), tbl_w_meta.tbl
+            )
+            .metadata(tbl_w_meta)
+            .na_rep(na_rep)
+            .include_nulls(include_nulls)
+            .lines(lines)
+            .compression(_to_plc_compression(compression))
+            .build()
+        )
+        if rows_per_chunk != np.iinfo(np.int32).max:
+            options.set_rows_per_chunk(rows_per_chunk)
+        plc.io.json.write_json(options)
     except OverflowError as err:
         raise OverflowError(
             f"Writing JSON file with rows_per_chunk={rows_per_chunk} failed. "

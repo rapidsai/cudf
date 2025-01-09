@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -140,8 +140,9 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
 endfunction()
 
 # ##################################################################################################
-# * column benchmarks -----------------------------------------------------------------------------
-ConfigureBench(COLUMN_CONCAT_BENCH column/concatenate.cpp)
+# * copying benchmarks
+# -----------------------------------------------------------------------------
+ConfigureNVBench(COPYING_NVBENCH copying/concatenate.cpp)
 
 # ##################################################################################################
 # * gather benchmark ------------------------------------------------------------------------------
@@ -351,11 +352,18 @@ ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binary
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(TEXT_BENCH text/subword.cpp)
-
 ConfigureNVBench(
-  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/ngrams.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
+  TEXT_NVBENCH
+  text/edit_distance.cpp
+  text/hash_ngrams.cpp
+  text/jaccard.cpp
+  text/minhash.cpp
+  text/ngrams.cpp
+  text/normalize.cpp
+  text/replace.cpp
+  text/subword.cpp
+  text/tokenize.cpp
+  text/vocab.cpp
 )
 
 # ##################################################################################################
@@ -416,6 +424,11 @@ ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 # * reshape benchmark
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
+
+# ##################################################################################################
+# * rolling benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(ROLLING_NVBENCH rolling/grouped_rolling_sum.cpp rolling/rolling_sum.cpp)
 
 add_custom_target(
   run_benchmarks

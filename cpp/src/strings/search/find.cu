@@ -32,7 +32,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -141,7 +143,7 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
     if (stop < 0) { return d_str.size_bytes(); }
     if (stop <= start) { return begin; }
     // we count from `begin` instead of recounting from the beginning of the string
-    return begin + std::get<0>(bytes_to_character_position(
+    return begin + cuda::std::get<0>(bytes_to_character_position(
                      string_view(d_str.data() + begin, d_str.size_bytes() - begin), stop - start));
   }();
 
@@ -347,13 +349,15 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
                                            string_view const d_target,
                                            bool* d_results)
 {
-  auto const idx    = cudf::detail::grid_1d::global_thread_id();
-  using warp_reduce = cub::WarpReduce<bool>;
-  __shared__ typename warp_reduce::TempStorage temp_storage;
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
 
   auto const str_idx = idx / cudf::detail::warp_size;
   if (str_idx >= d_strings.size()) { return; }
-  auto const lane_idx = idx % cudf::detail::warp_size;
+
+  namespace cg        = cooperative_groups;
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane_idx = warp.thread_rank();
+
   if (d_strings.is_null(str_idx)) { return; }
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
@@ -373,7 +377,7 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
     }
   }
 
-  auto const result = warp_reduce(temp_storage).Reduce(found, cub::Max());
+  auto const result = warp.any(found);
   if (lane_idx == 0) { d_results[str_idx] = result; }
 }
 

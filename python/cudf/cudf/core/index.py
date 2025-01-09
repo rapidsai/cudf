@@ -1,9 +1,8 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import operator
-import pickle
 import warnings
 from collections.abc import Hashable, MutableMapping
 from functools import cache, cached_property
@@ -32,6 +31,7 @@ from cudf.api.types import (
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals import copying
 from cudf.core._internals.search import search_sorted
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -337,9 +337,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if len(self) > 0:
             return column.as_column(self._range, dtype=self.dtype)
         else:
-            return column.column_empty(0, masked=False, dtype=self.dtype)
+            return column.column_empty(0, dtype=self.dtype)
 
-    def _clean_nulls_from_index(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     def _is_numeric(self) -> bool:
@@ -497,9 +497,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
         header["index_column"]["step"] = self.step
         frames = []
 
-        header["name"] = pickle.dumps(self.name)
-        header["dtype"] = pickle.dumps(self.dtype)
-        header["type-serialized"] = pickle.dumps(type(self))
+        header["name"] = self.name
+        header["dtype"] = self.dtype.str
         header["frame_count"] = 0
         return header, frames
 
@@ -507,11 +506,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def deserialize(cls, header, frames):
         h = header["index_column"]
-        name = pickle.loads(header["name"])
+        name = header["name"]
         start = h["start"]
         stop = h["stop"]
         step = h.get("step", 1)
-        return RangeIndex(start=start, stop=stop, step=step, name=name)
+        dtype = np.dtype(header["dtype"])
+        return RangeIndex(
+            start=start, stop=stop, step=step, dtype=dtype, name=name
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -840,14 +842,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._column.take(gather_map, nullify, check_bounds),
             name=self.name,
         )
 
     @_performance_tracking
     def _apply_boolean_mask(self, boolean_mask):
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._column.apply_boolean_mask(boolean_mask), name=self.name
         )
 
@@ -855,7 +857,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return cudf.Index._from_column(
+        return Index._from_column(
             self._as_int_index()._split(splits), name=self.name
         )
 
@@ -1125,15 +1127,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             out.name = name
         return out
 
-    @classmethod
     @_performance_tracking
-    def _from_data_like_self(
-        cls, data: MutableMapping, name: Any = no_default
-    ) -> Self:
-        out = _index_from_data(data, name)
-        if name is not no_default:
-            out.name = name
-        return out
+    def _from_data_like_self(self, data: MutableMapping) -> Self:
+        return _index_from_data(data, self.name)
 
     @classmethod
     @_performance_tracking
@@ -1370,7 +1366,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
             scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
             indices = libcudf.column.Column.from_pylibcudf(right_plc)
-        result = libcudf.copying.scatter([indices], scatter_map, [result])[0]
+        result = copying.scatter([indices], scatter_map, [result])[0]
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
@@ -1492,7 +1488,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             if isinstance(self._values, StringColumn):
                 output = repr(self.to_pandas(nullable=True))
             else:
-                output = repr(self._clean_nulls_from_index().to_pandas())
+                output = repr(self._pandas_repr_compatible().to_pandas())
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -1647,20 +1643,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __contains__(self, item) -> bool:
         hash(item)
         return item in self._column
-
-    def _clean_nulls_from_index(self) -> Index:
-        if self._values.has_nulls():
-            fill_value = (
-                str(cudf.NaT)
-                if isinstance(self, (DatetimeIndex, TimedeltaIndex))
-                else str(cudf.NA)
-            )
-            return cudf.Index._from_column(
-                self._column.astype("str").fillna(fill_value),
-                name=self.name,
-            )
-
-        return self
 
     def any(self) -> bool:
         return self._column.any()
@@ -2345,8 +2327,7 @@ class DatetimeIndex(Index):
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._column.millisecond.astype("int32")
-                * cudf.Scalar(1000, dtype="int32")
+                self._column.millisecond.astype("int32") * np.int32(1000)
             )
             + self._column.microsecond,
             name=self.name,
@@ -2962,13 +2943,13 @@ class TimedeltaIndex(Index):
     def std(self, *, skipna: bool = True, axis: int | None = 0, ddof: int = 1):
         return self._column.std(skipna=skipna, ddof=ddof)
 
-    def total_seconds(self) -> cupy.ndarray:
+    def total_seconds(self) -> Index:
         """
         Return total duration of each element expressed in seconds.
 
         This method is currently not implemented.
         """
-        return self._column.total_seconds().values
+        return Index._from_column(self._column.total_seconds(), name=self.name)
 
     def ceil(self, freq: str) -> Self:
         """
@@ -3613,7 +3594,7 @@ class IntervalIndex(Index):
     def _is_boolean(self) -> bool:
         return False
 
-    def _clean_nulls_from_index(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     @property

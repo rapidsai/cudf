@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 [build-system]
 build-backend = "rapids_build_backend.build"
@@ -20,11 +20,11 @@ requires-python = ">=3.10"
 dependencies = [
     "cachetools",
     "cubinlinker",
-    "cuda-python>=11.7.1,<12.0a0",
+    "cuda-python>=11.8.5,<12.0a0",
     "cupy-cuda11x>=12.0.0",
     "fsspec>=0.6.0",
     "libcudf==25.2.*,>=0.0.0a0",
-    "numba-cuda>=0.0.13,<0.0.18",
+    "numba-cuda>=0.2.0,<0.3.0",
     "numpy>=1.23,<3.0a0",
     "nvtx>=0.2.1",
     "packaging",
@@ -98,8 +98,6 @@ filterwarnings = [
     "error",
     "ignore:::.*xdist.*",
     "ignore:::.*pytest.*",
-    # https://github.com/rapidsai/build-planning/issues/116
-    "ignore:.*cuda..* module is deprecated.*:DeprecationWarning",
     # some third-party dependencies (e.g. 'boto3') still using datetime.datetime.utcnow()
     "ignore:.*datetime.*utcnow.*scheduled for removal.*:DeprecationWarning:botocore",
     # Deprecation warning from Pyarrow Table.to_pandas() with pandas-2.2+
