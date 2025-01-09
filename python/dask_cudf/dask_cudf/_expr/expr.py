@@ -1,11 +1,24 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import functools
 
-import dask_expr._shuffle as _shuffle_module
-from dask_expr import new_collection
-from dask_expr._cumulative import CumulativeBlockwise
-from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
-from dask_expr._reductions import Reduction, Var
+try:
+    import dask.dataframe.dask_expr._shuffle as _shuffle_module
+    from dask.dataframe.dask_expr import new_collection
+    from dask.dataframe.dask_expr._cumulative import CumulativeBlockwise
+    from dask.dataframe.dask_expr._expr import (
+        Elemwise,
+        Expr,
+        RenameAxis,
+        VarColumns,
+    )
+    from dask.dataframe.dask_expr._reductions import Reduction, Var
+except ImportError:
+    # TODO: Remove when pinned to dask>2024.12.1
+    import dask_expr._shuffle as _shuffle_module
+    from dask_expr import new_collection
+    from dask_expr._cumulative import CumulativeBlockwise
+    from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
+    from dask_expr._reductions import Reduction, Var
 
 from dask.dataframe.dispatch import (
     is_categorical_dtype,

@@ -3,15 +3,28 @@ import functools
 
 import numpy as np
 import pandas as pd
-from dask_expr._collection import new_collection
-from dask_expr._groupby import (
-    DecomposableGroupbyAggregation,
-    GroupBy as DXGroupBy,
-    GroupbyAggregation,
-    SeriesGroupBy as DXSeriesGroupBy,
-    SingleAggregation,
-)
-from dask_expr._util import is_scalar
+
+try:
+    from dask.dataframe.dask_expr._collection import new_collection
+    from dask.dataframe.dask_expr._groupby import (
+        DecomposableGroupbyAggregation,
+        GroupBy as DXGroupBy,
+        GroupbyAggregation,
+        SeriesGroupBy as DXSeriesGroupBy,
+        SingleAggregation,
+    )
+    from dask.dataframe.dask_expr._util import is_scalar
+except ImportError:
+    # TODO: Remove when pinned to dask>2024.12.1
+    from dask_expr._collection import new_collection
+    from dask_expr._groupby import (
+        DecomposableGroupbyAggregation,
+        GroupBy as DXGroupBy,
+        GroupbyAggregation,
+        SeriesGroupBy as DXSeriesGroupBy,
+        SingleAggregation,
+    )
+    from dask_expr._util import is_scalar
 
 from dask.dataframe.core import _concat
 from dask.dataframe.groupby import Aggregation

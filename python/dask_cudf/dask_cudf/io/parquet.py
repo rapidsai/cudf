@@ -11,14 +11,28 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
-from dask_expr._expr import Elemwise
-from dask_expr._util import _convert_to_list
-from dask_expr.io.io import FusedIO, FusedParquetIO
-from dask_expr.io.parquet import (
-    FragmentWrapper,
-    ReadParquetFSSpec,
-    ReadParquetPyarrowFS,
-)
+
+try:
+    from dask.dataframe.dask_expr import new_collection
+    from dask.dataframe.dask_expr._expr import Elemwise
+    from dask.dataframe.dask_expr._util import _convert_to_list
+    from dask.dataframe.dask_expr.io.io import FusedIO, FusedParquetIO
+    from dask.dataframe.dask_expr.io.parquet import (
+        FragmentWrapper,
+        ReadParquetFSSpec,
+        ReadParquetPyarrowFS,
+    )
+except ImportError:
+    # TODO: Remove when pinned to dask>2024.12.1
+    from dask_expr import new_collection
+    from dask_expr._expr import Elemwise
+    from dask_expr._util import _convert_to_list
+    from dask_expr.io.io import FusedIO, FusedParquetIO
+    from dask_expr.io.parquet import (
+        FragmentWrapper,
+        ReadParquetFSSpec,
+        ReadParquetPyarrowFS,
+    )
 
 from dask._task_spec import Task
 from dask.dataframe.io.parquet.arrow import _filters_to_expression
@@ -698,7 +712,6 @@ def read_parquet_expr(
         using the ``read`` key-word argument.
     """
 
-    import dask_expr as dx
     from fsspec.utils import stringify_path
     from pyarrow import fs as pa_fs
 
@@ -785,7 +798,7 @@ def read_parquet_expr(
                 "parquet_file_extension is not supported when using the pyarrow filesystem."
             )
 
-        return dx.new_collection(
+        return new_collection(
             NoOp(
                 CudfReadParquetPyarrowFS(
                     path,
@@ -806,7 +819,7 @@ def read_parquet_expr(
             )
         )
 
-    return dx.new_collection(
+    return new_collection(
         NoOp(
             CudfReadParquetFSSpec(
                 path,
