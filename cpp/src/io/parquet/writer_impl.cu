@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
 #include "interop/decimal_conversion_utilities.cuh"
+#include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_gpu.hpp"
@@ -718,7 +719,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
             // all others
             default:
               CUDF_LOG_WARN(
-                "Unsupported page encoding requested: {}; the requested encoding will be ignored",
+                "Unsupported page encoding requested: %d; the requested encoding will be ignored",
                 static_cast<int>(col_meta.get_encoding()));
               return;
           }

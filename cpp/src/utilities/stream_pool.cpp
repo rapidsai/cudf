@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,7 +129,8 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
   std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
   {
     if (count > STREAM_POOL_SIZE) {
-      CUDF_LOG_WARN("get_streams called with count ({}) > pool size ({})", count, STREAM_POOL_SIZE);
+      CUDF_LOG_WARN(
+        "get_streams called with count (%zu) > pool size (%zu)", count, STREAM_POOL_SIZE);
     }
     auto streams = std::vector<rmm::cuda_stream_view>();
     for (uint32_t i = 0; i < count; i++) {

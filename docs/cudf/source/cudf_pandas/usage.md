@@ -75,6 +75,7 @@ with Pool(4) as pool:
     ...
 ```
 
+(cudf-pandas-profiling)=
 ## Profiling `cudf.pandas`
 
 `cudf.pandas` will attempt to use the GPU whenever possible and fall

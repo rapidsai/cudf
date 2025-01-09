@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -360,6 +360,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             names=pd.core.indexes.frozen.FrozenList(data.keys()),
             name=name,
         )
+
+    @_performance_tracking
+    def _from_data_like_self(self, data: MutableMapping) -> Self:
+        mi = type(self)._from_data(data, name=self.name)
+        if mi.nlevels == self.nlevels:
+            mi.names = self.names
+        return mi
 
     @classmethod
     def _simple_new(
@@ -1752,16 +1759,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def nunique(self, dropna: bool = True) -> int:
         mi = self.dropna(how="all") if dropna else self
         return len(mi.unique())
-
-    def _clean_nulls_from_index(self) -> Self:
-        """
-        Convert all na values(if any) in MultiIndex object
-        to `<NA>` as a preprocessing step to `__repr__` methods.
-        """
-        index_df = self.to_frame(index=False, name=list(range(self.nlevels)))
-        return MultiIndex.from_frame(
-            index_df._clean_nulls_from_dataframe(index_df), names=self.names
-        )
 
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:

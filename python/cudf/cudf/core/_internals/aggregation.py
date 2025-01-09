@@ -29,11 +29,11 @@ _agg_name_map = {
 
 class Aggregation:
     def __init__(self, agg: plc.aggregation.Aggregation) -> None:
-        self.c_obj = agg
+        self.plc_obj = agg
 
     @property
     def kind(self) -> str:
-        name = self.c_obj.kind().name
+        name = self.plc_obj.kind().name
         return _agg_name_map.get(name, name)
 
     @classmethod

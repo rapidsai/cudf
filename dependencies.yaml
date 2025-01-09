@@ -688,7 +688,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.0.13,<0.0.18
+          - &numba-cuda-dep numba-cuda>=0.2.0,<0.3.0
           - nvtx>=0.2.1
           - packaging
           - rich
@@ -747,7 +747,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.11,<1.15
+          - polars>=1.11,<1.18
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -757,7 +757,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pynvml>=11.4.1,<12.0.0a0
+          - pynvml>=12.0.0,<13.0.0a0
           - rapids-dask-dependency==25.2.*,>=0.0.0a0
   run_custreamz:
     common:
@@ -810,11 +810,11 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - *numba-cuda-dep
+              - numba-cuda==0.2.0
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
             packages:
-              - numba-cuda==0.0.15
+              - *numba-cuda-dep
               - pandas==2.2.3
           - matrix:
             packages:

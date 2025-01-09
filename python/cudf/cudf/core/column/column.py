@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ import rmm
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
-from cudf._lib.scalar import as_device_scalar
 from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -71,13 +70,14 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.utils.utils import _array_ufunc, mask_dtype
+from cudf.utils.utils import _array_ufunc, _is_null_host_scalar, mask_dtype
 
 if TYPE_CHECKING:
     import builtins
 
     from cudf._typing import ColumnLike, Dtype, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.strings import StringColumn
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -92,6 +92,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         "max",
         "min",
     }
+
+    _PANDAS_NA_REPR = str(pd.NA)
 
     def data_array_view(
         self, *, mode: Literal["write", "read"] = "write"
@@ -177,6 +179,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             f"dtype: {self.dtype}"
         )
 
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        if self.has_nulls():
+            return self.astype("str").fillna(self._PANDAS_NA_REPR)
+        return self
+
     def to_pandas(
         self,
         *,
@@ -240,8 +253,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         plc_column = plc.replace.clamp(
             self.to_pylibcudf(mode="read"),
-            cudf.Scalar(lo, self.dtype).device_value.c_value,
-            cudf.Scalar(hi, self.dtype).device_value.c_value,
+            plc.interop.from_arrow(
+                pa.scalar(lo, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
+            plc.interop.from_arrow(
+                pa.scalar(hi, type=cudf_dtype_to_pa_type(self.dtype))
+            ),
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
@@ -777,9 +794,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not self.has_nulls(include_nan=True):
             return self.copy()
         elif method is None:
-            if is_scalar(fill_value) and libcudf.scalar._is_null_host_scalar(
-                fill_value
-            ):
+            if is_scalar(fill_value) and _is_null_host_scalar(fill_value):
                 return self.copy()
             else:
                 fill_value = self._validate_fillna_value(fill_value)
@@ -1018,7 +1033,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # https://github.com/rapidsai/cudf/issues/14515 by
             # providing a mode in which cudf::contains does not mask
             # the result.
-            result = result.fillna(cudf.Scalar(rhs.null_count > 0))
+            result = result.fillna(rhs.null_count > 0)
         return result
 
     def as_mask(self) -> Buffer:
@@ -1605,7 +1620,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.reduce.scan(
                 self.to_pylibcudf(mode="read"),
-                aggregation.make_aggregation(scan_op, kwargs).c_obj,
+                aggregation.make_aggregation(scan_op, kwargs).plc_obj,
                 plc.reduce.ScanType.INCLUSIVE
                 if inclusive
                 else plc.reduce.ScanType.EXCLUSIVE,
@@ -1637,7 +1652,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         with acquire_spill_lock():
             plc_scalar = plc.reduce.reduce(
                 self.to_pylibcudf(mode="read"),
-                aggregation.make_aggregation(reduction_op, kwargs).c_obj,
+                aggregation.make_aggregation(reduction_op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
             result_col = type(self).from_pylibcudf(
@@ -1984,12 +1999,12 @@ def as_column(
             column = Column.from_pylibcudf(
                 plc.filling.sequence(
                     len(arbitrary),
-                    as_device_scalar(
-                        arbitrary.start, dtype=np.dtype(np.int64)
-                    ).c_value,
-                    as_device_scalar(
-                        arbitrary.step, dtype=np.dtype(np.int64)
-                    ).c_value,
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.start, type=pa.int64())
+                    ),
+                    plc.interop.from_arrow(
+                        pa.scalar(arbitrary.step, type=pa.int64())
+                    ),
                 )
             )
         if cudf.get_option("default_integer_bitwidth") and dtype is None:
@@ -2537,10 +2552,10 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         )
 
     newsize = sum(map(len, objs))
-    if newsize > libcudf.MAX_COLUMN_SIZE:
+    if newsize > np.iinfo(libcudf.types.size_type_dtype).max:
         raise MemoryError(
             f"Result of concat cannot have "
-            f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
+            f"size > {libcudf.types.size_type_dtype}_MAX"
         )
     elif newsize == 0:
         return column_empty(0, head.dtype)
