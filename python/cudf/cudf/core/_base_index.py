@@ -353,7 +353,7 @@ class BaseIndex(Serializable):
 
         self.name = values[0]
 
-    def _clean_nulls_from_index(self):
+    def _pandas_repr_compatible(self):
         """
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.

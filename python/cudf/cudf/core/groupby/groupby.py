@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -44,7 +45,7 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, cudf_dtype_to_pa_type
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
@@ -852,7 +853,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
             [periods] * len(values),
             [
-                cudf.Scalar(val, dtype=col.dtype).device_value.c_value
+                plc.interop.from_arrow(
+                    pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
+                )
                 for val, col in zip(fill_values, values)
             ],
         )
