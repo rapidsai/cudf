@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import copy
 
@@ -14,17 +14,16 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.dtypes import ListDtype, StructDtype
-from cudf._lib.types import PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES
-from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 from cudf.core.missing import NA, NaT
+from cudf.utils.dtypes import PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES
 
 # We currently need this cimport because some of the implementations here
 # access the c_obj of the scalar, and because we need to be able to call
 # pylibcudf.Scalar.from_libcudf. Both of those are temporarily acceptable until
 # DeviceScalar is phased out entirely from cuDF Cython (at which point
 # cudf.Scalar will be directly backed by pylibcudf.Scalar).
-from pylibcudf cimport Scalar as plc_Scalar, type_id as plc_TypeID
-from pylibcudf.libcudf.scalar.scalar cimport list_scalar, scalar, struct_scalar
+from pylibcudf cimport Scalar as plc_Scalar
+from pylibcudf.libcudf.scalar.scalar cimport scalar
 
 
 def _replace_nested(obj, check, replacement):
@@ -223,40 +222,22 @@ cdef class DeviceScalar:
         return s
 
     cdef void _set_dtype(self, dtype=None):
-        cdef plc_TypeID cdtype_id = self.c_value.type().id()
+        cdtype_id = self.c_value.type().id()
         if dtype is not None:
             self._dtype = dtype
         elif cdtype_id in {
-            plc_TypeID.DECIMAL32,
-            plc_TypeID.DECIMAL64,
-            plc_TypeID.DECIMAL128,
+            plc.TypeID.DECIMAL32,
+            plc.TypeID.DECIMAL64,
+            plc.TypeID.DECIMAL128,
         }:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
-        elif cdtype_id == plc_TypeID.STRUCT:
-            struct_table_view = (<struct_scalar*>self.get_raw_ptr())[0].view()
-            self._dtype = StructDtype({
-                str(i): dtype_from_column_view(struct_table_view.column(i))
-                for i in range(struct_table_view.num_columns())
-            })
-        elif cdtype_id == plc_TypeID.LIST:
-            if (
-                <list_scalar*>self.get_raw_ptr()
-            )[0].view().type().id() == plc_TypeID.LIST:
-                self._dtype = dtype_from_column_view(
-                    (<list_scalar*>self.get_raw_ptr())[0].view()
-                )
-            else:
-                self._dtype = ListDtype(
-                    PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
-                        <underlying_type_t_type_id>(
-                            (<list_scalar*>self.get_raw_ptr())[0]
-                            .view().type().id()
-                        )
-                    ]
-                )
+        elif cdtype_id == plc.TypeID.STRUCT:
+            self._dtype = StructDtype.from_arrow(
+                plc.interop.to_arrow(self.c_value).type
+            )
+        elif cdtype_id == plc.TypeID.LIST:
+            self._dtype = ListDtype.from_arrow(plc.interop.to_arrow(self.c_value).type)
         else:
-            self._dtype = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
-                <underlying_type_t_type_id>(cdtype_id)
-            ]
+            self._dtype = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[cdtype_id]
