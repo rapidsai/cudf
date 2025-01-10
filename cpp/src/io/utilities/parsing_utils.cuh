@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,7 +171,10 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
 }
 
 // Converts character to lowercase.
-constexpr char to_lower(char const c) { return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c; }
+CUDF_HOST_DEVICE constexpr char to_lower(char const c)
+{
+  return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
 
 /**
  * @brief Checks if string is infinity, case insensitive with/without sign
@@ -515,13 +518,13 @@ struct ConvertFunctor {
   template <typename T,
             CUDF_ENABLE_IF(std::is_integral_v<T> and !std::is_same_v<T, bool> and
                            !cudf::is_fixed_point<T>())>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      data_type const output_type,
-                                                      parse_options_view const& opts,
-                                                      bool as_hex = false)
+  __device__ __forceinline__ bool operator()(char const* begin,
+                                             char const* end,
+                                             void* out_buffer,
+                                             size_t row,
+                                             data_type const output_type,
+                                             parse_options_view const& opts,
+                                             bool as_hex = false)
   {
     auto const value = [as_hex, &opts, begin, end]() -> cuda::std::optional<T> {
       // Check for user-specified true/false values
@@ -564,13 +567,13 @@ struct ConvertFunctor {
    * @brief Dispatch for boolean type types.
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, bool>)>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      data_type const output_type,
-                                                      parse_options_view const& opts,
-                                                      bool as_hex)
+  __device__ __forceinline__ bool operator()(char const* begin,
+                                             char const* end,
+                                             void* out_buffer,
+                                             size_t row,
+                                             data_type const output_type,
+                                             parse_options_view const& opts,
+                                             bool as_hex)
   {
     auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
       // Check for user-specified true/false values
@@ -593,13 +596,13 @@ struct ConvertFunctor {
    * is not valid. In such case, the validity mask is set to zero too.
    */
   template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>)>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      data_type const output_type,
-                                                      parse_options_view const& opts,
-                                                      bool as_hex)
+  __device__ __forceinline__ bool operator()(char const* begin,
+                                             char const* end,
+                                             void* out_buffer,
+                                             size_t row,
+                                             data_type const output_type,
+                                             parse_options_view const& opts,
+                                             bool as_hex)
   {
     auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
       // Check for user-specified true/false values
