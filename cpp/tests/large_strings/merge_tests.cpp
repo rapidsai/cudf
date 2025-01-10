@@ -51,7 +51,7 @@ TEST_F(MergeTest, MergeLargeStrings)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
 
-  // Make sure the LIBCUDF_LARGE_STRINGS_THRESHOLD is set to normal
+  // Unset the LIBCUDF_LARGE_STRINGS_THRESHOLD if already set.
   unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 
   // also test with large strings column as input
