@@ -148,7 +148,7 @@ struct reduce_dispatch_functor {
       case aggregation::HOST_UDF: {
         auto const& udf_base_ptr =
           dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-        auto const udf_ptr = dynamic_cast<host_udf_reduction_base const*>(udf_base_ptr.get());
+        auto const udf_ptr = dynamic_cast<reduce_host_udf const*>(udf_base_ptr.get());
         CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for reduction.");
         return (*udf_ptr)(col, output_dtype, init, stream, mr);
       }  // case aggregation::HOST_UDF

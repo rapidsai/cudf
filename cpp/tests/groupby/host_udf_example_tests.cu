@@ -42,7 +42,7 @@ namespace {
  * For each group of values, the aggregation computes
  * `(group_idx + 1) * group_sum_of_squares - group_max * group_sum`.
  */
-struct host_udf_groupby_example : cudf::host_udf_groupby_base {
+struct host_udf_groupby_example : cudf::groupby_host_udf {
   host_udf_groupby_example() = default;
 
   [[nodiscard]] std::unique_ptr<cudf::column> get_empty_output(

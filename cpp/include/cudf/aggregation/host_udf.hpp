@@ -55,9 +55,9 @@ class host_udf_base {
   host_udf_base() = default;  ///< Default constructor
 
   // Only allow deriving from the structs below.
-  friend struct host_udf_reduction_base;
-  friend struct host_udf_segmented_reduction_base;
-  friend struct host_udf_groupby_base;
+  friend struct reduce_host_udf;
+  friend struct segmented_reduce_host_udf;
+  friend struct groupby_host_udf;
 
  public:
   virtual ~host_udf_base() = default;  ///< Default destructor
@@ -102,7 +102,7 @@ class host_udf_base {
  *
  * Example:
  * @code{.cpp}
- * struct my_udf_aggregation : cudf::host_udf_reduction_base {
+ * struct my_udf_aggregation : cudf::reduce_host_udf {
  *   my_udf_aggregation() = default;
  *
  *   [[nodiscard]] std::unique_ptr<scalar> operator()(
@@ -130,7 +130,7 @@ class host_udf_base {
  * };
  * @endcode
  */
-struct host_udf_reduction_base : host_udf_base {
+struct reduce_host_udf : host_udf_base {
   /**
    * @brief Perform reduction operations.
    *
@@ -158,7 +158,7 @@ struct host_udf_reduction_base : host_udf_base {
  *
  * Example:
  * @code{.cpp}
- * struct my_udf_aggregation : cudf::host_udf_segmented_reduction_base {
+ * struct my_udf_aggregation : cudf::segmented_reduce_host_udf {
  *   my_udf_aggregation() = default;
  *
  *   [[nodiscard]] std::unique_ptr<column> operator()(
@@ -188,7 +188,7 @@ struct host_udf_reduction_base : host_udf_base {
  * };
  * @endcode
  */
-struct host_udf_segmented_reduction_base : host_udf_base {
+struct segmented_reduce_host_udf : host_udf_base {
   /**
    * @brief Perform segmented reduction operations.
    *
@@ -226,7 +226,7 @@ struct host_udf_segmented_reduction_base : host_udf_base {
  *
  * Example:
  * @code{.cpp}
- * struct my_udf_aggregation : cudf::host_udf_groupby_base {
+ * struct my_udf_aggregation : cudf::groupby_host_udf {
  *   my_udf_aggregation() = default;
  *
  *   [[nodiscard]] std::unique_ptr<column> get_empty_output(
@@ -262,7 +262,7 @@ struct host_udf_segmented_reduction_base : host_udf_base {
  * };
  * @endcode
  */
-struct host_udf_groupby_base : host_udf_base {
+struct groupby_host_udf : host_udf_base {
   /**
    * @brief Define the data that can be provided by libcudf for the aggregation to perform its
    * computation.
@@ -363,8 +363,8 @@ struct host_udf_groupby_base : host_udf_base {
  */
 #define MAP_GROUPBY_DATA_TYPE(attr, output_type)                                                  \
   template <>                                                                                     \
-  [[nodiscard]] inline host_udf_groupby_base::data_t<host_udf_groupby_base::groupby_data::attr>   \
-  host_udf_groupby_base::get_data<host_udf_groupby_base::groupby_data::attr>() const              \
+  [[nodiscard]] inline groupby_host_udf::data_t<groupby_host_udf::groupby_data::attr>             \
+  groupby_host_udf::get_data<groupby_host_udf::groupby_data::attr>() const                        \
   {                                                                                               \
     CUDF_EXPECTS(data_accessor_callbacks.count(groupby_data::attr) > 0,                           \
                  "Uninitialized data accessor callbacks.");                                       \

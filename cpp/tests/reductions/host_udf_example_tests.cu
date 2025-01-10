@@ -43,7 +43,7 @@ namespace {
  *
  * The aggregation computes `sum(value^2, for value in group)` (this is sum of squared).
  */
-struct host_udf_reduction_example : cudf::host_udf_reduction_base {
+struct host_udf_reduction_example : cudf::reduce_host_udf {
   host_udf_reduction_example() = default;
 
   [[nodiscard]] std::unique_ptr<cudf::scalar> operator()(
@@ -176,7 +176,7 @@ namespace {
  *
  * The aggregation computes `sum(value^2, for value in group)` (this is sum of squared).
  */
-struct host_udf_segmented_reduction_example : cudf::host_udf_segmented_reduction_base {
+struct host_udf_segmented_reduction_example : cudf::segmented_reduce_host_udf {
   host_udf_segmented_reduction_example() = default;
 
   [[nodiscard]] std::unique_ptr<cudf::column> operator()(

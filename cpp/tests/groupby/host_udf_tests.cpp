@@ -48,7 +48,7 @@ std::unique_ptr<cudf::aggregation> get_random_agg()
 /**
  * @brief A host-based UDF implementation used for unit tests for groupby aggregation.
  */
-struct host_udf_groupby_test : cudf::host_udf_groupby_base {
+struct host_udf_groupby_test : cudf::groupby_host_udf {
   int test_location_line;  // the location where testing is called
   bool* test_run;          // to check if the test is accidentally skipped
   bool test_other_agg;     // test calling other aggregation

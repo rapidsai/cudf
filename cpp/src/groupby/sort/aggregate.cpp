@@ -796,28 +796,28 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
   if (cache.has_result(values, agg)) { return; }
 
   auto const& udf_base_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-  auto const udf_ptr       = dynamic_cast<host_udf_groupby_base*>(udf_base_ptr.get());
+  auto const udf_ptr       = dynamic_cast<groupby_host_udf*>(udf_base_ptr.get());
   CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
 
   auto& data_callbacks = udf_ptr->data_accessor_callbacks;
   if (data_callbacks.empty()) {
-    data_callbacks.emplace(host_udf_groupby_base::groupby_data::INPUT_VALUES,
-                           [&]() -> host_udf_groupby_base::groupby_data_t { return values; });
+    data_callbacks.emplace(groupby_host_udf::groupby_data::INPUT_VALUES,
+                           [&]() -> groupby_host_udf::groupby_data_t { return values; });
     data_callbacks.emplace(
-      host_udf_groupby_base::groupby_data::GROUPED_VALUES,
-      [&]() -> host_udf_groupby_base::groupby_data_t { return get_grouped_values(); });
+      groupby_host_udf::groupby_data::GROUPED_VALUES,
+      [&]() -> groupby_host_udf::groupby_data_t { return get_grouped_values(); });
     data_callbacks.emplace(
-      host_udf_groupby_base::groupby_data::SORTED_GROUPED_VALUES,
-      [&]() -> host_udf_groupby_base::groupby_data_t { return get_sorted_values(); });
+      groupby_host_udf::groupby_data::SORTED_GROUPED_VALUES,
+      [&]() -> groupby_host_udf::groupby_data_t { return get_sorted_values(); });
     data_callbacks.emplace(
-      host_udf_groupby_base::groupby_data::NUM_GROUPS,
-      [&]() -> host_udf_groupby_base::groupby_data_t { return helper.num_groups(stream); });
+      groupby_host_udf::groupby_data::NUM_GROUPS,
+      [&]() -> groupby_host_udf::groupby_data_t { return helper.num_groups(stream); });
     data_callbacks.emplace(
-      host_udf_groupby_base::groupby_data::GROUP_OFFSETS,
-      [&]() -> host_udf_groupby_base::groupby_data_t { return helper.group_offsets(stream); });
+      groupby_host_udf::groupby_data::GROUP_OFFSETS,
+      [&]() -> groupby_host_udf::groupby_data_t { return helper.group_offsets(stream); });
     data_callbacks.emplace(
-      host_udf_groupby_base::groupby_data::GROUP_LABELS,
-      [&]() -> host_udf_groupby_base::groupby_data_t { return helper.group_labels(stream); });
+      groupby_host_udf::groupby_data::GROUP_LABELS,
+      [&]() -> groupby_host_udf::groupby_data_t { return helper.group_labels(stream); });
   }
 
   auto& agg_callback = udf_ptr->aggregation_accessor_callback;
