@@ -100,7 +100,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
       auto const group_sum =
         parent.compute_aggregation(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
-      auto const input_dv_ptr = cudf::column_device_view::create(values, stream);
+      auto const values_dv_ptr = cudf::column_device_view::create(values, stream);
       auto const output = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<OutputType>()},
                                                     num_groups,
                                                     cudf::mask_state::UNALLOCATED,
@@ -115,7 +115,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
         thrust::make_counting_iterator(0),
         thrust::make_counting_iterator(num_groups),
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
-        transform_fn{*input_dv_ptr,
+        transform_fn{*values_dv_ptr,
                      offsets,
                      group_indices,
                      group_max.begin<InputType>(),
