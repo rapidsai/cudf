@@ -2652,11 +2652,10 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
       _out_sink->host_write(pbw.data(), pbw.size());
       stripe.footerLength = pbw.size();
     } else {
-      auto bytes_written  = 0;
-      auto written_sf_len = 0;
-      for (int32_t remaining_sf_len = pbw.size(); remaining_sf_len > 0;
-           remaining_sf_len -= _compression_blocksize) {
-        auto const block_size = std::min<int32_t>(_compression_blocksize, remaining_sf_len);
+      std::size_t bytes_written  = 0;
+      std::size_t written_sf_len = 0;
+      while (written_sf_len < pbw.size()) {
+        auto const block_size = std::min(_compression_blocksize, pbw.size() - written_sf_len);
         auto const header_val = block_size * 2 + 1;  // 1 means uncompressed
         CUDF_EXPECTS(header_val >> 24 == 0, "Block length exceeds maximum size");
         std::array const header{static_cast<uint8_t>(header_val >> 0),
