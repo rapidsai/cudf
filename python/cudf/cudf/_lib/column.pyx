@@ -346,7 +346,7 @@ cdef class Column:
     def null_count(self):
         if self._null_count is None:
             if not self.nullable or self.size == 0:
-                return 0
+                self._null_count = 0
             with acquire_spill_lock():
                 self._null_count = pylibcudf.null_mask.null_count(
                     self.base_mask.get_ptr(mode="read"),
