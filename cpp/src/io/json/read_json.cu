@@ -38,7 +38,6 @@
 #include <thrust/scatter.h>
 
 #include <numeric>
-#include <queue>
 
 namespace cudf::io::json::detail {
 
@@ -391,8 +390,9 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   std::vector<cudf::io::table_with_metadata> partial_tables;
   json_reader_options batched_reader_opts{reader_opts};
 
-  // recursive lambda to construct schema_element
-  // TODO: how do we get this to work for array of arrays
+  // recursive lambda to construct schema_element. Here, we assume that the table from the
+  // first batch contains all the columns in the concatenated table, and that the partial tables
+  // from all following batches contain the same set of columns
   std::function<schema_element(cudf::host_span<column const> cols,
                                cudf::host_span<column_name_info const> names,
                                schema_element & schema)>
@@ -427,20 +427,24 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   // Dispatch individual batches to read_batch and push the resulting table into
   // partial_tables array. Note that the reader options need to be updated for each
   // batch to adjust byte range offset and byte range size.
-  for (std::size_t i = 0; i < batch_offsets.size() - 1; i++) {
+  batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
+  batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
+  partial_tables.emplace_back(
+    read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+
+  auto& tbl = partial_tables.back().tbl;
+  std::vector<column> children;
+  for (size_type j = 0; j < tbl->num_columns(); j++)
+    children.emplace_back(tbl->get_column(j));
+  batched_reader_opts.set_dtypes(
+    construct_schema(children, partial_tables.back().metadata.schema_info, schema));
+  batched_reader_opts.enable_prune_columns(true);
+
+  for (std::size_t i = 1; i < batch_offsets.size() - 1; i++) {
     batched_reader_opts.set_byte_range_offset(batch_offsets[i]);
     batched_reader_opts.set_byte_range_size(batch_offsets[i + 1] - batch_offsets[i]);
     partial_tables.emplace_back(
       read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
-
-    auto& tbl = partial_tables.back().tbl;
-    std::vector<column> children;
-    for (size_type j = 0; j < tbl->num_columns(); j++)
-      children.emplace_back(tbl->get_column(j));
-
-    batched_reader_opts.set_dtypes(
-      construct_schema(children, partial_tables.back().metadata.schema_info, schema));
-    batched_reader_opts.enable_prune_columns(true);
   }
 
   auto expects_schema_equality =
