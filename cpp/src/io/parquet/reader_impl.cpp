@@ -51,7 +51,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   auto& subpass = *pass.subpass;
 
   auto& page_nesting        = subpass.page_nesting_info;
-  auto& page_nesting_decode = subpass.page_nesting_decode_info;
+  auto& page_nesting_decode = subpass.page_nesting_decode_info;W
 
   auto const level_type_size = pass.level_type_size;
 
@@ -98,7 +98,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                              _stream);
     }
 
-    // Compute column string sizes (using page string offsets) for this subpass
+    // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();
 
     // Check for overflow in cumulative column string sizes of this pass so that the page string
@@ -111,8 +111,8 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
 
-    // Mark any chunks for which the cumulative column string size has exceeded the
-    // large strings threshold
+    // Mark/unmark column-chunk descriptors depending on the string sizes of corresponding output
+    // column chunks and the large strings threshold.
     for (auto& chunk : pass.chunks) {
       auto const idx            = chunk.src_col_index;
       chunk.is_large_string_col = (col_string_sizes[idx] > threshold);

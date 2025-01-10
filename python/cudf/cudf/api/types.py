@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -13,6 +13,7 @@ from typing import cast
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api import types as pd_types
 
 import cudf
@@ -144,6 +145,7 @@ def is_scalar(val):
             cudf.Scalar,
             cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
+            pa.Scalar,
         ),
     ) or (
         pd_types.is_scalar(val)
