@@ -38,6 +38,7 @@
 #include <thrust/scatter.h>
 
 #include <numeric>
+#include <queue>
 
 namespace cudf::io::json::detail {
 
@@ -400,14 +401,19 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
   construct_schema = [&construct_schema](cudf::host_span<column const> children,
                                          cudf::host_span<column_name_info const> children_props,
                                          schema_element& schema) -> schema_element {
-    CUDF_EXPECTS(children.size() == children_props.size(), "Somethings fishy");
+    CUDF_EXPECTS(children.size() == children_props.size(), "Something's fishy");
 
     std::vector<std::string> col_order;
-    for (size_t i = 0; i < children.size(); i++)
+    for (size_t i = 0; i < children.size(); i++) {
+      if(schema.type == data_type{cudf::type_id::LIST} && children_props[i].name == "offsets")
+        continue;
       col_order.push_back(children_props[i].name);
+    }
     schema.column_order = std::move(col_order);
 
     for (auto i = 0ul; i < children.size(); i++) {
+      if(schema.type == data_type{cudf::type_id::LIST} && children_props[i].name == "offsets")
+        continue;
       schema_element child_schema{children[i].type()};
       std::vector<column> grandchildren_cols;
       for (size_type j = 0; j < children[i].num_children(); j++)
@@ -417,6 +423,25 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     }
 
     return schema;
+  };
+  auto print_schema = [](schema_element& schema) {
+    std::queue<std::pair<std::string, schema_element>> q;
+    q.push(std::pair{"ROOT", schema});
+    size_t lnodes = 0, lsize = 1;
+    while(!q.empty()) {
+      auto [name, sch] = q.front();
+      std::cout << name << " (" << static_cast<std::underlying_type<type_id>::type>(sch.type.id()) << "), ";
+      q.pop();
+      lnodes++;
+      if(lnodes == lsize) {
+        std::cout << std::endl;
+        lnodes = 0;
+      }
+      for(auto name : sch.column_order.value()) {
+        q.push(std::pair{name, sch.child_types[name]});
+      }
+      if(!lnodes) lsize = q.size();
+    }
   };
   // Dispatch individual batches to read_batch and push the resulting table into
   // partial_tables array. Note that the reader options need to be updated for each
@@ -431,8 +456,13 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     std::vector<column> children;
     for (size_type j = 0; j < tbl->num_columns(); j++)
       children.emplace_back(tbl->get_column(j));
+
+    schema = construct_schema(children, partial_tables.back().metadata.schema_info, schema);
+    print_schema(schema);
+
     batched_reader_opts.set_dtypes(
       construct_schema(children, partial_tables.back().metadata.schema_info, schema));
+    batched_reader_opts.enable_prune_columns(true);
   }
 
   auto expects_schema_equality =

@@ -39,20 +39,20 @@ bool validate_column_order(schema_element const& types)
   // For list types, check if child_types size is 1 and call this function recursively.
   if (types.type.id() == type_id::STRUCT) {
     if (types.column_order.has_value()) {
-      if (types.column_order.value().size() != types.child_types.size()) { return false; }
+      if (types.column_order.value().size() != types.child_types.size()) { std::cout << "1\n"; return false; }
       for (auto const& column_name : types.column_order.value()) {
         auto it = types.child_types.find(column_name);
-        if (it == types.child_types.end()) { return false; }
+        if (it == types.child_types.end()) { std::cout << "2\n"; return false; }
         if (it->second.type.id() == type_id::STRUCT or it->second.type.id() == type_id::LIST) {
-          if (!validate_column_order(it->second)) { return false; }
+          if (!validate_column_order(it->second)) { std::cout << "3\n"; return false; }
         }
       }
     }
   } else if (types.type.id() == type_id::LIST) {
-    if (types.child_types.size() != 1) { return false; }
+    if (types.child_types.size() != 1) { std::cout << "4\n"; return false; }
     auto it = types.child_types.begin();
     if (it->second.type.id() == type_id::STRUCT or it->second.type.id() == type_id::LIST) {
-      if (!validate_column_order(it->second)) { return false; }
+      if (!validate_column_order(it->second)) { std::cout << "5\n"; return false; }
     }
   }
   return true;
