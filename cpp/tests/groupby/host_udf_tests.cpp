@@ -86,41 +86,41 @@ struct host_udf_groupby_test : cudf::groupby_host_udf {
     // `groupby_data` enum having the correct type.
 
     {
-      auto const attr_value = get_input_values();
-      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
+      auto const inp_data = get_input_values();
+      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(inp_data)>>));
     }
 
     {
-      auto const attr_value = get_grouped_values();
-      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
+      auto const inp_data = get_grouped_values();
+      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(inp_data)>>));
     }
 
     {
-      auto const attr_value = get_sorted_grouped_values();
-      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
+      auto const inp_data = get_sorted_grouped_values();
+      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(inp_data)>>));
     }
 
     {
-      auto const attr_value = get_num_groups();
-      EXPECT_TRUE((std::is_same_v<cudf::size_type, std::decay_t<decltype(attr_value)>>));
+      auto const inp_data = get_num_groups();
+      EXPECT_TRUE((std::is_same_v<cudf::size_type, std::decay_t<decltype(inp_data)>>));
     }
 
     {
-      auto const attr_value = get_group_offsets();
+      auto const inp_data = get_group_offsets();
       EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
-                                  std::decay_t<decltype(attr_value)>>));
+                                  std::decay_t<decltype(inp_data)>>));
     }
 
     {
-      auto const attr_value = get_group_labels();
+      auto const inp_data = get_group_labels();
       EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
-                                  std::decay_t<decltype(attr_value)>>));
+                                  std::decay_t<decltype(inp_data)>>));
     }
 
     // Perform tests on type of the result from computing other aggregations.
     if (test_other_agg) {
-      auto const attr_value = compute_aggregation(get_random_agg());
-      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
+      auto const inp_data = compute_aggregation(get_random_agg());
+      EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(inp_data)>>));
     }
 
     *test_run = true;  // test is run successfully
