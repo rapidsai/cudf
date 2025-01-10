@@ -148,16 +148,16 @@ void host_compress(compression_type compression,
 {
   if (compression == compression_type::NONE) { return; }
 
-  auto const num_blocks = inputs.size();
-  auto h_results        = cudf::detail::make_host_vector<compression_result>(num_blocks, stream);
+  auto const num_chunks = inputs.size();
+  auto h_results        = cudf::detail::make_host_vector<compression_result>(num_chunks, stream);
   auto const h_inputs   = cudf::detail::make_host_vector_async(inputs, stream);
   auto const h_outputs  = cudf::detail::make_host_vector_async(outputs, stream);
   stream.synchronize();
 
   std::vector<std::future<size_t>> tasks;
-  auto streams = cudf::detail::fork_streams(stream, h_comp_pool().get_thread_count());
-  for (size_t i = 0; i < num_blocks; ++i) {
-    auto cur_stream = streams[i % streams.size()];
+  auto const streams = cudf::detail::fork_streams(stream, h_comp_pool().get_thread_count());
+  for (size_t i = 0; i < num_chunks; ++i) {
+    auto const cur_stream = streams[i % streams.size()];
     auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
       auto const h_in  = cudf::detail::make_host_vector_sync(d_in, cur_stream);
       auto const h_out = compress(compression, h_in, cur_stream);
@@ -167,7 +167,7 @@ void host_compress(compression_type compression,
     tasks.emplace_back(h_comp_pool().submit_task(std::move(task)));
   }
 
-  for (auto i = 0ul; i < num_blocks; ++i) {
+  for (auto i = 0ul; i < num_chunks; ++i) {
     h_results[i] = {tasks[i].get(), compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy_async<compression_result>(results, h_results, stream);
@@ -211,7 +211,7 @@ void host_compress(compression_type compression,
 
 }  // namespace
 
-std::optional<size_t> compress_max_allowed_block_size(compression_type compression)
+std::optional<size_t> compress_max_allowed_chunk_size(compression_type compression)
 {
   if (auto nvcomp_type = to_nvcomp_compression(compression);
       nvcomp_type.has_value() and not nvcomp::is_compression_disabled(*nvcomp_type)) {
@@ -220,7 +220,7 @@ std::optional<size_t> compress_max_allowed_block_size(compression_type compressi
   return std::nullopt;
 }
 
-[[nodiscard]] size_t compress_required_block_alignment(compression_type compression)
+[[nodiscard]] size_t compress_required_chunk_alignment(compression_type compression)
 {
   auto nvcomp_type = to_nvcomp_compression(compression);
   if (compression == compression_type::NONE or not nvcomp_type.has_value() or

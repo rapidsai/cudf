@@ -110,7 +110,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
  */
 size_t compression_block_size(compression_type compression)
 {
-  auto const comp_limit = compress_max_allowed_block_size(compression);
+  auto const comp_limit = compress_max_allowed_chunk_size(compression);
 
   constexpr size_t max_block_size = 256 * 1024;
   return std::min(comp_limit.value_or(max_block_size), max_block_size);
@@ -569,7 +569,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
     auto add_stream =
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
-        auto const max_alignment_padding = compress_required_block_alignment(compression) - 1;
+        auto const max_alignment_padding = compress_required_chunk_alignment(compression) - 1;
         const auto base                  = column.index() * gpu::CI_NUM_STREAMS;
         ids[base + index_type]           = streams.size();
         streams.push_back(orc::Stream{
@@ -2281,7 +2281,7 @@ auto convert_table_to_orc_data(table_view const& input,
   auto stripe_dicts    = build_dictionaries(orc_table, segmentation, sort_dictionaries, stream);
   auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, segmentation, stream);
 
-  auto const block_align = compress_required_block_alignment(compression);
+  auto const block_align = compress_required_chunk_alignment(compression);
 
   auto streams  = create_streams(orc_table.columns,
                                 segmentation,

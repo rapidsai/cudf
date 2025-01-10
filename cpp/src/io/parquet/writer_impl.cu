@@ -1200,7 +1200,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
-                   compress_required_block_alignment(compression),
+                   compress_required_chunk_alignment(compression),
                    write_v2_headers,
                    nullptr,
                    nullptr,
@@ -1225,7 +1225,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
-                   compress_required_block_alignment(compression),
+                   compress_required_chunk_alignment(compression),
                    write_v2_headers,
                    nullptr,
                    nullptr,
@@ -1249,7 +1249,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    num_columns,
                    max_page_size_bytes,
                    max_page_size_rows,
-                   compress_required_block_alignment(compression),
+                   compress_required_chunk_alignment(compression),
                    write_v2_headers,
                    nullptr,
                    nullptr,
@@ -1262,7 +1262,7 @@ size_t max_page_bytes(compression_type compression, size_t max_page_size_bytes)
 {
   if (compression == compression_type::NONE) { return max_page_size_bytes; }
 
-  auto const comp_limit = compress_max_allowed_block_size(compression);
+  auto const comp_limit = compress_max_allowed_chunk_size(compression);
 
   auto max_size = std::min(comp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
   // page size must fit in a 32-bit signed integer
@@ -2195,7 +2195,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                        num_columns,
                        num_pages,
                        num_stats_bfr,
-                       compress_required_block_alignment(compression),
+                       compress_required_chunk_alignment(compression),
                        max_page_size_bytes,
                        max_page_size_rows,
                        write_v2_headers,
