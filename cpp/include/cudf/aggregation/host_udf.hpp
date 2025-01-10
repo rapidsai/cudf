@@ -248,8 +248,8 @@ struct aggregate_result_functor;
  *     rmm::device_async_resource_ref mr) const override
  *   {
  *     // Perform UDF computation using the input data and return the result.
- *     auto const values = get_data<groupby_data::GROUPED_VALUES>();
- *     auto const offsets = get_data<groupby_data::GROUP_OFFSETS>();
+ *     auto const values = get_grouped_values();
+ *     auto const offsets = get_group_offsets();
  *     auto const group_max = compute_aggregation(
  *         cudf::make_max_aggregation<cudf::groupby_aggregation>());
  *     ...
