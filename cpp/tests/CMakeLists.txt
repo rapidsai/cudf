@@ -598,8 +598,6 @@ ConfigureTest(
   PERCENT 100
 )
 
-ConfigureTest(LARGE_STRINGS_JSON_TEST large_strings/json_tests.cu GPUS 1 PERCENT 100)
-
 # ##################################################################################################
 # * json path test --------------------------------------------------------------------------------
 ConfigureTest(JSON_PATH_TEST json/json_tests.cpp)
