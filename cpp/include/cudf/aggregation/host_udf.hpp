@@ -225,8 +225,8 @@ struct aggregate_result_functor;
  * input is empty, and `operator()` to perform its groupby operations.
  *
  * During execution, the derived class can access to internal data provided by libcudf groupby
- * framework through a set of `get*` accessors, as well as calling other build-in groupby
- * aggregations through the `compute_aggregation()` function.
+ * framework through a set of ``get*`` accessors, as well as calling other build-in groupby
+ * aggregations through the `compute_aggregation` function.
  *
  * @note The derived class can only perform sort-based groupby aggregations. Hash-based groupby
  * aggregations require more complex data structure and is not yet supported.
