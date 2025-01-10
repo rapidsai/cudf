@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -51,6 +51,15 @@ def right():
             "d": [6, None, 7, 8, -1, 2, 4],
         }
     )
+
+
+@pytest.mark.parametrize(
+    "maintain_order", ["left", "left_right", "right_left", "right"]
+)
+def test_join_maintain_order_param_unsupported(left, right, maintain_order):
+    q = left.join(right, on=pl.col("a"), how="inner", maintain_order=maintain_order)
+
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
