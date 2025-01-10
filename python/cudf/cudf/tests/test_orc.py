@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -1970,3 +1970,25 @@ def test_row_group_alignment(datadir):
     got = cudf.read_orc(buffer)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "inputfile",
+    [
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.orc",
+    ],
+)
+def test_orc_reader_desynced_timestamp(datadir, inputfile):
+    # Test a special case where the DATA stream (second) in a TIMESTAMP column
+    # is progressed faster than the SECONDARY stream (nanosecond) at the start of a row
+    # group. In this case, the "run cache manager" in the decoder kernel is used to
+    # orchestrate the dual-stream processing.
+    # For more information, see https://github.com/rapidsai/cudf/issues/17155.
+
+    path = datadir / inputfile
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_frame_equal(cudf.from_pandas(expect), got)

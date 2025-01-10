@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -147,4 +147,10 @@ def test_agg_singleton(op):
 
     q = df.select(op(pl.col("a")))
 
+    assert_gpu_result_equal(q)
+
+
+def test_sum_empty_zero():
+    df = pl.LazyFrame({"a": pl.Series(values=[], dtype=pl.Int32())})
+    q = df.select(pl.col("a").sum())
     assert_gpu_result_equal(q)

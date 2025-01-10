@@ -114,6 +114,7 @@ class TemporalFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
+        self.is_pointwise = True
         if self.name not in self._COMPONENT_MAP:
             raise NotImplementedError(f"Temporal function {self.name}")
 

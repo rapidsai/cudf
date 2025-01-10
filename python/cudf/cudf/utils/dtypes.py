@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import datetime
@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
+
+import pylibcudf as plc
 
 import cudf
 
@@ -151,7 +153,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
     elif cudf.api.types.is_decimal128_dtype(dtype):
         return cudf.core.dtypes.Decimal128Dtype
-    elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
+    elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
         return dtype.type
 
     return infer_dtype_from_object(dtype)
@@ -198,7 +200,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     If `val` is None, returns None.
     """
 
-    if cudf._lib.scalar._is_null_host_scalar(val) or isinstance(
+    if cudf.utils.utils._is_null_host_scalar(val) or isinstance(
         val, cudf.Scalar
     ):
         return val
@@ -603,6 +605,66 @@ def _get_base_dtype(dtype: pd.DatetimeTZDtype) -> np.dtype:
     else:
         return dtype.base
 
+
+def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
+    if isinstance(dtype, cudf.ListDtype):
+        return plc.DataType(plc.TypeId.LIST)
+    elif isinstance(dtype, cudf.StructDtype):
+        return plc.DataType(plc.TypeId.STRUCT)
+    elif isinstance(dtype, cudf.Decimal128Dtype):
+        tid = plc.TypeId.DECIMAL128
+        return plc.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.Decimal64Dtype):
+        tid = plc.TypeId.DECIMAL64
+        return plc.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.Decimal32Dtype):
+        tid = plc.TypeId.DECIMAL32
+        return plc.DataType(tid, -dtype.scale)
+    # libcudf types don't support timezones so convert to the base type
+    elif isinstance(dtype, pd.DatetimeTZDtype):
+        dtype = _get_base_dtype(dtype)
+    else:
+        dtype = np.dtype(dtype)
+    return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
+
+
+SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
+    np.dtype("int8"): plc.types.TypeId.INT8,
+    np.dtype("int16"): plc.types.TypeId.INT16,
+    np.dtype("int32"): plc.types.TypeId.INT32,
+    np.dtype("int64"): plc.types.TypeId.INT64,
+    np.dtype("uint8"): plc.types.TypeId.UINT8,
+    np.dtype("uint16"): plc.types.TypeId.UINT16,
+    np.dtype("uint32"): plc.types.TypeId.UINT32,
+    np.dtype("uint64"): plc.types.TypeId.UINT64,
+    np.dtype("float32"): plc.types.TypeId.FLOAT32,
+    np.dtype("float64"): plc.types.TypeId.FLOAT64,
+    np.dtype("datetime64[s]"): plc.types.TypeId.TIMESTAMP_SECONDS,
+    np.dtype("datetime64[ms]"): plc.types.TypeId.TIMESTAMP_MILLISECONDS,
+    np.dtype("datetime64[us]"): plc.types.TypeId.TIMESTAMP_MICROSECONDS,
+    np.dtype("datetime64[ns]"): plc.types.TypeId.TIMESTAMP_NANOSECONDS,
+    np.dtype("object"): plc.types.TypeId.STRING,
+    np.dtype("bool"): plc.types.TypeId.BOOL8,
+    np.dtype("timedelta64[s]"): plc.types.TypeId.DURATION_SECONDS,
+    np.dtype("timedelta64[ms]"): plc.types.TypeId.DURATION_MILLISECONDS,
+    np.dtype("timedelta64[us]"): plc.types.TypeId.DURATION_MICROSECONDS,
+    np.dtype("timedelta64[ns]"): plc.types.TypeId.DURATION_NANOSECONDS,
+}
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
+    plc_type: np_type
+    for np_type, plc_type in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES.items()
+}
+# There's no equivalent to EMPTY in cudf.  We translate EMPTY
+# columns from libcudf to ``int8`` columns of all nulls in Python.
+# ``int8`` is chosen because it uses the least amount of memory.
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("int8")
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRUCT] = np.dtype(
+    "object"
+)
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.LIST] = np.dtype("object")
+
+
+SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
 
 # Type dispatch loops similar to what are found in `np.add.types`
 # In NumPy, whether or not an op can be performed between two

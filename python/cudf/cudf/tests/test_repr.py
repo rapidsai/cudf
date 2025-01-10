@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import textwrap
 
@@ -618,9 +618,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ns]"),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.001000000
-            1    0 days 00:00:00.000200000
-            2    0 days 00:00:00.003000000
+            0    0 days 00:00:00.001000
+            1    0 days 00:00:00.000200
+            2    0 days 00:00:00.003000
             dtype: timedelta64[ns]
             """
             ),
@@ -710,12 +710,12 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.012
-            1    0 days 00:00:00.012
-            2    0 days 00:00:00.022
-            3    0 days 00:00:00.343
-            4    0 days 01:12:33.534
-            5    0 days 00:07:15.342
+            0    0 days 00:00:00.012000
+            1    0 days 00:00:00.012000
+            2    0 days 00:00:00.022000
+            3    0 days 00:00:00.343000
+            4    0 days 01:12:33.534000
+            5    0 days 00:07:15.342000
             dtype: timedelta64[ms]
             """
             ),
@@ -745,13 +745,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    0 days 00:00:00.001
-            1    0 days 00:00:01.132
-            2    0 days 06:27:03.231
-            3    0 days 00:00:00.233
-            4        0 days 00:00:00
-            5    0 days 00:00:00.332
-            6    0 days 00:00:00.323
+            0    0 days 00:00:00.001000
+            1    0 days 00:00:01.132000
+            2    0 days 06:27:03.231000
+            3    0 days 00:00:00.233000
+            4           0 days 00:00:00
+            5    0 days 00:00:00.332000
+            6    0 days 00:00:00.323000
             dtype: timedelta64[ms]
             """
             ),
@@ -771,13 +771,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    157937 days 02:23:52.432
-            1         1 days 13:25:36.784
-            2         2 days 20:09:05.345
-            3         2 days 14:03:52.411
-            4     11573 days 23:39:03.241
-            5        42 days 01:35:48.734
-            6         0 days 00:00:23.234
+            0    157937 days 02:23:52.432000
+            1         1 days 13:25:36.784000
+            2         2 days 20:09:05.345000
+            3         2 days 14:03:52.411000
+            4     11573 days 23:39:03.241000
+            5        42 days 01:35:48.734000
+            6         0 days 00:00:23.234000
             dtype: timedelta64[ms]
             """
             ),
@@ -824,13 +824,13 @@ def test_timedelta_series_s_us_repr(data, dtype):
             ),
             textwrap.dedent(
                 """
-            0    157937 days 02:23:52.432
-            1         1 days 13:25:36.784
-            2         2 days 20:09:05.345
-            3         2 days 14:03:52.411
-            4     11573 days 23:39:03.241
-            5        42 days 01:35:48.734
-            6         0 days 00:00:23.234
+            0    157937 days 02:23:52.432000
+            1         1 days 13:25:36.784000
+            2         2 days 20:09:05.345000
+            3         2 days 14:03:52.411000
+            4     11573 days 23:39:03.241000
+            5        42 days 01:35:48.734000
+            6         0 days 00:00:23.234000
             Name: abc, dtype: timedelta64[ms]
             """
             ),
