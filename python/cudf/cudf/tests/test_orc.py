@@ -1977,6 +1977,8 @@ def test_row_group_alignment(datadir):
     [
         "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.orc",
         "TestOrcFile.timestamp.desynced.snappy.RLEv2.orc",
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.hasNull.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.hasNull.orc",
     ],
 )
 def test_orc_reader_desynced_timestamp(datadir, inputfile):
