@@ -19,16 +19,18 @@ import cudf
 import cudf.api.types
 import cudf.core.column.column as column
 import cudf.core.column.datetime as datetime
-from cudf import _lib as libcudf
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type, size_type_dtype
 from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import can_convert_to_column
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    can_convert_to_column,
+    dtype_to_pylibcudf_type,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -5611,7 +5613,7 @@ class StringColumn(column.ColumnBase):
         if len(children) == 0 and size != 0:
             # all nulls-column:
             offsets = column.as_column(
-                0, length=size + 1, dtype=size_type_dtype
+                0, length=size + 1, dtype=SIZE_TYPE_DTYPE
             )
 
             children = (offsets,)
@@ -5888,7 +5890,7 @@ class StringColumn(column.ColumnBase):
     ) -> cudf.core.column.DecimalBaseColumn:
         plc_column = plc.strings.convert.convert_fixed_point.to_fixed_point(
             self.to_pylibcudf(mode="read"),
-            libcudf.types.dtype_to_pylibcudf_type(dtype),
+            dtype_to_pylibcudf_type(dtype),
         )
         result = Column.from_pylibcudf(plc_column)
         result.dtype.precision = dtype.precision  # type: ignore[union-attr]
