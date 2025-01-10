@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -820,6 +820,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
             inplace=inplace,
         )
 
+    def _pandas_repr_compatible(self) -> Self:
+        """Return Self but with columns prepared for a pandas-like repr."""
+        columns = (col._prep_pandas_compat_repr() for col in self._columns)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(columns, verify=False)
+        )
+
     @_performance_tracking
     def _drop_column(
         self, name: abc.Hashable, errors: Literal["ignore", "raise"] = "raise"
@@ -861,7 +868,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 column_order,
                 null_precedence,
             )
-            columns = libcudf.utils.columns_from_pylibcudf_table(plc_table)
+            columns = [
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ]
         return self._from_columns_like_self(
             columns,
             column_names=self._column_names,
@@ -946,16 +955,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if len(dict_indices):
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            indices_columns = libcudf.interop.from_arrow(dict_indices_table)
+            plc_indices = plc.interop.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
-            for name, codes in zip(
-                dict_indices_table.column_names, indices_columns
+            for name, plc_codes in zip(
+                dict_indices_table.column_names, plc_indices.columns()
             ):
+                codes = libcudf.column.Column.from_pylibcudf(plc_codes)
                 categories = cudf_dictionaries_columns[name]
                 codes = as_unsigned_codes(len(categories), codes)
                 cudf_category_frame[name] = CategoricalColumn(
@@ -971,9 +981,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
-            name: col
-            for name, col in zip(
-                data.column_names, libcudf.interop.from_arrow(data)
+            name: libcudf.column.Column.from_pylibcudf(plc_col)
+            for name, plc_col in zip(
+                data.column_names, plc.interop.from_arrow(data).columns()
             )
         }
 
@@ -1032,7 +1042,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return cls._from_data({name: result[name] for name in column_names})
 
     @_performance_tracking
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Table:
         """
         Convert to arrow Table
 

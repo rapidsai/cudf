@@ -17,6 +17,7 @@
 #include "cudf_jni_apis.hpp"
 
 #include <cudf/aggregation.hpp>
+#include <cudf/aggregation/host_udf.hpp>
 
 extern "C" {
 
@@ -80,25 +81,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv*
         // case 23: LAG
         // case 24: PTX
         // case 25: CUDA
-        case 26:  // M2
+        // case 26: HOST_UDF
+        case 27:  // M2
           return cudf::make_m2_aggregation();
-        case 27:  // MERGE_M2
+        case 28:  // MERGE_M2
           return cudf::make_merge_m2_aggregation();
-        case 28:  // RANK
+        case 29:  // RANK
           return cudf::make_rank_aggregation(
             cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE);
-        case 29:  // DENSE_RANK
+        case 30:  // DENSE_RANK
           return cudf::make_rank_aggregation(
             cudf::rank_method::DENSE, {}, cudf::null_policy::INCLUDE);
-        case 30:  // ANSI SQL PERCENT_RANK
+        case 31:  // ANSI SQL PERCENT_RANK
           return cudf::make_rank_aggregation(cudf::rank_method::MIN,
                                              {},
                                              cudf::null_policy::INCLUDE,
                                              {},
                                              cudf::rank_percentage::ONE_NORMALIZED);
-        case 33:  // HISTOGRAM
+        // case 32: TDIGEST
+        // case 33: MERGE_TDIGEST
+        case 34:  // HISTOGRAM
           return cudf::make_histogram_aggregation();
-        case 34:  // MERGE_HISTOGRAM
+        case 35:  // MERGE_HISTOGRAM
           return cudf::make_merge_histogram_aggregation();
 
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
@@ -160,10 +164,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(JNIEnv*
     std::unique_ptr<cudf::aggregation> ret;
     // These numbers come from Aggregation.java and must stay in sync
     switch (kind) {
-      case 31:  // TDIGEST
+      case 32:  // TDIGEST
         ret = cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta);
         break;
-      case 32:  // MERGE_TDIGEST
+      case 33:  // MERGE_TDIGEST
         ret = cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta);
         break;
       default: throw std::logic_error("Unsupported TDigest Aggregation Operation");
@@ -292,6 +296,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createMergeSetsAgg(JNIEn
     std::unique_ptr<cudf::aggregation> ret =
       cudf::make_merge_sets_aggregation(null_equality, nan_equality);
     return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHostUDFAgg(JNIEnv* env,
+                                                                         jclass class_object,
+                                                                         jlong udf_native_handle)
+{
+  JNI_NULL_CHECK(env, udf_native_handle, "udf_native_handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(udf_native_handle);
+    auto output        = cudf::make_host_udf_aggregation(udf_ptr->clone());
+    return reinterpret_cast<jlong>(output.release());
   }
   CATCH_STD(env, 0);
 }

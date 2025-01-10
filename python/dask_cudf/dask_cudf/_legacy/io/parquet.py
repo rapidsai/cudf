@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 import itertools
 import warnings
 from functools import partial
@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from pyarrow import dataset as pa_ds, parquet as pq
 
-from dask import dataframe as dd
+import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
 try:
@@ -448,65 +448,7 @@ def set_object_dtypes_from_pa_schema(df, schema):
                 df._data[col_name] = col.astype(typ)
 
 
-def read_parquet(path, columns=None, **kwargs):
-    """
-    Read parquet files into a :class:`.DataFrame`.
-
-    Calls :func:`dask.dataframe.read_parquet` with ``engine=CudfEngine``
-    to coordinate the execution of :func:`cudf.read_parquet`, and to
-    ultimately create a :class:`.DataFrame` collection.
-
-    See the :func:`dask.dataframe.read_parquet` documentation for
-    all available options.
-
-    Examples
-    --------
-    >>> from dask_cudf import read_parquet
-    >>> df = read_parquet("/path/to/dataset/")  # doctest: +SKIP
-
-    When dealing with one or more large parquet files having an
-    in-memory footprint >15% device memory, the ``split_row_groups``
-    argument should be used to map Parquet **row-groups** to DataFrame
-    partitions (instead of **files** to partitions). For example, the
-    following code will map each row-group to a distinct partition:
-
-    >>> df = read_parquet(..., split_row_groups=True)  # doctest: +SKIP
-
-    To map **multiple** row-groups to each partition, an integer can be
-    passed to ``split_row_groups`` to specify the **maximum** number of
-    row-groups allowed in each output partition:
-
-    >>> df = read_parquet(..., split_row_groups=10)  # doctest: +SKIP
-
-    See Also
-    --------
-    cudf.read_parquet
-    dask.dataframe.read_parquet
-    """
-    if isinstance(columns, str):
-        columns = [columns]
-
-    # Set "check_file_size" option to determine whether we
-    # should check the parquet-file size. This check is meant
-    # to "protect" users from `split_row_groups` default changes
-    check_file_size = kwargs.pop("check_file_size", 500_000_000)
-    if (
-        check_file_size
-        and ("split_row_groups" not in kwargs)
-        and ("chunksize" not in kwargs)
-    ):
-        # User is not specifying `split_row_groups` or `chunksize`,
-        # so we should warn them if/when a file is ~>0.5GB on disk.
-        # They can set `split_row_groups` explicitly to silence/skip
-        # this check
-        if "read" not in kwargs:
-            kwargs["read"] = {}
-        kwargs["read"]["check_file_size"] = check_file_size
-
-    return dd.read_parquet(path, columns=columns, engine=CudfEngine, **kwargs)
-
-
-to_parquet = partial(dd.to_parquet, engine=CudfEngine)
+to_parquet = dd.to_parquet
 
 if create_metadata_file_dd is None:
     create_metadata_file = create_metadata_file_dd

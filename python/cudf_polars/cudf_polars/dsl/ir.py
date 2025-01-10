@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the LogicalPlan of polars.
@@ -34,8 +34,10 @@ from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_GT_112
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, MutableMapping, Sequence
+    from collections.abc import Callable, Hashable, Iterable, MutableMapping, Sequence
     from typing import Literal
+
+    from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import Schema
 
@@ -604,10 +606,12 @@ class Scan(IR):
                 (name, typ, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
-                plc.io.SourceInfo(paths),
-                lines=True,
-                dtypes=json_schema,
-                prune_columns=True,
+                plc.io.json._setup_json_reader_options(
+                    plc.io.SourceInfo(paths),
+                    lines=True,
+                    dtypes=json_schema,
+                    prune_columns=True,
+                )
             )
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)
@@ -1021,7 +1025,27 @@ class ConditionalJoin(IR):
     __slots__ = ("ast_predicate", "options", "predicate")
     _non_child = ("schema", "predicate", "options")
     predicate: expr.Expr
-    options: tuple
+    """Expression predicate to join on"""
+    options: tuple[
+        tuple[
+            str,
+            pl_expr.Operator | Iterable[pl_expr.Operator],
+        ],
+        bool,
+        tuple[int, int] | None,
+        str,
+        bool,
+        Literal["none", "left", "right", "left_right", "right_left"],
+    ]
+    """
+    tuple of options:
+    - predicates: tuple of ir join type (eg. ie_join) and (In)Equality conditions
+    - join_nulls: do nulls compare equal?
+    - slice: optional slice to perform after joining.
+    - suffix: string suffix for right columns if names match
+    - coalesce: should key columns be coalesced (only makes sense for outer joins)
+    - maintain_order: which DataFrame row order to preserve, if any
+    """
 
     def __init__(
         self, schema: Schema, predicate: expr.Expr, options: tuple, left: IR, right: IR
@@ -1031,15 +1055,16 @@ class ConditionalJoin(IR):
         self.options = options
         self.children = (left, right)
         self.ast_predicate = to_ast(predicate)
-        _, join_nulls, zlice, suffix, coalesce = self.options
+        _, join_nulls, zlice, suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
         assert not join_nulls
         assert not coalesce
+        assert maintain_order == "none"
         if self.ast_predicate is None:
             raise NotImplementedError(
                 f"Conditional join with predicate {predicate}"
             )  # pragma: no cover; polars never delivers expressions we can't handle
-        self._non_child_args = (self.ast_predicate, zlice, suffix)
+        self._non_child_args = (self.ast_predicate, zlice, suffix, maintain_order)
 
     @classmethod
     def do_evaluate(
@@ -1047,6 +1072,7 @@ class ConditionalJoin(IR):
         predicate: plc.expressions.Expression,
         zlice: tuple[int, int] | None,
         suffix: str,
+        maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
         left: DataFrame,
         right: DataFrame,
     ) -> DataFrame:
@@ -1090,6 +1116,7 @@ class Join(IR):
         tuple[int, int] | None,
         str,
         bool,
+        Literal["none", "left", "right", "left_right", "right_left"],
     ]
     """
     tuple of options:
@@ -1098,6 +1125,7 @@ class Join(IR):
     - slice: optional slice to perform after joining.
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
+    - maintain_order: which DataFrame row order to preserve, if any
     """
 
     def __init__(
@@ -1115,6 +1143,9 @@ class Join(IR):
         self.options = options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
+        # TODO: Implement maintain_order
+        if options[5] != "none":
+            raise NotImplementedError("maintain_order not implemented yet")
         if any(
             isinstance(e.value, expr.Literal)
             for e in itertools.chain(self.left_on, self.right_on)
@@ -1224,12 +1255,13 @@ class Join(IR):
             tuple[int, int] | None,
             str,
             bool,
+            Literal["none", "left", "right", "left_right", "right_left"],
         ],
         left: DataFrame,
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        how, join_nulls, zlice, suffix, coalesce = options
+        how, join_nulls, zlice, suffix, coalesce, _ = options
         if how == "cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
