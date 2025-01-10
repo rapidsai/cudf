@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -377,11 +377,11 @@ int64_t find_next_split(int64_t cur_pos,
  *
  * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, std::optional<LogicalType>> conversion_info(
+[[nodiscard]] std::tuple<int32_t, cuda::std::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  std::optional<LogicalType> logical_type)
+  cuda::std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
     is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
@@ -392,7 +392,7 @@ int64_t find_next_split(int64_t cur_pos,
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
-      return {clock_rate, std::nullopt};
+      return {clock_rate, cuda::std::nullopt};
     }
   }
 
@@ -1079,7 +1079,7 @@ struct decomp_sum {
   {
     return {a.codec,
             a.num_pages + b.num_pages,
-            std::max(a.max_page_decompressed_size, b.max_page_decompressed_size),
+            cuda::std::max(a.max_page_decompressed_size, b.max_page_decompressed_size),
             a.total_decompressed_size + b.total_decompressed_size};
   }
 };

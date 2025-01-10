@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ namespace flatbuf = cudf::io::parquet::flatbuf;
 
 namespace {
 
-std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
+cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
     switch (schema.converted_type.value()) {
@@ -66,7 +66,7 @@ std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema
       default: return LogicalType{LogicalType::UNDEFINED};
     }
   }
-  return std::nullopt;
+  return cuda::std::nullopt;
 }
 
 }  // namespace

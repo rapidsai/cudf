@@ -33,6 +33,7 @@
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
@@ -451,7 +452,7 @@ __inline__ __device__ It skip_character(It const& it, char ch)
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quotes(
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces_quotes(
   char const* begin, char const* end, char quotechar = '\0')
 {
   auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
@@ -473,8 +474,8 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char const* begin,
-                                                                           char const* end)
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces(char const* begin,
+                                                                                 char const* end)
 {
   auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
 
@@ -497,9 +498,9 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char 
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const* begin,
-                                                                      char const* end,
-                                                                      char quotechar)
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_quotes(char const* begin,
+                                                                            char const* end,
+                                                                            char quotechar)
 {
   if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
        *thrust::prev(end) == quotechar)) {

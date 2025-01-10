@@ -61,7 +61,7 @@ constexpr int encode_block_size = 128;
 constexpr int rle_buffer_size   = 2 * encode_block_size;
 constexpr int num_encode_warps  = encode_block_size / cudf::detail::warp_size;
 
-constexpr int rolling_idx(int pos) { return rolling_index<rle_buffer_size>(pos); }
+__device__ constexpr int rolling_idx(int pos) { return rolling_index<rle_buffer_size>(pos); }
 
 // max V1 header size
 // also valid for dict page header (V1 or V2)

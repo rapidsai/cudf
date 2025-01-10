@@ -32,6 +32,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/optional>
 #include <cuda_runtime.h>
 
 #include <type_traits>
@@ -52,7 +53,7 @@ constexpr size_type MAX_DICT_SIZE = (1 << MAX_DICT_BITS) - 1;
 constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 
 template <int rolling_size>
-constexpr int rolling_index(int index)
+CUDF_HOST_DEVICE constexpr int rolling_index(int index)
 {
   // Cannot divide by 0. But `rolling_size` will be 0 for unused arrays, so this case will never
   // actual be executed.
@@ -78,7 +79,7 @@ constexpr uint8_t REP_LVL_HIST_CUTOFF = 0;
 constexpr uint8_t DEF_LVL_HIST_CUTOFF = 0;
 
 // see setupLocalPageInfo() in page_decode.cuh for supported page encodings
-constexpr bool is_supported_encoding(Encoding enc)
+CUDF_HOST_DEVICE constexpr bool is_supported_encoding(Encoding enc)
 {
   switch (enc) {
     case Encoding::PLAIN:
@@ -96,7 +97,8 @@ constexpr bool is_supported_encoding(Encoding enc)
 /**
  * @brief Atomically OR `error` into `error_code`.
  */
-constexpr void set_error(kernel_error::value_type error, kernel_error::pointer error_code)
+__device__ constexpr void set_error(kernel_error::value_type error,
+                                    kernel_error::pointer error_code)
 {
   if (error != 0) {
     cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_device> ref{*error_code};
@@ -166,7 +168,7 @@ template <class T1,
                                     (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
                                     (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
             nullptr>
-constexpr uint32_t BitAnd(T1 a, T2 b)
+CUDF_HOST_DEVICE constexpr uint32_t BitAnd(T1 a, T2 b)
 {
   return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
 }
@@ -177,7 +179,7 @@ template <class T1,
                                     (is_scoped_enum<T1>::value and std::is_same_v<uint32_t, T2>) or
                                     (is_scoped_enum<T2>::value and std::is_same_v<uint32_t, T1>)>* =
             nullptr>
-constexpr uint32_t BitOr(T1 a, T2 b)
+CUDF_HOST_DEVICE constexpr uint32_t BitOr(T1 a, T2 b)
 {
   return static_cast<uint32_t>(a) | static_cast<uint32_t>(b);
 }
@@ -389,7 +391,7 @@ inline auto make_page_key_iterator(device_span<PageInfo const> pages)
  * @brief Struct describing a particular chunk of column data
  */
 struct ColumnChunkDesc {
-  constexpr ColumnChunkDesc() noexcept {};
+  CUDF_HOST_DEVICE constexpr ColumnChunkDesc() noexcept {};
   explicit ColumnChunkDesc(size_t compressed_size_,
                            uint8_t* compressed_data_,
                            size_t num_values_,
@@ -403,7 +405,7 @@ struct ColumnChunkDesc {
                            uint8_t def_level_bits_,
                            uint8_t rep_level_bits_,
                            Compression codec_,
-                           std::optional<LogicalType> logical_type_,
+                           cuda::std::optional<LogicalType> logical_type_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
@@ -449,12 +451,12 @@ struct ColumnChunkDesc {
   int32_t num_data_pages{};                           // number of data pages
   int32_t num_dict_pages{};                           // number of dictionary pages
   PageInfo const* dict_page{};
-  string_index_pair* str_dict_index{};        // index for string dictionary
-  bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
-  void** column_data_base{};                  // base pointers of column data
-  void** column_string_base{};                // base pointers of column string data
-  Compression codec{};                        // compressed codec enum
-  std::optional<LogicalType> logical_type{};  // logical type
+  string_index_pair* str_dict_index{};  // index for string dictionary
+  bitmask_type** valid_map_base{};      // base pointers of valid bit map for this column
+  void** column_data_base{};            // base pointers of column data
+  void** column_string_base{};          // base pointers of column string data
+  Compression codec{};                  // compressed codec enum
+  cuda::std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
@@ -486,8 +488,8 @@ struct parquet_column_device_view : stats_column_desc {
   int32_t type_length;           //!< length of fixed_length_byte_array data
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  [[nodiscard]] constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
-  [[nodiscard]] constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
+  [[nodiscard]] __device__ constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
+  [[nodiscard]] __device__ constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
   uint8_t max_def_level;  //!< needed for SizeStatistics calculation
   uint8_t max_rep_level;
 
@@ -644,7 +646,7 @@ struct EncPage {
 /**
  * @brief Test if the given column chunk is in a string column
  */
-constexpr bool is_string_col(ColumnChunkDesc const& chunk)
+__device__ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 {
   // return true for non-hashed byte_array and fixed_len_byte_array that isn't representing
   // a decimal.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ namespace cudf::io::orc::detail {
 namespace nvcomp = cudf::io::detail::nvcomp;
 
 template <typename T>
-[[nodiscard]] constexpr int varint_size(T val)
+[[nodiscard]] CUDF_HOST_DEVICE constexpr int varint_size(T val)
 {
   auto len = 1u;
   while (val > 0x7f) {

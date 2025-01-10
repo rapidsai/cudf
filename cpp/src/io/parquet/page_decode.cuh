@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 namespace cudf::io::parquet::detail {
 
 struct page_state_s {
-  constexpr page_state_s() noexcept {}
+  CUDF_HOST_DEVICE constexpr page_state_s() noexcept {}
   uint8_t const* data_start{};
   uint8_t const* data_end{};
   uint8_t const* lvl_end{};
@@ -121,7 +121,8 @@ struct null_count_back_copier {
 /**
  * @brief Test if the given page is in a string column
  */
-constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc const> chunks)
+__device__ constexpr bool is_string_col(PageInfo const& page,
+                                        device_span<ColumnChunkDesc const> chunks)
 {
   if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return false; }
   auto const& col = chunks[page.chunk_idx];
