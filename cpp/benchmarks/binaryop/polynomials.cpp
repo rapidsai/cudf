@@ -57,21 +57,21 @@ static void BM_binaryop_polynomials(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
+    rmm::cuda_stream_view stream{launch.get_stream().get_stream()};
 
-    auto result =
-      cudf::make_column_from_scalar(constants[0], num_rows, launch.get_stream().get_stream());
+    auto result = cudf::make_column_from_scalar(constants[0], num_rows, stream);
 
     for (cudf::size_type i = 0; i < order; i++) {
       auto product = cudf::binary_operation(result->view(),
                                             column_view,
                                             cudf::binary_operator::MUL,
                                             cudf::data_type{cudf::type_to_id<key_type>()},
-                                            launch.get_stream().get_stream());
+                                            stream);
       auto sum     = cudf::binary_operation(product->view(),
                                         constants[i + 1],
                                         cudf::binary_operator::ADD,
                                         cudf::data_type{cudf::type_to_id<key_type>()},
-                                        launch.get_stream().get_stream());
+                                        stream);
       result       = std::move(sum);
     }
   });
