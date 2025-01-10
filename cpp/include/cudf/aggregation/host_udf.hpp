@@ -219,7 +219,14 @@ struct aggregate_result_functor;
 /**
  * @brief The interface for host-based UDF implementation for groupby aggregation context.
  *
- * TODO.
+ * An implementation of host-based UDF for groupby needs to be derived from this class.
+ * In addition to implementing the virtual functions declared in the base class `host_udf_base`,
+ * such derived class must also define the functions `get_empty_output` to return result when the
+ * input is empty, and `operator()` to perform its groupby operations.
+ *
+ * During execution, the derived class can access to internal data provided by libcudf groupby
+ * framework through a set of ``get*`` accessors, as well as calling other build-in groupby
+ * aggregations through the `compute_aggregation` function.
  *
  * @note The derived class can only perform sort-based groupby aggregations. Hash-based groupby
  * aggregations require more complex data structure and is not yet supported.
@@ -296,13 +303,13 @@ struct groupby_host_udf : host_udf_base {
   std::function<column_view(void)> callback_input_values;
 
   /**
-   * @brief Callback to access the input values grouped according to the input `keys` for which the
+   * @brief Callback to access the input values grouped according to the input keys for which the
    * values within each group maintain their original order.
    */
   std::function<column_view(void)> callback_grouped_values;
 
   /**
-   * @brief Callback to access the input values grouped according to the input `keys` and sorted
+   * @brief Callback to access the input values grouped according to the input keys and sorted
    * within each group.
    */
   std::function<column_view(void)> callback_sorted_grouped_values;
@@ -340,7 +347,7 @@ struct groupby_host_udf : host_udf_base {
   }
 
   /**
-   * @brief Access the input values grouped according to the input `keys` for which the values
+   * @brief Access the input values grouped according to the input keys for which the values
    * within each group maintain their original order.
    *
    * @return The grouped values column.
@@ -352,7 +359,7 @@ struct groupby_host_udf : host_udf_base {
   }
 
   /**
-   * @brief Access the input values grouped according to the input `keys` and sorted within each
+   * @brief Access the input values grouped according to the input keys and sorted within each
    * group.
    *
    * @return The sorted grouped values column.
