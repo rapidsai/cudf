@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,12 +206,16 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
+  nvtxRangePushA("normalize_character_bytes");
   auto result = [&] {
+    nvtxRangePushA("normalizer_tables");
     auto const cp_metadata = get_codepoint_metadata(stream);
     auto const aux_table   = get_aux_codepoint_data(stream);
-    auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
+    nvtxRangePop();
+    auto const normalizer = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
     return normalizer.normalize(strings, stream);
   }();
+  nvtxRangePop();
 
   CUDF_EXPECTS(
     result.first->size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
@@ -227,8 +231,10 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the codepoint_to_utf8_fn
+  nvtxRangePushA("normalizer_output");
   auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
+  nvtxRangePop();
 
   return cudf::make_strings_column(strings.size(),
                                    std::move(offsets_column),

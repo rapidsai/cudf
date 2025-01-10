@@ -419,8 +419,12 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
 uvector_pair wordpiece_tokenizer::tokenize(cudf::strings_column_view const& input,
                                            rmm::cuda_stream_view stream)
 {
+  nvtxRangePushA("normalize_character_bytes");
   auto cps_and_offsets = normalizer.normalize(input, stream);
+  nvtxRangePop();
+  nvtxRangePushA("wordpiece_tokenizer");
   tokenize(cps_and_offsets, stream);
+  nvtxRangePop();
   return uvector_pair(std::move(cps_and_offsets.first), std::move(cps_and_offsets.second));
 }
 
