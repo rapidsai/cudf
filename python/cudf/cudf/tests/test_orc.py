@@ -1975,8 +1975,14 @@ def test_row_group_alignment(datadir):
 @pytest.mark.parametrize(
     "inputfile",
     [
+        # These sample data have a single column my_timestamp of the TIMESTAMP type,
+        # 2660 rows, and 1536 rows per row group.
         "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.orc",
         "TestOrcFile.timestamp.desynced.snappy.RLEv2.orc",
+        # These two data are the same with the above, except that every 100 rows start
+        # with a null value.
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.hasNull.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.hasNull.orc",
     ],
 )
 def test_orc_reader_desynced_timestamp(datadir, inputfile):
