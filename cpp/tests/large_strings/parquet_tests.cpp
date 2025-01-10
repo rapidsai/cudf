@@ -160,6 +160,10 @@ TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
   auto const int_iter = thrust::make_counting_iterator(0);
   input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
 
+  auto const str_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](int32_t i) { return std::to_string(i) + std::to_string(i) + std::to_string(i); });
+  input_columns.emplace_back(strings_col{str_iter, str_iter + num_rows}.release());
+
   auto offsets = std::vector<cudf::size_type>{};
   offsets.reserve(num_rows * 2);
   cudf::size_type num_structs = 0;
@@ -173,9 +177,6 @@ TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
   auto const make_structs_col = [=] {
     auto child1 = int32s_col(int_iter, int_iter + num_structs);
     auto child2 = int32s_col(int_iter + num_structs, int_iter + num_structs * 2);
-
-    auto const str_iter = cudf::detail::make_counting_transform_iterator(
-      0, [&](int32_t i) { return std::to_string(i) + std::to_string(i) + std::to_string(i); });
     auto child3 = strings_col{str_iter, str_iter + num_structs};
 
     return structs_col{{child1, child2, child3}}.release();
@@ -188,25 +189,24 @@ TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
                             0,
                             rmm::device_buffer{}));
 
-  // Expected table
+  // Input table
   auto const table    = cudf::table{std::move(input_columns)};
   auto const expected = table.view();
 
-  auto str_col_view = expected.column(1).child(1).child(2);
-  EXPECT_TRUE(str_col_view.type().id() == cudf::type_id::STRING);
+  auto const child3_view = expected.column(2).child(1).child(2);  // list<struct<int,int,string>>
   auto const column_size =
-    cudf::strings_column_view(str_col_view).chars_size(cudf::get_default_stream());
-  auto const threshold = column_size / 10;
+    cudf::strings_column_view(child3_view).chars_size(cudf::get_default_stream());
   // set smaller threshold to reduce file size and execution time
+  auto const threshold =
+    column_size / 16;  // Empirically set to get a mix of 32 and 64 bit string col chunks.
   setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
   std::cout << "LIBCUDF_LARGE_STRINGS_THRESHOLD = " << threshold << std::endl;
 
   // Host buffer to write Parquet
-  auto filepath = g_temp_env->get_temp_filepath("chunked_nested_large_strings.parquet");
-
+  auto buffer = std::vector<char>{};
   // Writer options
   cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
       .max_page_size_bytes(512 * 1024)
       .max_page_size_rows(20000)
       .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
@@ -217,10 +217,12 @@ TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
 
   // Reader options
   cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath));
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
 
+  auto constexpr chunk_read_limit = size_t{1} * 1024 * 1024;
+  auto constexpr pass_read_limit  = 0;
   // Chunked parquet reader
-  auto reader = cudf::io::chunked_parquet_reader(size_t{1} * 1024 * 1024, 0, in_opts);
+  auto reader = cudf::io::chunked_parquet_reader(chunk_read_limit, pass_read_limit, in_opts);
 
   // Read chunked
   auto tables = std::vector<std::unique_ptr<cudf::table>>{};

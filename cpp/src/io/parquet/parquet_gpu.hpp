@@ -828,6 +828,8 @@ void WriteFinalOffsets(host_span<size_type const> offsets,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] initial_str_offsets A vector to store the initial str_offset for large nested
+ * string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -836,7 +838,7 @@ void DecodeStringPageData(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
-                          size_t* str_offsets,
+                          size_t* initial_str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
@@ -881,7 +883,7 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
-                          size_t* str_offsets,
+                          size_t* initial_str_offsets,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
 
@@ -896,6 +898,8 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] initial_str_offsets A vector to store the initial str_offset for large nested
+ * string cols
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
@@ -904,7 +908,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,
-                                size_t* str_offsets,
+                                size_t* initial_str_offsets,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream);
 

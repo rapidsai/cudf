@@ -100,7 +100,6 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
     // Compute column string sizes (using page string offsets) for this subpass
     col_string_sizes = calculate_page_string_offsets();
-    // std::cout << "str_buffer_size = " << col_string_sizes[3] << std::endl;
 
     // Check for overflow in cumulative column string sizes of this pass so that the page string
     // offsets of overflowing (large) string columns are treated as 64-bit.
@@ -212,10 +211,21 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
+  // A hostdevice vector to compute and store initial str offsets from decoders to build nested
+  // large string columns. For non-nested large strign columns, the initial string offset is always
+  // zero.
+  auto initial_str_offsets =
+    cudf::detail::hostdevice_vector<size_t>{_input_columns.size(), _stream};
+
   pass.chunks.host_to_device_async(_stream);
   chunk_nested_valids.host_to_device_async(_stream);
   chunk_nested_data.host_to_device_async(_stream);
-  if (has_strings) { chunk_nested_str_data.host_to_device_async(_stream); }
+  if (has_strings) {
+    std::fill(
+      initial_str_offsets.begin(), initial_str_offsets.end(), std::numeric_limits<size_t>::max());
+    chunk_nested_str_data.host_to_device_async(_stream);
+    initial_str_offsets.host_to_device_async(_stream);
+  }
 
   // create this before we fork streams
   kernel_error error_code(_stream);
@@ -224,10 +234,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   int const nkernels = std::bitset<32>(kernel_mask).count();
   auto streams       = cudf::detail::fork_streams(_stream, nkernels);
 
-  int s_idx        = 0;
-  auto str_offsets = cudf::detail::hostdevice_vector<size_t>{_input_columns.size(), _stream};
-  std::fill(str_offsets.begin(), str_offsets.end(), std::numeric_limits<size_t>::max());
-  str_offsets.host_to_device_sync(_stream);
+  int s_idx = 0;
 
   auto decode_data = [&](decode_kernel_mask decoder_mask) {
     DecodePageData(subpass.pages,
@@ -247,7 +254,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
-                         str_offsets.d_begin(),
+                         initial_str_offsets.d_begin(),
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -259,7 +266,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
-                         str_offsets.d_begin(),
+                         initial_str_offsets.d_begin(),
                          error_code.data(),
                          streams[s_idx++]);
   }
@@ -271,7 +278,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                num_rows,
                                skip_rows,
                                level_type_size,
-                               str_offsets.d_begin(),
+                               initial_str_offsets.d_begin(),
                                error_code.data(),
                                streams[s_idx++]);
   }
@@ -375,10 +382,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
-  str_offsets.device_to_host_sync(_stream);
-  std::for_each(str_offsets.begin(), str_offsets.end(), [](auto& offset) {
-    if (offset == std::numeric_limits<size_t>::max()) { offset = 0; }
-  });
+  initial_str_offsets.device_to_host_sync(_stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
@@ -420,7 +424,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         }
         // Nested large strings column
         else if (input_col.nesting_depth() > 0) {
-          out_buf.set_str_offset(str_offsets[idx]);
+          CUDF_EXPECTS(static_cast<int64_t>(initial_str_offsets[idx]) >= int64_t{0},
+                       "Initial string offset must be >= 0");
+          out_buf.set_initial_string_offset(initial_str_offsets[idx]);
         }
       }
     }
