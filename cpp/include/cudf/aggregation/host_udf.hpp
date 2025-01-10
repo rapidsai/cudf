@@ -27,8 +27,6 @@
 
 #include <functional>
 #include <optional>
-#include <unordered_map>
-#include <variant>
 
 /**
  * @file host_udf.hpp
@@ -213,6 +211,11 @@ struct segmented_reduce_host_udf : host_udf_base {
     rmm::device_async_resource_ref mr) const = 0;
 };
 
+// Forward declaration.
+namespace groupby ::detail {
+struct aggregate_result_functor;
+}
+
 /**
  * @brief The interface for host-based UDF implementation for groupby aggregation context.
  *
@@ -221,7 +224,11 @@ struct segmented_reduce_host_udf : host_udf_base {
  * such derived class must also define the functions `get_empty_output` to return result when the
  * input is empty, and `operator()` to perform its groupby operations.
  *
- * @note Only sort-based groupby aggregations are supported at this time. Hash-based groupby
+ * During execution, the derived class can access to internal data provided by libcudf groupby
+ * framework through a set of `get_*()` accessors, as well as calling other build-in groupby
+ * aggregations through the `compute_aggregation()` function.
+ *
+ * @note The derived class can only perform sort-based groupby aggregations. Hash-based groupby
  * aggregations require more complex data structure and is not yet supported.
  *
  * Example:
@@ -264,77 +271,6 @@ struct segmented_reduce_host_udf : host_udf_base {
  */
 struct groupby_host_udf : host_udf_base {
   /**
-   * @brief Define the data that can be provided by libcudf for the aggregation to perform its
-   * computation.
-   */
-  enum class groupby_data : int32_t {
-    INPUT_VALUES,    ///< The input values column.
-    GROUPED_VALUES,  ///< The input values grouped according to the input `keys` for which the
-                     ///< values within each group maintain their original order.
-    SORTED_GROUPED_VALUES,  ///< The input values grouped according to the input `keys` and
-                            ///< sorted within each group.
-    NUM_GROUPS,             ///< The number of groups (i.e., number of distinct keys).
-    GROUP_OFFSETS,          ///< The offsets separating groups.
-    GROUP_LABELS            ///< Group labels (which is also the same as group indices).
-  };
-
-  /**
-   * @brief Hold all possible types of the data corresponding all values of `groupby_data`.
-   */
-  using groupby_data_t =
-    std::variant<column_view, /* INPUT_VALUES, GROUPED_VALUES, SORTED_GROUPED_VALUES */
-                 size_type,   /* NUM_GROUPS */
-                 device_span<size_type const> /* GROUP_OFFSETS, GROUP_LABELS */
-                 >;
-
-  /**
-   * @brief Store callbacks to access groupby data from libcudf.
-   *
-   * Only the data specified in `groupby_data` enum can be accessed through these callbacks.
-   */
-  std::unordered_map<groupby_data, std::function<groupby_data_t(void)>> data_accessor_callbacks;
-
-  /**
-   * @brief Define the conditional output type for the template function `get_data<>`
-   * below, allowing to access different data types similar to `std::get<>`.
-   */
-  template <groupby_data attr>
-  using data_t = std::conditional_t<
-    attr == groupby_data::INPUT_VALUES || attr == groupby_data::GROUPED_VALUES ||
-      attr == groupby_data::SORTED_GROUPED_VALUES,
-    column_view,
-    std::conditional_t<attr == groupby_data::NUM_GROUPS, size_type, device_span<size_type const>>>;
-
-  /**
-   * @brief Access groupby data from libcudf based on the given by the template parameter.
-   *
-   * @return The data corresponding to the given template parameter.
-   */
-  template <groupby_data attr>
-  [[nodiscard]] data_t<attr> get_data() const;
-
-  /**
-   * @brief Callback to access the result from other groupby aggregations.
-   */
-  std::function<column_view(std::unique_ptr<aggregation>)> aggregation_accessor_callback;
-
-  /**
-   * @brief Compute a built-in groupby aggregation and access its result.
-   *
-   * This allows the derived class to call any other built-in groupby aggregations on the same input
-   * values column and access the output for its operations.
-   *
-   * @param other_agg An arbitrary built-in groupby aggregation
-   * @return A `column_view` object corresponding to the output result of the given aggregation
-   */
-  [[nodiscard]] column_view compute_aggregation(std::unique_ptr<aggregation> other_agg) const
-  {
-    CUDF_EXPECTS(aggregation_accessor_callback,
-                 "Uninitialized callback for computing aggregation.");
-    return aggregation_accessor_callback(std::move(other_agg));
-  }
-
-  /**
    * @brief Get the output when the input values column is empty.
    *
    * This is called in libcudf when the input values column is empty. In such situations libcudf
@@ -356,29 +292,132 @@ struct groupby_host_udf : host_udf_base {
    */
   [[nodiscard]] virtual std::unique_ptr<column> operator()(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const = 0;
-};
 
-/**
- * @brief Map each `groupby_data` enum to its corresponding data type.
- */
-#define MAP_GROUPBY_DATA_TYPE(attr, output_type)                                                  \
-  template <>                                                                                     \
-  [[nodiscard]] inline groupby_host_udf::data_t<groupby_host_udf::groupby_data::attr>             \
-  groupby_host_udf::get_data<groupby_host_udf::groupby_data::attr>() const                        \
-  {                                                                                               \
-    CUDF_EXPECTS(data_accessor_callbacks.count(groupby_data::attr) > 0,                           \
-                 "Uninitialized data accessor callbacks.");                                       \
-    auto const& data_accessor = data_accessor_callbacks.at(groupby_data::attr);                   \
-    CUDF_EXPECTS(data_accessor, "Uninitialized accessor callback for data attribute " #attr "."); \
-    return std::get<output_type>(data_accessor());                                                \
+ private:
+  // Allow the struct `aggregate_result_functor` to set its private callback variables.
+  friend struct groupby::detail::aggregate_result_functor;
+
+  /**
+   * @brief Callback to access the input values column.
+   */
+  std::function<column_view(void)> callback_input_values;
+
+  /**
+   * @brief Callback to access the input values grouped according to the input `keys` for which the
+   * values within each group maintain their original order.
+   */
+  std::function<column_view(void)> callback_grouped_values;
+
+  /**
+   * @brief Callback to access the input values grouped according to the input `keys` and sorted
+   * within each group.
+   */
+  std::function<column_view(void)> callback_sorted_grouped_values;
+
+  /**
+   * @brief Callback to access the number of groups (i.e., number of distinct keys).
+   */
+  std::function<size_type(void)> callback_num_groups;
+
+  /**
+   * @brief Callback to access the offsets separating groups.
+   */
+  std::function<device_span<size_type const>(void)> callback_group_offsets;
+
+  /**
+   * @brief Callback to access the group labels (which is also the same as group indices).
+   */
+  std::function<device_span<size_type const>(void)> callback_group_labels;
+
+  /**
+   * @brief Callback to access the result from other groupby aggregations.
+   */
+  std::function<column_view(std::unique_ptr<aggregation>)> callback_compute_aggregation;
+
+ protected:
+  /**
+   * @brief Access the input values column.
+   *
+   * @return The input values column.
+   */
+  [[nodiscard]] column_view get_input_values() const
+  {
+    CUDF_EXPECTS(callback_input_values, "Uninitialized callback_input_values.");
+    return callback_input_values();
   }
 
-MAP_GROUPBY_DATA_TYPE(INPUT_VALUES, column_view)
-MAP_GROUPBY_DATA_TYPE(GROUPED_VALUES, column_view)
-MAP_GROUPBY_DATA_TYPE(SORTED_GROUPED_VALUES, column_view)
-MAP_GROUPBY_DATA_TYPE(NUM_GROUPS, cudf::size_type)
-MAP_GROUPBY_DATA_TYPE(GROUP_OFFSETS, device_span<cudf::size_type const>)
-MAP_GROUPBY_DATA_TYPE(GROUP_LABELS, device_span<cudf::size_type const>)
+  /**
+   * @brief Access the input values grouped according to the input `keys` for which the values
+   * within each group maintain their original order.
+   *
+   * @return The grouped values column.
+   */
+  [[nodiscard]] column_view get_grouped_values() const
+  {
+    CUDF_EXPECTS(callback_grouped_values, "Uninitialized callback_grouped_values.");
+    return callback_grouped_values();
+  }
+
+  /**
+   * @brief Access the input values grouped according to the input `keys` and sorted within each
+   * group.
+   *
+   * @return The sorted grouped values column.
+   */
+  [[nodiscard]] column_view get_sorted_grouped_values() const
+  {
+    CUDF_EXPECTS(callback_sorted_grouped_values, "Uninitialized callback_sorted_grouped_values.");
+    return callback_sorted_grouped_values();
+  }
+
+  /**
+   * @brief Access the number of groups (i.e., number of distinct keys).
+   *
+   * @return The number of groups.
+   */
+  [[nodiscard]] size_type get_num_groups() const
+  {
+    CUDF_EXPECTS(callback_num_groups, "Uninitialized callback_num_groups.");
+    return callback_num_groups();
+  }
+
+  /**
+   * @brief Access the offsets separating groups.
+   *
+   * @return The array of group offsets.
+   */
+  [[nodiscard]] device_span<size_type const> get_group_offsets() const
+  {
+    CUDF_EXPECTS(callback_group_offsets, "Uninitialized callback_group_offsets.");
+    return callback_group_offsets();
+  }
+
+  /**
+   * @brief Access the group labels (which is also the same as group indices).
+   *
+   * @return The array of group labels.
+   */
+  [[nodiscard]] device_span<size_type const> get_group_labels() const
+  {
+    CUDF_EXPECTS(callback_group_labels, "Uninitialized callback_group_labels.");
+    return callback_group_labels();
+  }
+
+  /**
+   * @brief Compute a built-in groupby aggregation and access its result.
+   *
+   * This allows the derived class to call any other built-in groupby aggregations on the same input
+   * values column and access the output for its operations.
+   *
+   * @param other_agg An arbitrary built-in groupby aggregation
+   * @return A `column_view` object corresponding to the output result of the given aggregation
+   */
+  [[nodiscard]] column_view compute_aggregation(std::unique_ptr<aggregation> other_agg) const
+  {
+    CUDF_EXPECTS(callback_compute_aggregation, "Uninitialized callback for computing aggregation.");
+    return callback_compute_aggregation(std::move(other_agg));
+  }
+};
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

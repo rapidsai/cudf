@@ -86,33 +86,33 @@ struct host_udf_groupby_test : cudf::groupby_host_udf {
     // `groupby_data` enum having the correct type.
 
     {
-      auto const attr_value = get_data<groupby_data::INPUT_VALUES>();
+      auto const attr_value = get_input_values();
       EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
     }
 
     {
-      auto const attr_value = get_data<groupby_data::GROUPED_VALUES>();
+      auto const attr_value = get_grouped_values();
       EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
     }
 
     {
-      auto const attr_value = get_data<groupby_data::SORTED_GROUPED_VALUES>();
+      auto const attr_value = get_sorted_grouped_values();
       EXPECT_TRUE((std::is_same_v<cudf::column_view, std::decay_t<decltype(attr_value)>>));
     }
 
     {
-      auto const attr_value = get_data<groupby_data::NUM_GROUPS>();
+      auto const attr_value = get_num_groups();
       EXPECT_TRUE((std::is_same_v<cudf::size_type, std::decay_t<decltype(attr_value)>>));
     }
 
     {
-      auto const attr_value = get_data<groupby_data::GROUP_OFFSETS>();
+      auto const attr_value = get_group_offsets();
       EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
                                   std::decay_t<decltype(attr_value)>>));
     }
 
     {
-      auto const attr_value = get_data<groupby_data::GROUP_LABELS>();
+      auto const attr_value = get_group_labels();
       EXPECT_TRUE((std::is_same_v<cudf::device_span<cudf::size_type const>,
                                   std::decay_t<decltype(attr_value)>>));
     }

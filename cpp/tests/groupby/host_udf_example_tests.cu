@@ -55,7 +55,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
   [[nodiscard]] std::unique_ptr<cudf::column> operator()(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const override
   {
-    auto const values = get_data<groupby_data::GROUPED_VALUES>();
+    auto const values = get_grouped_values();
     return cudf::type_dispatcher(values.type(), groupby_fn{*this}, stream, mr);
   }
 
@@ -88,13 +88,13 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
     std::unique_ptr<cudf::column> operator()(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr) const
     {
-      auto const values = parent.get_data<groupby_data::GROUPED_VALUES>();
+      auto const values = parent.get_grouped_values();
       if (values.size() == 0) { return parent.get_empty_output(stream, mr); }
 
-      auto const offsets = parent.get_data<groupby_data::GROUP_OFFSETS>();
+      auto const offsets = parent.get_group_offsets();
       CUDF_EXPECTS(offsets.size() > 0, "Invalid offsets.");
       auto const num_groups    = static_cast<int>(offsets.size()) - 1;
-      auto const group_indices = parent.get_data<groupby_data::GROUP_LABELS>();
+      auto const group_indices = parent.get_group_labels();
       auto const group_max =
         parent.compute_aggregation(cudf::make_max_aggregation<cudf::groupby_aggregation>());
       auto const group_sum =

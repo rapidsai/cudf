@@ -799,30 +799,31 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
   auto const udf_ptr       = dynamic_cast<groupby_host_udf*>(udf_base_ptr.get());
   CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
 
-  auto& data_callbacks = udf_ptr->data_accessor_callbacks;
-  if (data_callbacks.empty()) {
-    data_callbacks.emplace(groupby_host_udf::groupby_data::INPUT_VALUES,
-                           [&]() -> groupby_host_udf::groupby_data_t { return values; });
-    data_callbacks.emplace(
-      groupby_host_udf::groupby_data::GROUPED_VALUES,
-      [&]() -> groupby_host_udf::groupby_data_t { return get_grouped_values(); });
-    data_callbacks.emplace(
-      groupby_host_udf::groupby_data::SORTED_GROUPED_VALUES,
-      [&]() -> groupby_host_udf::groupby_data_t { return get_sorted_values(); });
-    data_callbacks.emplace(
-      groupby_host_udf::groupby_data::NUM_GROUPS,
-      [&]() -> groupby_host_udf::groupby_data_t { return helper.num_groups(stream); });
-    data_callbacks.emplace(
-      groupby_host_udf::groupby_data::GROUP_OFFSETS,
-      [&]() -> groupby_host_udf::groupby_data_t { return helper.group_offsets(stream); });
-    data_callbacks.emplace(
-      groupby_host_udf::groupby_data::GROUP_LABELS,
-      [&]() -> groupby_host_udf::groupby_data_t { return helper.group_labels(stream); });
+  if (!udf_ptr->callback_input_values) {
+    udf_ptr->callback_input_values = [&]() -> column_view { return values; };
   }
-
-  auto& agg_callback = udf_ptr->aggregation_accessor_callback;
-  if (!agg_callback) {
-    agg_callback = [&](std::unique_ptr<aggregation> other_agg) -> column_view {
+  if (!udf_ptr->callback_grouped_values) {
+    udf_ptr->callback_grouped_values = [&]() -> column_view { return get_grouped_values(); };
+  }
+  if (!udf_ptr->callback_sorted_grouped_values) {
+    udf_ptr->callback_sorted_grouped_values = [&]() -> column_view { return get_sorted_values(); };
+  }
+  if (!udf_ptr->callback_num_groups) {
+    udf_ptr->callback_num_groups = [&]() -> size_type { return helper.num_groups(stream); };
+  }
+  if (!udf_ptr->callback_group_offsets) {
+    udf_ptr->callback_group_offsets = [&]() -> device_span<size_type const> {
+      return helper.group_offsets(stream);
+    };
+  }
+  if (!udf_ptr->callback_group_labels) {
+    udf_ptr->callback_group_labels = [&]() -> device_span<size_type const> {
+      return helper.group_labels(stream);
+    };
+  }
+  if (!udf_ptr->callback_compute_aggregation) {
+    udf_ptr->callback_compute_aggregation =
+      [&](std::unique_ptr<aggregation> other_agg) -> column_view {
       cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
       return cache.get_result(values, *other_agg);
     };
