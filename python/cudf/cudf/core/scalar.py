@@ -203,37 +203,6 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
     return plc_scalar
 
 
-def gather_metadata(
-    dtypes: dict[str, Any],
-) -> list[plc.interop.ColumnMetadata]:
-    """Convert a dict of dtypes to a list of ColumnMetadata objects.
-
-    The metadata is constructed recursively so that nested types are
-    represented as nested ColumnMetadata objects.
-
-    Parameters
-    ----------
-    dtypes : dict
-        A dict mapping column names to dtypes.
-
-    Returns
-    -------
-    List[ColumnMetadata]
-        A list of ColumnMetadata objects.
-    """
-    out = []
-    for name, dtype in dtypes.items():
-        v = plc.interop.ColumnMetadata(name)
-        if isinstance(dtype, cudf.StructDtype):
-            v.children_meta = gather_metadata(dtype.fields)
-        elif isinstance(dtype, cudf.ListDtype):
-            # Offsets column is unnamed and has no children
-            v.children_meta.append(plc.interop.ColumnMetadata(""))
-            v.children_meta.extend(gather_metadata({"": dtype.element_type}))
-        out.append(v)
-    return out
-
-
 # Note that the metaclass below can easily be generalized for use with
 # other classes, if needed in the future. Simply replace the arguments
 # of the `__call__` method with `*args` and `**kwargs`. This will
@@ -393,8 +362,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
         return not cudf.utils.utils._is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self) -> None:
-        # metadata = [gather_metadata]({"": self.dtype})[0]
-        # ps = plc.interop.to_arrow(self._device_value, metadata)
         ps = plc.interop.to_arrow(self._device_value)
         is_datetime = pa.types.is_timestamp(ps.type)
         is_timedelta = pa.types.is_duration(ps.type)
