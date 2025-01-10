@@ -51,7 +51,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   auto& subpass = *pass.subpass;
 
   auto& page_nesting        = subpass.page_nesting_info;
-  auto& page_nesting_decode = subpass.page_nesting_decode_info;W
+  auto& page_nesting_decode = subpass.page_nesting_decode_info;
 
   auto const level_type_size = pass.level_type_size;
 
@@ -379,10 +379,12 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   // synchronize the streams
   cudf::detail::join_streams(streams, _stream);
 
+  // Sync here to use the offsets below
+  initial_str_offsets.device_to_host_sync(_stream);
+
   subpass.pages.device_to_host_async(_stream);
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
-  initial_str_offsets.device_to_host_sync(_stream);
 
   if (auto const error = error_code.value_sync(_stream); error != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
