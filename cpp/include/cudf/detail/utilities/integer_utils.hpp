@@ -23,6 +23,8 @@
  */
 
 #include <cudf/fixed_point/temporary.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <cmath>
 #include <cstdlib>
@@ -49,6 +51,13 @@ CUDF_HOST_DEVICE constexpr S round_up_safe(S number_to_round, S modulus)
   auto remainder = number_to_round % modulus;
   if (remainder == 0) { return number_to_round; }
   auto rounded_up = number_to_round - remainder + modulus;
+  if (rounded_up < number_to_round) {
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Attempt to round up beyond the type's maximum value", cudf::data_type_error);
+#else
+    CUDF_UNREACHABLE("Attempt to round up beyond the type's maximum value");
+#endif
+  }
   return rounded_up;
 }
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ import pyarrow as pa
 from typing_extensions import Self
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.core._internals import unary
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
     find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -621,7 +621,7 @@ class CategoricalColumn(column.ColumnBase):
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
             value
-        ) and cudf._lib.scalar._is_null_host_scalar(value):
+        ) and cudf.utils.utils._is_null_host_scalar(value):
             to_add_categories = 0
         else:
             if cudf.api.types.is_scalar(value):
@@ -1140,7 +1140,7 @@ class CategoricalColumn(column.ColumnBase):
         if self.null_count == len(self):
             # self.categories is empty; just return codes
             return self.codes
-        gather_map = self.codes.astype(libcudf.types.size_type_dtype).fillna(0)
+        gather_map = self.codes.astype(SIZE_TYPE_DTYPE).fillna(0)
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
         return out
@@ -1192,10 +1192,10 @@ class CategoricalColumn(column.ColumnBase):
         codes = [o.codes for o in objs]
 
         newsize = sum(map(len, codes))
-        if newsize > np.iinfo(libcudf.types.size_type_dtype).max:
+        if newsize > np.iinfo(SIZE_TYPE_DTYPE).max:
             raise MemoryError(
                 f"Result of concat cannot have "
-                f"size > {libcudf.types.size_type_dtype}_MAX"
+                f"size > {SIZE_TYPE_DTYPE}_MAX"
             )
         elif newsize == 0:
             codes_col = column.column_empty(0, head.codes.dtype)

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba.np import numpy_support
 from typing_extensions import Self
 
@@ -151,7 +152,7 @@ class NumericalColumn(NumericalBaseColumn):
             cudf.Scalar(
                 value,
                 dtype=self.dtype
-                if cudf._lib.scalar._is_null_host_scalar(value)
+                if cudf.utils.utils._is_null_host_scalar(value)
                 else None,
             )
             if is_scalar(value)
@@ -382,12 +383,8 @@ class NumericalColumn(NumericalBaseColumn):
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
-                true_string=cudf.Scalar(
-                    "True", dtype="str"
-                ).device_value.c_value,
-                false_string=cudf.Scalar(
-                    "False", dtype="str"
-                ).device_value.c_value,
+                true_string=plc.interop.from_arrow(pa.scalar("True")),
+                false_string=plc.interop.from_arrow(pa.scalar("False")),
             )
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
@@ -789,7 +786,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if cudf._lib.scalar._is_null_host_scalar(col_to_normalize[0]):
+            if cudf.utils.utils._is_null_host_scalar(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column
