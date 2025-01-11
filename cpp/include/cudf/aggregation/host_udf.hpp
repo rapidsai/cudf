@@ -221,12 +221,12 @@ struct aggregate_result_functor;
  *
  * An implementation of host-based UDF for groupby needs to be derived from this class.
  * In addition to implementing the virtual functions declared in the base class `host_udf_base`,
- * such derived class must also define the functions `get_empty_output` to return result when the
- * input is empty, and `operator()` to perform its groupby operations.
+ * such a derived class must also define the functions `get_empty_output()` to return result when
+ * the input is empty, and ``operator()`` to perform its groupby operations.
  *
- * During execution, the derived class can access to internal data provided by libcudf groupby
- * framework through a set of ``get*`` accessors, as well as calling other build-in groupby
- * aggregations through the `compute_aggregation` function.
+ * During execution, the derived class can access internal data provided by the libcudf groupby
+ * framework through a set of ``get*`` accessors, as well as calling other built-in groupby
+ * aggregations through the ``compute_aggregation`` function.
  *
  * @note The derived class can only perform sort-based groupby aggregations. Hash-based groupby
  * aggregations require more complex data structure and is not yet supported.
@@ -248,11 +248,6 @@ struct aggregate_result_functor;
  *     rmm::device_async_resource_ref mr) const override
  *   {
  *     // Perform UDF computation using the input data and return the result.
- *     auto const values = get_grouped_values();
- *     auto const offsets = get_group_offsets();
- *     auto const group_max = compute_aggregation(
- *         cudf::make_max_aggregation<cudf::groupby_aggregation>());
- *     ...
  *   }
  *
  *   [[nodiscard]] bool is_equal(host_udf_base const& other) const override
