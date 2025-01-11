@@ -38,7 +38,9 @@ namespace {
 
 auto& h_comp_pool()
 {
-  static BS::thread_pool pool(std::thread::hardware_concurrency());
+  static std::size_t pool_size =
+    getenv_or("LIBCUDF_HOST_COMPRESSION_NUM_THREADS", std::thread::hardware_concurrency());
+  static BS::thread_pool pool(pool_size);
   return pool;
 }
 
@@ -155,7 +157,11 @@ void host_compress(compression_type compression,
   stream.synchronize();
 
   std::vector<std::future<size_t>> tasks;
-  auto const streams = cudf::detail::fork_streams(stream, h_comp_pool().get_thread_count());
+  auto const num_streams =
+    std::min<std::size_t>({num_chunks,
+                           cudf::detail::global_cuda_stream_pool().get_stream_pool_size(),
+                           h_comp_pool().get_thread_count()});
+  auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const cur_stream = streams[i % streams.size()];
     auto task = [d_in = h_inputs[i], d_out = h_outputs[i], cur_stream, compression]() -> size_t {
