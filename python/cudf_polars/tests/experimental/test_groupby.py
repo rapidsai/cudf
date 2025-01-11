@@ -37,6 +37,21 @@ def test_groupby(df, engine, op, keys):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.parametrize("op", ["sum", "mean", "len"])
+@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
+def test_groupby_single_partitions(df, op, keys):
+    q = getattr(df.group_by(*keys), op)()
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            raise_on_fail=True,
+            executor="dask-experimental",
+            executor_options={"max_rows_per_partition": 1e9},
+        ),
+        check_row_order=False,
+    )
+
+
 @pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
