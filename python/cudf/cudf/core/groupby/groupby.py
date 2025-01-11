@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING, Any, Literal
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 import pylibcudf as plc
 
 import cudf
 import cudf.core._internals
 from cudf import _lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_list_like,
@@ -45,6 +45,7 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, cudf_dtype_to_pa_type
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
@@ -586,7 +587,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         offsets, group_keys, (indices,) = self._groups(
             [
                 cudf.core.column.as_column(
-                    range(len(self.obj)), dtype=size_type_dtype
+                    range(len(self.obj)), dtype=SIZE_TYPE_DTYPE
                 )
             ]
         )
@@ -852,7 +853,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
             [periods] * len(values),
             [
-                cudf.Scalar(val, dtype=col.dtype).device_value.c_value
+                plc.interop.from_arrow(
+                    pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
+                )
                 for val, col in zip(fill_values, values)
             ],
         )
@@ -1181,7 +1184,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # aggregation scheme in libcudf. This is probably "fast
         # enough" for most reasonable input sizes.
         _, offsets, _, group_values = self._grouped()
-        group_offsets = np.asarray(offsets, dtype=size_type_dtype)
+        group_offsets = np.asarray(offsets, dtype=SIZE_TYPE_DTYPE)
         size_per_group = np.diff(group_offsets)
         # "Out of bounds" n for the group size either means no entries
         # (negative) or all the entries (positive)
@@ -1195,7 +1198,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             group_offsets = group_offsets[:-1]
         else:
             group_offsets = group_offsets[1:] - size_per_group
-        to_take = np.arange(size_per_group.sum(), dtype=size_type_dtype)
+        to_take = np.arange(size_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
         fixup = np.empty_like(size_per_group)
         fixup[0] = 0
         np.cumsum(size_per_group[:-1], out=fixup[1:])
@@ -1496,11 +1499,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         # into a numpy array directly, rather than a list.
         # TODO: this uses the sort-based groupby, could one use hash-based?
         _, offsets, _, group_values = self._grouped()
-        group_offsets = np.asarray(offsets, dtype=size_type_dtype)
+        group_offsets = np.asarray(offsets, dtype=SIZE_TYPE_DTYPE)
         size_per_group = np.diff(group_offsets)
         if n is not None:
             samples_per_group = np.broadcast_to(
-                size_type_dtype.type(n), size_per_group.shape
+                SIZE_TYPE_DTYPE.type(n), size_per_group.shape
             )
             if not replace and (minsize := size_per_group.min()) < n:
                 raise ValueError(
@@ -1513,7 +1516,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # which is round-to-nearest, ties to sgn(x) * inf).
             samples_per_group = np.round(
                 size_per_group * frac, decimals=0
-            ).astype(size_type_dtype)
+            ).astype(SIZE_TYPE_DTYPE)
         if replace:
             # We would prefer to use cupy here, but their rng.integers
             # interface doesn't take array-based low and high
@@ -1521,7 +1524,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             low = 0
             high = np.repeat(size_per_group, samples_per_group)
             rng = np.random.default_rng(seed=random_state)
-            indices = rng.integers(low, high, dtype=size_type_dtype)
+            indices = rng.integers(low, high, dtype=SIZE_TYPE_DTYPE)
             indices += np.repeat(group_offsets[:-1], samples_per_group)
         else:
             # Approach: do a segmented argsort of the index array and take
@@ -1529,7 +1532,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # We will shuffle the group indices and then pick them out
             # from the grouped dataframe index.
             nrows = len(group_values)
-            indices = cp.arange(nrows, dtype=size_type_dtype)
+            indices = cp.arange(nrows, dtype=SIZE_TYPE_DTYPE)
             if len(size_per_group) < 500:
                 # Empirically shuffling with cupy is faster at this scale
                 rs = cp.random.get_random_state()
@@ -1553,7 +1556,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
-            want = np.arange(samples_per_group.sum(), dtype=size_type_dtype)
+            want = np.arange(samples_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
             scan = np.empty_like(samples_per_group)
             scan[0] = 0
             np.cumsum(samples_per_group[:-1], out=scan[1:])
