@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf._lib.column import Column
-from cudf._lib.types import dtype_to_pylibcudf_type
 from cudf.core.buffer import acquire_spill_lock
+from cudf.utils.dtypes import dtype_to_pylibcudf_type
 
 if TYPE_CHECKING:
     from cudf._typing import Dtype
