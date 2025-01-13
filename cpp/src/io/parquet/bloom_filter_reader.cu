@@ -67,9 +67,10 @@ struct bloom_filter_caster {
     using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
     using word_type   = typename policy_type::word_type;
 
-    // List, Struct, Dictionary types are not supported
-    if constexpr (cudf::is_compound<T>() and not std::is_same_v<T, string_view>) {
-      CUDF_FAIL("Compound types don't support equality predicate");
+    // Boolean, List, Struct, Dictionary types are not supported
+    if constexpr (std::is_same_v<T, bool> or
+                  (cudf::is_compound<T>() and not std::is_same_v<T, string_view>)) {
+      CUDF_FAIL("Bloom filters do not support boolean or compound types");
     } else {
       // Check if the literal has the same type as the predicate column
       CUDF_EXPECTS(
