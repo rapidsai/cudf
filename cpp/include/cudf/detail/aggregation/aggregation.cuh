@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -31,7 +32,6 @@
 #include <thrust/fill.h>
 
 #include <type_traits>
-#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -216,12 +216,12 @@ struct identity_initializer {
  * @throw cudf::logic_error if column type is not fixed-width
  *
  * @param table The table of columns to initialize.
- * @param aggs A vector of aggregation operations corresponding to the table
+ * @param aggs A span of aggregation operations corresponding to the table
  * columns. The aggregations determine the identity value for each column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void initialize_with_identity(mutable_table_view& table,
-                              std::vector<aggregation::Kind> const& aggs,
+                              host_span<cudf::aggregation::Kind const> aggs,
                               rmm::cuda_stream_view stream);
 
 }  // namespace detail

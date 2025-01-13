@@ -55,7 +55,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.0.13,<0.0.18
+- numba-cuda>=0.2.0,<0.3.0
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcc_linux-64=11.8
@@ -66,12 +66,12 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.11,<1.15
+- polars>=1.11,<1.18
 - pre-commit
 - ptxcompiler
 - pyarrow>=14.0.0,<19.0.0a0
 - pydata-sphinx-theme!=0.14.2
-- pynvml>=11.4.1,<12.0.0a0
+- pynvml>=12.0.0,<13.0.0a0
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov

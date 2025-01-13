@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 
 from typing import Literal
@@ -19,24 +19,21 @@ from cudf.core.buffer import (
     as_buffer,
     cuda_array_interface_wrapper,
 )
-from cudf.utils.dtypes import _get_base_dtype
+from cudf.utils.dtypes import (
+    _get_base_dtype,
+    dtype_to_pylibcudf_type,
+    PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+)
 
 from cpython.buffer cimport PyObject_CheckBuffer
-from libc.stdint cimport uintptr_t
-from libcpp.memory cimport make_unique, unique_ptr
+from libc.stdint cimport uintptr_t, int32_t
+from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
-from cudf._lib.types cimport (
-    dtype_from_column_view,
-    dtype_to_data_type,
-    dtype_to_pylibcudf_type,
-)
-
-from cudf._lib.types import dtype_from_pylibcudf_column
-
+from pylibcudf cimport DataType as plc_DataType, Column as plc_Column
 cimport pylibcudf.libcudf.copying as cpp_copying
 cimport pylibcudf.libcudf.types as libcudf_types
 cimport pylibcudf.libcudf.unary as libcudf_unary
@@ -45,6 +42,7 @@ from pylibcudf.libcudf.column.column_factories cimport (
     make_numeric_column
 )
 from pylibcudf.libcudf.column.column_view cimport column_view
+from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.null_mask cimport null_count as cpp_null_count
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 
@@ -62,6 +60,80 @@ cdef get_element(column_view col_view, size_type index):
     return DeviceScalar.from_unique_ptr(
         move(c_output), dtype=dtype_from_column_view(col_view)
     )
+
+
+def dtype_from_pylibcudf_column(plc_Column col not None):
+    type_ = col.type()
+    tid = type_.id()
+
+    if tid == pylibcudf.TypeId.LIST:
+        child = col.list_view().child()
+        return cudf.ListDtype(dtype_from_pylibcudf_column(child))
+    elif tid == pylibcudf.TypeId.STRUCT:
+        fields = {
+            str(i): dtype_from_pylibcudf_column(col.child(i))
+            for i in range(col.num_children())
+        }
+        return cudf.StructDtype(fields)
+    elif tid == pylibcudf.TypeId.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    elif tid == pylibcudf.TypeId.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-type_.scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
+
+
+cdef dtype_from_lists_column_view(column_view cv):
+    # lists_column_view have no default constructor, so we heap
+    # allocate it to get around Cython's limitation of requiring
+    # default constructors for stack allocated objects
+    cdef shared_ptr[lists_column_view] lv = make_shared[lists_column_view](cv)
+    cdef column_view child = lv.get()[0].child()
+
+    if child.type().id() == libcudf_types.type_id.LIST:
+        return cudf.ListDtype(dtype_from_lists_column_view(child))
+    else:
+        return cudf.ListDtype(dtype_from_column_view(child))
+
+
+cdef dtype_from_column_view(column_view cv):
+    cdef libcudf_types.type_id tid = cv.type().id()
+    if tid == libcudf_types.type_id.LIST:
+        return dtype_from_lists_column_view(cv)
+    elif tid == libcudf_types.type_id.STRUCT:
+        fields = {
+            str(i): dtype_from_column_view(cv.child(i))
+            for i in range(cv.num_children())
+        }
+        return cudf.StructDtype(fields)
+    elif tid == libcudf_types.type_id.DECIMAL64:
+        return cudf.Decimal64Dtype(
+            precision=cudf.Decimal64Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    elif tid == libcudf_types.type_id.DECIMAL32:
+        return cudf.Decimal32Dtype(
+            precision=cudf.Decimal32Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    elif tid == libcudf_types.type_id.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    else:
+        return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[<int32_t>(tid)]
 
 
 cdef class Column:
@@ -361,7 +433,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
+        cdef plc_DataType dtype = <plc_DataType?>dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[mutable_column_view] children
         cdef void* data
@@ -398,7 +470,7 @@ cdef class Column:
         self._data = None
 
         return mutable_column_view(
-            dtype,
+            dtype.c_obj,
             self.size,
             data,
             mask,
@@ -424,7 +496,7 @@ cdef class Column:
             col = self
             data_dtype = col.dtype
 
-        cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
+        cdef plc_DataType dtype = <plc_DataType?>dtype_to_pylibcudf_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
         cdef void* data
@@ -450,7 +522,7 @@ cdef class Column:
         cdef libcudf_types.size_type c_null_count = null_count
 
         return column_view(
-            dtype,
+            dtype.c_obj,
             self.size,
             data,
             mask,

@@ -27,7 +27,7 @@ namespace cudf::groupby::detail::hash {
 CUDF_HOST_DEVICE auto constexpr GROUPBY_CG_SIZE = 1;
 
 /// Number of slots per thread
-CUDF_HOST_DEVICE auto constexpr GROUPBY_WINDOW_SIZE = 1;
+CUDF_HOST_DEVICE auto constexpr GROUPBY_BUCKET_SIZE = 1;
 
 /// Thread block size
 CUDF_HOST_DEVICE auto constexpr GROUPBY_BLOCK_SIZE = 128;
@@ -48,9 +48,9 @@ using shmem_extent_t =
   cuco::extent<cudf::size_type,
                static_cast<cudf::size_type>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43)>;
 
-/// Number of windows needed by each shared memory hash set
-CUDF_HOST_DEVICE auto constexpr window_extent =
-  cuco::make_window_extent<GROUPBY_CG_SIZE, GROUPBY_WINDOW_SIZE>(shmem_extent_t{});
+/// Number of buckets needed by each shared memory hash set
+CUDF_HOST_DEVICE auto constexpr bucket_extent =
+  cuco::make_bucket_extent<GROUPBY_CG_SIZE, GROUPBY_BUCKET_SIZE>(shmem_extent_t{});
 
 using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
@@ -75,7 +75,7 @@ using global_set_t = cuco::static_set<cudf::size_type,
                                       row_comparator_t,
                                       probing_scheme_t,
                                       cudf::detail::cuco_allocator<char>,
-                                      cuco::storage<GROUPBY_WINDOW_SIZE>>;
+                                      cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cuco::extent<int64_t>,
@@ -83,7 +83,7 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                nullable_row_comparator_t,
                                                probing_scheme_t,
                                                cudf::detail::cuco_allocator<char>,
-                                               cuco::storage<GROUPBY_WINDOW_SIZE>>;
+                                               cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 template <typename Op>
 using hash_set_ref_t = cuco::static_set_ref<
@@ -91,7 +91,7 @@ using hash_set_ref_t = cuco::static_set_ref<
   cuda::thread_scope_device,
   row_comparator_t,
   probing_scheme_t,
-  cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::window_extent<int64_t>>,
+  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::bucket_extent<int64_t>>,
   Op>;
 
 template <typename Op>
@@ -100,6 +100,6 @@ using nullable_hash_set_ref_t = cuco::static_set_ref<
   cuda::thread_scope_device,
   nullable_row_comparator_t,
   probing_scheme_t,
-  cuco::aow_storage_ref<cudf::size_type, GROUPBY_WINDOW_SIZE, cuco::window_extent<int64_t>>,
+  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::bucket_extent<int64_t>>,
   Op>;
 }  // namespace cudf::groupby::detail::hash
