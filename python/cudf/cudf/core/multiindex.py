@@ -1514,19 +1514,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         name_j = self._column_names[j] if isinstance(j, int) else j
         to_swap = {name_i, name_j}
         new_data = {}
-        found_i = False
-        found_j = False
         # TODO: Preserve self._codes and self._levels if set
         for k, v in self._column_labels_and_values:
             if k not in to_swap:
                 new_data[k] = v
-            elif found_i and found_j:
-                break
             elif k == name_i:
-                found_i = True
                 new_data[name_j] = self._data[name_j]
             elif k == name_j:
-                found_j = True
                 new_data[name_i] = self._data[name_i]
         midx = type(self)._from_data(new_data)
         if all(n is None for n in self.names):
