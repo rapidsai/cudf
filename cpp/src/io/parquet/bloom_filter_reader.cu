@@ -61,8 +61,7 @@ struct bloom_filter_caster {
   std::unique_ptr<cudf::column> query_bloom_filter(cudf::size_type equality_col_idx,
                                                    cudf::data_type dtype,
                                                    ast::literal const* const literal,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr) const
+                                                   rmm::cuda_stream_view stream) const
   {
     using key_type    = T;
     using policy_type = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;
@@ -73,16 +72,18 @@ struct bloom_filter_caster {
       CUDF_FAIL("Compound types don't support equality predicate");
     } else {
       // Check if the literal has the same type as the predicate column
-      CUDF_EXPECTS(dtype == literal->get_data_type() and
-                     cudf::have_same_types(cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
-                                           cudf::scalar_type_t<T>(T{}, false, stream, mr)),
-                   "Mismatched predicate column and literal types");
+      CUDF_EXPECTS(
+        dtype == literal->get_data_type() and
+          cudf::have_same_types(
+            cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
+            cudf::scalar_type_t<T>(T{}, false, stream, cudf::get_current_device_resource_ref())),
+        "Mismatched predicate column and literal types");
     }
 
     // Filter properties
     auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
-    rmm::device_buffer results{total_row_groups, stream, mr};
+    rmm::device_buffer results{total_row_groups, stream, cudf::get_current_device_resource_ref()};
     cudf::device_span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
 
     // Query literal in bloom filters from each column chunk (row group).
@@ -141,20 +142,19 @@ struct bloom_filter_caster {
   std::unique_ptr<cudf::column> operator()(cudf::size_type equality_col_idx,
                                            cudf::data_type dtype,
                                            ast::literal* const literal,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr) const
+                                           rmm::cuda_stream_view stream) const
   {
     // For INT96 timestamps, use cudf::string_view type and set is_int96_timestamp to YES
     if constexpr (cudf::is_timestamp<T>()) {
       if (parquet_types[equality_col_idx] == Type::INT96) {
         // For INT96 timestamps, use cudf::string_view type and set is_int96_timestamp to YES
         return query_bloom_filter<cudf::string_view, bloom_filter_caster::is_int96_timestamp::YES>(
-          equality_col_idx, dtype, literal, stream, mr);
+          equality_col_idx, dtype, literal, stream);
       }
     }
 
     // For all other cases
-    return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream, mr);
+    return query_bloom_filter<T>(equality_col_idx, dtype, literal, stream);
   }
 };
 
@@ -592,8 +592,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
                "Total number of row groups exceed the size_type's limit");
 
-  auto mr = cudf::get_current_device_resource_ref();
-
   // Collect equality literals for each input table column
   auto const equality_literals =
     equality_literals_collector{filter.get(), num_input_columns}.get_equality_literals();
@@ -633,8 +631,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                  });
 
   // Copy bloom filter bitset spans to device
-  auto const bloom_filter_spans =
-    cudf::detail::make_device_uvector_async(h_bloom_filter_spans, stream, mr);
+  auto const bloom_filter_spans = cudf::detail::make_device_uvector_async(
+    h_bloom_filter_spans, stream, cudf::get_current_device_resource_ref());
 
   // Create a bloom filter query table caster
   bloom_filter_caster const bloom_filter_col{
@@ -660,7 +658,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
       // Add a column for all literals associated with an equality column
       for (auto const& literal : equality_literals[input_col_idx]) {
         bloom_filter_membership_columns.emplace_back(cudf::type_dispatcher<dispatch_storage_type>(
-          dtype, bloom_filter_col, equality_col_idx, dtype, literal, stream, mr));
+          dtype, bloom_filter_col, equality_col_idx, dtype, literal, stream));
       }
       equality_col_idx++;
     });
@@ -678,8 +676,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   return collect_filtered_row_group_indices(bloom_filter_membership_table,
                                             bloom_filter_expr.get_bloom_filter_expr(),
                                             input_row_group_indices,
-                                            stream,
-                                            mr);
+                                            stream);
 }
 
 }  // namespace cudf::io::parquet::detail

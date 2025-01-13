@@ -459,7 +459,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
   auto const filtered_row_group_indices = collect_filtered_row_group_indices(
-    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream, mr);
+    stats_table, stats_expr.get_stats_expr(), input_row_group_indices, stream);
 
   // Span of row groups to apply bloom filtering on.
   auto const bloom_filter_input_row_groups =
@@ -628,12 +628,12 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   cudf::table_view table,
   std::reference_wrapper<ast::expression const> ast_expr,
   host_span<std::vector<size_type> const> input_row_group_indices,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::cuda_stream_view stream)
 {
   // Filter the input table using AST expression
-  auto predicate_col = cudf::detail::compute_column(table, ast_expr.get(), stream, mr);
-  auto predicate     = predicate_col->view();
+  auto predicate_col = cudf::detail::compute_column(
+    table, ast_expr.get(), stream, cudf::get_current_device_resource_ref());
+  auto predicate = predicate_col->view();
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");
 

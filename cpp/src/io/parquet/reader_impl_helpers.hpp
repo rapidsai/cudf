@@ -509,7 +509,6 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  * @param ast_expr StatsAST or BloomfilterAST expression to filter with
  * @param input_row_group_indices Lists of input row groups to read, one per source
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to be used in cudf::compute_column
  *
  * @return Collected filtered row group indices, one vector per source, if any. A std::nullopt if
  * all row groups are required or if the computed predicate is all nulls
@@ -518,7 +517,6 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   cudf::table_view ast_table,
   std::reference_wrapper<ast::expression const> ast_expr,
   host_span<std::vector<size_type> const> input_row_group_indices,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail
