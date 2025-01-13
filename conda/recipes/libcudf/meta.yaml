@@ -80,11 +80,7 @@ outputs:
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
         - {{ compiler('cuda') }}
-        {% else %}
-        - {{ compiler('cuda') }}
-        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -120,11 +116,7 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
         - {{ compiler('cuda') }}
-        {% else %}
-        - {{ compiler('cuda') }}
-        {% endif %}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -150,10 +142,8 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
         - {{ compiler('cuda') }}
-        {% else %}
-        - {{ compiler('cuda') }}
+        {% if cuda_major != "11" %}
         - cuda-nvtx-dev
         {% endif %}
     requirements:
@@ -196,10 +186,8 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        {% if cuda_major == "11" %}
         - {{ compiler('cuda') }}
-        {% else %}
-        - {{ compiler('cuda') }}
+        {% if cuda_major != "11" %}
         - libcurand-dev
         {% endif %}
     requirements:

@@ -34,10 +34,8 @@ build:
     - SCCACHE_S3_USE_SSL
     - SCCACHE_S3_NO_CREDENTIALS
   ignore_run_exports_from:
-    {% if cuda_major == "11" %}
     - {{ compiler('cuda') }}
-    {% else %}
-    - {{ compiler('cuda') }}
+    {% if cuda_major != "11" %}
     - cuda-cudart-dev
     {% endif %}
 

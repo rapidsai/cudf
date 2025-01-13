@@ -94,7 +94,7 @@ dependencies:
 - sphinx-remove-toctrees
 - sphinxcontrib-websupport
 - streamz
-- sysroot_linux-64==2.17
+- sysroot_linux-64==2.28
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 name: all_cuda-118_arch-x86_64
