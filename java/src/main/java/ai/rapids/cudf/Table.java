@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -313,12 +313,11 @@ public final class Table implements AutoCloseable {
    *                           all of them
    * @param binaryToString     whether to convert this column to String if binary
    * @param filePath           the path of the file to read, or null if no path should be read.
-   * @param address            the address of the buffer to read from or 0 if we should not.
-   * @param length             the length of the buffer to read from.
+   * @param addrsAndSizes      the address and size pairs for every buffer or null for no buffers.
    * @param timeUnit           return type of TimeStamp in units
    */
   private static native long[] readParquet(String[] filterColumnNames, boolean[] binaryToString, String filePath,
-                                           long address, long length, int timeUnit) throws CudfException;
+                                           long[] addrsAndSizes, int timeUnit) throws CudfException;
 
   private static native long[] readParquetFromDataSource(String[] filterColumnNames,
                                                          boolean[] binaryToString, int timeUnit,
@@ -1357,7 +1356,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), null, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -1402,6 +1401,14 @@ public final class Table implements AutoCloseable {
     }
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
     return readParquet(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
@@ -1422,10 +1429,35 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
+    long[] addrsSizes = new long[]{ buffer.getAddress() + offset, len };
     return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+        null, addrsSizes, opts.timeUnit().typeId.getNativeId()));
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffers Buffers containing the Parquet data. The buffers are logically concatenated
+   *                in order to construct the file being read.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer... buffers) {
+    assert buffers.length > 0;
+    long[] addrsSizes = new long[buffers.length * 2];
+    for (int i = 0; i < buffers.length; i++) {
+      addrsSizes[i * 2] = buffers[i].getAddress();
+      addrsSizes[(i * 2) + 1] = buffers[i].getLength();
+    }
+    return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
+        null, addrsSizes, opts.timeUnit().typeId.getNativeId()));
+  }
+
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param ds custom datasource to provide the Parquet file data
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, DataSource ds) {
     long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
     try {

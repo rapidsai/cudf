@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -212,6 +212,8 @@ class DatetimeColumn(column.ColumnBase):
         "__rsub__",
     }
 
+    _PANDAS_NA_REPR = str(pd.NaT)
+
     def __init__(
         self,
         data: Buffer,
@@ -351,8 +353,8 @@ class DatetimeColumn(column.ColumnBase):
         day_of_year = self.day_of_year
         leap_dates = self.is_leap_year
 
-        leap = day_of_year == cudf.Scalar(366)
-        non_leap = day_of_year == cudf.Scalar(365)
+        leap = day_of_year == 366
+        non_leap = day_of_year == 365
         return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
     @property
