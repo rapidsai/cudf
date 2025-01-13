@@ -1512,15 +1512,23 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         name_i = self._column_names[i] if isinstance(i, int) else i
         name_j = self._column_names[j] if isinstance(j, int) else j
+        to_swap = {name_i, name_j}
         new_data = {}
+        found_i = False
+        found_j = False
+        # TODO: Preserve self._codes and self._levels if set
         for k, v in self._column_labels_and_values:
-            if k not in (name_i, name_j):
+            if k not in to_swap:
                 new_data[k] = v
+            elif found_i and found_j:
+                break
             elif k == name_i:
+                found_i = True
                 new_data[name_j] = self._data[name_j]
             elif k == name_j:
+                found_j = True
                 new_data[name_i] = self._data[name_i]
-        midx = MultiIndex._from_data(new_data)
+        midx = type(self)._from_data(new_data)
         if all(n is None for n in self.names):
             midx = midx.set_names(self.names)
         return midx
@@ -1793,11 +1801,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         usage = sum(col.memory_usage for col in self._columns)
+        breakpoint()
         if self._levels is not None:
             usage += sum(
                 level.memory_usage(deep=deep) for level in self._levels
             )
-        elif self._codes is not None:
+        if self._codes is not None:
             usage += sum(code.memory_usage for code in self._codes)
         return usage
 
@@ -1867,7 +1876,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     f"found object of type: {type(obj)}"
                 )
 
-        return MultiIndex._concat(to_concat)
+        return type(self)._concat(to_concat)
 
     @_performance_tracking
     def __array_function__(self, func, types, args, kwargs):
