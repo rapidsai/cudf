@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Typing utilities for cudf_polars."""
@@ -24,6 +24,7 @@ __all__: list[str] = [
     "ExprTransformer",
     "GenericTransformer",
     "IRTransformer",
+    "NodeTimer",
     "NodeTraverser",
     "OptimizationArgs",
     "PolarsExpr",
@@ -105,6 +106,14 @@ class NodeTraverser(Protocol):
         callback: Callable[[list[str] | None, str | None, int | None], pl.DataFrame],
     ) -> None:
         """Set the callback replacing the current node in the plan."""
+        ...
+
+
+class NodeTimer(Protocol):
+    """Abstract protocol for polars NodeTimer."""
+
+    def store(self, name: str, start: int, end: int) -> None:
+        """Store node timing information."""
         ...
 
 
