@@ -129,29 +129,13 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
 
   if (build_table_num_rows == 0) { return; }
 
-  if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
-    auto d_build_view   = cudf::table_device_view::create(_build, stream);
-    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, *d_build_view, DEFAULT_HASH_SEED};
-
-    auto const iter = cudf::detail::make_counting_transform_iterator(
-      0, primitive_keys_fn<rhs_index_type>{d_hasher});
-
-    this->_hash_table.insert_async(iter, iter + build_table_num_rows, stream.value());
-  } else {
-    auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
-    auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
-
-    auto const iter =
-      cudf::detail::make_counting_transform_iterator(0, build_keys_fn<rhs_index_type>{d_hasher});
-
-    if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(this->_build))) {
+  auto const helper = [&](auto iter) {
+    if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(build))) {
       this->_hash_table.insert_async(iter, iter + build_table_num_rows, stream.value());
     } else {
       auto stencil = thrust::counting_iterator<size_type>{0};
       auto const row_bitmask =
-        cudf::detail::bitmask_and(this->_build, stream, cudf::get_current_device_resource_ref())
-          .first;
+        cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first;
       auto const pred =
         cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 
@@ -159,7 +143,28 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
       this->_hash_table.insert_if_async(
         iter, iter + build_table_num_rows, stencil, pred, stream.value());
     }
-  }
+  };
+
+  /*
+if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
+  auto d_build_view   = cudf::table_device_view::create(_build, stream);
+  auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
+    nullate::DYNAMIC{has_nulls}, *d_build_view, DEFAULT_HASH_SEED};
+
+  auto const iter = cudf::detail::make_counting_transform_iterator(
+    0, primitive_keys_fn<rhs_index_type>{d_hasher});
+
+  helper(iter);
+} else {
+*/
+  auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
+  auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
+
+  auto const iter =
+    cudf::detail::make_counting_transform_iterator(0, build_keys_fn<rhs_index_type>{d_hasher});
+
+  helper(iter);
+  //}
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -187,72 +192,64 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
   auto const found_begin =
     thrust::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
-  if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
-    auto d_build_view   = cudf::table_device_view::create(_build, stream);
-    auto d_probe_view   = cudf::table_device_view::create(probe, stream);
-    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, *d_probe_view, DEFAULT_HASH_SEED};
-    auto const d_equal = cudf::row::primitive::row_equality_comparator{
-      nullate::DYNAMIC{has_nulls}, *d_probe_view, *d_build_view, _nulls_equal};
-
-    auto const iter = cudf::detail::make_counting_transform_iterator(
-      0, primitive_keys_fn<lhs_index_type>{d_hasher});
-
-    this->_hash_table.find_async(iter,
-                                 iter + probe_table_num_rows,
-                                 primitive_comparator_adapter{d_equal},
-                                 hasher{},
-                                 found_begin,
-                                 stream.value());
-  } else {
-    auto preprocessed_probe =
-      cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
-    auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
-      preprocessed_probe, _preprocessed_build);
-
-    auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
-    auto const iter             = cudf::detail::make_counting_transform_iterator(
-      0, build_keys_fn<lhs_index_type>{d_probe_hasher});
-
-    auto const comparator_helper = [&](auto device_comparator) {
-      // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
-      // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
-      if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
-        this->_hash_table.find_async(iter,
-                                     iter + probe_table_num_rows,
-                                     comparator_adapter{device_comparator},
-                                     hasher{},
-                                     found_begin,
-                                     stream.value());
-      } else {
-        auto stencil = thrust::counting_iterator<size_type>{0};
-        auto const row_bitmask =
-          cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
-        auto const pred =
-          cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
-
-        this->_hash_table.find_if_async(iter,
-                                        iter + probe_table_num_rows,
-                                        stencil,
-                                        pred,
-                                        comparator_adapter{device_comparator},
-                                        hasher{},
-                                        found_begin,
-                                        stream.value());
-      }
-    };
-
-    if (_has_nested_columns) {
-      auto const device_comparator =
-        two_table_equal.equal_to<true>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
-      comparator_helper(device_comparator);
+  auto const helper = [&](auto iter, auto const& d_equal) {
+    // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
+    // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
+    if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
+      this->_hash_table.find_async(
+        iter, iter + probe_table_num_rows, d_equal, hasher{}, found_begin, stream.value());
     } else {
-      auto const device_comparator =
-        two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
-      comparator_helper(device_comparator);
+      auto stencil = thrust::counting_iterator<size_type>{0};
+      auto const row_bitmask =
+        cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
+      auto const pred =
+        cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
+
+      this->_hash_table.find_if_async(iter,
+                                      iter + probe_table_num_rows,
+                                      stencil,
+                                      pred,
+                                      d_equal,
+                                      hasher{},
+                                      found_begin,
+                                      stream.value());
     }
+  };
+
+  /*
+if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
+  auto d_build_view   = cudf::table_device_view::create(_build, stream);
+  auto d_probe_view   = cudf::table_device_view::create(probe, stream);
+  auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
+    nullate::DYNAMIC{has_nulls}, *d_probe_view, DEFAULT_HASH_SEED};
+  auto const d_equal = cudf::row::primitive::row_equality_comparator{
+    nullate::DYNAMIC{has_nulls}, *d_probe_view, *d_build_view, _nulls_equal};
+  auto const iter = cudf::detail::make_counting_transform_iterator(
+    0, primitive_keys_fn<lhs_index_type>{d_hasher});
+
+  helper(iter, primitive_comparator_adapter{d_equal});
+} else {
+*/
+  auto preprocessed_probe =
+    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+  auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
+    preprocessed_probe, _preprocessed_build);
+
+  auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+  auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
+  auto const iter             = cudf::detail::make_counting_transform_iterator(
+    0, build_keys_fn<lhs_index_type>{d_probe_hasher});
+
+  if (_has_nested_columns) {
+    auto const device_comparator =
+      two_table_equal.equal_to<true>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
+    helper(iter, comparator_adapter{device_comparator});
+  } else {
+    auto const device_comparator =
+      two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
+    helper(iter, comparator_adapter{device_comparator});
   }
+  //}
 
   auto const tuple_iter = cudf::detail::make_counting_transform_iterator(
     0,
@@ -297,78 +294,71 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   auto const output_begin =
     thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
 
-  if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
-    auto d_build_view   = cudf::table_device_view::create(_build, stream);
-    auto d_probe_view   = cudf::table_device_view::create(probe, stream);
-    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, *d_probe_view, DEFAULT_HASH_SEED};
-    auto const d_equal = cudf::row::primitive::row_equality_comparator{
-      nullate::DYNAMIC{has_nulls}, *d_probe_view, *d_build_view, _nulls_equal};
-
-    auto const iter = cudf::detail::make_counting_transform_iterator(
-      0, primitive_keys_fn<lhs_index_type>{d_hasher});
-
-    this->_hash_table.find_async(iter,
-                                 iter + probe_table_num_rows,
-                                 primitive_comparator_adapter{d_equal},
-                                 hasher{},
-                                 output_begin,
-                                 stream.value());
-  } else {
-    // If build table is empty, return probe table
-    if (this->_build.num_rows() == 0) {
-      thrust::fill(rmm::exec_policy_nosync(stream),
-                   build_indices->begin(),
-                   build_indices->end(),
-                   JoinNoneValue);
+  auto const helper = [&](auto iter, auto const& d_equal) {
+    // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
+    // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
+    if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
+      this->_hash_table.find_async(
+        iter, iter + probe_table_num_rows, d_equal, hasher{}, output_begin, stream.value());
     } else {
-      auto preprocessed_probe =
-        cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
-      auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
-        preprocessed_probe, _preprocessed_build);
+      auto stencil = thrust::counting_iterator<size_type>{0};
+      auto const row_bitmask =
+        cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
+      auto const pred =
+        cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 
-      auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-      auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
-      auto const iter             = cudf::detail::make_counting_transform_iterator(
-        0, build_keys_fn<lhs_index_type>{d_probe_hasher});
+      this->_hash_table.find_if_async(iter,
+                                      iter + probe_table_num_rows,
+                                      stencil,
+                                      pred,
+                                      d_equal,
+                                      hasher{},
+                                      output_begin,
+                                      stream.value());
+    }
+  };
 
-      auto const comparator_helper = [&](auto device_comparator) {
-        if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
-          this->_hash_table.find_async(iter,
-                                       iter + probe_table_num_rows,
-                                       comparator_adapter{device_comparator},
-                                       hasher{},
-                                       output_begin,
-                                       stream.value());
-        } else {
-          auto stencil = thrust::counting_iterator<size_type>{0};
-          auto const row_bitmask =
-            cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
-          auto const pred =
-            cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
+  /*
+if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
+  auto d_build_view   = cudf::table_device_view::create(_build, stream);
+  auto d_probe_view   = cudf::table_device_view::create(probe, stream);
+  auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
+    nullate::DYNAMIC{has_nulls}, *d_probe_view, DEFAULT_HASH_SEED};
+  auto const d_equal = cudf::row::primitive::row_equality_comparator{
+    nullate::DYNAMIC{has_nulls}, *d_probe_view, *d_build_view, _nulls_equal};
 
-          this->_hash_table.find_if_async(iter,
-                                          iter + probe_table_num_rows,
-                                          stencil,
-                                          pred,
-                                          comparator_adapter{device_comparator},
-                                          hasher{},
-                                          output_begin,
-                                          stream.value());
-        }
-      };
+  auto const iter = cudf::detail::make_counting_transform_iterator(
+    0, primitive_keys_fn<lhs_index_type>{d_hasher});
 
-      if (_has_nested_columns) {
-        auto const device_comparator =
-          two_table_equal.equal_to<true>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
-        comparator_helper(device_comparator);
-      } else {
-        auto const device_comparator =
-          two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
-        comparator_helper(device_comparator);
-      }
+  helper(iter, primitive_comparator_adapter{d_equal});
+} else {
+*/
+  // If build table is empty, return probe table
+  if (this->_build.num_rows() == 0) {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream), build_indices->begin(), build_indices->end(), JoinNoneValue);
+  } else {
+    auto preprocessed_probe =
+      cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
+    auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
+      preprocessed_probe, _preprocessed_build);
+
+    auto const probe_row_hasher = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+    auto const d_probe_hasher   = probe_row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
+    auto const iter             = cudf::detail::make_counting_transform_iterator(
+      0, build_keys_fn<lhs_index_type>{d_probe_hasher});
+
+    if (_has_nested_columns) {
+      auto const device_comparator =
+        two_table_equal.equal_to<true>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
+      helper(iter, comparator_adapter{device_comparator});
+    } else {
+      auto const device_comparator =
+        two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
+      helper(iter, comparator_adapter{device_comparator});
     }
   }
+  //}
 
   return build_indices;
 }
