@@ -28,6 +28,8 @@
 #include <nvbench/nvbench.cuh>
 #include <nvbench/types.cuh>
 
+#include <random>
+
 template <typename key_type>
 static void BM_ast_polynomials(nvbench::state& state)
 {
@@ -45,11 +47,16 @@ static void BM_ast_polynomials(nvbench::state& state)
   auto column_view = table->get_column(0);
 
   std::vector<cudf::numeric_scalar<key_type>> constants;
+  {
+    std::random_device random_device;
+    std::mt19937 generator;
+    std::uniform_real_distribution<key_type> distribution{0, 1};
 
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(order + 1),
-                 std::back_inserter(constants),
-                 [](int) { return cudf::numeric_scalar<key_type>(1); });
+    std::transform(thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(order + 1),
+                   std::back_inserter(constants),
+                   [&](int) { return distribution(generator); });
+  }
 
   cudf::ast::tree tree{};
 

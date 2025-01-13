@@ -28,6 +28,7 @@
 #include <nvbench/nvbench.cuh>
 
 #include <algorithm>
+#include <random>
 
 template <typename key_type>
 static void BM_binaryop_polynomials(nvbench::state& state)
@@ -46,11 +47,16 @@ static void BM_binaryop_polynomials(nvbench::state& state)
   auto column_view = table->get_column(0);
 
   std::vector<cudf::numeric_scalar<key_type>> constants;
+  {
+    std::random_device random_device;
+    std::mt19937 generator;
+    std::uniform_real_distribution<key_type> distribution{0, 1};
 
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(order + 1),
-                 std::back_inserter(constants),
-                 [](int) { return cudf::numeric_scalar<key_type>(0.8F); });
+    std::transform(thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(order + 1),
+                   std::back_inserter(constants),
+                   [&](int) { return cudf::numeric_scalar<key_type>(distribution(generator)); });
+  }
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(num_rows);
@@ -60,6 +66,7 @@ static void BM_binaryop_polynomials(nvbench::state& state)
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
     cudf::scoped_range range{"benchmark_iteration"};
     rmm::cuda_stream_view stream{launch.get_stream().get_stream()};
+    std::vector<std::unique_ptr<cudf::column>> intermediates;
 
     auto result = cudf::make_column_from_scalar(constants[0], num_rows, stream);
 
@@ -74,7 +81,9 @@ static void BM_binaryop_polynomials(nvbench::state& state)
                                         cudf::binary_operator::ADD,
                                         cudf::data_type{cudf::type_to_id<key_type>()},
                                         stream);
-      result       = std::move(sum);
+      intermediates.push_back(std::move(product));
+      intermediates.push_back(std::move(result));
+      result = std::move(sum);
     }
   });
 }

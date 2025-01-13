@@ -47,10 +47,16 @@ static void BM_transform_polynomials(nvbench::state& state)
 
   std::vector<key_type> constants;
 
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(order + 1),
-                 std::back_inserter(constants),
-                 [](int) { return 0.8F; });
+  {
+    std::random_device random_device;
+    std::mt19937 generator;
+    std::uniform_real_distribution<key_type> distribution{0, 1};
+
+    std::transform(thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(order + 1),
+                   std::back_inserter(constants),
+                   [&](int) { return distribution(generator); });
+  }
 
   // Use the number of bytes read from global memory
   state.add_global_memory_reads<key_type>(num_rows);
@@ -71,7 +77,7 @@ static void BM_transform_polynomials(nvbench::state& state)
     std::string type = std::is_same_v<key_type, float> ? "float" : "double";
 
     std::string udf = R"***(
-__device__ inline void    fdsf   (
+__device__ inline void    compute_polynomial   (
        )***" + type + R"***(* out,
        )***" + type + R"***( x
 )
