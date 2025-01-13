@@ -526,26 +526,23 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
                   });
                 });
 
-  // Do we have any bloom filters
-  if (have_bloom_filters) {
-    // Vector to hold bloom filter data
-    std::vector<rmm::device_buffer> bloom_filter_data(num_chunks);
+  // Exit early if we don't have any bloom filters
+  if (not have_bloom_filters) { return {}; }
 
-    // Read bloom filter data
-    read_bloom_filter_data(sources,
-                           num_chunks,
-                           bloom_filter_data,
-                           bloom_filter_offsets,
-                           bloom_filter_sizes,
-                           chunk_source_map,
-                           stream);
+  // Vector to hold bloom filter data
+  std::vector<rmm::device_buffer> bloom_filter_data(num_chunks);
 
-    // Return bloom filter data
-    return bloom_filter_data;
-  }
+  // Read bloom filter data
+  read_bloom_filter_data(sources,
+                         num_chunks,
+                         bloom_filter_data,
+                         bloom_filter_offsets,
+                         bloom_filter_sizes,
+                         chunk_source_map,
+                         stream);
 
-  // Return empty vector
-  return {};
+  // Return bloom filter data
+  return bloom_filter_data;
 }
 
 std::vector<Type> aggregate_reader_metadata::get_parquet_types(
