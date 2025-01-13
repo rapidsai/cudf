@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -967,7 +967,9 @@ class udf_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying host-based UDF aggregation.
  */
-class host_udf_aggregation final : public groupby_aggregation {
+class host_udf_aggregation final : public groupby_aggregation,
+                                   public reduce_aggregation,
+                                   public segmented_reduce_aggregation {
  public:
   std::unique_ptr<host_udf_base> udf_ptr;
 

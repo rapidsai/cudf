@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -129,9 +129,6 @@ struct pass_intermediate_data {
 
   rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
   rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
-
-  // cumulative strings column sizes.
-  std::vector<size_t> cumulative_col_string_sizes{};
 
   int level_type_size{0};
 
