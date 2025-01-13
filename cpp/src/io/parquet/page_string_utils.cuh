@@ -175,9 +175,6 @@ __device__ inline size_t gpuDecodeString(
 
   auto const& ni = s->nesting_info[leaf_level_index];
 
-  using scanner = cub::BlockScan<size_t, block_size>;
-  __shared__ typename scanner::TempStorage scan_storage;
-
   // decode values
   int pos = start;
   while (pos < end) {
@@ -216,9 +213,15 @@ __device__ inline size_t gpuDecodeString(
 
     // compute string offsets
     size_t thread_string_offset, block_total_string_length;
-    scanner(scan_storage)
-      .ExclusiveSum(string_length, thread_string_offset, block_total_string_length);
-    __syncthreads();
+    {
+      using scanner = cub::BlockScan<size_t, block_size>;
+      __shared__ typename scanner::TempStorage scan_storage;
+      scanner(scan_storage)
+        .ExclusiveSum(string_length, thread_string_offset, block_total_string_length);
+
+      // Make sure all threads have finished using scan_storage before next loop overwrites.
+      __syncthreads();
+    }
 
     // adjust for prior offset, get output string pointer
     thread_string_offset += string_output_offset;
