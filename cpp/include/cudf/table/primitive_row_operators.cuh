@@ -30,6 +30,21 @@
 
 namespace CUDF_EXPORT cudf {
 namespace row::primitive {
+
+/**
+￼ * @brief Returns `void` if it's not a primitive type
+￼ */
+template <typename T>
+using primitive_type_t = std::conditional_t<cudf::is_numeric<T>(), T, void>;
+
+/**
+￼ * @brief Custom dispatcher for primitive types
+￼ */
+template <cudf::type_id Id>
+struct dispatch_primitive_type {
+  using type = primitive_type_t<id_to_type<Id>>;  ///< The underlying type
+};
+
 /**
  * @brief Performs an equality comparison between two elements in two columns.
  */
@@ -41,16 +56,11 @@ class element_equality_comparator {
    *
    * @note `lhs` and `rhs` may be the same.
    *
-   * @param has_nulls Indicates if either input column contains nulls.
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
-   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  __host__ __device__ element_equality_comparator(cudf::nullate::DYNAMIC has_nulls,
-                                                  column_device_view lhs,
-                                                  column_device_view rhs,
-                                                  null_equality nulls_are_equal)
-    : _has_nulls{has_nulls}, _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal}
+  __host__ __device__ element_equality_comparator(column_device_view lhs, column_device_view rhs)
+    : _lhs{lhs}, _rhs{rhs}
   {
   }
 
@@ -65,15 +75,6 @@ class element_equality_comparator {
   __device__ bool operator()(size_type lhs_element_index,
                              size_type rhs_element_index) const noexcept
   {
-    if (_has_nulls) {
-      bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
-      bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
-      if (lhs_is_null and rhs_is_null) {
-        return _nulls_are_equal == null_equality::EQUAL;
-      } else if (lhs_is_null != rhs_is_null) {
-        return false;
-      }
-    }
     return cudf::equality_compare(_lhs.element<Element>(lhs_element_index),
                                   _rhs.element<Element>(rhs_element_index));
   }
@@ -87,10 +88,8 @@ class element_equality_comparator {
   // @endcond
 
  private:
-  cudf::nullate::DYNAMIC _has_nulls;
   column_device_view _lhs;
   column_device_view _rhs;
-  null_equality _nulls_are_equal;
 };
 
 /**
@@ -106,7 +105,7 @@ class row_equality_comparator {
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  row_equality_comparator(cudf::nullate::DYNAMIC has_nulls,
+  row_equality_comparator(cudf::nullate::DYNAMIC const& has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
                           null_equality nulls_are_equal)
@@ -124,9 +123,18 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
-    return cudf::type_dispatcher<dispatch_storage_type>(
+    if (_has_nulls) {
+      bool const lhs_is_null{_lhs.column(0).is_null(lhs_row_index)};
+      bool const rhs_is_null{_rhs.column(0).is_null(rhs_row_index)};
+      if (lhs_is_null and rhs_is_null) {
+        return _nulls_are_equal == null_equality::EQUAL;
+      } else if (lhs_is_null != rhs_is_null) {
+        return false;
+      }
+    }
+    return cudf::type_dispatcher<dispatch_primitive_type>(
       _lhs.begin()->type(),
-      element_equality_comparator{_has_nulls, *_lhs.begin(), *_rhs.begin(), _nulls_are_equal},
+      element_equality_comparator{_lhs.column(0), _rhs.column(0)},
       lhs_row_index,
       rhs_row_index);
   }
@@ -240,7 +248,7 @@ class row_lexicographic_comparator {
 
       auto comparator = element_relational_comparator{_lhs.column(i), _rhs.column(i)};
 
-      weak_ordering state = cudf::type_dispatcher<dispatch_storage_type>(
+      weak_ordering state = cudf::type_dispatcher<dispatch_primitive_type>(
         _lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
@@ -267,13 +275,9 @@ class element_hasher {
   /**
    * @brief Constructs a function object for hashing an element in the given column
    *
-   * @param has_nulls Indicates if the input column contains nulls
    * @param seed The seed to use for the hash function
    */
-  __device__ element_hasher(cudf::nullate::DYNAMIC has_nulls, hash_value_type seed)
-    : _has_nulls{has_nulls}, _seed{seed}
-  {
-  }
+  __device__ element_hasher(hash_value_type seed) : _seed{seed} {}
 
   /**
    * @brief Returns the hash value of the given element in the given column.
@@ -286,7 +290,6 @@ class element_hasher {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (_has_nulls && col.is_null(row_index)) { return null_hash; }
     return Hash<T>{_seed}(col.element<T>(row_index));
   }
 
@@ -305,9 +308,6 @@ class element_hasher {
   }
 
  private:
-  static constexpr hash_value_type null_hash = cuda::std::numeric_limits<hash_value_type>::max();
-
-  cudf::nullate::DYNAMIC _has_nulls;
   hash_value_type _seed;
 };
 
@@ -328,9 +328,7 @@ class row_hasher {
    * @param t A table_device_view to hash
    * @param seed A seed value to use for hashing
    */
-  CUDF_HOST_DEVICE row_hasher(cudf::nullate::DYNAMIC has_nulls,
-                              table_device_view t,
-                              hash_value_type seed)
+  row_hasher(cudf::nullate::DYNAMIC const& has_nulls, table_device_view t, hash_value_type seed)
     : _has_nulls{has_nulls}, _table{t}, _seed{seed}
   {
   }
@@ -343,10 +341,12 @@ class row_hasher {
    */
   __device__ auto operator()(size_type row_index) const
   {
-    return cudf::type_dispatcher<dispatch_storage_type>(_table.column(0).type(),
-                                                        element_hasher<Hash>{_has_nulls, _seed},
-                                                        _table.column(0),
-                                                        row_index);
+    /*
+    if (_has_nulls && _table.column(0).is_null(row_index)) { return
+    cuda::std::numeric_limits<hash_value_type>::max(); }
+    */
+    return cudf::type_dispatcher<dispatch_primitive_type>(
+      _table.column(0).type(), element_hasher<Hash>{_seed}, _table.column(0), row_index);
   }
 
  private:
