@@ -167,6 +167,8 @@ cdef extern from "cudf/io/json.hpp" \
         size_type get_rows_per_chunk() except +libcudf_exception_handler
         string get_true_value() except +libcudf_exception_handler
         string get_false_value() except +libcudf_exception_handler
+        cudf_io_types.compression_type get_compression()\
+            except +libcudf_exception_handler
 
         # setter
         void set_table(
@@ -181,6 +183,9 @@ cdef extern from "cudf/io/json.hpp" \
         void set_rows_per_chunk(size_type val) except +libcudf_exception_handler
         void set_true_value(string val) except +libcudf_exception_handler
         void set_false_value(string val) except +libcudf_exception_handler
+        void set_compression(
+            cudf_io_types.compression_type comptype
+        ) except +libcudf_exception_handler
 
         @staticmethod
         json_writer_options_builder builder(
@@ -217,6 +222,9 @@ cdef extern from "cudf/io/json.hpp" \
         ) except +libcudf_exception_handler
         json_writer_options_builder& false_value(
             string val
+        ) except +libcudf_exception_handler
+        json_writer_options_builder& compression(
+            cudf_io_types.compression_type comptype
         ) except +libcudf_exception_handler
 
         json_writer_options build() except +libcudf_exception_handler

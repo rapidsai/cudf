@@ -61,7 +61,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     d_row_equal,
     probing_scheme_t{d_row_hash},
     cuco::thread_scope_device,
-    cuco::storage<GROUPBY_WINDOW_SIZE>{},
+    cuco::storage<GROUPBY_BUCKET_SIZE>{},
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
     stream.value()};
 
