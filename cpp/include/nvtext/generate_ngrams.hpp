@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,6 +117,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(
  *
  * @param input Strings column to produce ngrams from
  * @param ngrams The ngram number to generate. Default is 5.
+ * @param seed The seed value to use with the hash algorithm. Default is 0.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A lists column of hash values
@@ -124,6 +125,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(
 std::unique_ptr<cudf::column> hash_character_ngrams(
   cudf::strings_column_view const& input,
   cudf::size_type ngrams            = 5,
+  uint32_t seed                     = 0,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
