@@ -1795,7 +1795,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def memory_usage(self, deep: bool = False) -> int:
         usage = sum(col.memory_usage for col in self._columns)
-        breakpoint()
         if self._levels is not None:
             usage += sum(
                 level.memory_usage(deep=deep) for level in self._levels
