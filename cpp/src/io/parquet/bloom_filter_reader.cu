@@ -350,7 +350,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
   }
 
   /**
-   * @brief Returns the AST to apply on bloom filters mmebership.
+   * @brief Returns the AST to apply on bloom filter membership.
    *
    * @return AST operation expression
    */
@@ -368,7 +368,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
 };
 
 /**
- * @brief Reads bloom filters data to device.
+ * @brief Reads bloom filter data to device.
  *
  * @param sources Dataset sources
  * @param num_chunks Number of total column chunks to read
