@@ -41,11 +41,16 @@ class element_equality_comparator {
    *
    * @note `lhs` and `rhs` may be the same.
    *
+   * @param has_nulls Indicates if either input column contains nulls.
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  __host__ __device__ element_equality_comparator(column_device_view lhs, column_device_view rhs)
-    : lhs{lhs}, rhs{rhs}
+  __host__ __device__ element_equality_comparator(cudf::nullate::DYNAMIC has_nulls,
+                                                  column_device_view lhs,
+                                                  column_device_view rhs,
+                                                  null_equality nulls_are_equal)
+    : _has_nulls{has_nulls}, _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal}
   {
   }
 
@@ -60,8 +65,17 @@ class element_equality_comparator {
   __device__ bool operator()(size_type lhs_element_index,
                              size_type rhs_element_index) const noexcept
   {
-    return cudf::equality_compare(lhs.element<Element>(lhs_element_index),
-                                  rhs.element<Element>(rhs_element_index));
+    if (_has_nulls) {
+      bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
+      if (lhs_is_null and rhs_is_null) {
+        return _nulls_are_equal == null_equality::EQUAL;
+      } else if (lhs_is_null != rhs_is_null) {
+        return false;
+      }
+    }
+    return cudf::equality_compare(_lhs.element<Element>(lhs_element_index),
+                                  _rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
@@ -73,8 +87,10 @@ class element_equality_comparator {
   // @endcond
 
  private:
-  column_device_view lhs;
-  column_device_view rhs;
+  cudf::nullate::DYNAMIC _has_nulls;
+  column_device_view _lhs;
+  column_device_view _rhs;
+  null_equality _nulls_are_equal;
 };
 
 /**
@@ -85,10 +101,16 @@ class row_equality_comparator {
   /**
    * @brief Construct a new row equality comparator object
    *
+   * @param has_nulls Indicates if either input column contains nulls
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  row_equality_comparator(table_device_view lhs, table_device_view rhs) : lhs{lhs}, rhs{rhs}
+  row_equality_comparator(cudf::nullate::DYNAMIC has_nulls,
+                          table_device_view lhs,
+                          table_device_view rhs,
+                          null_equality nulls_are_equal)
+    : _has_nulls{has_nulls}, _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
@@ -103,15 +125,17 @@ class row_equality_comparator {
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
     return cudf::type_dispatcher<dispatch_storage_type>(
-      lhs.begin()->type(),
-      element_equality_comparator{*lhs.begin(), *rhs.begin()},
+      _lhs.begin()->type(),
+      element_equality_comparator{_has_nulls, *_lhs.begin(), *_rhs.begin(), _nulls_are_equal},
       lhs_row_index,
       rhs_row_index);
   }
 
  private:
-  table_device_view lhs;
-  table_device_view rhs;
+  cudf::nullate::DYNAMIC _has_nulls;
+  table_device_view _lhs;
+  table_device_view _rhs;
+  null_equality _nulls_are_equal;
 };
 
 /**
@@ -243,9 +267,13 @@ class element_hasher {
   /**
    * @brief Constructs a function object for hashing an element in the given column
    *
+   * @param has_nulls Indicates if the input column contains nulls
    * @param seed The seed to use for the hash function
    */
-  __device__ element_hasher(uint32_t seed) : _seed{seed} {}
+  __device__ element_hasher(cudf::nullate::DYNAMIC has_nulls, hash_value_type seed)
+    : _has_nulls{has_nulls}, _seed{seed}
+  {
+  }
 
   /**
    * @brief Returns the hash value of the given element in the given column.
@@ -258,6 +286,7 @@ class element_hasher {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
+    if (_has_nulls && col.is_null(row_index)) { return null_hash; }
     return Hash<T>{_seed}(col.element<T>(row_index));
   }
 
@@ -276,7 +305,10 @@ class element_hasher {
   }
 
  private:
-  uint32_t _seed;
+  static constexpr hash_value_type null_hash = cuda::std::numeric_limits<hash_value_type>::max();
+
+  cudf::nullate::DYNAMIC _has_nulls;
+  hash_value_type _seed;
 };
 
 /**
@@ -292,10 +324,16 @@ class row_hasher {
   /**
    * @brief Constructs a row_hasher object with a seed value.
    *
+   * @param has_nulls Indicates if the input column contains nulls
    * @param t A table_device_view to hash
    * @param seed A seed value to use for hashing
    */
-  CUDF_HOST_DEVICE row_hasher(table_device_view t, uint32_t seed = 0) : _table{t}, _seed{seed} {}
+  CUDF_HOST_DEVICE row_hasher(cudf::nullate::DYNAMIC has_nulls,
+                              table_device_view t,
+                              hash_value_type seed)
+    : _has_nulls{has_nulls}, _table{t}, _seed{seed}
+  {
+  }
 
   /**
    * @brief Computes the hash value of the row at `row_index` in the `table`
@@ -305,13 +343,16 @@ class row_hasher {
    */
   __device__ auto operator()(size_type row_index) const
   {
-    return cudf::type_dispatcher<dispatch_storage_type>(
-      _table.column(0).type(), element_hasher<Hash>{_seed}, _table.column(0), row_index);
+    return cudf::type_dispatcher<dispatch_storage_type>(_table.column(0).type(),
+                                                        element_hasher<Hash>{_has_nulls, _seed},
+                                                        _table.column(0),
+                                                        row_index);
   }
 
  private:
+  cudf::nullate::DYNAMIC _has_nulls;
   table_device_view _table;
-  uint32_t _seed;
+  hash_value_type _seed;
 };
 
 }  // namespace row::primitive

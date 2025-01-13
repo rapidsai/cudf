@@ -127,12 +127,12 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
 
   size_type const build_table_num_rows{_build.num_rows()};
 
-  if (build_table_num_rows) { return; }
+  if (build_table_num_rows == 0) { return; }
 
   if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
-    auto d_build_view = cudf::table_device_view::create(_build, stream);
-    auto const d_hasher =
-      cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{*d_build_view};
+    auto d_build_view   = cudf::table_device_view::create(_build, stream);
+    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
+      nullate::DYNAMIC{has_nulls}, *d_build_view, DEFAULT_HASH_SEED};
 
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, primitive_keys_fn<rhs_index_type>{d_hasher});
@@ -188,12 +188,12 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
     thrust::make_transform_output_iterator(found_indices.begin(), output_fn{});
 
   if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
-    auto d_build_view = cudf::table_device_view::create(_build, stream);
-    auto d_probe_view = cudf::table_device_view::create(probe, stream);
-    auto const d_hasher =
-      cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{*d_probe_view};
-    auto const d_equal =
-      cudf::row::primitive::row_equality_comparator{*d_probe_view, *d_build_view};
+    auto d_build_view   = cudf::table_device_view::create(_build, stream);
+    auto d_probe_view   = cudf::table_device_view::create(probe, stream);
+    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
+      nullate::DYNAMIC{has_nulls}, *d_probe_view, DEFAULT_HASH_SEED};
+    auto const d_equal = cudf::row::primitive::row_equality_comparator{
+      nullate::DYNAMIC{has_nulls}, *d_probe_view, *d_build_view, _nulls_equal};
 
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, primitive_keys_fn<lhs_index_type>{d_hasher});
@@ -298,12 +298,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
     thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
 
   if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
-    auto d_build_view = cudf::table_device_view::create(_build, stream);
-    auto d_probe_view = cudf::table_device_view::create(probe, stream);
-    auto const d_hasher =
-      cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{*d_probe_view};
-    auto const d_equal =
-      cudf::row::primitive::row_equality_comparator{*d_probe_view, *d_build_view};
+    auto d_build_view   = cudf::table_device_view::create(_build, stream);
+    auto d_probe_view   = cudf::table_device_view::create(probe, stream);
+    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
+      nullate::DYNAMIC{has_nulls}, *d_probe_view, DEFAULT_HASH_SEED};
+    auto const d_equal = cudf::row::primitive::row_equality_comparator{
+      nullate::DYNAMIC{has_nulls}, *d_probe_view, *d_build_view, _nulls_equal};
 
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, primitive_keys_fn<lhs_index_type>{d_hasher});
