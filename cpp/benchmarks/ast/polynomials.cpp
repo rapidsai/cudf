@@ -18,6 +18,7 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/error.hpp>
@@ -69,6 +70,7 @@ static void BM_ast_polynomials(nvbench::state& state)
   state.add_global_memory_writes<key_type>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    cudf::scoped_range range{"benchmark_iteration"};
     cudf::compute_column(*table, tree.back(), launch.get_stream().get_stream());
   });
 }

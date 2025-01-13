@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
@@ -57,6 +58,8 @@ static void BM_transform_polynomials(nvbench::state& state)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
+
+    cudf::scoped_range range{"benchmark_iteration"};
 
     std::string expr = std::to_string(constants[0]);
 
