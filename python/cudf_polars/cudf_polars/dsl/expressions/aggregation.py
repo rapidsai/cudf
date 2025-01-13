@@ -31,7 +31,7 @@ __all__ = ["Agg"]
 
 
 class Agg(Expr):
-    __slots__ = ("name", "options", "request")
+    __slots__ = ("_request", "name", "options")
     _non_child = ("dtype", "name", "options")
 
     def __init__(
@@ -50,7 +50,8 @@ class Agg(Expr):
             _, quantile = self.children
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
-        self.request = None
+
+        self._request = None
 
     _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
         [
@@ -77,8 +78,10 @@ class Agg(Expr):
         "linear": plc.types.Interpolation.LINEAR,
     }
 
-    def _fill_request(self):
-        if self.request is None:
+    @property
+    def request(self):
+        """Return the aggregation request."""
+        if self._request is None:
             # TODO: nan handling in groupby case
             if self.name == "min":
                 req = plc.aggregation.min()
@@ -115,7 +118,9 @@ class Agg(Expr):
                 raise NotImplementedError(
                     f"Unreachable, {self.name=} is incorrectly listed in _SUPPORTED"
                 )  # pragma: no cover
-            self.request = req
+            self._request = req
+
+        return self._request
 
     def collect_agg(self, *, depth: int) -> AggInfo:
         """Collect information about aggregations in groupbys."""
@@ -127,7 +132,6 @@ class Agg(Expr):
             raise NotImplementedError("Nan propagation in groupby for min/max")
         (child,) = self.children
         ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
-        self._fill_request()
         request = self.request
         # These are handled specially here because we don't set up the
         # request for the whole-frame agg because we can avoid a
@@ -233,8 +237,6 @@ class Agg(Expr):
             raise NotImplementedError(
                 f"Agg in context {context}"
             )  # pragma: no cover; unreachable
-
-        self._fill_request()
 
         op = getattr(self, f"_{self.name}", None)
         if op is None:
