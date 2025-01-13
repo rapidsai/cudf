@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
@@ -260,6 +260,17 @@ def custom_repr_html(obj):
     )[0]
 
 
+def custom_getitem(self, arg):
+    if cudf.api.types.is_scalar(arg):
+        return self._fsproxy_slow[arg]
+    else:
+        return _fast_slow_function_call(
+            lambda self, arg: self[arg],
+            self,
+            arg,
+        )[0]
+
+
 if ipython_shell:
     # See: https://ipython.readthedocs.io/en/stable/config/integrating.html#formatters-for-third-party-types
     html_formatter = ipython_shell.display_formatter.formatters["text/html"]
@@ -285,6 +296,7 @@ Series = make_final_proxy_type(
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
+        "__getitem__": custom_getitem,
     },
 )
 
