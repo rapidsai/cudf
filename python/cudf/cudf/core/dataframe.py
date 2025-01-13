@@ -8079,6 +8079,90 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         result.name = "proportion" if normalize else "count"
         return result
 
+    @_performance_tracking
+    def to_pylibcudf(self, copy=False):
+        """
+        Convert this DataFrame to a pylibcudf.Table.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Table
+            A pylibcudf.Table referencing the same data.
+        dict
+            Dict of metadata (includes column names and dataframe indices)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3],
+        ...                    'b': ['a', 'b', 'c']},
+        ...                    index=['x', 'y', 'z'])
+        >>> df.to_pylibcudf()
+        (<pylibcudf.table.Table at 0x7f9b5996e1d0>,
+        {'index': Index(['x', 'y', 'z'], dtype='object'),
+        'column_names': Index(['a', 'b'], dtype='object')})
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {}
+        metadata["index"] = self.index
+        metadata["column_names"] = self.columns
+        return plc.Table(
+            [col.to_pylibcudf(mode="write") for col in self._columns]
+        ), metadata
+
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(cls, table: plc.Table, metadata: dict):
+        """
+        Create a DataFrame from a pylibcudf.Table.
+
+        Parameters
+        ----------
+        table : pylibcudf.Table
+            The input Table.
+        metadata : dict
+            Metadata necessary to reconstruct the dataframe
+
+        Returns
+        -------
+        table : pylibcudf.Table
+            A pylibcudf.Table referencing the same data.
+        column_names : list[str]
+            The list of columns names.
+
+        Notes
+        -----
+        This function will generate a DataFrame which contains a tuple of columns
+        pointing to the same columns the input table points to.  It will directly access
+        the data and mask buffers of the pylibcudf columns, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Table.
+        """
+        if metadata is None:
+            raise ValueError("Must at least pass metadata with column names")
+        columns = table.columns()
+        df = cls._from_data(
+            {
+                name: cudf.core.column.ColumnBase.from_pylibcudf(
+                    col, data_ptr_exposed=True
+                )
+                for name, col in zip(metadata["column_names"], columns)
+            }
+        )
+        for key in metadata:
+            setattr(df, key, metadata[key])
+        return df
+
 
 def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
     """

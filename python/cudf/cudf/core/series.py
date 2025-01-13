@@ -72,6 +72,8 @@ if TYPE_CHECKING:
 
     import pyarrow as pa
 
+    import pylibcudf as plc
+
     from cudf._typing import (
         ColumnLike,
         DataFrameOrSeries,
@@ -3805,6 +3807,74 @@ class Series(SingleColumnFrame, IndexedFrame):
             ),
             inplace=inplace,
         )
+
+    @_performance_tracking
+    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+        """
+        Convert this Series to a pylibcudf.Column.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        dict
+            Dict of metadata (includes name and series indices)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", "u", "h", "d"]).to_pylibcudf()
+        >>> sr.to_pylibcudf()
+        (<pylibcudf.column.Column at 0x7f8160f16800>,
+        {'index': RangeIndex(start=0, stop=5, step=1), 'name': None})
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"name": self.name, "index": self.index}
+        return self._column.to_pylibcudf(mode="write"), metadata
+
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(cls, col: plc.Column, metadata=None):
+        """
+        Create a Series from a pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The input Column.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+
+        Notes
+        -----
+        This function will generate a Series which contains a Column
+        pointing to the provided pylibcudf Column.  It will directly access
+        the data and mask buffers of the pylibcudf Column, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Column.
+        """
+        cudf_col = cls._from_column(
+            cudf.core.column.ColumnBase.from_pylibcudf(
+                col, data_ptr_exposed=True
+            )
+        )
+        if metadata:
+            for key in metadata:
+                setattr(cudf_col, key, metadata[key])
+        return cudf_col
 
 
 def make_binop_func(op):
