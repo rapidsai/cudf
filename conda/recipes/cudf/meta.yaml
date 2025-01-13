@@ -38,7 +38,7 @@ build:
     - libcudf
   ignore_run_exports_from:
     {% if cuda_major == "11" %}
-    - {{ compiler('cuda11') }}
+    - {{ compiler('cuda') }}
     {% else %}
     - {{ compiler('cuda') }}
     - cuda-cudart-dev
@@ -52,7 +52,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     {% if cuda_major == "11" %}
-    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    - {{ compiler('cuda') }} ={{ cuda_version }}
     {% else %}
     - {{ compiler('cuda') }}
     {% endif %}
