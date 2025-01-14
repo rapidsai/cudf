@@ -110,24 +110,13 @@ __device__ void block_excl_sum(size_type* arr, size_type length, size_type initi
 }
 
 /**
- * @brief Compute string offsets for non-large string cols and just the initial offset for
- * large string cols
+ * @brief Atomically update the initial string offset for large string columns.
  */
-template <int block_size>
-__device__ void compute_string_offsets(uint8_t* data_out,
-                                       size_t* initial_str_offsets,
-                                       int32_t chunk_idx,
-                                       int32_t value_count,
-                                       size_t str_offset,
-                                       bool is_large_string_col)
+inline __device__ void update_initial_string_offset(size_t* initial_str_offsets,
+                                                    int32_t chunk_idx,
+                                                    size_t str_offset)
 {
-  // Compute offsets if this is not a large strings col
-  if (not is_large_string_col) {
-    auto const offptr = reinterpret_cast<size_type*>(data_out);
-    block_excl_sum<block_size>(offptr, value_count, str_offset);
-  }
-  // Atomically update the initial string offset for this output column's chunk
-  else if (threadIdx.x == 0) {
+  if (threadIdx.x == 0) {
     cuda::atomic_ref<size_t, cuda::std::thread_scope_device> initial_str_offsets_ref{
       initial_str_offsets[chunk_idx]};
     initial_str_offsets_ref.fetch_min(str_offset, cuda::std::memory_order_relaxed);
