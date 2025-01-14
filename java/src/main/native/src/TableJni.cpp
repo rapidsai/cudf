@@ -4171,21 +4171,17 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv*
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
-  JNIEnv* env, jclass, jlong input_table, jlong bounce_buffer_size, jlong memoryResourceHandle)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(JNIEnv* env,
+                                                                  jclass,
+                                                                  jlong input_table,
+                                                                  jlong bounce_buffer_size)
 {
   JNI_NULL_CHECK(env, input_table, "native handle is null", 0);
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::table_view* n_table = reinterpret_cast<cudf::table_view*>(input_table);
-    // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
-    // and scratch memory only.
-    auto temp_mr = memoryResourceHandle != 0
-                     ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
-                     : cudf::get_current_device_resource_ref();
-    auto chunked_pack =
-      cudf::chunked_pack::create(*n_table, bounce_buffer_size, cudf::get_default_stream(), temp_mr);
+    auto chunked_pack         = cudf::chunked_pack::create(*n_table, bounce_buffer_size);
     return reinterpret_cast<jlong>(chunked_pack.release());
   }
   CATCH_STD(env, 0);
