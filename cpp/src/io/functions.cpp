@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -766,6 +766,7 @@ void parquet_writer_options_base::set_stats_level(statistics_freq sf) { _stats_l
 void parquet_writer_options_base::set_compression(compression_type compression)
 {
   _compression = compression;
+  if (compression == compression_type::AUTO) { _compression = compression_type::SNAPPY; }
 }
 
 void parquet_writer_options_base::enable_int96_timestamps(bool req)
