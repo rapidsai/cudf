@@ -1,12 +1,11 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from typing_extensions import Self
 
 import cudf
-import cudf._lib as libcudf
-from cudf._lib.types import size_type_dtype
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
     from cudf.core.column import NumericalColumn
@@ -64,14 +63,14 @@ class GatherMap:
             # Alternately we can have an Optional[Column] and handle None
             # specially in _gather.
             self.column = cast(
-                "NumericalColumn", self.column.astype(size_type_dtype)
+                "NumericalColumn", self.column.astype(SIZE_TYPE_DTYPE)
             )
         else:
             if self.column.dtype.kind not in {"i", "u"}:
                 raise TypeError("Gather map must have integer dtype")
             if not nullify:
-                lo, hi = libcudf.reduce.minmax(self.column)
-                if lo.value < -nrows or hi.value >= nrows:
+                lo, hi = self.column.minmax()
+                if lo < -nrows or hi >= nrows:
                     raise IndexError(
                         f"Gather map is out of bounds for [0, {nrows})"
                     )

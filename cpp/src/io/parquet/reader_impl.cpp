@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,38 +97,24 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                              _stream);
     }
 
-    // Compute column string sizes (using page string offsets) for this subpass
+    // Compute column string sizes (using page string offsets) for this output table chunk
     col_string_sizes = calculate_page_string_offsets();
-
-    // ensure cumulative column string sizes have been initialized
-    if (pass.cumulative_col_string_sizes.empty()) {
-      pass.cumulative_col_string_sizes.resize(_input_columns.size(), 0);
-    }
-
-    // Add to the cumulative column string sizes of this pass
-    std::transform(pass.cumulative_col_string_sizes.begin(),
-                   pass.cumulative_col_string_sizes.end(),
-                   col_string_sizes.begin(),
-                   pass.cumulative_col_string_sizes.begin(),
-                   std::plus<>{});
 
     // Check for overflow in cumulative column string sizes of this pass so that the page string
     // offsets of overflowing (large) string columns are treated as 64-bit.
     auto const threshold         = static_cast<size_t>(strings::detail::get_offset64_threshold());
-    auto const has_large_strings = std::any_of(pass.cumulative_col_string_sizes.cbegin(),
-                                               pass.cumulative_col_string_sizes.cend(),
+    auto const has_large_strings = std::any_of(col_string_sizes.cbegin(),
+                                               col_string_sizes.cend(),
                                                [=](std::size_t sz) { return sz > threshold; });
     if (has_large_strings and not strings::detail::is_large_strings_enabled()) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
 
-    // Mark any chunks for which the cumulative column string size has exceeded the
-    // large strings threshold
-    if (has_large_strings) {
-      for (auto& chunk : pass.chunks) {
-        auto const idx = chunk.src_col_index;
-        if (pass.cumulative_col_string_sizes[idx] > threshold) { chunk.is_large_string_col = true; }
-      }
+    // Mark/unmark column-chunk descriptors depending on the string sizes of corresponding output
+    // column chunks and the large strings threshold.
+    for (auto& chunk : pass.chunks) {
+      auto const idx            = chunk.src_col_index;
+      chunk.is_large_string_col = (col_string_sizes[idx] > threshold);
     }
   }
 
@@ -210,11 +196,9 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         // only do string buffer for leaf
         if (idx == max_depth - 1 and out_buf.string_size() == 0 and
             col_string_sizes[pass.chunks[c].src_col_index] > 0) {
-          out_buf.create_string_data(
-            col_string_sizes[pass.chunks[c].src_col_index],
-            pass.cumulative_col_string_sizes[pass.chunks[c].src_col_index] >
-              static_cast<size_t>(strings::detail::get_offset64_threshold()),
-            _stream);
+          out_buf.create_string_data(col_string_sizes[pass.chunks[c].src_col_index],
+                                     pass.chunks[c].is_large_string_col,
+                                     _stream);
         }
         if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
@@ -416,11 +400,11 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         final_offsets.emplace_back(offset);
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
-        // need to cap off the string offsets column
-        auto const sz = static_cast<size_type>(col_string_sizes[idx]);
-        if (sz <= strings::detail::get_offset64_threshold()) {
+        // only if it is not a large strings column
+        if (col_string_sizes[idx] <=
+            static_cast<size_t>(strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
-          final_offsets.emplace_back(sz);
+          final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }
       }
     }

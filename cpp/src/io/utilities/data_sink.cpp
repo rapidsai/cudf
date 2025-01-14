@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ class file_sink : public data_sink {
     if (cufile_integration::is_kvikio_enabled()) {
       cufile_integration::set_up_kvikio();
       _kvikio_file = kvikio::FileHandle(filepath, "w");
-      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
+      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
                     _kvikio_file.is_compat_mode_preferred() ? "on" : "off");
     } else {
       _cufile_out = detail::make_cufile_output(filepath);

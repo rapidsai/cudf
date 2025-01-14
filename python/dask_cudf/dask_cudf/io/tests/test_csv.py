@@ -185,11 +185,6 @@ def test_read_csv_blocksize_none(tmp_path, compression, size):
     df2 = dask_cudf.read_csv(path, blocksize=None, dtype=typ)
     dd.assert_eq(df, df2)
 
-    # Test chunksize deprecation
-    with pytest.warns(FutureWarning, match="deprecated"):
-        df3 = dask_cudf.read_csv(path, chunksize=None, dtype=typ)
-    dd.assert_eq(df, df3)
-
 
 @pytest.mark.parametrize("dtype", [{"b": str, "c": int}, None])
 def test_csv_reader_usecols(tmp_path, dtype):
@@ -274,8 +269,4 @@ def test_deprecated_api_paths(tmp_path):
     # Encourage top-level read_csv import only
     with pytest.warns(match="dask_cudf.io.read_csv is now deprecated"):
         df2 = dask_cudf.io.read_csv(csv_path)
-    dd.assert_eq(df, df2, check_divisions=False)
-
-    with pytest.warns(match="dask_cudf.io.csv.read_csv is now deprecated"):
-        df2 = dask_cudf.io.csv.read_csv(csv_path)
     dd.assert_eq(df, df2, check_divisions=False)

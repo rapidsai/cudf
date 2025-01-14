@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import functools
 import operator
@@ -10,11 +10,11 @@ import pytest
 
 import cudf
 from cudf import NA
-from cudf._lib.copying import get_element
 from cudf.api.types import is_scalar
 from cudf.core.column.column import column_empty
 from cudf.testing import assert_eq
 from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
+from cudf.utils.dtypes import cudf_dtype_to_pa_type
 
 
 @pytest.mark.parametrize(
@@ -424,7 +424,9 @@ def test_get_ind_sequence():
 def test_contains_scalar(data, scalar, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect)
-    got = sr.list.contains(cudf.Scalar(scalar, sr.dtype.element_type))
+    got = sr.list.contains(
+        pa.scalar(scalar, type=cudf_dtype_to_pa_type(sr.dtype.element_type))
+    )
     assert_eq(expect, got)
 
 
@@ -456,7 +458,9 @@ def test_contains_scalar(data, scalar, expect):
 def test_contains_null_search_key(data, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect, dtype="bool")
-    got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
+    got = sr.list.contains(
+        pa.scalar(None, type=cudf_dtype_to_pa_type(sr.dtype.element_type))
+    )
     assert_eq(expect, got)
 
 
@@ -519,12 +523,12 @@ def test_contains_invalid(data, scalar):
         ),
         (
             [["d", None, "e"], [None, "f"], []],
-            cudf.Scalar(cudf.NA, "O"),
+            pa.scalar(None, type=pa.string()),
             [None, None, None],
         ),
         (
             [None, [10, 9, 8], [5, 8, None]],
-            cudf.Scalar(cudf.NA, "int64"),
+            pa.scalar(None, type=pa.int64()),
             [None, None, None],
         ),
     ],
@@ -533,7 +537,11 @@ def test_index(data, search_key, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect, dtype="int32")
     if is_scalar(search_key):
-        got = sr.list.index(cudf.Scalar(search_key, sr.dtype.element_type))
+        got = sr.list.index(
+            pa.scalar(
+                search_key, type=cudf_dtype_to_pa_type(sr.dtype.element_type)
+            )
+        )
     else:
         got = sr.list.index(
             cudf.Series(search_key, dtype=sr.dtype.element_type)
@@ -715,9 +723,8 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
     ],
 )
 def test_list_scalar_device_construction(data):
-    col = cudf.Series([data])._column
-    slr = get_element(col, 0)
-    assert slr.value == data
+    res = cudf.Series([data])._column.element_indexing(0)
+    assert res == data
 
 
 @pytest.mark.parametrize("nesting_level", [1, 2, 3])
@@ -729,10 +736,8 @@ def test_list_scalar_device_construction_null(nesting_level):
     arrow_type = pa.infer_type(data)
     arrow_arr = pa.array([None], type=arrow_type)
 
-    col = cudf.Series(arrow_arr)._column
-    slr = get_element(col, 0)
-
-    assert slr.value is cudf.NA
+    res = cudf.Series(arrow_arr)._column.element_indexing(0)
+    assert res is cudf.NA
 
 
 @pytest.mark.parametrize("input_obj", [[[1, NA, 3]], [[1, NA, 3], [4, 5, NA]]])

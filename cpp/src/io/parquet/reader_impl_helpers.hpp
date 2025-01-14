@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +195,38 @@ class aggregate_reader_metadata {
    */
   void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
 
+  /**
+   * @brief Reads bloom filter bitsets for the specified columns from the given lists of row
+   * groups.
+   *
+   * @param sources Dataset sources
+   * @param row_group_indices Lists of row groups to read bloom filters from, one per source
+   * @param[out] bloom_filter_data List of bloom filter data device buffers
+   * @param column_schemas Schema indices of columns whose bloom filters will be read
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A flattened list of bloom filter bitset device buffers for each predicate column across
+   * row group
+   */
+  [[nodiscard]] std::vector<rmm::device_buffer> read_bloom_filters(
+    host_span<std::unique_ptr<datasource> const> sources,
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<int const> column_schemas,
+    size_type num_row_groups,
+    rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Collects Parquet types for the columns with the specified schema indices
+   *
+   * @param row_group_indices Lists of row groups, once per source
+   * @param column_schemas Schema indices of columns whose types will be collected
+   *
+   * @return A list of parquet types for the columns matching the provided schema indices
+   */
+  [[nodiscard]] std::vector<Type> get_parquet_types(
+    host_span<std::vector<size_type> const> row_group_indices,
+    host_span<int const> column_schemas) const;
+
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources,
                             bool use_arrow_schema,
@@ -323,8 +355,9 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters the row groups based on predicate filter
    *
+   * @param sources Lists of input datasources
    * @param row_group_indices Lists of row groups to read, one per source
-   * @param output_dtypes Datatypes of of output columns
+   * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -334,11 +367,32 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::
     tuple<std::optional<std::vector<std::vector<size_type>>>, size_t, size_t, size_t>
-    filter_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+    filter_row_groups(    host_span<std::unique_ptr<datasource> const> sources,
+    host_span<std::vector<size_type> const> row_group_indices,
                       host_span<data_type const> output_dtypes,
                       host_span<int const> output_column_schemas,
                       std::reference_wrapper<ast::expression const> filter,
                       rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Filters the row groups using bloom filters
+   *
+   * @param sources Dataset sources
+   * @param row_group_indices Lists of input row groups to read, one per source
+   * @param output_dtypes Datatypes of output columns
+   * @param output_column_schemas schema indices of output columns
+   * @param filter AST expression to filter row groups based on bloom filter membership
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices, if any is filtered
+   */
+  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
+    host_span<std::unique_ptr<datasource> const> sources,
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    host_span<data_type const> output_dtypes,
+    host_span<int const> output_column_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Filters and reduces down to a selection of row groups
@@ -346,6 +400,7 @@ class aggregate_reader_metadata {
    * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
    * values based on the input row group list.
    *
+   * @param sources Lists of input datasources
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
@@ -364,7 +419,8 @@ class aggregate_reader_metadata {
                            size_t,
                            size_t,
                            size_t>
-  select_row_groups(host_span<std::vector<size_type> const> row_group_indices,
+  select_row_groups(host_span<std::unique_ptr<datasource> const> sources, 
+                    host_span<std::vector<size_type> const> row_group_indices,
                     int64_t row_start,
                     std::optional<size_type> const& row_count,
                     host_span<data_type const> output_dtypes,
@@ -423,14 +479,14 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
 
   /**
-   * @brief Returns the AST to apply on Column chunk statistics.
+   * @brief Returns the converted AST expression
    *
    * @return AST operation expression
    */
   [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> get_converted_expr()
     const
   {
-    return _stats_expr;
+    return _converted_expr;
   }
 
  private:
@@ -438,7 +494,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
   std::unordered_map<std::string, size_type> column_name_to_index;
-  std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
+  std::optional<std::reference_wrapper<ast::expression const>> _converted_expr;
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
@@ -454,5 +510,23 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
 [[nodiscard]] std::vector<std::string> get_column_names_in_expression(
   std::optional<std::reference_wrapper<ast::expression const>> expr,
   std::vector<std::string> const& skip_names);
+
+/**
+ * @brief Filter table using the provided (StatsAST or BloomfilterAST) expression and
+ * collect filtered row group indices
+ *
+ * @param table Table of stats or bloom filter membership columns
+ * @param ast_expr StatsAST or BloomfilterAST expression to filter with
+ * @param input_row_group_indices Lists of input row groups to read, one per source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return Collected filtered row group indices, one vector per source, if any. A std::nullopt if
+ * all row groups are required or if the computed predicate is all nulls
+ */
+[[nodiscard]] std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
+  cudf::table_view ast_table,
+  std::reference_wrapper<ast::expression const> ast_expr,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail

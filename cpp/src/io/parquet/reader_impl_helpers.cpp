@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1036,6 +1036,7 @@ std::tuple<int64_t,
            size_t,
            size_t>
 aggregate_reader_metadata::select_row_groups(
+  host_span<std::unique_ptr<datasource> const> sources,
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
   std::optional<size_type> const& num_rows_opt,
@@ -1056,7 +1057,7 @@ aggregate_reader_metadata::select_row_groups(
              num_stats_filtered_row_groups,
              num_bloom_filtered_row_groups) =
       filter_row_groups(
-        row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
+        sources, row_group_indices, output_dtypes, output_column_schemas, filter.value(), stream);
     if (filtered_row_group_indices.has_value()) {
       row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
