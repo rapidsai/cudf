@@ -24,7 +24,6 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/strings/detail/gather.cuh>
 
-#include <cuda/atomic>
 #include <thrust/logical.h>
 #include <thrust/transform_scan.h>
 
@@ -1137,22 +1136,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // values until we reach first_row. account for that here.
   if (!has_repetition) { value_count -= s->first_row; }
 
-  // If we read > 0 values from this page.
+  // Compute string offsets if we read > 0 values from this page.
   if (value_count > 0) {
-    // Compute offsets if this is not a large strings col
-    if (not s->col.is_large_string_col) {
-      auto const offptr =
-        reinterpret_cast<size_type*>(nesting_info_base[leaf_level_index].data_out);
-      block_excl_sum<decode_block_size>(offptr, value_count, s->page.str_offset);
-    }
-    // Update the str_offset for offsets to be computed during output column construction
-    else {
-      if (!t) {
-        cuda::atomic_ref<size_t, cuda::std::thread_scope_device> ref{
-          initial_str_offsets[pages[page_idx].chunk_idx]};
-        ref.fetch_min(s->page.str_offset, cuda::std::memory_order_relaxed);
-      }
-    }
+    compute_string_offsets<decode_block_size>(nesting_info_base[leaf_level_index].data_out,
+                                              initial_str_offsets,
+                                              pages[page_idx].chunk_idx,
+                                              value_count,
+                                              s->page.str_offset,
+                                              s->col.is_large_string_col);
   }
 
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
