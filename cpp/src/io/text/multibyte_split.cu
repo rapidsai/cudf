@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
 }  // namespace
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
-                                              std::string const& delimiter,
+                                              std::string_view delimiter,
                                               byte_range_info byte_range,
                                               bool strip_delimiters,
                                               rmm::cuda_stream_view stream,
@@ -313,7 +313,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   auto device_delim = cudf::string_scalar(delimiter, true, stream, mr);
 
-  auto sorted_delim = delimiter;
+  std::string sorted_delim{delimiter};
   std::sort(sorted_delim.begin(), sorted_delim.end());
   auto [_last_char, _last_char_count, max_duplicate_tokens] = std::accumulate(
     sorted_delim.begin(), sorted_delim.end(), std::make_tuple('\0', 0, 0), [](auto acc, char c) {
@@ -567,7 +567,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 }  // namespace detail
 
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
-                                              std::string const& delimiter,
+                                              std::string_view delimiter,
                                               parse_options options,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)

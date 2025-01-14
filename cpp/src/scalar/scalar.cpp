@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ bool* scalar::validity_data() { return _is_valid.data(); }
 
 bool const* scalar::validity_data() const { return _is_valid.data(); }
 
-string_scalar::string_scalar(std::string const& string,
+string_scalar::string_scalar(std::string_view string,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)

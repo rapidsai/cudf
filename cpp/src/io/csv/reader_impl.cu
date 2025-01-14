@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -106,13 +107,13 @@ class selected_rows_offsets {
 /**
  * @brief Removes the first and Last quote in the string
  */
-string removeQuotes(string str, char quotechar)
+std::string_view remove_quotes(std::string_view str, char quotechar)
 {
   // Exclude first and last quotation char
   size_t const first_quote = str.find(quotechar);
-  if (first_quote != string::npos) { str.erase(first_quote, 1); }
+  if (first_quote != string::npos) { str = str.substr(first_quote + 1); }
   size_t const last_quote = str.rfind(quotechar);
-  if (last_quote != string::npos) { str.erase(last_quote, 1); }
+  if (last_quote != string::npos) { str.substr(0, last_quote); }
 
   return str;
 }
@@ -152,8 +153,10 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
           --col_name_len;
         }
 
-        string const new_col_name(row.data() + prev, col_name_len);
-        col_names.push_back(removeQuotes(new_col_name, parse_opts.quotechar));
+        string new_col_name{
+          remove_quotes(std::string_view{row.data() + prev, static_cast<std::size_t>(col_name_len)},
+                        parse_opts.quotechar)};
+        col_names.push_back(std::move(new_col_name));
       } else {
         // This is the first data row, add the automatically generated name
         col_names.push_back(prefix + std::to_string(col_names.size()));
