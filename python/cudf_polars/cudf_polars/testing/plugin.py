@@ -8,7 +8,9 @@ from __future__ import annotations
 from functools import partialmethod
 from typing import TYPE_CHECKING
 
+import fastexcel
 import pytest
+from packaging import version
 
 import polars
 
@@ -44,7 +46,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-EXPECTED_FAILURES: Mapping[str, str] = {
+EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_csv.py::test_compressed_csv": "Need to determine if file is compressed",
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
@@ -192,6 +194,10 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     # Maybe flaky, order-dependent?
     "tests/unit/test_projections.py::test_schema_full_outer_join_projection_pd_13287": "Order-specific result check, query is correct but in different order",
     "tests/unit/test_queries.py::test_group_by_agg_equals_zero_3535": "libcudf sums all nulls to null, not zero",
+    "tests/unit/io/test_spreadsheet.py::test_write_excel_bytes[calamine]": (
+        "Fails when fastexcel version >= 0.12.1. tracking issue: https://github.com/pola-rs/polars/issues/20698",
+        version.parse(fastexcel.__version__) >= version.parse("0.12.1"),
+    ),
 }
 
 
@@ -219,4 +225,12 @@ def pytest_collection_modifyitems(
         if item.nodeid in TESTS_TO_SKIP:
             item.add_marker(pytest.mark.skip(reason=TESTS_TO_SKIP[item.nodeid]))
         elif item.nodeid in EXPECTED_FAILURES:
+            if isinstance(EXPECTED_FAILURES[item.nodeid], tuple):
+                # the second entry in the tuple is the condition to xfail on
+                item.add_marker(
+                    pytest.mark.xfail(
+                        condition=EXPECTED_FAILURES[item.nodeid][1],
+                        reason=EXPECTED_FAILURES[item.nodeid][0],
+                    ),
+                )
             item.add_marker(pytest.mark.xfail(reason=EXPECTED_FAILURES[item.nodeid]))
