@@ -28,7 +28,9 @@
 #include <nvcomp/snappy.h>
 #include <nvcomp/zstd.h>
 
+#include <fstream>
 #include <mutex>
+#include <numeric>
 
 namespace cudf::io::detail::nvcomp {
 namespace {

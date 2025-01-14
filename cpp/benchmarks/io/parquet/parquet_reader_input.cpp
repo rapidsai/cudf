@@ -43,10 +43,13 @@ void parquet_read_common(cudf::size_type num_rows_to_read,
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();
-
       timer.start();
       auto const result = cudf::io::read_parquet(read_opts);
       timer.stop();
+
+      setenv("LOG_COMP", "1", 1);
+      cudf::io::read_parquet(read_opts);
+      setenv("LOG_COMP", "0", 1);
 
       CUDF_EXPECTS(result.tbl->num_columns() == num_cols_to_read, "Unexpected number of columns");
       CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
@@ -66,7 +69,6 @@ void BM_parquet_read_data_common(nvbench::state& state,
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const compression = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -75,8 +77,7 @@ void BM_parquet_read_data_common(nvbench::state& state,
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
-      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression);
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
     cudf::io::write_parquet(write_opts);
     return view.num_rows();
   }();
@@ -125,7 +126,6 @@ void BM_parquet_read_io_compression(nvbench::state& state)
   auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -136,8 +136,7 @@ void BM_parquet_read_io_compression(nvbench::state& state)
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
-      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression);
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
     cudf::io::write_parquet(write_opts);
     return view.num_rows();
   }();
@@ -170,8 +169,7 @@ void BM_parquet_read_io_small_mixed(nvbench::state& state)
 
     cudf::io::parquet_writer_options write_opts =
       cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .max_page_size_rows(10'000)
-        .compression(cudf::io::compression_type::NONE);
+        .max_page_size_rows(10'000);
     cudf::io::write_parquet(write_opts);
   }
 
@@ -186,7 +184,6 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const byte_limit  = static_cast<cudf::size_type>(state.get_int64("byte_limit"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const compression = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -197,8 +194,7 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
-      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression);
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
 
     cudf::io::write_parquet(write_opts);
     return view.num_rows();
@@ -223,6 +219,12 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
       } while (reader.has_next());
       timer.stop();
 
+      setenv("LOG_COMP", "1", 1);
+      do {
+        auto const _ = reader.read_chunk();
+      } while (reader.has_next());
+      setenv("LOG_COMP", "0", 1);
+
       CUDF_EXPECTS(num_rows_read == num_rows_written, "Benchmark did not read the entire table");
     });
 
@@ -243,7 +245,7 @@ void BM_parquet_read_wide_tables(nvbench::state& state,
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size_mb") << 20);
   auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const source_type     = io_type::DEVICE_BUFFER;
+  auto const source_type     = retrieve_io_type_enum(state.get_string("io_type"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -254,8 +256,7 @@ void BM_parquet_read_wide_tables(nvbench::state& state,
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
-      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(cudf::io::compression_type::NONE);
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
     cudf::io::write_parquet(write_opts);
     return view.num_rows();
   }();
@@ -277,7 +278,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
   auto const data_size_bytes = static_cast<size_t>(state.get_int64("data_size_mb") << 20);
   auto const cardinality     = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const run_length      = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const source_type     = io_type::DEVICE_BUFFER;
+  auto const source_type     = retrieve_io_type_enum(state.get_string("io_type"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -288,8 +289,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
     auto const view = tbl->view();
 
     cudf::io::parquet_writer_options write_opts =
-      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(cudf::io::compression_type::NONE);
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
     cudf::io::write_parquet(write_opts);
     return view.num_rows();
   }();
@@ -299,7 +299,6 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::FLOAT,
-                                            data_type::BOOL8,
                                             data_type::DECIMAL,
                                             data_type::TIMESTAMP,
                                             data_type::DURATION,
@@ -312,31 +311,30 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_data, NVBENCH_TYPE_AXES(d_type_list))
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {0, 2000})
+  .add_int64_axis("run_length", {1, 16});
 
 NVBENCH_BENCH(BM_parquet_read_io_compression)
   .set_name("parquet_read_io_compression")
-  .add_string_axis("io_type", {"FILEPATH", "HOST_BUFFER", "DEVICE_BUFFER"})
-  .add_string_axis("compression_type", {"SNAPPY", "NONE"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {0, 2000})
+  .add_int64_axis("run_length", {1, 16});
 
 NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_read_chunks")
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32})
+  .add_int64_axis("cardinality", {0, 2000})
+  .add_int64_axis("run_length", {1, 16})
   .add_int64_axis("byte_limit", {0, 500'000});
 
 NVBENCH_BENCH(BM_parquet_read_io_small_mixed)
   .set_name("parquet_read_io_small_mixed")
-  .add_string_axis("io_type", {"FILEPATH"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32})
+  .add_int64_axis("cardinality", {0, 2000})
+  .add_int64_axis("run_length", {1, 16})
   .add_int64_axis("num_string_cols", {1, 2, 3});
 
 using d_type_list_wide_table = nvbench::enum_type_list<data_type::DECIMAL, data_type::STRING>;
@@ -344,18 +342,20 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_wide_tables, NVBENCH_TYPE_AXES(d_type_list_w
   .set_name("parquet_read_wide_tables")
   .set_min_samples(4)
   .set_type_axes_names({"data_type"})
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .add_int64_axis("data_size_mb", {1024, 2048, 4096})
   .add_int64_axis("num_cols", {256, 512, 1024})
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {0, 2000})
+  .add_int64_axis("run_length", {1, 16});
 
 NVBENCH_BENCH(BM_parquet_read_wide_tables_mixed)
   .set_name("parquet_read_wide_tables_mixed")
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("data_size_mb", {1024, 2048, 4096})
   .add_int64_axis("num_cols", {256, 512, 1024})
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {0, 2000})
+  .add_int64_axis("run_length", {1, 16});
 
 // a benchmark for structs that only contain fixed-width types
 using d_type_list_struct_only = nvbench::enum_type_list<data_type::STRUCT>;
@@ -364,5 +364,5 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type
   .set_type_axes_names({"data_type"})
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {0, 2000})
+  .add_int64_axis("run_length", {1, 16});

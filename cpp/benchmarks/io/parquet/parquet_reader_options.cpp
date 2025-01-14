@@ -77,7 +77,8 @@ void BM_parquet_read_options(nvbench::state& state,
   auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
+  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
+  cuio_source_sink_pair source_sink(source_type);
   cudf::io::parquet_writer_options options =
     cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
   cudf::io::write_parquet(options);
@@ -133,52 +134,3 @@ void BM_parquet_read_options(nvbench::state& state,
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
-
-using row_selections =
-  nvbench::enum_type_list<row_selection::ALL, row_selection::NROWS, row_selection::ROW_GROUPS>;
-NVBENCH_BENCH_TYPES(BM_parquet_read_options,
-                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
-                                      row_selections,
-                                      nvbench::enum_type_list<converts_strings::YES>,
-                                      nvbench::enum_type_list<uses_pandas_metadata::YES>,
-                                      nvbench::enum_type_list<cudf::type_id::EMPTY>))
-  .set_name("parquet_read_row_selection")
-  .set_type_axes_names({"column_selection",
-                        "row_selection",
-                        "str_to_categories",
-                        "uses_pandas_metadata",
-                        "timestamp_type"})
-  .set_min_samples(4);
-
-using col_selections = nvbench::enum_type_list<column_selection::ALL,
-                                               column_selection::ALTERNATE,
-                                               column_selection::FIRST_HALF,
-                                               column_selection::SECOND_HALF>;
-NVBENCH_BENCH_TYPES(BM_parquet_read_options,
-                    NVBENCH_TYPE_AXES(col_selections,
-                                      nvbench::enum_type_list<row_selection::ALL>,
-                                      nvbench::enum_type_list<converts_strings::YES>,
-                                      nvbench::enum_type_list<uses_pandas_metadata::YES>,
-                                      nvbench::enum_type_list<cudf::type_id::EMPTY>))
-  .set_name("parquet_read_column_selection")
-  .set_type_axes_names({"column_selection",
-                        "row_selection",
-                        "str_to_categories",
-                        "uses_pandas_metadata",
-                        "timestamp_type"})
-  .set_min_samples(4);
-
-NVBENCH_BENCH_TYPES(
-  BM_parquet_read_options,
-  NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
-                    nvbench::enum_type_list<row_selection::ALL>,
-                    nvbench::enum_type_list<converts_strings::YES, converts_strings::NO>,
-                    nvbench::enum_type_list<uses_pandas_metadata::YES, uses_pandas_metadata::NO>,
-                    nvbench::enum_type_list<cudf::type_id::EMPTY>))
-  .set_name("parquet_read_misc_options")
-  .set_type_axes_names({"column_selection",
-                        "row_selection",
-                        "str_to_categories",
-                        "uses_pandas_metadata",
-                        "timestamp_type"})
-  .set_min_samples(4);
