@@ -161,10 +161,8 @@ cpdef size_type null_count(Py_ssize_t bitmask, size_type start, size_type stop):
     ----------
     bitmask : int
         Integer pointer to the bitmask.
-
     start : int
         Index of the first bit to count (inclusive).
-
     stop : int
         Index of the last bit to count (exclusive).
 
