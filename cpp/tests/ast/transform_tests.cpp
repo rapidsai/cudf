@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -389,8 +389,8 @@ TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
   auto c_1   = column_wrapper<int32_t>{0, 0, 0};
   auto table = cudf::table_view{{c_0, c_1}};
 
-  auto col_ref_0 = cudf::ast::column_reference(0);
-  auto col_ref_1 = cudf::ast::column_reference(1);
+  auto const& col_ref_0 = tree.push(cudf::ast::column_reference(0));
+  auto const& col_ref_1 = tree.push(cudf::ast::column_reference(1));
 
   auto const& left_expression  = generate_ast_expr(left_depth_level,
                                                   col_ref_0,
