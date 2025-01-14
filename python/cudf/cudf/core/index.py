@@ -19,7 +19,6 @@ import pylibcudf as plc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -53,6 +52,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
     find_common_type,
     is_mixed_with_object_dtype,
@@ -339,7 +339,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         else:
             return column.column_empty(0, dtype=self.dtype)
 
-    def _clean_nulls_from_index(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     def _is_numeric(self) -> bool:
@@ -1002,7 +1002,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             i = [self._range.index(value)]
         except ValueError:
             i = []
-        return as_column(i, dtype=size_type_dtype)
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)
 
     def isin(self, values, level=None):
         if level is not None and level > 0:
@@ -1127,15 +1127,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             out.name = name
         return out
 
-    @classmethod
     @_performance_tracking
-    def _from_data_like_self(
-        cls, data: MutableMapping, name: Any = no_default
-    ) -> Self:
-        out = _index_from_data(data, name)
-        if name is not no_default:
-            out.name = name
-        return out
+    def _from_data_like_self(self, data: MutableMapping) -> Self:
+        return _index_from_data(data, self.name)
 
     @classmethod
     @_performance_tracking
@@ -1354,7 +1348,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = as_column(
             -1,
             length=len(needle),
-            dtype=libcudf.types.size_type_dtype,
+            dtype=SIZE_TYPE_DTYPE,
         )
 
         if not len(self):
@@ -1494,7 +1488,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             if isinstance(self._values, StringColumn):
                 output = repr(self.to_pandas(nullable=True))
             else:
-                output = repr(self._clean_nulls_from_index().to_pandas())
+                output = repr(self._pandas_repr_compatible().to_pandas())
                 # We should remove all the single quotes
                 # from the output due to the type-cast to
                 # object dtype happening above.
@@ -1649,20 +1643,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __contains__(self, item) -> bool:
         hash(item)
         return item in self._column
-
-    def _clean_nulls_from_index(self) -> Index:
-        if self._values.has_nulls():
-            fill_value = (
-                str(cudf.NaT)
-                if isinstance(self, (DatetimeIndex, TimedeltaIndex))
-                else str(cudf.NA)
-            )
-            return Index._from_column(
-                self._column.astype("str").fillna(fill_value),
-                name=self.name,
-            )
-
-        return self
 
     def any(self) -> bool:
         return self._column.any()
@@ -2347,8 +2327,7 @@ class DatetimeIndex(Index):
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._column.millisecond.astype("int32")
-                * cudf.Scalar(1000, dtype="int32")
+                self._column.millisecond.astype("int32") * np.int32(1000)
             )
             + self._column.microsecond,
             name=self.name,
@@ -3615,7 +3594,7 @@ class IntervalIndex(Index):
     def _is_boolean(self) -> bool:
         return False
 
-    def _clean_nulls_from_index(self) -> Self:
+    def _pandas_repr_compatible(self) -> Self:
         return self
 
     @property
