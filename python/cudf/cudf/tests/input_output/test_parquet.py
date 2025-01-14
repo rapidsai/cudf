@@ -6,7 +6,6 @@ import pyarrow.parquet as pq
 
 import cudf
 from cudf._fuzz_testing.utils import compare_dataframe
-from cudf.testing import assert_eq
 
 
 def test_parquet_long_list():
@@ -22,6 +21,7 @@ def test_parquet_long_list():
     list_rows = pa.array([small_row, large_row, small_row])
     generated_table = pa.Table.from_arrays([list_rows], names=["list_of_list"])
 
+    # Write the parquet file using pyarrow
     file_name = "long_row_list_test.pq"
     # https://arrow.apache.org/docs/python/generated/pyarrow.parquet.write_table.html
     pq.write_table(
@@ -32,8 +32,8 @@ def test_parquet_long_list():
         version="1.0",
         write_page_index=False,
     )
-    assert_eq(True, False)
 
+    # Compare results from using the cudf reader and the pandas reader
     actual = cudf.read_parquet(file_name)
     expected = pd.read_parquet(file_name)
     compare_dataframe(actual, expected, nullable=False)
