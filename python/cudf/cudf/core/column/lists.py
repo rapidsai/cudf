@@ -1,43 +1,34 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import itertools
 from functools import cached_property
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
-import numpy as np
 import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.lists import (
-    concatenate_list_elements,
-    concatenate_rows,
-    contains_scalar,
-    count_elements,
-    distinct,
-    extract_element_column,
-    extract_element_scalar,
-    index_of_column,
-    index_of_scalar,
-    segmented_gather,
-    sort_lists,
-)
-from cudf._lib.strings.convert.convert_lists import format_list_column
-from cudf._lib.types import size_type_dtype
+import cudf.core.column.column as column
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
-from cudf.core.column import ColumnBase, as_column, column
+from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
+    from cudf.core.column.string import StringColumn
 
 
 class ListColumn(ColumnBase):
@@ -77,12 +68,19 @@ class ListColumn(ColumnBase):
             children=children,
         )
 
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        # TODO: handle if self.has_nulls(): case
+        return self
+
     @cached_property
     def memory_usage(self):
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
         current_base_child = self.base_children[1]
         current_offset = self.offset
@@ -107,7 +105,7 @@ class ListColumn(ColumnBase):
         ) * current_base_child.dtype.itemsize
 
         if current_base_child.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+            n += plc.null_mask.bitmask_allocation_size_bytes(
                 current_base_child.size
             )
         return n
@@ -139,7 +137,7 @@ class ListColumn(ColumnBase):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
-                return concatenate_rows([self, other])
+                return self.concatenate_rows([other])  # type: ignore[list-item]
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -163,7 +161,7 @@ class ListColumn(ColumnBase):
         """
         return cast(NumericalColumn, self.children[0])
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         offsets = self.offsets.to_arrow()
         elements = (
             pa.nulls(len(self.elements))
@@ -173,7 +171,7 @@ class ListColumn(ColumnBase):
         pa_type = pa.list_(elements.type)
 
         if self.nullable:
-            nbuf = pa.py_buffer(self.mask.memoryview())
+            nbuf = pa.py_buffer(self.mask.memoryview())  # type: ignore[union-attr]
             buffers = (nbuf, offsets.buffers()[1])
         else:
             buffers = offsets.buffers()
@@ -200,8 +198,8 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def normalize_binop_value(self, other):
-        if not isinstance(other, ListColumn):
+    def normalize_binop_value(self, other) -> Self:
+        if not isinstance(other, type(self)):
             return NotImplemented
         return other
 
@@ -249,7 +247,7 @@ class ListColumn(ColumnBase):
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if cudf._lib.scalar._is_null_host_scalar(data):
+            if cudf.utils.utils._is_null_host_scalar(data):
                 mask_col.append(False)
                 offset_vals.append(offset)
             else:
@@ -260,7 +258,7 @@ class ListColumn(ColumnBase):
 
         offset_col = cast(
             NumericalColumn,
-            column.as_column(offset_vals, dtype=size_type_dtype),
+            column.as_column(offset_vals, dtype=SIZE_TYPE_DTYPE),
         )
 
         # Build ListColumn
@@ -268,7 +266,7 @@ class ListColumn(ColumnBase):
             data=None,
             size=len(arbitrary),
             dtype=cudf.ListDtype(data_col.dtype),
-            mask=cudf._lib.transform.bools_to_mask(as_column(mask_col)),
+            mask=as_column(mask_col).as_mask(),
             offset=0,
             null_count=0,
             children=(offset_col, data_col),
@@ -284,8 +282,13 @@ class ListColumn(ColumnBase):
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
 
-        # Call libcudf to format the list column
-        return format_list_column(lc, separators)
+        with acquire_spill_lock():
+            plc_column = plc.strings.convert.convert_lists.format_list_column(
+                lc.to_pylibcudf(mode="read"),
+                plc.interop.from_arrow(pa.scalar("None")),
+                separators.to_pylibcudf(mode="read"),
+            )
+            return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def _transform_leaves(self, func, *args, **kwargs) -> Self:
         # return a new list column with the same nested structure
@@ -325,6 +328,129 @@ class ListColumn(ColumnBase):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
+
+    @acquire_spill_lock()
+    def count_elements(self) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.count_elements(self.to_pylibcudf(mode="read"))
+        )
+
+    @acquire_spill_lock()
+    def distinct(self, nulls_equal: bool, nans_all_equal: bool) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.distinct(
+                self.to_pylibcudf(mode="read"),
+                (
+                    plc.types.NullEquality.EQUAL
+                    if nulls_equal
+                    else plc.types.NullEquality.UNEQUAL
+                ),
+                (
+                    plc.types.NanEquality.ALL_EQUAL
+                    if nans_all_equal
+                    else plc.types.NanEquality.UNEQUAL
+                ),
+            )
+        )
+
+    @acquire_spill_lock()
+    def sort_lists(
+        self, ascending: bool, na_position: Literal["first", "last"]
+    ) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.sort_lists(
+                self.to_pylibcudf(mode="read"),
+                plc.types.Order.ASCENDING
+                if ascending
+                else plc.types.Order.DESCENDING,
+                (
+                    plc.types.NullOrder.BEFORE
+                    if na_position == "first"
+                    else plc.types.NullOrder.AFTER
+                ),
+                False,
+            )
+        )
+
+    @acquire_spill_lock()
+    def extract_element_scalar(self, index: int) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.extract_list_element(
+                self.to_pylibcudf(mode="read"),
+                index,
+            )
+        )
+
+    @acquire_spill_lock()
+    def extract_element_column(self, index: ColumnBase) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.extract_list_element(
+                self.to_pylibcudf(mode="read"),
+                index.to_pylibcudf(mode="read"),
+            )
+        )
+
+    @acquire_spill_lock()
+    def contains_scalar(self, search_key: pa.Scalar) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.contains(
+                self.to_pylibcudf(mode="read"),
+                plc.interop.from_arrow(search_key),
+            )
+        )
+
+    @acquire_spill_lock()
+    def index_of_scalar(self, search_key: pa.Scalar) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.index_of(
+                self.to_pylibcudf(mode="read"),
+                plc.interop.from_arrow(search_key),
+                plc.lists.DuplicateFindOption.FIND_FIRST,
+            )
+        )
+
+    @acquire_spill_lock()
+    def index_of_column(self, search_keys: ColumnBase) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.index_of(
+                self.to_pylibcudf(mode="read"),
+                search_keys.to_pylibcudf(mode="read"),
+                plc.lists.DuplicateFindOption.FIND_FIRST,
+            )
+        )
+
+    @acquire_spill_lock()
+    def concatenate_rows(self, other_columns: list[ColumnBase]) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.concatenate_rows(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in itertools.chain([self], other_columns)
+                    ]
+                )
+            )
+        )
+
+    @acquire_spill_lock()
+    def concatenate_list_elements(self, dropna: bool) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.concatenate_list_elements(
+                self.to_pylibcudf(mode="read"),
+                plc.lists.ConcatenateNullPolicy.IGNORE
+                if dropna
+                else plc.lists.ConcatenateNullPolicy.NULLIFY_OUTPUT_ROW,
+            )
+        )
+
+    @acquire_spill_lock()
+    def segmented_gather(self, gather_map: ColumnBase) -> ColumnBase:
+        return type(self).from_pylibcudf(
+            plc.lists.segmented_gather(
+                self.to_pylibcudf(mode="read"),
+                gather_map.to_pylibcudf(mode="read"),
+            )
+        )
 
 
 class ListMethods(ColumnMethods):
@@ -397,18 +523,16 @@ class ListMethods(ColumnMethods):
         2   6
         dtype: int64
         """
-        if is_scalar(index):
-            out = extract_element_scalar(self._column, cudf.Scalar(index))
+        if isinstance(index, int):
+            out = self._column.extract_element_scalar(index)
         else:
             index = as_column(index)
-            out = extract_element_column(self._column, as_column(index))
+            out = self._column.extract_element_column(index)
 
         if not (default is None or default is NA):
             # determine rows for which `index` is out-of-bounds
-            lengths = count_elements(self._column)
-            out_of_bounds_mask = (np.negative(index) > lengths) | (
-                index >= lengths
-            )
+            lengths = self._column.count_elements()
+            out_of_bounds_mask = ((-1 * index) > lengths) | (index >= lengths)
 
             # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_mask.any():
@@ -445,7 +569,7 @@ class ListMethods(ColumnMethods):
         dtype: bool
         """
         return self._return_or_inplace(
-            contains_scalar(self._column, cudf.Scalar(search_key))
+            self._column.contains_scalar(pa.scalar(search_key))
         )
 
     def index(self, search_key: ScalarLike | ColumnLike) -> ParentType:
@@ -494,13 +618,10 @@ class ListMethods(ColumnMethods):
         """
 
         if is_scalar(search_key):
-            return self._return_or_inplace(
-                index_of_scalar(self._column, cudf.Scalar(search_key))
-            )
+            result = self._column.index_of_scalar(pa.scalar(search_key))
         else:
-            return self._return_or_inplace(
-                index_of_column(self._column, as_column(search_key))
-            )
+            result = self._column.index_of_column(as_column(search_key))
+        return self._return_or_inplace(result)
 
     @property
     def leaves(self) -> ParentType:
@@ -550,7 +671,7 @@ class ListMethods(ColumnMethods):
         2       2
         dtype: int32
         """
-        return self._return_or_inplace(count_elements(self._column))
+        return self._return_or_inplace(self._column.count_elements())
 
     def take(self, lists_indices: ColumnLike) -> ParentType:
         """
@@ -598,7 +719,7 @@ class ListMethods(ColumnMethods):
             )
 
         return self._return_or_inplace(
-            segmented_gather(self._column, lists_indices_col)
+            self._column.segmented_gather(lists_indices_col)
         )
 
     def unique(self) -> ParentType:
@@ -631,7 +752,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
-            distinct(self._column, nulls_equal=True, nans_all_equal=True)
+            self._column.distinct(nulls_equal=True, nans_all_equal=True)
         )
 
     def sort_values(
@@ -639,7 +760,7 @@ class ListMethods(ColumnMethods):
         ascending: bool = True,
         inplace: bool = False,
         kind: str = "quicksort",
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
         ignore_index: bool = False,
     ) -> ParentType:
         """
@@ -692,7 +813,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("Nested lists sort is not supported.")
 
         return self._return_or_inplace(
-            sort_lists(self._column, ascending, na_position),
+            self._column.sort_lists(ascending, na_position),
             retain_index=not ignore_index,
         )
 
@@ -742,7 +863,7 @@ class ListMethods(ColumnMethods):
         dtype: list
         """
         return self._return_or_inplace(
-            concatenate_list_elements(self._column, dropna=dropna)
+            self._column.concatenate_list_elements(dropna)
         )
 
     def astype(self, dtype):

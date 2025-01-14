@@ -25,6 +25,21 @@
 
 namespace cudf {
 namespace detail {
+namespace {
+
+template <typename ViewType>
+auto concatenate_column_views(std::vector<ViewType> const& views)
+{
+  using ColumnView = typename ViewType::ColumnView;
+  std::vector<ColumnView> concat_cols;
+  for (auto& view : views) {
+    concat_cols.insert(concat_cols.end(), view.begin(), view.end());
+  }
+  return concat_cols;
+}
+
+}  // namespace
+
 template <typename ColumnView>
 table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols) : _columns{cols}
 {
@@ -36,17 +51,6 @@ table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols
   } else {
     _num_rows = 0;
   }
-}
-
-template <typename ViewType>
-auto concatenate_column_views(std::vector<ViewType> const& views)
-{
-  using ColumnView = typename ViewType::ColumnView;
-  std::vector<ColumnView> concat_cols;
-  for (auto& view : views) {
-    concat_cols.insert(concat_cols.end(), view.begin(), view.end());
-  }
-  return concat_cols;
 }
 
 // Explicit instantiation for a table of `column_view`s
@@ -65,17 +69,16 @@ table_view table_view::select(std::vector<size_type> const& column_indices) cons
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view()
 {
-  std::vector<column_view> cols{begin(), end()};
-  return table_view{cols};
+  return table_view{std::vector<column_view>{begin(), end()}};
 }
 
 table_view::table_view(std::vector<table_view> const& views)
-  : table_view{concatenate_column_views(views)}
+  : table_view{detail::concatenate_column_views(views)}
 {
 }
 
 mutable_table_view::mutable_table_view(std::vector<mutable_table_view> const& views)
-  : mutable_table_view{concatenate_column_views(views)}
+  : mutable_table_view{detail::concatenate_column_views(views)}
 {
 }
 

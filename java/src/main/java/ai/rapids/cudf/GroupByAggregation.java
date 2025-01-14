@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -275,6 +275,15 @@ public final class GroupByAggregation {
    */
   public static GroupByAggregation mergeSets() {
     return new GroupByAggregation(Aggregation.mergeSets());
+  }
+
+  /**
+   * Execute an aggregation using a host-side user-defined function (UDF).
+   * @param wrapper The wrapper for the native host UDF instance.
+   * @return A new GroupByAggregation instance
+   */
+  public static GroupByAggregation hostUDF(HostUDFWrapper wrapper) {
+    return new GroupByAggregation(Aggregation.hostUDF(wrapper));
   }
 
   /**

@@ -336,7 +336,7 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
 {
   // Lambda function to convert int32 to a string of uint8 bytes
   auto const convert_int32_to_byte_string = [&](int32_t const value) {
-    std::array<uint8_t, sizeof(int32_t)> buffer;
+    std::array<uint8_t, sizeof(int32_t)> buffer{};
     std::memcpy(buffer.data(), &value, sizeof(int32_t));
     return std::string(reinterpret_cast<char*>(buffer.data()), buffer.size());
   };

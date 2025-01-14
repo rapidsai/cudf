@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@
 
 #include <array>
 #include <type_traits>
+
+namespace nvcomp = cudf::io::detail::nvcomp;
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
@@ -1135,7 +1137,7 @@ TEST_F(OrcReaderTest, SingleInputs)
 
 TEST_F(OrcReaderTest, zstdCompressionRegression)
 {
-  if (cudf::io::nvcomp::is_decompression_disabled(cudf::io::nvcomp::compression_type::ZSTD)) {
+  if (nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD)) {
     GTEST_SKIP() << "Newer nvCOMP version is required";
   }
 
@@ -1700,8 +1702,8 @@ TEST_F(OrcMetadataReaderTest, TestNested)
 
 TEST_F(OrcReaderTest, ZstdMaxCompressionRate)
 {
-  if (cudf::io::nvcomp::is_decompression_disabled(cudf::io::nvcomp::compression_type::ZSTD) or
-      cudf::io::nvcomp::is_compression_disabled(cudf::io::nvcomp::compression_type::ZSTD)) {
+  if (nvcomp::is_decompression_disabled(nvcomp::compression_type::ZSTD) or
+      nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD)) {
     GTEST_SKIP() << "Newer nvCOMP version is required";
   }
 
@@ -2066,6 +2068,7 @@ TEST_P(OrcCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(OrcCompressionTest,
                         OrcCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));

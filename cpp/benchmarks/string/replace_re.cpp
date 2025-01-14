@@ -26,18 +26,14 @@
 
 static void bench_replace(nvbench::state& state)
 {
-  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const rtype     = state.get_string("type");
 
-  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
   data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   cudf::strings_column_view input(column->view());
 
   auto program = cudf::strings::regex_program::create("(\\d+)");
@@ -62,6 +58,7 @@ static void bench_replace(nvbench::state& state)
 
 NVBENCH_BENCH(bench_replace)
   .set_name("replace_re")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_string_axis("type", {"replace", "backref"});

@@ -36,6 +36,8 @@
 
 namespace cuio_json = cudf::io::json;
 
+namespace {
+
 struct h_tree_meta_t {
   std::vector<cuio_json::NodeT> node_categories;
   std::vector<cuio_json::NodeIndexT> parent_node_ids;
@@ -222,6 +224,7 @@ void run_test(std::string const& input, bool enable_lines = true)
   // assert equality between csr and meta formats
   ASSERT_TRUE(iseq);
 }
+}  // namespace
 
 struct JsonColumnTreeTests : public cudf::test::BaseFixture {};
 
