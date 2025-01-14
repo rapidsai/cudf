@@ -35,6 +35,7 @@ from ..fast_slow_proxy import (
     _fast_slow_function_call,
     _FastSlowAttribute,
     _FunctionProxy,
+    _maybe_wrap_result,
     _Unusable,
     make_final_proxy_type as _make_final_proxy_type,
     make_intermediate_proxy_type as _make_intermediate_proxy_type,
@@ -262,7 +263,7 @@ def custom_repr_html(obj):
 
 def custom_getitem(self, arg):
     if cudf.api.types.is_scalar(arg):
-        return self._fsproxy_slow[arg]
+        return _maybe_wrap_result(self._fsproxy_slow[arg], None)
     else:
         return _fast_slow_function_call(
             lambda self, arg: self[arg],
@@ -352,6 +353,7 @@ Index = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "__getitem__": custom_getitem,
     },
 )
 
@@ -430,6 +432,7 @@ DatetimeIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "__getitem__": custom_getitem,
     },
 )
 
@@ -467,6 +470,7 @@ TimedeltaIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "__getitem__": custom_getitem,
     },
 )
 
