@@ -220,11 +220,12 @@ ConfigureTest(
   REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
+  reductions/host_udf_example_tests.cu
+  reductions/list_rank_test.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
   GPUS 1
   PERCENT 70
@@ -317,14 +318,15 @@ ConfigureTest(
 )
 ConfigureTest(
   PARQUET_TEST
-  io/parquet_test.cpp
+  io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
-  io/parquet_writer_test.cpp
+  io/parquet_test.cpp
   io/parquet_v2_test.cpp
+  io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
 )
