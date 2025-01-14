@@ -14,7 +14,6 @@ import pylibcudf as plc
 
 import cudf
 import cudf.core.column.column as column
-from cudf._lib.types import size_type_dtype
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
@@ -22,6 +21,7 @@ from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -258,7 +258,7 @@ class ListColumn(ColumnBase):
 
         offset_col = cast(
             NumericalColumn,
-            column.as_column(offset_vals, dtype=size_type_dtype),
+            column.as_column(offset_vals, dtype=SIZE_TYPE_DTYPE),
         )
 
         # Build ListColumn
