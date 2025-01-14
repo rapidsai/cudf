@@ -9,6 +9,6 @@ except ImportError:
 
     if not dd._dask_expr_enabled():
         raise ValueError(
-            "The legacy DataFrame API is not supported in dask_cudf>24.12. "
-            "Please enable query-planning, or downgrade to dask_cudf<=24.12"
+            "The legacy DataFrame API is not supported for RAPIDS >24.12. "
+            "The 'dataframe.query-planning' config must be True or None."
         )
