@@ -200,7 +200,6 @@ TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
   auto const threshold =
     column_size / 16;  // Empirically set to get a mix of 32 and 64 bit string col chunks.
   setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
-  std::cout << "LIBCUDF_LARGE_STRINGS_THRESHOLD = " << threshold << std::endl;
 
   // Host buffer to write Parquet
   auto buffer = std::vector<char>{};
