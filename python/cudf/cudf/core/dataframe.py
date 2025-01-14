@@ -8080,7 +8080,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         return result
 
     @_performance_tracking
-    def to_pylibcudf(self, copy=False):
+    def to_pylibcudf(self, copy: bool = False) -> tuple[plc.Table, dict]:
         """
         Convert this DataFrame to a pylibcudf.Table.
 
@@ -8114,16 +8114,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         if copy:
             raise NotImplementedError("copy=True is not supported")
-        metadata = {}
-        metadata["index"] = self.index
-        metadata["column_names"] = self.columns
+        metadata = {"index": self.index, "columns": self.columns}
         return plc.Table(
             [col.to_pylibcudf(mode="write") for col in self._columns]
         ), metadata
 
     @classmethod
     @_performance_tracking
-    def from_pylibcudf(cls, table: plc.Table, metadata: dict):
+    def from_pylibcudf(cls, table: plc.Table, metadata: dict) -> Self:
         """
         Create a DataFrame from a pylibcudf.Table.
 
@@ -8148,7 +8146,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         the data and mask buffers of the pylibcudf columns, so the newly created
         object is not tied to the lifetime of the original pylibcudf.Table.
         """
-        if metadata is None:
+        if not isinstance(metadata, dict):
             raise ValueError("Must at least pass metadata with column names")
         columns = table.columns()
         df = cls._from_data(
@@ -8156,11 +8154,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 name: cudf.core.column.ColumnBase.from_pylibcudf(
                     col, data_ptr_exposed=True
                 )
-                for name, col in zip(metadata["column_names"], columns)
+                for name, col in zip(metadata["columns"], columns)
             }
         )
         for key in metadata:
-            setattr(df, key, metadata[key])
+            if key in {"index", "columns"}:
+                setattr(df, key, metadata[key])
         return df
 
 

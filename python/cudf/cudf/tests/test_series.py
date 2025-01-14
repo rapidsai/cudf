@@ -3008,6 +3008,5 @@ def test_dtype_dtypes_equal():
 @pytest.mark.parametrize("ps", _series_na_data())
 def test_roundtrip_series_plc_column(ps):
     expect = cudf.Series(ps)
-    plc_col, metadata = expect.to_pylibcudf()
-    actual = cudf.Series.from_pylibcudf(plc_col, metadata=metadata)
+    actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
     assert_eq(expect, actual)

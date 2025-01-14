@@ -11258,6 +11258,5 @@ def test_dataframe_multiindex_column_names(names):
 @pytest.mark.parametrize("pdf", _dataframe_na_data())
 def test_roundtrip_dataframe_plc_table(pdf):
     expect = cudf.DataFrame.from_pandas(pdf)
-    plc_table, metadata = expect.to_pylibcudf()
-    actual = cudf.DataFrame.from_pylibcudf(plc_table, metadata=metadata)
+    actual = cudf.DataFrame.from_pylibcudf(*expect.to_pylibcudf())
     assert_eq(expect, actual)

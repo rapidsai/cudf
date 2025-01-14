@@ -3845,7 +3845,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @classmethod
     @_performance_tracking
-    def from_pylibcudf(cls, col: plc.Column, metadata=None):
+    def from_pylibcudf(cls, col: plc.Column, metadata=None) -> Self:
         """
         Create a Series from a pylibcudf.Column.
 
@@ -3871,7 +3871,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 col, data_ptr_exposed=True
             )
         )
-        if metadata:
+        if isinstance(metadata, dict):
             for key in metadata:
                 setattr(cudf_col, key, metadata[key])
         return cudf_col
