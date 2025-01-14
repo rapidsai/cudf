@@ -623,7 +623,11 @@ dependencies:
           # https://github.com/pydata/pydata-sphinx-theme/releases/tag/v0.15.4
           - pydata-sphinx-theme>=0.15.4
           - scipy
-          - sphinx
+          # Needed for safe parallel writes as with the pydata-sphinx-theme pin above
+          # https://github.com/sphinx-doc/sphinx/issues/12409
+          # https://github.com/sphinx-doc/sphinx/pull/12888
+          # https://github.com/sphinx-doc/sphinx/releases/tag/v8.1.0
+          - sphinx>=8.1.0
           - sphinx-autobuild
           - sphinx-copybutton
           - sphinx-markdown-tables

@@ -86,11 +86,11 @@ dependencies:
 - s3fs>=2022.3.0
 - scikit-build-core>=0.10.0
 - scipy
-- sphinx
 - sphinx-autobuild
 - sphinx-copybutton
 - sphinx-markdown-tables
 - sphinx-remove-toctrees
+- sphinx>=8.1.0
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.17
