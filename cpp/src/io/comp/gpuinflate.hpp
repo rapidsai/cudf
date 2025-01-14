@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,18 +123,5 @@ void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
               device_span<compression_result> results,
               rmm::cuda_stream_view stream);
-
-/**
- * @brief Aggregate results of compression into a single statistics object.
- *
- * @param inputs List of uncompressed input buffers
- * @param results List of compression results
- * @param stream CUDA stream to use
- * @return writer_compression_statistics
- */
-[[nodiscard]] writer_compression_statistics collect_compression_statistics(
-  device_span<device_span<uint8_t const> const> inputs,
-  device_span<compression_result const> results,
-  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail
